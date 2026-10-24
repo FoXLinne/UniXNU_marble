@@ -272,18 +272,30 @@ struct Touch {
         for (;;) {
             touchIrq = read32(reinterpret_cast<void *>(pins.address), 0x5004) & 1;
             if (touchIrq) { IOSleep(8); continue; }
-            result = read(events, frame, sizeof(frame));
+            // Match the controller driver's two-contact pre-read; extend for additional contacts.
+            result = read(events, frame, 26);
             if (result) return result;
             touchEvents++;
             touchHeader = little32(frame);
+            if (!checksum(frame, 8)) {
+                touchInvalid++;
+                IOSleep(1);
+                continue; // Preserve the pending event while its header is being updated.
+            }
             unsigned count = frame[2] & 15;
-            if ((frame[0] & 0x80) && count <= 10 && checksum(frame, 8) &&
-                (!count || checksum(frame + 8, count * 8 + 2))) {
+            bool touchEvent = (frame[0] & 0x80) && count <= 10;
+            if (touchEvent && count > 2) {
+                result = read(events + 26, frame + 26, (count - 2) * 8);
+                if (result) return result;
+            }
+            bool valid = touchEvent && (!count || checksum(frame + 8, count * 8 + 2));
+            // Release the controller before entering the HID work loop.
+            result = acknowledge(events);
+            if (result) return result;
+            if (valid) {
                 touchFrames++;
                 native_touch_publish(count, frame + 8);
             } else touchInvalid++;
-            result = acknowledge(events);
-            if (result) return result;
             IOSleep(1);
         }
     }
