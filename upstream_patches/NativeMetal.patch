@@ -1,0 +1,26 @@
+diff --git a/bridge/patches/0008-alias-padded-rows-of-written-textures.patch b/bridge/patches/0008-alias-padded-rows-of-written-textures.patch
+new file mode 100644
+index 0000000..b508638
+--- /dev/null
++++ b/bridge/patches/0008-alias-padded-rows-of-written-textures.patch
+@@ -0,0 +1,20 @@
++diff --git a/crates/metal2vulkan-runtime/src/texture.rs b/crates/metal2vulkan-runtime/src/texture.rs
++index e040049..cc1f9ee 100644
++--- a/crates/metal2vulkan-runtime/src/texture.rs
+++++ b/crates/metal2vulkan-runtime/src/texture.rs
++@@ -1962,7 +1962,14 @@ impl Device {
++         // What an image over the texels may hold beside them: the bytes between padded rows too
++         // where the texture only reads, by the policy (`linear_plan::holding`); else why none may.
++         let policy = self.compile_device().policy().padded_reads;
++-        let holds = holding(&texels.layout, usage, policy);
+++        // IOSurface owns its row padding; render targets can alias that complete plane.
+++        let holds = if call == "new_texture_with_iosurface_plane"
+++            && policy == metal2vulkan::device::PaddedReadsPolicy::Alias
+++        {
+++            Ok(Holds::Padding)
+++        } else {
+++            holding(&texels.layout, usage, policy)
+++        };
++         // Over bytes detached from their pages (`detach.rs`) no image aliases them: the texture
++         // is their shadow, which presents a stand-in until they lie in pages again.
++         let detached = texels.buffer.detached();
