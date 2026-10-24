@@ -16,6 +16,7 @@
 #include <pexpert/boot.h>
 #include <libkern/crypto/sha2.h>
 #include <libkern/zlib.h>
+#include "SparseDisk.h"
 
 extern "C" {
 #include <vm/pmap.h>
@@ -81,7 +82,7 @@ static void captureRootScreen(void)
   memcpy(output, &header, sizeof(header));
 }
 static uint32_t observationSeconds;
-static uint8_t *dataSeed;
+static RamSparseDisk dataSeed = {};
 static uint64_t dataSeedBytes;
 static uint8_t dataSeedHash[32];
 static char dataSeedUUID[37];
@@ -141,7 +142,7 @@ extern "C" void native_root_block_process_exit(const char *name, int signal, int
 static void observationExpired(thread_call_param_t, thread_call_param_t)
 {
   captureRootScreen();
-  panic("RootStage observation timeout after %u seconds", observationSeconds);
+  panic("RootStage observation timeout after %u seconds Data=%llu/%llu copies=%llu", observationSeconds, dataSeed.resident, dataSeed.bytes, displayFrames);
 }
 
 extern "C" void native_root_block_capture_log(void)
@@ -173,7 +174,8 @@ class NativeRootBlock : public IOBlockStorageDevice {
   ROOT_STAGE_DISK disk = {};
   bool online = false;
   unsigned diskIndex = 0;
-  uint8_t *writableData = nullptr;
+  RamSparseDisk *writableData = nullptr;
+  IOLock *dataGate = nullptr;
 public:
   void configure(const ROOT_STAGE_DISK &source, unsigned index) {
     if (!source.Bytes || source.Received != source.Bytes ||
@@ -192,10 +194,12 @@ public:
       total += expected;
     }
   }
-  void configureData(uint8_t *data, uint64_t bytes) {
+  void configureData(RamSparseDisk *data) {
     writableData = data;
-    disk.Bytes = bytes;
+    disk.Bytes = data->bytes;
     diskIndex = 2;
+    dataGate = IOLockAlloc();
+    if (!dataGate) panic("RootStage: Data I/O lock allocation failed");
   }
   int sourceIndex() const { return online ? (int)diskIndex : -1; }
   bool start(IOService *provider) override {
@@ -235,10 +239,18 @@ public:
     if (block > capacity || count > capacity - block || count * 512 > buffer->getLength()) return kIOReturnBadArgument;
     uint64_t offset = block * 512, bytes = count * 512, done = 0;
     if (writableData) {
-      done = write ? buffer->readBytes(0, writableData + offset, bytes) :
-          buffer->writeBytes(0, writableData + offset, bytes);
-      completion->action(completion->target, completion->parameter,
-          done == bytes ? kIOReturnSuccess : kIOReturnIOError, done);
+      struct DataOps {
+        IOMemoryDescriptor *buffer;
+        uint8_t *allocate() { return (uint8_t *)IOMallocZero(4096); }
+        uint64_t read(uint64_t at, void *p, uint64_t n) { return buffer->readBytes(at, p, n); }
+        uint64_t copy(uint64_t at, const void *p, uint64_t n) { return buffer->writeBytes(at, p, n); }
+      } ops = {buffer};
+      bool noMemory;
+      IOLockLock(dataGate);
+      done = ramSparseIO(*writableData, write, offset, bytes, ops, noMemory);
+      IOLockUnlock(dataGate);
+      IOReturn result = done == bytes ? kIOReturnSuccess : noMemory ? kIOReturnNoMemory : kIOReturnIOError;
+      completion->action(completion->target, completion->parameter, result, done);
       return kIOReturnSuccess;
     }
     while (done < bytes) {
@@ -317,10 +329,10 @@ extern "C" void native_root_block_start(void)
       if (bytes) {
         memcpy(dataSeedUUID, mailbox + 64, sizeof(dataSeedUUID));
         if (strnlen(dataSeedUUID, sizeof(dataSeedUUID)) != 36) panic("RootStage: Data volume UUID invalid");
-        if ((offset & 4095) || !logical || logical > 0x80000000ULL || (logical & 4095) || offset > kernel.Bytes - rootOutputBytes ||
+        if ((offset & 4095) || !logical || logical > 0x10000000ULL || offset > kernel.Bytes - rootOutputBytes ||
             bytes > kernel.Bytes - rootOutputBytes - offset)
           panic("RootStage: Data seed range invalid");
-        void *data = IOMallocAligned(logical, 4096);
+        void *data = IOMalloc(logical);
         size_t copyBytes = (bytes + 4095) & ~4095ULL;
         void *packed = IOMalloc(copyBytes);
         if (!data || !packed) panic("RootStage: Data allocation failed for %llu bytes", logical);
@@ -340,11 +352,19 @@ extern "C" void native_root_block_start(void)
         IOFree(packed, copyBytes);
         if (result != Z_STREAM_END || stream.total_out != logical || stream.avail_in)
           panic("RootStage: Data seed decompression failed: %d", result);
-        dataSeed = (uint8_t *)data;
-        dataSeedBytes = logical;
+        if (!ramPackedLayout((const uint8_t *)data, logical, &dataSeedBytes) || dataSeedBytes > 0x80000000ULL)
+          panic("RootStage: packed Data layout invalid");
+        dataSeed.bytes = dataSeedBytes;
+        dataSeed.pages = (uint8_t **)IOMallocZero((dataSeedBytes / 4096) * sizeof(uint8_t *));
+        struct ImportOps { uint8_t *allocate() { return (uint8_t *)IOMallocZero(4096); } } ops;
+        if (!ramSparseImport(dataSeed, (const uint8_t *)data, logical, ops))
+          panic("RootStage: sparse Data import failed");
+        IOFree(data, logical);
+        static const uint8_t zero[4096] = {};
         SHA256_CTX context;
         SHA256_Init(&context);
-        SHA256_Update(&context, data, logical);
+        for (uint64_t i = 0; i < dataSeedBytes / 4096; i++)
+          SHA256_Update(&context, dataSeed.pages[i] ? dataSeed.pages[i] : zero, 4096);
         SHA256_Final(dataSeedHash, &context);
       }
     } else log->release();
@@ -372,14 +392,14 @@ extern "C" void native_root_block_start(void)
     disk->registerService(kIOServiceSynchronous);
     IOLog("RootStage: disk %u published, %llu bytes\n",i,table->Disks[i].Bytes);
   }
-  if (dataSeed) {
+  if (dataSeed.pages) {
     auto *disk = new NativeRootBlock;
     if (!disk || !disk->init(nullptr)) panic("RootStage: Data service allocation failed");
-    disk->configureData(dataSeed, dataSeedBytes);
+    disk->configureData(&dataSeed);
     if (!disk->attach(parent) || !disk->start(parent)) panic("RootStage: Data service start failed");
     disk->setName("Data");
     disk->registerService(kIOServiceSynchronous);
-    IOLog("RootStage: writable Data published, %llu bytes\n", dataSeedBytes);
+    IOLog("RootStage: writable Data published, %llu logical bytes, %llu resident bytes\n", dataSeedBytes, dataSeed.resident);
   }
   mapping->release();
   started = true;
@@ -484,7 +504,7 @@ extern "C" int native_root_block_data_seed(dev_t *device, char *path, size_t siz
     uint64_t *base, uint64_t *bytes, uint8_t digest[32])
 {
   if (!rootBlockVolume(dataSeedUUID, device, path, size, 2)) return 0;
-  *base = (uint64_t)dataSeed;
+  *base = 0;
   *bytes = dataSeedBytes;
   memcpy(digest, dataSeedHash, 32);
   return 1;

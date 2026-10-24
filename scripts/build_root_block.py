@@ -197,7 +197,7 @@ for argument in arguments:
     else:
         command.append(argument)
 command += ['-I', str(ROOT / 'build/storage-abi/include'), '-I', str(ROOT / '.cache/xnu-work/osfmk'),
-            '-I', str(ROOT / 'package/UniXNUPkg/Include')]
+            '-I', str(ROOT / 'package/UniXNUPkg/Include'), '-I', str(ROOT / 'drivers/NativeRamBlock')]
 subprocess.run(command, cwd=record['directory'], check=True)
 obj = obj_path.read_bytes()
 image = np.macho(obj)

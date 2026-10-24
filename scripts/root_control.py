@@ -117,8 +117,8 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
         seed_uuid = bytes(37)
         if data_seed:
             seed = data_seed.read_bytes()
-            if len(seed) % 4096 or seed[32:36] != b'NXSB':
-                raise ValueError('Data seed must be a raw APFS container')
+            if len(seed) < 32 or seed[:8] != b'DBRDISK1':
+                raise ValueError('Data seed must use the DBRDISK1 packed format')
             metadata = json.loads(data_seed.with_name('seed.json').read_text())
             if metadata['sha256'] != hashlib.sha256(seed).hexdigest():
                 raise ValueError('Data seed checksum differs from seed.json')
