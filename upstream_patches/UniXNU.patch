@@ -209,6 +209,42 @@ index 0000000..3d5b73e
 + }
 + 
 + int
+diff --git a/patches/xnu/native-init-exec-diagnostic.patch b/patches/xnu/native-init-exec-diagnostic.patch
+new file mode 100644
+index 0000000..1b0415e
+--- /dev/null
++++ b/patches/xnu/native-init-exec-diagnostic.patch
+@@ -0,0 +1,30 @@
++--- a/bsd/kern/kern_exec.c
+++++ b/bsd/kern/kern_exec.c
++@@ -1365,6 +1365,14 @@
++ 			}
++ 		}
++ 
+++		if (proc_getpid(p) == 1) {
+++			char description[192];
+++			snprintf(description, sizeof(description),
+++			    "init load_machfile result=%d errno=%d cpu=%x subtype=%x",
+++			    lret, error, mach_header->cputype, mach_header->cpusubtype);
+++			os_reason_set_description_data(exec_failure_reason,
+++			    EXIT_REASON_USER_DESC, description, strlen(description) + 1);
+++		}
++ 		exec_failure_reason->osr_flags |= OS_REASON_FLAG_CONSISTENT_FAILURE;
++ 
++ 		goto badtoolate;
++--- a/bsd/kern/mach_loader.c
+++++ b/bsd/kern/mach_loader.c
++@@ -1528,6 +1528,10 @@
++ 		ret = LOAD_BADMACHO_UPX;
++ 	}
++ 
+++	if (ret != LOAD_SUCCESS) {
+++		printf("Mach-O parse failed: depth=%d result=%d platform=%u csflags=%x\n",
+++		    depth, ret, result->ip_platform, result->csflags);
+++	}
++ 	kfree_data(addr, alloc_size);
++ 
++ 	return ret;
 diff --git a/patches/xnu/native-resident-return.patch b/patches/xnu/native-resident-return.patch
 new file mode 100644
 index 0000000..bd3b5c2
