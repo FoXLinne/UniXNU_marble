@@ -52,7 +52,8 @@ if args.kernel:
 else:
     shutil.copy2(BIN / 'HelloPayload.efi', payloads / 'HelloPayload.efi')
     entry = 'type = "efi"\npath = "Payloads/HelloPayload.efi"\nargs = "pause"\n'
-(stage / 'unixnu.toml').write_text('version = 1\n[boot]\ntimeout = 3\ndefault = "marble"\n[kits]\nautoload = false\n[[driver]]\npath = "Payloads/DarwinBoot.efi"\n[[entry]]\nid = "marble"\ntitle = "UniXNU"\n' + entry)
+timeout = 0 if args.root_stage else 3
+(stage / 'unixnu.toml').write_text(f'version = 1\n[boot]\ntimeout = {timeout}\ndefault = "marble"\n[kits]\nautoload = false\n[[driver]]\npath = "Payloads/DarwinBoot.efi"\n[[entry]]\nid = "marble"\ntitle = "UniXNU"\n' + entry)
 size = sum(p.stat().st_size for p in stage.rglob('*') if p.is_file())
 volume = OUT / 'volume.img'
 volume_bytes = ((size + 8 * 1024**2 - 1) // (8 * 1024**2)) * 8 * 1024**2
