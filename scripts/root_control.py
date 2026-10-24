@@ -20,6 +20,7 @@ import usb.util
 
 CHUNK = 1024**2
 LOG_BYTES = 65536
+OUTPUT_BYTES = CHUNK
 LOG_MAGIC = b'ROOTLOG1'
 
 
@@ -121,11 +122,11 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
             data += seed
             data += bytes(-len(data) % CHUNK)
         extra_args = boot_args.encode()
-        if len(extra_args) >= 256 or b'\0' in extra_args:
+        if len(extra_args) >= 1024 or b'\0' in extra_args:
             raise ValueError('Extra boot arguments exceed the command line limit')
         data += (struct.pack('<8sII', LOG_MAGIC, 1, 0) + os.urandom(16) +
                  struct.pack('<I4xQQQ', observe_seconds, seed_offset, seed_bytes, seed_raw_bytes) + seed_uuid + bytes(27) +
-                 extra_args + bytes(LOG_BYTES - 128 - len(extra_args)))
+                 extra_args + bytes(OUTPUT_BYTES - 128 - len(extra_args)))
         if len(data) > 64 * CHUNK:
             raise ValueError('RootStage kernel update exceeds the 64 MiB slot')
         digest = hashlib.sha256(data).hexdigest()
@@ -169,7 +170,7 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'load', 'start', 'logs', 'continue', 'selftest', 'reboot'])
+    parser.add_argument('command', choices=['status', 'load', 'start', 'logs', 'screen', 'continue', 'selftest', 'reboot'])
     parser.add_argument('--images', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--kernel', type=Path)
@@ -189,12 +190,28 @@ def main():
                 channel.command('continue')
         elif args.command == 'status':
             result = {name: channel.command('getvar:' + name) for name in ('version', 'kernel-memory', 'received', 'returns', 'handoff-fault')}
+        elif args.command == 'screen':
+            if args.output is None:
+                parser.error('screen requires --output')
+            channel.command('oem select:2')
+            data = channel.read_back()
+            magic, width, height, stride, size, frames = struct.unpack_from('<8sIIIIQ', data, LOG_BYTES)
+            if magic != b'ROOTRGB1' or size != stride * height:
+                raise RuntimeError('Framebuffer snapshot has not been captured')
+            pixels = data[LOG_BYTES + 32:LOG_BYTES + 32 + size]
+            def chunk(kind, payload):
+                return struct.pack('>I', len(payload)) + kind + payload + struct.pack('>I', zlib.crc32(kind + payload))
+            scanlines = b''.join(b'\0' + pixels[y * stride:(y + 1) * stride] for y in range(height))
+            png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)) +
+                   chunk(b'IDAT', zlib.compress(scanlines)) + chunk(b'IEND', b''))
+            args.output.write_bytes(png)
+            result = dict(output=str(args.output), width=width, height=height, completed_copies=frames)
         elif args.command == 'logs':
             if args.output is None:
                 parser.error('logs requires --output')
             channel.command('oem select:2')
             data = channel.read_back()
-            if len(data) != LOG_BYTES or data[:8] != LOG_MAGIC:
+            if len(data) < LOG_BYTES or data[:8] != LOG_MAGIC:
                 raise RuntimeError('Resident kernel has no log mailbox')
             version, length = struct.unpack_from('<II', data, 8)
             if version != 1 or not 0 < length <= LOG_BYTES - 16:

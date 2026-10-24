@@ -14,7 +14,7 @@ marble 的 UniXNU 适配代码。系统目标为 iPadOS 17.7.11（21H461）。
 
 系统盘与内核产物位于工作区 `outputs/UniXNU_marble`。`scripts/build_compact_system.py` 使用仓库内的 `scripts/mkapfs.py` 生成紧凑系统盘。
 
-通过 `root_control.py start --kernel` 更新内核时，传输包尾部包含 64 KiB 日志区。panic 返回 RootStage 后读取内核日志与 panic 文本：
+通过 `root_control.py start --kernel` 更新内核时，传输包附带 1 MiB 回传区，起始 64 KiB 保存日志。panic 返回 RootStage 后读取内核日志与 panic 文本：
 
 ```sh
 ../marble_hackios/venv/bin/python scripts/root_control.py logs --output ../../outputs/UniXNU_marble/kernel.log
@@ -25,3 +25,5 @@ marble 的 UniXNU 适配代码。系统目标为 iPadOS 17.7.11（21H461）。
 `start --kernel --data-seed PATH` 读取同目录的 `seed.json`，核对摘要与卷 UUID；传输包包含压缩 APFS 种子，内核解压后发布可写 RAM Data 卷。每轮启动从种子创建 Data。`--boot-args=TEXT` 附加用户空间及后续初始化阶段读取的启动参数。
 
 `--boot-args="rootstage-panic-process=SpringBoard"` 在指定进程首次崩溃退出时保存寄存器、共享缓存偏移和用户栈。`scripts/symbolicate_root_log.py` 使用同版共享缓存与 `.symbols` 解析地址。
+
+`root_control.py screen --output PATH.png` 读取崩溃或观测期结束前的帧缓冲缩略图，并输出完成的像素复制次数。

@@ -34,7 +34,52 @@ char *native_root_block_boot_args;
 }
 
 static constexpr size_t rootLogBytes = 65536;
+static constexpr size_t rootOutputBytes = 1048576;
 static IOMemoryMap *rootLogMapping;
+static const volatile uint8_t *displayPixels;
+static uint64_t displayStride, displayFrames;
+static uint32_t displayWidth, displayHeight;
+extern "C" void native_root_block_register_display(uint64_t address, uint64_t stride, uint32_t width, uint32_t height)
+{
+  displayPixels = (const volatile uint8_t *)address;
+  displayStride = stride;
+  displayWidth = width;
+  displayHeight = height;
+}
+
+extern "C" void native_root_block_presented(void)
+{
+  __atomic_fetch_add(&displayFrames, 1, __ATOMIC_RELAXED);
+}
+
+static void captureRootScreen(void)
+{
+  if (!rootLogMapping || !displayPixels) return;
+  struct ScreenHeader {
+    char magic[8];
+    uint32_t width, height, stride, bytes;
+    uint64_t frames;
+  } header;
+  memcpy(header.magic, "ROOTRGB1", 8);
+  uint32_t step = MAX((displayWidth + 319) / 320, (displayHeight + 719) / 720);
+  header.width = (displayWidth + step - 1) / step;
+  header.height = (displayHeight + step - 1) / step;
+  header.stride = header.width * 3;
+  header.bytes = header.stride * header.height;
+  header.frames = displayFrames;
+  auto *output = (uint8_t *)rootLogMapping->getVirtualAddress() + rootLogBytes;
+  for (uint32_t y = 0; y < header.height; y++) {
+    const volatile uint8_t *source = displayPixels + y * step * displayStride;
+    uint8_t *row = output + sizeof(header) + y * header.stride;
+    for (uint32_t x = 0; x < header.width; x++) {
+      const volatile uint8_t *pixel = source + x * step * 4;
+      row[x * 3] = pixel[2];
+      row[x * 3 + 1] = pixel[1];
+      row[x * 3 + 2] = pixel[0];
+    }
+  }
+  memcpy(output, &header, sizeof(header));
+}
 static uint32_t observationSeconds;
 static uint8_t *dataSeed;
 static uint64_t dataSeedBytes;
@@ -88,12 +133,14 @@ extern "C" void native_root_block_process_exit(const char *name, int signal, int
     if (frame[0] <= fp) break;
     fp = frame[0];
   }
+  captureRootScreen();
   panic("RootStage: %s exit signal=%d exception=%d code=%llx subcode=%llx namespace=%u reason=%llx %s\n%s",
       name, signal, exception, code, subcode, reasonNamespace, reasonCode, reason ? reason : "", trace);
 }
 
 static void observationExpired(thread_call_param_t, thread_call_param_t)
 {
+  captureRootScreen();
   panic("RootStage observation timeout after %u seconds", observationSeconds);
 }
 
@@ -118,7 +165,7 @@ extern "C" void native_root_block_capture_log(void)
   log.length = (uint32_t)used;
   void *output = (void *)rootLogMapping->getVirtualAddress();
   memcpy(output, &log, sizeof(log));
-  flush_dcache64((addr64_t)output, sizeof(log), FALSE);
+  flush_dcache64((addr64_t)output, rootOutputBytes, FALSE);
 }
 
 class NativeRootBlock : public IOBlockStorageDevice {
@@ -239,10 +286,10 @@ extern "C" void native_root_block_start(void)
   extern void native_resident_configure(uint64_t);
   native_resident_configure(table->ReturnStub);
   const ROOT_STAGE_DISK &kernel = table->Disks[2];
-  if (kernel.Count == 1 && kernel.Bytes >= rootLogBytes && kernel.Bytes <= kernel.Extents[0].Bytes) {
-    uint64_t address = kernel.Extents[0].Address + kernel.Bytes - rootLogBytes;
+  if (kernel.Count == 1 && kernel.Bytes >= rootOutputBytes && kernel.Bytes <= kernel.Extents[0].Bytes) {
+    uint64_t address = kernel.Extents[0].Address + kernel.Bytes - rootOutputBytes;
     IOMemoryDescriptor *memory = IOMemoryDescriptor::withAddressRange(
-        address, rootLogBytes, kIODirectionOut | kIOMemoryMapperNone, nullptr);
+        address, rootOutputBytes, kIODirectionOut | kIOMemoryMapperNone, nullptr);
     IOMemoryMap *log = memory ? memory->map(kIOMapAnywhere | kIOMapCopybackCache) : nullptr;
     OSSafeReleaseNULL(memory);
     if (!log) panic("RootStage: log mailbox mapping failed");
@@ -270,8 +317,8 @@ extern "C" void native_root_block_start(void)
       if (bytes) {
         memcpy(dataSeedUUID, mailbox + 64, sizeof(dataSeedUUID));
         if (strnlen(dataSeedUUID, sizeof(dataSeedUUID)) != 36) panic("RootStage: Data volume UUID invalid");
-        if ((offset & 4095) || !logical || logical > 0x80000000ULL || (logical & 4095) || offset > kernel.Bytes - rootLogBytes ||
-            bytes > kernel.Bytes - rootLogBytes - offset)
+        if ((offset & 4095) || !logical || logical > 0x80000000ULL || (logical & 4095) || offset > kernel.Bytes - rootOutputBytes ||
+            bytes > kernel.Bytes - rootOutputBytes - offset)
           panic("RootStage: Data seed range invalid");
         void *data = IOMallocAligned(logical, 4096);
         void *packed = IOMalloc(bytes);
