@@ -260,8 +260,19 @@ gmu_command = [str(ROOT / 'kits/marble/MarbleGmu.cpp') if v == str(source) else 
 gmu_command += ['-I', str(ROOT / 'kits/ArmSmmu4K'), '-I', str(ROOT / 'kits/AdrenoFirmware')]
 subprocess.run(gmu_command, cwd=record['directory'], check=True)
 gpu_objects = [gmu, cpu]
+for source_path in [ROOT / 'kits/marble/MarbleAdreno.cpp', *[
+    ROOT / 'drivers/NativeAdreno' / ('NativeAdreno' + name + '.cpp')
+    for name in ('Memory', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit', 'Pwrup')
+]]:
+    target = out / (source_path.stem + '.o')
+    recipe = [str(source_path) if v == str(source) else str(target) if v == str(obj_path) else v for v in command]
+    for directory in ('drivers/NativeAdreno', 'kits/ArmSmmu4K', 'kits/AdrenoPM4'):
+        recipe += ['-I', str(ROOT / directory)]
+    subprocess.run(recipe, cwd=record['directory'], check=True)
+    gpu_objects.append(target)
 for directory, names in (
-    ('ArmSmmu4K', ('ArmSmmu4K.c', 'ArmSmmu4KContext.c', 'ArmSmmu4KProgram.c', 'ArmSmmu4KMmio.c')),
+    ('ArmSmmu4K', tuple(path.name for path in sorted((ROOT / 'kits/ArmSmmu4K').glob('ArmSmmu4K*.c')))),
+    ('AdrenoPM4', ('AdrenoPM4.c',)),
     ('AdrenoFirmware', ('AdrenoFirmware.c', 'AdrenoHfi.c', 'AdrenoHfiVotes.c')),
 ):
     for name in names:
@@ -272,8 +283,13 @@ for directory, names in (
 firmware = ROOT / '.cache/firmware/marble/gmu_gen70000.bin'
 if hashlib.sha256(firmware.read_bytes()).hexdigest() != 'b2d3f0e2a98fd6259ab9ffef16df63265542e6cc9a970d53d476e823d432042a':
     raise SystemExit('Marble GMU firmware checksum differs')
+sqe_firmware = ROOT / '.cache/firmware/marble/a730_sqe.fw'
+if hashlib.sha256(sqe_firmware.read_bytes()).hexdigest() != 'e67d1829f57fc8326d806234b932dc3b78e28a9940df34c70752f17d5f38b7aa':
+    raise SystemExit('Marble SQE firmware checksum differs')
 firmware_assembly = out / 'marble-firmware.S'
 firmware_assembly.write_text('.section __DATA_CONST,__const\n.p2align 12\n.globl _marble_gmu_firmware\n_marble_gmu_firmware:\n.incbin ' + json.dumps(str(firmware)) + '\nmarble_gmu_end:\n.p2align 3\n.globl _marble_gmu_firmware_size\n_marble_gmu_firmware_size:\n.quad marble_gmu_end-_marble_gmu_firmware\n')
+with firmware_assembly.open('a') as stream:
+    stream.write('.p2align 12\n.globl _marble_sqe_firmware\n_marble_sqe_firmware:\n.incbin ' + json.dumps(str(sqe_firmware)) + '\nmarble_sqe_end:\n.p2align 3\n.globl _marble_sqe_firmware_size\n_marble_sqe_firmware_size:\n.quad marble_sqe_end-_marble_sqe_firmware\n')
 firmware_object = out / 'marble-firmware.o'
 subprocess.run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-isysroot', str(sdk), '-c', str(firmware_assembly), '-o', str(firmware_object)], check=True)
 gpu_objects.append(firmware_object)

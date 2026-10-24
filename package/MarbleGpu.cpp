@@ -80,7 +80,10 @@ int powerCx() {
 void worker(void *, wait_result_t) {
     int result = powerCx();
     IOLog("MarbleGPU: CX initialization result=%d\n", result);
-    if (!result) IOLog("MarbleGPU: GMU initialization result=%d\n", native_marble_gmu_load());
+    if (!result) {
+        result = native_marble_gmu_load();
+        IOLog("MarbleGPU: GMU initialization result=%d\n", result);
+    }
 }
 }
 extern "C" void native_marble_gpu_quiesce_inherited(void) {

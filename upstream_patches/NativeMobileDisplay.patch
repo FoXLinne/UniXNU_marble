@@ -1,16 +1,17 @@
 diff --git a/NativeLegacyDisplay.cpp b/NativeLegacyDisplay.cpp
-index 8e6aba9..5c336b1 100644
+index 8e6aba9..dbcbce8 100644
 --- a/NativeLegacyDisplay.cpp
 +++ b/NativeLegacyDisplay.cpp
-@@ -32,6 +32,7 @@ extern "C" void native_legacy_surface_rejected(uint64_t,uint64_t,uint32_t,uint32
+@@ -32,6 +32,8 @@ extern "C" void native_legacy_surface_rejected(uint64_t,uint64_t,uint32_t,uint32
  extern "C" bool native_legacy_prepare_scanout(void);
  extern "C" void native_legacy_transfer_observed(IOReturn,const void *,uint64_t);
  extern "C" void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes);
++extern "C" volatile uint32_t native_legacy_output_blank;
 +extern "C" void native_legacy_surface_snapshot(const void *,uint64_t,uint32_t,uint32_t,uint32_t,uint32_t);
  extern "C" void native_legacy_retirement_observed(IOService *);
  // GPU hand-off (boot-arg sheng-fb-gpu=1): the frame is offered to the privileged GPU client instead of being copied; the swap retires when the
  // client reports the GPU copy done (native_legacy_gpu_complete). A refused offer or a failed copy uses the CPU copy below and is counted.
-@@ -57,7 +58,7 @@ static inline bool nativeBgra(uint32_t format,uint32_t planes) {
+@@ -57,7 +59,7 @@ static inline bool nativeBgra(uint32_t format,uint32_t planes) {
  class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
      OSDeclareDefaultStructors(NativeLegacyDisplay)
      IOMemoryMap *bootMapping=nullptr;
@@ -19,7 +20,7 @@ index 8e6aba9..5c336b1 100644
      void *shadow=nullptr;uint64_t shadowBytes=0;bool shadowValid=false;
      bool primary=false;
      bool logicalPM=false;
-@@ -160,6 +161,7 @@ public:
+@@ -160,6 +162,7 @@ public:
      }
      bool start(IOService *provider) override {
          if(!startDisplay(provider))return false;
@@ -27,7 +28,36 @@ index 8e6aba9..5c336b1 100644
          startVsync();return true;
      }
      bool startDisplay(IOService *provider) {
-@@ -320,6 +322,8 @@ public:
+@@ -294,7 +297,8 @@ public:
+         if(!gpuBypass) {
+             if(!native_legacy_prepare_scanout()) {native_legacy_transfer_observed(kIOReturnNotReady,request,0);return;}
+         }
+-        if(!gpuBypass && native_legacy_gpu_offer(this,memory,sourceStride,width,height)) {
++        bool blankOutput=__atomic_load_n(&native_legacy_output_blank,__ATOMIC_ACQUIRE)!=0;
++        if(!blankOutput && !gpuBypass && native_legacy_gpu_offer(this,memory,sourceStride,width,height)) {
+             // The GPU writes the scanout memory behind the CPU's back: the differential copy's picture of it is stale from now on.
+             native_legacy_swap_stage(1);
+             shadowValid=false;gpuRequest=request;gpuLength=length;transferred=true;
+@@ -317,9 +321,27 @@ public:
+             source->getLength(),sourceStride,width,height)) {
+             OSSafeReleaseNULL(source);native_legacy_transfer_observed(kIOReturnBadArgument,request,0);return;
+         }
++        static bool outputBlanked=false;
++        if(blankOutput) {
++            if(!outputBlanked) {
++                native_legacy_fill_pixels(reinterpret_cast<volatile void *>(bootMapping->getVirtualAddress()),
++                    bootMapping->getLength(),video.v_rowBytes,width,height,0xff000000U);
++                __asm__ volatile("dsb sy" ::: "memory");
++                outputBlanked=true;
++            }
++            native_legacy_surface_snapshot(reinterpret_cast<const void *>(source->getVirtualAddress()),sourceStride,width,height,
++                native_legacy_surface_format(surface),native_legacy_surface_planes(surface));
++            OSSafeReleaseNULL(source);transferred=true;
++            native_legacy_transfer_observed(kIOReturnSuccess,request,0);
++            finishTransfer(request);
++            return;
++        }
++        outputBlanked=false;
          // The two content scans read every pixel again; they only describe the first frames (the probe keeps 32).
          if(scanBudget) {
              --scanBudget;
@@ -36,7 +66,7 @@ index 8e6aba9..5c336b1 100644
              uint64_t scan[5];
              if(native_legacy_frame_scan(reinterpret_cast<const void *>(source->getVirtualAddress()),source->getLength(),sourceStride,width,height,scan))
                  native_legacy_frame_observed(0,scan[0],scan[1],scan[2],scan[3],scan[4]);
-@@ -495,7 +499,7 @@ public:
+@@ -495,7 +517,7 @@ public:
             !video.v_width || !video.v_height || video.v_depth!=32 || video.v_rotate ||
             video.v_width>16384 || video.v_height>16384 || video.v_rowBytes<video.v_width*4 ||
             video.v_rowBytes>UINT64_MAX/video.v_height)return false;

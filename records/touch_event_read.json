@@ -6,8 +6,34 @@
     "Acknowledge the controller before HID work-loop dispatch"
   ],
   "build": "passed: archived XNU core linked with current driver archives, then original 21H461 kext prelink",
-  "hardware_validation": "loading",
+  "hardware_validation": "Startup self-IPI verified on eight cores; revised Goodix reader is compiled into the next candidate.",
   "relink_script": "scripts/relink_kernel.py",
   "kernel": "outputs/UniXNU_marble/kernel_touch_events.macho",
-  "sha256": "89e70638469241a54520ff91f8e7993b95774ea1287dff55deb18814120ea778"
+  "sha256": "89e70638469241a54520ff91f8e7993b95774ea1287dff55deb18814120ea778",
+  "startup_ipi_validation": {
+    "kernel": "outputs/UniXNU_marble/kernel_touch_events.macho",
+    "frames": 21,
+    "first_frame_counter_seconds": 585.752348125,
+    "ipi_received": [
+      32807,
+      30921,
+      28486,
+      27058,
+      35108,
+      33839,
+      34011,
+      34016
+    ],
+    "log": "outputs/UniXNU_marble/startup_ipi_desktop.log"
+  },
+  "touch_reader_candidate": "outputs/UniXNU_marble/kernel_night_touch.macho",
+  "resident_return": {
+    "eight_cores": "passed",
+    "RootStage_returns": 1,
+    "handoff_fault": "0:0:0",
+    "OS_reused_bytes": 6077580800,
+    "SystemOS_reused_bytes": 3303014400,
+    "kernel_transfer_seconds": 6.682341499981703
+  },
+  "touch_reader_candidate_sha256": "baed1ce53e04cadae834d3bfd960cd8ef885e49bc7dc174cec2e30b451ddbcd3"
 }

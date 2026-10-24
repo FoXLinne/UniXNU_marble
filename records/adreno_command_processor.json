@@ -1,0 +1,29 @@
+{
+  "kernel": "outputs/UniXNU_marble/kernel_night_touch.macho",
+  "sha256": "baed1ce53e04cadae834d3bfd960cd8ef885e49bc7dc174cec2e30b451ddbcd3",
+  "compile": "passed",
+  "link": "passed",
+  "prelink": "passed",
+  "hardware": "pending",
+  "control": "RuntimeRoot vendor request 14; runtime_control.py adreno",
+  "variant": "SM7475 gen7_4_0",
+  "sqe_firmware": "a730_sqe.fw",
+  "sqe_sha256": "e67d1829f57fc8326d806234b932dc3b78e28a9940df34c70752f17d5f38b7aa",
+  "gpu_smmu": {
+    "bank": 20,
+    "asid": 21,
+    "sids": [
+      0,
+      1
+    ]
+  },
+  "bringup": [
+    "SQE microcode",
+    "hardware clock gating",
+    "register protection",
+    "power-up register list",
+    "CP_ME_INIT",
+    "scratch memory write fence"
+  ],
+  "night_ui": "hide_display retains black scanout while screen --source captures the compositor surface"
+}

@@ -10,6 +10,7 @@ SOURCES = {
     'UniXNU': (WORK / 'UniXNU', None),
     'DarwinBoot': (WORK / 'UniXNU/drivers/DarwinBoot', None),
     'ArmCpu': (WORK / 'UniXNU/drivers/ArmCpu', None),
+    'NativeAdreno': (WORK / 'UniXNU/drivers/NativeAdreno', None),
     'NativeMobileDisplay': (WORK / 'UniXNU/drivers/NativeMobileDisplay', None),
     'NativeRamBlock': (WORK / 'UniXNU/drivers/NativeRamBlock', None),
     'NativeGeniSpi': (WORK / 'UniXNU/drivers/NativeGeniSpi', None),

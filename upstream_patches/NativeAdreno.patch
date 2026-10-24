@@ -1,0 +1,26 @@
+diff --git a/NativeAdrenoMemory.cpp b/NativeAdrenoMemory.cpp
+index 4b402ca..a8bfca8 100644
+--- a/NativeAdrenoMemory.cpp
++++ b/NativeAdrenoMemory.cpp
+@@ -1,7 +1,7 @@
+ /* SPDX-License-Identifier: MIT */
+ #include "NativeAdrenoMemory.h"
+ /* Where a call that never returns is stuck: the free/unmap/release path stores a stage number here, the board page shows it. */
+-extern "C" {volatile uint32_t native_adreno_trace_stage;}
++extern "C" {volatile uint32_t native_adreno_trace_stage;volatile uint32_t native_adreno_wc_enabled=1;}
+ #include <IOKit/IOBufferMemoryDescriptor.h>
+ #include <IOKit/IOLib.h>
+ #include <kern/task.h>
+diff --git a/NativeAdrenoUserClient.cpp b/NativeAdrenoUserClient.cpp
+index 8651b05..83e42cc 100644
+--- a/NativeAdrenoUserClient.cpp
++++ b/NativeAdrenoUserClient.cpp
+@@ -2,7 +2,7 @@
+ #include "NativeAdrenoUserClient.h"
+ extern "C" volatile uint32_t native_adreno_trace_stage;
+ /* 0 keeps user BOs cacheable and maintained before every submission (int-070..097); the board sets it from the sheng-gpu-wc boot argument. */
+-extern "C" {volatile uint32_t native_adreno_wc_enabled=1;}
++extern "C" volatile uint32_t native_adreno_wc_enabled;
+ /* BoImport record: [0] calls, [1] refused, [2..5] last refusal (status, stage, bytes, address), [6..9] first refusal. Stages 1..3 are this file's
+  * checks, 10..19 NativeAdrenoMemory::importTask's. */
+ extern "C" {volatile uint64_t native_adreno_import_diag[10];}

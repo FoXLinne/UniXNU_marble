@@ -12,6 +12,8 @@ extern "C" unsigned native_root_runtime_read(unsigned, unsigned, void *, unsigne
 extern "C" void native_hid_request_home(void);
 extern "C" void native_marble_touch_start(void);
 extern "C" void native_marble_gpu_start(void);
+extern "C" int native_marble_adreno_start(void);
+extern "C" volatile uint32_t native_legacy_output_blank;
 extern "C" void native_marble_gmu_stop(void);
 extern "C" void native_hid_request_tap(unsigned, unsigned);
 extern "C" void native_hid_request_contact(unsigned, unsigned, bool);
@@ -164,6 +166,10 @@ void handleSetup() {
         native_marble_touch_start(); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 9) {
         native_marble_gpu_start(); return;
+    } else if (setup[0] == 0x40 && !length && setup[1] == 15) {
+        __atomic_store_n(&native_legacy_output_blank, value, __ATOMIC_RELEASE); return;
+    } else if (setup[0] == 0x40 && !length && setup[1] == 14) {
+        IOLog("MarbleGPU: command processor result=%d\n", native_marble_adreno_start()); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 10) {
         native_hid_request_tap(value, index); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 11) {
