@@ -1,32 +1,17 @@
 diff --git a/patches/xnu-10063.141.1-security-init.patch b/patches/xnu-10063.141.1-security-init.patch
-index a4e85a4..713293e 100644
+index a4e85a4..a4e66a8 100644
 --- a/patches/xnu-10063.141.1-security-init.patch
 +++ b/patches/xnu-10063.141.1-security-init.patch
-@@ -1,18 +1,21 @@
- --- a/libkern/c++/OSKext.cpp
- +++ b/libkern/c++/OSKext.cpp
--@@ -73,6 +73,11 @@
-+@@ -73,6 +73,14 @@
-  
-  #include <libkern/OSKextLibPrivate.h>
-  #include <libkern/c++/OSKext.h>
- +
- +#if CONFIG_MACF
- +extern "C" int mac_late;
-++extern "C" void trust_cache_runtime_init(void);
-++extern "C" void load_static_trust_cache(void);
-++extern "C" bool native_prelink_trust_cache_ready = false;
- +extern "C" __attribute__((used)) const uint32_t native_prelink_security_init_version = 1;
- +#endif
+@@ -12,7 +12,7 @@
   #include <libkern/c++/OSLib.h>
   
   #include <IOKit/IOLib.h>
 -@@ -8446,6 +8451,43 @@
-+@@ -8446,6 +8454,52 @@
++@@ -8446,6 +8451,47 @@
   	result = OSRuntimeInitializeCPP(this);
   	if (result == KERN_SUCCESS) {
   		result = startfunc(kmod_info, kmodStartData);
-@@ -48,6 +51,15 @@
+@@ -48,6 +48,10 @@
  +			if (!executable) {
  +				panic("NativePrelink: early security initializer outside module code");
  +			}
@@ -34,11 +19,6 @@ index a4e85a4..713293e 100644
 ++			extern void sheng_pmgr_run(void) __asm__("_sheng_pmgr_run");
 ++			sheng_pmgr_run();
 ++#endif
-++			if (!native_prelink_trust_cache_ready) {
-++				trust_cache_runtime_init();
-++				load_static_trust_cache();
-++				native_prelink_trust_cache_ready = true;
-++			}
  +			((void (*)(void))target)();
  +	#else
  +			panic("NativePrelink: early security initializer requires MAC framework");
