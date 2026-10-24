@@ -5,6 +5,9 @@
     "Retain a pending event on header checksum failure",
     "Acknowledge the controller before HID work-loop dispatch"
   ],
-  "build": "outputs/UniXNU_marble/touch_event_build.log",
-  "hardware_validation": "pending"
+  "build": "passed: archived XNU core linked with current driver archives, then original 21H461 kext prelink",
+  "hardware_validation": "loading",
+  "relink_script": "scripts/relink_kernel.py",
+  "kernel": "outputs/UniXNU_marble/kernel_touch_events.macho",
+  "sha256": "89e70638469241a54520ff91f8e7993b95774ea1287dff55deb18814120ea778"
 }
