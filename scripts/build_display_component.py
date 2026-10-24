@@ -6,11 +6,15 @@ from pathlib import Path
 import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('component',choices=['NativeLegacyDisplay','NativeGOPPresenter','NativeKeyStoreEvents'])
+parser.add_argument('component',choices=['NativeLegacyDisplay','NativeGOPPresenter','NativeKeyStoreEvents','NativeHomeInput'])
 component=parser.parse_args().component
 record=json.loads((ROOT/'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json').read_text().strip().rstrip(','))
-source=ROOT/'drivers'/('NativeKeyStoreEvents' if component=='NativeKeyStoreEvents' else 'NativeMobileDisplay')/(component+'.cpp')
-out=ROOT/'build'/{'NativeLegacyDisplay':'native-legacy-display','NativeGOPPresenter':'native-gop-presenter','NativeKeyStoreEvents':'native-keystore-events'}[component]
+sources={'NativeLegacyDisplay':'drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp',
+         'NativeGOPPresenter':'drivers/NativeMobileDisplay/NativeGOPPresenter.cpp',
+         'NativeKeyStoreEvents':'drivers/NativeKeyStoreEvents/NativeKeyStoreEvents.cpp',
+         'NativeHomeInput':'kits/marble/NativeHomeInput.cpp'}
+source=ROOT/sources[component]
+out=ROOT/'build'/{'NativeLegacyDisplay':'native-legacy-display','NativeGOPPresenter':'native-gop-presenter','NativeKeyStoreEvents':'native-keystore-events','NativeHomeInput':'native-hid-input'}[component]
 out.mkdir(parents=True,exist_ok=True)
 destination=out/(component+'.o')
 arguments = record['arguments']
