@@ -8,6 +8,8 @@ extern volatile uint32_t armcpu_smp_running, armcpu_smp_requested;
 extern volatile uint32_t armcpu_smp_step[8], armcpu_smp_fail[8];
 extern volatile int32_t armcpu_smp_psci_rc[8];
 extern volatile uint32_t armcpu_core_timer[8], armcpu_core_sgi[8];
+extern volatile uint64_t armcpu_ipi_sent, armcpu_ipi_interrupts;
+extern volatile uint32_t armcpu_gic_boot[8];
 extern unsigned int vm_page_free_count;
 }
 static unsigned domainFrequency[3], domainState[3];
@@ -68,5 +70,7 @@ extern "C" unsigned native_marble_cpu_report(char *out, unsigned cap) {
         at += snprintf(out + at, cap - at, "CPU%u step=%u failure=%u psci=%d timer=%u ipi=%u\n",
             core, armcpu_smp_step[core], armcpu_smp_fail[core], armcpu_smp_psci_rc[core],
             armcpu_core_timer[core], armcpu_core_sgi[core]);
+    at += snprintf(out + at, cap - at, "IPI sent=%llu received=%llu GICD_TYPER=%x\n",
+        armcpu_ipi_sent, armcpu_ipi_interrupts, armcpu_gic_boot[3]);
     return at;
 }

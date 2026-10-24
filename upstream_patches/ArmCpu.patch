@@ -1,7 +1,16 @@
 diff --git a/ArmCpu.cpp b/ArmCpu.cpp
-index a1f7bc6..1537a89 100644
+index a1f7bc6..e8a6078 100644
 --- a/ArmCpu.cpp
 +++ b/ArmCpu.cpp
+@@ -31,7 +31,7 @@ volatile uint64_t armcpu_ipi_selftest_sent = 0;
+ volatile uint32_t armcpu_gic_boot[8];
+ volatile uint32_t armcpu_core_timer[8], armcpu_core_sgi[8];   // per logical core: architectural timer interrupts and SGI 0 taken
+ static bool gSpiIpi = false;                // boot-arg armcpu-spi-ipi=1: IPIs are software-pended SPIs 1008+core routed to that core (ICC_SGI1R_EL1 generates nothing on this board)
+-static bool gSelfIpi = false;               // boot-arg armcpu-self-ipi=1: every core sends itself SGI 0 from initCPU
++static bool gSelfIpi = true;                // Enable XNU CPU signals with the startup self-IPI.
+ volatile uint32_t armcpu_irq_phase = 0,armcpu_irq_id = 1023;
+ volatile uint32_t armcpu_quiesce_calls = 0,armcpu_halt_calls = 0;
+ // Secondary-CPU bring-up evidence (sheng-smp=1). Step values: 1 nub started, 2 registered, 3 start thread running,
 @@ -125,7 +125,7 @@ static void spiIpiSend (uintptr_t dist, uint32_t core)
  static uint64_t counter (void)
  {
@@ -29,6 +38,15 @@ index a1f7bc6..1537a89 100644
    if (!secondary) {
      uint64_t pmr, ig, sre;
      __asm__ volatile ("mrs %0, icc_pmr_el1" : "=r" (pmr));
+@@ -361,7 +361,7 @@ bool ArmCpu::start (IOService *provider)
+   unsigned skip = 0;
+   PE_parse_boot_argn ("armcpu-skip-gic", &skip, sizeof (skip));
+   skipGic = skip != 0;
+-  unsigned selfIpi = 0;
++  unsigned selfIpi = 1;
+   PE_parse_boot_argn ("armcpu-self-ipi", &selfIpi, sizeof (selfIpi));
+   gSelfIpi = selfIpi == 1;
+   unsigned spiIpi = 0;
 @@ -603,7 +603,7 @@ void ArmCpu::interrupt (void)
        }
      }
