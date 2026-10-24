@@ -1,0 +1,224 @@
+diff --git a/patches/xnu/architectural-timer-entry.patch b/patches/xnu/architectural-timer-entry.patch
+index 635ed0d..191920b 100644
+--- a/patches/xnu/architectural-timer-entry.patch
++++ b/patches/xnu/architectural-timer-entry.patch
+@@ -9,3 +9,17 @@
+  	// Setup timer interrupt routing; must be done before MMU is enabled
+  	mrs		x15, MPIDR_EL1						// Load MPIDR to get CPU number
+  	and		x15, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
++--- a/osfmk/arm64/machine_routines.c
+++++ b/osfmk/arm64/machine_routines.c
++@@ -2393,8 +2393,11 @@
++ 	uint64_t cntvctl = CNTV_CTL_EL0_ENABLE; /* One wants to use 32 bits, but "mrs" prefers it this way */
++ 
++ 	__builtin_arm_wsr64("CNTV_CTL_EL0", cntvctl);
+++	/* Native ArmCpu uses the virtual timer; physical timer access may trap to EL2. */
+++#if !defined(XNU_NATIVE_ARCH_TIMER) || !XNU_NATIVE_ARCH_TIMER
++ 	/* disable the physical timer as a precaution, as its registers reset to architecturally unknown values */
++ 	__builtin_arm_wsr64("CNTP_CTL_EL0", CNTP_CTL_EL0_IMASKED);
+++#endif
++ }
++ 
++ void
+diff --git a/patches/xnu/offline-component-load-probes.patch b/patches/xnu/offline-component-load-probes.patch
+index 94bf523..69d5e48 100644
+--- a/patches/xnu/offline-component-load-probes.patch
++++ b/patches/xnu/offline-component-load-probes.patch
+@@ -1,6 +1,6 @@
+ --- a/bsd/kern/bsd_init.c
+ +++ b/bsd/kern/bsd_init.c
+-@@ -478,5 +478,88 @@
++@@ -478,5 +478,90 @@
+   * of the tro_ucred field so that the uthread structure can be
+   * used like any other.
+   */
+@@ -72,12 +72,14 @@
+ +	}
+ +	native_mobile_graphics_load_status = OSKextLoadKextWithIdentifier("com.apple.iokit.IOMobileGraphicsFamily");
+ +	native_mobile_graphics_probe_checkpoint();
+++#if defined(XNU_NATIVE_LEGACY_DISPLAY) && XNU_NATIVE_LEGACY_DISPLAY
+ +	int legacy_register = 0;
+ +	if (native_mobile_graphics_load_status == 0 &&
+ +	    PE_parse_boot_argn("offline-legacy-register", &legacy_register, sizeof(legacy_register)) && legacy_register) {
+ +		extern void native_legacy_display_probe(void);
+ +		native_legacy_display_probe();
+ +	}
+++#endif
+ +	int client_probe = 0;
+ +	if (native_mobile_graphics_load_status == 0 &&
+ +	    PE_parse_boot_argn("offline-mobile-graphics-client", &client_probe, sizeof(client_probe)) && client_probe) {
+@@ -89,7 +91,7 @@
+ +
+  void
+  bsd_init(void)
+-@@ -698,6 +774,27 @@
++@@ -698,6 +776,27 @@
+  	/* Initialize the file systems. */
+  	bsd_init_kprintf("calling vfsinit\n");
+  	vfsinit();
+diff --git a/scripts/audit-amfi-pmgr-contract.py b/scripts/audit-amfi-pmgr-contract.py
+index 12eb8a8..2c94067 100644
+--- a/scripts/audit-amfi-pmgr-contract.py
++++ b/scripts/audit-amfi-pmgr-contract.py
+@@ -20,6 +20,8 @@ def require(ok, message):
+ parser = argparse.ArgumentParser(description=__doc__)
+ parser.add_argument('--candidate', type=Path, default=ROOT /
+                     'build/native-prelink/native-owner-ufs-rootauth3-candidate.macho')
++parser.add_argument('--original-kernel', type=Path, default=ROOT /
++                    '.cache/firmware/kernelcache.macho/kernelcache.release.ipad7.decompressed')
+ args = parser.parse_args()
+ if not args.candidate.exists():
+     # Build products are pruned: a later candidate built from the same original kernelcache carries the same original
+@@ -100,7 +102,7 @@ words(0xfffffff004a20fbc, (0x12800000, 0xd65f03c0, 0xd65f03c0))
+ 
+ # The target-specific driver is inspected in the original supplied cache; it
+ # is not in this native candidate. Do not infer hardware semantics from its name.
+-original = (ROOT / '.cache/firmware/kernelcache.macho/kernelcache.release.ipad7.decompressed').read_bytes()
++original = args.original_kernel.read_bytes()
+ original_meta = macho(original)
+ 
+ 
+diff --git a/scripts/build-xnu-4k-baseline.sh b/scripts/build-xnu-4k-baseline.sh
+index 5815dd9..5223ea4 100755
+--- a/scripts/build-xnu-4k-baseline.sh
++++ b/scripts/build-xnu-4k-baseline.sh
+@@ -324,8 +324,10 @@ fi
+ SHENG_PMGR_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.sheng-pmgr-mode
+ if [ "$(cat "$SHENG_PMGR_STAMP" 2>/dev/null || echo 0)" != "$SHENG_PMGR" ]; then
+   rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o"
++  rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/libkern/DEVELOPMENT/OSKext.cpo"
+   printf '%s\n' "$SHENG_PMGR" > "$SHENG_PMGR_STAMP"
+ fi
++EXTRA_MAKE_ARGS+=("OSKext.cpo_CFLAGS_ADD=-DXNU_SHENG_PMGR=$SHENG_PMGR")
+ EXTRA_MAKE_ARGS+=("bsd_init.o_CFLAGS_ADD=-DXNU_SHENG_PMGR=$SHENG_PMGR -DXNU_VERIFIED_ROOT_PROBE=$OWNER_ROOT_PROBE -DXNU_OWNER_ROOT_AUDIT=$OWNER_ROOT_AUDIT -DXNU_OWNER_ROOT_TRUST=$OWNER_ROOT_TRUST -DXNU_ADRENO_FIRMWARE_PROBE=$ADRENO_FIRMWARE_PROBE -DXNU_ADRENO_PM4_PROBE=$ADRENO_PM4_PROBE -DXNU_SMMU4K_PROBE=$SMMU4K_PROBE -DXNU_CONSTANT_UPLOADS_PROBE=$CONSTANT_UPLOADS_PROBE -DXNU_NATIVE_LEGACY_DISPLAY=${XNU_NATIVE_LEGACY_DISPLAY:-0} -DXNU_NATIVE_OFFLINE_GPU=$NATIVE_OFFLINE_GPU")
+ NATIVE_MOBILE_DISPLAY=${XNU_NATIVE_MOBILE_DISPLAY:-0}
+ if [ "$NATIVE_MOBILE_DISPLAY" != 0 ] && [ "$NATIVE_MOBILE_DISPLAY" != 1 ]; then
+@@ -519,9 +521,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
+   exit 1
+ fi
+ EXTRA_MAKE_ARGS+=("start.o_SFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER")
++EXTRA_MAKE_ARGS+=("machine_routines.o_CFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER")
+ NATIVE_TIMER_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.native-arch-timer-mode
+ if [ "$(cat "$NATIVE_TIMER_STAMP" 2>/dev/null || echo 0)" != "$NATIVE_ARCH_TIMER" ]; then
+   rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/start.o"
++  rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/machine_routines.o"
+   printf '%s\n' "$NATIVE_ARCH_TIMER" > "$NATIVE_TIMER_STAMP"
+ fi
+ NATIVE_PAN=${XNU_NATIVE_PAN:-0}
+diff --git a/package/UniXNUPkg/Include/Protocol/RootStage.h b/package/UniXNUPkg/Include/Protocol/RootStage.h
+new file mode 100644
+index 0000000..65d5a8c
+--- /dev/null
++++ b/package/UniXNUPkg/Include/Protocol/RootStage.h
+@@ -0,0 +1,36 @@
++#ifndef UNIXNU_ROOT_STAGE_H
++#define UNIXNU_ROOT_STAGE_H
++
++#define ROOT_STAGE_MAGIC 0x31544f4f52584e55ULL
++#define ROOT_STAGE_CHUNK 0x10000000ULL
++#define ROOT_STAGE_EXTENTS 64
++#define ROOT_STAGE_GUID {0x7db6a499,0x1639,0x46e7,{0xb2,0xca,0x28,0x5b,0x91,0xd0,0x6f,0x21}}
++#define ROOT_STAGE_FAULT_GUID {0x1d7d3ce9,0x52a6,0x49c1,{0xb8,0x6e,0x35,0xb6,0x82,0x72,0x98,0xa4}}
++
++typedef struct {
++  unsigned long long Address;
++  unsigned long long Bytes;
++} ROOT_STAGE_EXTENT;
++
++typedef struct {
++  unsigned long long Bytes;
++  unsigned long long Received;
++  unsigned long long Count;
++  char Identity[33];
++  ROOT_STAGE_EXTENT Extents[ROOT_STAGE_EXTENTS];
++} ROOT_STAGE_DISK;
++
++typedef struct {
++  unsigned long long Magic;
++  unsigned long long Version;
++  unsigned long long KernelBase;
++  unsigned long long KernelBytes;
++  unsigned long long DiskCount;
++  unsigned long long ReturnStub;
++  unsigned long long WaitForHost;
++  unsigned long long ReturnTest;
++  unsigned long long ReturnCount;
++  ROOT_STAGE_DISK Disks[3];
++} ROOT_STAGE_TABLE;
++
++#endif
+diff --git a/patches/xnu/early-video-console.patch b/patches/xnu/early-video-console.patch
+new file mode 100644
+index 0000000..3d5b73e
+--- /dev/null
++++ b/patches/xnu/early-video-console.patch
+@@ -0,0 +1,16 @@
++--- a/pexpert/arm/pe_init.c
+++++ b/pexpert/arm/pe_init.c
++@@ -539,6 +539,13 @@
++ 	} else {
++ 		PE_initialize_console(&PE_state.video, kPETextMode);
++ 	}
+++
+++	unsigned int early_console = 0;
+++	if (PE_parse_boot_argn("early_console", &early_console, sizeof(early_console)) && early_console) {
+++		PE_initialize_console(NULL, kPETextMode);
+++		PE_initialize_console(NULL, kPEAcquireScreen);
+++		kprintf("Early video console acquired\n");
+++	}
++ }
++ 
++ int
+diff --git a/patches/xnu/native-resident-return.patch b/patches/xnu/native-resident-return.patch
+new file mode 100644
+index 0000000..bd3b5c2
+--- /dev/null
++++ b/patches/xnu/native-resident-return.patch
+@@ -0,0 +1,13 @@
++--- a/osfmk/arm64/machine_routines.c
+++++ b/osfmk/arm64/machine_routines.c
++@@ -800,6 +800,10 @@
++ void
++ halt_all_cpus(boolean_t reboot)
++ {
+++	extern void native_resident_return(void) __attribute__((weak_import));
+++	if (reboot && &native_resident_return) {
+++		native_resident_return();
+++	}
++ 	if (reboot) {
++ 		printf("MACH Reboot\n");
++ 		PEHaltRestart(kPERestartCPU);
+diff --git a/patches/xnu/native-root-block-init.patch b/patches/xnu/native-root-block-init.patch
+new file mode 100644
+index 0000000..7161b4f
+--- /dev/null
++++ b/patches/xnu/native-root-block-init.patch
+@@ -0,0 +1,28 @@
++--- a/iokit/bsddev/IOKitBSDInit.cpp
+++++ b/iokit/bsddev/IOKitBSDInit.cpp
++@@ -110,7 +110,14 @@
++ kern_return_t
++ IOKitBSDInit( void )
++ {
++ 	IOService::publishResource("IOBSD");
+++
+++	// Publish RAM storage after platform power management and BSD resources.
+++	extern void native_root_block_start(void) __asm__("_native_root_block_start")
+++	    __attribute__((weak_import));
+++	if (&native_root_block_start) {
+++		native_root_block_start();
+++	}
++ 
++ #if IOPOLLED_COREFILE
++ 	corefile_open_call = thread_call_allocate_with_options(IOOpenPolledCoreFile, NULL, THREAD_CALL_PRIORITY_KERNEL, THREAD_CALL_OPTIONS_ONCE);
++@@ -982,6 +989,10 @@
++ 			// The disk isn't found - have the user pick from System Recovery.
++ 			(void)IOSetRecoveryBoot(BSD_BOOTFAIL_MEDIA_MISSING, NULL, true);
++ #elif XNU_TARGET_OS_IOS
+++			extern const char *native_root_block_report(void) __asm__("_native_root_block_report")
+++			    __attribute__((weak_import));
+++			if (&native_root_block_report)
+++				panic("Failed to mount root device: %s", native_root_block_report());
++ 			panic("Failed to mount root device");
++ #endif
++ 		}

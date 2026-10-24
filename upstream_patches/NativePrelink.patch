@@ -1,0 +1,24 @@
+diff --git a/patches/xnu-10063.141.1-security-init.patch b/patches/xnu-10063.141.1-security-init.patch
+index a4e85a4..a4e66a8 100644
+--- a/patches/xnu-10063.141.1-security-init.patch
++++ b/patches/xnu-10063.141.1-security-init.patch
+@@ -12,7 +12,7 @@
+  #include <libkern/c++/OSLib.h>
+  
+  #include <IOKit/IOLib.h>
+-@@ -8446,6 +8451,43 @@
++@@ -8446,6 +8451,47 @@
+  	result = OSRuntimeInitializeCPP(this);
+  	if (result == KERN_SUCCESS) {
+  		result = startfunc(kmod_info, kmodStartData);
+@@ -48,6 +48,10 @@
+ +			if (!executable) {
+ +				panic("NativePrelink: early security initializer outside module code");
+ +			}
+++#if defined(XNU_SHENG_PMGR) && XNU_SHENG_PMGR
+++			extern void sheng_pmgr_run(void) __asm__("_sheng_pmgr_run");
+++			sheng_pmgr_run();
+++#endif
+ +			((void (*)(void))target)();
+ +	#else
+ +			panic("NativePrelink: early security initializer requires MAC framework");

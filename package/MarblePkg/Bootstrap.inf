@@ -1,0 +1,31 @@
+[Defines]
+  INF_VERSION = 0x00010019
+  BASE_NAME = MarbleBootstrap
+  FILE_GUID = 71335348-B8BE-466B-8BB4-926870AA59E7
+  MODULE_TYPE = UEFI_APPLICATION
+  VERSION_STRING = 1.0
+  ENTRY_POINT = MarbleBootstrapEntry
+
+[Sources]
+  Bootstrap.c
+  RootUsb.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  UniXNUPkg/UniXNUPkg.dec
+
+[LibraryClasses]
+  BaseMemoryLib
+  BaseLib
+  DevicePathLib
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  UefiLib
+  MemoryAllocationLib
+
+[Protocols]
+  gEfiCpuArchProtocolGuid
+  gEfiBlockIoProtocolGuid
+  gEfiDevicePathProtocolGuid
+  gEfiSimpleFileSystemProtocolGuid

@@ -1,0 +1,597 @@
+diff --git a/DarwinBootPkg/Driver/DarwinBoot.c b/DarwinBootPkg/Driver/DarwinBoot.c
+index 25ce2d2..f39c53a 100644
+--- a/DarwinBootPkg/Driver/DarwinBoot.c
++++ b/DarwinBootPkg/Driver/DarwinBoot.c
+@@ -12,6 +12,9 @@
+ #include <Protocol/LoadedImage.h>
+ #include <Protocol/GraphicsOutput.h>
+ #include <Protocol/SimpleFileSystem.h>
++#include <Protocol/RootStage.h>
++EFI_STATUS DarwinResidentRun(ROOT_STAGE_TABLE *,UINT64,UINT64,UINT64,UINT64,UINT64,UINT64,EFI_MEMORY_DESCRIPTOR *,UINTN,UINTN);
++
+ #include "BootArgs.h"
+ #include "BootVideo.h"
+ #include "PackedRamdisk.h"
+@@ -183,7 +186,7 @@ ParseKernel (CONST UINT8 *Data, UINTN Size, KERNEL *Kernel)
+ 
+ STATIC
+ BOOLEAN
+-AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN ParentPath, UINTN *RamdiskOffset, UINTN *TrustCacheOffset, UINTN *AddonOffset, UINT64 *WindowSize, BOOLEAN *KeepPacked)
++AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN ParentPath, UINTN *RamdiskOffset, UINTN *TrustCacheOffset, UINTN *AddonOffset, UINTN *RootOffset, UINT64 *WindowSize, BOOLEAN *KeepPacked)
+ {
+   UINT32 Properties;
+   UINT32 Children;
+@@ -194,6 +197,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+   UINTN  TrustCandidate;
+   UINTN  AddonCandidate;
+   UINTN  MemoryCandidate;
++  UINTN  RootCandidate;
+   CONST UINT8 *Name;
+   UINTN  NameLength;
+ 
+@@ -203,6 +207,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+   TrustCandidate = MAX_UINTN;
+   AddonCandidate = MAX_UINTN;
+   MemoryCandidate = MAX_UINTN;
++  RootCandidate = MAX_UINTN;
+   if ((Depth > 64) || (Size - *Offset < 8)) { return FALSE; }
+   Properties = U32 (Data + *Offset);
+   Children = U32 (Data + *Offset + 4);
+@@ -236,6 +241,10 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+       if ((AddonCandidate != MAX_UINTN) || (Length != 16)) { return FALSE; }
+       AddonCandidate = *Offset;
+     }
++    if (AsciiStrCmp ((CONST CHAR8 *)(Data + *Offset - 36), "RootDisks") == 0) {
++      if ((RootCandidate != MAX_UINTN) || (Length != 16)) { return FALSE; }
++      RootCandidate = *Offset;
++    }
+     if (AsciiStrCmp ((CONST CHAR8 *)(Data + *Offset - 36), "darwinboot-memory-size") == 0) {
+       if ((MemoryCandidate != MAX_UINTN) || (Length != 8)) { return FALSE; }
+       MemoryCandidate = *Offset;
+@@ -265,9 +274,13 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+     *WindowSize = U64 (Data + MemoryCandidate);
+     if (!DarwinWindowSizeValid (*WindowSize)) { return FALSE; }
+   }
++  if ((Path == 2) && (RootCandidate != MAX_UINTN)) {
++    if (*RootOffset != MAX_UINTN) { return FALSE; }
++    *RootOffset = RootCandidate;
++  }
+   if (Children > (Size - *Offset) / 8) { return FALSE; }
+   for (Index = 0; Index < Children; Index++) {
+-    if (!AdtNode (Data, Size, Offset, Depth + 1, Path, RamdiskOffset, TrustCacheOffset, AddonOffset, WindowSize, KeepPacked)) { return FALSE; }
++    if (!AdtNode (Data, Size, Offset, Depth + 1, Path, RamdiskOffset, TrustCacheOffset, AddonOffset, RootOffset, WindowSize, KeepPacked)) { return FALSE; }
+   }
+   return TRUE;
+ }
+@@ -491,6 +504,8 @@ Boot (
+   UINT64                          TrustCacheAddress;
+   UINTN                           AddonOffset;
+   UINT64                          AddonAddress;
++  UINTN                           RootOffset;
++  ROOT_STAGE_TABLE                *RootStage;
+   DARWIN_BOOT_ARGS                *Args;
+   EFI_MEMORY_DESCRIPTOR           *Map;
+   UINTN                           Capacity;
+@@ -523,6 +538,7 @@ Boot (
+       CommandLine[Index] = (CHAR8)Request->BootArgs[Index];
+     }
+   }
++Reload:
+   Root = NULL;
+   Image = NULL;
+   Tree = NULL;
+@@ -532,12 +548,26 @@ Boot (
+   TreePath = NULL;
+   Map = NULL;
+   Address = 0;
++  RootStage = NULL;
++  {
++    EFI_GUID Guid=ROOT_STAGE_GUID;
++    for (UINTN I=0;I<gST->NumberOfTableEntries;I++)
++      if (CompareGuid(&gST->ConfigurationTable[I].VendorGuid,&Guid))
++        RootStage=gST->ConfigurationTable[I].VendorTable;
++    if (RootStage && (RootStage->Magic!=ROOT_STAGE_MAGIC || RootStage->Version!=2)) return EFI_INCOMPATIBLE_VERSION;
++  }
+   Capacity = 0;
+   Status = gBS->HandleProtocol (Request->Volume, &gEfiSimpleFileSystemProtocolGuid, (VOID **)&Fs);
+   if (EFI_ERROR (Status)) { return Status; }
+   Status = Fs->OpenVolume (Fs, &Root);
+   if (EFI_ERROR (Status)) { return Status; }
+-  Status = ReadFile (Root, Request->KernelPath, SIZE_128MB, &Image, &ImageSize);
++  if (RootStage && RootStage->Disks[2].Bytes) {
++    ROOT_STAGE_DISK *Update=&RootStage->Disks[2];
++    if (Update->Received!=Update->Bytes || Update->Count!=1) { Status=EFI_NOT_READY; goto Fail; }
++    ImageSize=Update->Bytes;
++    Image=AllocateCopyPool(ImageSize,(VOID *)(UINTN)Update->Extents[0].Address);
++    Status=Image ? EFI_SUCCESS : EFI_OUT_OF_RESOURCES;
++  } else Status = ReadFile (Root, Request->KernelPath, SIZE_128MB, &Image, &ImageSize);
+   if (EFI_ERROR (Status)) { goto Fail; }
+   Status = ParseKernel (Image, ImageSize, &Kernel);
+   if (EFI_ERROR (Status)) { goto Fail; }
+@@ -552,9 +582,10 @@ Boot (
+   RamdiskOffset = MAX_UINTN;
+   TrustCacheOffset = MAX_UINTN;
+   AddonOffset = MAX_UINTN;
++  RootOffset = MAX_UINTN;
+   WindowSize = 0;
+   KeepPacked = FALSE;
+-  if (!AdtNode (Tree, TreeSize, &Offset, 0, 3, &RamdiskOffset, &TrustCacheOffset, &AddonOffset, &WindowSize, &KeepPacked) || (Offset != TreeSize)) { Status = EFI_COMPROMISED_DATA; goto Fail; }
++  if (!AdtNode (Tree, TreeSize, &Offset, 0, 3, &RamdiskOffset, &TrustCacheOffset, &AddonOffset, &RootOffset, &WindowSize, &KeepPacked) || (Offset != TreeSize)) { Status = EFI_COMPROMISED_DATA; goto Fail; }
+   if (KeepPacked && (!RamdiskPacked || (RamdiskOffset == MAX_UINTN))) { Status = EFI_COMPROMISED_DATA; goto Fail; }
+   if (WindowSize == 0) { WindowSize = WINDOW_SIZE; }
+   if (Kernel.Base > MAX_UINT64 - WindowSize) { Status = EFI_LOAD_ERROR; goto Fail; }
+@@ -599,8 +630,24 @@ Boot (
+   }
+   Status = ReadBootVideo (Video);
+   if (EFI_ERROR (Status)) { goto Fail; }
+-  Status = AllocateWindow (&Kernel, WindowSize, &Address);
+-  if (EFI_ERROR (Status)) { goto Fail; }
++  if (RootOffset != MAX_UINTN) {
++    EFI_GUID RootGuid = ROOT_STAGE_GUID;
++    for (Index = 0; Index < gST->NumberOfTableEntries; Index++) {
++      if (CompareGuid (&gST->ConfigurationTable[Index].VendorGuid, &RootGuid)) {
++        RootStage = gST->ConfigurationTable[Index].VendorTable;
++        break;
++      }
++    }
++    if ((RootStage == NULL) || (RootStage->Magic != ROOT_STAGE_MAGIC) ||
++        (RootStage->Version != 2) || (RootStage->KernelBytes != WindowSize) ||
++        (RootStage->KernelBase == 0) || (RootStage->KernelBase & (BLOCK_SIZE - 1))) {
++      Status = EFI_COMPROMISED_DATA; goto Fail;
++    }
++    Address = RootStage->KernelBase + (Kernel.Base & (BLOCK_SIZE - 1));
++  } else {
++    Status = AllocateWindow (&Kernel, WindowSize, &Address);
++    if (EFI_ERROR (Status)) { goto Fail; }
++  }
+   ArgsAddress = ALIGN_VALUE (Address + Kernel.End - Kernel.Base, SIZE_16KB);
+   TreeAddress = ArgsAddress + EFI_PAGE_SIZE;
+   RamdiskAddress = ALIGN_VALUE (TreeAddress + TreeSize, EFI_PAGE_SIZE);
+@@ -631,6 +678,10 @@ Boot (
+   Args->DeviceTreeLength = (UINT32)TreeSize;
+   CopyMem (Args->CommandLine, CommandLine, sizeof (CommandLine));
+   CopyMem ((VOID *)(UINTN)TreeAddress, Tree, TreeSize);
++  if (RootStage != NULL) {
++    WriteUnaligned64 ((UINT64 *)(UINTN)(TreeAddress + RootOffset), (UINTN)RootStage);
++    WriteUnaligned64 ((UINT64 *)(UINTN)(TreeAddress + RootOffset + 8), sizeof (*RootStage));
++  }
+   if (Request->Ramdisk != NULL) {
+     if (KeepPacked) { CopyMem ((VOID *)(UINTN)RamdiskAddress, Request->Ramdisk, Request->RamdiskSize); }
+     else { CopyRamdisk ((VOID *)(UINTN)RamdiskAddress, Request->Ramdisk, Request->RamdiskSize, RamdiskPacked); }
+@@ -681,6 +732,16 @@ Boot (
+           READ_SYSREG (id_aa64mmfr0_el1) & 0xF, (((READ_SYSREG (id_aa64mmfr0_el1) >> 28) & 0xF) == 0xF) ? "NOT supported" : "supported"));
+   DEBUG ((DEBUG_ERROR, "ID_AA64PFR0_EL1  0x%lx\n", READ_SYSREG (id_aa64pfr0_el1)));
+   DEBUG ((DEBUG_ERROR, "\nExiting boot services. A green bar across the top\nmeans the kernel entry code ran.\n"));
++  if (RootStage) {
++    Status=DarwinResidentRun(RootStage,ArgsAddress,Address+Kernel.Entry-Kernel.Base,
++        Address,WindowSize,Video[0],Video[2]*Video[4],Map,MapSize,Stride);
++    FreePool(Map); Map=NULL;
++    if (EFI_ERROR(Status)) goto Fail;
++    Print(L"DARWINBOOT: kernel returned; system disks retained\r\n");
++    Status=((EFI_STATUS (*)(VOID))(UINTN)RootStage->WaitForHost)();
++    if (EFI_ERROR(Status)) goto Fail;
++    goto Reload;
++  }
+   for (Attempt = 0; Attempt < 3; Attempt++) {
+     MapSize = Capacity;
+     Status = gBS->GetMemoryMap (&MapSize, Map, &Key, &Stride, &Version);
+@@ -705,18 +766,21 @@ Fail:
+   if (Addon != NULL) { FreePool (Addon); }
+   if (TreePath != NULL) { FreePool (TreePath); }
+   if (Map != NULL) { FreePool (Map); }
+-  if (Address != 0) { gBS->FreePages (Address, EFI_SIZE_TO_PAGES (WindowSize)); }
++  if ((Address != 0) && (RootStage == NULL)) { gBS->FreePages (Address, EFI_SIZE_TO_PAGES (WindowSize)); }
+   Print (L"DARWINBOOT: boot refused: %r; firmware retained\n", Status);
+   return Status;
+ }
+ 
+ STATIC UNIXNU_LOADER_PROTOCOL mLoader = { UNIXNU_LOADER_REVISION, Boot };
++STATIC EFI_GUID mResidentFaultGuid = ROOT_STAGE_FAULT_GUID;
++extern UINT64 DarwinResidentFaultInfo[3];
+ 
+ STATIC
+ EFI_STATUS
+ EFIAPI
+ Unload (EFI_HANDLE ImageHandle)
+ {
++  gBS->InstallConfigurationTable (&mResidentFaultGuid, NULL);
+   return gBS->UninstallMultipleProtocolInterfaces (ImageHandle, &gUniXNULoaderProtocolGuid, &mLoader, NULL);
+ }
+ 
+@@ -734,7 +798,10 @@ DarwinBootEntry (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+   Status = gBS->HandleProtocol (ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&Loaded);
+   if (EFI_ERROR (Status)) { return Status; }
+   mImage = ImageHandle;
++  Status = gBS->InstallConfigurationTable (&mResidentFaultGuid, DarwinResidentFaultInfo);
++  if (EFI_ERROR (Status)) { return Status; }
+   Status = gBS->InstallMultipleProtocolInterfaces (&ImageHandle, &gUniXNULoaderProtocolGuid, &mLoader, NULL);
++  if (EFI_ERROR (Status)) { gBS->InstallConfigurationTable (&mResidentFaultGuid, NULL); }
+   if (!EFI_ERROR (Status)) {
+     Loaded->Unload = Unload;
+     Print (L"DARWINBOOT: loader v2 installed EL%u\n", (UINT32)(DarwinCurrentEl () >> 2));
+diff --git a/DarwinBootPkg/Driver/DarwinBoot.inf b/DarwinBootPkg/Driver/DarwinBoot.inf
+index 3a90c96..fd4fa05 100644
+--- a/DarwinBootPkg/Driver/DarwinBoot.inf
++++ b/DarwinBootPkg/Driver/DarwinBoot.inf
+@@ -14,6 +14,8 @@
+   BootVideo.h
+   DiagFont.h
+   Entry.S
++  Resident.c
++  ResidentContext.S
+ 
+ [Packages]
+   MdePkg/MdePkg.dec
+diff --git a/DarwinBootPkg/Driver/Entry.S b/DarwinBootPkg/Driver/Entry.S
+index 890d4df..4190039 100644
+--- a/DarwinBootPkg/Driver/Entry.S
++++ b/DarwinBootPkg/Driver/Entry.S
+@@ -9,6 +9,11 @@ ASM_FUNC(DarwinCurrentEl)
+ // PA (0 for none), x5=its size in bytes. EL1 only.
+ ASM_FUNC(DarwinEnter)
+   msr daifset, #15
++  // The kernel installs its IRQ handler after early VM initialization.
++  msr icc_igrpen1_el1, xzr
++  msr cntv_ctl_el0, xzr
++  dsb sy
++  isb
+   // Breadcrumb: a green bar (BGRA 0xFF00FF00) over the top 1/16 of the frame
+   // buffer shows that this code ran, whatever the kernel does afterwards.
+   cbz x4, 2f
+@@ -40,6 +45,17 @@ ASM_FUNC(DarwinEnter)
+   ic iallu
+   dsb sy
+   isb
++  // Preserve the final return frame, matching the marble HackiOS handoff.
++  mov x4, sp
++  sub x4, x4, #0x400
++  bic x4, x4, #63
++  add x5, x4, #0x4000
++4:
++  dc cvac, x4
++  add x4, x4, #64
++  cmp x4, x5
++  b.lo 4b
++  dsb sy
+   mrs x4, sctlr_el1
+   bic x4, x4, #1
+   bic x4, x4, #4
+diff --git a/DarwinBootPkg/Driver/Resident.c b/DarwinBootPkg/Driver/Resident.c
+new file mode 100644
+index 0000000..6394853
+--- /dev/null
++++ b/DarwinBootPkg/Driver/Resident.c
+@@ -0,0 +1,132 @@
++// SPDX-License-Identifier: BSD-2-Clause-Patent
++#include <Uefi.h>
++#include <Library/BaseLib.h>
++#include <Library/MemoryAllocationLib.h>
++#include <Library/UefiBootServicesTableLib.h>
++#include <Library/UefiLib.h>
++#include <Protocol/RootStage.h>
++
++UINT64 DarwinResidentContext[48] __attribute__((aligned(64)));
++UINT64 DarwinResidentFaultInfo[3] __attribute__((aligned(64)));
++VOID DarwinResidentVectors(VOID);
++UINTN DarwinResidentSave(VOID) __attribute__((returns_twice));
++VOID DarwinResidentReturn(VOID);
++VOID DarwinEnter(UINT64,UINT64,UINT64,UINT64,UINT64,UINT64);
++
++#define DIST 0x17100000UL
++#define REDIST 0x17190000UL
++STATIC UINT32 mControl, mEnabled[32], mConfig[64];
++STATIC UINT8 mPriority[1024], mLocalPriority[32];
++STATIC UINT64 mRoutes[1024];
++STATIC UINT32 mLocalEnabled, mLocalConfig, mBanks;
++// Use base-only MMIO instructions; firmware traps on post-indexed accesses.
++STATIC UINT32 Read32(UINTN Address) {
++  UINT32 Value;
++  __asm__ volatile("ldr %w0, [%1]" : "=r"(Value) : "r"(Address) : "memory");
++  return Value;
++}
++STATIC VOID Write32(UINTN Address, UINT32 Value) {
++  __asm__ volatile("str %w1, [%0]" :: "r"(Address), "r"(Value) : "memory");
++}
++STATIC UINT8 Read8(UINTN Address) {
++  UINT32 Value;
++  __asm__ volatile("ldrb %w0, [%1]" : "=r"(Value) : "r"(Address) : "memory");
++  return (UINT8)Value;
++}
++STATIC VOID Write8(UINTN Address, UINT8 Value) {
++  __asm__ volatile("strb %w1, [%0]" :: "r"(Address), "r"((UINT32)Value) : "memory");
++}
++STATIC UINT64 Read64(UINTN Address) {
++  UINT64 Value;
++  __asm__ volatile("ldr %0, [%1]" : "=r"(Value) : "r"(Address) : "memory");
++  return Value;
++}
++STATIC VOID Write64(UINTN Address, UINT64 Value) {
++  __asm__ volatile("str %1, [%0]" :: "r"(Address), "r"(Value) : "memory");
++}
++
++STATIC VOID SaveInterrupts(VOID)
++{
++  mControl=Read32(DIST);
++  mBanks=MIN((Read32(DIST+4)&31)+1,32);
++  for (UINTN i=1;i<mBanks;i++) {
++    mEnabled[i]=Read32(DIST+0x100+4*i);
++  }
++  // Preserve the firmware's active SPIs; unused IDs can belong to secure firmware.
++  for (UINTN i=32;i<MIN(mBanks*32,1020);i++) {
++    if ((mEnabled[i/32] & (1U << (i%32))) == 0) continue;
++    mPriority[i]=Read8(DIST+0x400+i);
++    mConfig[i/16]=Read32(DIST+0xc00+4*(i/16));
++    mRoutes[i]=Read64(DIST+0x6000+8*i);
++  }
++  mLocalEnabled=Read32(REDIST+0x100);
++  for (UINTN i=0;i<32;i++)
++    if (mLocalEnabled & (1U << i)) mLocalPriority[i]=Read8(REDIST+0x400+i);
++  mLocalConfig=Read32(REDIST+0xc04);
++}
++
++STATIC VOID RestoreInterrupts(VOID)
++{
++  for (UINTN i=1;i<mBanks;i++) {
++    if (!mEnabled[i]) continue;
++    Write32(DIST+0x180+4*i,mEnabled[i]);
++    Write32(DIST+0x280+4*i,mEnabled[i]);
++    Write32(DIST+0x380+4*i,mEnabled[i]);
++  }
++  for (UINTN i=32;i<MIN(mBanks*32,1020);i++) {
++    if ((mEnabled[i/32] & (1U << (i%32))) == 0) continue;
++    Write8(DIST+0x400+i,mPriority[i]);
++    Write32(DIST+0xc00+4*(i/16),mConfig[i/16]);
++    Write64(DIST+0x6000+8*i,mRoutes[i]);
++  }
++  for (UINTN i=1;i<mBanks;i++)
++    if (mEnabled[i]) Write32(DIST+0x100+4*i,mEnabled[i]);
++  Write32(REDIST+0x180,mLocalEnabled); Write32(REDIST+0x280,mLocalEnabled); Write32(REDIST+0x380,mLocalEnabled);
++  for (UINTN i=0;i<32;i++)
++    if (mLocalEnabled & (1U << i)) Write8(REDIST+0x400+i,mLocalPriority[i]);
++  Write32(REDIST+0xc04,mLocalConfig); Write32(REDIST+0x100,mLocalEnabled);
++  Write32(DIST,mControl);
++  __asm__ volatile("dsb sy; isb" ::: "memory");
++}
++
++EFI_STATUS DarwinResidentRun(ROOT_STAGE_TABLE *Stage, UINT64 Args, UINT64 Entry,
++    UINT64 Base, UINT64 Size, UINT64 Video, UINT64 VideoBytes,
++    EFI_MEMORY_DESCRIPTOR *Map, UINTN MapSize, UINTN Stride)
++{
++  Stage->ReturnStub=(UINTN)&DarwinResidentReturn;
++  Print(L"Resident run=%p save=%p return=%p\r\n", (VOID *)(UINTN)&DarwinResidentRun,
++      (VOID *)(UINTN)&DarwinResidentSave, (VOID *)(UINTN)&DarwinResidentReturn);
++  DarwinResidentFaultInfo[1]=0;
++  if (DarwinResidentSave()==0) {
++    __asm__ volatile("msr daifset, #15" ::: "memory");
++    // Preserve the return frame before accessing interrupt-controller registers.
++    UINT64 Stack;
++    __asm__ volatile("mov %0, sp" : "=r"(Stack));
++    for (UINT64 P=(Stack-0x2000)&~63ULL;P<Stack+0x2000;P+=64)
++      __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");
++    for (UINT64 P=(UINTN)DarwinResidentContext;P<(UINTN)(DarwinResidentContext+48);P+=64)
++      __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");
++    __asm__ volatile("dsb sy; msr vbar_el1, %0; isb" :: "r"((UINTN)&DarwinResidentVectors) : "memory");
++    SaveInterrupts();
++    // The kernel owns only its allocated window. Retained firmware must reach RAM.
++    for (UINTN i=0;i<MapSize;i+=Stride) {
++      EFI_MEMORY_DESCRIPTOR *D=(VOID *)((UINT8 *)Map+i);
++      if ((D->Type>=EfiLoaderCode && D->Type<=EfiRuntimeServicesData) || D->Type==EfiACPIReclaimMemory || D->Type==EfiACPIMemoryNVS) {
++        for (UINT64 P=D->PhysicalStart;P<D->PhysicalStart+EFI_PAGES_TO_SIZE(D->NumberOfPages);P+=64)
++          __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");
++      }
++    }
++    __asm__ volatile("dsb sy" ::: "memory");
++    DarwinEnter(Args,Stage->ReturnTest ? Stage->ReturnStub : Entry,Base,Size,Video,VideoBytes);
++  }
++  if (DarwinResidentFaultInfo[1]) {
++    Print(L"Resident fault ESR=%lx PC=%lx FAR=%lx\r\n",
++        DarwinResidentFaultInfo[0],DarwinResidentFaultInfo[1],DarwinResidentFaultInfo[2]);
++  } else if (!Stage->ReturnTest) {
++    RestoreInterrupts();
++  }
++  Stage->ReturnTest=0;
++  Stage->ReturnCount++;
++  __asm__ volatile("msr daif, %0" :: "r"(DarwinResidentContext[8]) : "memory");
++  return EFI_SUCCESS;
++}
+diff --git a/DarwinBootPkg/Driver/ResidentContext.S b/DarwinBootPkg/Driver/ResidentContext.S
+new file mode 100644
+index 0000000..4ae95a9
+--- /dev/null
++++ b/DarwinBootPkg/Driver/ResidentContext.S
+@@ -0,0 +1,195 @@
++// SPDX-License-Identifier: BSD-2-Clause-Patent
++#include <AsmMacroLib.h>
++.text
++.balign 64
++ASM_FUNC(DarwinResidentSave)
++  adrp x10, DarwinResidentContext
++  add x10, x10, :lo12:DarwinResidentContext
++  mrs x9, ttbr0_el1
++  str x9, [x10, #0]
++  mrs x9, ttbr1_el1
++  str x9, [x10, #8]
++  mrs x9, tcr_el1
++  str x9, [x10, #16]
++  mrs x9, mair_el1
++  str x9, [x10, #24]
++  mrs x9, sctlr_el1
++  str x9, [x10, #32]
++  mrs x9, vbar_el1
++  str x9, [x10, #40]
++  mrs x9, cpacr_el1
++  str x9, [x10, #48]
++  mrs x9, spsel
++  str x9, [x10, #56]
++  mrs x9, daif
++  str x9, [x10, #64]
++  mrs x9, cntv_ctl_el0
++  str x9, [x10, #72]
++  mrs x9, cntv_cval_el0
++  str x9, [x10, #80]
++  mrs x9, cntkctl_el1
++  str x9, [x10, #88]
++  mrs x9, tpidr_el1
++  str x9, [x10, #96]
++  mrs x9, tpidr_el0
++  str x9, [x10, #104]
++  mrs x9, tpidrro_el0
++  str x9, [x10, #112]
++  mrs x9, contextidr_el1
++  str x9, [x10, #120]
++  mrs x9, mdscr_el1
++  str x9, [x10, #128]
++  mrs x9, fpcr
++  str x9, [x10, #136]
++  mrs x9, fpsr
++  str x9, [x10, #144]
++  mrs x9, icc_pmr_el1
++  str x9, [x10, #152]
++  mrs x9, icc_igrpen1_el1
++  str x9, [x10, #160]
++  mrs x9, icc_bpr1_el1
++  str x9, [x10, #168]
++  mov x9, sp
++  str x9, [x10, #176]
++  mrs x9, spsel
++  cbz x9, 1f
++  mrs x9, sp_el0
++  str x9, [x10, #184]
++1:
++  str x18, [x10, #192]
++  str x19, [x10, #200]
++  str x20, [x10, #208]
++  str x21, [x10, #216]
++  str x22, [x10, #224]
++  str x23, [x10, #232]
++  str x24, [x10, #240]
++  str x25, [x10, #248]
++  str x26, [x10, #256]
++  str x27, [x10, #264]
++  str x28, [x10, #272]
++  str x29, [x10, #280]
++  str x30, [x10, #288]
++  str d8, [x10, #304]
++  str d9, [x10, #312]
++  str d10, [x10, #320]
++  str d11, [x10, #328]
++  str d12, [x10, #336]
++  str d13, [x10, #344]
++  str d14, [x10, #352]
++  str d15, [x10, #360]
++  mov x0, #0
++  ret
++.balign 64
++ASM_FUNC(DarwinResidentReturn)
++  msr daifset, #15
++  .inst 0xd500409f // PAN=0
++  .inst 0xd500407f // UAO=0
++  mrs x9, sctlr_el1
++  bic x9, x9, #1
++  bic x9, x9, #4
++  bic x9, x9, #0x1000
++  msr sctlr_el1, x9
++  isb
++  adrp x10, DarwinResidentContext
++  add x10, x10, :lo12:DarwinResidentContext
++  ldr x9, [x10, #0]
++  msr ttbr0_el1, x9
++  ldr x9, [x10, #8]
++  msr ttbr1_el1, x9
++  ldr x9, [x10, #16]
++  msr tcr_el1, x9
++  ldr x9, [x10, #24]
++  msr mair_el1, x9
++  ldr x9, [x10, #40]
++  msr vbar_el1, x9
++  ldr x9, [x10, #48]
++  msr cpacr_el1, x9
++  isb
++  tlbi vmalle1
++  dsb sy
++  ic iallu
++  isb
++  ldr x9, [x10, #32]
++  msr sctlr_el1, x9
++  isb
++  ldr x9, [x10, #56]
++  cbz x9, 2f
++  msr spsel, #1
++  ldr x9, [x10, #184]
++  msr sp_el0, x9
++  b 3f
++2:
++  msr spsel, #0
++3:
++  ldr x9, [x10, #176]
++  mov sp, x9
++  ldr x9, [x10, #96]
++  msr tpidr_el1, x9
++  ldr x9, [x10, #104]
++  msr tpidr_el0, x9
++  ldr x9, [x10, #112]
++  msr tpidrro_el0, x9
++  ldr x9, [x10, #120]
++  msr contextidr_el1, x9
++  ldr x9, [x10, #128]
++  msr mdscr_el1, x9
++  ldr x9, [x10, #136]
++  msr fpcr, x9
++  ldr x9, [x10, #144]
++  msr fpsr, x9
++  ldr x9, [x10, #152]
++  msr icc_pmr_el1, x9
++  ldr x9, [x10, #168]
++  msr icc_bpr1_el1, x9
++  ldr x9, [x10, #160]
++  msr icc_igrpen1_el1, x9
++  ldr x9, [x10, #88]
++  msr cntkctl_el1, x9
++  ldr x9, [x10, #80]
++  msr cntv_cval_el0, x9
++  ldr x9, [x10, #72]
++  msr cntv_ctl_el0, x9
++  ldr x18, [x10, #192]
++  ldr x19, [x10, #200]
++  ldr x20, [x10, #208]
++  ldr x21, [x10, #216]
++  ldr x22, [x10, #224]
++  ldr x23, [x10, #232]
++  ldr x24, [x10, #240]
++  ldr x25, [x10, #248]
++  ldr x26, [x10, #256]
++  ldr x27, [x10, #264]
++  ldr x28, [x10, #272]
++  ldr x29, [x10, #280]
++  ldr x30, [x10, #288]
++  ldr d8, [x10, #304]
++  ldr d9, [x10, #312]
++  ldr d10, [x10, #320]
++  ldr d11, [x10, #328]
++  ldr d12, [x10, #336]
++  ldr d13, [x10, #344]
++  ldr d14, [x10, #352]
++  ldr d15, [x10, #360]
++  mov x0, #1
++  ret
++
++// The handoff runs with interrupts masked. Recover faults through the saved frame.
++.balign 2048
++ASM_FUNC(DarwinResidentVectors)
++.rept 16
++  b DarwinResidentFault
++  .balign 128
++.endr
++ASM_FUNC(DarwinResidentFault)
++  msr daifset, #15
++  adrp x10, DarwinResidentFaultInfo
++  add x10, x10, :lo12:DarwinResidentFaultInfo
++  mrs x9, esr_el1
++  str x9, [x10]
++  mrs x9, elr_el1
++  str x9, [x10, #8]
++  mrs x9, far_el1
++  str x9, [x10, #16]
++  dc cvac, x10
++  dsb sy
++  b DarwinResidentReturn
