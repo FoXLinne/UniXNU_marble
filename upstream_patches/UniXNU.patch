@@ -300,7 +300,7 @@ index 0000000..761e6d0
 + 	}
 diff --git a/patches/xnu/native-init-policy-diagnostic.patch b/patches/xnu/native-init-policy-diagnostic.patch
 new file mode 100644
-index 0000000..549ab92
+index 0000000..6a2f5db
 --- /dev/null
 +++ b/patches/xnu/native-init-policy-diagnostic.patch
 @@ -0,0 +1,63 @@
@@ -309,7 +309,7 @@ index 0000000..549ab92
 +@@ -798,6 +798,8 @@
 + 	return error;
 + }
-+ 
++
 ++char native_init_mac_failure[128];
 ++
 + void
@@ -318,7 +318,7 @@ index 0000000..549ab92
 +@@ -845,9 +847,13 @@
 + 			size_t spawnattrlen = 0;
 + 			void *spawnattr = exec_spawnattr_getmacpolicyinfo(macextensions, mpc->mpc_name, &spawnattrlen);
-+ 
++
 +-			error = mac_error_select(hook(cred, new, vfs_context_proc(ctx), vp, offset, scriptvp,
 +-			    mac_vnode_label(vp), scriptvnodelabel, execl, csflags, spawnattr, spawnattrlen, disjoint),
 +-			    error);
@@ -335,7 +335,7 @@ index 0000000..549ab92
 +@@ -864,9 +870,13 @@
 + 				size_t spawnattrlen = 0;
 + 				void *spawnattr = exec_spawnattr_getmacpolicyinfo(macextensions, mpc->mpc_name, &spawnattrlen);
-+ 
++
 +-				error = mac_error_select(hook(cred, new, vfs_context_proc(ctx), vp, offset, scriptvp,
 +-				    mac_vnode_label(vp), scriptvnodelabel, execl, csflags, spawnattr, spawnattrlen, disjoint),
 +-				    error);
