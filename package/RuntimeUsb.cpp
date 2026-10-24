@@ -12,6 +12,7 @@ extern "C" unsigned native_root_runtime_read(unsigned, unsigned, void *, unsigne
 extern "C" void native_hid_request_home(void);
 extern "C" void native_marble_touch_start(void);
 extern "C" void native_marble_gpu_start(void);
+extern "C" void native_marble_gmu_stop(void);
 extern "C" void native_hid_request_tap(unsigned, unsigned);
 extern "C" void native_root_block_capture_log(void);
 extern "C" void native_runtime_usb_start(void);
@@ -318,6 +319,7 @@ extern "C" void native_runtime_usb_report(char *out,unsigned length) {
         active,controllerId,initialControl,initialStatus,initialPhy,control,state,events,requests,failures,lastCommand,physical);
 }
 extern "C" void native_runtime_usb_stop(void) {
+    native_marble_gmu_stop();
     active=false;
     if (!controllerOwned) return;
     write(DWC3_DEVTEN,0);

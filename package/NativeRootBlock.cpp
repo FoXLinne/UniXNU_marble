@@ -32,6 +32,7 @@ void native_runtime_usb_start(void);
 void native_runtime_usb_report(char *, unsigned);
 void native_hid_report(char *, unsigned);
 void native_marble_touch_report(char *, unsigned);
+void native_marble_gpu_quiesce_inherited(void);
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void root_block_static_init(void) __asm__("__GLOBAL__sub_I_NativeRootBlock.cpp");
 volatile uint64_t native_root_block_reads;
@@ -491,6 +492,7 @@ extern "C" void native_root_block_start(void)
 {
   static bool started;
   if (started) return;
+  native_marble_gpu_quiesce_inherited();
   IORegistryEntry *map = IORegistryEntry::fromPath("/chosen/memory-map", gIODTPlane);
   OSData *range = map ? OSDynamicCast(OSData, map->getProperty("RootDisks")) : nullptr;
   if (!range) { OSSafeReleaseNULL(map); return; }

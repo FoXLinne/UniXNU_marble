@@ -259,7 +259,7 @@ subprocess.run(gmu_command, cwd=record['directory'], check=True)
 gpu_objects = [gmu]
 for directory, names in (
     ('ArmSmmu4K', ('ArmSmmu4K.c', 'ArmSmmu4KContext.c', 'ArmSmmu4KProgram.c', 'ArmSmmu4KMmio.c')),
-    ('AdrenoFirmware', ('AdrenoFirmware.c', 'AdrenoHfi.c')),
+    ('AdrenoFirmware', ('AdrenoFirmware.c', 'AdrenoHfi.c', 'AdrenoHfiVotes.c')),
 ):
     for name in names:
         target = out / (Path(name).stem + '.o')

@@ -83,6 +83,15 @@ void worker(void *, wait_result_t) {
     if (!result) IOLog("MarbleGPU: GMU initialization result=%d\n", native_marble_gmu_load());
 }
 }
+extern "C" void native_marble_gpu_quiesce_inherited(void) {
+    Registers cc, core;
+    if (!cc.map(0x3d90000, 0xa000)) return;
+    if (!(cc.read(0x953c) & (1U << 31)) || !(cc.read(0x913c) & 1)) return;
+    if (!core.map(0x3d68000, 0x37000)) return;
+    core.write(0x16000, 1);
+    IODelay(100);
+    IOLog("MarbleGPU: inherited GMU held in reset\n");
+}
 extern "C" void native_marble_gpu_start(void) {
     static bool started;
     if (__atomic_exchange_n(&started, true, __ATOMIC_RELAXED)) return;

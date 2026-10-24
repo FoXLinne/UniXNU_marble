@@ -9,6 +9,7 @@
 #include "ArmSmmu4KProgram.h"
 #include "AdrenoFirmware.h"
 #include "AdrenoHfi.h"
+#include "AdrenoHfiVotes.h"
 
 extern "C" const uint8_t marble_gmu_firmware[];
 extern "C" const uint64_t marble_gmu_firmware_size;
@@ -53,7 +54,7 @@ struct Memory {
     }
 };
 struct Gmu {
-    Registers core, rscc, pdc, gpu, smmu;
+    Registers core, rscc, pdc, gpu, smmu, database;
     Memory cache, scratch, tables;
     ArmSmmu4KIo smmuIo = {};
     ArmSmmu4KMmio smmuMmio = {};
@@ -66,6 +67,109 @@ struct Gmu {
     static int notify(void *cookie) {
         static_cast<Gmu *>(cookie)->write(0x1f994, 1);
         return 0;
+    }
+    struct Resource { const uint8_t *data = nullptr; unsigned bytes = 0; uint32_t address = 0; };
+    Resource resource(const char *name) const {
+        auto *db = reinterpret_cast<const uint8_t *>(database.mapping->getVirtualAddress());
+        auto u16 = [](const uint8_t *p) { return unsigned(p[0]) | unsigned(p[1]) << 8; };
+        auto u32 = [](const uint8_t *p) { return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24; };
+        if (u32(db + 4) != 0x0c0330db) return {};
+        for (unsigned group = 0; group < 8; ++group) {
+            const uint8_t *header = db + 8 + group * 16;
+            unsigned entries = 144 + u16(header + 2), aux = 144 + u16(header + 4), count = u16(header + 6);
+            if (entries + count * 24 > 0x20000) return {};
+            for (unsigned index = 0; index < count; ++index) {
+                const uint8_t *entry = db + entries + index * 24;
+                if (strncmp(reinterpret_cast<const char *>(entry), name, 8)) continue;
+                unsigned bytes = u16(entry + 20), offset = aux + u16(entry + 22);
+                if (offset + bytes > 0x20000) return {};
+                return {db + offset, bytes, u32(entry + 16)};
+            }
+        }
+        return {};
+    }
+    int exchange(unsigned command, const uint32_t *payload, size_t words) {
+        uint32_t header = 0, error = 0, reply[16] = {};
+        size_t replyWords = 0;
+        auto status = AdrenoHfiSend(&hfi, command, payload, words, &header);
+        if (status) return -5;
+        unsigned elapsed = 0;
+        for (; elapsed < 100; ++elapsed) {
+            status = AdrenoHfiPoll(&hfi, reply, 16, &replyWords, &error);
+            if (status != AdrenoHfiEmpty) break;
+            IOSleep(1);
+        }
+        IOLog("MarbleGPU: HFI command=%u header=%x status=%u error=%x reply_words=%lu elapsed=%u skipped=%x/%x/%x\n",
+            command, header, status, error, replyWords, elapsed, hfi.skipped_header, hfi.skipped_ret, hfi.skipped_code);
+        return status ? -5 : 0;
+    }
+    int performance() {
+        if (!database.map(0x80860000, 0x20000)) return -12;
+        Resource gfx = resource("gfx.lvl"), mx = resource("mx.lvl"), cx = resource("cx.lvl");
+        IOLog("MarbleGPU: ARC gfx=%x/%u mx=%x/%u cx=%x/%u\n",
+            gfx.address, gfx.bytes, mx.address, mx.bytes, cx.address, cx.bytes);
+        const uint32_t gpuHz[] = {0, 220000000, 285000000, 324000000, 364000000, 439000000, 515000000, 580000000};
+        const uint32_t gpuLevels[] = {0, 0x30, 0x38, 0x40, 0x50, 0x60, 0x80, 0x90};
+        const uint32_t dependentCx[] = {0, 0x40, 0x40, 0x40, 0x80, 0x80, 0x80, 0xc0};
+        const uint32_t gmuHz[] = {0, 200000000, 500000000}, gmuLevels[] = {0, 0x40, 0x80};
+        uint32_t gpuVotes[8], gmuVotes[3];
+        if (AdrenoHfiArcVotes(gpuLevels, 8, gfx.data, gfx.bytes, mx.data, mx.bytes, gpuVotes, 8) ||
+            AdrenoHfiArcVotes(gmuLevels, 3, cx.data, cx.bytes, mx.data, mx.bytes, gmuVotes, 3)) return -22;
+        uint32_t payload[58] = {8, 3};
+        for (unsigned i = 0; i < 8; ++i) {
+            payload[2 + i * 3] = gpuVotes[i];
+            unsigned index = 0;
+            for (; index < cx.bytes / 2; ++index) {
+                unsigned level = unsigned(cx.data[index * 2]) | unsigned(cx.data[index * 2 + 1]) << 8;
+                if (level >= dependentCx[i]) break;
+            }
+            if (index == cx.bytes / 2) return -22;
+            payload[3 + i * 3] = index;
+            payload[4 + i * 3] = gpuHz[i] / 1000;
+        }
+        for (unsigned i = 0; i < 3; ++i) {
+            payload[50 + i * 2] = gmuVotes[i];
+            payload[51 + i * 2] = gmuHz[i] / 1000;
+        }
+        int result = exchange(4, payload, 58);
+        if (result) return result;
+        return bandwidth();
+    }
+    int bandwidth() {
+        Resource resources[] = {resource("SH0"), resource("MC0"), resource("ACV"), resource("CN0")};
+        AdrenoHfiBcm buses[4] = {};
+        const unsigned widths[] = {16, 4, 0, 4};
+        for (unsigned i = 0; i < 4; ++i) {
+            buses[i].address = resources[i].address;
+            buses[i].buswidth = widths[i];
+            buses[i].fixed = i == 2;
+            if (!buses[i].address || AdrenoHfiBcmAux(&buses[i], resources[i].data, resources[i].bytes)) return -22;
+            IOLog("MarbleGPU: BCM=%u address=%x unit=%u width=%u vcd=%u\n", i,
+                buses[i].address, buses[i].unit, buses[i].width, buses[i].vcd);
+        }
+        const uint32_t rates[] = {0, 0xbebc2, 0x1ae1b6, 0x209a8e, 0x28973c, 0x2dc6c0,
+            0x5caf6a, 0x65ce03, 0x7cb163, 0xa3140c, 0xbe7f17, 0xc7acf1};
+        uint32_t payload[159] = {12, 1, 3, 1, 0};
+        auto vote = [](const AdrenoHfiBcm &bus, uint32_t rate, bool commit) {
+            uint64_t peak = bus.fixed ? (rate ? 8 : 0) :
+                uint64_t(rate) * bus.width / bus.buswidth * 1000 / bus.unit;
+            if (rate && !peak) peak = 1;
+            if (peak > 0x3fff) peak = 0x3fff;
+            return (commit ? 1U << 30 : 0) | (rate ? 1U << 29 : 0) | uint32_t(peak);
+        };
+        payload[5] = buses[3].address;
+        payload[11] = vote(buses[3], 0, true);
+        payload[17] = vote(buses[3], 100, true);
+        for (unsigned j = 0; j < 3; ++j) {
+            payload[23 + j] = buses[j].address;
+            bool commit = j == 2 || buses[j].vcd != buses[j + 1].vcd;
+            if (commit) payload[4] |= 1U << j;
+            for (unsigned i = 0; i < 12; ++i) payload[31 + i * 8 + j] = vote(buses[j], rates[i], commit);
+        }
+        int result = exchange(3, payload, 159);
+        if (result) return result;
+        const uint32_t handle = 0;
+        return exchange(14, &handle, 1);
     }
     int mapMemory() {
         if (!smmu.map(0x3da0000, 0x40000)) return -12;
@@ -181,7 +285,8 @@ struct Gmu {
     int start() {
         if (!core.map(0x3d68000, 0x37000) || !rscc.map(0x3d50000, 0x10000) ||
             !pdc.map(0xb290000, 0x10000) || !gpu.map(0x3d00000, 0x40000)) return -12;
-        if (read(0x1f800) != 1) return -16;
+        write(0x1f800, 1);
+        IODelay(100);
         int result = mapMemory();
         if (result) return result;
         const uint32_t setup[][2] = {
@@ -224,13 +329,19 @@ struct Gmu {
         for (elapsed = 0; elapsed < 100 && !(read(0x1f980) & 1); ++elapsed) IOSleep(1);
         IOLog("MarbleGPU: HFI status=%x elapsed=%u\n", read(0x1f980), elapsed);
         if (elapsed == 100) { write(0x1f800, 1); return -110; }
-        return 0;
+        return performance();
     }
 };
+Gmu *device;
+}
+extern "C" void native_marble_gmu_stop(void) {
+    if (device && device->core.words) {
+        device->write(0x1f800, 1);
+        IODelay(100);
+    }
 }
 extern "C" int native_marble_gmu_load(void) {
     // Context tables and firmware buffers remain mapped while the GMU owns them.
-    static Gmu *device;
     if (device) return -16;
     device = new Gmu;
     return device ? device->start() : -12;
