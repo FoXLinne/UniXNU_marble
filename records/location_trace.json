@@ -1,0 +1,14 @@
+{
+  "observation_seconds": 360,
+  "locationd_pid": 62,
+  "wait_cycle": [
+    "contextstored MotionMonitor synchronously waits for com.apple.locationd.registration",
+    "locationd worker thread 8 synchronously calls BoardServices from ActivityKit",
+    "liveactivitiesd waits for CoreDuetContext contextual key path"
+  ],
+  "locationd_main": "dispatch_sync wait while processing a CFRunLoop source",
+  "framebuffer_copies": 0,
+  "next": "Use upstream sheng-disable-jobs=com.apple.locationd as an explicit RAM launch override to isolate this cycle",
+  "system_images_modified": false,
+  "desktop_verified": false
+}

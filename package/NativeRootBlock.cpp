@@ -142,7 +142,14 @@ static void dataInflateFree(voidpf, voidpf address)
 extern "C" void native_root_block_process_exit(const char *name, int signal, int exception,
     uint64_t code, uint64_t subcode, uint32_t reasonNamespace, uint64_t reasonCode, const char *reason)
 {
-  if (!panicProcess[0] || strcmp(panicProcess, name)) return;
+  bool selected = false;
+  for (const char *start = panicProcess; *start;) {
+    const char *end = strchr(start, ',');
+    size_t length = end ? (size_t)(end - start) : strlen(start);
+    if (strlen(name) == length && !strncmp(start, name, length)) selected = true;
+    start += length + (end != nullptr);
+  }
+  if (!selected) return;
   arm_saved_state_t *state = find_user_regs(current_thread());
   uint64_t pc = state ? get_saved_state_pc(state) : 0;
   uint64_t lr = state ? get_saved_state_lr(state) : 0;

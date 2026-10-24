@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Explicit temporary bring-up policy for an unavailable watchdog backend.
+// Explicit RAM launch overrides for unavailable board services.
 // Runs after writable scratch Data mounts, before the unchanged launchd exec.
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -9,14 +9,37 @@
 #include <sys/stat.h>
 #include <pexpert/pexpert.h>
 
-static const char policy[] =
+static const char policy_head[] =
  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
- "<plist version=\"1.0\"><dict><key>com.apple.watchdogd</key><true/></dict></plist>\n";
+ "<plist version=\"1.0\"><dict>";
+static char policy[2048], jobs[200];
 volatile int sheng_watchdog_policy_status=-1;
+
+static int append_job(const char **cursor) {
+ const char *start=*cursor,*end=start;
+ while(*end && *end!=',')end++;
+ if(end>start) {
+  size_t used=strlen(policy);
+  int length=snprintf(policy+used,sizeof(policy)-used,"<key>%.*s</key><true/>",(int)(end-start),start);
+  if(length<0 || (size_t)length>=sizeof(policy)-used)return EINVAL;
+ }
+ *cursor=*end?end+1:end;
+ return 0;
+}
+
 int sheng_boot_watchdog_policy(void *process, uint64_t scratch) {
  proc_t p=process;
  int enabled=0,error=0,fd=-1;int32_t result=0;
- if(!PE_parse_boot_argn("sheng-disable-watchdogd",&enabled,sizeof(enabled)) || enabled!=1)return 0;
+ PE_parse_boot_argn("sheng-disable-watchdogd",&enabled,sizeof(enabled));
+ if(!PE_parse_boot_argn("sheng-disable-jobs",jobs,sizeof(jobs)))jobs[0]=0;
+ jobs[sizeof(jobs)-1]=0;
+ if(enabled!=1 && !jobs[0])return 0;
+ for(const char *c=jobs;*c;c++)
+  if(!((*c>='a'&&*c<='z')||(*c>='A'&&*c<='Z')||(*c>='0'&&*c<='9')||*c=='.'||*c=='-'||*c==','))return EINVAL;
+ strlcpy(policy,policy_head,sizeof(policy));
+ if(enabled==1)strlcat(policy,"<key>com.apple.watchdogd</key><true/>",sizeof(policy));
+ for(const char *cursor=jobs;*cursor;)if((error=append_job(&cursor)))return error;
+ if(strlcat(policy,"</dict></plist>\n",sizeof(policy))>=sizeof(policy))return EINVAL;
  const char *directory="/private/var/db/com.apple.xpc.launchd";
  const char *path="/private/var/db/com.apple.xpc.launchd/disabled.plist";
  if((error=copyout(directory,scratch,strlen(directory)+1)))goto done;
@@ -63,6 +86,6 @@ int sheng_boot_watchdog_policy(void *process, uint64_t scratch) {
   }
  }
  sheng_watchdog_policy_status=error;
- printf("sheng bring-up watchdogd launch policy: %d (hardware watchdog not implemented)\n",error);
+ printf("RootStage launch policy status=%d watchdog=%d jobs=%s\n",error,enabled==1,jobs);
  return error;
 }
