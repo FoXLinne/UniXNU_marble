@@ -3,7 +3,7 @@
   "build": "passed",
   "kernel": "outputs/UniXNU_marble/kernel_shared_cache.macho",
   "kernel_sha256": "86ce9c0c8444c71dc83a57a939f067fbdac5fbe601765063409dafe9bb2e0af0",
-  "device_result": "Original dyld shared cache loaded; launchd ran mount child pid 3; missing /filesystems/fstab caused mount exit 66 and panic; kernel returned to RootStage, returns=2",
+  "device_result": "Original dyld shared cache loaded; launchd ran mount child pid 3; mount exit 66 and panic; kernel returned to RootStage, returns=2. Subsequent boot_manifest record confirms missing boot-manifest-hash caused the mount exit; /filesystems/fstab diagnostic also occurs during successful mount phases.",
   "log": "records/shared_cache_kernel.log.gz",
   "log_sha256": "f82a468d1daa30c6abc3a7ab6c845f8d514a079dcfedce7a01dc753c68949ab0",
   "rootstage_after": {

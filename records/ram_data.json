@@ -1,0 +1,24 @@
+{
+  "change": "Inflate compressed APFS Data seed from the resident kernel update",
+  "build": "passed",
+  "kernel": "outputs/UniXNU_marble/kernel_ram_data.macho",
+  "kernel_sha256": "2a47192ae65d8c80d72a0250f09192282b039980cf941f3aaa2a488294b6fcaf",
+  "seed": {
+    "volume_uuid": "104DEB93-C404-42D0-B297-F0D8D7E8A697",
+    "bytes": 134217728,
+    "sha256": "4faa154f2cddb3e67d68ab333651d899dc9b17da3df670c6b99b0458002fb9af",
+    "source_regular_files": 39,
+    "source_regular_bytes": 611715,
+    "guest_mutable": true,
+    "initial_seed_signature_verified": false,
+    "seed": "Original private/var excluding staged_system_apps; symlinks preserved; runtime directories added",
+    "owner_keybag_created": false,
+    "os_inputs_modified": false,
+    "production_storage_qualified": false,
+    "directory_skeleton": "Original var plus upstream offline Data runtime directories"
+  },
+  "device_result": "128 MiB Data inflated and published as md0; APFS read container metadata then refused invalid fsindex -1 with ENOENT; panic returned to RootStage returns=4",
+  "next": "Publish Data through IOBlockStorageDevice and select its APFS volume node",
+  "log": "records/ram_data_kernel.log.gz",
+  "log_sha256": "8c098f474295eba03127d09e106e706e63188af0695150a04cd8ae88cccfa81d"
+}

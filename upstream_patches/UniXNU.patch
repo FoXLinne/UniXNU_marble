@@ -86,6 +86,62 @@ index 94bf523..69d5e48 100644
   	/* Initialize the file systems. */
   	bsd_init_kprintf("calling vfsinit\n");
   	vfsinit();
+diff --git a/patches/xnu/zzy-native-gpu-addon-mount.patch b/patches/xnu/zzy-native-gpu-addon-mount.patch
+index 7961cb7..dec19ac 100644
+--- a/patches/xnu/zzy-native-gpu-addon-mount.patch
++++ b/patches/xnu/zzy-native-gpu-addon-mount.patch
+@@ -71,7 +71,7 @@ index a5ff474..4704203 100644
+ + * be part of the Data seed and the seed's persistent store survives a plugin rebuild. Missing directories below /private/var/ngpu are
+ + * created. A malformed addon is refused as a whole; a file that cannot be written keeps its old content.
+ + * Counters for the boot log: files in the addon (-1 none), files written, files already equal, failures and the last error. */
+-+extern int native_ram_block_gpu_addon(const uint8_t **, uint64_t *) __attribute__((weak_import));
+++extern int native_boot_gpu_addon(const uint8_t **, uint64_t *);
+ +#include <libkern/zlib.h>
+ +/* zlib's state, from kalloc with its size in front (the default allocator of the kernel's zlib is not meant for this). */
+ +static voidpf
+@@ -207,7 +207,7 @@ index a5ff474..4704203 100644
+ +{
+ +	const uint8_t *addon = NULL;
+ +	uint64_t bytes = 0;
+-+	if (!native_ram_block_gpu_addon || !native_ram_block_gpu_addon(&addon, &bytes)) {
+++	if (!native_boot_gpu_addon(&addon, &bytes)) {
+ +		return;
+ +	}
+ +	uint32_t count = 0;
+@@ -400,3 +400,33 @@ index c3bebc8..4555530 100644
+  #define BINDM_CASEINSENSITIVE 0x0000000000000002
+ 
+  typedef int (*vop_t)(void *);
++--- a/iokit/bsddev/IOKitBSDInit.cpp
+++++ b/iokit/bsddev/IOKitBSDInit.cpp
++@@ -1717,3 +1717,27 @@
++ 	}
++ 	return value;
++ }
+++
+++#include <machine/machine_routines.h>
+++extern unsigned long gPhysBase, gPhysSize;
+++// The GPU addon the loader placed after the trust caches (/chosen/memory-map/GpuAddon, scripts/make-gpu-addon.py), for the kernel's
+++// boot-time addon install (kern_exec.c). Boot memory, like the seed: never freed here. Returns 0 without one.
+++extern "C" int native_boot_gpu_addon(const uint8_t **data,uint64_t *bytes) {
+++  if(!data || !bytes)return 0;
+++  *data=nullptr;*bytes=0;
+++  IORegistryEntry *map=IORegistryEntry::fromPath("/chosen/memory-map",gIODTPlane);
+++  if(!map)return 0;
+++  OSData *range=OSDynamicCast(OSData,map->getProperty("GpuAddon"));
+++  uint64_t physical=0,size=0;
+++  if(range && range->getLength()==16){
+++    memcpy(&physical,range->getBytesNoCopy(),8);
+++    memcpy(&size,static_cast<const uint8_t *>(range->getBytesNoCopy())+8,8);
+++  }
+++  map->release();
+++  if(!size || size>(UINT64_C(64)<<20) || (physical&4095) || physical<gPhysBase || size>gPhysSize || physical-gPhysBase>gPhysSize-size)return 0;
+++  *data=reinterpret_cast<const uint8_t *>(ml_static_ptovirt(physical));
+++  if(!*data)return 0;
+++  *bytes=size;
+++  return 1;
+++}
+++
 diff --git a/scripts/audit-amfi-pmgr-contract.py b/scripts/audit-amfi-pmgr-contract.py
 index 12eb8a8..2c94067 100644
 --- a/scripts/audit-amfi-pmgr-contract.py
@@ -109,20 +165,23 @@ index 12eb8a8..2c94067 100644
  
  
 diff --git a/scripts/build-xnu-4k-baseline.sh b/scripts/build-xnu-4k-baseline.sh
-index 5815dd9..f1720eb 100755
+index 5815dd9..a94322c 100755
 --- a/scripts/build-xnu-4k-baseline.sh
 +++ b/scripts/build-xnu-4k-baseline.sh
-@@ -36,7 +36,8 @@ fi
+@@ -35,8 +35,10 @@ fi
+ # Remove them first so earlier independent patches retain their idempotent checks.
  # The same holds for the boot-time GPU addon mount and the staged system apps copy (zzy), which edit the owner Data mount function
  # inside the systemos patch. Reverse newest first; the loop below re-applies them in name order.
- for LATE_PATCH in "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
+-for LATE_PATCH in "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
 -    "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch"; do
++for LATE_PATCH in "$ROOT/patches/xnu/zz-root-stage-data.patch" "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
 +    "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch" \
++    "$ROOT/patches/xnu/zz-root-stage-manifest.patch" \
 +    "$ROOT/patches/xnu/zz-root-stage-owner-auth.patch" "$ROOT/patches/xnu/zz-root-stage-cache.patch"; do
    if git -C .cache/xnu-work apply --reverse --check "$LATE_PATCH" >/dev/null 2>&1; then
      git -C .cache/xnu-work apply --reverse "$LATE_PATCH"
    fi
-@@ -324,8 +325,10 @@ fi
+@@ -324,8 +326,10 @@ fi
  SHENG_PMGR_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.sheng-pmgr-mode
  if [ "$(cat "$SHENG_PMGR_STAMP" 2>/dev/null || echo 0)" != "$SHENG_PMGR" ]; then
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o"
@@ -133,7 +192,7 @@ index 5815dd9..f1720eb 100755
  EXTRA_MAKE_ARGS+=("bsd_init.o_CFLAGS_ADD=-DXNU_SHENG_PMGR=$SHENG_PMGR -DXNU_VERIFIED_ROOT_PROBE=$OWNER_ROOT_PROBE -DXNU_OWNER_ROOT_AUDIT=$OWNER_ROOT_AUDIT -DXNU_OWNER_ROOT_TRUST=$OWNER_ROOT_TRUST -DXNU_ADRENO_FIRMWARE_PROBE=$ADRENO_FIRMWARE_PROBE -DXNU_ADRENO_PM4_PROBE=$ADRENO_PM4_PROBE -DXNU_SMMU4K_PROBE=$SMMU4K_PROBE -DXNU_CONSTANT_UPLOADS_PROBE=$CONSTANT_UPLOADS_PROBE -DXNU_NATIVE_LEGACY_DISPLAY=${XNU_NATIVE_LEGACY_DISPLAY:-0} -DXNU_NATIVE_OFFLINE_GPU=$NATIVE_OFFLINE_GPU")
  NATIVE_MOBILE_DISPLAY=${XNU_NATIVE_MOBILE_DISPLAY:-0}
  if [ "$NATIVE_MOBILE_DISPLAY" != 0 ] && [ "$NATIVE_MOBILE_DISPLAY" != 1 ]; then
-@@ -348,13 +351,14 @@ if [ "$(cat "$OWNER_ROOT_STAMP" 2>/dev/null || echo 0:0:0:0:0:0)" != "$OWNER_ROO
+@@ -348,13 +352,14 @@ if [ "$(cat "$OWNER_ROOT_STAMP" 2>/dev/null || echo 0:0:0:0:0:0)" != "$OWNER_ROO
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o"
    printf '%s\n' "$OWNER_ROOT_PROBE:$OWNER_ROOT_AUDIT:$OWNER_ROOT_TRUST:$ADRENO_FIRMWARE_PROBE:$ADRENO_PM4_PROBE:$SMMU4K_PROBE:$CONSTANT_UPLOADS_PROBE:$NATIVE_LEGACY_DISPLAY:$NATIVE_OFFLINE_GPU" > "$OWNER_ROOT_STAMP"
  fi
@@ -150,7 +209,16 @@ index 5815dd9..f1720eb 100755
    exit 1
  fi
  OWNER_CACHE_STARTUP=${XNU_OWNER_CACHE_STARTUP:-0}
-@@ -463,11 +467,11 @@ if [ "$(cat "$NATIVE_AIR_STAMP" 2>/dev/null || echo 0)" != "$NATIVE_AIR_INIT" ];
+@@ -375,7 +380,7 @@ if [ "$OWNER_BOOT_MANIFEST" = 1 ] && [ "$OWNER_CACHE_STARTUP" != 1 ]; then
+   echo 'Owner boot metadata requires real authenticated owner root/cache startup' >&2
+   exit 1
+ fi
+-EXTRA_MAKE_ARGS+=("IOKitBSDInit.cpo_CFLAGS_ADD=-DXNU_OWNER_BOOT_MANIFEST=$OWNER_BOOT_MANIFEST")
++EXTRA_MAKE_ARGS+=("IOKitBSDInit.cpo_CFLAGS_ADD=-DXNU_OWNER_BOOT_MANIFEST=$OWNER_BOOT_MANIFEST -DXNU_ROOT_STAGE_CACHE=$ROOT_STAGE_CACHE")
+ OWNER_MANIFEST_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.owner-boot-manifest-mode
+ if [ "$(cat "$OWNER_MANIFEST_STAMP" 2>/dev/null || echo 0)" != "$OWNER_BOOT_MANIFEST" ]; then
+   rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOKitBSDInit.cpo"
+@@ -463,11 +468,11 @@ if [ "$(cat "$NATIVE_AIR_STAMP" 2>/dev/null || echo 0)" != "$NATIVE_AIR_INIT" ];
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o"
    printf '%s\n' "$NATIVE_AIR_INIT" > "$NATIVE_AIR_STAMP"
  fi
@@ -165,7 +233,7 @@ index 5815dd9..f1720eb 100755
  fi
  OWNER_CACHE_CARRIER=${XNU_OWNER_CACHE_CARRIER:-0}
  OWNER_CACHE_CARRIER_WRONG_UUID=${XNU_OWNER_CACHE_CARRIER_WRONG_UUID:-0}
-@@ -519,9 +523,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
+@@ -519,9 +524,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
    exit 1
  fi
  EXTRA_MAKE_ARGS+=("start.o_SFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER")
@@ -177,6 +245,54 @@ index 5815dd9..f1720eb 100755
    printf '%s\n' "$NATIVE_ARCH_TIMER" > "$NATIVE_TIMER_STAMP"
  fi
  NATIVE_PAN=${XNU_NATIVE_PAN:-0}
+diff --git a/scripts/prepare-owner-data-fixture.py b/scripts/prepare-owner-data-fixture.py
+index a9dda5d..1b6a715 100644
+--- a/scripts/prepare-owner-data-fixture.py
++++ b/scripts/prepare-owner-data-fixture.py
+@@ -13,16 +13,18 @@ import subprocess
+ ROOT = Path(__file__).resolve().parents[1]
+ parser = argparse.ArgumentParser(description=__doc__)
+ parser.add_argument('--output', type=Path, default=ROOT / 'build/owner-data-fixture')
++parser.add_argument('--source', type=Path, default=ROOT / '.cache/firmware/target-volumes/os-mount')
++parser.add_argument('--size-mib', type=int, default=32)
+ args = parser.parse_args()
+ fixture = args.output.resolve()
+-image = fixture / 'owner-data-32.cdr'
++image = fixture / f'owner-data-{args.size_mib}.cdr'
+ if image.exists():
+     raise SystemExit('Refuse to overwrite an existing Data seed')
+-source = ROOT / '.cache/firmware/target-volumes/os-mount'
++source = args.source.resolve()
+ if hashlib.sha256((source / 'sbin/launchd').read_bytes()).hexdigest() != '8cec9a3c44a443b08e977ccc5d577850316ad428c575dc01f09b018dbd5b6a25':
+     raise SystemExit('Require the unchanged supplied original OS mount')
+ fixture.mkdir(parents=True, exist_ok=True)
+-subprocess.run(['hdiutil', 'create', '-size', '32m', '-layout', 'NONE', '-fs', 'APFS',
++subprocess.run(['hdiutil', 'create', '-size', f'{args.size_mib}m', '-layout', 'NONE', '-fs', 'APFS',
+                 '-volname', 'OwnerData', '-type', 'UDTO', str(image)], check=True)
+ target = fixture / 'mount'
+ target.mkdir(exist_ok=True)
+@@ -53,13 +55,19 @@ try:
+                 shutil.copy2(src, dst)
+                 count += 1
+                 total += src.stat().st_size
+-    for name in ('keybags', 'mobile/tmp', 'tmp', 'run'):
++    for name in ('keybags', 'keybags/backup', 'mobile/tmp', 'tmp', 'run',
++                 'db/dslocal/nodes/Default/users', 'db/dslocal/nodes/Default/groups',
++                 'db/dslocal/nodes/Default/config', 'containers/Data/System',
++                 'containers/Data/Application', 'containers/Shared/SystemGroup', 'PersonaVolumes',
++                 'preboot', 'root', 'Library', 'mobile/Library/Preferences',
++                 'mobile/Library/Caches', 'mobile/Library/Logs', 'mobile/Containers',
++                 'mobile/Documents', 'mobile/Media'):
+         (target / name).mkdir(parents=True, exist_ok=True)
+     os.chmod(target / 'tmp', 0o1777)
+ finally:
+     subprocess.run(['hdiutil', 'detach', device], check=True)
+ data = image.read_bytes()
+-if len(data) != 32 * 1024**2 or data[32:36] != b'NXSB':
++if len(data) != args.size_mib * 1024**2 or data[32:36] != b'NXSB':
+     raise SystemExit('Host formatting did not produce the requested raw APFS container')
+ report = dict(volume_uuid=volume_uuid, bytes=len(data), sha256=hashlib.sha256(data).hexdigest(), source_regular_files=count,
+               source_regular_bytes=total, guest_mutable=True, initial_seed_signature_verified=False,
 diff --git a/package/UniXNUPkg/Include/Protocol/RootStage.h b/package/UniXNUPkg/Include/Protocol/RootStage.h
 new file mode 100644
 index 0000000..65d5a8c
@@ -619,6 +735,78 @@ index 0000000..ca403ce
 + 	native_owner_cache_root_recheck = root_recheck;
 + 	if (!root_recheck) error = EAUTH;
 + #if defined(XNU_OWNER_BOOT_MANIFEST) && XNU_OWNER_BOOT_MANIFEST
+diff --git a/patches/xnu/zz-root-stage-data.patch b/patches/xnu/zz-root-stage-data.patch
+new file mode 100644
+index 0000000..01abeee
+--- /dev/null
++++ b/patches/xnu/zz-root-stage-data.patch
+@@ -0,0 +1,25 @@
++--- a/bsd/kern/kern_exec.c
+++++ b/bsd/kern/kern_exec.c
++@@ -7219,7 +7219,9 @@
++ #if !defined(XNU_OWNER_BOOT_MANIFEST) || !XNU_OWNER_BOOT_MANIFEST
++ #error Scratch Data mounting requires the authenticated original OS startup path
++ #endif
++-#if defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++extern int native_root_block_data_seed(dev_t *, char *, size_t, uint64_t *, uint64_t *, uint8_t *);
+++#elif defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
++ #ifndef XNU_OWNER_DATA_VOLUME_UUID
++ #error Supply the observed scratch volume UUID for the IOKit backend
++ #endif
++@@ -7865,7 +7867,10 @@
++ 	int error = EINVAL;
++ 	vnode_t data_root = NULLVP;
++ 	char device_path[64] = "/dev/md0";
++-#if defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++	if (!native_root_block_data_seed(&device, device_path,
+++	    sizeof(device_path), &base, &size, native_owner_data_seed_sha256)) { error = ENOENT; goto done; }
+++#elif defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
++ 	/* The typed provider supplies logical seed identity for both dense and
++ 	 * sparse media. A sparse disk has no contiguous logical-byte address. */
++ 	if (!native_ram_block_volume_seed(XNU_OWNER_DATA_VOLUME_UUID, &device, device_path,
+diff --git a/patches/xnu/zz-root-stage-manifest.patch b/patches/xnu/zz-root-stage-manifest.patch
+new file mode 100644
+index 0000000..10b0cf5
+--- /dev/null
++++ b/patches/xnu/zz-root-stage-manifest.patch
+@@ -0,0 +1,35 @@
++--- a/iokit/bsddev/IOKitBSDInit.cpp
+++++ b/iokit/bsddev/IOKitBSDInit.cpp
++@@ -578,7 +578,13 @@
++ #error Owner image-set metadata is an offline development instrument
++ #endif
++ #include <libkern/crypto/sha2.h>
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++extern "C" int native_root_block_identity_sha384(dev_t, const char *, uint8_t[48]);
+++#define owner_image_digest native_root_block_identity_sha384
+++#else
++ extern "C" int native_verified_block_manifest_sha384(dev_t, const char *, uint8_t[48]);
+++#define owner_image_digest native_verified_block_manifest_sha384
+++#endif
++ extern "C" int native_owner_publish_boot_manifest(dev_t, const char *, dev_t, const char *);
++ extern "C" {
++ volatile int native_owner_boot_manifest_status = -1;
++@@ -589,12 +595,16 @@
++ native_owner_publish_boot_manifest(dev_t rootDevice, const char *rootUUID,
++     dev_t cacheDevice, const char *cacheUUID)
++ {
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++	static const char domain[] = "RootStage.OwnerBootSet.v1";
+++#else
++ 	static const char domain[] = "VerifiedRoot.OwnerBootSet.v1";
+++#endif
++ 	uint8_t rootDigest[48], cacheDigest[48], digest[48];
++ 	uint8_t rootRole = 1, cacheRole = 2;
++ 	if (rootDevice == cacheDevice ||
++-	    !native_verified_block_manifest_sha384(rootDevice, rootUUID, rootDigest) ||
++-	    !native_verified_block_manifest_sha384(cacheDevice, cacheUUID, cacheDigest)) {
+++	    !owner_image_digest(rootDevice, rootUUID, rootDigest) ||
+++	    !owner_image_digest(cacheDevice, cacheUUID, cacheDigest)) {
++ 		native_owner_boot_manifest_status = 1;
++ 		return 0;
++ 	}
 diff --git a/patches/xnu/zz-root-stage-owner-auth.patch b/patches/xnu/zz-root-stage-owner-auth.patch
 new file mode 100644
 index 0000000..605e75b

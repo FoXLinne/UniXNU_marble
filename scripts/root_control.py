@@ -11,6 +11,8 @@ import plistlib
 import subprocess
 import struct
 import time
+import zlib
+import uuid
 
 import usb.backend.libusb1
 import usb.core
@@ -92,7 +94,7 @@ def image_stream(image):
         subprocess.run(['hdiutil', 'detach', disk], check=True, capture_output=True)
 
 
-def load(channel, images, kernel=None, observe_seconds=0):
+def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_args=""):
     if channel.command('getvar:version') != 'RootStage2':
         raise RuntimeError('Load the RootStage2 boot image to use resident disks')
     if not 1 <= len(images) <= 2:
@@ -101,10 +103,31 @@ def load(channel, images, kernel=None, observe_seconds=0):
     if kernel:
         data = kernel.read_bytes()
         source_digest = hashlib.sha256(data).hexdigest()
-        # A separate output mailbox follows the Mach-O; its nonce starts a fresh run.
+        # The raw Data seed and output mailbox follow the Mach-O segments.
         data += bytes(-len(data) % CHUNK)
+        seed_offset, seed_bytes, seed_raw_bytes = 0, 0, 0
+        seed_uuid = bytes(37)
+        if data_seed:
+            seed = data_seed.read_bytes()
+            if len(seed) % 4096 or seed[32:36] != b'NXSB':
+                raise ValueError('Data seed must be a raw APFS container')
+            metadata = json.loads(data_seed.with_name('seed.json').read_text())
+            if metadata['sha256'] != hashlib.sha256(seed).hexdigest():
+                raise ValueError('Data seed checksum differs from seed.json')
+            seed_uuid = str(uuid.UUID(metadata['volume_uuid'])).upper().encode() + b'\0'
+            seed_raw_bytes = len(seed)
+            seed = zlib.compress(seed, level=1)
+            seed_offset, seed_bytes = len(data), len(seed)
+            data += seed
+            data += bytes(-len(data) % CHUNK)
+        extra_args = boot_args.encode()
+        if len(extra_args) >= 256 or b'\0' in extra_args:
+            raise ValueError('Extra boot arguments exceed the command line limit')
         data += (struct.pack('<8sII', LOG_MAGIC, 1, 0) + os.urandom(16) +
-                 struct.pack('<I', observe_seconds) + bytes(LOG_BYTES - 36))
+                 struct.pack('<I4xQQQ', observe_seconds, seed_offset, seed_bytes, seed_raw_bytes) + seed_uuid + bytes(27) +
+                 extra_args + bytes(LOG_BYTES - 128 - len(extra_args)))
+        if len(data) > 64 * CHUNK:
+            raise ValueError('RootStage kernel update exceeds the 64 MiB slot')
         digest = hashlib.sha256(data).hexdigest()
         entries.append((2, dict(name='kernel', source=str(kernel), format='raw',
                                 raw_bytes=len(data), sha256=digest, payload=data,
@@ -151,6 +174,8 @@ def main():
     parser.add_argument('--report', type=Path)
     parser.add_argument('--kernel', type=Path)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--boot-args', default='')
+    parser.add_argument('--data-seed', type=Path)
     parser.add_argument('--observe-seconds', type=int, default=0)
     args = parser.parse_args()
     channel = RootUsb()
@@ -159,7 +184,7 @@ def main():
             if args.images is None:
                 parser.error('--images is required')
             images = json.loads(args.images.read_text())
-            result = load(channel, images, args.kernel, args.observe_seconds)
+            result = load(channel, images, args.kernel, args.observe_seconds, args.data_seed, args.boot_args)
             if args.command == 'start':
                 channel.command('continue')
         elif args.command == 'status':

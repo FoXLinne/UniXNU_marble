@@ -12,6 +12,10 @@
 #include <IOKit/IOBSD.h>
 #include <Protocol/RootStage.h>
 #include <arm/machine_routines.h>
+#include <pexpert/pexpert.h>
+#include <pexpert/boot.h>
+#include <libkern/crypto/sha2.h>
+#include <libkern/zlib.h>
 
 extern "C" {
 #include <vm/pmap.h>
@@ -28,7 +32,29 @@ char native_root_block_panic_text[4096];
 static constexpr size_t rootLogBytes = 65536;
 static IOMemoryMap *rootLogMapping;
 static uint32_t observationSeconds;
+static uint8_t *dataSeed;
+static uint64_t dataSeedBytes;
+static uint8_t dataSeedHash[32];
+static char dataSeedUUID[37];
+static struct { uint64_t bytes; char identity[33]; } rootIdentities[2];
 static thread_call_t observationCall;
+
+static voidpf dataInflateAllocate(voidpf, uInt items, uInt size)
+{
+  size_t bytes = (size_t)items * size + 16;
+  auto *block = (uint8_t *)IOMallocZero(bytes);
+  if (!block) return Z_NULL;
+  memcpy(block, &bytes, sizeof(bytes));
+  return block + 16;
+}
+
+static void dataInflateFree(voidpf, voidpf address)
+{
+  auto *block = (uint8_t *)address - 16;
+  size_t bytes;
+  memcpy(&bytes, block, sizeof(bytes));
+  IOFree(block, bytes);
+}
 
 static void observationExpired(thread_call_param_t, thread_call_param_t)
 {
@@ -64,6 +90,7 @@ class NativeRootBlock : public IOBlockStorageDevice {
   ROOT_STAGE_DISK disk = {};
   bool online = false;
   unsigned diskIndex = 0;
+  uint8_t *writableData = nullptr;
 public:
   void configure(const ROOT_STAGE_DISK &source, unsigned index) {
     if (!source.Bytes || source.Received != source.Bytes ||
@@ -81,6 +108,11 @@ public:
             index, i, disk.Extents[i].Address, disk.Extents[i].Bytes, expected);
       total += expected;
     }
+  }
+  void configureData(uint8_t *data, uint64_t bytes) {
+    writableData = data;
+    disk.Bytes = bytes;
+    diskIndex = 2;
   }
   int sourceIndex() const { return online ? (int)diskIndex : -1; }
   bool start(IOService *provider) override {
@@ -106,7 +138,7 @@ public:
     *present = online; if (changed) *changed = false; return kIOReturnSuccess;
   }
   IOReturn reportRemovability(bool *value) override { *value = false; return kIOReturnSuccess; }
-  IOReturn reportWriteProtection(bool *value) override { *value = true; return kIOReturnSuccess; }
+  IOReturn reportWriteProtection(bool *value) override { *value = !writableData; return kIOReturnSuccess; }
   IOReturn doSynchronizeCache() override { return kIOReturnSuccess; }
   IOReturn doSynchronize(UInt64, UInt64, IOOptionBits) override { return kIOReturnSuccess; }
   IOReturn getWriteCacheState(bool *value) override { *value = false; return kIOReturnSuccess; }
@@ -114,10 +146,18 @@ public:
   IOReturn doAsyncReadWrite(IOMemoryDescriptor *buffer, UInt64 block, UInt64 count,
       IOStorageAttributes *, IOStorageCompletion *completion) override {
     if (!online) return kIOReturnNotReady;
-    if (buffer->getDirection() != kIODirectionIn) return kIOReturnNotWritable;
+    bool write = buffer->getDirection() == kIODirectionOut;
+    if (write && !writableData) return kIOReturnNotWritable;
     uint64_t capacity = disk.Bytes / 512;
     if (block > capacity || count > capacity - block || count * 512 > buffer->getLength()) return kIOReturnBadArgument;
     uint64_t offset = block * 512, bytes = count * 512, done = 0;
+    if (writableData) {
+      done = write ? buffer->readBytes(0, writableData + offset, bytes) :
+          buffer->writeBytes(0, writableData + offset, bytes);
+      completion->action(completion->target, completion->parameter,
+          done == bytes ? kIOReturnSuccess : kIOReturnIOError, done);
+      return kIOReturnSuccess;
+    }
     while (done < bytes) {
       uint64_t position = offset + done;
       unsigned index = position / ROOT_STAGE_CHUNK;
@@ -160,6 +200,8 @@ extern "C" void native_root_block_start(void)
   if (!mapping) panic("RootStage: table mapping failed");
   const auto *table = reinterpret_cast<const ROOT_STAGE_TABLE *>(mapping->getVirtualAddress());
   if (table->Magic != ROOT_STAGE_MAGIC || table->Version != 2) panic("RootStage: invalid table header");
+  extern void native_resident_configure(uint64_t);
+  native_resident_configure(table->ReturnStub);
   const ROOT_STAGE_DISK &kernel = table->Disks[2];
   if (kernel.Count == 1 && kernel.Bytes >= rootLogBytes && kernel.Bytes <= kernel.Extents[0].Bytes) {
     uint64_t address = kernel.Extents[0].Address + kernel.Bytes - rootLogBytes;
@@ -170,11 +212,56 @@ extern "C" void native_root_block_start(void)
     if (!log) panic("RootStage: log mailbox mapping failed");
     if (!memcmp((const void *)log->getVirtualAddress(), "ROOTLOG1", 8)) {
       rootLogMapping = log;
-      memcpy(&observationSeconds, (const char *)log->getVirtualAddress() + 32, sizeof(observationSeconds));
+      const char *mailbox = (const char *)log->getVirtualAddress();
+      memcpy(&observationSeconds, mailbox + 32, sizeof(observationSeconds));
+      uint64_t offset, bytes, logical;
+      memcpy(&offset, mailbox + 40, sizeof(offset));
+      memcpy(&bytes, mailbox + 48, sizeof(bytes));
+      memcpy(&logical, mailbox + 56, sizeof(logical));
+      const char *extraArgs = mailbox + 128;
+      size_t extraLength = strnlen(extraArgs, BOOT_LINE_LENGTH);
+      if (extraLength) {
+        char *commandLine = PE_boot_args();
+        if (extraLength >= BOOT_LINE_LENGTH || strlen(commandLine) + extraLength + 2 > BOOT_LINE_LENGTH)
+          panic("RootStage: extra boot arguments exceed the command line limit");
+        strlcat(commandLine, " ", BOOT_LINE_LENGTH);
+        strlcat(commandLine, extraArgs, BOOT_LINE_LENGTH);
+        IOLog("RootStage: extra boot arguments %s\n", extraArgs);
+      }
+      if (bytes) {
+        memcpy(dataSeedUUID, mailbox + 64, sizeof(dataSeedUUID));
+        if (strnlen(dataSeedUUID, sizeof(dataSeedUUID)) != 36) panic("RootStage: Data volume UUID invalid");
+        if ((offset & 4095) || !logical || logical > 0x80000000ULL || (logical & 4095) || offset > kernel.Bytes - rootLogBytes ||
+            bytes > kernel.Bytes - rootLogBytes - offset)
+          panic("RootStage: Data seed range invalid");
+        void *data = IOMallocAligned(logical, 4096);
+        void *packed = IOMalloc(bytes);
+        if (!data || !packed) panic("RootStage: Data allocation failed for %llu bytes", logical);
+        if (copypv(kernel.Extents[0].Address + offset, (addr64_t)packed, (unsigned int)bytes,
+            cppvPsrc | cppvNoRefSrc) != KERN_SUCCESS)
+          panic("RootStage: Data seed copy failed");
+        z_stream stream = {};
+        stream.zalloc = dataInflateAllocate;
+        stream.zfree = dataInflateFree;
+        stream.next_in = (Bytef *)packed;
+        stream.avail_in = (uInt)bytes;
+        stream.next_out = (Bytef *)data;
+        stream.avail_out = (uInt)logical;
+        if (inflateInit(&stream) != Z_OK) panic("RootStage: Data inflater initialization failed");
+        int result = inflate(&stream, Z_FINISH);
+        inflateEnd(&stream);
+        IOFree(packed, bytes);
+        if (result != Z_STREAM_END || stream.total_out != logical || stream.avail_in)
+          panic("RootStage: Data seed decompression failed: %d", result);
+        dataSeed = (uint8_t *)data;
+        dataSeedBytes = logical;
+        SHA256_CTX context;
+        SHA256_Init(&context);
+        SHA256_Update(&context, data, logical);
+        SHA256_Final(dataSeedHash, &context);
+      }
     } else log->release();
   }
-  extern void native_resident_configure(uint64_t);
-  native_resident_configure(table->ReturnStub);
   kern_return_t result = OSKextLoadKextWithIdentifier("com.apple.iokit.IOStorageFamily");
   if (result) panic("RootStage: IOStorageFamily load returned %x",result);
   void *handle = OSMetaClass::preModLoad(g_kernel_kmod_info.name);
@@ -190,11 +277,22 @@ extern "C" void native_root_block_start(void)
     if (!disk) panic("RootStage: disk %u allocation failed", i);
     if (!disk->init(nullptr)) panic("RootStage: disk %u initialization failed", i);
     disk->configure(table->Disks[i], i);
+    rootIdentities[i].bytes = table->Disks[i].Bytes;
+    memcpy(rootIdentities[i].identity, table->Disks[i].Identity, sizeof(rootIdentities[i].identity));
     if (!disk->attach(parent)) panic("RootStage: disk %u attachment failed", i);
     if (!disk->start(parent)) panic("RootStage: disk %u service start failed", i);
     disk->setName(i ? "SystemOS" : "OS");
     disk->registerService(kIOServiceSynchronous);
     IOLog("RootStage: disk %u published, %llu bytes\n",i,table->Disks[i].Bytes);
+  }
+  if (dataSeed) {
+    auto *disk = new NativeRootBlock;
+    if (!disk || !disk->init(nullptr)) panic("RootStage: Data service allocation failed");
+    disk->configureData(dataSeed, dataSeedBytes);
+    if (!disk->attach(parent) || !disk->start(parent)) panic("RootStage: Data service start failed");
+    disk->setName("Data");
+    disk->registerService(kIOServiceSynchronous);
+    IOLog("RootStage: writable Data published, %llu bytes\n", dataSeedBytes);
   }
   mapping->release();
   started = true;
@@ -235,6 +333,21 @@ static int rootBlockIndex(dev_t device)
   return index;
 }
 
+extern "C" int native_root_block_identity_sha384(dev_t device, const char *uuid, uint8_t digest[48])
+{
+  int index = rootBlockIndex(device);
+  if (index < 0 || index >= 2) return 0;
+  const auto &image = rootIdentities[index];
+  if (strnlen(image.identity, sizeof(image.identity)) != 32) return 0;
+  SHA384_CTX context;
+  SHA384_Init(&context);
+  SHA384_Update(&context, image.identity, 32);
+  SHA384_Update(&context, &image.bytes, sizeof(image.bytes));
+  SHA384_Update(&context, uuid, strlen(uuid) + 1);
+  SHA384_Final(digest, &context);
+  return 1;
+}
+
 extern "C" int native_root_block_authorized(dev_t device)
 {
   return rootBlockIndex(device) == 0;
@@ -245,7 +358,7 @@ extern "C" int native_root_block_cache_authorized(dev_t device)
   return rootBlockIndex(device) == 1;
 }
 
-extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, char *path, size_t size)
+static int rootBlockVolume(const char *uuid, dev_t *device, char *path, size_t size, int index)
 {
   if (observationSeconds && !observationCall) {
     observationCall = thread_call_allocate(observationExpired, nullptr);
@@ -265,7 +378,7 @@ extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, 
     OSNumber *minorNumber = OSDynamicCast(OSNumber, entry->getProperty(kIOBSDMinorKey));
     if (!name || !majorNumber || !minorNumber) continue;
     dev_t candidate = makedev(majorNumber->unsigned32BitValue(), minorNumber->unsigned32BitValue());
-    if (!native_root_block_cache_authorized(candidate)) continue;
+    if (rootBlockIndex(candidate) != index) continue;
     if (snprintf(path, size, "/dev/%s", name->getCStringNoCopy()) >= (int)size) break;
     *device = candidate;
     found = true;
@@ -273,4 +386,19 @@ extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, 
   }
   iterator->release();
   return found;
+}
+
+extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, char *path, size_t size)
+{
+  return rootBlockVolume(uuid, device, path, size, 1);
+}
+
+extern "C" int native_root_block_data_seed(dev_t *device, char *path, size_t size,
+    uint64_t *base, uint64_t *bytes, uint8_t digest[32])
+{
+  if (!rootBlockVolume(dataSeedUUID, device, path, size, 2)) return 0;
+  *base = (uint64_t)dataSeed;
+  *bytes = dataSeedBytes;
+  memcpy(digest, dataSeedHash, 32);
+  return 1;
 }

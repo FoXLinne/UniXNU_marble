@@ -1,0 +1,24 @@
+{
+  "change": "Publish writable APFS Data through IOBlockStorageDevice and select volume UUID",
+  "build": "passed",
+  "kernel": "outputs/UniXNU_marble/kernel_data_media.macho",
+  "kernel_sha256": "92473129bb815ac7530ae00a922a7e35eb1122eb515e229c628b3c1b1addaa65",
+  "seed": {
+    "volume_uuid": "104DEB93-C404-42D0-B297-F0D8D7E8A697",
+    "bytes": 134217728,
+    "sha256": "4faa154f2cddb3e67d68ab333651d899dc9b17da3df670c6b99b0458002fb9af",
+    "source_regular_files": 39,
+    "source_regular_bytes": 611715,
+    "guest_mutable": true,
+    "initial_seed_signature_verified": false,
+    "seed": "Original private/var excluding staged_system_apps; symlinks preserved; runtime directories added",
+    "owner_keybag_created": false,
+    "os_inputs_modified": false,
+    "production_storage_qualified": false,
+    "directory_skeleton": "Original var plus upstream offline Data runtime directories"
+  },
+  "device_result": "Original launchd reached SpringBoard pid 27 and backboardd pid 57; runtime container directories were created on writable Data; SpringBoard repeatedly crashed; watchdogd pid 155 exited namespace 2 subcode 5; panic returned to RootStage returns=5",
+  "log": "records/data_media_kernel.log.gz",
+  "log_sha256": "de25f4fcf90c192d07e48082c608823da2d7521b4078cfe28810bf6984866883",
+  "desktop_verified": false
+}
