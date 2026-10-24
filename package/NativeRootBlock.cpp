@@ -289,7 +289,7 @@ extern "C" void native_root_block_start(void)
   if (kernel.Count == 1 && kernel.Bytes >= rootOutputBytes && kernel.Bytes <= kernel.Extents[0].Bytes) {
     uint64_t address = kernel.Extents[0].Address + kernel.Bytes - rootOutputBytes;
     IOMemoryDescriptor *memory = IOMemoryDescriptor::withAddressRange(
-        address, rootOutputBytes, kIODirectionOut | kIOMemoryMapperNone, nullptr);
+        address, rootOutputBytes, kIODirectionInOut | kIOMemoryMapperNone, nullptr);
     IOMemoryMap *log = memory ? memory->map(kIOMapAnywhere | kIOMapCopybackCache) : nullptr;
     OSSafeReleaseNULL(memory);
     if (!log) panic("RootStage: log mailbox mapping failed");
@@ -321,9 +321,10 @@ extern "C" void native_root_block_start(void)
             bytes > kernel.Bytes - rootOutputBytes - offset)
           panic("RootStage: Data seed range invalid");
         void *data = IOMallocAligned(logical, 4096);
-        void *packed = IOMalloc(bytes);
+        size_t copyBytes = (bytes + 4095) & ~4095ULL;
+        void *packed = IOMalloc(copyBytes);
         if (!data || !packed) panic("RootStage: Data allocation failed for %llu bytes", logical);
-        if (copypv(kernel.Extents[0].Address + offset, (addr64_t)packed, (unsigned int)bytes,
+        if (copypv(kernel.Extents[0].Address + offset, (addr64_t)packed, (unsigned int)copyBytes,
             cppvPsrc | cppvNoRefSrc) != KERN_SUCCESS)
           panic("RootStage: Data seed copy failed");
         z_stream stream = {};
@@ -336,7 +337,7 @@ extern "C" void native_root_block_start(void)
         if (inflateInit(&stream) != Z_OK) panic("RootStage: Data inflater initialization failed");
         int result = inflate(&stream, Z_FINISH);
         inflateEnd(&stream);
-        IOFree(packed, bytes);
+        IOFree(packed, copyBytes);
         if (result != Z_STREAM_END || stream.total_out != logical || stream.avail_in)
           panic("RootStage: Data seed decompression failed: %d", result);
         dataSeed = (uint8_t *)data;

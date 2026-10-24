@@ -224,9 +224,26 @@ subprocess.run(['llvm-objcopy', '--remove-section=__DATA,__mod_init_func',
 resident = out / 'NativeResident.o'
 resident_command = [str(ROOT / 'kits/marble/NativeResident.cpp') if v == str(source) else str(resident) if v == str(obj_path) else v for v in command]
 subprocess.run(resident_command, cwd=record['directory'], check=True)
+policy_source = ROOT / 'kits/marble/RootWatchdogPolicy.c'
+policy_object = out / 'RootWatchdogPolicy.o'
+policy_recipe = json.loads((ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o.json').read_text().strip().rstrip(','))
+policy_command = []
+policy_arguments = iter(policy_recipe['arguments'])
+for value in policy_arguments:
+    if value == policy_recipe['file']:
+        policy_command.append(str(policy_source))
+    elif value in ('-MF', '-MT', '-MJ'):
+        next(policy_arguments)
+    elif value == '-o':
+        next(policy_arguments)
+        policy_command += ['-o', str(policy_object)]
+    else:
+        policy_command.append(value)
+policy_command += ['-mgeneral-regs-only']
+subprocess.run(policy_command, cwd=policy_recipe['directory'], check=True)
 archive = out / 'libNativeRootBlock.a'
 archive.unlink(missing_ok=True)
-subprocess.run(['xcrun', 'ar', 'rcs', archive, late, resident, out / 'original-bindings.o'], check=True)
+subprocess.run(['xcrun', 'ar', 'rcs', archive, late, resident, out / 'original-bindings.o', policy_object], check=True)
 report = dict(reference_kernel_sha256=plan['candidate_sha256'], original_executable_code_unchanged=True,
               method_slots=len(methods), compiled_public_class_size=int(class_size[1], 16),
               bindings={name:hex(value) for name,value in bindings.items()}, runtime_qualified=False,

@@ -86,8 +86,15 @@ def image_stream(image):
         ['hdiutil', 'attach', '-readonly', '-nomount', '-plist', image['source']]))
     disk = next(e['dev-entry'] for e in attached['system-entities'] if e.get('dev-entry'))
     try:
-        info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', disk]))
-        if info['TotalSize'] != image['raw_bytes']:
+        for entity in attached['system-entities']:
+            candidate = entity.get('dev-entry')
+            if not candidate:
+                continue
+            info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', candidate]))
+            if info['TotalSize'] == image['raw_bytes']:
+                disk = candidate
+                break
+        else:
             raise ValueError(f'Image size differs from manifest: {image["name"]}')
         with open(disk.replace('/dev/disk', '/dev/rdisk'), 'rb', buffering=0) as stream:
             yield stream

@@ -142,6 +142,19 @@ index 7961cb7..dec19ac 100644
 ++  return 1;
 ++}
 ++
+diff --git a/patches/xnu/zzz-boot-progress.patch b/patches/xnu/zzz-boot-progress.patch
+index 4a188fb..433b339 100644
+--- a/patches/xnu/zzz-boot-progress.patch
++++ b/patches/xnu/zzz-boot-progress.patch
+@@ -211,7 +211,7 @@
+  	int data_error = native_owner_data_prepare(p, (user_addr_t)scratch_addr);
+ +	boot_progress_stage("Data mount returned");
+  	if (data_error) panic("offline scratch Data mount failed: %d", data_error);
+-+#if defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS
+++#if (defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS) || (defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE)
+ +	extern int sheng_boot_watchdog_policy(void *, uint64_t);
+ +	boot_progress_stage("temporary watchdog launch policy enter");
+ +	int policy_error=sheng_boot_watchdog_policy(p, (uint64_t)scratch_addr);
 diff --git a/scripts/audit-amfi-pmgr-contract.py b/scripts/audit-amfi-pmgr-contract.py
 index 12eb8a8..2c94067 100644
 --- a/scripts/audit-amfi-pmgr-contract.py
@@ -298,6 +311,44 @@ index a9dda5d..1b6a715 100644
      raise SystemExit('Host formatting did not produce the requested raw APFS container')
  report = dict(volume_uuid=volume_uuid, bytes=len(data), sha256=hashlib.sha256(data).hexdigest(), source_regular_files=count,
                source_regular_bytes=total, guest_mutable=True, initial_seed_signature_verified=False,
+diff --git a/scripts/seed-data-skip-setup.py b/scripts/seed-data-skip-setup.py
+index e0d03b9..ad4de43 100755
+--- a/scripts/seed-data-skip-setup.py
++++ b/scripts/seed-data-skip-setup.py
+@@ -17,7 +17,7 @@ and the container directories under /private/var/containers that on a device liv
+ build-os-root.py does): a board without input would otherwise turn its display off about 30 seconds after SpringBoard starts
+ and put the system to sleep.
+ """
+-import hashlib, json, os, plistlib, subprocess, sys, tempfile
++import hashlib, json, os, plistlib, shutil, subprocess, sys, tempfile
+ from pathlib import Path
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+@@ -45,7 +45,8 @@ def main():
+     if output.exists():
+         sys.exit('Refuse to overwrite ' + str(output))
+     blob = base.read_bytes()
+-    logical, extents = packed_ramdisk.regions(blob)
++    raw_mode = blob[32:36] == b'NXSB'
++    logical, extents = (len(blob), [(0, blob)]) if raw_mode else packed_ramdisk.regions(blob)
+     with tempfile.TemporaryDirectory(prefix='data-seed-', dir=str(ROOT / 'build')) as td:
+         raw = Path(td) / 'seed.raw'
+         with raw.open('wb') as f:
+@@ -88,8 +89,12 @@ def main():
+             subprocess.run(['hdiutil', 'detach', device], check=True)
+         if raw.read_bytes()[32:36] != b'NXSB':
+             sys.exit('The edited image is no APFS container any more')
+-        metadata = packed_ramdisk.pack(raw, output)
+-    report = dict(base_sha256=packed_ramdisk.inspect(base)[0]['sha256'], output=metadata,
++        if raw_mode:
++            shutil.copyfile(raw, output)
++            metadata = dict(format='apfs', bytes=output.stat().st_size, sha256=hashlib.sha256(output.read_bytes()).hexdigest())
++        else:
++            metadata = packed_ramdisk.pack(raw, output)
++    report = dict(base_sha256=hashlib.sha256(blob).hexdigest() if raw_mode else packed_ramdisk.inspect(base)[0]['sha256'], output=metadata,
+                   preferences=['com.apple.migration', 'com.apple.springboard', 'com.apple.purplebuddy',
+                                'com.apple.purplebuddy.notbackedup', 'com.apple.managedconfiguration.notbackedup'],
+                   no_auto_dim=no_auto_dim, build=BUILD, source='github.com/dipa-studio/ios-sweet tools/sweet-root-tweaks.py')
 diff --git a/package/UniXNUPkg/Include/Protocol/RootStage.h b/package/UniXNUPkg/Include/Protocol/RootStage.h
 new file mode 100644
 index 0000000..65d5a8c
