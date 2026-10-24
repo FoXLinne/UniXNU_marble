@@ -232,6 +232,23 @@ index 0000000..7161b4f
 + 			panic("Failed to mount root device");
 + #endif
 + 		}
+diff --git a/patches/xnu/native-rw-lock-diagnostic.patch b/patches/xnu/native-rw-lock-diagnostic.patch
+new file mode 100644
+index 0000000..c694868
+--- /dev/null
++++ b/patches/xnu/native-rw-lock-diagnostic.patch
+@@ -0,0 +1,11 @@
++--- a/osfmk/kern/lock_rw.c
+++++ b/osfmk/kern/lock_rw.c
++@@ -1397,7 +1397,7 @@
++ 	if (lock->lck_rw_can_sleep) {
++ 		lck_rw_lock_count_inc(thread, lock);
++ 	} else if (get_preemption_level() == 0) {
++-		panic("Taking non-sleepable RW lock with preemption enabled");
+++		panic("Taking non-sleepable RW lock with preemption enabled: lock=%p data=%08x caller=%p", lock, lock->lck_rw_data, caller);
++ 	}
++ 
++ 	for (;;) {
 diff --git a/patches/xnu/zz-root-stage-owner-auth.patch b/patches/xnu/zz-root-stage-owner-auth.patch
 new file mode 100644
 index 0000000..605e75b
