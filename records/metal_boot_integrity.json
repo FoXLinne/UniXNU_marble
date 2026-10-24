@@ -1,0 +1,41 @@
+{
+  "boot_sha256": "4d419127160987f21f00379bc394d60bc483b670fe9c33ad004db4ed054b934e",
+  "container_bytes": 58738800,
+  "payloads": [
+    {
+      "name": "loader.efi",
+      "bytes": 18432,
+      "sha256": "fc92da295dc247daeb4e6aded6583832d0545fd41195a288dde82edde6561b00",
+      "matches_built_bootstrap": true
+    },
+    {
+      "name": "root.stage",
+      "bytes": 1,
+      "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+    },
+    {
+      "name": "volume.img",
+      "bytes": 58720256,
+      "sha256": "eaeb75bf8b4e3fc40e37556ac3d5fee9ab0dd825f10a9874dd2e85c6f8d0bbe9",
+      "extracted": "outputs/UniXNU_marble/metal_boot_volume.img"
+    }
+  ],
+  "embedded_files": {
+    "DarwinBoot.efi": {
+      "bytes": 28672,
+      "sha256": "809b19671c925d8ad6eca1b21e347365f466951f5f48b7c20411ec475de13deb",
+      "matches": true,
+      "watchdog_message": true
+    },
+    "kernel.macho": {
+      "bytes": 52555776,
+      "sha256": "256752a70a763d7264d73605bebf8c02e83ddd0c62e8bc676e45ea9205b6d8af",
+      "matches": true
+    },
+    "trustcache": {
+      "bytes": 61456,
+      "sha256": "dbd2da83f2da1f1a121782c2389e71f69e4fa30034b592645ad4dc1018fe367f",
+      "matches": true
+    }
+  }
+}
