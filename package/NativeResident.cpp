@@ -9,6 +9,7 @@ extern "C" void native_resident_configure(uint64_t);
 extern "C" void native_resident_return(void);
 extern "C" void native_resident_panic_return(void);
 extern "C" void native_root_block_capture_log(void);
+extern "C" void armcpu_complete_active_interrupt(void);
 extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_root_block_export_data(void);
 extern "C" volatile uint32_t armcpu_smp_step[8], armcpu_smp_mpidr[8];
@@ -30,6 +31,7 @@ static uint64_t psci(uint64_t function, uint64_t argument = 0)
 static void powerOffSecondary(void *)
 {
   __asm__ volatile("msr daifset, #15\n\tmsr cntv_ctl_el0, xzr\n\tmsr icc_igrpen1_el1, xzr\n\tdsb sy\n\tisb" ::: "memory");
+  armcpu_complete_active_interrupt();
   psci(0x84000002); // PSCI CPU_OFF
   for (;;) __asm__ volatile("wfi");
 }
@@ -94,6 +96,7 @@ extern "C" void native_resident_return(void)
       ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) | ARM_TTE_BLOCK_AP(AP_RWNA) |
       ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WRITEBACK);
   uint64_t table = ml_static_vtop((vm_offset_t)level1);
+  armcpu_complete_active_interrupt();
   tcr &= ~0x80ULL;
   __asm__ volatile(
       "msr daifset, #15\n"

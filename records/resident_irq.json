@@ -1,0 +1,14 @@
+{
+  "defect": "Resident return leaves the active IPI handler before ArmCpu::interrupt reaches ICC_EOIR1_EL1",
+  "changes": [
+    "Track the acknowledged interrupt per logical CPU",
+    "Complete the active interrupt before PSCI CPU_OFF and the firmware return branch",
+    "Clear inherited Group 1 active priority registers and redistributor active interrupts during CPU startup"
+  ],
+  "source": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/refs/tags/v6.1/drivers/irqchip/irq-gic-v3.c",
+  "build": "passed",
+  "prelink": "passed",
+  "kernel": "outputs/UniXNU_marble/kernel_resident_irq.macho",
+  "sha256": "b158e198d26eb28d353e12de8091896e28a74971ab995e02ed76dd50accecc7b",
+  "hardware_validation": "pending; USB did not enumerate after the preceding resident warm launch"
+}
