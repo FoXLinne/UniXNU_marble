@@ -74,6 +74,9 @@ def image_stream(image):
         ['hdiutil', 'attach', '-readonly', '-nomount', '-plist', image['source']]))
     disk = next(e['dev-entry'] for e in attached['system-entities'] if e.get('dev-entry'))
     try:
+        info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', disk]))
+        if info['TotalSize'] != image['raw_bytes']:
+            raise ValueError(f'Image size differs from manifest: {image["name"]}')
         with open(disk.replace('/dev/disk', '/dev/rdisk'), 'rb', buffering=0) as stream:
             yield stream
     finally:
@@ -98,9 +101,10 @@ def load(channel, images, kernel=None):
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
             if digest != image['sha256']:
                 raise ValueError(f'Image checksum differs from manifest: {image["name"]}')
-            stream.seek(0, 2)
-            if stream.tell() != image['raw_bytes']:
-                raise ValueError(f'Image size differs from manifest: {image["name"]}')
+            if image.get('format') == 'raw':
+                stream.seek(0, 2)
+                if stream.tell() != image['raw_bytes']:
+                    raise ValueError(f'Image size differs from manifest: {image["name"]}')
             channel.command(f'oem begin:{index}:{image["raw_bytes"]:016x}:{digest[:32]}')
             offset, total = [int(v, 16) for v in channel.command('getvar:received').split(':')]
             if total != image['raw_bytes'] or not 0 <= offset <= total:

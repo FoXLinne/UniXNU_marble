@@ -21,6 +21,7 @@ parser.add_argument('--kernel', type=Path)
 parser.add_argument('--unique-chip-id')
 parser.add_argument('--root-stage', action='store_true')
 parser.add_argument('--root-images', type=Path)
+parser.add_argument('--trust-cache', type=Path)
 args = parser.parse_args()
 OUT.mkdir(parents=True, exist_ok=True)
 if (OUT / 'stage').exists():
@@ -46,6 +47,9 @@ if args.kernel:
         images = json.loads(args.root_images.read_text())
         os_image = next(image for image in images if image['name'] == 'OS')
         adt_command += ['--root-disks', '--root-match-volume-uuid', os_image['volumes'][0]['uuid']]
+    if args.trust_cache:
+        shutil.copy2(args.trust_cache, payloads / 'kernel.macho.trustcache')
+        adt_command.append('--trust-cache')
     subprocess.run(adt_command, check=True)
     kernel_args = ' '.join(board['payload']['kernel_args'])
     entry = f'type = "xnu"\npath = "Payloads/kernel.macho"\nargs = "{kernel_args}"\n'

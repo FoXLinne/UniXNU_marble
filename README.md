@@ -1,6 +1,6 @@
-# Marble_iOS
+# Marble_UniXNU
 
-marble 的 UniXNU 适配代码。
+marble 的 UniXNU 适配代码。系统目标为 iPadOS 17.7.11（21H461）。
 
 | 目录或文件 | 内容 |
 | --- | --- |

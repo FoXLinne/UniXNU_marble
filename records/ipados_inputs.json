@@ -1,0 +1,72 @@
+{
+  "target": "iPadOS 17.7.11",
+  "build": "21H461",
+  "identity": "iPad7,1 / J120 / pad",
+  "images": [
+    {
+      "name": "OS",
+      "source": "/Users/kaedekr/Documents/Codex/2026-10-22/https-github-com-oosexgang-hackios-xnu/work/UniXNU/out/ipsw/21H461/044-76040-038.dmg",
+      "raw_bytes": 6077580800,
+      "device_block_size": 512,
+      "source_read_only": true,
+      "filesystem": {
+        "VolumeName": "",
+        "Content": "GUID_partition_scheme",
+        "MediaName": "Disk Image"
+      },
+      "header_signatures": {
+        "byte_32": "00000000",
+        "byte_1024": "ef57347c"
+      },
+      "volumes": [
+        {
+          "name": "DawnUpdate21H461.J120J121J207J208OS",
+          "uuid": "04769D26-2CA0-4825-B443-E2E5F88300F2",
+          "roles": [
+            "System"
+          ]
+        }
+      ],
+      "sha256": "e5634d04a8ac35f024845f583394e0a35deb26a04cb0c00286a8674e25a9a4f2"
+    },
+    {
+      "name": "SystemOS",
+      "source": "/Users/kaedekr/Documents/Codex/2026-10-22/https-github-com-oosexgang-hackios-xnu/work/UniXNU/out/ipsw/21H461/044-76034-038.dmg",
+      "raw_bytes": 3303014400,
+      "device_block_size": 512,
+      "source_read_only": true,
+      "filesystem": {
+        "VolumeName": "",
+        "Content": "",
+        "MediaName": "Disk Image"
+      },
+      "header_signatures": {
+        "byte_32": "4e585342",
+        "byte_1024": "00000000"
+      },
+      "volumes": [
+        {
+          "name": "DawnUpdate21H461.J120J121J207J208SystemCryptex",
+          "uuid": "8846FE78-2910-4297-AF97-D59BB6F8FC16",
+          "roles": []
+        }
+      ],
+      "sha256": "b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f"
+    }
+  ],
+  "trust_bundle": {
+    "path": "outputs/UniXNU_marble/iPadOS17/original_trust.bundle",
+    "bytes": 61356,
+    "sha256": "7416ca4f8377146626bb284e2133c76bee6cb4e3ee0af5d648b186235a7323a7"
+  },
+  "boot_image": {
+    "path": "outputs/UniXNU_marble/marble_ipados_boot.img",
+    "sha256": "5d34b91bfe9c40c9ab04226874cc58300d52e200c6542848d1e97d051289d886"
+  },
+  "kernel": "outputs/UniXNU_marble/kernel_init_policy.macho",
+  "root_volume_uuid": "04769D26-2CA0-4825-B443-E2E5F88300F2",
+  "root_disks_bytes": 9380595200,
+  "pack": "passed",
+  "interface_reference": "work/UniXNU/docs/zh/guide/mobilegestalt.md; artwork-device-idiom and model describe the interface family; documented default pairs iPadOS with pad identity",
+  "device_result": "boot package prepared; switching resident loader"
+}
