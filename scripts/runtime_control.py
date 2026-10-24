@@ -26,7 +26,7 @@ def read(device, kind, offset, length):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'gpu', 'adreno', 'hide_display', 'show_display', 'tap', 'swipe', 'trace', 'trace_start', 'return'])
+    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'gpu', 'adreno', 'hide_display', 'show_display', 'tap', 'swipe', 'trace', 'trace_start', 'metal_cache', 'return'])
     parser.add_argument('--x', type=int)
     parser.add_argument('--y', type=int)
     parser.add_argument('--to-x', type=int)
@@ -80,6 +80,14 @@ def main():
                 print(args.output)
             else:
                 print(text)
+        elif args.command == 'metal_cache':
+            magic, generation, length = struct.unpack('<8sII', read(device, 16, 0, 16))
+            if magic != b'ROOTMTC1' or not length:
+                raise RuntimeError('Metal pipeline cache export is not ready')
+            if args.output is None:
+                parser.error('metal_cache requires --output')
+            args.output.write_bytes(read(device, 16, 16, length))
+            print(json.dumps(dict(generation=generation, bytes=length, output=str(args.output))))
         elif args.command == 'status':
             fields=struct.unpack('<8s6Q',read(device,5,0,56))
             if fields[0] != b'ROOTRUN1':

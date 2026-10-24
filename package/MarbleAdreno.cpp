@@ -3,6 +3,10 @@
 #include <IOKit/IOLib.h>
 #include <IOKit/IODeviceMemory.h>
 #include <kern/clock.h>
+#include <IOKit/IOService.h>
+#include <IOKit/IOPlatformExpert.h>
+#include <mach/kmod.h>
+#include "NativeAdrenoUserClient.h"
 #include "NativeAdrenoGpuContext.h"
 #include "NativeAdrenoCpInit.h"
 #include "NativeAdrenoPwrup.h"
@@ -11,6 +15,12 @@
 
 extern "C" const uint8_t marble_sqe_firmware[];
 extern "C" const uint64_t marble_sqe_firmware_size;
+extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *, NativeAdrenoSubmit *, NativeAdrenoRing *,
+    const NativeAdrenoRingClock *, const NativeAdrenoTimer *, const NativeAdrenoAbiDeviceInfo *, uint32_t, uint32_t);
+extern "C" void native_adreno_accelerator_static_init(void) __asm__("__GLOBAL__sub_I_NativeAdrenoAccelerator.cpp");
+extern "C" IOService *native_adreno_accelerator_allocate(void);
+extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
+extern "C" kmod_info_t g_kernel_kmod_info;
 
 namespace {
 class CommandProcessor {
@@ -20,6 +30,14 @@ class CommandProcessor {
     NativeAdrenoGpuBuffer buffers[5] = {};
     NativeAdrenoRing ring;
     NativeAdrenoCpInit initializer;
+    NativeAdrenoSubmit submit;
+    NativeAdrenoTimer timer;
+    uint32_t outputBits = 0;
+    // Live DT chip ID and UBWC configuration; KGSL gen7_4_0 supplies 2 MiB GMEM and no UCHE GMEM window.
+    static constexpr NativeAdrenoAbiDeviceInfo deviceInfo = {
+        0x07030002, 2U << 20, 0, 0x1fffffffff000ULL, 0x20000000, 0xe0000000,
+        16, 6, 1, 4, NativeAdrenoDeviceClientIova, 0
+    };
     static IOMemoryMap *map(uint64_t physical, size_t bytes, IOOptionBits options) {
         auto *memory = IODeviceMemory::withRange(physical, bytes);
         auto *mapping = memory ? memory->map(kIOMapAnywhere | options) : nullptr;
@@ -67,6 +85,7 @@ class CommandProcessor {
         IOLog("MarbleGPU: GPU context status=%x step=%u program=%u routes=%u output_bits=%u\n",
             status, report.step, report.program_status, report.routes_verified, report.output_bits);
         if (status || NativeAdrenoGpuContextBuffers(buffers)) return -5;
+        outputBits = report.output_bits;
         for (unsigned i = 0; i < 5; ++i) {
             bufferMaps[i] = map(buffers[i].physical, buffers[i].bytes, kIOMapWriteCombineCache);
             if (!bufferMaps[i]) return -12;
@@ -157,13 +176,43 @@ class CommandProcessor {
         IOLog("MarbleGPU: CP write=%x fence=%u seen=%u wait=%u scratch=%x\n", status, fence, seen, waited, value);
         return status || waited || value != 0xa7257475 ? -5 : 0;
     }
+    int publishService() {
+        NativeAdrenoVm *vm = NativeAdrenoGpuContextVm();
+        IOReturn status = submit.attach(vm, &ring);
+        const NativeAdrenoTimeIo timeIo{this, readRegister};
+        if (!status) status = timer.attach(&timeIo, NativeAdrenoTimeCp);
+        const NativeAdrenoRingClock clock{nullptr, now, idle};
+        if (!status) status = native_adreno_publish(vm, &submit, &ring, &clock, &timer, &deviceInfo, 32, outputBits);
+        if (status) return status;
+        status = OSKextLoadKextWithIdentifier("com.apple.iokit.IOGPUFamily");
+        if (status) return status;
+        void *module = OSMetaClass::preModLoad(g_kernel_kmod_info.name);
+        if (!module) return kIOReturnNoResources;
+        native_adreno_accelerator_static_init();
+        status = OSMetaClass::postModLoad(module);
+        if (status) return status;
+        IOService *accelerator = native_adreno_accelerator_allocate();
+        if (!accelerator || !accelerator->init()) return kIOReturnNoMemory;
+        accelerator->setProperty("MetalPluginName", "NativeAdrenoMetal");
+        accelerator->setProperty("MetalPluginClassName", "NativeAdrenoMetalDevice");
+        accelerator->setProperty("NativeSandboxGrantProcess", "backboardd,iconservicesagent,WidgetRenderer_Default,PosterBoard");
+        if (!accelerator->attach(IOService::getPlatform())) return kIOReturnNotAttached;
+        accelerator->registerService();
+        IOLog("MarbleGPU: Adreno 725 Metal accelerator published chip=%x\n", deviceInfo.chip_id);
+        return 0;
+    }
 public:
-    int start() { int status = context(); return status ? status : configure(); }
+    int start() {
+        int status = context();
+        if (!status) status = configure();
+        return status ? status : publishService();
+    }
 };
 CommandProcessor *commandProcessor;
 }
 
 extern "C" int native_marble_adreno_start(void) {
+    if (commandProcessor) return -16;
     commandProcessor = new CommandProcessor;
     return commandProcessor ? commandProcessor->start() : -12;
 }

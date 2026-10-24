@@ -177,6 +177,20 @@ index 12eb8a8..2c94067 100644
  original_meta = macho(original)
  
  
+diff --git a/scripts/build-native-metal-bridge.py b/scripts/build-native-metal-bridge.py
+index 613bcba..c0cf5f1 100644
+--- a/scripts/build-native-metal-bridge.py
++++ b/scripts/build-native-metal-bridge.py
+@@ -27,7 +27,8 @@ PATCHES = [ROOT / 'drivers/NativeMetal/bridge/patches' / name for name in [
+     '0001-optional-constant-output-members.patch', '0002-resource-wait-storage-dependencies.patch',
+     '0003-cache-device-entry-point-priming.patch', '0004-fold-constant-global-field-loads.patch',
+     '0005-keep-module-decodes-and-profile-fingerprints.patch', '0006-skip-draws-without-a-pipeline.patch',
+-    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch']]
++    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch',
++    '0009-use-8mb-memory-blocks.patch']]
+ tree_diff = subprocess.check_output(['git', '-C', str(SOURCE), 'diff', 'HEAD', '--'], text=True)
+ def canonical_diff(diff):
+     # Independent patches touch disjoint files; Git orders the combined diff by
 diff --git a/scripts/build-xnu-4k-baseline.sh b/scripts/build-xnu-4k-baseline.sh
 index 5815dd9..24ea7fc 100755
 --- a/scripts/build-xnu-4k-baseline.sh
@@ -263,6 +277,52 @@ index 5815dd9..24ea7fc 100755
    printf '%s\n' "$NATIVE_ARCH_TIMER" > "$NATIVE_TIMER_STAMP"
  fi
  NATIVE_PAN=${XNU_NATIVE_PAN:-0}
+diff --git a/scripts/check-turnip-darwin-host.py b/scripts/check-turnip-darwin-host.py
+index 6deaed9..7513f5b 100644
+--- a/scripts/check-turnip-darwin-host.py
++++ b/scripts/check-turnip-darwin-host.py
+@@ -10,6 +10,7 @@ import subprocess
+ import sys
+ import tempfile
+ 
++os.environ['SDKROOT'] = subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-path'], text=True).strip()
+ ROOT = Path(__file__).resolve().parents[1]
+ kit = ROOT / 'drivers/NativeAdreno'
+ sim = kit / 'tests/hostsim'
+@@ -51,7 +52,7 @@ shim = out / 'libhostiokit.dylib'
+ subprocess.run(['xcrun', 'clang++', '-dynamiclib', '-o', shim, service, shim_obj, *core, *objects,
+                 '-framework', 'IOKit', '-framework', 'CoreFoundation'], check=True)
+ smoke = out / 'vulkan_smoke'
+-subprocess.run(['xcrun', 'clang', '-std=c11', '-O1', '-I', '/opt/homebrew/include', sim / 'vulkan_smoke.c', '-o', smoke,
++subprocess.run(['xcrun', 'clang', '-std=c11', '-O1', '-I', ROOT / '.cache/mesa-work/include', sim / 'vulkan_smoke.c', '-o', smoke,
+                 '-Wl,-rpath,' + str(out)], check=True)
+ 
+ plugin_smoke = out / 'plugin_smoke'
+@@ -59,6 +60,11 @@ subprocess.run([sys.executable, ROOT / 'scripts/gen-turnip-smoke-shaders.py'], c
+ subprocess.run(['xcrun', 'clang++', '-std=c++17', '-O1', '-I', ROOT / 'drivers/NativeMetal', '-I', ROOT / '.cache/mesa-work/include',
+                 '-I', ROOT / 'build/turnip-smoke',
+                 sim / 'plugin_smoke.cpp', '-o', plugin_smoke], check=True)
++for executable in (shim, smoke, plugin_smoke):
++    subprocess.run(['codesign', '--force', '--sign', '-', executable], check=True)
++if '--build-only' in sys.argv:
++    print('Built Turnip host command recorder')
++    sys.exit(0)
+ env = dict(os.environ, DYLD_INSERT_LIBRARIES=str(shim), MESA_LOG='')
+ env.pop('TU_DARWIN_SERVICE', None)   # the default is the production transport: accelerator service, open type 0x4147, tunnel through one admitted selector
+ result = subprocess.run([str(smoke), str(library)], env=env, capture_output=True, text=True, timeout=300)
+diff --git a/scripts/gen-turnip-replay.py b/scripts/gen-turnip-replay.py
+index 664915c..4b0beb8 100644
+--- a/scripts/gen-turnip-replay.py
++++ b/scripts/gen-turnip-replay.py
+@@ -21,7 +21,7 @@ HEADER = ROOT / 'build/turnip-smoke/TurnipReplay.h'
+ RD_GPUADDR, RD_BUFFER_CONTENTS, RD_CMDSTREAM_ADDR = 3, 12, 6
+ 
+ if not (HOST / 'plugin_smoke').exists():
+-    subprocess.run([sys.executable, ROOT / 'scripts/check-turnip-darwin-host.py'], check=True)
++    subprocess.run([sys.executable, ROOT / 'scripts/check-turnip-darwin-host.py', '--build-only'], check=True)
+ shutil.rmtree(OUT, ignore_errors=True)
+ OUT.mkdir(parents=True)
+ env = dict(os.environ, DYLD_INSERT_LIBRARIES=str(HOST / 'libhostiokit.dylib'), MESA_LOG='', TU_DEBUG='nocb', FD_RD_DUMP='enable', HOSTSIM_PAGE_SIZE='4096',
 diff --git a/scripts/prepare-owner-data-fixture.py b/scripts/prepare-owner-data-fixture.py
 index a9dda5d..1b6a715 100644
 --- a/scripts/prepare-owner-data-fixture.py

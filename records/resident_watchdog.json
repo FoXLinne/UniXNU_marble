@@ -1,0 +1,21 @@
+{
+  "firmware": "outputs/UniXNU_marble/marble_watchdog_boot.img",
+  "bytes": 11894784,
+  "sha256": "d9632e2065501fb70633bd35f7c338e71c2f14a6eea574417e9a9e40bb6f8bdf",
+  "bootstrap_build": "passed",
+  "pack": "passed",
+  "kernel_staging_bytes": 201326592,
+  "watchdog": {
+    "source": "https://raw.githubusercontent.com/MiCode/Xiaomi_Kernel_OpenSource/marble-s-oss/drivers/virt/gunyah/gh_virt_wdt.c",
+    "control": "0x86000005",
+    "status": "0x86000006",
+    "pet": "0x86000007",
+    "set_time": "0x86000008",
+    "bark_ms": 50000,
+    "bite_ms": 60000,
+    "kernel_pet_interval_ms": 1000,
+    "arm": "before kernel handoff",
+    "disarm": "after resident return"
+  },
+  "hardware_validation": "pending; device absent from USB enumeration"
+}

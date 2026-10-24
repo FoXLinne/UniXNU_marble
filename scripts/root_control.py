@@ -136,8 +136,8 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
         data += (struct.pack('<8sII', LOG_MAGIC, 1, 0) + os.urandom(16) +
                  struct.pack('<I4xQQQ', observe_seconds, seed_offset, seed_bytes, seed_raw_bytes) + seed_uuid + bytes(27) +
                  extra_args + bytes(OUTPUT_BYTES - 128 - len(extra_args)))
-        if len(data) > 128 * CHUNK:
-            raise ValueError('RootStage kernel update exceeds the 128 MiB slot')
+        if len(data) > 192 * CHUNK:
+            raise ValueError('RootStage kernel update exceeds the 192 MiB slot')
         digest = hashlib.sha256(data).hexdigest()
         entries.append((2, dict(name='kernel', source=str(kernel), format='raw',
                                 raw_bytes=len(data), sha256=digest, payload=data,
@@ -178,7 +178,7 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
                     else:
                         channel.write(data)
                     sent += len(data)
-                    if sent % (128 * CHUNK) == 0 or offset + sent == total:
+                    if sent % (192 * CHUNK) == 0 or offset + sent == total:
                         print(f'{image["name"]}: {offset + sent}/{total}', flush=True)
         report = dict(name=image['name'], bytes=total, sha256=digest,
                       reused_bytes=offset, transmitted_bytes=sent - zero_bytes,

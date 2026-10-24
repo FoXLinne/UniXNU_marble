@@ -24,3 +24,24 @@ index 0000000..b508638
 +         // Over bytes detached from their pages (`detach.rs`) no image aliases them: the texture
 +         // is their shadow, which presents a stand-in until they lie in pages again.
 +         let detached = texels.buffer.detached();
+diff --git a/bridge/patches/0009-use-8mb-memory-blocks.patch b/bridge/patches/0009-use-8mb-memory-blocks.patch
+new file mode 100644
+index 0000000..879ee9b
+--- /dev/null
++++ b/bridge/patches/0009-use-8mb-memory-blocks.patch
+@@ -0,0 +1,15 @@
++diff --git a/crates/metal2vulkan-runtime/src/memory.rs b/crates/metal2vulkan-runtime/src/memory.rs
++index de3df1e..0f315bc 100644
++--- a/crates/metal2vulkan-runtime/src/memory.rs
+++++ b/crates/metal2vulkan-runtime/src/memory.rs
++@@ -48,8 +48,8 @@ use std::ptr::NonNull;
++ use std::sync::Arc;
++ use std::sync::Mutex;
++ 
++-/// The size of a pooled block, at most the device's `maxMemoryAllocationSize`.
++-pub(super) const BLOCK_BYTES: u64 = 64 << 20;
+++/// Commit memory in 8 MiB blocks per process and memory class.
+++pub(super) const BLOCK_BYTES: u64 = 8 << 20;
++ 
++ /// What memory a resource needs.
++ #[derive(Clone, Copy, Debug, PartialEq, Eq)]

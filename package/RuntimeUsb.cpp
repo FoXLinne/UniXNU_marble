@@ -41,6 +41,16 @@ unsigned controlTicks;
 unsigned enumerationTicks;
 uint32_t controllerId, initialControl, initialStatus, initialPhy, lastCommand;
 bool threeStage, active, controllerOwned, panicOnFailure;
+bool watchdogActive;
+unsigned watchdogTicks;
+uint64_t watchdogCall(uint64_t function, uint64_t *control = nullptr) {
+    register uint64_t x0 __asm__("x0") = function;
+    register uint64_t x1 __asm__("x1") = 0;
+    __asm__ volatile("smc #0" : "+r"(x0), "+r"(x1) ::
+        "x2","x3","x4","x5","x6","x7","x8","x9","x10","x11","x12","x13","x14","x15","x16","x17","memory");
+    if (control) *control = x1;
+    return x0;
+}
 uint8_t setup[8];
 
 uint32_t read(unsigned offset) { return registers[offset / 4]; }
@@ -156,7 +166,7 @@ void handleSetup() {
         case 1: case 3: case 11: return;
         default: stall(); return;
         }
-    } else if (setup[0] == 0xc0 && (setup[1] == 1 || setup[1] == 2 || setup[1] == 5 || setup[1] == 6 || setup[1] == 7 || setup[1] == 8)) {
+    } else if (setup[0] == 0xc0 && (setup[1] == 1 || setup[1] == 2 || setup[1] == 5 || setup[1] == 6 || setup[1] == 7 || setup[1] == 8 || setup[1] == 16)) {
         count = native_root_runtime_read(setup[1], value | index<<16, out, MIN(length,responseBytes));
     } else if (setup[0] == 0x40 && !length && setup[1] == 3) {
         native_hid_request_home(); return;
@@ -284,7 +294,15 @@ void worker(void *, wait_result_t) {
         panic("%s",report);
     }
     if (initialized) {
+        uint64_t control = 0;
+        uint64_t status = watchdogCall(0x86000006, &control);
+        watchdogActive = !status && (control & 1);
+        IOLog("MarbleWatchdog: active=%u status=%llx\n", watchdogActive, status);
         while (active) {
+            if (watchdogActive && ++watchdogTicks >= 100) {
+                watchdogCall(0x86000007);
+                watchdogTicks = 0;
+            }
             unsigned count = read(DWC3_GEVNTCOUNT(0)) & DWC3_GEVNTCOUNT_MASK;
             if (count > eventBytes || (count&3)) {
                 IOLog("RuntimeUSB: invalid event count=%u\n",count); break;

@@ -262,7 +262,7 @@ subprocess.run(gmu_command, cwd=record['directory'], check=True)
 gpu_objects = [gmu, cpu]
 for source_path in [ROOT / 'kits/marble/MarbleAdreno.cpp', *[
     ROOT / 'drivers/NativeAdreno' / ('NativeAdreno' + name + '.cpp')
-    for name in ('Memory', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit', 'Pwrup')
+    for name in ('Memory', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit', 'Pwrup', 'Submit', 'UserClient', 'Publish', 'Timer', 'KernelTime')
 ]]:
     target = out / (source_path.stem + '.o')
     recipe = [str(source_path) if v == str(source) else str(target) if v == str(obj_path) else v for v in command]
@@ -293,6 +293,10 @@ with firmware_assembly.open('a') as stream:
 firmware_object = out / 'marble-firmware.o'
 subprocess.run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-isysroot', str(sdk), '-c', str(firmware_assembly), '-o', str(firmware_object)], check=True)
 gpu_objects.append(firmware_object)
+subprocess.run([sys.executable, str(ROOT / 'scripts/build-native-adreno-accelerator.py')], cwd=ROOT, check=True)
+accelerator = ROOT / 'build/native-adreno-accelerator'
+shutil.copyfile(accelerator / 'original-bindings.o', out / 'adreno-accelerator-bindings.o')
+gpu_objects += [accelerator / 'NativeAdrenoAccelerator.late.o', out / 'adreno-accelerator-bindings.o']
 spi = out / 'GeniSpi.o'
 spi_command = [str(ROOT / 'drivers/NativeGeniSpi/GeniSpi.c') if v == str(policy_source) else str(spi) if v == str(policy_object) else v for v in policy_command]
 subprocess.run(spi_command, cwd=policy_recipe['directory'], check=True)

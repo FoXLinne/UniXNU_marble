@@ -47,6 +47,32 @@ char native_root_block_panic_text[4096];
 char *native_root_block_boot_args;
 }
 
+// Owner pipeline caches arrive in ordered pieces; USB fetches the completed generation.
+static IOLock *metalCacheLock;
+static uint8_t *metalCache;
+static uint32_t metalCacheGeneration, metalCacheTotal, metalCacheFilled;
+extern "C" int boot_log_export_put(uint32_t generation, uint32_t total, uint32_t offset,
+    const void *data, uint32_t size)
+{
+  if (!metalCacheLock || !generation || !total || !data || offset > total || size > total - offset) return -1;
+  IOLockLock(metalCacheLock);
+  int status = 0;
+  if (!offset) {
+    if (metalCache) IOFree(metalCache, metalCacheTotal);
+    metalCache = static_cast<uint8_t *>(IOMalloc(total));
+    metalCacheTotal = metalCache ? total : 0;
+    metalCacheFilled = 0;
+    metalCacheGeneration = generation;
+  }
+  if (!metalCache || generation != metalCacheGeneration || total != metalCacheTotal || offset != metalCacheFilled) status = -1;
+  else {
+    memcpy(metalCache + offset, data, size);
+    metalCacheFilled += size;
+  }
+  IOLockUnlock(metalCacheLock);
+  return status;
+}
+
 static constexpr size_t rootLogBytes = 65536;
 static constexpr size_t rootOutputBytes = 1048576;
 static IOMemoryMap *rootLogMapping;
@@ -310,6 +336,23 @@ extern "C" void native_root_block_capture_log(void)
 extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, void *out, unsigned capacity)
 {
   if (!rootLogMapping) return 0;
+  if (kind == 16 && metalCacheLock) {
+    IOLockLock(metalCacheLock);
+    struct { char magic[8]; uint32_t generation, bytes; } header;
+    memcpy(header.magic, "ROOTMTC1", 8);
+    header.generation = metalCacheGeneration;
+    header.bytes = metalCacheFilled == metalCacheTotal ? metalCacheTotal : 0;
+    unsigned count = 0;
+    if (offset < sizeof(header)) {
+      count = MIN(capacity, unsigned(sizeof(header) - offset));
+      memcpy(out, reinterpret_cast<uint8_t *>(&header) + offset, count);
+    } else if (offset - sizeof(header) < header.bytes) {
+      count = MIN(capacity, unsigned(header.bytes - (offset - sizeof(header))));
+      memcpy(out, metalCache + offset - sizeof(header), count);
+    }
+    IOLockUnlock(metalCacheLock);
+    return count;
+  }
   if (kind == 8) {
     constexpr unsigned traceOffset = 800 * 1024;
     unsigned bytes = rootOutputBytes - traceOffset;
@@ -522,6 +565,7 @@ extern "C" void native_root_block_start(void)
 {
   static bool started;
   if (started) return;
+  metalCacheLock = IOLockAlloc();
   native_marble_gpu_quiesce_inherited();
   native_marble_cpu_start();
   IORegistryEntry *map = IORegistryEntry::fromPath("/chosen/memory-map", gIODTPlane);

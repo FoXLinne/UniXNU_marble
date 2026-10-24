@@ -141,7 +141,7 @@ STATIC VOID DataReply(UINTN Size)
 STATIC EFI_STATUS AllocateDisk(UINTN Index, UINT64 Bytes)
 {
   ROOT_STAGE_DISK *Disk = &mStage->Disks[Index];
-  if (!Bytes || (Index < 2 && Bytes % 512) || Bytes > (Index == 2 ? 0x8000000ULL : ROOT_STAGE_CHUNK * ROOT_STAGE_EXTENTS)) return EFI_INVALID_PARAMETER;
+  if (!Bytes || (Index < 2 && Bytes % 512) || Bytes > (Index == 2 ? 0xc000000ULL : ROOT_STAGE_CHUNK * ROOT_STAGE_EXTENTS)) return EFI_INVALID_PARAMETER;
   if (Disk->Count) return EFI_ALREADY_STARTED;
   for (UINT64 Offset = 0; Offset < Bytes;) {
     UINTN Size = (UINTN)MIN(ROOT_STAGE_CHUNK, Bytes - Offset);
