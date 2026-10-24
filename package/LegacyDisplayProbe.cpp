@@ -16,6 +16,8 @@
 extern "C" kmod_info_t g_kernel_kmod_info;
 extern "C" void native_root_block_register_display(uint64_t,uint64_t,uint32_t,uint32_t);
 extern "C" void native_root_block_presented(void);
+extern "C" void native_root_block_register_observer(void (*)(unsigned));
+extern "C" void root_ui_capture(unsigned);
 extern "C" void native_legacy_display_static_init(void) __asm__("__GLOBAL__sub_I_NativeLegacyDisplay.cpp");
 extern "C" IOService *native_legacy_display_allocate(void);
 extern "C" void native_gop_presenter_static_init(void) __asm__("__GLOBAL__sub_I_NativeGOPPresenter.cpp");
@@ -441,6 +443,7 @@ void native_legacy_display_probe(void) {
 }
 void native_legacy_display_late_probe(void);
 void native_legacy_display_late_probe(void) {
+    native_root_block_register_observer(root_ui_capture);
     if(!native_legacy_stage){
         kern_return_t status=OSKextLoadKextWithIdentifier("com.apple.iokit.IOMobileGraphicsFamily");
         if(status)panic("RootStage: display family load failed %x",status);

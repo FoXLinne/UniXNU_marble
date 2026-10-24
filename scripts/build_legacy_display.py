@@ -209,15 +209,33 @@ while i<len(args):
 cmd+=['-Wall','-Wextra','-Werror','-Wno-unused-parameter','-Wno-unnecessary-virtual-specifier','-Wno-c99-designator','-Wno-reorder-init-list',
       '-Wno-deprecated-enum-enum-conversion','-I',str(ROOT/'.cache/xnu-work/osfmk')]
 run(cmd,cwd=r['directory'])
+snapshot_source=ROOT/'kits/marble/RootUiSnapshot.cpp'
+snapshot_object=OUT/'RootUiSnapshot.o'
+run([str(snapshot_source) if str(v)==str(source) else str(snapshot_object) if str(v)==str(OUT/'LegacyDisplayProbe.o') else v for v in cmd],cwd=r['directory'])
+process_recipe=json.loads((ROOT/'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/startup.o.json').read_text().strip().rstrip(','))
+trace_objects=[]
+for component in ('BootProcessProbe','BootUiTraceProbe'):
+    trace_source=ROOT/'kits/marble'/(component+'.c')
+    trace_object=OUT/(component+'.o')
+    trace_command=[];trace_arguments=iter(process_recipe['arguments'])
+    for value in trace_arguments:
+        if value==process_recipe['file']:trace_command.append(str(trace_source))
+        elif value in ('-MF','-MT','-MJ'):next(trace_arguments)
+        elif value=='-o':next(trace_arguments);trace_command+=['-o',str(trace_object)]
+        else:trace_command.append(value)
+    trace_command+=['-mgeneral-regs-only','-I',str(ROOT/'kits/marble')]
+    run(trace_command,cwd=process_recipe['directory'])
+    trace_objects.append(trace_object)
 archive=OUT/'libNativeLegacyDisplay.late.a'
 archive.unlink(missing_ok=True)
 print(run(['python3',ROOT/'scripts/build_display_component.py','NativeGOPPresenter'],text=True),end='')
 gop=ROOT/'build/native-gop-presenter';gop_late=gop/'NativeGOPPresenter.late.o'
 run([objcopy,'--remove-section=__DATA,__mod_init_func',
      '--globalize-symbol=__GLOBAL__sub_I_NativeGOPPresenter.cpp',gop/'NativeGOPPresenter.o',gop_late])
-run(['xcrun','ar','rcs',archive,late,OUT/'LegacyDisplayProbe.o',OUT/'original-bindings.o',gop_late])
+run(['xcrun','ar','rcs',archive,late,OUT/'LegacyDisplayProbe.o',OUT/'original-bindings.o',gop_late,snapshot_object,*trace_objects])
 sources=[ROOT/'drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp',ROOT/'drivers/NativeMobileDisplay/NativeLegacyRequest.h',
-         ROOT/'drivers/NativeMobileDisplay/NativeGOPPresenter.cpp',ROOT/'drivers/NativeMobileDisplay/NativeGOPWire.h',source]
+         ROOT/'drivers/NativeMobileDisplay/NativeGOPPresenter.cpp',ROOT/'drivers/NativeMobileDisplay/NativeGOPWire.h',source,snapshot_source,
+         *[ROOT/'kits/marble'/name for name in ('BootProcessProbe.c','BootUiTraceProbe.c','BootUiTraceCore.h','BootUiTraceDetails.h')]]
 (OUT/'build-report.json').write_text(json.dumps(dict(
     source_sha256={str(p.relative_to(ROOT)):sha(p) for p in sources},generated_abi_sha256=sha(OUT/'OriginalLegacyFramebufferABI.h'),
     original_candidate_sha256=sha(candidate),original_family_sha256=expected,

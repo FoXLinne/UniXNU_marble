@@ -177,7 +177,7 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'load', 'start', 'logs', 'screen', 'continue', 'selftest', 'reboot'])
+    parser.add_argument('command', choices=['status', 'load', 'start', 'logs', 'screen', 'trace', 'continue', 'selftest', 'reboot'])
     parser.add_argument('--images', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--kernel', type=Path)
@@ -197,6 +197,17 @@ def main():
                 channel.command('continue')
         elif args.command == 'status':
             result = {name: channel.command('getvar:' + name) for name in ('version', 'kernel-memory', 'received', 'returns', 'handoff-fault')}
+        elif args.command == 'trace':
+            if args.output is None:
+                parser.error('trace requires --output')
+            channel.command('oem select:2')
+            data = channel.read_back()
+            offset = 800 * 1024
+            magic, version, length = struct.unpack_from('<8sII', data, offset)
+            if magic != b'ROOTTRC1' or version != 1 or not 0 < length <= OUTPUT_BYTES - offset - 16:
+                raise RuntimeError('Process trace has not been captured')
+            args.output.write_bytes(data[offset + 16:offset + 16 + length])
+            result = dict(output=str(args.output), bytes=length)
         elif args.command == 'screen':
             if args.output is None:
                 parser.error('screen requires --output')

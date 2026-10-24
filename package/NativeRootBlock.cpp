@@ -37,6 +37,36 @@ char *native_root_block_boot_args;
 static constexpr size_t rootLogBytes = 65536;
 static constexpr size_t rootOutputBytes = 1048576;
 static IOMemoryMap *rootLogMapping;
+static void (*rootObserver)(unsigned);
+static uint32_t observationSeconds;
+extern "C" void native_root_block_register_observer(void (*observer)(unsigned))
+{
+  rootObserver = observer;
+}
+
+extern "C" void native_root_block_trace_write(const char *text)
+{
+  if (!rootLogMapping) return;
+  constexpr size_t offset = 800 * 1024;
+  constexpr size_t capacity = rootOutputBytes - offset - 16;
+  static uint32_t used;
+  uint8_t *output = (uint8_t *)rootLogMapping->getVirtualAddress() + offset;
+  size_t length = strlen(text);
+  if (length + 1 > capacity - used) return;
+  memcpy(output + 16 + used, text, length);
+  used += length;
+  output[16 + used++] = '\n';
+  uint32_t version = 1;
+  memcpy(output + 8, &version, 4);
+  memcpy(output + 12, &used, 4);
+  memcpy(output, "ROOTTRC1", 8);
+}
+
+static void rootObservationWorker(void *, wait_result_t)
+{
+  rootObserver(observationSeconds);
+  thread_terminate(current_thread());
+}
 static const volatile uint8_t *displayPixels;
 static uint64_t displayStride, displayFrames;
 static uint32_t displayWidth, displayHeight;
@@ -81,7 +111,7 @@ static void captureRootScreen(void)
   }
   memcpy(output, &header, sizeof(header));
 }
-static uint32_t observationSeconds;
+
 static RamSparseDisk dataSeed = {};
 static uint64_t dataSeedBytes;
 static uint8_t dataSeedHash[32];
@@ -473,6 +503,13 @@ static int rootBlockVolume(const char *uuid, dev_t *device, char *path, size_t s
     uint64_t deadline;
     clock_interval_to_deadline(observationSeconds, NSEC_PER_SEC, &deadline);
     thread_call_enter_delayed(observationCall, deadline);
+    uint32_t follow = 0;
+    if (rootObserver && PE_parse_boot_argn("boot-ui-follow", &follow, sizeof(follow)) && follow == 1) {
+      thread_t worker;
+      if (kernel_thread_start(rootObservationWorker, nullptr, &worker) != KERN_SUCCESS)
+        panic("RootStage: UI observation worker creation failed");
+      thread_deallocate(worker);
+    }
   }
   IORegistryIterator *iterator = IORegistryIterator::iterateOver(gIOServicePlane, kIORegistryIterateRecursively);
   if (!iterator) return 0;
