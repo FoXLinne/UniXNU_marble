@@ -35,17 +35,20 @@ struct Memory {
     IOMemoryMap *mapping = nullptr;
     uint8_t *cpu = nullptr;
     uint64_t physical = 0;
-    bool allocate(size_t bytes) {
+    bool allocate(size_t bytes, bool uncached = true) {
         descriptor = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
-            kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache, bytes, 0xffffff000ULL);
+            kIODirectionInOut | kIOMemoryPhysicallyContiguous | (uncached ? kIOMapInhibitCache : 0), bytes, 0xffffff000ULL);
         if (!descriptor || descriptor->prepare() != kIOReturnSuccess) return false;
-        mapping = descriptor->map(kIOMapAnywhere | kIOMapInhibitCache);
+        mapping = descriptor->map(kIOMapAnywhere | (uncached ? kIOMapInhibitCache : kIOMapCopybackCache));
         if (!mapping) return false;
         cpu = reinterpret_cast<uint8_t *>(mapping->getVirtualAddress());
         addr64_t span = 0;
         physical = descriptor->getPhysicalSegment(0, &span);
         if (span < bytes) return false;
-        memset(cpu, 0, bytes);
+        if (uncached) {
+            auto *words = reinterpret_cast<volatile uint64_t *>(cpu);
+            for (size_t i = 0; i < bytes / 8; ++i) words[i] = 0;
+        } else memset(cpu, 0, bytes);
         return true;
     }
 };
@@ -70,10 +73,13 @@ struct Gmu {
         unsigned banks = id1 & 255, slots = id0 & 255;
         unsigned page = (id1 & (1U << 31)) ? 0x10000 : 0x1000;
         unsigned contextBase = page << (((id1 >> 28) & 7) + 1);
+        IOLog("MarbleGPU: SMMU banks=%u slots=%u context_base=%x\n", banks, slots, contextBase);
         // Reuse a route for the stopped GMU, or select an unused hardware slot.
         bool found = false;
         for (unsigned i = 0; i < slots; ++i) {
             uint32_t match = smmu.read(0x800 + i * 4);
+            if (match & (1U << 31)) IOLog("MarbleGPU: inherited route=%u SMR=%x S2CR=%x\n",
+                i, match, smmu.read(0xc00 + i * 4));
             if ((match & 0x8000ffffU) == 0x80000005U) {
                 slot = i;
                 bank = smmu.read(0xc00 + i * 4) & 255;
@@ -86,13 +92,20 @@ struct Gmu {
         if (!found) {
             for (slot = 0; slot < slots; ++slot)
                 if (!(smmu.read(0x800 + slot * 4) & (1U << 31))) break;
-            if (slot == slots) return -28;
-            for (bank = banks; bank > 0; --bank)
-                if (!smmu.read(contextBase + (bank - 1) * page)) break;
-            if (!bank) return -28;
+            if (slot == slots) { IOLog("MarbleGPU: SMMU stream slots occupied\n"); return -28; }
+            for (bank = banks; bank > 0; --bank) {
+                if (smmu.read(contextBase + (bank - 1) * page) & 1) continue;
+                bool routed = false;
+                for (unsigned i = 0; i < slots; ++i) {
+                    uint32_t match = smmu.read(0x800 + i * 4), route = smmu.read(0xc00 + i * 4);
+                    if ((match & (1U << 31)) && !(route & (3U << 16)) && (route & 255) == bank - 1) routed = true;
+                }
+                if (!routed) break;
+            }
+            if (!bank) { IOLog("MarbleGPU: SMMU context banks occupied\n"); return -28; }
             --bank;
         }
-        if (!cache.allocate(0xffc000) || !scratch.allocate(0x13000) || !tables.allocate(32 * 4096)) return -12;
+        if (!cache.allocate(0xffc000) || !scratch.allocate(0x13000) || !tables.allocate(32 * 4096, false)) return -12;
         static const unsigned outputBits[] = {32, 36, 40, 42, 44, 48};
         unsigned output = (id2 >> 4) & 15;
         if (output >= 6) return -22;
@@ -108,6 +121,13 @@ struct Gmu {
         IOLog("MarbleGPU: GMU tables status=%u pages=%lu root=%llx bank=%u slot=%u\n",
             result, built.table_pages, built.root_physical, bank, slot);
         if (result) return -22;
+        uint64_t ctr;
+        __asm__ volatile("mrs %0, ctr_el0" : "=r"(ctr));
+        size_t line = 4U << ((ctr >> 16) & 15);
+        for (uintptr_t at = reinterpret_cast<uintptr_t>(tables.cpu);
+             at < reinterpret_cast<uintptr_t>(tables.cpu) + built.table_pages * 4096; at += line)
+            __asm__ volatile("dc cvac, %0" :: "r"(at) : "memory");
+        __asm__ volatile("dsb sy" ::: "memory");
         smmuMmio = {reinterpret_cast<volatile unsigned char *>(smmu.words), 0x40000};
         if (ArmSmmu4KBindMmio(&smmuMmio, &smmuIo)) return -22;
         ArmSmmu4KContextConfig context = {&config, nullptr, &built, nullptr,
