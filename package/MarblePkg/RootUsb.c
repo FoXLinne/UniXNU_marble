@@ -12,6 +12,7 @@
 #define TRANSFER_BYTES 0x100000
 #define EP_OUT 0x01
 #define EP_IN 0x81
+#define KERNEL_ALIGNMENT_SLACK 0x200000ULL
 
 STATIC ROOT_USB_PROTOCOL *mUsb;
 STATIC EFI_CPU_ARCH_PROTOCOL *mCpu;
@@ -35,8 +36,9 @@ typedef struct {
 
 STATIC BOOLEAN OwnedRange(UINT64 Address, UINT64 Bytes)
 {
-  return Address>=mStage->KernelBase && Bytes<=mStage->KernelBytes &&
-    Address-mStage->KernelBase<=mStage->KernelBytes-Bytes;
+  UINT64 Capacity=mStage->KernelBytes+KERNEL_ALIGNMENT_SLACK;
+  return Address>=mStage->KernelBase && Bytes<=Capacity &&
+    Address-mStage->KernelBase<=Capacity-Bytes;
 }
 
 STATIC EFI_STATUS ReadData(UINT64 Offset, UINTN Bytes, BOOLEAN Index)
@@ -139,7 +141,7 @@ STATIC VOID DataReply(UINTN Size)
 STATIC EFI_STATUS AllocateDisk(UINTN Index, UINT64 Bytes)
 {
   ROOT_STAGE_DISK *Disk = &mStage->Disks[Index];
-  if (!Bytes || (Index < 2 && Bytes % 512) || Bytes > (Index == 2 ? 0x4000000ULL : ROOT_STAGE_CHUNK * ROOT_STAGE_EXTENTS)) return EFI_INVALID_PARAMETER;
+  if (!Bytes || (Index < 2 && Bytes % 512) || Bytes > (Index == 2 ? 0x8000000ULL : ROOT_STAGE_CHUNK * ROOT_STAGE_EXTENTS)) return EFI_INVALID_PARAMETER;
   if (Disk->Count) return EFI_ALREADY_STARTED;
   for (UINT64 Offset = 0; Offset < Bytes;) {
     UINTN Size = (UINTN)MIN(ROOT_STAGE_CHUNK, Bytes - Offset);
@@ -188,7 +190,7 @@ EFI_STATUS MarbleRootUsb(VOID)
   mStage->WaitForHost = (UINTN)&MarbleRootUsb;
   mStage->KernelBytes = 0x100000000ULL;
   // DarwinBoot preserves the kernel virtual base's offset within a 2 MiB block.
-  mStage->KernelBase = (UINTN)AllocateAlignedPages(EFI_SIZE_TO_PAGES(mStage->KernelBytes+0x200000),0x200000);
+  mStage->KernelBase = (UINTN)AllocateAlignedPages(EFI_SIZE_TO_PAGES(mStage->KernelBytes+KERNEL_ALIGNMENT_SLACK),0x200000);
   if (!mStage->KernelBase) return EFI_OUT_OF_RESOURCES;
   Print(L"Kernel RAM: 0x%lx bytes\r\n",mStage->KernelBytes);
   Print(L"Kernel base: %p\r\n",(VOID *)(UINTN)mStage->KernelBase);

@@ -1,5 +1,5 @@
 {
-  "runtime_usb_verified": false,
+  "runtime_usb_verified": true,
   "white_regions_fixed": false,
   "protocol": {
     "vendor": "18d1",
@@ -30,6 +30,11 @@
       "result": "Controller initialized; zero connection events; no runtime enumeration",
       "controller_id": "33313130",
       "data_transmitted": 0
+    },
+    {
+      "name": "runtime_surface",
+      "result": "RuntimeRoot enumerated with PHY retained; live logs, status, source surface and scanout read over USB",
+      "first_frame_after_launchd_seconds": 343.78
     }
   ],
   "resident_image_check_seconds": 0.03164525103056803,
@@ -37,10 +42,27 @@
   "readonly_images_modified": false,
   "android_partitions_modified": false,
   "pending": [
-    "Loader PHY handoff validation",
-    "Live USB log readback",
-    "Source and scanout comparison",
-    "ReduceTransparencyEnabled candidate validation",
-    "Frozen Data export and warm boot timing"
-  ]
+    "Runtime Home and return hardware test",
+    "Software compositor white surface rendering",
+    "Complete warm Data export and boot timing",
+    "Read window boot timing"
+  ],
+  "surface_comparison": {
+    "source_equals_scanout": true,
+    "white_alpha_opaque": 225,
+    "white_alpha_zero": 0,
+    "nonpremultiplied": 0,
+    "format": "BGRA",
+    "width": 1080,
+    "height": 2400,
+    "stride": 4352
+  },
+  "warm_data": {
+    "complete": false,
+    "missing_pages": 4,
+    "reason": "Firmware export range omitted owned alignment slack",
+    "compression_bytes": 77676117,
+    "firmware_fix": "Include the allocated 2 MiB alignment slack",
+    "update_slot_mib": 128
+  }
 }

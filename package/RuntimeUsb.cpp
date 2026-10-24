@@ -128,7 +128,7 @@ void handleSetup() {
         case 1: case 3: case 11: return;
         default: stall(); return;
         }
-    } else if (setup[0] == 0xc0 && (setup[1] == 1 || setup[1] == 2 || setup[1] == 5 || setup[1] == 6)) {
+    } else if (setup[0] == 0xc0 && (setup[1] == 1 || setup[1] == 2 || setup[1] == 5 || setup[1] == 6 || setup[1] == 7)) {
         count = native_root_runtime_read(setup[1], value | index<<16, out, MIN(length,responseBytes));
     } else if (setup[0] == 0x40 && !length && setup[1] == 3) {
         native_hid_request_home(); return;

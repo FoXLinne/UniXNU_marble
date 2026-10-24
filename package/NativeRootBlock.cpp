@@ -42,6 +42,7 @@ static constexpr size_t rootOutputBytes = 1048576;
 static IOMemoryMap *rootLogMapping;
 static void (*rootObserver)(unsigned);
 static uint32_t observationSeconds;
+static uint64_t readWindowHits, readWindowMisses, readWindowBytes;
 extern "C" void native_root_block_register_observer(void (*observer)(unsigned))
 {
   rootObserver = observer;
@@ -90,6 +91,13 @@ extern "C" void native_root_block_presented(void)
 
 static void *sourceSnapshot;
 static size_t sourceSnapshotBytes;
+static struct {
+  char magic[8];
+  uint32_t width,height,format,planes;
+  uint64_t stride,frame;
+  uint32_t columns,rows;
+  uint32_t pixels[16*32];
+} sourceInfo;
 static void capturePixels(void *output, const volatile uint8_t *pixels,
     uint64_t stride, uint32_t width, uint32_t height, uint64_t frames)
 {
@@ -124,7 +132,8 @@ static void captureRootScreen(void)
   capturePixels((uint8_t *)rootLogMapping->getVirtualAddress()+rootLogBytes,
       displayPixels,displayStride,displayWidth,displayHeight,displayFrames);
 }
-extern "C" void native_root_block_capture_surface(const void *pixels, uint64_t stride, uint32_t width, uint32_t height)
+extern "C" void native_root_block_capture_surface(const void *pixels, uint64_t stride, uint32_t width, uint32_t height,
+    uint32_t format,uint32_t planes)
 {
   if (!sourceSnapshot) sourceSnapshot = IOMalloc(32 + 320 * 720 * 3);
   if (!sourceSnapshot) return;
@@ -132,6 +141,13 @@ extern "C" void native_root_block_capture_surface(const void *pixels, uint64_t s
   uint32_t length;
   memcpy(&length,(uint8_t *)sourceSnapshot+20,4);
   sourceSnapshotBytes=32+length;
+  memcpy(sourceInfo.magic,"ROOTSUR1",8);
+  sourceInfo.width=width;sourceInfo.height=height;sourceInfo.format=format;sourceInfo.planes=planes;
+  sourceInfo.stride=stride;sourceInfo.frame=displayFrames+1;sourceInfo.columns=16;sourceInfo.rows=32;
+  for (unsigned y=0;y<32;y++) for (unsigned x=0;x<16;x++) {
+    const uint8_t *pixel=(const uint8_t *)pixels+(uint64_t)((y*2+1)*height/64)*stride+((x*2+1)*width/32)*4;
+    memcpy(&sourceInfo.pixels[y*16+x],pixel,4);
+  }
 }
 
 static RamSparseDisk dataSeed = {};
@@ -254,6 +270,8 @@ extern "C" void native_root_block_capture_log(void)
   char runtime[256];
   native_runtime_usb_report(runtime,sizeof(runtime));
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
+  used += snprintf(log.text + used, sizeof(log.text) - used,
+      "ReadWindow hits=%llu misses=%llu bytes=%llu\n",readWindowHits,readWindowMisses,readWindowBytes);
   log.length = (uint32_t)used;
   void *output = (void *)rootLogMapping->getVirtualAddress();
   memcpy(output, &log, sizeof(log));
@@ -263,6 +281,12 @@ extern "C" void native_root_block_capture_log(void)
 extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, void *out, unsigned capacity)
 {
   if (!rootLogMapping) return 0;
+  if (kind == 7) {
+    if (offset>=sizeof(sourceInfo)) return 0;
+    unsigned count=MIN((size_t)capacity,sizeof(sourceInfo)-offset);
+    memcpy(out,(uint8_t *)&sourceInfo+offset,count);
+    return count;
+  }
   if (kind == 5) {
     uint64_t now, first=0;
     absolutetime_to_nanoseconds(mach_absolute_time(),&now);
@@ -309,6 +333,29 @@ class NativeRootBlock : public IOBlockStorageDevice {
   unsigned diskIndex = 0;
   RamSparseDisk *writableData = nullptr;
   IOLock *dataGate = nullptr;
+  IOLock *readGate = nullptr;
+  struct Window { uint64_t base=0, stamp=0; IOMemoryMap *map=nullptr; } windows[4];
+  uint64_t windowStamp = 0;
+  IOMemoryMap *readWindow(uint64_t address,uint64_t extentStart,uint64_t extentEnd) {
+    constexpr uint64_t span=16*1024*1024;
+    uint64_t base=extentStart+((address-extentStart)&~(span-1));
+    unsigned victim=0;
+    for (unsigned i=0;i<4;i++) {
+      if (windows[i].map && windows[i].base==base) {
+        windows[i].stamp=++windowStamp; readWindowHits++; return windows[i].map;
+      }
+      if (!windows[i].map || windows[i].stamp<windows[victim].stamp) victim=i;
+    }
+    Window &entry=windows[victim];
+    OSSafeReleaseNULL(entry.map);
+    auto *memory=IOMemoryDescriptor::withAddressRange(base,MIN(span,extentEnd-base),
+        kIODirectionIn|kIOMemoryMapperNone,nullptr);
+    entry.map=memory ? memory->map(kIOMapAnywhere|kIOMapCopybackCache|kIOMapReadOnly) : nullptr;
+    OSSafeReleaseNULL(memory);
+    if (!entry.map) { IOLog("RootStage: read window map failed pa=%llx\n",base); return nullptr; }
+    entry.base=base; entry.stamp=++windowStamp; readWindowMisses++;
+    return entry.map;
+  }
 public:
   void configure(const ROOT_STAGE_DISK &source, unsigned index) {
     if (!source.Bytes || source.Received != source.Bytes ||
@@ -318,6 +365,11 @@ public:
           index, source.Bytes, source.Received, source.Count);
     disk = source;
     diskIndex = index;
+    unsigned cached=0;
+    if (PE_parse_boot_argn("rootstage-read-window",&cached,sizeof(cached)) && cached==1) {
+      readGate=IOLockAlloc();
+      if (!readGate) panic("RootStage: read window lock allocation failed");
+    }
     uint64_t total = 0;
     for (unsigned i = 0; i < disk.Count; i++) {
       uint64_t expected = MIN(ROOT_STAGE_CHUNK, disk.Bytes - total);
@@ -343,6 +395,12 @@ public:
   void stop(IOService *provider) override {
     online = false;
     IOBlockStorageDevice::stop(provider);
+  }
+  void free() override {
+    for (auto &entry:windows) OSSafeReleaseNULL(entry.map);
+    if (readGate) IOLockFree(readGate);
+    if (dataGate) IOLockFree(dataGate);
+    IOBlockStorageDevice::free();
   }
   IOReturn doEjectMedia() override { return kIOReturnUnsupported; }
   IOReturn doFormatMedia(UInt64) override { return kIOReturnUnsupported; }
@@ -391,6 +449,20 @@ public:
       unsigned index = position / ROOT_STAGE_CHUNK;
       uint64_t within = position % ROOT_STAGE_CHUNK;
       uint64_t size = MIN(bytes - done, disk.Extents[index].Bytes - within);
+      if (readGate) {
+        uint64_t address=disk.Extents[index].Address+within;
+        IOLockLock(readGate);
+        auto *window=readWindow(address,disk.Extents[index].Address,disk.Extents[index].Address+disk.Extents[index].Bytes);
+        if (!window) { IOLockUnlock(readGate); break; }
+        uint64_t at=address-window->getPhysicalAddress();
+        size=MIN(size,window->getLength()-at);
+        uint64_t copied=buffer->writeBytes(done,(uint8_t *)window->getVirtualAddress()+at,size);
+        readWindowBytes+=copied;
+        IOLockUnlock(readGate);
+        done+=copied;
+        if (copied!=size) break;
+        continue;
+      }
       IOByteCount destinationBytes;
       addr64_t destination = buffer->getPhysicalSegment(done, &destinationBytes, kIOMemoryMapperNone);
       if (!destination || !destinationBytes) break;
@@ -462,7 +534,7 @@ extern "C" void native_root_block_start(void)
       if (bytes) {
         memcpy(dataSeedUUID, mailbox + 64, sizeof(dataSeedUUID));
         if (strnlen(dataSeedUUID, sizeof(dataSeedUUID)) != 36) panic("RootStage: Data volume UUID invalid");
-        if ((offset & 4095) || !logical || logical > 0x10000000ULL || offset > kernel.Bytes - rootOutputBytes ||
+        if ((offset & 4095) || !logical || logical > 0x40000000ULL || offset > kernel.Bytes - rootOutputBytes ||
             bytes > kernel.Bytes - rootOutputBytes - offset)
           panic("RootStage: Data seed range invalid");
         void *data = IOMalloc(logical);

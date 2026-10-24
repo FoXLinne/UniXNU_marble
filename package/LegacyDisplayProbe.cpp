@@ -16,6 +16,10 @@
 extern "C" kmod_info_t g_kernel_kmod_info;
 extern "C" void native_root_block_register_display(uint64_t,uint64_t,uint32_t,uint32_t);
 extern "C" void native_root_block_presented(void);
+extern "C" void native_root_block_capture_surface(const void *,uint64_t,uint32_t,uint32_t,uint32_t,uint32_t);
+extern "C" void native_legacy_surface_snapshot(const void *pixels,uint64_t stride,uint32_t width,uint32_t height,uint32_t format,uint32_t planes) {
+    native_root_block_capture_surface(pixels,stride,width,height,format,planes);
+}
 extern "C" void native_root_block_register_observer(void (*)(unsigned));
 extern "C" void root_ui_capture(unsigned);
 extern "C" void native_keyevents_start(void);

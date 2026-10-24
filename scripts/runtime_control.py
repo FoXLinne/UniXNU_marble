@@ -25,7 +25,7 @@ def read(device, kind, offset, length):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'logs', 'screen', 'home', 'return'])
+    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'return'])
     parser.add_argument('--output', type=Path)
     parser.add_argument('--source', action='store_true', help='Capture the compositor surface before scanout copy')
     args = parser.parse_args()
@@ -43,8 +43,22 @@ def main():
             if fields[0] != b'ROOTRUN1':
                 raise RuntimeError('Invalid runtime status header')
             print(json.dumps(dict(protocol=device.product, serial=device.serial_number,
-                uptime_seconds=fields[1]/1e9, first_frame_seconds=fields[2]/1e9,
+                counter_seconds=fields[1]/1e9, first_frame_counter_seconds=fields[2]/1e9,
                 reads=fields[3], frames=fields[4], data_resident_bytes=fields[5], data_logical_bytes=fields[6]),indent=2))
+        elif args.command == 'surface':
+            data=read(device,7,0,48+16*32*4)
+            magic,width,height,format,planes,stride,frame,columns,rows=struct.unpack_from('<8s4I2Q2I',data)
+            if magic != b'ROOTSUR1':
+                raise RuntimeError('No compositor surface captured')
+            pixels=struct.unpack_from('<512I',data,48)
+            result=dict(width=width,height=height,format=hex(format),planes=planes,stride=stride,frame=frame,
+                columns=columns,rows=rows,pixels=[f'{pixel:08x}' for pixel in pixels],
+                white_alpha_zero=sum((p&0xffffff)==0xffffff and p>>24==0 for p in pixels),
+                white_alpha_opaque=sum(p==0xffffffff for p in pixels),
+                nonpremultiplied=sum(max(p&255,(p>>8)&255,(p>>16)&255)>p>>24 for p in pixels))
+            text=json.dumps(result,indent=2)
+            if args.output: args.output.write_text(text+'\n')
+            else: print(text)
         elif args.command == 'logs':
             header = read(device, 1, 0, 16)
             magic, version, length = struct.unpack('<8sII', header)

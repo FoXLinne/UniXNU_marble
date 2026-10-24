@@ -1,20 +1,21 @@
 diff --git a/NativeLegacyDisplay.cpp b/NativeLegacyDisplay.cpp
-index 8e6aba9..10c9e8c 100644
+index 8e6aba9..6012cd0 100644
 --- a/NativeLegacyDisplay.cpp
 +++ b/NativeLegacyDisplay.cpp
 @@ -32,6 +32,7 @@ extern "C" void native_legacy_surface_rejected(uint64_t,uint64_t,uint32_t,uint32
  extern "C" bool native_legacy_prepare_scanout(void);
  extern "C" void native_legacy_transfer_observed(IOReturn,const void *,uint64_t);
  extern "C" void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes);
-+extern "C" void native_root_block_capture_surface(const void *,uint64_t,uint32_t,uint32_t);
++extern "C" void native_legacy_surface_snapshot(const void *,uint64_t,uint32_t,uint32_t,uint32_t,uint32_t);
  extern "C" void native_legacy_retirement_observed(IOService *);
  // GPU hand-off (boot-arg sheng-fb-gpu=1): the frame is offered to the privileged GPU client instead of being copied; the swap retires when the
  // client reports the GPU copy done (native_legacy_gpu_complete). A refused offer or a failed copy uses the CPU copy below and is counted.
-@@ -320,6 +321,7 @@ public:
+@@ -320,6 +321,8 @@ public:
          // The two content scans read every pixel again; they only describe the first frames (the probe keeps 32).
          if(scanBudget) {
              --scanBudget;
-+            native_root_block_capture_surface(reinterpret_cast<const void *>(source->getVirtualAddress()),sourceStride,width,height);
++            native_legacy_surface_snapshot(reinterpret_cast<const void *>(source->getVirtualAddress()),sourceStride,width,height,
++                native_legacy_surface_format(surface),native_legacy_surface_planes(surface));
              uint64_t scan[5];
              if(native_legacy_frame_scan(reinterpret_cast<const void *>(source->getVirtualAddress()),source->getLength(),sourceStride,width,height,scan))
                  native_legacy_frame_observed(0,scan[0],scan[1],scan[2],scan[3],scan[4]);

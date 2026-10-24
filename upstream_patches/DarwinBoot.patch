@@ -256,6 +256,28 @@ index 890d4df..4190039 100644
    mrs x4, sctlr_el1
    bic x4, x4, #1
    bic x4, x4, #4
+diff --git a/Test/packed_ramdisk.py b/Test/packed_ramdisk.py
+index 824c949..2284570 100644
+--- a/Test/packed_ramdisk.py
++++ b/Test/packed_ramdisk.py
+@@ -6,7 +6,7 @@ from pathlib import Path
+ import struct
+ 
+ PAGE = 4096
+-MAX_INPUT = 256 * 1024**2
++MAX_INPUT = 1024**3
+ MAX_LOGICAL = 1024**4
+ ZERO = bytes(1024**2)
+ 
+@@ -69,7 +69,7 @@ def seed_identity(logical, extents):
+ def inspect(path):
+     size = path.stat().st_size
+     if not 0 < size <= MAX_INPUT:
+-        raise ValueError('Encoded RAM disk exceeds 256 MiB input bound')
++        raise ValueError('Encoded RAM disk exceeds 1 GiB input bound')
+     blob = path.read_bytes()
+     encoded_hash = hashlib.sha256(blob).hexdigest()
+     if blob[:8] == b'DBRDISK1':
 diff --git a/DarwinBootPkg/Driver/Resident.c b/DarwinBootPkg/Driver/Resident.c
 new file mode 100644
 index 0000000..6394853
