@@ -1,0 +1,29 @@
+{
+  "marble_root_media_boot.img": {
+    "loader.efi": "9dd3597a8b97d000963cb68efd98a6654d563d6026523a1f06e1ef780d02ed69",
+    "root.stage": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "UniXNU.efi": "df2c87102bb614827749015e99000c2590b735e016f5a69b1770e090f133ecf2",
+    "Payloads/DarwinBoot.efi": "6d6060e04754182b975c13dc0e0dbed5c150be463378300a1c63dafa6072ff7d",
+    "unixnu.toml": "version = 1\n[boot]\ntimeout = 3\ndefault = \"marble\"\n[kits]\nautoload = false\n[[driver]]\npath = \"Payloads/DarwinBoot.efi\"\n[[entry]]\nid = \"marble\"\ntitle = \"UniXNU\"\ntype = \"xnu\"\npath = \"Payloads/kernel.macho\"\nargs = \"-v serial=0 debug=0x14e cpus=1 armcpu-diagnostics=1 -no_slto_panic early_console=1 -enable_kprintf_spam startup_debug=1 sheng-pmgr=2\"\n",
+    "Payloads/kernel.macho.adt": "b39c95f4cca24162776d7a82a7228505afbb0530c4ba54a3fcebbf1f7c5115ec",
+    "firmware_prefix": "731c0c0de61313e6c35244578fe61a021444a8ecfc081cd93e68685390773719"
+  },
+  "marble_amfi_register_boot.img": {
+    "loader.efi": "9dd3597a8b97d000963cb68efd98a6654d563d6026523a1f06e1ef780d02ed69",
+    "root.stage": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "UniXNU.efi": "df2c87102bb614827749015e99000c2590b735e016f5a69b1770e090f133ecf2",
+    "Payloads/DarwinBoot.efi": "6d6060e04754182b975c13dc0e0dbed5c150be463378300a1c63dafa6072ff7d",
+    "unixnu.toml": "version = 1\n[boot]\ntimeout = 3\ndefault = \"marble\"\n[kits]\nautoload = false\n[[driver]]\npath = \"Payloads/DarwinBoot.efi\"\n[[entry]]\nid = \"marble\"\ntitle = \"UniXNU\"\ntype = \"xnu\"\npath = \"Payloads/kernel.macho\"\nargs = \"-v serial=0 debug=0x14e cpus=1 armcpu-diagnostics=1 -no_slto_panic early_console=1 -enable_kprintf_spam startup_debug=1 sheng-pmgr=2\"\n",
+    "Payloads/kernel.macho.adt": "b3f1c3ea0518285f0e048f79015047cc534fb6536d0f4748a8684c9ca5b8f751",
+    "firmware_prefix": "731c0c0de61313e6c35244578fe61a021444a8ecfc081cd93e68685390773719"
+  },
+  "marble_root_autoboot.img": {
+    "loader.efi": "9dd3597a8b97d000963cb68efd98a6654d563d6026523a1f06e1ef780d02ed69",
+    "root.stage": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "UniXNU.efi": "df2c87102bb614827749015e99000c2590b735e016f5a69b1770e090f133ecf2",
+    "Payloads/DarwinBoot.efi": "6d6060e04754182b975c13dc0e0dbed5c150be463378300a1c63dafa6072ff7d",
+    "unixnu.toml": "version = 1\n[boot]\ntimeout = 0\ndefault = \"marble\"\n[kits]\nautoload = false\n[[driver]]\npath = \"Payloads/DarwinBoot.efi\"\n[[entry]]\nid = \"marble\"\ntitle = \"UniXNU\"\ntype = \"xnu\"\npath = \"Payloads/kernel.macho\"\nargs = \"-v serial=0 debug=0x14e cpus=1 armcpu-diagnostics=1 -no_slto_panic early_console=1 -enable_kprintf_spam startup_debug=1 sheng-pmgr=2\"\n",
+    "Payloads/kernel.macho.adt": "4026196d22ba1fbbad79dced65a37c107735c8d2a56e217ae6be56200d8bf9c7",
+    "firmware_prefix": "731c0c0de61313e6c35244578fe61a021444a8ecfc081cd93e68685390773719"
+  }
+}
