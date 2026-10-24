@@ -39,7 +39,8 @@ if args.kernel:
     board = tomllib.loads((DEVICE / 'board.toml').read_text())
     adt_command = [sys.executable, DEVICE / 'scripts/make-marble-adt.py',
                     '--output', payloads / 'kernel.macho.adt', '--dram-size', '0x400000000',
-                    '--owned-memory-size', board['payload']['adt']['owned_memory_size'], '--cpu-regs', '0',
+                    '--owned-memory-size', board['payload']['adt']['owned_memory_size'],
+                    '--cpu-regs', board['payload']['adt']['cpu_regs'],
                     '--unique-chip-id', args.unique_chip_id, '--chip-id', '207', '--ipad-identity']
     if args.root_stage:
         if args.root_images is None:

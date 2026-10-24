@@ -220,6 +220,21 @@ void native_legacy_swap_validation_observed(bool accepted,unsigned reason,const 
 }
 // Time of the pixel copy into the scanout buffer (counter ticks): swaps completed, last/maximum/sum, for the banner.
 volatile uint64_t native_legacy_copy_n,native_legacy_copy_last,native_legacy_copy_max,native_legacy_copy_sum,native_legacy_copy_bytes_last,native_legacy_copy_bytes_sum;
+extern "C" unsigned native_legacy_performance_report(char *out,unsigned cap) {
+    uint64_t frequency, translation=0, mair=0;
+    __asm__ volatile("mrs %0, cntfrq_el0":"=r"(frequency));
+    if(native_legacy_gop_virtual) {
+        bool irq=ml_set_interrupts_enabled(false);
+        __asm__ volatile("at s1e1r, %2\n\tisb\n\tmrs %0, par_el1\n\tmrs %1, mair_el1"
+            : "=r"(translation),"=r"(mair) : "r"(native_legacy_gop_virtual) : "memory");
+        ml_set_interrupts_enabled(irq);
+    }
+    return snprintf(out,cap,"Display copies=%llu last_us=%llu max_us=%llu total_us=%llu accepted=%u rejected=%u reason=%u retirements=%u PAR=%llx MAIR=%llx",
+        native_legacy_copy_n,native_legacy_copy_last*1000000/frequency,
+        native_legacy_copy_max*1000000/frequency,native_legacy_copy_sum*1000000/frequency,
+        native_legacy_swap_accepted_count,native_legacy_swap_rejected_count,
+        native_legacy_rej_reason,native_legacy_retirement_calls,translation,mair);
+}
 void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes) {
     native_legacy_copy_bytes_last=bytes;native_legacy_copy_bytes_sum=native_legacy_copy_bytes_sum+bytes;
     native_legacy_copy_n=native_legacy_copy_n+1;native_legacy_copy_last=ticks;native_legacy_copy_sum=native_legacy_copy_sum+ticks;

@@ -1,0 +1,38 @@
+{
+  "kernel": "outputs/UniXNU_marble/kernel_ipi_touch.macho",
+  "sha256": "5579fa75836bbe10bdd2c5284cc0ef20dff583b822504ea7646130296b30ecf3",
+  "build": "passed",
+  "eight_core_boot": {
+    "secondary_online": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "runtime_usb": "readable",
+    "user_feedback": "Performance improved substantially; applications still cannot be interacted with"
+  },
+  "measured_scanout_copy_us": 146453,
+  "cpu_frequency_first_run_khz": [
+    1804800,
+    null,
+    null
+  ],
+  "frequency_correction": "The qcom,freq-domain maximum-core LUT cell is 4 for every domain, independent of the 4+3+1 topology",
+  "ipi_defect": "Apple ARM64 assembler treats semicolon as a comment; signalCPU emitted DSB then LDP/RET, omitting MSR ICC_SGI1R_EL1",
+  "ipi_source_fix": "Separate inline assembly instructions with newline; emitted MSR is recorded in ipi_codegen_after.txt",
+  "touch_source_fix": "Publish Built-In, DisplayIntegrated, PrimaryUsagePage=13 and PrimaryUsage=4 on the matched event service and its interface, following UniXNU-sheng HidInputProbe.cpp",
+  "resident_return": "Return through CPU 0 after PSCI CPU_OFF on secondary CPUs; PSCI SYSTEM_RESET handles an incomplete shutdown",
+  "hardware_validation_of_new_kernel": "pending",
+  "application_interaction": "unresolved",
+  "wallpaper": "black",
+  "native_metal": "pending",
+  "sources": [
+    "https://github.com/UniXNU/UniXNU-sheng/blob/251b291/package/HidInputProbe.cpp",
+    "https://github.com/UniXNU/UniXNU-sheng/commit/edb1b5390588fe973dceb3c6e0e833ba2106db86",
+    "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/cpufreq/qcom-cpufreq-hw.c"
+  ]
+}

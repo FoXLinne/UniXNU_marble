@@ -2,6 +2,8 @@
 #include <arm/machine_routines.h>
 #include <pexpert/pexpert.h>
 #include <stdint.h>
+#include <kern/cpu_number.h>
+#include <IOKit/IOLib.h>
 
 extern "C" void native_resident_configure(uint64_t);
 extern "C" void native_resident_return(void);
@@ -9,10 +11,50 @@ extern "C" void native_resident_panic_return(void);
 extern "C" void native_root_block_capture_log(void);
 extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_root_block_export_data(void);
+extern "C" volatile uint32_t armcpu_smp_step[8], armcpu_smp_mpidr[8];
 
 static uint64_t return_stub;
 static uint64_t level1[512] __attribute__((aligned(4096)));
 static uint64_t level2[512] __attribute__((aligned(4096)));
+
+static uint64_t psci(uint64_t function, uint64_t argument = 0)
+{
+  register uint64_t x0 __asm__("x0") = function;
+  register uint64_t x1 __asm__("x1") = argument;
+  register uint64_t x2 __asm__("x2") = 0;
+  __asm__ volatile("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2)
+      :: "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "memory");
+  return x0;
+}
+
+static void powerOffSecondary(void *)
+{
+  __asm__ volatile("msr daifset, #15\n\tmsr cntv_ctl_el0, xzr\n\tmsr icc_igrpen1_el1, xzr\n\tdsb sy\n\tisb" ::: "memory");
+  psci(0x84000002); // PSCI CPU_OFF
+  for (;;) __asm__ volatile("wfi");
+}
+
+static void returnOnBootCpu(void *)
+{
+  unsigned requested = 0;
+  for (unsigned core = 1; core < 8; ++core) {
+    if (armcpu_smp_step[core] != 7) continue;
+    requested |= 1U << core;
+    if (cpu_immediate_xcall(core, powerOffSecondary, &return_stub) != KERN_SUCCESS)
+      psci(0x84000009); // PSCI SYSTEM_RESET
+  }
+  uint64_t began, now, frequency;
+  __asm__ volatile("mrs %0, cntvct_el0" : "=r"(began));
+  __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(frequency));
+  while (requested) {
+    for (unsigned core = 1; core < 8; ++core)
+      if ((requested & (1U << core)) && psci(0xc4000004, armcpu_smp_mpidr[core]) == 1)
+        requested &= ~(1U << core);
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(now));
+    if (now - began > frequency / 2) psci(0x84000009);
+  }
+  native_resident_return();
+}
 
 void native_resident_configure(uint64_t address)
 {
@@ -32,7 +74,11 @@ extern "C" __attribute__((used)) void native_resident_panic_return(void)
   do {
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(now));
   } while (now - start < frequency * 5);
-  native_resident_return();
+  // The resident firmware resumes on its boot core after the secondary cores leave the kernel.
+  if (cpu_number() == 0) returnOnBootCpu(nullptr);
+  if (cpu_immediate_xcall(0, returnOnBootCpu, &return_stub) != KERN_SUCCESS)
+    psci(0x84000009);
+  powerOffSecondary(nullptr);
 }
 
 extern "C" void native_resident_return(void)

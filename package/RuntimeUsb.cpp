@@ -14,6 +14,8 @@ extern "C" void native_marble_touch_start(void);
 extern "C" void native_marble_gpu_start(void);
 extern "C" void native_marble_gmu_stop(void);
 extern "C" void native_hid_request_tap(unsigned, unsigned);
+extern "C" void native_hid_request_contact(unsigned, unsigned, bool);
+extern "C" void native_root_block_request_snapshot(void);
 extern "C" void native_root_block_capture_log(void);
 extern "C" void native_runtime_usb_start(void);
 extern "C" void native_runtime_usb_stop(void);
@@ -152,7 +154,7 @@ void handleSetup() {
         case 1: case 3: case 11: return;
         default: stall(); return;
         }
-    } else if (setup[0] == 0xc0 && (setup[1] == 1 || setup[1] == 2 || setup[1] == 5 || setup[1] == 6 || setup[1] == 7)) {
+    } else if (setup[0] == 0xc0 && (setup[1] == 1 || setup[1] == 2 || setup[1] == 5 || setup[1] == 6 || setup[1] == 7 || setup[1] == 8)) {
         count = native_root_runtime_read(setup[1], value | index<<16, out, MIN(length,responseBytes));
     } else if (setup[0] == 0x40 && !length && setup[1] == 3) {
         native_hid_request_home(); return;
@@ -164,6 +166,10 @@ void handleSetup() {
         native_marble_gpu_start(); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 10) {
         native_hid_request_tap(value, index); return;
+    } else if (setup[0] == 0x40 && !length && setup[1] == 11) {
+        native_root_block_request_snapshot(); return;
+    } else if (setup[0] == 0x40 && !length && (setup[1] == 12 || setup[1] == 13)) {
+        native_hid_request_contact(value, index, setup[1] == 12); return;
     } else { stall(); return; }
     count = MIN(count,length);
     for (unsigned i=0; i<count; i++) reinterpret_cast<volatile uint8_t *>(bytes)[controlOffset+i]=response[i];

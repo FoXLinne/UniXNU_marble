@@ -252,11 +252,14 @@ subprocess.run(touch_command, cwd=record['directory'], check=True)
 gpu = out / 'MarbleGpu.o'
 gpu_command = [str(ROOT / 'kits/marble/MarbleGpu.cpp') if v == str(source) else str(gpu) if v == str(obj_path) else v for v in command]
 subprocess.run(gpu_command, cwd=record['directory'], check=True)
+cpu = out / 'MarbleCpu.o'
+cpu_command = [str(ROOT / 'kits/marble/MarbleCpu.cpp') if v == str(source) else str(cpu) if v == str(obj_path) else v for v in command]
+subprocess.run(cpu_command, cwd=record['directory'], check=True)
 gmu = out / 'MarbleGmu.o'
 gmu_command = [str(ROOT / 'kits/marble/MarbleGmu.cpp') if v == str(source) else str(gmu) if v == str(obj_path) else v for v in command]
 gmu_command += ['-I', str(ROOT / 'kits/ArmSmmu4K'), '-I', str(ROOT / 'kits/AdrenoFirmware')]
 subprocess.run(gmu_command, cwd=record['directory'], check=True)
-gpu_objects = [gmu]
+gpu_objects = [gmu, cpu]
 for directory, names in (
     ('ArmSmmu4K', ('ArmSmmu4K.c', 'ArmSmmu4KContext.c', 'ArmSmmu4KProgram.c', 'ArmSmmu4KMmio.c')),
     ('AdrenoFirmware', ('AdrenoFirmware.c', 'AdrenoHfi.c', 'AdrenoHfiVotes.c')),

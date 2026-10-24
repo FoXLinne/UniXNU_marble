@@ -33,6 +33,13 @@ void native_runtime_usb_report(char *, unsigned);
 void native_hid_report(char *, unsigned);
 void native_marble_touch_report(char *, unsigned);
 void native_marble_gpu_quiesce_inherited(void);
+void native_marble_cpu_start(void);
+unsigned native_marble_cpu_report(char *, unsigned);
+void native_marble_gpu_start(void);
+unsigned native_legacy_performance_report(char *, unsigned);
+unsigned native_legacy_prepare_report(char *, unsigned);
+unsigned native_legacy_swap_timeline(char *, unsigned);
+extern volatile int native_gpu_addon3_stage, native_gpu_addon3_status;
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void root_block_static_init(void) __asm__("__GLOBAL__sub_I_NativeRootBlock.cpp");
 volatile uint64_t native_root_block_reads;
@@ -73,6 +80,12 @@ static void rootObservationWorker(void *, wait_result_t)
 {
   rootObserver(observationSeconds);
   thread_terminate(current_thread());
+}
+extern "C" void native_root_block_request_snapshot(void)
+{
+  thread_t thread;
+  if (kernel_thread_start(rootObservationWorker,nullptr,&thread)==KERN_SUCCESS)
+    thread_deallocate(thread);
 }
 static const volatile uint8_t *displayPixels;
 static uint64_t displayStride, displayFrames;
@@ -262,7 +275,7 @@ extern "C" void native_root_block_capture_log(void)
   memcpy(log.magic, "ROOTLOG1", sizeof(log.magic));
   log.version = 1;
   size_t used = 0;
-  size_t length = MIN((size_t)msgbufp->msg_size, sizeof(log.text) - sizeof(native_root_block_panic_text) - 512);
+  size_t length = MIN((size_t)msgbufp->msg_size, sizeof(log.text) - sizeof(native_root_block_panic_text) - 8192);
   size_t start = (msgbufp->msg_bufx + msgbufp->msg_size - length) % msgbufp->msg_size;
   for (size_t i = 0; i < length; i++) {
     char c = msgbufp->msg_bufc[(start + i) % msgbufp->msg_size];
@@ -279,6 +292,15 @@ extern "C" void native_root_block_capture_log(void)
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   used += snprintf(log.text + used, sizeof(log.text) - used,
       "ReadWindow hits=%llu misses=%llu bytes=%llu\n",readWindowHits,readWindowMisses,readWindowBytes);
+  char display[512];
+  native_legacy_performance_report(display,sizeof(display));
+  used += snprintf(log.text + used,sizeof(log.text) - used,"%s\n",display);
+  native_legacy_prepare_report(display,sizeof(display));
+  used += snprintf(log.text + used,sizeof(log.text) - used,"%s\n",display);
+  used += native_legacy_swap_timeline(log.text + used,4096);
+  used += snprintf(log.text + used,sizeof(log.text) - used,"Wallpaper mount_stage=%d status=%d\n",
+      native_gpu_addon3_stage,native_gpu_addon3_status);
+  used += native_marble_cpu_report(log.text + used, 1024);
   log.length = (uint32_t)used;
   void *output = (void *)rootLogMapping->getVirtualAddress();
   memcpy(output, &log, sizeof(log));
@@ -288,6 +310,14 @@ extern "C" void native_root_block_capture_log(void)
 extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, void *out, unsigned capacity)
 {
   if (!rootLogMapping) return 0;
+  if (kind == 8) {
+    constexpr unsigned traceOffset = 800 * 1024;
+    unsigned bytes = rootOutputBytes - traceOffset;
+    if (offset >= bytes) return 0;
+    unsigned count = MIN(capacity,bytes-offset);
+    memcpy(out,(uint8_t *)rootLogMapping->getVirtualAddress()+traceOffset+offset,count);
+    return count;
+  }
   if (kind == 7) {
     if (offset>=sizeof(sourceInfo)) return 0;
     unsigned count=MIN((size_t)capacity,sizeof(sourceInfo)-offset);
@@ -493,6 +523,7 @@ extern "C" void native_root_block_start(void)
   static bool started;
   if (started) return;
   native_marble_gpu_quiesce_inherited();
+  native_marble_cpu_start();
   IORegistryEntry *map = IORegistryEntry::fromPath("/chosen/memory-map", gIODTPlane);
   OSData *range = map ? OSDynamicCast(OSData, map->getProperty("RootDisks")) : nullptr;
   if (!range) { OSSafeReleaseNULL(map); return; }
@@ -624,6 +655,7 @@ extern "C" void native_root_block_start(void)
   mapping->release();
   started = true;
   native_runtime_usb_start();
+  native_marble_gpu_start();
 }
 
 extern "C" const char *native_root_block_report(void)

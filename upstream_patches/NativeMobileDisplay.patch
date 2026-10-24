@@ -1,5 +1,5 @@
 diff --git a/NativeLegacyDisplay.cpp b/NativeLegacyDisplay.cpp
-index 8e6aba9..6012cd0 100644
+index 8e6aba9..5c336b1 100644
 --- a/NativeLegacyDisplay.cpp
 +++ b/NativeLegacyDisplay.cpp
 @@ -32,6 +32,7 @@ extern "C" void native_legacy_surface_rejected(uint64_t,uint64_t,uint32_t,uint32
@@ -10,7 +10,24 @@ index 8e6aba9..6012cd0 100644
  extern "C" void native_legacy_retirement_observed(IOService *);
  // GPU hand-off (boot-arg sheng-fb-gpu=1): the frame is offered to the privileged GPU client instead of being copied; the swap retires when the
  // client reports the GPU copy done (native_legacy_gpu_complete). A refused offer or a failed copy uses the CPU copy below and is counted.
-@@ -320,6 +321,8 @@ public:
+@@ -57,7 +58,7 @@ static inline bool nativeBgra(uint32_t format,uint32_t planes) {
+ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
+     OSDeclareDefaultStructors(NativeLegacyDisplay)
+     IOMemoryMap *bootMapping=nullptr;
+-    uint32_t scanBudget=32;
++    uint32_t scanBudget=0;
+     void *shadow=nullptr;uint64_t shadowBytes=0;bool shadowValid=false;
+     bool primary=false;
+     bool logicalPM=false;
+@@ -160,6 +161,7 @@ public:
+     }
+     bool start(IOService *provider) override {
+         if(!startDisplay(provider))return false;
++        PE_parse_boot_argn("offline-legacy-frame-scan",&scanBudget,sizeof(scanBudget));
+         startVsync();return true;
+     }
+     bool startDisplay(IOService *provider) {
+@@ -320,6 +322,8 @@ public:
          // The two content scans read every pixel again; they only describe the first frames (the probe keeps 32).
          if(scanBudget) {
              --scanBudget;
@@ -19,3 +36,12 @@ index 8e6aba9..6012cd0 100644
              uint64_t scan[5];
              if(native_legacy_frame_scan(reinterpret_cast<const void *>(source->getVirtualAddress()),source->getLength(),sourceStride,width,height,scan))
                  native_legacy_frame_observed(0,scan[0],scan[1],scan[2],scan[3],scan[4]);
+@@ -495,7 +499,7 @@ public:
+            !video.v_width || !video.v_height || video.v_depth!=32 || video.v_rotate ||
+            video.v_width>16384 || video.v_height>16384 || video.v_rowBytes<video.v_width*4 ||
+            video.v_rowBytes>UINT64_MAX/video.v_height)return false;
+-        IOMemoryMap *mapping=provider->mapDeviceMemoryWithIndex(0,kIOMapInhibitCache);
++        IOMemoryMap *mapping=provider->mapDeviceMemoryWithIndex(0,kIOMapWriteCombineCache);
+         if(!mapping)return false;
+         bool valid=mapping->getVirtualAddress() && mapping->getPhysicalAddress()==video.v_baseAddr &&
+                    mapping->getLength()==video.v_rowBytes*video.v_height;

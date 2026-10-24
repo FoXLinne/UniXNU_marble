@@ -19,14 +19,16 @@ static const uint8_t reportDescriptor[] = {
     0x75,0x01,0x95,0x01,0x81,0x02,0x75,0x07,0x95,0x01,0x81,0x03,0xc0
 };
 
-static bool hasEventDriver(IORegistryEntry *parent, unsigned depth) {
-    if (!depth) return false;
+static IORegistryEntry *findEventDriver(IORegistryEntry *parent, unsigned depth) {
+    if (!depth) return nullptr;
     OSIterator *iterator = parent->getChildIterator(gIOServicePlane);
-    if (!iterator) return false;
-    bool found = false;
+    if (!iterator) return nullptr;
+    IORegistryEntry *found = nullptr;
     while (OSObject *object = iterator->getNextObject()) {
         IORegistryEntry *entry = OSDynamicCast(IORegistryEntry,object);
-        if (entry && (entry->metaCast("IOHIDEventDriver") || hasEventDriver(entry,depth-1))) { found=true; break; }
+        if (!entry) continue;
+        found = entry->metaCast("IOHIDEventDriver") ? entry : findEventDriver(entry, depth - 1);
+        if (found) break;
     }
     iterator->release(); return found;
 }
@@ -38,7 +40,7 @@ class NativeHomeInput : public IOHIDDevice {
     static void tick(OSObject *owner, IOTimerEventSource *source) {
         NativeHomeInput *self = OSDynamicCast(NativeHomeInput,owner);
         native_hid_live_checkpoint(self);
-        bool matched = hasEventDriver(self,4);
+        bool matched = findEventDriver(self,4) != nullptr;
         native_hid_input_observed(3,matched);
         if (!self->down && (!matched || !native_hid_input_requested())) { source->setTimeoutMS(1000); return; }
         uint8_t report[] = {2,static_cast<uint8_t>(self->down ? 0 : 1)};
@@ -159,15 +161,32 @@ public:
         return tapTimer && inputLoop->addEventSource(tapTimer) == kIOReturnSuccess;
     }
     void publish(unsigned count, const uint8_t *points) {
-        if (!eventDriverMatched) eventDriverMatched = hasEventDriver(this, 4);
+        if (!eventDriverMatched) {
+            if (auto *driver = findEventDriver(this, 4)) {
+                // backboardd classifies the event service and its interface, rather than the HID device.
+                IORegistryEntry *entries[] = {driver, driver->getParentEntry(gIOServicePlane)};
+                for (auto *entry : entries) {
+                    if (!entry) continue;
+                    entry->setProperty("Built-In", kOSBooleanTrue);
+                    entry->setProperty("DisplayIntegrated", kOSBooleanTrue);
+                    entry->setProperty("PrimaryUsagePage", 0x0dULL, 32);
+                    entry->setProperty("PrimaryUsage", 4ULL, 32);
+                }
+                eventDriverMatched = true;
+            }
+        }
         native_hid_input_observed(7, eventDriverMatched);
         inputLoop->runAction(send, this, reinterpret_cast<void *>(uintptr_t(count)), const_cast<uint8_t *>(points));
     }
     void tap(unsigned x, unsigned y) {
-        uint8_t point[8] = {0, 0, uint8_t(x), uint8_t(x >> 8), uint8_t(y), uint8_t(y >> 8), 1, 0};
         IOLog("MarbleTouch: synthetic tap x=%u y=%u\n", x, y);
-        publish(1, point);
+        contact(x, y, true);
         tapTimer->setTimeoutMS(60);
+    }
+    void contact(unsigned x, unsigned y, bool active) {
+        tapTimer->cancelTimeout();
+        uint8_t point[8] = {0, 0, uint8_t(x), uint8_t(x >> 8), uint8_t(y), uint8_t(y >> 8), 1, 0};
+        publish(active ? 1 : 0, point);
     }
     void stop(IOService *provider) override {
         if (tapTimer) { tapTimer->cancelTimeout(); inputLoop->removeEventSource(tapTimer); OSSafeReleaseNULL(tapTimer); }
@@ -186,4 +205,7 @@ extern "C" void native_touch_publish(unsigned count, const uint8_t *points) {
 }
 extern "C" void native_hid_request_tap(unsigned x, unsigned y) {
     if (touchInput && x < 1080 && y < 2400) touchInput->tap(x, y);
+}
+extern "C" void native_hid_request_contact(unsigned x, unsigned y, bool active) {
+    if (touchInput && x < 1080 && y < 2400) touchInput->contact(x, y, active);
 }

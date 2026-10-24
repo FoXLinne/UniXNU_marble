@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import struct
+import time
 import zlib
 
 import usb.backend.libusb1
@@ -25,9 +26,12 @@ def read(device, kind, offset, length):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'gpu', 'tap', 'return'])
+    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'gpu', 'tap', 'swipe', 'trace', 'trace_start', 'return'])
     parser.add_argument('--x', type=int)
     parser.add_argument('--y', type=int)
+    parser.add_argument('--to-x', type=int)
+    parser.add_argument('--to-y', type=int)
+    parser.add_argument('--duration-ms', type=int, default=400)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--source', action='store_true', help='Capture the compositor surface before scanout copy')
     args = parser.parse_args()
@@ -37,14 +41,42 @@ def main():
         raise SystemExit('Marble runtime USB is unavailable')
     device.default_timeout = 5000
     try:
-        if args.command == 'tap':
+        if args.command == 'swipe':
+            if (None in (args.x, args.y, args.to_x, args.to_y) or
+                    not 0 <= args.x < 1080 or not 0 <= args.to_x < 1080 or
+                    not 0 <= args.y < 2400 or not 0 <= args.to_y < 2400 or args.duration_ms <= 0):
+                parser.error('swipe requires --x, --y, --to-x, --to-y within the screen and a positive duration')
+            steps = max(2, args.duration_ms // 20)
+            began = time.monotonic()
+            try:
+                for step in range(steps + 1):
+                    x = args.x + (args.to_x - args.x) * step // steps
+                    y = args.y + (args.to_y - args.y) * step // steps
+                    device.ctrl_transfer(0x40, 12, x, y, b'')
+                    pause = began + args.duration_ms / 1000 * (step + 1) / steps - time.monotonic()
+                    if step < steps and pause > 0:
+                        time.sleep(pause)
+            finally:
+                device.ctrl_transfer(0x40, 13, args.to_x, args.to_y, b'')
+            print(f'swipe {args.x},{args.y} -> {args.to_x},{args.to_y}')
+        elif args.command == 'tap':
             if args.x is None or args.y is None or not 0 <= args.x < 1080 or not 0 <= args.y < 2400:
                 parser.error('tap requires --x 0..1079 and --y 0..2399')
             device.ctrl_transfer(0x40, 10, args.x, args.y, b'')
             print(f'tap x={args.x} y={args.y}')
-        elif args.command in ('home', 'touch', 'gpu', 'return'):
-            device.ctrl_transfer(0x40, {'home': 3, 'return': 4, 'touch': 8, 'gpu': 9}[args.command], 0, 0, b'')
+        elif args.command in ('home', 'touch', 'gpu', 'return', 'trace_start'):
+            device.ctrl_transfer(0x40, {'home': 3, 'return': 4, 'touch': 8, 'gpu': 9, 'trace_start': 11}[args.command], 0, 0, b'')
             print(args.command)
+        elif args.command == 'trace':
+            magic, version, length = struct.unpack('<8sII', read(device, 8, 0, 16))
+            if magic != b'ROOTTRC1' or version != 1 or length > 229360:
+                raise RuntimeError('Runtime trace is not ready')
+            text = read(device, 8, 16, length).decode(errors='replace')
+            if args.output:
+                args.output.write_text(text)
+                print(args.output)
+            else:
+                print(text)
         elif args.command == 'status':
             fields=struct.unpack('<8s6Q',read(device,5,0,56))
             if fields[0] != b'ROOTRUN1':
