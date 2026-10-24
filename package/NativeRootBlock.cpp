@@ -8,6 +8,7 @@
 #include <sys/param.h>
 #include <sys/msgbuf.h>
 #include <libkern/c++/OSNumber.h>
+#include <libkern/c++/OSString.h>
 #include <IOKit/IOBSD.h>
 #include <Protocol/RootStage.h>
 
@@ -24,7 +25,7 @@ class NativeRootBlock : public IOBlockStorageDevice {
   OSDeclareDefaultStructors(NativeRootBlock)
   ROOT_STAGE_DISK disk = {};
   bool online = false;
-  bool systemRoot = false;
+  unsigned diskIndex = 0;
 public:
   void configure(const ROOT_STAGE_DISK &source, unsigned index) {
     if (!source.Bytes || source.Received != source.Bytes ||
@@ -33,7 +34,7 @@ public:
       panic("RootStage: disk %u metadata bytes=%llu received=%llu extents=%llu",
           index, source.Bytes, source.Received, source.Count);
     disk = source;
-    systemRoot = index == 0;
+    diskIndex = index;
     uint64_t total = 0;
     for (unsigned i = 0; i < disk.Count; i++) {
       uint64_t expected = MIN(ROOT_STAGE_CHUNK, disk.Bytes - total);
@@ -43,7 +44,7 @@ public:
       total += expected;
     }
   }
-  bool isSystemRoot() const { return systemRoot && online; }
+  int sourceIndex() const { return online ? (int)diskIndex : -1; }
   bool start(IOService *provider) override {
     if (!IOBlockStorageDevice::start(provider)) return false;
     online = true;
@@ -163,11 +164,11 @@ extern "C" const char *native_root_block_report(void)
   return report;
 }
 
-extern "C" int native_root_block_authorized(dev_t device)
+static int rootBlockIndex(dev_t device)
 {
   IORegistryIterator *iterator = IORegistryIterator::iterateOver(gIOServicePlane, kIORegistryIterateRecursively);
-  if (!iterator) return 0;
-  int authorized = 0;
+  if (!iterator) return -1;
+  int index = -1;
   while (IORegistryEntry *entry = iterator->getNextObject()) {
     OSNumber *majorNumber = OSDynamicCast(OSNumber, entry->getProperty(kIOBSDMajorKey));
     OSNumber *minorNumber = OSDynamicCast(OSNumber, entry->getProperty(kIOBSDMinorKey));
@@ -175,10 +176,43 @@ extern "C" int native_root_block_authorized(dev_t device)
         minorNumber->unsigned32BitValue() != (unsigned)minor(device)) continue;
     for (IORegistryEntry *parent = entry; parent; parent = parent->getParentEntry(gIOServicePlane)) {
       NativeRootBlock *disk = OSDynamicCast(NativeRootBlock, parent);
-      if (disk) { authorized = disk->isSystemRoot(); break; }
+      if (disk) { index = disk->sourceIndex(); break; }
     }
     break;
   }
   iterator->release();
-  return authorized;
+  return index;
+}
+
+extern "C" int native_root_block_authorized(dev_t device)
+{
+  return rootBlockIndex(device) == 0;
+}
+
+extern "C" int native_root_block_cache_authorized(dev_t device)
+{
+  return rootBlockIndex(device) == 1;
+}
+
+extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, char *path, size_t size)
+{
+  IORegistryIterator *iterator = IORegistryIterator::iterateOver(gIOServicePlane, kIORegistryIterateRecursively);
+  if (!iterator) return 0;
+  bool found = false;
+  while (IORegistryEntry *entry = iterator->getNextObject()) {
+    OSString *identity = OSDynamicCast(OSString, entry->getProperty("UUID"));
+    if (!identity || strcmp(identity->getCStringNoCopy(), uuid)) continue;
+    OSString *name = OSDynamicCast(OSString, entry->getProperty(kIOBSDNameKey));
+    OSNumber *majorNumber = OSDynamicCast(OSNumber, entry->getProperty(kIOBSDMajorKey));
+    OSNumber *minorNumber = OSDynamicCast(OSNumber, entry->getProperty(kIOBSDMinorKey));
+    if (!name || !majorNumber || !minorNumber) continue;
+    dev_t candidate = makedev(majorNumber->unsigned32BitValue(), minorNumber->unsigned32BitValue());
+    if (!native_root_block_cache_authorized(candidate)) continue;
+    if (snprintf(path, size, "/dev/%s", name->getCStringNoCopy()) >= (int)size) break;
+    *device = candidate;
+    found = true;
+    break;
+  }
+  iterator->release();
+  return found;
 }

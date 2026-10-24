@@ -109,7 +109,7 @@ index 12eb8a8..2c94067 100644
  
  
 diff --git a/scripts/build-xnu-4k-baseline.sh b/scripts/build-xnu-4k-baseline.sh
-index 5815dd9..1267391 100755
+index 5815dd9..f1720eb 100755
 --- a/scripts/build-xnu-4k-baseline.sh
 +++ b/scripts/build-xnu-4k-baseline.sh
 @@ -36,7 +36,8 @@ fi
@@ -118,7 +118,7 @@ index 5815dd9..1267391 100755
  for LATE_PATCH in "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
 -    "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch"; do
 +    "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch" \
-+    "$ROOT/patches/xnu/zz-root-stage-owner-auth.patch"; do
++    "$ROOT/patches/xnu/zz-root-stage-owner-auth.patch" "$ROOT/patches/xnu/zz-root-stage-cache.patch"; do
    if git -C .cache/xnu-work apply --reverse --check "$LATE_PATCH" >/dev/null 2>&1; then
      git -C .cache/xnu-work apply --reverse "$LATE_PATCH"
    fi
@@ -133,7 +133,39 @@ index 5815dd9..1267391 100755
  EXTRA_MAKE_ARGS+=("bsd_init.o_CFLAGS_ADD=-DXNU_SHENG_PMGR=$SHENG_PMGR -DXNU_VERIFIED_ROOT_PROBE=$OWNER_ROOT_PROBE -DXNU_OWNER_ROOT_AUDIT=$OWNER_ROOT_AUDIT -DXNU_OWNER_ROOT_TRUST=$OWNER_ROOT_TRUST -DXNU_ADRENO_FIRMWARE_PROBE=$ADRENO_FIRMWARE_PROBE -DXNU_ADRENO_PM4_PROBE=$ADRENO_PM4_PROBE -DXNU_SMMU4K_PROBE=$SMMU4K_PROBE -DXNU_CONSTANT_UPLOADS_PROBE=$CONSTANT_UPLOADS_PROBE -DXNU_NATIVE_LEGACY_DISPLAY=${XNU_NATIVE_LEGACY_DISPLAY:-0} -DXNU_NATIVE_OFFLINE_GPU=$NATIVE_OFFLINE_GPU")
  NATIVE_MOBILE_DISPLAY=${XNU_NATIVE_MOBILE_DISPLAY:-0}
  if [ "$NATIVE_MOBILE_DISPLAY" != 0 ] && [ "$NATIVE_MOBILE_DISPLAY" != 1 ]; then
-@@ -519,9 +522,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
+@@ -348,13 +351,14 @@ if [ "$(cat "$OWNER_ROOT_STAMP" 2>/dev/null || echo 0:0:0:0:0:0)" != "$OWNER_ROO
+   rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o"
+   printf '%s\n' "$OWNER_ROOT_PROBE:$OWNER_ROOT_AUDIT:$OWNER_ROOT_TRUST:$ADRENO_FIRMWARE_PROBE:$ADRENO_PM4_PROBE:$SMMU4K_PROBE:$CONSTANT_UPLOADS_PROBE:$NATIVE_LEGACY_DISPLAY:$NATIVE_OFFLINE_GPU" > "$OWNER_ROOT_STAMP"
+ fi
++ROOT_STAGE_CACHE=${XNU_ROOT_STAGE_CACHE:-0}
+ OWNER_CACHE_MOUNT=${XNU_OWNER_CACHE_MOUNT:-0}
+ if [ "$OWNER_CACHE_MOUNT" != 0 ] && [ "$OWNER_CACHE_MOUNT" != 1 ]; then
+   echo 'XNU_OWNER_CACHE_MOUNT must be 0 or 1' >&2
+   exit 1
+ fi
+-if [ "$OWNER_CACHE_MOUNT" = 1 ] && [ "$OWNER_ROOT_TRUST" != 1 ]; then
+-  echo 'The offline SystemOS mount requires real independent owner root enforcement' >&2
++if [ "$OWNER_CACHE_MOUNT" = 1 ] && [ "$OWNER_ROOT_TRUST" != 1 ] && [ "$ROOT_STAGE_CACHE" != 1 ]; then
++  echo 'SystemOS mounting requires an owner-verified or RootStage root provider' >&2
+   exit 1
+ fi
+ OWNER_CACHE_STARTUP=${XNU_OWNER_CACHE_STARTUP:-0}
+@@ -463,11 +467,11 @@ if [ "$(cat "$NATIVE_AIR_STAMP" 2>/dev/null || echo 0)" != "$NATIVE_AIR_INIT" ];
+   rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o"
+   printf '%s\n' "$NATIVE_AIR_INIT" > "$NATIVE_AIR_STAMP"
+ fi
+-EXTRA_MAKE_ARGS+=("kern_exec.o_CFLAGS_ADD=-DXNU_NATIVE_AIR_INIT=$NATIVE_AIR_INIT -DXNU_OWNER_CACHE_MOUNT=$OWNER_CACHE_MOUNT -DXNU_OWNER_CACHE_STARTUP=$OWNER_CACHE_STARTUP -DXNU_OWNER_BOOT_MANIFEST=$OWNER_BOOT_MANIFEST -DXNU_OWNER_DATA_MOUNT=$OWNER_DATA_MOUNT -DXNU_NATIVE_RAM_BLOCK=$NATIVE_RAM_BLOCK -DXNU_OWNER_CRYPTEX_FILES=$OWNER_CRYPTEX_FILES -DXNU_OWNER_UNION_SYSTEMOS=$OWNER_UNION_SYSTEMOS -include $OWNER_DATA_HEADER")
++EXTRA_MAKE_ARGS+=("kern_exec.o_CFLAGS_ADD=-DXNU_NATIVE_AIR_INIT=$NATIVE_AIR_INIT -DXNU_OWNER_CACHE_MOUNT=$OWNER_CACHE_MOUNT -DXNU_ROOT_STAGE_CACHE=$ROOT_STAGE_CACHE -DXNU_OWNER_CACHE_STARTUP=$OWNER_CACHE_STARTUP -DXNU_OWNER_BOOT_MANIFEST=$OWNER_BOOT_MANIFEST -DXNU_OWNER_DATA_MOUNT=$OWNER_DATA_MOUNT -DXNU_NATIVE_RAM_BLOCK=$NATIVE_RAM_BLOCK -DXNU_OWNER_CRYPTEX_FILES=$OWNER_CRYPTEX_FILES -DXNU_OWNER_UNION_SYSTEMOS=$OWNER_UNION_SYSTEMOS -include $OWNER_DATA_HEADER")
+ OWNER_CACHE_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.owner-cache-mount-mode
+-if [ "$(cat "$OWNER_CACHE_STAMP" 2>/dev/null || echo 0:0)" != "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP" ]; then
++if [ "$(cat "$OWNER_CACHE_STAMP" 2>/dev/null || echo 0:0)" != "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP:$ROOT_STAGE_CACHE" ]; then
+   rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o"
+-  printf '%s\n' "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP" > "$OWNER_CACHE_STAMP"
++  printf '%s\n' "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP:$ROOT_STAGE_CACHE" > "$OWNER_CACHE_STAMP"
+ fi
+ OWNER_CACHE_CARRIER=${XNU_OWNER_CACHE_CARRIER:-0}
+ OWNER_CACHE_CARRIER_WRONG_UUID=${XNU_OWNER_CACHE_CARRIER_WRONG_UUID:-0}
+@@ -519,9 +523,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
    exit 1
  fi
  EXTRA_MAKE_ARGS+=("start.o_SFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER")
@@ -505,6 +537,88 @@ index 0000000..afa0574
 ++	native_prelink_trust_cache_ready = true;
 ++#endif
 + }
+diff --git a/patches/xnu/zz-root-stage-cache.patch b/patches/xnu/zz-root-stage-cache.patch
+new file mode 100644
+index 0000000..ca403ce
+--- /dev/null
++++ b/patches/xnu/zz-root-stage-cache.patch
+@@ -0,0 +1,76 @@
++--- a/bsd/kern/kern_exec.c
+++++ b/bsd/kern/kern_exec.c
++@@ -7030,7 +7030,34 @@
++ #if !DEVELOPMENT && !DEBUG
++ #error The offline owner cache mount is a development instrument
++ #endif
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++extern int native_root_block_authorized(dev_t);
+++extern int native_root_block_cache_authorized(dev_t);
+++extern int native_root_block_volume_device(const char *, dev_t *, char *, size_t);
+++#else
++ extern int native_verified_block_volume_device(const char *, dev_t *, char *, size_t);
+++extern int native_verified_block_root_authorized(dev_t);
+++#endif
+++
+++static int
+++native_owner_cache_device_authorized(dev_t device, bool root)
+++{
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++	return root ? native_root_block_authorized(device) : native_root_block_cache_authorized(device);
+++#else
+++	return native_verified_block_root_authorized(device);
+++#endif
+++}
+++
+++static int
+++native_owner_cache_find_volume(const char *uuid, dev_t *device, char *path, size_t size)
+++{
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++	return native_root_block_volume_device(uuid, device, path, size);
+++#else
+++	return native_verified_block_volume_device(uuid, device, path, size);
+++#endif
+++}
++ #if defined(XNU_OWNER_BOOT_MANIFEST) && XNU_OWNER_BOOT_MANIFEST
++ extern int native_owner_publish_boot_manifest(dev_t, const char *, dev_t, const char *);
++ #endif
++@@ -7038,7 +7065,6 @@
++ extern void commpage_update_dyld_flags(uint64_t);
++ volatile uint64_t native_owner_cache_dyld_flags = 0;
++ #endif
++-extern int native_verified_block_root_authorized(dev_t);
++ volatile int native_owner_cache_stage = 0;
++ volatile int native_owner_cache_status = -1;
++ volatile int native_owner_cache_mount_status = -1;
++@@ -7108,10 +7134,10 @@
++ #endif
++ 	if (device_vnode) vnode_put(device_vnode);
++ 	root_authorized = (vfs_flags(root_mount) & MNT_RDONLY) && root_device != NODEV &&
++-	    native_verified_block_root_authorized(root_device);
+++	    native_owner_cache_device_authorized(root_device, true);
++ 	if (!root_authorized) goto done;
++ 	native_owner_cache_stage = 1;
++-	if (!native_verified_block_volume_device(volume, &selected, device_path,
+++	if (!native_owner_cache_find_volume(volume, &selected, device_path,
++ 	    sizeof(device_path))) goto done;
++ 	strlcpy(native_owner_cache_device_path, device_path, sizeof(native_owner_cache_device_path));
++ 	native_owner_cache_selected_device = selected;
++@@ -7146,7 +7172,7 @@
++ 	    vnode_mountedhere(original_os_root) == cache_mount && rootvnode == mounted_root;
++ 	native_owner_cache_native_union = native_union;
++ 	cache_authorized = readonly && actual == selected &&
++-	    !strcmp(vfs_statfs(cache_mount)->f_fstypename, "apfs") && native_verified_block_root_authorized(actual);
+++	    !strcmp(vfs_statfs(cache_mount)->f_fstypename, "apfs") && native_owner_cache_device_authorized(actual, false);
++ #if defined(XNU_OWNER_UNION_SYSTEMOS) && XNU_OWNER_UNION_SYSTEMOS
++ 	cache_authorized = cache_authorized && native_union;
++ #endif
++@@ -7165,7 +7191,7 @@
++ 	native_owner_cache_stage = 6;
++ done:
++ 	if (mounted_root) vnode_put(mounted_root);
++-	int root_recheck = root_authorized && native_verified_block_root_authorized(root_device);
+++	int root_recheck = root_authorized && native_owner_cache_device_authorized(root_device, true);
++ 	native_owner_cache_root_recheck = root_recheck;
++ 	if (!root_recheck) error = EAUTH;
++ #if defined(XNU_OWNER_BOOT_MANIFEST) && XNU_OWNER_BOOT_MANIFEST
 diff --git a/patches/xnu/zz-root-stage-owner-auth.patch b/patches/xnu/zz-root-stage-owner-auth.patch
 new file mode 100644
 index 0000000..605e75b
