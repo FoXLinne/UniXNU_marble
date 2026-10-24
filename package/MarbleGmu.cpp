@@ -169,7 +169,31 @@ struct Gmu {
         int result = exchange(3, payload, 159);
         if (result) return result;
         const uint32_t handle = 0;
-        return exchange(14, &handle, 1);
+        result = exchange(14, &handle, 1);
+        if (result) return result;
+        return powerGpu();
+    }
+    int powerGpu() {
+        // KGSL gen7: blocking DCVS vote, OOB GPU request, then HFI START.
+        const uint32_t vote[] = {1, 2, 2}; // 285 MHz and DDR table level 2.
+        int result = exchange(30, vote, 3);
+        if (result) return result;
+        write(0x1f994, 1U << 30);
+        unsigned elapsed = 0;
+        for (; elapsed < 100 && !(read(0x1f992) & (1U << 31)); ++elapsed) IOSleep(1);
+        uint32_t response = read(0x1f992), power = read(0x1f8d0), state = read(0x1f8ec);
+        IOLog("MarbleGPU: GX OOB response=%x power=%x state=%x elapsed=%u\n",
+            response, power, state, elapsed);
+        write(0x1f991, 1U << 31);
+        if (elapsed == 100 || (power & 3)) {
+            write(0x1f994, 1U << 31);
+            return -110;
+        }
+        result = exchange(10, nullptr, 0);
+        if (!result) IOLog("MarbleGPU: GX RBBM status=%x secure=%x\n",
+            gpu.read(0x210 * 4), gpu.read(0xf400 * 4));
+        // Hold the GPU OOB vote while the command processor is being brought up.
+        return result;
     }
     int mapMemory() {
         if (!smmu.map(0x3da0000, 0x40000)) return -12;

@@ -126,7 +126,7 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
                 raise ValueError('Data seed checksum differs from seed.json')
             seed_uuid = str(uuid.UUID(metadata['volume_uuid'])).upper().encode() + b'\0'
             seed_raw_bytes = len(seed)
-            seed = zlib.compress(seed, level=1)
+            seed = zlib.compress(seed, level=6)
             seed_offset, seed_bytes = len(data), len(seed)
             data += seed
             data += bytes(-len(data) % CHUNK)
