@@ -12,6 +12,8 @@
 #include <Protocol/RootStage.h>
 
 extern "C" {
+#include <vm/pmap.h>
+
 extern kmod_info_t g_kernel_kmod_info;
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void root_block_static_init(void) __asm__("__GLOBAL__sub_I_NativeRootBlock.cpp");
@@ -21,7 +23,6 @@ volatile uint64_t native_root_block_reads;
 class NativeRootBlock : public IOBlockStorageDevice {
   OSDeclareDefaultStructors(NativeRootBlock)
   ROOT_STAGE_DISK disk = {};
-  IOMemoryMap *chunks[ROOT_STAGE_EXTENTS] = {};
   bool online = false;
   bool systemRoot = false;
 public:
@@ -39,16 +40,6 @@ public:
       if (!disk.Extents[i].Address || disk.Extents[i].Bytes != expected)
         panic("RootStage: disk %u extent %u invalid pa=%llx bytes=%llu expected=%llu",
             index, i, disk.Extents[i].Address, disk.Extents[i].Bytes, expected);
-      IOMemoryDescriptor *memory = IOMemoryDescriptor::withAddressRange(
-          disk.Extents[i].Address, expected, kIODirectionIn | kIOMemoryMapperNone, nullptr);
-      if (!memory)
-        panic("RootStage: disk %u extent %u descriptor failed pa=%llx bytes=%llu",
-            index, i, disk.Extents[i].Address, expected);
-      chunks[i] = memory->map(kIOMapAnywhere | kIOMapReadOnly);
-      memory->release();
-      if (!chunks[i])
-        panic("RootStage: disk %u extent %u mapping failed pa=%llx bytes=%llu",
-            index, i, disk.Extents[i].Address, expected);
       total += expected;
     }
   }
@@ -61,10 +52,6 @@ public:
   void stop(IOService *provider) override {
     online = false;
     IOBlockStorageDevice::stop(provider);
-  }
-  void free() override {
-    for (auto &mapping : chunks) OSSafeReleaseNULL(mapping);
-    IOBlockStorageDevice::free();
   }
   IOReturn doEjectMedia() override { return kIOReturnUnsupported; }
   IOReturn doFormatMedia(UInt64) override { return kIOReturnUnsupported; }
@@ -97,10 +84,14 @@ public:
       unsigned index = position / ROOT_STAGE_CHUNK;
       uint64_t within = position % ROOT_STAGE_CHUNK;
       uint64_t size = MIN(bytes - done, disk.Extents[index].Bytes - within);
-      auto *source = reinterpret_cast<const uint8_t *>(chunks[index]->getVirtualAddress()) + within;
-      IOByteCount copied = buffer->writeBytes(done, source, size);
-      done += copied;
-      if (copied != size) break;
+      IOByteCount destinationBytes;
+      addr64_t destination = buffer->getPhysicalSegment(done, &destinationBytes, kIOMemoryMapperNone);
+      if (!destination || !destinationBytes) break;
+      size = MIN(size, destinationBytes);
+      // XNU's copy windows cover staged RAM outside the managed kernel window.
+      if (copypv(disk.Extents[index].Address + within, destination,
+          (unsigned int)size, cppvPsrc | cppvPsnk | cppvNoRefSrc) != KERN_SUCCESS) break;
+      done += size;
     }
     __atomic_fetch_add(&native_root_block_reads, 1, __ATOMIC_RELAXED);
     completion->action(completion->target, completion->parameter,
