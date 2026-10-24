@@ -1,0 +1,32 @@
+diff --git a/NativeRamBlock.cpp b/NativeRamBlock.cpp
+index 4b96ff8..90d8e71 100644
+--- a/NativeRamBlock.cpp
++++ b/NativeRamBlock.cpp
+@@ -424,27 +424,6 @@ static int selectVolumeSeed(const char *uuid, dev_t *device, char *path, size_t
+ extern "C" int native_ram_block_volume_device(const char *uuid,dev_t *device,char *path,size_t size) {
+   return selectVolumeSeed(uuid,device,path,size,nullptr,nullptr,nullptr);
+ }
+-// The GPU addon the loader placed after the trust caches (/chosen/memory-map/GpuAddon, scripts/make-gpu-addon.py), for the kernel's
+-// boot-time addon install (kern_exec.c). Boot memory, like the seed: never freed here. Returns 0 without one.
+-extern "C" int native_ram_block_gpu_addon(const uint8_t **data,uint64_t *bytes) {
+-  if(!data || !bytes)return 0;
+-  *data=nullptr;*bytes=0;
+-  IORegistryEntry *map=IORegistryEntry::fromPath("/chosen/memory-map",gIODTPlane);
+-  if(!map)return 0;
+-  OSData *range=OSDynamicCast(OSData,map->getProperty("GpuAddon"));
+-  uint64_t physical=0,size=0;
+-  if(range && range->getLength()==16){
+-    memcpy(&physical,range->getBytesNoCopy(),8);
+-    memcpy(&size,static_cast<const uint8_t *>(range->getBytesNoCopy())+8,8);
+-  }
+-  map->release();
+-  if(!size || size>(UINT64_C(64)<<20) || (physical&4095) || physical<gPhysBase || size>gPhysSize || physical-gPhysBase>gPhysSize-size)return 0;
+-  *data=reinterpret_cast<const uint8_t *>(ml_static_ptovirt(physical));
+-  if(!*data)return 0;
+-  *bytes=size;
+-  return 1;
+-}
+-
+ extern "C" int native_ram_block_volume_seed(const char *uuid,dev_t *device,char *path,size_t size,
+     uint64_t *base,uint64_t *bytes,uint8_t digest[32]) {
+   if(!base || !bytes || !digest)return 0;

@@ -21,12 +21,16 @@ extern "C" {
 #include <vm/pmap.h>
 #include <kern/clock.h>
 #include <kern/thread_call.h>
+#include <kern/task.h>
+#include <arm/thread.h>
+#include <sys/systm.h>
 
 extern kmod_info_t g_kernel_kmod_info;
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void root_block_static_init(void) __asm__("__GLOBAL__sub_I_NativeRootBlock.cpp");
 volatile uint64_t native_root_block_reads;
 char native_root_block_panic_text[4096];
+char *native_root_block_boot_args;
 }
 
 static constexpr size_t rootLogBytes = 65536;
@@ -36,6 +40,8 @@ static uint8_t *dataSeed;
 static uint64_t dataSeedBytes;
 static uint8_t dataSeedHash[32];
 static char dataSeedUUID[37];
+static char panicProcess[32];
+static char residentBootArgs[BOOT_LINE_LENGTH];
 static struct { uint64_t bytes; char identity[33]; } rootIdentities[2];
 static thread_call_t observationCall;
 
@@ -54,6 +60,36 @@ static void dataInflateFree(voidpf, voidpf address)
   size_t bytes;
   memcpy(&bytes, block, sizeof(bytes));
   IOFree(block, bytes);
+}
+
+extern "C" void native_root_block_process_exit(const char *name, int signal, int exception,
+    uint64_t code, uint64_t subcode, uint32_t reasonNamespace, uint64_t reasonCode, const char *reason)
+{
+  if (!panicProcess[0] || strcmp(panicProcess, name)) return;
+  arm_saved_state_t *state = find_user_regs(current_thread());
+  uint64_t pc = state ? get_saved_state_pc(state) : 0;
+  uint64_t lr = state ? get_saved_state_lr(state) : 0;
+  uint64_t fp = state ? get_saved_state_fp(state) : 0;
+  char trace[2048];
+  size_t used = snprintf(trace, sizeof(trace), "pc=%llx lr=%llx fp=%llx sp=%llx\n",
+      pc, lr, fp, state ? get_saved_state_sp(state) : 0);
+  if (state) {
+    for (unsigned i = 0; i < 8; i++)
+      used += snprintf(trace + used, sizeof(trace) - used, "x%u=%llx ", i, get_saved_state_reg(state, i));
+  }
+  uint64_t infos[24];
+  user_addr_t infoAddress = task_get_all_image_info_addr(current_task());
+  if (infoAddress && !copyin(infoAddress, infos, sizeof(infos)))
+    used += snprintf(trace + used, sizeof(trace) - used, "\ncache_slide=%llx cache_base=%llx\n", infos[19], infos[22]);
+  for (unsigned i = 0; i < 12 && fp && !(fp & 15); i++) {
+    uint64_t frame[2];
+    if (copyin(fp, frame, sizeof(frame))) break;
+    used += snprintf(trace + used, sizeof(trace) - used, "frame %u fp=%llx return=%llx\n", i, fp, frame[1]);
+    if (frame[0] <= fp) break;
+    fp = frame[0];
+  }
+  panic("RootStage: %s exit signal=%d exception=%d code=%llx subcode=%llx namespace=%u reason=%llx %s\n%s",
+      name, signal, exception, code, subcode, reasonNamespace, reasonCode, reason ? reason : "", trace);
 }
 
 static void observationExpired(thread_call_param_t, thread_call_param_t)
@@ -221,13 +257,16 @@ extern "C" void native_root_block_start(void)
       const char *extraArgs = mailbox + 128;
       size_t extraLength = strnlen(extraArgs, BOOT_LINE_LENGTH);
       if (extraLength) {
-        char *commandLine = PE_boot_args();
+        strlcpy(residentBootArgs, PE_boot_args(), sizeof(residentBootArgs));
+        char *commandLine = residentBootArgs;
         if (extraLength >= BOOT_LINE_LENGTH || strlen(commandLine) + extraLength + 2 > BOOT_LINE_LENGTH)
           panic("RootStage: extra boot arguments exceed the command line limit");
         strlcat(commandLine, " ", BOOT_LINE_LENGTH);
         strlcat(commandLine, extraArgs, BOOT_LINE_LENGTH);
+        native_root_block_boot_args = residentBootArgs;
         IOLog("RootStage: extra boot arguments %s\n", extraArgs);
       }
+      PE_parse_boot_argn("rootstage-panic-process", panicProcess, sizeof(panicProcess));
       if (bytes) {
         memcpy(dataSeedUUID, mailbox + 64, sizeof(dataSeedUUID));
         if (strnlen(dataSeedUUID, sizeof(dataSeedUUID)) != 36) panic("RootStage: Data volume UUID invalid");

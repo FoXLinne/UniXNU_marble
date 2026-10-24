@@ -165,7 +165,7 @@ index 12eb8a8..2c94067 100644
  
  
 diff --git a/scripts/build-xnu-4k-baseline.sh b/scripts/build-xnu-4k-baseline.sh
-index 5815dd9..a94322c 100755
+index 5815dd9..24ea7fc 100755
 --- a/scripts/build-xnu-4k-baseline.sh
 +++ b/scripts/build-xnu-4k-baseline.sh
 @@ -35,8 +35,10 @@ fi
@@ -218,22 +218,27 @@ index 5815dd9..a94322c 100755
  OWNER_MANIFEST_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.owner-boot-manifest-mode
  if [ "$(cat "$OWNER_MANIFEST_STAMP" 2>/dev/null || echo 0)" != "$OWNER_BOOT_MANIFEST" ]; then
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOKitBSDInit.cpo"
-@@ -463,11 +468,11 @@ if [ "$(cat "$NATIVE_AIR_STAMP" 2>/dev/null || echo 0)" != "$NATIVE_AIR_INIT" ];
+@@ -463,11 +468,15 @@ if [ "$(cat "$NATIVE_AIR_STAMP" 2>/dev/null || echo 0)" != "$NATIVE_AIR_INIT" ];
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o"
    printf '%s\n' "$NATIVE_AIR_INIT" > "$NATIVE_AIR_STAMP"
  fi
 -EXTRA_MAKE_ARGS+=("kern_exec.o_CFLAGS_ADD=-DXNU_NATIVE_AIR_INIT=$NATIVE_AIR_INIT -DXNU_OWNER_CACHE_MOUNT=$OWNER_CACHE_MOUNT -DXNU_OWNER_CACHE_STARTUP=$OWNER_CACHE_STARTUP -DXNU_OWNER_BOOT_MANIFEST=$OWNER_BOOT_MANIFEST -DXNU_OWNER_DATA_MOUNT=$OWNER_DATA_MOUNT -DXNU_NATIVE_RAM_BLOCK=$NATIVE_RAM_BLOCK -DXNU_OWNER_CRYPTEX_FILES=$OWNER_CRYPTEX_FILES -DXNU_OWNER_UNION_SYSTEMOS=$OWNER_UNION_SYSTEMOS -include $OWNER_DATA_HEADER")
++EXTRA_MAKE_ARGS+=("pe_bootargs.o_CFLAGS_ADD=-DXNU_ROOT_STAGE_CACHE=$ROOT_STAGE_CACHE")
++EXTRA_MAKE_ARGS+=("kern_exit.o_CFLAGS_ADD=-DXNU_ROOT_STAGE_CACHE=$ROOT_STAGE_CACHE")
 +EXTRA_MAKE_ARGS+=("kern_exec.o_CFLAGS_ADD=-DXNU_NATIVE_AIR_INIT=$NATIVE_AIR_INIT -DXNU_OWNER_CACHE_MOUNT=$OWNER_CACHE_MOUNT -DXNU_ROOT_STAGE_CACHE=$ROOT_STAGE_CACHE -DXNU_OWNER_CACHE_STARTUP=$OWNER_CACHE_STARTUP -DXNU_OWNER_BOOT_MANIFEST=$OWNER_BOOT_MANIFEST -DXNU_OWNER_DATA_MOUNT=$OWNER_DATA_MOUNT -DXNU_NATIVE_RAM_BLOCK=$NATIVE_RAM_BLOCK -DXNU_OWNER_CRYPTEX_FILES=$OWNER_CRYPTEX_FILES -DXNU_OWNER_UNION_SYSTEMOS=$OWNER_UNION_SYSTEMOS -include $OWNER_DATA_HEADER")
  OWNER_CACHE_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.owner-cache-mount-mode
 -if [ "$(cat "$OWNER_CACHE_STAMP" 2>/dev/null || echo 0:0)" != "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP" ]; then
-+if [ "$(cat "$OWNER_CACHE_STAMP" 2>/dev/null || echo 0:0)" != "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP:$ROOT_STAGE_CACHE" ]; then
-   rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o"
+-  rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o"
 -  printf '%s\n' "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP" > "$OWNER_CACHE_STAMP"
++if [ "$(cat "$OWNER_CACHE_STAMP" 2>/dev/null || echo 0:0)" != "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP:$ROOT_STAGE_CACHE" ]; then
++  rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o" \
++    "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exit.o" \
++    "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/pexpert/DEVELOPMENT/pe_bootargs.o"
 +  printf '%s\n' "$OWNER_CACHE_MOUNT:$OWNER_CACHE_STARTUP:$ROOT_STAGE_CACHE" > "$OWNER_CACHE_STAMP"
  fi
  OWNER_CACHE_CARRIER=${XNU_OWNER_CACHE_CARRIER:-0}
  OWNER_CACHE_CARRIER_WRONG_UUID=${XNU_OWNER_CACHE_CARRIER_WRONG_UUID:-0}
-@@ -519,9 +524,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
+@@ -519,9 +528,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
    exit 1
  fi
  EXTRA_MAKE_ARGS+=("start.o_SFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER")
@@ -568,6 +573,28 @@ index 0000000..7161b4f
 + 			panic("Failed to mount root device");
 + #endif
 + 		}
+diff --git a/patches/xnu/native-root-stage-exit-diagnostic.patch b/patches/xnu/native-root-stage-exit-diagnostic.patch
+new file mode 100644
+index 0000000..bacb10c
+--- /dev/null
++++ b/patches/xnu/native-root-stage-exit-diagnostic.patch
+@@ -0,0 +1,16 @@
++--- a/bsd/kern/kern_exit.c
+++++ b/bsd/kern/kern_exit.c
++@@ -1965,6 +1965,13 @@
++ 			}
++ 		}
++ #endif
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++		extern void native_root_block_process_exit(const char *, int, int, uint64_t, uint64_t, uint32_t, uint64_t, const char *);
+++		native_root_block_process_exit(p->p_comm, WTERMSIG(rv), ut->uu_exception, ut->uu_code, ut->uu_subcode,
+++		    PROC_HAS_EXITREASON(p) ? p->p_exit_reason->osr_namespace : 0,
+++		    PROC_HAS_EXITREASON(p) ? p->p_exit_reason->osr_code : 0,
+++		    PROC_HAS_EXITREASON(p) ? exit_reason_get_string_desc(p->p_exit_reason) : NULL);
+++#endif
++ 		const bool fatal = false;
++ 		kr = task_exception_notify(EXC_CRASH, code, subcode, fatal);
++ 		/* Nobody handled EXC_CRASH?? remember to make corpse */
 diff --git a/patches/xnu/native-rw-lock-diagnostic.patch b/patches/xnu/native-rw-lock-diagnostic.patch
 new file mode 100644
 index 0000000..c694868
@@ -652,6 +679,24 @@ index 0000000..afa0574
 ++	load_static_trust_cache();
 ++	native_prelink_trust_cache_ready = true;
 ++#endif
++ }
+diff --git a/patches/xnu/zz-root-stage-boot-args.patch b/patches/xnu/zz-root-stage-boot-args.patch
+new file mode 100644
+index 0000000..fa381b5
+--- /dev/null
++++ b/patches/xnu/zz-root-stage-boot-args.patch
+@@ -0,0 +1,12 @@
++--- a/pexpert/arm/pe_bootargs.c
+++++ b/pexpert/arm/pe_bootargs.c
++@@ -8,5 +8,9 @@
++ PE_boot_args(
++ 	void)
++ {
+++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
+++	extern char *native_root_block_boot_args;
+++	if (native_root_block_boot_args) return native_root_block_boot_args;
+++#endif
++ 	return (char *)((boot_args *)PE_state.bootArgs)->CommandLine;
 + }
 diff --git a/patches/xnu/zz-root-stage-cache.patch b/patches/xnu/zz-root-stage-cache.patch
 new file mode 100644
