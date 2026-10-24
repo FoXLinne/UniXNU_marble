@@ -1,11 +1,16 @@
 {
   "panic": "Taking non-sleepable RW lock with preemption enabled @lock_rw.c:1400",
-  "stage": "AppleMobileFileIntegrity mpo_policy_init",
+  "stage": "AppleImage4 mpo_policy_init",
   "diagnostic": [
     "lock address",
     "lock data",
     "caller address"
   ],
   "build": "passed",
-  "device_result": "diagnostic kernel uploaded; awaiting screen"
+  "device_result": "trust cache queried before runtime initialization",
+  "lock": "0xfffffff007ad5978",
+  "lock_symbol": "trust_cache_rt_lock",
+  "lock_data": 0,
+  "caller": "0xfffffff00771bd30",
+  "caller_symbol": "query_trust_cache"
 }

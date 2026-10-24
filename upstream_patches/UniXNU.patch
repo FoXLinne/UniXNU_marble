@@ -20,6 +20,36 @@ index 635ed0d..191920b 100644
 + }
 + 
 + void
+diff --git a/patches/xnu/native-trust-cache-runtime.patch b/patches/xnu/native-trust-cache-runtime.patch
+index 1d088a2..8247dbb 100644
+--- a/patches/xnu/native-trust-cache-runtime.patch
++++ b/patches/xnu/native-trust-cache-runtime.patch
+@@ -1,6 +1,6 @@
+ --- a/osfmk/kern/startup.c
+ +++ b/osfmk/kern/startup.c
+-@@ -751,7 +751,7 @@
++@@ -751,14 +751,17 @@
+  	csm_initialize_provisioning_profiles();
+  #endif
+  
+@@ -9,3 +9,17 @@
+  	kernel_bootstrap_log("trust_cache_init");
+  
+  	/* Initialize the runtime for the trust cache interface */
++-	trust_cache_runtime_init();
++-
++-	/* Load the static and engineering trust caches */
++-	load_static_trust_cache();
+++	extern bool native_prelink_trust_cache_ready __attribute__((weak_import));
+++	if (!&native_prelink_trust_cache_ready || !native_prelink_trust_cache_ready) {
+++		trust_cache_runtime_init();
+++
+++		/* Load the static and engineering trust caches */
+++		load_static_trust_cache();
+++	}
++ #endif
++ 
++ 	kernel_startup_initialize_upto(STARTUP_SUB_LOCKDOWN);
 diff --git a/patches/xnu/offline-component-load-probes.patch b/patches/xnu/offline-component-load-probes.patch
 index 94bf523..69d5e48 100644
 --- a/patches/xnu/offline-component-load-probes.patch
@@ -249,6 +279,42 @@ index 0000000..c694868
 + 	}
 + 
 + 	for (;;) {
+diff --git a/patches/xnu/native-trust-cache-early-query.patch b/patches/xnu/native-trust-cache-early-query.patch
+new file mode 100644
+index 0000000..7775c81
+--- /dev/null
++++ b/patches/xnu/native-trust-cache-early-query.patch
+@@ -0,0 +1,30 @@
++--- a/bsd/kern/kern_trustcache.c
+++++ b/bsd/kern/kern_trustcache.c
++@@ -439,6 +439,7 @@
++ /* Lock for the runtime */
++ LCK_GRP_DECLARE(trust_cache_lck_grp, "trust_cache_lck_grp");
++ decl_lck_rw_data(, trust_cache_rt_lock);
+++static bool trust_cache_runtime_ready;
++ 
++ /* Immutable part of the runtime */
++ SECURITY_READ_ONLY_LATE(TrustCacheRuntime_t) trust_cache_rt_storage;
++@@ -489,6 +490,7 @@
++ 
++ 	/* Initialize the read-write lock */
++ 	lck_rw_init(&trust_cache_rt_lock, &trust_cache_lck_grp, 0);
+++	trust_cache_runtime_ready = true;
++ }
++ 
++ static kern_return_t
++@@ -617,6 +619,11 @@
++ 	TrustCacheQueryToken_t *query_token)
++ {
++ 	kern_return_t ret = KERN_NOT_FOUND;
+++
+++	/* Security policies can query while their runtime provider is loading. */
+++	if (!trust_cache_runtime_ready) {
+++		return KERN_NOT_FOUND;
+++	}
++ 
++ 	/* Validate the query type preemptively */
++ 	if (query_type >= kTCQueryTypeTotal) {
 diff --git a/patches/xnu/zz-root-stage-owner-auth.patch b/patches/xnu/zz-root-stage-owner-auth.patch
 new file mode 100644
 index 0000000..605e75b
