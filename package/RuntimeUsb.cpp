@@ -27,6 +27,7 @@ uint8_t *bytes;
 uint8_t response[responseBytes];
 uint64_t physical;
 unsigned eventPosition, controlState, resource[2];
+bool resourceOwned[2];
 unsigned events, requests, failures, configuration, returnTicks;
 unsigned controlTicks;
 uint32_t controllerId, initialControl, initialStatus, initialPhy, lastCommand;
@@ -48,22 +49,29 @@ bool command(unsigned ep, uint32_t op, uint32_t p0=0, uint32_t p1=0, uint32_t p2
     for (unsigned i = 0; i < 1000; i++) {
         uint32_t result = read(base + DWC3_DEPCMD);
         if (!(result & DWC3_DEPCMD_CMDACT)) {
-            if (DWC3_DEPCMD_STATUS(result)) { failures++; return false; }
-            if (DWC3_DEPCMD_CMD(op) == DWC3_DEPCMD_STARTTRANSFER)
+            if (DWC3_DEPCMD_STATUS(result)) {
+                IOLog("RuntimeUSB: endpoint=%u command=%x result=%x state=%u\n",ep,op,result,controlState);
+                failures++; return false;
+            }
+            if (DWC3_DEPCMD_CMD(op) == DWC3_DEPCMD_STARTTRANSFER) {
                 resource[ep] = DWC3_DEPCMD_GET_RSC_IDX(result);
+                resourceOwned[ep] = true;
+            }
             return true;
         }
         IODelay(1);
     }
     failures++;
+    IOLog("RuntimeUSB: endpoint=%u command=%x timed out state=%u\n",ep,op,controlState);
     return false;
 }
 void end(unsigned ep) {
-    if (resource[ep]) {
+    if (resourceOwned[ep]) {
         command(ep, DWC3_DEPCMD_ENDTRANSFER | DWC3_DEPCMD_HIPRI_FORCERM |
                     DWC3_DEPCMD_PARAM(resource[ep]));
         IODelay(100);
         resource[ep] = 0;
+        resourceOwned[ep] = false;
     }
 }
 bool configure(unsigned ep, bool modify) {
@@ -86,7 +94,10 @@ void receiveSetup() {
     end(1); end(0);
     controlState = 0;
     controlTicks = 0;
-    transfer(0, setupOffset, 8, DWC3_TRBCTL_CONTROL_SETUP);
+    if (!transfer(0, setupOffset, 8, DWC3_TRBCTL_CONTROL_SETUP)) {
+        if (panicOnFailure) panic("RuntimeUSB: setup transfer failed events=%u requests=%u",events,requests);
+        active=false;
+    }
 }
 void stall() {
     command(0, DWC3_DEPCMD_SETSTALL);
@@ -143,10 +154,11 @@ void handleSetup() {
     count = MIN(count,length);
     for (unsigned i=0; i<count; i++) reinterpret_cast<volatile uint8_t *>(bytes)[controlOffset+i]=response[i];
     // Host requests bounded chunks, including the exact final length.
-    transfer(1,controlOffset,count,DWC3_TRBCTL_CONTROL_DATA);
+    if (!transfer(1,controlOffset,count,DWC3_TRBCTL_CONTROL_DATA)) stall();
 }
 void handleEvent(uint32_t event) {
     events++;
+    if (events <= 32) IOLog("RuntimeUSB: event=%x state=%u resources=%u/%u\n",event,controlState,resource[0],resource[1]);
     if (!DWC3_EVENT_IS_ENDPOINT(event)) {
         if (DWC3_DEVT_CATEGORY(event) != DWC3_EVENT_TYPE_DEV) return;
         switch (DWC3_DEVT_TYPE(event)) {
@@ -169,16 +181,18 @@ void handleEvent(uint32_t event) {
     unsigned ep = DWC3_DEPEVT_EPNUMBER(event), type = DWC3_DEPEVT_TYPE(event);
     if (ep > 1) return;
     if (type == DWC3_DEPEVT_XFERCOMPLETE) {
+        resourceOwned[ep]=false;
         resource[ep]=0;
         __asm__ volatile("dsb sy" ::: "memory");
         if (controlState == 0) handleSetup();
         else if (controlState == 1) controlState=2;
         else receiveSetup();
     } else if (type == DWC3_DEPEVT_XFERNOTREADY &&
+               !(DWC3_DEPEVT_STATUS(event) & DEPEVT_STATUS_TRANSFER_ACTIVE) &&
                DEPEVT_STATUS_CONTROL_PHASE(DWC3_DEPEVT_STATUS(event)) == DEPEVT_STATUS_CONTROL_STATUS &&
                controlState == 2) {
         controlState=3;
-        transfer(ep,controlOffset,0,threeStage ? DWC3_TRBCTL_CONTROL_STATUS3 : DWC3_TRBCTL_CONTROL_STATUS2);
+        if (!transfer(ep,controlOffset,0,threeStage ? DWC3_TRBCTL_CONTROL_STATUS3 : DWC3_TRBCTL_CONTROL_STATUS2)) stall();
     }
 }
 bool initialize() {

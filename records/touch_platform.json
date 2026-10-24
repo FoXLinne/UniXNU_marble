@@ -10,7 +10,6 @@
   "smmu_base": "0x15000000",
   "stream_id": "0x5a3",
   "context_banks": 78,
-  "stream_groups": 120,
   "source": "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/tree/gold-s-oss/drivers/input/touchscreen/GT9916R",
   "source_sha256": {
     "goodix_brl_spi.c": "bb3e7929f85eba3938bc2334ab035e7023e9e87ef4649d581b1e6b44cde152de",
@@ -28,11 +27,29 @@
       "result": "Same partial enumeration after EXIDS stream validity correction; no touch logs retrieved",
       "host_open_error": "0xe00002d8",
       "native_reset_error": -536870208
+    },
+    {
+      "kernel": "kernel_touch_staged.macho",
+      "touch_spi_started": false,
+      "result": "Control status stage timed out; returned to RootStage and retrieved log",
+      "usb_state": 3,
+      "usb_events": 11,
+      "usb_requests": 2,
+      "usb_failures": 1,
+      "last_command": "0x6"
+    },
+    {
+      "kernel": "kernel_usb_resource.macho",
+      "result": "Goodix DMA preparation reached SMMU geometry check; count cap correction built; physical input pending"
     }
   ],
-  "next_kernel": "kernel_touch_staged.macho",
+  "next_kernel": "kernel_usb_active.macho",
   "next_boot_touch_mode": 2,
   "next_runtime_command": "touch",
   "debug_usb_control_timeout_seconds": 5,
-  "debug_usb_recovery_verified": false
+  "debug_usb_recovery_verified": true,
+  "hardware_idr0": "0x4c017e71",
+  "hardware_stream_groups": 113,
+  "dt_stream_group_cap": 120,
+  "smmu_override_source": "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/iommu/arm/arm-smmu/arm-smmu.c#L3422"
 }

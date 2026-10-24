@@ -65,7 +65,8 @@ struct Touch {
         addr64_t length = 0, physical = dma->getPhysicalSegment(0, &length);
         if (length < 8192) return GENI_ERR_IO;
         smmu_io io = {reinterpret_cast<void *>(smmu.address), read32, write32};
-        IOLog("MarbleTouch: SMMU id=%x control=%x\n", io.rd(io.ctx, 0x20), io.rd(io.ctx, 0));
+        IOLog("MarbleTouch: SMMU id=%x/%x/%x control=%x\n", io.rd(io.ctx, 0x20),
+            io.rd(io.ctx, 0x24), io.rd(io.ctx, 0x28), io.rd(io.ctx, 0));
         auto plan = smmu_plan_bypass(&io, 0x5a3, physical, 8192, 78, 120);
         IOLog("MarbleTouch: SMMU id=%x control=%x extended=%d bank=%u slot=%u\n",
             io.rd(io.ctx, 0x20), io.rd(io.ctx, 0), plan.extended, plan.bank, plan.slot);

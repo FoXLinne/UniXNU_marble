@@ -40,6 +40,15 @@
     {
       "name": "touch_exids",
       "result": "Partial USB enumeration; control requests unavailable; host reset failed; touch initialization result unavailable"
+    },
+    {
+      "name": "usb_resource",
+      "result": "Runtime enumeration, status, logs, touch command and return verified; subsequent boot exposed active-transfer event race"
+    },
+    {
+      "name": "usb_active",
+      "result": "Build completed; hardware run pending USB reconnection",
+      "kernel": "kernel_usb_active.macho"
     }
   ],
   "resident_image_check_seconds": 0.03164525103056803,
@@ -72,5 +81,6 @@
   "runtime_control_verified": {
     "home_command_acknowledged": true,
     "return_to_rootstage": true
-  }
+  },
+  "latest_usb_host_state": "Device entry absent"
 }

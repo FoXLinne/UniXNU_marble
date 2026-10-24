@@ -1,12 +1,12 @@
 diff --git a/SmmuBypass.h b/SmmuBypass.h
 new file mode 100644
-index 0000000..54b00b8
+index 0000000..fa23592
 --- /dev/null
 +++ b/SmmuBypass.h
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,87 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +// QUP DMA stream bypass in the firmware-managed apps SMMU.
-+// The caller supplies firmware context-bank and stream-group counts from the device tree.
++// Device-tree overrides cap the context banks and stream groups reported by hardware.
 +#ifndef GENI_SMMU_BYPASS_H
 +#define GENI_SMMU_BYPASS_H
 +#include <stdint.h>
@@ -32,7 +32,9 @@ index 0000000..54b00b8
 +    p.slot = 0xffffffffu;
 +    uint32_t idr0 = io->rd(io->ctx, 0x20), idr1 = io->rd(io->ctx, 0x24), idr2 = io->rd(io->ctx, 0x28);
 +    p.extended = (idr0 & (1u << 8)) && (io->rd(io->ctx, 0) & (1u << 3));
-+    if (!count || count > (idr0 & 255) || !banks || banks > (idr1 & 255)) {p.error = "Firmware SMMU geometry exceeds hardware"; return p;}
++    if (count > (idr0 & 255)) count = idr0 & 255;
++    if (banks > (idr1 & 255)) banks = idr1 & 255;
++    if (!count || !banks) {p.error = "SMMU geometry is empty"; return p;}
 +    if (!(idr0 & (1u << 30)) || !(idr2 & (1u << 12))) {p.error = "SMMU AArch64 stage 1 unsupported"; return p;}
 +    for (unsigned shift = 0; shift <= 8; shift += 4) {
 +        unsigned bits = smmu_bits((idr2 >> shift) & 15);
