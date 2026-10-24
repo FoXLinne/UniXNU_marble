@@ -7,6 +7,8 @@
 #include <mach/kmod.h>
 #include <sys/param.h>
 #include <sys/msgbuf.h>
+#include <libkern/c++/OSNumber.h>
+#include <IOKit/IOBSD.h>
 #include <Protocol/RootStage.h>
 
 extern "C" {
@@ -21,6 +23,7 @@ class NativeRootBlock : public IOBlockStorageDevice {
   ROOT_STAGE_DISK disk = {};
   IOMemoryMap *chunks[ROOT_STAGE_EXTENTS] = {};
   bool online = false;
+  bool systemRoot = false;
 public:
   void configure(const ROOT_STAGE_DISK &source, unsigned index) {
     if (!source.Bytes || source.Received != source.Bytes ||
@@ -29,6 +32,7 @@ public:
       panic("RootStage: disk %u metadata bytes=%llu received=%llu extents=%llu",
           index, source.Bytes, source.Received, source.Count);
     disk = source;
+    systemRoot = index == 0;
     uint64_t total = 0;
     for (unsigned i = 0; i < disk.Count; i++) {
       uint64_t expected = MIN(ROOT_STAGE_CHUNK, disk.Bytes - total);
@@ -48,6 +52,7 @@ public:
       total += expected;
     }
   }
+  bool isSystemRoot() const { return systemRoot && online; }
   bool start(IOService *provider) override {
     if (!IOBlockStorageDevice::start(provider)) return false;
     online = true;
@@ -165,4 +170,24 @@ extern "C" const char *native_root_block_report(void)
   }
   report[used] = '\0';
   return report;
+}
+
+extern "C" int native_root_block_authorized(dev_t device)
+{
+  IORegistryIterator *iterator = IORegistryIterator::iterateOver(gIOServicePlane, kIORegistryIterateRecursively);
+  if (!iterator) return 0;
+  int authorized = 0;
+  while (IORegistryEntry *entry = iterator->getNextObject()) {
+    OSNumber *majorNumber = OSDynamicCast(OSNumber, entry->getProperty(kIOBSDMajorKey));
+    OSNumber *minorNumber = OSDynamicCast(OSNumber, entry->getProperty(kIOBSDMinorKey));
+    if (!majorNumber || !minorNumber || majorNumber->unsigned32BitValue() != (unsigned)major(device) ||
+        minorNumber->unsigned32BitValue() != (unsigned)minor(device)) continue;
+    for (IORegistryEntry *parent = entry; parent; parent = parent->getParentEntry(gIOServicePlane)) {
+      NativeRootBlock *disk = OSDynamicCast(NativeRootBlock, parent);
+      if (disk) { authorized = disk->isSystemRoot(); break; }
+    }
+    break;
+  }
+  iterator->release();
+  return authorized;
 }

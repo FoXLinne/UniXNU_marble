@@ -79,10 +79,20 @@ index 12eb8a8..2c94067 100644
  
  
 diff --git a/scripts/build-xnu-4k-baseline.sh b/scripts/build-xnu-4k-baseline.sh
-index 5815dd9..5223ea4 100755
+index 5815dd9..1267391 100755
 --- a/scripts/build-xnu-4k-baseline.sh
 +++ b/scripts/build-xnu-4k-baseline.sh
-@@ -324,8 +324,10 @@ fi
+@@ -36,7 +36,8 @@ fi
+ # The same holds for the boot-time GPU addon mount and the staged system apps copy (zzy), which edit the owner Data mount function
+ # inside the systemos patch. Reverse newest first; the loop below re-applies them in name order.
+ for LATE_PATCH in "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
+-    "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch"; do
++    "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch" \
++    "$ROOT/patches/xnu/zz-root-stage-owner-auth.patch"; do
+   if git -C .cache/xnu-work apply --reverse --check "$LATE_PATCH" >/dev/null 2>&1; then
+     git -C .cache/xnu-work apply --reverse "$LATE_PATCH"
+   fi
+@@ -324,8 +325,10 @@ fi
  SHENG_PMGR_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.sheng-pmgr-mode
  if [ "$(cat "$SHENG_PMGR_STAMP" 2>/dev/null || echo 0)" != "$SHENG_PMGR" ]; then
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o"
@@ -93,7 +103,7 @@ index 5815dd9..5223ea4 100755
  EXTRA_MAKE_ARGS+=("bsd_init.o_CFLAGS_ADD=-DXNU_SHENG_PMGR=$SHENG_PMGR -DXNU_VERIFIED_ROOT_PROBE=$OWNER_ROOT_PROBE -DXNU_OWNER_ROOT_AUDIT=$OWNER_ROOT_AUDIT -DXNU_OWNER_ROOT_TRUST=$OWNER_ROOT_TRUST -DXNU_ADRENO_FIRMWARE_PROBE=$ADRENO_FIRMWARE_PROBE -DXNU_ADRENO_PM4_PROBE=$ADRENO_PM4_PROBE -DXNU_SMMU4K_PROBE=$SMMU4K_PROBE -DXNU_CONSTANT_UPLOADS_PROBE=$CONSTANT_UPLOADS_PROBE -DXNU_NATIVE_LEGACY_DISPLAY=${XNU_NATIVE_LEGACY_DISPLAY:-0} -DXNU_NATIVE_OFFLINE_GPU=$NATIVE_OFFLINE_GPU")
  NATIVE_MOBILE_DISPLAY=${XNU_NATIVE_MOBILE_DISPLAY:-0}
  if [ "$NATIVE_MOBILE_DISPLAY" != 0 ] && [ "$NATIVE_MOBILE_DISPLAY" != 1 ]; then
-@@ -519,9 +521,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
+@@ -519,9 +522,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
    exit 1
  fi
  EXTRA_MAKE_ARGS+=("start.o_SFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER")
@@ -222,3 +232,28 @@ index 0000000..7161b4f
 + 			panic("Failed to mount root device");
 + #endif
 + 		}
+diff --git a/patches/xnu/zz-root-stage-owner-auth.patch b/patches/xnu/zz-root-stage-owner-auth.patch
+new file mode 100644
+index 0000000..605e75b
+--- /dev/null
++++ b/patches/xnu/zz-root-stage-owner-auth.patch
+@@ -0,0 +1,19 @@
++--- a/bsd/kern/bsd_init.c
+++++ b/bsd/kern/bsd_init.c
++@@ -1096,6 +1096,16 @@
++ 				native_owner_root_checkpoint(autherr, owner, device);
++ 			}
++ #endif
+++			extern int native_root_block_authorized(dev_t) __attribute__((weak_import));
+++			if (autherr && &native_root_block_authorized) {
+++				mount_t root_mount = vnode_mount(rootvnode);
+++				vnode_t device_vnode = vfs_devvp(root_mount);
+++				if (device_vnode) {
+++					owner_authorized = (vfs_flags(root_mount) & MNT_RDONLY) &&
+++					    native_root_block_authorized(vnode_specrdev(device_vnode));
+++					vnode_put(device_vnode);
+++				}
+++			}
++ 			if (autherr && !owner_authorized) {
++ 				panic("rootvp not authenticated after mounting");
++ 			}
