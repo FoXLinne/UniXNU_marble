@@ -113,6 +113,7 @@ static void captureRootScreen(void)
 }
 
 static RamSparseDisk dataSeed = {};
+extern "C" bool native_root_block_data_is_ephemeral(void) { return dataSeed.pages != nullptr; }
 static uint64_t dataSeedBytes;
 static uint8_t dataSeedHash[32];
 static char dataSeedUUID[37];

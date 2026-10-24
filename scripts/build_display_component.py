@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Compile the framebuffer or GOP presenter using the current kernel recipe."""
+"""Compile owned IOKit components using the current kernel recipe."""
 import argparse
 import json
 from pathlib import Path
 import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('component',choices=['NativeLegacyDisplay','NativeGOPPresenter'])
+parser.add_argument('component',choices=['NativeLegacyDisplay','NativeGOPPresenter','NativeKeyStoreEvents'])
 component=parser.parse_args().component
 record=json.loads((ROOT/'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json').read_text().strip().rstrip(','))
-source=ROOT/'drivers/NativeMobileDisplay'/(component+'.cpp')
-out=ROOT/'build'/('native-legacy-display' if component=='NativeLegacyDisplay' else 'native-gop-presenter')
+source=ROOT/'drivers'/('NativeKeyStoreEvents' if component=='NativeKeyStoreEvents' else 'NativeMobileDisplay')/(component+'.cpp')
+out=ROOT/'build'/{'NativeLegacyDisplay':'native-legacy-display','NativeGOPPresenter':'native-gop-presenter','NativeKeyStoreEvents':'native-keystore-events'}[component]
 out.mkdir(parents=True,exist_ok=True)
 destination=out/(component+'.o')
 arguments = record['arguments']

@@ -212,6 +212,15 @@ run(cmd,cwd=r['directory'])
 snapshot_source=ROOT/'kits/marble/RootUiSnapshot.cpp'
 snapshot_object=OUT/'RootUiSnapshot.o'
 run([str(snapshot_source) if str(v)==str(source) else str(snapshot_object) if str(v)==str(OUT/'LegacyDisplayProbe.o') else v for v in cmd],cwd=r['directory'])
+keyevents_source=ROOT/'kits/marble/KeyStoreEvents.cpp'
+keyevents_probe=OUT/'KeyStoreEvents.o'
+run([str(keyevents_source) if str(v)==str(source) else str(keyevents_probe) if str(v)==str(OUT/'LegacyDisplayProbe.o') else v for v in cmd],cwd=r['directory'])
+print(run(['python3',ROOT/'scripts/build_display_component.py','NativeKeyStoreEvents'],text=True),end='')
+keyevents_dir=ROOT/'build/native-keystore-events'
+keyevents_late=keyevents_dir/'NativeKeyStoreEvents.late.o'
+run([objcopy,'--remove-section=__DATA,__mod_init_func',
+     '--globalize-symbol=__GLOBAL__sub_I_NativeKeyStoreEvents.cpp',
+     keyevents_dir/'NativeKeyStoreEvents.o',keyevents_late])
 process_recipe=json.loads((ROOT/'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/startup.o.json').read_text().strip().rstrip(','))
 trace_objects=[]
 for component in ('BootProcessProbe','BootUiTraceProbe'):
@@ -232,9 +241,10 @@ print(run(['python3',ROOT/'scripts/build_display_component.py','NativeGOPPresent
 gop=ROOT/'build/native-gop-presenter';gop_late=gop/'NativeGOPPresenter.late.o'
 run([objcopy,'--remove-section=__DATA,__mod_init_func',
      '--globalize-symbol=__GLOBAL__sub_I_NativeGOPPresenter.cpp',gop/'NativeGOPPresenter.o',gop_late])
-run(['xcrun','ar','rcs',archive,late,OUT/'LegacyDisplayProbe.o',OUT/'original-bindings.o',gop_late,snapshot_object,*trace_objects])
+run(['xcrun','ar','rcs',archive,late,OUT/'LegacyDisplayProbe.o',OUT/'original-bindings.o',gop_late,snapshot_object,keyevents_probe,keyevents_late,*trace_objects])
 sources=[ROOT/'drivers/NativeMobileDisplay/NativeLegacyDisplay.cpp',ROOT/'drivers/NativeMobileDisplay/NativeLegacyRequest.h',
          ROOT/'drivers/NativeMobileDisplay/NativeGOPPresenter.cpp',ROOT/'drivers/NativeMobileDisplay/NativeGOPWire.h',source,snapshot_source,
+         keyevents_source,ROOT/'drivers/NativeKeyStoreEvents/NativeKeyStoreEvents.cpp',
          *[ROOT/'kits/marble'/name for name in ('BootProcessProbe.c','BootUiTraceProbe.c','BootUiTraceCore.h','BootUiTraceDetails.h')]]
 (OUT/'build-report.json').write_text(json.dumps(dict(
     source_sha256={str(p.relative_to(ROOT)):sha(p) for p in sources},generated_abi_sha256=sha(OUT/'OriginalLegacyFramebufferABI.h'),

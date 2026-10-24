@@ -1,0 +1,16 @@
+{
+  "process": "liveactivitiesd",
+  "signal": 5,
+  "exception": 6,
+  "unslid_pc": "0x1c18f64f8",
+  "image": "SessionSyncEngine",
+  "instruction": "brk #1",
+  "branch": "cbz x20, 0x1c18f64f8 after MobileKeyBag call returns nil",
+  "preceding_call_target": "0x1b51aa4dc",
+  "queue_label": "com.apple.liveactivitiesd.IOSKeybag.internal",
+  "original_service_name": "AppleKeyStore",
+  "notification_interest": "IOGeneralInterest",
+  "original_code_modified": false,
+  "fix": "Register existing NativeKeyStoreEvents notification service for ephemeral Data; state user client remains controlled by sheng-aks",
+  "rootstage_returns": 18
+}
