@@ -31,6 +31,7 @@ extern kmod_info_t g_kernel_kmod_info;
 void native_runtime_usb_start(void);
 void native_runtime_usb_report(char *, unsigned);
 void native_hid_report(char *, unsigned);
+void native_marble_touch_report(char *, unsigned);
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void root_block_static_init(void) __asm__("__GLOBAL__sub_I_NativeRootBlock.cpp");
 volatile uint64_t native_root_block_reads;
@@ -273,6 +274,8 @@ extern "C" void native_root_block_capture_log(void)
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   native_hid_report(runtime,sizeof(runtime));
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
+  native_marble_touch_report(runtime,sizeof(runtime));
+  used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   used += snprintf(log.text + used, sizeof(log.text) - used,
       "ReadWindow hits=%llu misses=%llu bytes=%llu\n",readWindowHits,readWindowMisses,readWindowBytes);
   log.length = (uint32_t)used;
@@ -337,13 +340,14 @@ class NativeRootBlock : public IOBlockStorageDevice {
   RamSparseDisk *writableData = nullptr;
   IOLock *dataGate = nullptr;
   IOLock *readGate = nullptr;
-  struct Window { uint64_t base=0, stamp=0; IOMemoryMap *map=nullptr; } windows[4];
+  static constexpr unsigned windowCount = 32;
+  struct Window { uint64_t base=0, stamp=0; IOMemoryMap *map=nullptr; } windows[windowCount];
   uint64_t windowStamp = 0;
   IOMemoryMap *readWindow(uint64_t address,uint64_t extentStart,uint64_t extentEnd) {
     constexpr uint64_t span=16*1024*1024;
     uint64_t base=extentStart+((address-extentStart)&~(span-1));
     unsigned victim=0;
-    for (unsigned i=0;i<4;i++) {
+    for (unsigned i=0;i<windowCount;i++) {
       if (windows[i].map && windows[i].base==base) {
         windows[i].stamp=++windowStamp; readWindowHits++; return windows[i].map;
       }

@@ -15,6 +15,9 @@ void native_marble_touch_start(void);
 }
 
 namespace {
+unsigned touchStage, touchEvents, touchFrames, touchInvalid, touchIrq;
+uint32_t touchHeader;
+int touchResult;
 struct Region {
     IOMemoryMap *mapping = nullptr;
     uintptr_t address = 0;
@@ -226,6 +229,7 @@ struct Touch {
     int run() {
         int result = initialize();
         if (result) return result;
+        touchStage = 2;
         uint8_t confirm[8], returned[8];
         memset(confirm, 0xaa, sizeof(confirm));
         for (unsigned attempt = 0; attempt < 3; ++attempt) {
@@ -263,15 +267,21 @@ struct Touch {
         IOLog("MarbleTouch: IC info=%lu event=%x head=%u point=%u\n", bytes,
             events, little16(info + at + 48), little16(info + at + 50));
         if (!events || little16(info + at + 48) != 8 || little16(info + at + 50) != 8) return GENI_ERR_PROTO;
+        touchStage = 3;
         uint8_t frame[90];
         for (;;) {
-            if (read32(reinterpret_cast<void *>(pins.address), 0x5004) & 1) { IOSleep(8); continue; }
+            touchIrq = read32(reinterpret_cast<void *>(pins.address), 0x5004) & 1;
+            if (touchIrq) { IOSleep(8); continue; }
             result = read(events, frame, sizeof(frame));
             if (result) return result;
+            touchEvents++;
+            touchHeader = little32(frame);
             unsigned count = frame[2] & 15;
             if ((frame[0] & 0x80) && count <= 10 && checksum(frame, 8) &&
-                (!count || checksum(frame + 8, count * 8 + 2)))
+                (!count || checksum(frame + 8, count * 8 + 2))) {
+                touchFrames++;
                 native_touch_publish(count, frame + 8);
+            } else touchInvalid++;
             result = acknowledge(events);
             if (result) return result;
             IOSleep(1);
@@ -281,6 +291,8 @@ struct Touch {
 void worker(void *, wait_result_t) {
     auto *touch = new Touch;
     int result = touch ? touch->run() : GENI_ERR_IO;
+    touchResult = result;
+    touchStage = 4;
     IOLog("MarbleTouch: stopped status=%d\n", result);
     delete touch;
 }
@@ -288,8 +300,13 @@ void worker(void *, wait_result_t) {
 extern "C" void native_marble_touch_start(void) {
     static bool started;
     if (__atomic_exchange_n(&started, true, __ATOMIC_RELAXED)) return;
+    touchStage = 1;
     thread_t thread;
     kern_return_t result = kernel_thread_start(worker, nullptr, &thread);
     if (!result) thread_deallocate(thread);
     else IOLog("MarbleTouch: thread start=%d\n", result);
+}
+extern "C" void native_marble_touch_report(char *out, unsigned size) {
+    snprintf(out, size, "MarbleTouch stage=%u result=%d irq=%u events=%u frames=%u invalid=%u header=%08x",
+        touchStage, touchResult, touchIrq, touchEvents, touchFrames, touchInvalid, touchHeader);
 }

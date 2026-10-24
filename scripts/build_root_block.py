@@ -252,11 +252,33 @@ subprocess.run(touch_command, cwd=record['directory'], check=True)
 gpu = out / 'MarbleGpu.o'
 gpu_command = [str(ROOT / 'kits/marble/MarbleGpu.cpp') if v == str(source) else str(gpu) if v == str(obj_path) else v for v in command]
 subprocess.run(gpu_command, cwd=record['directory'], check=True)
+gmu = out / 'MarbleGmu.o'
+gmu_command = [str(ROOT / 'kits/marble/MarbleGmu.cpp') if v == str(source) else str(gmu) if v == str(obj_path) else v for v in command]
+gmu_command += ['-I', str(ROOT / 'kits/ArmSmmu4K'), '-I', str(ROOT / 'kits/AdrenoFirmware')]
+subprocess.run(gmu_command, cwd=record['directory'], check=True)
+gpu_objects = [gmu]
+for directory, names in (
+    ('ArmSmmu4K', ('ArmSmmu4K.c', 'ArmSmmu4KContext.c', 'ArmSmmu4KProgram.c', 'ArmSmmu4KMmio.c')),
+    ('AdrenoFirmware', ('AdrenoFirmware.c', 'AdrenoHfi.c')),
+):
+    for name in names:
+        target = out / (Path(name).stem + '.o')
+        recipe = [str(ROOT / 'kits' / directory / name) if v == str(policy_source) else str(target) if v == str(policy_object) else v for v in policy_command]
+        subprocess.run(recipe, cwd=policy_recipe['directory'], check=True)
+        gpu_objects.append(target)
+firmware = ROOT / '.cache/firmware/marble/gmu_gen70000.bin'
+if hashlib.sha256(firmware.read_bytes()).hexdigest() != 'b2d3f0e2a98fd6259ab9ffef16df63265542e6cc9a970d53d476e823d432042a':
+    raise SystemExit('Marble GMU firmware checksum differs')
+firmware_assembly = out / 'marble-firmware.S'
+firmware_assembly.write_text('.section __DATA_CONST,__const\n.p2align 12\n.globl _marble_gmu_firmware\n_marble_gmu_firmware:\n.incbin ' + json.dumps(str(firmware)) + '\nmarble_gmu_end:\n.p2align 3\n.globl _marble_gmu_firmware_size\n_marble_gmu_firmware_size:\n.quad marble_gmu_end-_marble_gmu_firmware\n')
+firmware_object = out / 'marble-firmware.o'
+subprocess.run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-isysroot', str(sdk), '-c', str(firmware_assembly), '-o', str(firmware_object)], check=True)
+gpu_objects.append(firmware_object)
 spi = out / 'GeniSpi.o'
 spi_command = [str(ROOT / 'drivers/NativeGeniSpi/GeniSpi.c') if v == str(policy_source) else str(spi) if v == str(policy_object) else v for v in policy_command]
 subprocess.run(spi_command, cwd=policy_recipe['directory'], check=True)
 archive.unlink(missing_ok=True)
-subprocess.run(['xcrun', 'ar', 'rcs', archive, late, resident, out / 'original-bindings.o', policy_object, runtime, touch, gpu, spi], check=True)
+subprocess.run(['xcrun', 'ar', 'rcs', archive, late, resident, out / 'original-bindings.o', policy_object, runtime, touch, gpu, spi, *gpu_objects], check=True)
 report = dict(reference_kernel_sha256=plan['candidate_sha256'], original_executable_code_unchanged=True,
               method_slots=len(methods), compiled_public_class_size=int(class_size[1], 16),
               bindings={name:hex(value) for name,value in bindings.items()}, runtime_qualified=False,

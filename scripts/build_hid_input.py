@@ -91,6 +91,7 @@ for i,name in enumerate(compiled):
 require(owned==[0,1,7,14,86,87,111,171,173,180],'Only qualified HID methods overridden')
 # This kernel compiler resolves qualified super calls through the original vtable.
 undefined={n for n,_,k in symbols if k==1 and '11IOHIDDevice' in n}
+bindings={name:address for name,address in bindings.items() if name in undefined}
 require(undefined==set(bindings),'All and only actual original HID imports bound')
 asm=OUT/'original-bindings.S';asm.write_text(''.join(f'.globl {n}\n.set {n}, {a:#x}\n' for n,a in sorted(bindings.items())))
 sdk=run(['xcrun','--sdk','iphoneos','--show-sdk-path'],text=True).strip()

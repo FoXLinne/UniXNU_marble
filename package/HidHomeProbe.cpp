@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <IOKit/IOService.h>
+#include <IOKit/IOCatalogue.h>
+#include <libkern/c++/OSArray.h>
+#include <libkern/c++/OSUnserialize.h>
 #include <libkern/c++/OSKext.h>
 #include <libkern/c++/OSSymbol.h>
 #include <mach/kmod.h>
@@ -19,6 +22,22 @@ static uint64_t nextHome, frequency;
 static unsigned homeDelay, homeCount, homeInterval;
 static bool configured;
 static unsigned requestedHome;
+static bool registerTouchDriver(void) {
+    const char personality[] =
+        "<array><dict>"
+        "<key>IOClass</key><string>IOHIDEventDriver</string>"
+        "<key>IOProviderClass</key><string>IOHIDInterface</string>"
+        "<key>CFBundleIdentifier</key><string>com.apple.iokit.IOHIDFamily</string>"
+        "<key>HIDDefaultBehavior</key><string></string>"
+        "<key>DeviceUsagePairs</key><array><dict>"
+        "<key>DeviceUsagePage</key><integer>13</integer>"
+        "<key>DeviceUsage</key><integer>4</integer>"
+        "</dict></array></dict></array>";
+    OSArray *drivers = OSDynamicCast(OSArray, OSUnserializeXML(personality));
+    bool result = drivers && gIOCatalogue->addDrivers(drivers, true);
+    OSSafeReleaseNULL(drivers);
+    return result;
+}
 extern "C" void native_hid_request_home(void) {
     __atomic_fetch_add(&requestedHome, 1, __ATOMIC_RELAXED);
 }
@@ -48,8 +67,8 @@ extern "C" bool native_hid_input_requested(void) {
     return true;
 }
 extern "C" void native_hid_report(char *out, unsigned size) {
-    snprintf(out, size, "HID status=%x ticks=%u home=%u reports=%u/%u results=%x/%x matched=%d touch=%u result=%x",
-        status, ticks, sent, events[4], events[5], results[4], results[5], results[3], events[6], results[6]);
+    snprintf(out, size, "HID status=%x ticks=%u home=%u reports=%u/%u results=%x/%x matched=%d touch=%u result=%x touch_matched=%d",
+        status, ticks, sent, events[4], events[5], results[4], results[5], results[3], events[6], results[6], results[7]);
 }
 extern "C" void native_hid_home_start(void) {
     unsigned enabled = 0;
@@ -76,6 +95,7 @@ extern "C" void native_hid_home_start(void) {
         panic("RootStage: HID input start failed");
     unsigned touch = 0;
     if (PE_parse_boot_argn("marble-touch", &touch, sizeof(touch)) && touch) {
+        IOLog("MarbleTouch: event driver personality=%u\n", registerTouchDriver());
         IOService *digitizer = native_hid_touch_allocate();
         if (digitizer && digitizer->init() && digitizer->attach(resource) && digitizer->start(resource)) {
             if (touch == 1) native_marble_touch_start();

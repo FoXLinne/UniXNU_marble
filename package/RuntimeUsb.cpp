@@ -11,6 +11,8 @@
 extern "C" unsigned native_root_runtime_read(unsigned, unsigned, void *, unsigned);
 extern "C" void native_hid_request_home(void);
 extern "C" void native_marble_touch_start(void);
+extern "C" void native_marble_gpu_start(void);
+extern "C" void native_hid_request_tap(unsigned, unsigned);
 extern "C" void native_root_block_capture_log(void);
 extern "C" void native_runtime_usb_start(void);
 extern "C" void native_runtime_usb_stop(void);
@@ -157,6 +159,10 @@ void handleSetup() {
         returnTicks = 50; return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 8) {
         native_marble_touch_start(); return;
+    } else if (setup[0] == 0x40 && !length && setup[1] == 9) {
+        native_marble_gpu_start(); return;
+    } else if (setup[0] == 0x40 && !length && setup[1] == 10) {
+        native_hid_request_tap(value, index); return;
     } else { stall(); return; }
     count = MIN(count,length);
     for (unsigned i=0; i<count; i++) reinterpret_cast<volatile uint8_t *>(bytes)[controlOffset+i]=response[i];
@@ -230,6 +236,11 @@ bool initialize() {
     physical = dmaMap->getPhysicalAddress();
     for (unsigned i=0; i<dmaBytes/4; i++) reinterpret_cast<volatile uint32_t *>(bytes)[i]=0;
     write(DWC3_DCTL,read(DWC3_DCTL)&~DWC3_DCTL_RUN_STOP);
+    unsigned stopped = 0;
+    for (; stopped < 10000 && !(read(DWC3_DSTS) & DWC3_DSTS_DEVCTRLHLT); ++stopped) IODelay(1);
+    if (stopped == 10000) return false;
+    // RootStage and RuntimeRoot have distinct descriptors. Give the host a disconnect interval.
+    IOSleep(300);
     write(DWC3_GCTL,(read(DWC3_GCTL)&~DWC3_GCTL_PRTCAPDIR(3))|DWC3_GCTL_PRTCAPDIR(2)|DWC3_GCTL_DSBLCLKGTNG);
     write(DWC3_DCTL,read(DWC3_DCTL)|DWC3_DCTL_CSFTRST);
     unsigned wait=0;

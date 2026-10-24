@@ -25,7 +25,9 @@ def read(device, kind, offset, length):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'return'])
+    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'gpu', 'tap', 'return'])
+    parser.add_argument('--x', type=int)
+    parser.add_argument('--y', type=int)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--source', action='store_true', help='Capture the compositor surface before scanout copy')
     args = parser.parse_args()
@@ -35,8 +37,13 @@ def main():
         raise SystemExit('Marble runtime USB is unavailable')
     device.default_timeout = 5000
     try:
-        if args.command in ('home', 'touch', 'return'):
-            device.ctrl_transfer(0x40, {'home': 3, 'return': 4, 'touch': 8}[args.command], 0, 0, b'')
+        if args.command == 'tap':
+            if args.x is None or args.y is None or not 0 <= args.x < 1080 or not 0 <= args.y < 2400:
+                parser.error('tap requires --x 0..1079 and --y 0..2399')
+            device.ctrl_transfer(0x40, 10, args.x, args.y, b'')
+            print(f'tap x={args.x} y={args.y}')
+        elif args.command in ('home', 'touch', 'gpu', 'return'):
+            device.ctrl_transfer(0x40, {'home': 3, 'return': 4, 'touch': 8, 'gpu': 9}[args.command], 0, 0, b'')
             print(args.command)
         elif args.command == 'status':
             fields=struct.unpack('<8s6Q',read(device,5,0,56))
