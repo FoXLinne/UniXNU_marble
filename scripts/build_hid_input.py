@@ -82,7 +82,7 @@ for segment in om['segments']:
                 if bits>>27&1 and bits>>28==0 and bits>>25&3==3:relocations[sec['va']+offset]=symbols[bits&0xffffff][0]
 compiled=[relocations.get(vt+16+i*8) for i in range(207)]
 require(all(compiled) and vt+16+207*8 not in relocations,'Compiled exact 207-slot vtable')
-bindings={'__ZN11IOHIDDeviceC2EPK11OSMetaClass':0xfffffff004ad94f8,'__ZN11IOHIDDeviceD2Ev':0xfffffff004ad9518,'__ZN11IOHIDDevice10gMetaClassE':0xfffffff006ae6fa0,'__ZTV11IOHIDDevice':vptr-16}
+bindings={'__ZN11IOHIDDeviceC2EPK11OSMetaClass':0xfffffff004ad94f8,'__ZN11IOHIDDeviceD2Ev':0xfffffff004ad9518,'__ZN11IOHIDDevice10gMetaClassE':0xfffffff006ae6fa0,'__ZTV11IOHIDDevice':vptr-16,'__ZN11IOHIDDevice4stopEP9IOService':methods[87]}
 owned=[]
 for i,name in enumerate(compiled):
     if name.startswith(('__ZN15NativeHomeInput','__ZNK15NativeHomeInput')):owned.append(i)

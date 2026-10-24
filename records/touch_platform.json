@@ -1,0 +1,38 @@
+{
+  "controller": "Goodix 9916R",
+  "spi_base": "0x990000",
+  "wrapper_base": "0x9c0000",
+  "max_spi_hz": 15000000,
+  "irq_gpio": 21,
+  "reset_gpio": 20,
+  "width": 1080,
+  "height": 2400,
+  "smmu_base": "0x15000000",
+  "stream_id": "0x5a3",
+  "context_banks": 78,
+  "stream_groups": 120,
+  "source": "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/tree/gold-s-oss/drivers/input/touchscreen/GT9916R",
+  "source_sha256": {
+    "goodix_brl_spi.c": "bb3e7929f85eba3938bc2334ab035e7023e9e87ef4649d581b1e6b44cde152de",
+    "goodix_brl_hw.c": "af352a374f83ae2813e92bd3d5147c67ef04966f5143a79882ef447392e9c132",
+    "goodix_ts_core.h": "fa248c537612725e4efecdc1690a7fd2523bf9253d7403395a5953691ac0f6a2"
+  },
+  "physical_touch_verified": false,
+  "rounds": [
+    {
+      "kernel": "kernel_touch_dma.macho",
+      "result": "Runtime USB device descriptor available; control requests unavailable; Goodix DMA outcome unknown"
+    },
+    {
+      "kernel": "kernel_touch_exids_live.macho",
+      "result": "Same partial enumeration after EXIDS stream validity correction; no touch logs retrieved",
+      "host_open_error": "0xe00002d8",
+      "native_reset_error": -536870208
+    }
+  ],
+  "next_kernel": "kernel_touch_staged.macho",
+  "next_boot_touch_mode": 2,
+  "next_runtime_command": "touch",
+  "debug_usb_control_timeout_seconds": 5,
+  "debug_usb_recovery_verified": false
+}

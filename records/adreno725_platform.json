@@ -1,0 +1,29 @@
+{
+  "soc": "SM7475",
+  "model": "Adreno725v1",
+  "chip_id": "0x07030002",
+  "compatible": "qcom,adreno-gpu-gen7-4-0",
+  "gpu": {
+    "base": "0x03d00000",
+    "bytes": "0x40000"
+  },
+  "gmu": {
+    "base": "0x03d68000",
+    "bytes": "0x37000",
+    "pdc_base": "0x0b290000",
+    "ao_base": "0x03d40000"
+  },
+  "smmu_base": "0x03da0000",
+  "gpu_clock_controller": "0x03d90000",
+  "firmware": "adreno725_firmware.json",
+  "android_log": "adreno725_android.log",
+  "reference": {
+    "repository": "https://github.com/qualcomm-linux/kgsl",
+    "revision": "2b2d762c0b843c560d2ae2203f6b3cfe1474fb3f",
+    "core": "adreno_gpu_core_gen7_4_0",
+    "sqe": "a730_sqe.fw",
+    "gmu": "gmu_gen70000.bin",
+    "zap": "a730_zap.mdt"
+  },
+  "native_metal_verified": false
+}

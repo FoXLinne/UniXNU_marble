@@ -10,6 +10,7 @@
 
 extern "C" unsigned native_root_runtime_read(unsigned, unsigned, void *, unsigned);
 extern "C" void native_hid_request_home(void);
+extern "C" void native_marble_touch_start(void);
 extern "C" void native_root_block_capture_log(void);
 extern "C" void native_runtime_usb_start(void);
 extern "C" void native_runtime_usb_stop(void);
@@ -27,6 +28,7 @@ uint8_t response[responseBytes];
 uint64_t physical;
 unsigned eventPosition, controlState, resource[2];
 unsigned events, requests, failures, configuration, returnTicks;
+unsigned controlTicks;
 uint32_t controllerId, initialControl, initialStatus, initialPhy, lastCommand;
 bool threeStage, active, controllerOwned, panicOnFailure;
 uint8_t setup[8];
@@ -83,6 +85,7 @@ bool transfer(unsigned ep, unsigned offset, unsigned length, uint32_t type) {
 void receiveSetup() {
     end(1); end(0);
     controlState = 0;
+    controlTicks = 0;
     transfer(0, setupOffset, 8, DWC3_TRBCTL_CONTROL_SETUP);
 }
 void stall() {
@@ -134,6 +137,8 @@ void handleSetup() {
         native_hid_request_home(); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 4) {
         returnTicks = 50; return;
+    } else if (setup[0] == 0x40 && !length && setup[1] == 8) {
+        native_marble_touch_start(); return;
     } else { stall(); return; }
     count = MIN(count,length);
     for (unsigned i=0; i<count; i++) reinterpret_cast<volatile uint8_t *>(bytes)[controlOffset+i]=response[i];
@@ -238,6 +243,11 @@ void worker(void *, wait_result_t) {
                 write(DWC3_GEVNTCOUNT(0),4);
                 handleEvent(event);
             }
+            if (panicOnFailure && controlState && ++controlTicks >= 500) {
+                native_root_block_capture_log();
+                panic("RuntimeUSB: control transfer timeout state=%u events=%u requests=%u failures=%u",
+                    controlState, events, requests, failures);
+            }
             if (returnTicks && !--returnTicks) {
                 native_root_block_capture_log();
                 panic("RootStage runtime return requested");
@@ -246,6 +256,10 @@ void worker(void *, wait_result_t) {
         }
     }
     IOLog("RuntimeUSB: stopped events=%u requests=%u failures=%u\n",events,requests,failures);
+    if (initialized && panicOnFailure) {
+        native_root_block_capture_log();
+        panic("RuntimeUSB: event processing stopped events=%u requests=%u failures=%u", events, requests, failures);
+    }
     native_runtime_usb_stop();
     // DMA allocations stay owned until the controller is quiescent.
     thread_terminate(current_thread());

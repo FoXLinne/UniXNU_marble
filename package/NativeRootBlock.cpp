@@ -30,6 +30,7 @@ extern "C" {
 extern kmod_info_t g_kernel_kmod_info;
 void native_runtime_usb_start(void);
 void native_runtime_usb_report(char *, unsigned);
+void native_hid_report(char *, unsigned);
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void root_block_static_init(void) __asm__("__GLOBAL__sub_I_NativeRootBlock.cpp");
 volatile uint64_t native_root_block_reads;
@@ -269,6 +270,8 @@ extern "C" void native_root_block_capture_log(void)
     used += snprintf(log.text + used, sizeof(log.text) - used, "\nPANIC\n%s\n", native_root_block_panic_text);
   char runtime[256];
   native_runtime_usb_report(runtime,sizeof(runtime));
+  used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
+  native_hid_report(runtime,sizeof(runtime));
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   used += snprintf(log.text + used, sizeof(log.text) - used,
       "ReadWindow hits=%llu misses=%llu bytes=%llu\n",readWindowHits,readWindowMisses,readWindowBytes);

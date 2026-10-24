@@ -11,6 +11,7 @@ SOURCES = {
     'DarwinBoot': (WORK / 'UniXNU/drivers/DarwinBoot', None),
     'NativeMobileDisplay': (WORK / 'UniXNU/drivers/NativeMobileDisplay', None),
     'NativeRamBlock': (WORK / 'UniXNU/drivers/NativeRamBlock', None),
+    'NativeGeniSpi': (WORK / 'UniXNU/drivers/NativeGeniSpi', None),
     'NativeKeyStoreEvents': (WORK / 'UniXNU/drivers/NativeKeyStoreEvents', None),
     'Mu_Basecore': (WORK / 'marble_hackios/Mu-Silicium/Mu_Basecore', []),
     'NativePrelink': (WORK / 'UniXNU/kits/NativePrelink', None),

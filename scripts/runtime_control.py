@@ -25,7 +25,7 @@ def read(device, kind, offset, length):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'return'])
+    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'return'])
     parser.add_argument('--output', type=Path)
     parser.add_argument('--source', action='store_true', help='Capture the compositor surface before scanout copy')
     args = parser.parse_args()
@@ -35,8 +35,8 @@ def main():
         raise SystemExit('Marble runtime USB is unavailable')
     device.default_timeout = 5000
     try:
-        if args.command in ('home', 'return'):
-            device.ctrl_transfer(0x40, 3 if args.command == 'home' else 4, 0, 0, b'')
+        if args.command in ('home', 'touch', 'return'):
+            device.ctrl_transfer(0x40, {'home': 3, 'return': 4, 'touch': 8}[args.command], 0, 0, b'')
             print(args.command)
         elif args.command == 'status':
             fields=struct.unpack('<8s6Q',read(device,5,0,56))

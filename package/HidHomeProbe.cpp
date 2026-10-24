@@ -8,6 +8,8 @@
 extern kmod_info_t g_kernel_kmod_info;
 extern "C" void native_hid_static_init(void) __asm__("__GLOBAL__sub_I_NativeHomeInput.cpp");
 extern "C" IOService *native_hid_input_allocate(void);
+extern "C" IOService *native_hid_touch_allocate(void);
+extern "C" void native_marble_touch_start(void);
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" volatile uint32_t native_legacy_transfer_calls;
 static uint32_t events[8], ticks, sent;
@@ -45,8 +47,8 @@ extern "C" bool native_hid_input_requested(void) {
     return true;
 }
 extern "C" void native_hid_report(char *out, unsigned size) {
-    snprintf(out, size, "HID status=%x ticks=%u home=%u reports=%u/%u results=%x/%x matched=%d",
-        status, ticks, sent, events[4], events[5], results[4], results[5], results[3]);
+    snprintf(out, size, "HID status=%x ticks=%u home=%u reports=%u/%u results=%x/%x matched=%d touch=%u result=%x",
+        status, ticks, sent, events[4], events[5], results[4], results[5], results[3], events[6], results[6]);
 }
 extern "C" void native_hid_home_start(void) {
     unsigned enabled = 0;
@@ -71,6 +73,14 @@ extern "C" void native_hid_home_start(void) {
     IOService *device = native_hid_input_allocate();
     if (!device || !device->init() || !device->attach(resource) || !device->start(resource))
         panic("RootStage: HID input start failed");
+    unsigned touch = 0;
+    if (PE_parse_boot_argn("marble-touch", &touch, sizeof(touch)) && touch) {
+        IOService *digitizer = native_hid_touch_allocate();
+        if (digitizer && digitizer->init() && digitizer->attach(resource) && digitizer->start(resource)) {
+            if (touch == 1) native_marble_touch_start();
+            else IOLog("MarbleTouch: HID ready, awaiting runtime start\n");
+        } else IOLog("MarbleTouch: HID digitizer start failed\n");
+    }
     resource->release();
     IOLog("RootStage: virtual HID consumer input published\n");
 }
