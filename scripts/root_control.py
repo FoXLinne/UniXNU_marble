@@ -105,6 +105,8 @@ def image_stream(image):
 def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_args=""):
     if channel.command('getvar:version') != 'RootStage2':
         raise RuntimeError('Load the RootStage2 boot image to use resident disks')
+    transfer_bytes = int(channel.command('getvar:max-download-size'), 16)
+    zero_fill = 'zero-fill' in channel.command('getvar:features').split(',')
     if not 1 <= len(images) <= 2:
         raise ValueError('RootStage accepts one or two root disks')
     entries = list(enumerate(images))
@@ -142,13 +144,14 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
                                 source_sha256=source_digest)))
     reports = []
     for index, image in entries:
+        chunk_bytes = CHUNK if index == 2 else transfer_bytes
         began = time.monotonic()
         digest = image['sha256']
         total = image['raw_bytes']
         channel.command(f'oem select:{index}')
         identity = channel.command('getvar:image-id')
         received, resident_bytes = [int(v, 16) for v in channel.command('getvar:received').split(':')]
-        offset, sent = 0, 0
+        offset, sent, zero_bytes = 0, 0, 0
         if identity == digest[:32] and received == resident_bytes == total:
             offset = total
         else:
@@ -166,15 +169,20 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
                     raise RuntimeError('Resident disk geometry differs from image')
                 stream.seek(offset)
                 while offset + sent < total:
-                    data = stream.read(min(CHUNK, total - offset - sent))
+                    data = stream.read(min(chunk_bytes, total - offset - sent))
                     if not data:
                         raise RuntimeError(f'Short read: {image["name"]}')
-                    channel.write(data)
+                    if zero_fill and data.count(0) == len(data):
+                        channel.command(f'oem zero:{len(data):08x}')
+                        zero_bytes += len(data)
+                    else:
+                        channel.write(data)
                     sent += len(data)
                     if sent % (128 * CHUNK) == 0 or offset + sent == total:
                         print(f'{image["name"]}: {offset + sent}/{total}', flush=True)
         report = dict(name=image['name'], bytes=total, sha256=digest,
-                      reused_bytes=offset, transmitted_bytes=sent,
+                      reused_bytes=offset, transmitted_bytes=sent - zero_bytes,
+                      zero_filled_bytes=zero_bytes,
                       elapsed_seconds=time.monotonic() - began)
         if 'source_sha256' in image:
             report['source_sha256'] = image['source_sha256']

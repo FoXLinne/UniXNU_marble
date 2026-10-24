@@ -9,7 +9,7 @@
 #include <Protocol/RootStage.h>
 #include <Protocol/Cpu.h>
 
-#define TRANSFER_BYTES 0x100000
+#define TRANSFER_BYTES 0x400000
 #define EP_OUT 0x01
 #define EP_IN 0x81
 #define KERNEL_ALIGNMENT_SLACK 0x200000ULL
@@ -215,7 +215,7 @@ StartUsb:
     ROOT_STAGE_DISK *Disk = &mStage->Disks[mDisk];
     if (AsciiStrCmp(Command,"upload")) mExportBytes=0;
     if (!AsciiStrCmp(Command,"getvar:version")) Reply("OKAY","RootStage2");
-    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache");
+    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache,zero-fill");
     else if (!AsciiStrnCmp(Command,"oem runtime-usb:",16) && (Command[16]=='0' || Command[16]=='1') && !Command[17]) {
       mRuntimeUsb=Command[16]=='1'; Reply("OKAY","");
     }
@@ -245,7 +245,7 @@ StartUsb:
     else if (!AsciiStrCmp(Command,"getvar:returns")) {
       CHAR8 Text[17]; Hex(Text,mStage->ReturnCount,16); Reply("OKAY",Text);
     }
-    else if (!AsciiStrCmp(Command,"getvar:max-download-size")) Reply("OKAY","0x00100000");
+    else if (!AsciiStrCmp(Command,"getvar:max-download-size")) Reply("OKAY","0x00400000");
     else if (!AsciiStrCmp(Command,"getvar:kernel-memory")) {
       CHAR8 Text[34]; Hex(Text,mStage->KernelBase,16); Text[16]=':'; Hex(Text+17,mStage->KernelBytes,16); Reply("OKAY",Text);
     } else if (!AsciiStrCmp(Command,"getvar:received")) {
@@ -271,6 +271,15 @@ StartUsb:
       }
       if (EFI_ERROR(Status)) Reply("FAIL","RAM allocation failed");
       else { mDisk=Index; mLastBytes=0; Reply("OKAY",""); Print(L"RootStage disk %u: %lu bytes\r\n",Index,Bytes); }
+    } else if (!AsciiStrnCmp(Command,"oem zero:",9) && AsciiStrLen(Command)==17) {
+      UINTN Bytes=AsciiStrHexToUintn(Command+9);
+      if (!Bytes || Bytes>TRANSFER_BYTES || Disk->Received>Disk->Bytes || Bytes>Disk->Bytes-Disk->Received) { Reply("FAIL","invalid zero fill size"); continue; }
+      UINTN First=MIN(Bytes,(UINTN)(ROOT_STAGE_CHUNK-Disk->Received%ROOT_STAGE_CHUNK));
+      ZeroMem(DiskAddress(Disk,Disk->Received),First);
+      if (First<Bytes) ZeroMem(DiskAddress(Disk,Disk->Received+First),Bytes-First);
+      mLastOffset=Disk->Received; mLastBytes=Bytes; Disk->Received+=Bytes;
+      mDirty[mDisk]=TRUE;
+      Reply("OKAY","");
     } else if (!AsciiStrnCmp(Command,"download:",9)) {
       UINTN Bytes = AsciiStrHexToUintn(Command+9);
       if (!Bytes || Bytes>TRANSFER_BYTES || Disk->Received>Disk->Bytes || Bytes>Disk->Bytes-Disk->Received) { Reply("FAIL","invalid download size"); continue; }
