@@ -2,6 +2,7 @@
 #include <IOKit/IODeviceTreeSupport.h>
 #include <IOKit/IOPlatformExpert.h>
 #include <IOKit/IOMemoryDescriptor.h>
+#include <IOKit/IOBufferMemoryDescriptor.h>
 #include <IOKit/storage/IOBlockStorageDevice.h>
 #include <libkern/c++/OSData.h>
 #include <mach/kmod.h>
@@ -27,6 +28,8 @@ extern "C" {
 #include <sys/systm.h>
 
 extern kmod_info_t g_kernel_kmod_info;
+void native_runtime_usb_start(void);
+void native_runtime_usb_report(char *, unsigned);
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void root_block_static_init(void) __asm__("__GLOBAL__sub_I_NativeRootBlock.cpp");
 volatile uint64_t native_root_block_reads;
@@ -70,6 +73,7 @@ static void rootObservationWorker(void *, wait_result_t)
 static const volatile uint8_t *displayPixels;
 static uint64_t displayStride, displayFrames;
 static uint32_t displayWidth, displayHeight;
+static uint64_t firstDisplayTime;
 extern "C" void native_root_block_register_display(uint64_t address, uint64_t stride, uint32_t width, uint32_t height)
 {
   displayPixels = (const volatile uint8_t *)address;
@@ -81,27 +85,30 @@ extern "C" void native_root_block_register_display(uint64_t address, uint64_t st
 extern "C" void native_root_block_presented(void)
 {
   __atomic_fetch_add(&displayFrames, 1, __ATOMIC_RELAXED);
+  if (!firstDisplayTime) firstDisplayTime = mach_absolute_time();
 }
 
-static void captureRootScreen(void)
+static void *sourceSnapshot;
+static size_t sourceSnapshotBytes;
+static void capturePixels(void *output, const volatile uint8_t *pixels,
+    uint64_t stride, uint32_t width, uint32_t height, uint64_t frames)
 {
-  if (!rootLogMapping || !displayPixels) return;
   struct ScreenHeader {
     char magic[8];
     uint32_t width, height, stride, bytes;
     uint64_t frames;
   } header;
   memcpy(header.magic, "ROOTRGB1", 8);
-  uint32_t step = MAX((displayWidth + 319) / 320, (displayHeight + 719) / 720);
-  header.width = (displayWidth + step - 1) / step;
-  header.height = (displayHeight + step - 1) / step;
+  uint32_t step = MAX((width + 319) / 320, (height + 719) / 720);
+  header.width = (width + step - 1) / step;
+  header.height = (height + step - 1) / step;
   header.stride = header.width * 3;
   header.bytes = header.stride * header.height;
-  header.frames = displayFrames;
-  auto *output = (uint8_t *)rootLogMapping->getVirtualAddress() + rootLogBytes;
+  header.frames = frames;
+  auto *target = (uint8_t *)output;
   for (uint32_t y = 0; y < header.height; y++) {
-    const volatile uint8_t *source = displayPixels + y * step * displayStride;
-    uint8_t *row = output + sizeof(header) + y * header.stride;
+    const volatile uint8_t *source = pixels + y * step * stride;
+    uint8_t *row = target + sizeof(header) + y * header.stride;
     for (uint32_t x = 0; x < header.width; x++) {
       const volatile uint8_t *pixel = source + x * step * 4;
       row[x * 3] = pixel[2];
@@ -111,8 +118,24 @@ static void captureRootScreen(void)
   }
   memcpy(output, &header, sizeof(header));
 }
+static void captureRootScreen(void)
+{
+  if (!rootLogMapping || !displayPixels) return;
+  capturePixels((uint8_t *)rootLogMapping->getVirtualAddress()+rootLogBytes,
+      displayPixels,displayStride,displayWidth,displayHeight,displayFrames);
+}
+extern "C" void native_root_block_capture_surface(const void *pixels, uint64_t stride, uint32_t width, uint32_t height)
+{
+  if (!sourceSnapshot) sourceSnapshot = IOMalloc(32 + 320 * 720 * 3);
+  if (!sourceSnapshot) return;
+  capturePixels(sourceSnapshot,(const volatile uint8_t *)pixels,stride,width,height,displayFrames+1);
+  uint32_t length;
+  memcpy(&length,(uint8_t *)sourceSnapshot+20,4);
+  sourceSnapshotBytes=32+length;
+}
 
 static RamSparseDisk dataSeed = {};
+static IOBufferMemoryDescriptor *dataExportIndex;
 extern "C" bool native_root_block_data_is_ephemeral(void) { return dataSeed.pages != nullptr; }
 static uint64_t dataSeedBytes;
 static uint8_t dataSeedHash[32];
@@ -121,6 +144,32 @@ static char panicProcess[32];
 static char residentBootArgs[BOOT_LINE_LENGTH];
 static struct { uint64_t bytes; char identity[33]; } rootIdentities[2];
 static thread_call_t observationCall;
+
+extern "C" void native_root_block_export_data(void)
+{
+  if (!rootLogMapping || !dataExportIndex) return;
+  struct DataHeader {
+    char magic[8];
+    uint32_t version, pageSize;
+    uint64_t logical, indexAddress, indexBytes;
+    char uuid[37];
+  } header = {};
+  auto *index = (uint64_t *)dataExportIndex->getBytesNoCopy();
+  for (uint64_t i=0; i<dataSeed.bytes/4096; i++) {
+    uint8_t *page=dataSeed.pages[i];
+    index[i]=page ? ml_vtophys((vm_offset_t)page) : 0;
+    if (page) flush_dcache64((addr64_t)page,4096,FALSE);
+  }
+  memcpy(header.magic,"ROOTDAT1",8);
+  header.version=1; header.pageSize=4096; header.logical=dataSeed.bytes;
+  header.indexAddress=dataExportIndex->getPhysicalSegment(0,nullptr);
+  header.indexBytes=dataSeed.bytes/4096*8;
+  memcpy(header.uuid,dataSeedUUID,sizeof(header.uuid));
+  flush_dcache64((addr64_t)index,header.indexBytes,FALSE);
+  auto *out=(uint8_t *)rootLogMapping->getVirtualAddress()+768*1024;
+  memcpy(out,&header,sizeof(header));
+  flush_dcache64((addr64_t)out,sizeof(header),FALSE);
+}
 
 static voidpf dataInflateAllocate(voidpf, uInt items, uInt size)
 {
@@ -194,17 +243,63 @@ extern "C" void native_root_block_capture_log(void)
   memcpy(log.magic, "ROOTLOG1", sizeof(log.magic));
   log.version = 1;
   size_t used = 0;
-  size_t length = MIN((size_t)msgbufp->msg_size, sizeof(log.text) - sizeof(native_root_block_panic_text) - 16);
+  size_t length = MIN((size_t)msgbufp->msg_size, sizeof(log.text) - sizeof(native_root_block_panic_text) - 512);
   size_t start = (msgbufp->msg_bufx + msgbufp->msg_size - length) % msgbufp->msg_size;
   for (size_t i = 0; i < length; i++) {
     char c = msgbufp->msg_bufc[(start + i) % msgbufp->msg_size];
     if (c) log.text[used++] = c;
   }
-  used += snprintf(log.text + used, sizeof(log.text) - used, "\nPANIC\n%s\n", native_root_block_panic_text);
+  if (native_root_block_panic_text[0])
+    used += snprintf(log.text + used, sizeof(log.text) - used, "\nPANIC\n%s\n", native_root_block_panic_text);
+  char runtime[256];
+  native_runtime_usb_report(runtime,sizeof(runtime));
+  used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   log.length = (uint32_t)used;
   void *output = (void *)rootLogMapping->getVirtualAddress();
   memcpy(output, &log, sizeof(log));
   flush_dcache64((addr64_t)output, rootOutputBytes, FALSE);
+}
+
+extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, void *out, unsigned capacity)
+{
+  if (!rootLogMapping) return 0;
+  if (kind == 5) {
+    uint64_t now, first=0;
+    absolutetime_to_nanoseconds(mach_absolute_time(),&now);
+    if (firstDisplayTime) absolutetime_to_nanoseconds(firstDisplayTime,&first);
+    struct {
+      char magic[8];
+      uint64_t uptime, firstFrame, reads, frames, resident, logical;
+    } status;
+    memcpy(status.magic,"ROOTRUN1",8);
+    status.uptime=now; status.firstFrame=first; status.reads=native_root_block_reads;
+    status.frames=displayFrames; status.resident=dataSeed.resident; status.logical=dataSeed.bytes;
+    unsigned count=MIN(capacity,(unsigned)sizeof(status));
+    memcpy(out,&status,count);
+    return count;
+  }
+  if (kind == 6) {
+    if (offset >= sourceSnapshotBytes) return 0;
+    unsigned count = MIN((size_t)capacity, sourceSnapshotBytes-offset);
+    memcpy(out,(uint8_t *)sourceSnapshot+offset,count);
+    return count;
+  }
+  if (!offset) {
+    if (kind == 1) native_root_block_capture_log();
+    else captureRootScreen();
+  }
+  size_t base = kind == 1 ? 0 : rootLogBytes;
+  size_t length = rootLogBytes;
+  if (kind == 2) {
+    uint32_t pixels;
+    memcpy(&pixels, (uint8_t *)rootLogMapping->getVirtualAddress() + base + 20, 4);
+    length = 32 + pixels;
+    if (length > 800 * 1024 - rootLogBytes) return 0;
+  }
+  if (offset >= length) return 0;
+  unsigned count = MIN((size_t)capacity, length - offset);
+  memcpy(out, (uint8_t *)rootLogMapping->getVirtualAddress() + base + offset, count);
+  return count;
 }
 
 class NativeRootBlock : public IOBlockStorageDevice {
@@ -431,6 +526,12 @@ extern "C" void native_root_block_start(void)
     IOLog("RootStage: disk %u published, %llu bytes\n",i,table->Disks[i].Bytes);
   }
   if (dataSeed.pages) {
+    unsigned exportData=0;
+    if (PE_parse_boot_argn("rootstage-export-data",&exportData,sizeof(exportData)) && exportData==1) {
+      dataExportIndex=IOBufferMemoryDescriptor::withOptions(kIODirectionInOut|kIOMemoryPhysicallyContiguous,
+          dataSeed.bytes/4096*8,4096);
+      if (!dataExportIndex) panic("RootStage: Data export index allocation failed");
+    }
     auto *disk = new NativeRootBlock;
     if (!disk || !disk->init(nullptr)) panic("RootStage: Data service allocation failed");
     disk->configureData(&dataSeed);
@@ -441,6 +542,7 @@ extern "C" void native_root_block_start(void)
   }
   mapping->release();
   started = true;
+  native_runtime_usb_start();
 }
 
 extern "C" const char *native_root_block_report(void)

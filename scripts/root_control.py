@@ -143,28 +143,36 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
     reports = []
     for index, image in entries:
         began = time.monotonic()
-        with image_stream(image) as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-            if digest != image['sha256']:
-                raise ValueError(f'Image checksum differs from manifest: {image["name"]}')
-            if image.get('format') == 'raw':
-                stream.seek(0, 2)
-                if stream.tell() != image['raw_bytes']:
-                    raise ValueError(f'Image size differs from manifest: {image["name"]}')
-            channel.command(f'oem begin:{index}:{image["raw_bytes"]:016x}:{digest[:32]}')
-            offset, total = [int(v, 16) for v in channel.command('getvar:received').split(':')]
-            if total != image['raw_bytes'] or not 0 <= offset <= total:
-                raise RuntimeError('Resident disk geometry differs from image')
-            stream.seek(offset)
-            sent = 0
-            while offset + sent < total:
-                data = stream.read(min(CHUNK, total - offset - sent))
-                if not data:
-                    raise RuntimeError(f'Short read: {image["name"]}')
-                channel.write(data)
-                sent += len(data)
-                if sent % (128 * CHUNK) == 0 or offset + sent == total:
-                    print(f'{image["name"]}: {offset + sent}/{total}', flush=True)
+        digest = image['sha256']
+        total = image['raw_bytes']
+        channel.command(f'oem select:{index}')
+        identity = channel.command('getvar:image-id')
+        received, resident_bytes = [int(v, 16) for v in channel.command('getvar:received').split(':')]
+        offset, sent = 0, 0
+        if identity == digest[:32] and received == resident_bytes == total:
+            offset = total
+        else:
+            # Source bytes are required only for a new or incomplete resident disk.
+            with image_stream(image) as stream:
+                if hashlib.file_digest(stream, 'sha256').hexdigest() != digest:
+                    raise ValueError(f'Image checksum differs from manifest: {image["name"]}')
+                if image.get('format') == 'raw':
+                    stream.seek(0, 2)
+                    if stream.tell() != total:
+                        raise ValueError(f'Image size differs from manifest: {image["name"]}')
+                channel.command(f'oem begin:{index}:{total:016x}:{digest[:32]}')
+                offset, resident_bytes = [int(v, 16) for v in channel.command('getvar:received').split(':')]
+                if resident_bytes != total or not 0 <= offset <= total:
+                    raise RuntimeError('Resident disk geometry differs from image')
+                stream.seek(offset)
+                while offset + sent < total:
+                    data = stream.read(min(CHUNK, total - offset - sent))
+                    if not data:
+                        raise RuntimeError(f'Short read: {image["name"]}')
+                    channel.write(data)
+                    sent += len(data)
+                    if sent % (128 * CHUNK) == 0 or offset + sent == total:
+                        print(f'{image["name"]}: {offset + sent}/{total}', flush=True)
         report = dict(name=image['name'], bytes=total, sha256=digest,
                       reused_bytes=offset, transmitted_bytes=sent,
                       elapsed_seconds=time.monotonic() - began)
@@ -175,9 +183,49 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
     return reports
 
 
+def export_data(channel, output):
+    channel.command('oem select:2')
+    mailbox = channel.read_back()
+    magic, version, page, logical, _, index_bytes, volume = struct.unpack_from('<8sIIQQQ37s',mailbox,768*1024)
+    if magic != b'ROOTDAT1' or version != 1 or page != 4096 or index_bytes != logical // page * 8:
+        raise RuntimeError('Resident kernel has no frozen Data snapshot')
+    index = bytearray()
+    for offset in range(0,index_bytes,CHUNK):
+        count=min(CHUNK,index_bytes-offset)
+        channel.command(f'oem data-map:{offset:08x}:{count:08x}')
+        index.extend(channel.read_back())
+    if len(index) != index_bytes:
+        raise RuntimeError('Short Data page index')
+    pages=struct.unpack('<'+'Q'*(index_bytes//8),index)
+    sent=0
+    with output.open('xb') as stream:
+        stream.truncate(logical)
+        start=0
+        while start<len(pages):
+            if not pages[start]:
+                start+=1
+                continue
+            end=start+1
+            while end<len(pages) and pages[end] and (end-start)*page<CHUNK:
+                end+=1
+            offset,count=start*page,(end-start)*page
+            channel.command(f'oem data-read:{offset:016x}:{count:08x}')
+            data=channel.read_back()
+            if len(data)!=count:
+                raise RuntimeError('Short Data snapshot read')
+            stream.seek(offset);stream.write(data)
+            sent+=count;start=end
+    with output.open('rb') as stream:
+        stream.seek(32)
+        if stream.read(4)!=b'NXSB':
+            raise RuntimeError('Data snapshot has no APFS container header')
+    return dict(output=str(output),logical_bytes=logical,transmitted_bytes=sent,
+                volume_uuid=volume.rstrip(b'\0').decode(),captured_at_panic=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'load', 'start', 'logs', 'screen', 'trace', 'continue', 'selftest', 'reboot'])
+    parser.add_argument('command', choices=['status', 'load', 'start', 'logs', 'screen', 'trace', 'data', 'continue', 'selftest', 'reboot'])
     parser.add_argument('--images', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--kernel', type=Path)
@@ -185,6 +233,7 @@ def main():
     parser.add_argument('--boot-args', default='')
     parser.add_argument('--data-seed', type=Path)
     parser.add_argument('--observe-seconds', type=int, default=0)
+    parser.add_argument('--keep-usb', action='store_true', help='Keep the loader PHY powered for native runtime USB takeover')
     args = parser.parse_args()
     channel = RootUsb()
     try:
@@ -192,11 +241,17 @@ def main():
             if args.images is None:
                 parser.error('--images is required')
             images = json.loads(args.images.read_text())
+            if args.keep_usb:
+                channel.command('oem runtime-usb:1')
             result = load(channel, images, args.kernel, args.observe_seconds, args.data_seed, args.boot_args)
             if args.command == 'start':
                 channel.command('continue')
         elif args.command == 'status':
             result = {name: channel.command('getvar:' + name) for name in ('version', 'kernel-memory', 'received', 'returns', 'handoff-fault')}
+        elif args.command == 'data':
+            if args.output is None:
+                parser.error('data requires --output')
+            result=export_data(channel,args.output)
         elif args.command == 'trace':
             if args.output is None:
                 parser.error('trace requires --output')

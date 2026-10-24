@@ -1,0 +1,46 @@
+{
+  "runtime_usb_verified": false,
+  "white_regions_fixed": false,
+  "protocol": {
+    "vendor": "18d1",
+    "product": "d00e",
+    "serial": "marble",
+    "transport": "EP0 vendor control",
+    "operations": [
+      "status",
+      "logs",
+      "screen",
+      "source_screen",
+      "home",
+      "return"
+    ]
+  },
+  "rounds": [
+    {
+      "name": "runtime_usb",
+      "result": "No runtime enumeration; 300 second timeout; zero presented frames"
+    },
+    {
+      "name": "runtime_capture",
+      "result": "Unaligned abort during DMA buffer zeroing before endpoint commands",
+      "controller_id": "33313130"
+    },
+    {
+      "name": "usb_aligned",
+      "result": "Controller initialized; zero connection events; no runtime enumeration",
+      "controller_id": "33313130",
+      "data_transmitted": 0
+    }
+  ],
+  "resident_image_check_seconds": 0.03164525103056803,
+  "kernel_upload_and_start_seconds": 3.287462708016392,
+  "readonly_images_modified": false,
+  "android_partitions_modified": false,
+  "pending": [
+    "Loader PHY handoff validation",
+    "Live USB log readback",
+    "Source and scanout comparison",
+    "ReduceTransparencyEnabled candidate validation",
+    "Frozen Data export and warm boot timing"
+  ]
+}

@@ -1,0 +1,273 @@
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+// Polled EP0 diagnostics. PHY and clocks are inherited from the marble loader.
+#include <IOKit/IOLib.h>
+#include <IOKit/IOBufferMemoryDescriptor.h>
+#include <IOKit/IOMemoryDescriptor.h>
+#include <pexpert/pexpert.h>
+#include <kern/thread.h>
+#include <sys/param.h>
+#include "RuntimeUsbRegisters.h"
+
+extern "C" unsigned native_root_runtime_read(unsigned, unsigned, void *, unsigned);
+extern "C" void native_hid_request_home(void);
+extern "C" void native_root_block_capture_log(void);
+extern "C" void native_runtime_usb_start(void);
+extern "C" void native_runtime_usb_stop(void);
+extern "C" void native_runtime_usb_report(char *, unsigned);
+
+namespace {
+constexpr unsigned dmaBytes = 16384, eventBytes = 4096, responseBytes = 4096;
+constexpr unsigned trbOffset = 4096, controlOffset = 8192, setupOffset = 12288;
+constexpr uint64_t controllerAddress = 0x0a600000;
+IOMemoryMap *registerMap, *dmaMap;
+IOBufferMemoryDescriptor *dma;
+volatile uint32_t *registers;
+uint8_t *bytes;
+uint8_t response[responseBytes];
+uint64_t physical;
+unsigned eventPosition, controlState, resource[2];
+unsigned events, requests, failures, configuration, returnTicks;
+uint32_t controllerId, initialControl, initialStatus, initialPhy, lastCommand;
+bool threeStage, active, controllerOwned, panicOnFailure;
+uint8_t setup[8];
+
+uint32_t read(unsigned offset) { return registers[offset / 4]; }
+void write(unsigned offset, uint32_t value) {
+    registers[offset / 4] = value;
+    __asm__ volatile("dsb sy" ::: "memory");
+}
+bool command(unsigned ep, uint32_t op, uint32_t p0=0, uint32_t p1=0, uint32_t p2=0) {
+    unsigned base = DWC3_DEP_BASE(ep);
+    lastCommand = ep<<16 | op;
+    write(base + DWC3_DEPCMDPAR0, p0);
+    write(base + DWC3_DEPCMDPAR1, p1);
+    write(base + DWC3_DEPCMDPAR2, p2);
+    write(base + DWC3_DEPCMD, op | DWC3_DEPCMD_CMDACT);
+    for (unsigned i = 0; i < 1000; i++) {
+        uint32_t result = read(base + DWC3_DEPCMD);
+        if (!(result & DWC3_DEPCMD_CMDACT)) {
+            if (DWC3_DEPCMD_STATUS(result)) { failures++; return false; }
+            if (DWC3_DEPCMD_CMD(op) == DWC3_DEPCMD_STARTTRANSFER)
+                resource[ep] = DWC3_DEPCMD_GET_RSC_IDX(result);
+            return true;
+        }
+        IODelay(1);
+    }
+    failures++;
+    return false;
+}
+void end(unsigned ep) {
+    if (resource[ep]) {
+        command(ep, DWC3_DEPCMD_ENDTRANSFER | DWC3_DEPCMD_HIPRI_FORCERM |
+                    DWC3_DEPCMD_PARAM(resource[ep]));
+        IODelay(100);
+        resource[ep] = 0;
+    }
+}
+bool configure(unsigned ep, bool modify) {
+    uint32_t p0 = DWC3_DEPCFG_MAX_PACKET_SIZE(64) |
+        (modify ? DWC3_DEPCFG_ACTION_MODIFY : DWC3_DEPCFG_ACTION_INIT);
+    return command(ep, DWC3_DEPCMD_SETEPCONFIG, p0,
+        DWC3_DEPCFG_EP_NUMBER(ep) | DWC3_DEPCFG_XFER_COMPLETE_EN | DWC3_DEPCFG_XFER_NOT_READY_EN);
+}
+bool transfer(unsigned ep, unsigned offset, unsigned length, uint32_t type) {
+    auto *trb = reinterpret_cast<DWC3_TRB *>(bytes + trbOffset + ep * 32);
+    uint64_t address = physical + offset;
+    volatile uint32_t *words = reinterpret_cast<volatile uint32_t *>(trb);
+    words[0]=(uint32_t)address; words[1]=address>>32; words[2]=length;
+    words[3]=type | DWC3_TRB_CTRL_HWO | DWC3_TRB_CTRL_IOC | DWC3_TRB_CTRL_LST | DWC3_TRB_CTRL_ISP_IMI;
+    __asm__ volatile("dsb sy" ::: "memory");
+    uint64_t trbAddress = physical + trbOffset + ep * 32;
+    return command(ep, DWC3_DEPCMD_STARTTRANSFER, trbAddress >> 32, (uint32_t)trbAddress);
+}
+void receiveSetup() {
+    end(1); end(0);
+    controlState = 0;
+    transfer(0, setupOffset, 8, DWC3_TRBCTL_CONTROL_SETUP);
+}
+void stall() {
+    command(0, DWC3_DEPCMD_SETSTALL);
+    receiveSetup();
+}
+unsigned descriptor(unsigned type, unsigned index, uint8_t *out) {
+    static const uint8_t device[] = {18,1,0,2,0,0,0,64,0xd1,0x18,0x0e,0xd0,0,1,1,2,3,1};
+    static const uint8_t config[] = {9,2,18,0,1,1,0,0x80,50,9,4,0,0,0,0xff,0x42,0x42,0};
+    static const uint8_t qualifier[] = {10,6,0,2,0,0,0,64,1,0};
+    if (type == 1) { memcpy(out,device,sizeof(device)); return sizeof(device); }
+    if (type == 2 || type == 7) { memcpy(out,config,sizeof(config)); out[1]=type; return sizeof(config); }
+    if (type == 6) { memcpy(out,qualifier,sizeof(qualifier)); return sizeof(qualifier); }
+    if (type != 3) return 0;
+    if (!index) { const uint8_t language[] = {4,3,9,4}; memcpy(out,language,4); return 4; }
+    const char *value = index == 1 ? "UniXNU" : index == 2 ? "RuntimeRoot" : index == 3 ? "marble" : nullptr;
+    if (!value) return 0;
+    unsigned length = strlen(value);
+    out[0] = 2 + length * 2; out[1] = 3;
+    for (unsigned i=0; i<length; i++) { out[2+i*2]=value[i]; out[3+i*2]=0; }
+    return out[0];
+}
+void handleSetup() {
+    for (unsigned i=0; i<8; i++) setup[i]=reinterpret_cast<volatile uint8_t *>(bytes)[setupOffset+i];
+    unsigned value = setup[2] | setup[3]<<8, index = setup[4] | setup[5]<<8;
+    unsigned length = setup[6] | setup[7]<<8, count = 0;
+    threeStage = length != 0;
+    controlState = threeStage ? 1 : 2;
+    requests++;
+    uint8_t *out = response;
+    if ((setup[0] & 0x60) == 0) {
+        switch (setup[1]) {
+        case 6:
+            count = descriptor(value >> 8, value & 255, out);
+            if (!count) { stall(); return; }
+            break;
+        case 5:
+            write(DWC3_DCFG,(read(DWC3_DCFG)&~DWC3_DCFG_DEVADDR_MASK)|DWC3_DCFG_DEVADDR(value&127));
+            return;
+        case 9: configuration = value; return;
+        case 8: out[0] = configuration; count = 1; break;
+        case 0: out[0] = out[1] = 0; count = 2; break;
+        case 1: case 3: case 11: return;
+        default: stall(); return;
+        }
+    } else if (setup[0] == 0xc0 && (setup[1] == 1 || setup[1] == 2 || setup[1] == 5 || setup[1] == 6)) {
+        count = native_root_runtime_read(setup[1], value | index<<16, out, MIN(length,responseBytes));
+    } else if (setup[0] == 0x40 && !length && setup[1] == 3) {
+        native_hid_request_home(); return;
+    } else if (setup[0] == 0x40 && !length && setup[1] == 4) {
+        returnTicks = 50; return;
+    } else { stall(); return; }
+    count = MIN(count,length);
+    for (unsigned i=0; i<count; i++) reinterpret_cast<volatile uint8_t *>(bytes)[controlOffset+i]=response[i];
+    // Host requests bounded chunks, including the exact final length.
+    transfer(1,controlOffset,count,DWC3_TRBCTL_CONTROL_DATA);
+}
+void handleEvent(uint32_t event) {
+    events++;
+    if (!DWC3_EVENT_IS_ENDPOINT(event)) {
+        if (DWC3_DEVT_CATEGORY(event) != DWC3_EVENT_TYPE_DEV) return;
+        switch (DWC3_DEVT_TYPE(event)) {
+        case DWC3_DEVICE_EVENT_RESET:
+            configuration = 0;
+            end(1); end(0);
+            command(0,DWC3_DEPCMD_CLEARSTALL);
+            command(1,DWC3_DEPCMD_CLEARSTALL);
+            write(DWC3_DCFG,read(DWC3_DCFG)&~DWC3_DCFG_DEVADDR_MASK);
+            receiveSetup();
+            break;
+        case DWC3_DEVICE_EVENT_CONNECT_DONE:
+            configure(0,true); configure(1,true);
+            IOLog("RuntimeUSB: connected speed=%x\n",read(DWC3_DSTS)&7);
+            break;
+        case DWC3_DEVICE_EVENT_DISCONNECT: configuration=0; break;
+        }
+        return;
+    }
+    unsigned ep = DWC3_DEPEVT_EPNUMBER(event), type = DWC3_DEPEVT_TYPE(event);
+    if (ep > 1) return;
+    if (type == DWC3_DEPEVT_XFERCOMPLETE) {
+        resource[ep]=0;
+        __asm__ volatile("dsb sy" ::: "memory");
+        if (controlState == 0) handleSetup();
+        else if (controlState == 1) controlState=2;
+        else receiveSetup();
+    } else if (type == DWC3_DEPEVT_XFERNOTREADY &&
+               DEPEVT_STATUS_CONTROL_PHASE(DWC3_DEPEVT_STATUS(event)) == DEPEVT_STATUS_CONTROL_STATUS &&
+               controlState == 2) {
+        controlState=3;
+        transfer(ep,controlOffset,0,threeStage ? DWC3_TRBCTL_CONTROL_STATUS3 : DWC3_TRBCTL_CONTROL_STATUS2);
+    }
+}
+bool initialize() {
+    auto *memory = IOMemoryDescriptor::withPhysicalAddress(controllerAddress,0x10000,kIODirectionInOut);
+    registerMap = memory ? memory->map(kIOMapInhibitCache) : nullptr;
+    OSSafeReleaseNULL(memory);
+    if (!registerMap) return false;
+    registers = reinterpret_cast<volatile uint32_t *>(registerMap->getVirtualAddress());
+    uint32_t id=read(DWC3_GSNPSID);
+    controllerId=id; initialControl=read(DWC3_DCTL); initialStatus=read(DWC3_DSTS); initialPhy=read(DWC3_GUSB2PHYCFG(0));
+    IOLog("RuntimeUSB: id=%x ctl=%x status=%x phy=%x\n",id,read(DWC3_DCTL),read(DWC3_DSTS),read(DWC3_GUSB2PHYCFG(0)));
+    if ((id&DWC3_GSNPSID_MASK)!=DWC3_GSNPSID_USB3 && (id&DWC3_GSNPSID_MASK)!=DWC3_GSNPSID_USB31) return false;
+    controllerOwned=true;
+    dma = IOBufferMemoryDescriptor::withOptions(kIODirectionInOut|kIOMemoryPhysicallyContiguous|kIOMapInhibitCache,dmaBytes,4096);
+    dmaMap = dma ? dma->map(kIOMapInhibitCache) : nullptr;
+    if (!dmaMap) return false;
+    bytes = reinterpret_cast<uint8_t *>(dmaMap->getVirtualAddress());
+    physical = dmaMap->getPhysicalAddress();
+    for (unsigned i=0; i<dmaBytes/4; i++) reinterpret_cast<volatile uint32_t *>(bytes)[i]=0;
+    write(DWC3_DCTL,read(DWC3_DCTL)&~DWC3_DCTL_RUN_STOP);
+    write(DWC3_GCTL,(read(DWC3_GCTL)&~DWC3_GCTL_PRTCAPDIR(3))|DWC3_GCTL_PRTCAPDIR(2)|DWC3_GCTL_DSBLCLKGTNG);
+    write(DWC3_DCTL,read(DWC3_DCTL)|DWC3_DCTL_CSFTRST);
+    unsigned wait=0;
+    for (; wait<10000 && (read(DWC3_DCTL)&DWC3_DCTL_CSFTRST); wait++) IODelay(1);
+    if (wait==10000) return false;
+    if ((id&DWC3_GSNPSID_MASK)==DWC3_GSNPSID_USB31) IOSleep(50);
+    write(DWC3_GUSB2PHYCFG(0),read(DWC3_GUSB2PHYCFG(0))&~(DWC3_GUSB2PHYCFG_SUSPHY|DWC3_GUSB2PHYCFG_ENBLSLPM));
+    write(DWC3_DCFG,(read(DWC3_DCFG)&~(DWC3_DCFG_SPEED_MASK|DWC3_DCFG_DEVADDR_MASK))|DWC3_DCFG_HIGHSPEED);
+    write(DWC3_GEVNTADRLO(0),(uint32_t)physical);
+    write(DWC3_GEVNTADRHI(0),physical>>32);
+    write(DWC3_GEVNTSIZ(0),DWC3_GEVNTSIZ_INTMASK|eventBytes);
+    write(DWC3_GEVNTCOUNT(0),read(DWC3_GEVNTCOUNT(0))&DWC3_GEVNTCOUNT_MASK);
+    write(DWC3_DEVTEN,DWC3_DEVTEN_DISCONNEVTEN|DWC3_DEVTEN_USBRSTEN|DWC3_DEVTEN_CONNECTDONEEN);
+    write(DWC3_DALEPENA,0);
+    if (!command(0,DWC3_DEPCMD_DEPSTARTCFG)) return false;
+    for (unsigned ep=0; ep<2; ep++)
+        if (!command(ep,DWC3_DEPCMD_SETTRANSFRESOURCE,1)) return false;
+    if (!configure(0,false) || !configure(1,false)) return false;
+    write(DWC3_DALEPENA,3);
+    receiveSetup();
+    active=true;
+    write(DWC3_DCTL,read(DWC3_DCTL)|DWC3_DCTL_RUN_STOP);
+    IOLog("RuntimeUSB: ready dma=%llx\n",physical);
+    return true;
+}
+void worker(void *, wait_result_t) {
+    bool initialized=initialize();
+    if (!initialized && panicOnFailure) {
+        char report[256]; native_runtime_usb_report(report,sizeof(report));
+        panic("%s",report);
+    }
+    if (initialized) {
+        while (active) {
+            unsigned count = read(DWC3_GEVNTCOUNT(0)) & DWC3_GEVNTCOUNT_MASK;
+            if (count > eventBytes || (count&3)) {
+                IOLog("RuntimeUSB: invalid event count=%u\n",count); break;
+            }
+            __asm__ volatile("dsb sy" ::: "memory");
+            for (unsigned i=0; i<count; i+=4) {
+                uint32_t event=reinterpret_cast<volatile uint32_t *>(bytes)[eventPosition/4];
+                eventPosition=(eventPosition+4)%eventBytes;
+                write(DWC3_GEVNTCOUNT(0),4);
+                handleEvent(event);
+            }
+            if (returnTicks && !--returnTicks) {
+                native_root_block_capture_log();
+                panic("RootStage runtime return requested");
+            }
+            IOSleep(10);
+        }
+    }
+    IOLog("RuntimeUSB: stopped events=%u requests=%u failures=%u\n",events,requests,failures);
+    native_runtime_usb_stop();
+    // DMA allocations stay owned until the controller is quiescent.
+    thread_terminate(current_thread());
+}
+}
+extern "C" void native_runtime_usb_report(char *out,unsigned length) {
+    uint32_t control=controllerOwned ? read(DWC3_DCTL) : 0;
+    uint32_t state=controllerOwned ? read(DWC3_DSTS) : 0;
+    snprintf(out,length,"RuntimeUSB active=%u id=%x initial=%x/%x/%x current=%x/%x events=%u requests=%u failures=%u last_command=%x dma=%llx",
+        active,controllerId,initialControl,initialStatus,initialPhy,control,state,events,requests,failures,lastCommand,physical);
+}
+extern "C" void native_runtime_usb_stop(void) {
+    active=false;
+    if (!controllerOwned) return;
+    write(DWC3_DEVTEN,0);
+    write(DWC3_DCTL,read(DWC3_DCTL)&~DWC3_DCTL_RUN_STOP);
+    for (unsigned i=0; i<10000 && !(read(DWC3_DSTS)&DWC3_DSTS_DEVCTRLHLT); i++) IODelay(1);
+}
+extern "C" void native_runtime_usb_start(void) {
+    unsigned enabled=0;
+    if (!PE_parse_boot_argn("rootstage-runtime-usb",&enabled,sizeof(enabled)) || (enabled!=1 && enabled!=2)) return;
+    panicOnFailure=enabled==2;
+    thread_t thread;
+    if (kernel_thread_start(worker,nullptr,&thread)==KERN_SUCCESS) thread_deallocate(thread);
+}

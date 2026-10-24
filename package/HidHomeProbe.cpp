@@ -15,6 +15,10 @@ static int results[8], status = -1;
 static uint64_t nextHome, frequency;
 static unsigned homeDelay, homeCount, homeInterval;
 static bool configured;
+static unsigned requestedHome;
+extern "C" void native_hid_request_home(void) {
+    __atomic_fetch_add(&requestedHome, 1, __ATOMIC_RELAXED);
+}
 
 extern "C" void native_hid_input_observed(unsigned event, int result) {
     if (event < 8) { events[event]++; results[event] = result; }
@@ -22,6 +26,10 @@ extern "C" void native_hid_input_observed(unsigned event, int result) {
 extern "C" void native_hid_live_checkpoint(IOService *) { ticks++; }
 extern "C" bool native_hid_input_requested(void) {
     if (native_legacy_transfer_calls < 2) return false;
+    if (__atomic_load_n(&requestedHome, __ATOMIC_RELAXED)) {
+        __atomic_fetch_sub(&requestedHome, 1, __ATOMIC_RELAXED);
+        return true;
+    }
     uint64_t now;
     __asm__ volatile("isb\n\tmrs %0, cntpct_el0" : "=r"(now));
     if (!configured) {

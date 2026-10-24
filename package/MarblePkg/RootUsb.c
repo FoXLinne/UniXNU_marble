@@ -21,6 +21,54 @@ STATIC UINTN mDisk;
 STATIC UINTN mLastBytes;
 STATIC UINT64 mLastOffset;
 STATIC BOOLEAN mConnected;
+STATIC BOOLEAN mDirty[3];
+STATIC BOOLEAN mRuntimeUsb;
+STATIC UINT8 *mExport;
+STATIC UINTN mExportBytes;
+
+typedef struct {
+  CHAR8 Magic[8];
+  UINT32 Version, PageSize;
+  UINT64 Logical, IndexAddress, IndexBytes;
+  CHAR8 Uuid[37];
+} ROOT_DATA_EXPORT;
+
+STATIC BOOLEAN OwnedRange(UINT64 Address, UINT64 Bytes)
+{
+  return Address>=mStage->KernelBase && Bytes<=mStage->KernelBytes &&
+    Address-mStage->KernelBase<=mStage->KernelBytes-Bytes;
+}
+
+STATIC EFI_STATUS ReadData(UINT64 Offset, UINTN Bytes, BOOLEAN Index)
+{
+  ROOT_STAGE_DISK *Kernel=&mStage->Disks[2];
+  if (Kernel->Count!=1 || Kernel->Bytes<0x100000) return EFI_NOT_READY;
+  ROOT_DATA_EXPORT *Header=(VOID *)(UINTN)(Kernel->Extents[0].Address+Kernel->Bytes-0x100000+768*1024);
+  if (CompareMem(Header->Magic,"ROOTDAT1",8) || Header->Version!=1 || Header->PageSize!=4096 ||
+      !Header->Logical || Header->Logical>0x80000000ULL || (Header->Logical&4095) ||
+      Header->IndexBytes!=Header->Logical/4096*8 || !OwnedRange(Header->IndexAddress,Header->IndexBytes))
+    return EFI_NOT_READY;
+  UINT64 Size=Index ? Header->IndexBytes : Header->Logical;
+  if (!Bytes || Bytes>TRANSFER_BYTES || Offset>Size || Bytes>Size-Offset) return EFI_INVALID_PARAMETER;
+  if (!mExport) {
+    EFI_STATUS Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mExport);
+    if (EFI_ERROR(Status)) return Status;
+  }
+  if (Index) CopyMem(mExport,(VOID *)(UINTN)(Header->IndexAddress+Offset),Bytes);
+  else {
+    UINT64 *Pages=(VOID *)(UINTN)Header->IndexAddress;
+    for (UINTN Done=0;Done<Bytes;) {
+      UINT64 At=Offset+Done, Address=Pages[At/4096];
+      UINTN Within=At&4095, Count=MIN(Bytes-Done,4096-Within);
+      if (Address && !OwnedRange(Address,4096)) return EFI_COMPROMISED_DATA;
+      if (Address) CopyMem(mExport+Done,(VOID *)(UINTN)(Address+Within),Count);
+      else ZeroMem(mExport+Done,Count);
+      Done+=Count;
+    }
+  }
+  mExportBytes=Bytes;
+  return EFI_SUCCESS;
+}
 
 // Same fastboot USB descriptors as the working marble HackiOS loader.
 STATIC UINT8 mDevice[] = {18,1,0x10,2,0,0,0,64,0xd1,0x18,0x0d,0xd0,0,1,1,2,3,1};
@@ -148,6 +196,7 @@ EFI_STATUS MarbleRootUsb(VOID)
   if (EFI_ERROR(Status)) return Status;
 StartUsb:
   mConnected = FALSE;
+  if (mRuntimeUsb) mUsb->Stop();
   Status = mUsb->StartEx(&Set);
   if (EFI_ERROR(Status)) return Status;
   if (!mRx) Status = mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mRx);
@@ -162,7 +211,23 @@ StartUsb:
     mRx[Size] = 0;
     CHAR8 *Command = (CHAR8 *)mRx;
     ROOT_STAGE_DISK *Disk = &mStage->Disks[mDisk];
+    if (AsciiStrCmp(Command,"upload")) mExportBytes=0;
     if (!AsciiStrCmp(Command,"getvar:version")) Reply("OKAY","RootStage2");
+    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache");
+    else if (!AsciiStrnCmp(Command,"oem runtime-usb:",16) && (Command[16]=='0' || Command[16]=='1') && !Command[17]) {
+      mRuntimeUsb=Command[16]=='1'; Reply("OKAY","");
+    }
+    else if ((!AsciiStrnCmp(Command,"oem data-map:",13) || !AsciiStrnCmp(Command,"oem data-read:",14))) {
+      BOOLEAN Index=!AsciiStrnCmp(Command,"oem data-map:",13);
+      UINTN Start=Index ? 13 : 14, Digits=Index ? 8 : 16;
+      if (AsciiStrLen(Command)!=Start+Digits+9 || Command[Start+Digits]!=':') {
+        Reply("FAIL","invalid Data request"); continue;
+      }
+      UINT64 Offset=AsciiStrHexToUint64(Command+Start);
+      UINTN Bytes=AsciiStrHexToUintn(Command+Start+Digits+1);
+      Status=ReadData(Offset,Bytes,Index);
+      Reply(EFI_ERROR(Status) ? "FAIL" : "OKAY",EFI_ERROR(Status) ? "Data snapshot unavailable" : "");
+    }
     else if (!AsciiStrCmp(Command,"getvar:handoff-fault")) {
       EFI_GUID Guid = ROOT_STAGE_FAULT_GUID;
       UINT64 Empty[3] = {0}, *Fault = Empty;
@@ -220,8 +285,13 @@ StartUsb:
       }
       if (Done!=Bytes) { Reply("FAIL","short download"); continue; }
       mLastOffset=Disk->Received; mLastBytes=Bytes; Disk->Received+=Bytes;
+      mDirty[mDisk]=TRUE;
       Reply("OKAY","");
     } else if (!AsciiStrCmp(Command,"upload")) {
+      if (mExportBytes) {
+        DataReply(mExportBytes); Transfer(EP_IN,mExport,mExportBytes); Reply("OKAY","");
+        mExportBytes=0; continue;
+      }
       if (!mLastBytes) { Reply("FAIL","no staged data"); continue; }
       DataReply(mLastBytes);
       UINTN First=MIN(mLastBytes,(UINTN)(ROOT_STAGE_CHUNK-mLastOffset%ROOT_STAGE_CHUNK));
@@ -237,15 +307,17 @@ StartUsb:
       Print(L"RootStage cache writeback\r\n");
       Status = EFI_SUCCESS;
       for (UINTN i=0;i<3 && !EFI_ERROR(Status);i++) {
+        if (!mDirty[i]) continue;
         for (UINTN j=0;j<mStage->Disks[i].Count;j++) {
           ROOT_STAGE_EXTENT *Extent=&mStage->Disks[i].Extents[j];
           Status=mCpu->FlushDataCache(mCpu,Extent->Address,Extent->Bytes,EfiCpuFlushTypeWriteBack);
           if (EFI_ERROR(Status)) break;
         }
       }
+      if (!EFI_ERROR(Status)) ZeroMem(mDirty,sizeof(mDirty));
       if (!EFI_ERROR(Status)) Status=mCpu->FlushDataCache(mCpu,(UINTN)mStage,sizeof(*mStage),EfiCpuFlushTypeWriteBack);
       if (EFI_ERROR(Status)) { Reply("FAIL","root cache writeback failed"); continue; }
-      Reply("OKAY",""); mUsb->Stop(); return EFI_SUCCESS;
+      Reply("OKAY",""); if (!mRuntimeUsb) mUsb->Stop(); return EFI_SUCCESS;
     } else if (!AsciiStrCmp(Command,"reboot")) {
       Reply("OKAY",""); mUsb->Stop(); gRT->ResetSystem(EfiResetCold,EFI_SUCCESS,0,NULL);
     } else Reply("FAIL","unknown command");
