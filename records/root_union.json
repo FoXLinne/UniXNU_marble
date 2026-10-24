@@ -1,0 +1,26 @@
+{
+  "previous_failure": "launchd dyld namespace 6 code 1; no dyld cache",
+  "change": "Enable CONFIG_XNU_OWNER_UNION_SYSTEMOS to use the existing readonly native union root composition; SystemOS provides standard cache and library paths, OS remains the lower root",
+  "root_manifest": "outputs/UniXNU_marble/iPadOS17/root_images.json",
+  "rootstage_before": {
+    "version": "RootStage2",
+    "returns": 1,
+    "handoff_fault": [
+      0,
+      0,
+      0
+    ]
+  },
+  "source_references": [
+    "work/UniXNU/docs/zh/devices/sheng.md",
+    "work/UniXNU/scripts/check-owner-systemos-mount-checkpoints.py",
+    "work/UniXNU/scripts/check-owner-union-checkpoints.py"
+  ],
+  "build_log": "outputs/UniXNU_marble/root_union_build.log",
+  "device_result": "continue accepted; immediate RootStage query unavailable; awaiting screen evidence",
+  "build": "passed",
+  "kernel": "outputs/UniXNU_marble/kernel_root_union.macho",
+  "kernel_sha256": "d9611cad04e34d65d59799bf32a7aae79d69fb48baa411addfaaa953127a9476",
+  "reused_system_bytes": 9380595200,
+  "transmitted_kernel_bytes": 51978240
+}
