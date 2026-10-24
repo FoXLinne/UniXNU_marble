@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 // marble DT, MiCode gcc-waipio.c and gpucc-waipio.c.
 #include <IOKit/IOLib.h>
+#include <pexpert/pexpert.h>
 #include <IOKit/IOService.h>
 #include <IOKit/IOMemoryDescriptor.h>
 #include <kern/thread.h>
 extern "C" int native_marble_gmu_load(void);
+extern "C" int native_marble_adreno_start(void);
 
 namespace {
 struct Registers {
@@ -83,6 +85,12 @@ void worker(void *, wait_result_t) {
     if (!result) {
         result = native_marble_gmu_load();
         IOLog("MarbleGPU: GMU initialization result=%d\n", result);
+        unsigned nativeMetal = 0;
+        PE_parse_boot_argn("marble-adreno", &nativeMetal, sizeof(nativeMetal));
+        if (!result && nativeMetal) {
+            result = native_marble_adreno_start();
+            IOLog("MarbleGPU: native Metal initialization result=%d\n", result);
+        }
     }
 }
 }

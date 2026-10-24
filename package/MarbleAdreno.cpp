@@ -13,6 +13,7 @@
 #include "AdrenoPM4.h"
 #include "MarbleAdrenoRegisters.h"
 
+extern "C" int native_marble_zap_load(void);
 extern "C" const uint8_t marble_sqe_firmware[];
 extern "C" const uint64_t marble_sqe_firmware_size;
 extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *, NativeAdrenoSubmit *, NativeAdrenoRing *,
@@ -174,7 +175,15 @@ class CommandProcessor {
         waited = status ? NativeAdrenoRingFenceTimeout : ring.wait(fence, &clock, 200000, &seen);
         uint32_t value = *reinterpret_cast<volatile uint32_t *>(cpu[4]);
         IOLog("MarbleGPU: CP write=%x fence=%u seen=%u wait=%u scratch=%x\n", status, fence, seen, waited, value);
-        return status || waited || value != 0xa7257475 ? -5 : 0;
+        if (status || waited || value != 0xa7257475) return -5;
+        int secure = native_marble_zap_load();
+        if (secure) return secure;
+        uint32_t leaveSecure[2] = {};
+        AdrenoPM4Type7(0x66, 1, leaveSecure);
+        status = ring.submit(leaveSecure, 2, &fence);
+        waited = status ? NativeAdrenoRingFenceTimeout : ring.wait(fence, &clock, 200000, &seen);
+        IOLog("MarbleGPU: secure mode exit status=%x fence=%u seen=%u wait=%u\n", status, fence, seen, waited);
+        return status || waited ? -5 : 0;
     }
     int publishService() {
         NativeAdrenoVm *vm = NativeAdrenoGpuContextVm();
@@ -195,7 +204,7 @@ class CommandProcessor {
         if (!accelerator || !accelerator->init()) return kIOReturnNoMemory;
         accelerator->setProperty("MetalPluginName", "NativeAdrenoMetal");
         accelerator->setProperty("MetalPluginClassName", "NativeAdrenoMetalDevice");
-        accelerator->setProperty("NativeSandboxGrantProcess", "backboardd,iconservicesagent,WidgetRenderer_Default,PosterBoard");
+        accelerator->setProperty("NativeSandboxGrantProcess", "*");
         if (!accelerator->attach(IOService::getPlatform())) return kIOReturnNotAttached;
         accelerator->registerService();
         IOLog("MarbleGPU: Adreno 725 Metal accelerator published chip=%x\n", deviceInfo.chip_id);

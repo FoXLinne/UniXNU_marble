@@ -260,7 +260,7 @@ gmu_command = [str(ROOT / 'kits/marble/MarbleGmu.cpp') if v == str(source) else 
 gmu_command += ['-I', str(ROOT / 'kits/ArmSmmu4K'), '-I', str(ROOT / 'kits/AdrenoFirmware')]
 subprocess.run(gmu_command, cwd=record['directory'], check=True)
 gpu_objects = [gmu, cpu]
-for source_path in [ROOT / 'kits/marble/MarbleAdreno.cpp', *[
+for source_path in [ROOT / 'kits/marble/MarbleAdreno.cpp', ROOT / 'kits/marble/MarbleZap.cpp', *[
     ROOT / 'drivers/NativeAdreno' / ('NativeAdreno' + name + '.cpp')
     for name in ('Memory', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit', 'Pwrup', 'Submit', 'UserClient', 'Publish', 'Timer', 'KernelTime')
 ]]:
@@ -290,6 +290,11 @@ firmware_assembly = out / 'marble-firmware.S'
 firmware_assembly.write_text('.section __DATA_CONST,__const\n.p2align 12\n.globl _marble_gmu_firmware\n_marble_gmu_firmware:\n.incbin ' + json.dumps(str(firmware)) + '\nmarble_gmu_end:\n.p2align 3\n.globl _marble_gmu_firmware_size\n_marble_gmu_firmware_size:\n.quad marble_gmu_end-_marble_gmu_firmware\n')
 with firmware_assembly.open('a') as stream:
     stream.write('.p2align 12\n.globl _marble_sqe_firmware\n_marble_sqe_firmware:\n.incbin ' + json.dumps(str(sqe_firmware)) + '\nmarble_sqe_end:\n.p2align 3\n.globl _marble_sqe_firmware_size\n_marble_sqe_firmware_size:\n.quad marble_sqe_end-_marble_sqe_firmware\n')
+zap_firmware = ROOT / '.cache/firmware/marble/a730_zap.mbn'
+if hashlib.sha256(zap_firmware.read_bytes()).hexdigest() != 'f03e732d07046c01250998d7f1ee2a2fae3e3ae28872320cdd38334e60e9a10e':
+    raise SystemExit('Marble ZAP firmware checksum differs')
+with firmware_assembly.open('a') as stream:
+    stream.write('.p2align 12\n.globl _marble_zap_firmware\n_marble_zap_firmware:\n.incbin ' + json.dumps(str(zap_firmware)) + '\nmarble_zap_end:\n.p2align 3\n.globl _marble_zap_firmware_size\n_marble_zap_firmware_size:\n.quad marble_zap_end-_marble_zap_firmware\n')
 firmware_object = out / 'marble-firmware.o'
 subprocess.run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-isysroot', str(sdk), '-c', str(firmware_assembly), '-o', str(firmware_object)], check=True)
 gpu_objects.append(firmware_object)
