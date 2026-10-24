@@ -211,21 +211,23 @@ index 0000000..3d5b73e
 + int
 diff --git a/patches/xnu/native-init-exec-diagnostic.patch b/patches/xnu/native-init-exec-diagnostic.patch
 new file mode 100644
-index 0000000..1b0415e
+index 0000000..761e6d0
 --- /dev/null
 +++ b/patches/xnu/native-init-exec-diagnostic.patch
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,83 @@
 +--- a/bsd/kern/kern_exec.c
 ++++ b/bsd/kern/kern_exec.c
-+@@ -1365,6 +1365,14 @@
++@@ -1365,6 +1365,16 @@
 + 			}
 + 		}
 + 
 ++		if (proc_getpid(p) == 1) {
-++			char description[192];
+++			extern char native_init_load_failure[192];
+++			char description[384];
 ++			snprintf(description, sizeof(description),
-++			    "init load_machfile result=%d errno=%d cpu=%x subtype=%x",
-++			    lret, error, mach_header->cputype, mach_header->cpusubtype);
+++			    "init load_machfile result=%d errno=%d cpu=%x subtype=%x %s",
+++			    lret, error, mach_header->cputype, mach_header->cpusubtype,
+++			    native_init_load_failure);
 ++			os_reason_set_description_data(exec_failure_reason,
 ++			    EXIT_REASON_USER_DESC, description, strlen(description) + 1);
 ++		}
@@ -245,6 +247,57 @@ index 0000000..1b0415e
 + 	kfree_data(addr, alloc_size);
 + 
 + 	return ret;
++@@ -3751,6 +3755,8 @@
++  * This routine has its own, separate, understanding of the FAT file format,
++  * which is terrifically unfortunate.
++  */
+++char native_init_load_failure[192];
+++
++ static
++ load_return_t
++ get_macho_vnode(
++@@ -3802,6 +3808,10 @@
++ 
++ 	/* check for regular file */
++ 	if (vp->v_type != VREG) {
+++		if (proc_getpid(p) == 1) {
+++			snprintf(native_init_load_failure, sizeof(native_init_load_failure),
+++			    "dyld %s type=%d", path, vp->v_type);
+++		}
++ 		error = LOAD_PROTECT;
++ 		goto bad1;
++ 	}
++@@ -3814,18 +3824,30 @@
++ 
++ 	/* Check mount point */
++ 	if (vp->v_mount->mnt_flag & MNT_NOEXEC) {
+++		if (proc_getpid(p) == 1) {
+++			snprintf(native_init_load_failure, sizeof(native_init_load_failure),
+++			    "dyld %s mount flags=%x", path, vp->v_mount->mnt_flag);
+++		}
++ 		error = LOAD_PROTECT;
++ 		goto bad1;
++ 	}
++ 
++ 	/* check access */
++ 	if ((error = vnode_authorize(vp, NULL, KAUTH_VNODE_EXECUTE | KAUTH_VNODE_READ_DATA, ctx)) != 0) {
+++		if (proc_getpid(p) == 1) {
+++			snprintf(native_init_load_failure, sizeof(native_init_load_failure),
+++			    "dyld %s authorize errno=%d", path, error);
+++		}
++ 		error = LOAD_PROTECT;
++ 		goto bad1;
++ 	}
++ 
++ 	/* try to open it */
++ 	if ((error = VNOP_OPEN(vp, FREAD, ctx)) != 0) {
+++		if (proc_getpid(p) == 1) {
+++			snprintf(native_init_load_failure, sizeof(native_init_load_failure),
+++			    "dyld %s open errno=%d", path, error);
+++		}
++ 		error = LOAD_PROTECT;
++ 		goto bad1;
++ 	}
 diff --git a/patches/xnu/native-resident-return.patch b/patches/xnu/native-resident-return.patch
 new file mode 100644
 index 0000000..bd3b5c2
