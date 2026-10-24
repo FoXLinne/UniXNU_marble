@@ -1,0 +1,42 @@
+{
+  "kernel": "outputs/UniXNU_marble/kernel_touch_power.macho",
+  "source_kernel_sha256": "1490e29e2502bc506818667e608f561c80ab0585f3330a17ae36c0d3c68514b3",
+  "build": "passed",
+  "runtime_usb_failures": 0,
+  "iovdd": {
+    "resource": "ldoc2",
+    "address": "0x42c00",
+    "millivolts": 1800,
+    "command_status": [
+      "0x10101",
+      "0x10101",
+      "0x10101"
+    ]
+  },
+  "avdd": {
+    "resource": "ldoc9",
+    "address": "0x41400",
+    "millivolts": 3224,
+    "command_status": [
+      "0x10101",
+      "0x10101",
+      "0x10101"
+    ]
+  },
+  "goodix": {
+    "confirm": "aaaaaaaa/aaaaaaaa",
+    "pid": "9916R",
+    "info_bytes": 191,
+    "event_address": "0x10308",
+    "header_bytes": 8,
+    "point_bytes": 8
+  },
+  "touch_reports": 0,
+  "physical_touch_validation": "pending physical contact",
+  "gpu_cx": "built; boot argument disabled for touch iteration",
+  "references": [
+    "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/soc/qcom/rpmh-rsc.c",
+    "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/soc/qcom/cmd-db.c",
+    "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/regulator/rpmh-regulator.c"
+  ]
+}

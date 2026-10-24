@@ -27,9 +27,11 @@ uint8_t *bytes;
 uint8_t response[responseBytes];
 uint64_t physical;
 unsigned eventPosition, controlState, resource[2];
+unsigned statusEndpoint;
 bool resourceOwned[2];
 unsigned events, requests, failures, configuration, returnTicks;
 unsigned controlTicks;
+unsigned enumerationTicks;
 uint32_t controllerId, initialControl, initialStatus, initialPhy, lastCommand;
 bool threeStage, active, controllerOwned, panicOnFailure;
 uint8_t setup[8];
@@ -79,6 +81,11 @@ bool configure(unsigned ep, bool modify) {
         (modify ? DWC3_DEPCFG_ACTION_MODIFY : DWC3_DEPCFG_ACTION_INIT);
     return command(ep, DWC3_DEPCMD_SETEPCONFIG, p0,
         DWC3_DEPCFG_EP_NUMBER(ep) | DWC3_DEPCFG_XFER_COMPLETE_EN | DWC3_DEPCFG_XFER_NOT_READY_EN);
+}
+bool startConfiguration() {
+    return command(0,DWC3_DEPCMD_DEPSTARTCFG) &&
+        command(0,DWC3_DEPCMD_SETTRANSFRESOURCE,1) &&
+        command(1,DWC3_DEPCMD_SETTRANSFRESOURCE,1);
 }
 bool transfer(unsigned ep, unsigned offset, unsigned length, uint32_t type) {
     auto *trb = reinterpret_cast<DWC3_TRB *>(bytes + trbOffset + ep * 32);
@@ -164,16 +171,24 @@ void handleEvent(uint32_t event) {
         switch (DWC3_DEVT_TYPE(event)) {
         case DWC3_DEVICE_EVENT_RESET:
             configuration = 0;
-            end(1); end(0);
+            end(1);
+            if (controlState != 0) end(0);
+            controlState=0;
+            controlTicks=0;
             command(0,DWC3_DEPCMD_CLEARSTALL);
             command(1,DWC3_DEPCMD_CLEARSTALL);
             write(DWC3_DCFG,read(DWC3_DCFG)&~DWC3_DCFG_DEVADDR_MASK);
-            receiveSetup();
             break;
-        case DWC3_DEVICE_EVENT_CONNECT_DONE:
-            configure(0,true); configure(1,true);
+        case DWC3_DEVICE_EVENT_CONNECT_DONE: {
+            bool rearm=!resourceOwned[0];
+            if ((rearm && !startConfiguration()) || !configure(0,!rearm) || !configure(1,!rearm)) {
+                active=false;
+                break;
+            }
+            if (rearm) receiveSetup();
             IOLog("RuntimeUSB: connected speed=%x\n",read(DWC3_DSTS)&7);
             break;
+        }
         case DWC3_DEVICE_EVENT_DISCONNECT: configuration=0; break;
         }
         return;
@@ -181,17 +196,19 @@ void handleEvent(uint32_t event) {
     unsigned ep = DWC3_DEPEVT_EPNUMBER(event), type = DWC3_DEPEVT_TYPE(event);
     if (ep > 1) return;
     if (type == DWC3_DEPEVT_XFERCOMPLETE) {
+        if (!resourceOwned[ep]) return;
+        __asm__ volatile("dsb sy" ::: "memory");
         resourceOwned[ep]=false;
         resource[ep]=0;
-        __asm__ volatile("dsb sy" ::: "memory");
-        if (controlState == 0) handleSetup();
-        else if (controlState == 1) controlState=2;
-        else receiveSetup();
+        if (controlState == 0 && ep == 0) handleSetup();
+        else if (controlState == 1 && ep == 1) controlState=2;
+        else if (controlState == 3 && ep == statusEndpoint) receiveSetup();
     } else if (type == DWC3_DEPEVT_XFERNOTREADY &&
                !(DWC3_DEPEVT_STATUS(event) & DEPEVT_STATUS_TRANSFER_ACTIVE) &&
                DEPEVT_STATUS_CONTROL_PHASE(DWC3_DEPEVT_STATUS(event)) == DEPEVT_STATUS_CONTROL_STATUS &&
                controlState == 2) {
         controlState=3;
+        statusEndpoint=ep;
         if (!transfer(ep,controlOffset,0,threeStage ? DWC3_TRBCTL_CONTROL_STATUS3 : DWC3_TRBCTL_CONTROL_STATUS2)) stall();
     }
 }
@@ -227,9 +244,7 @@ bool initialize() {
     write(DWC3_GEVNTCOUNT(0),read(DWC3_GEVNTCOUNT(0))&DWC3_GEVNTCOUNT_MASK);
     write(DWC3_DEVTEN,DWC3_DEVTEN_DISCONNEVTEN|DWC3_DEVTEN_USBRSTEN|DWC3_DEVTEN_CONNECTDONEEN);
     write(DWC3_DALEPENA,0);
-    if (!command(0,DWC3_DEPCMD_DEPSTARTCFG)) return false;
-    for (unsigned ep=0; ep<2; ep++)
-        if (!command(ep,DWC3_DEPCMD_SETTRANSFRESOURCE,1)) return false;
+    if (!startConfiguration()) return false;
     if (!configure(0,false) || !configure(1,false)) return false;
     write(DWC3_DALEPENA,3);
     receiveSetup();
@@ -260,6 +275,12 @@ void worker(void *, wait_result_t) {
             if (panicOnFailure && controlState && ++controlTicks >= 500) {
                 native_root_block_capture_log();
                 panic("RuntimeUSB: control transfer timeout state=%u events=%u requests=%u failures=%u",
+                    controlState, events, requests, failures);
+            }
+            if (configuration) enumerationTicks=0;
+            else if (panicOnFailure && ++enumerationTicks >= 1000) {
+                native_root_block_capture_log();
+                panic("RuntimeUSB: enumeration timeout state=%u events=%u requests=%u failures=%u",
                     controlState, events, requests, failures);
             }
             if (returnTicks && !--returnTicks) {

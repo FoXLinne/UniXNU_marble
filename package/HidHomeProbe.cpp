@@ -10,6 +10,7 @@ extern "C" void native_hid_static_init(void) __asm__("__GLOBAL__sub_I_NativeHome
 extern "C" IOService *native_hid_input_allocate(void);
 extern "C" IOService *native_hid_touch_allocate(void);
 extern "C" void native_marble_touch_start(void);
+extern "C" void native_marble_gpu_start(void);
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" volatile uint32_t native_legacy_transfer_calls;
 static uint32_t events[8], ticks, sent;
@@ -82,5 +83,8 @@ extern "C" void native_hid_home_start(void) {
         } else IOLog("MarbleTouch: HID digitizer start failed\n");
     }
     resource->release();
+    unsigned gpu = 0;
+    if (PE_parse_boot_argn("marble-gpu", &gpu, sizeof(gpu)) && gpu == 1)
+        native_marble_gpu_start();
     IOLog("RootStage: virtual HID consumer input published\n");
 }

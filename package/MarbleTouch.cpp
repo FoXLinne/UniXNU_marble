@@ -52,6 +52,78 @@ bool checksum(const uint8_t *data, size_t bytes) {
     for (size_t i = 0; i < bytes - 2; ++i) sum += data[i];
     return (sum & 65535) == little16(data + bytes - 2);
 }
+// RPMh VRM resources and AP DRV2 wiring come from the marble device tree.
+struct TouchPower {
+    Region database, controller;
+    uint32_t resource(const char *name) {
+        auto *db = reinterpret_cast<const uint8_t *>(database.address);
+        const uint8_t magic[] = {0xdb, 0x30, 0x03, 0x0c};
+        if (memcmp(db + 4, magic, sizeof(magic))) return 0;
+        for (unsigned group = 0; group < 8; ++group) {
+            const uint8_t *header = db + 8 + group * 16;
+            unsigned offset = 144 + little16(header + 2), count = little16(header + 6);
+            if (offset + count * 24 > 0x20000) return 0;
+            for (unsigned index = 0; index < count; ++index) {
+                const uint8_t *entry = db + offset + index * 24;
+                if (!strncmp(reinterpret_cast<const char *>(entry), name, 8)) return little32(entry + 16);
+            }
+        }
+        return 0;
+    }
+    int enable(uint32_t address, unsigned millivolts) {
+        auto *base = reinterpret_cast<void *>(controller.address);
+        // The first three TCS slots belong to active requests on DRV2.
+        unsigned slot = 0;
+        for (; slot < 3; ++slot)
+            if (read32(base, 0xd00 + slot * 672 + 0x18)) break;
+        if (slot == 3) return GENI_ERR_IO;
+        unsigned tcs = 0xd00 + slot * 672;
+        uint32_t control = read32(base, tcs + 0x14) & ~(1U << 24);
+        write32(base, tcs + 0x14, control);
+        write32(base, tcs + 0x14, control & ~(1U << 16));
+        write32(base, 0xd08, 1U << slot);
+        write32(base, tcs + 0x1c, 0);
+        write32(base, tcs + 0x10, 7);
+        const uint32_t offsets[] = {0, 8, 4};
+        const uint32_t values[] = {millivolts, 7, 1};
+        for (unsigned i = 0; i < 3; ++i) {
+            unsigned cmd = tcs + i * 20;
+            write32(base, cmd + 0x30, 0x10108);
+            write32(base, cmd + 0x34, address + offsets[i]);
+            write32(base, cmd + 0x38, values[i]);
+        }
+        write32(base, tcs + 0x1c, 7);
+        write32(base, tcs + 0x14, 1U << 16);
+        write32(base, tcs + 0x14, (1U << 16) | (1U << 24));
+        unsigned elapsed = 0;
+        for (; elapsed < 100; ++elapsed) {
+            if (read32(base, 0xd04) & (1U << slot)) break;
+            IOSleep(1);
+        }
+        uint32_t status[3];
+        for (unsigned i = 0; i < 3; ++i) status[i] = read32(base, tcs + 0x3c + i * 20);
+        IOLog("MarbleTouch: power resource=%x mV=%u TCS=%u status=%x/%x/%x elapsed=%u\n",
+            address, millivolts, slot, status[0], status[1], status[2], elapsed);
+        if (elapsed == 100) return GENI_ERR_TIMEOUT;
+        write32(base, tcs + 0x1c, 0);
+        write32(base, 0xd08, 1U << slot);
+        write32(base, tcs + 0x14, 1U << 16);
+        return (status[0] & status[1] & status[2] & (1U << 16)) ? 0 : GENI_ERR_IO;
+    }
+    int start() {
+        if (!database.map(0x80860000, 0x20000) || !controller.map(0x17a20000, 0x10000)) return GENI_ERR_IO;
+        uint32_t iovdd = resource("ldoc2"), avdd = resource("ldoc9");
+        IOLog("MarbleTouch: RPMh ldoc2=%x ldoc9=%x config=%x\n", iovdd, avdd,
+            read32(reinterpret_cast<void *>(controller.address), 0xc));
+        if (!iovdd || !avdd) return GENI_ERR_IO;
+        int result = enable(iovdd, 1800);
+        if (result) return result;
+        IOSleep(3);
+        result = enable(avdd, 3224);
+        IOSleep(15);
+        return result;
+    }
+};
 struct Touch {
     Region gcc, pins, engine, wrapper, smmu;
     IOBufferMemoryDescriptor *dma = nullptr;
@@ -91,11 +163,16 @@ struct Touch {
             result, address, spi.snap_irq, spi.snap_status, spi.snap_txfs, spi.snap_rxfs);
         return result;
     }
-    int acknowledge(uint32_t address) {
+    int write(uint32_t address, const uint8_t *data, size_t bytes) {
+        if (bytes > sizeof(tx) - 5) return GENI_ERR_PARAM;
         tx[0] = 0xf0;
         for (unsigned i = 0; i < 4; ++i) tx[i + 1] = static_cast<uint8_t>(address >> (24 - 8 * i));
-        tx[5] = 0;
-        return geni_spi_transfer(&spi, tx, nullptr, 6, 0);
+        memcpy(tx + 5, data, bytes);
+        return geni_spi_transfer(&spi, tx, nullptr, bytes + 5, 0);
+    }
+    int acknowledge(uint32_t address) {
+        const uint8_t zero = 0;
+        return write(address, &zero, 1);
     }
     int initialize() {
         if (!gcc.map(0x100000, 0x70000) || !pins.map(0xf110000, 0x6000) ||
@@ -111,6 +188,9 @@ struct Touch {
         write32(p, 0x4004, 0);
         write32(p, 0x4000, (1 << 9) | (3 << 6) | 3);
         IOSleep(10);
+        TouchPower power;
+        int powered = power.start();
+        if (powered) return powered;
         write32(p, 0x4004, 2);
         IOSleep(100);
         spi.se = {reinterpret_cast<void *>(engine.address), read32, write32, delay};
@@ -146,6 +226,18 @@ struct Touch {
     int run() {
         int result = initialize();
         if (result) return result;
+        uint8_t confirm[8], returned[8];
+        memset(confirm, 0xaa, sizeof(confirm));
+        for (unsigned attempt = 0; attempt < 3; ++attempt) {
+            result = write(0x10000, confirm, sizeof(confirm));
+            if (!result) result = read(0x10000, returned, sizeof(returned));
+            if (result) return result;
+            IOLog("MarbleTouch: confirm=%08x/%08x tx=%u rx=%u\n", little32(returned),
+                little32(returned + 4), spi.last_tx_in, spi.last_rx_in);
+            if (!memcmp(confirm, returned, sizeof(confirm))) break;
+            if (attempt == 2) return GENI_ERR_PROTO;
+            IOSleep(5);
+        }
         uint8_t version[28];
         result = read(0x10014, version, sizeof(version));
         if (result) return result;
@@ -156,6 +248,7 @@ struct Touch {
         result = read(0x10070, info, 2);
         if (result) return result;
         size_t bytes = little16(info);
+        IOLog("MarbleTouch: IC info length=%lu\n", bytes);
         if (bytes < 34 || bytes > sizeof(info)) return GENI_ERR_PROTO;
         result = read(0x10070, info, bytes);
         if (result) return result;

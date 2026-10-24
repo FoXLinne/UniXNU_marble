@@ -249,11 +249,14 @@ touch = out / 'MarbleTouch.o'
 touch_command = [str(ROOT / 'kits/marble/MarbleTouch.cpp') if v == str(source) else str(touch) if v == str(obj_path) else v for v in command]
 touch_command += ['-I', str(ROOT / 'drivers/NativeGeniSpi')]
 subprocess.run(touch_command, cwd=record['directory'], check=True)
+gpu = out / 'MarbleGpu.o'
+gpu_command = [str(ROOT / 'kits/marble/MarbleGpu.cpp') if v == str(source) else str(gpu) if v == str(obj_path) else v for v in command]
+subprocess.run(gpu_command, cwd=record['directory'], check=True)
 spi = out / 'GeniSpi.o'
 spi_command = [str(ROOT / 'drivers/NativeGeniSpi/GeniSpi.c') if v == str(policy_source) else str(spi) if v == str(policy_object) else v for v in policy_command]
 subprocess.run(spi_command, cwd=policy_recipe['directory'], check=True)
 archive.unlink(missing_ok=True)
-subprocess.run(['xcrun', 'ar', 'rcs', archive, late, resident, out / 'original-bindings.o', policy_object, runtime, touch, spi], check=True)
+subprocess.run(['xcrun', 'ar', 'rcs', archive, late, resident, out / 'original-bindings.o', policy_object, runtime, touch, gpu, spi], check=True)
 report = dict(reference_kernel_sha256=plan['candidate_sha256'], original_executable_code_unchanged=True,
               method_slots=len(methods), compiled_public_class_size=int(class_size[1], 16),
               bindings={name:hex(value) for name,value in bindings.items()}, runtime_qualified=False,
