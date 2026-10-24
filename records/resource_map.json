@@ -1,0 +1,10 @@
+{
+  "failure": "dyld VNOP_OPEN EINVAL 22; reproduced by macOS opening the same APFS image",
+  "cause": "zlib resource map reserved header contained resource fork header instead of zero bytes",
+  "fix": "leave first 16 bytes of resource map zero",
+  "patched_resources": 8467,
+  "image": "OS_resource_map.apfs",
+  "image_sha256": "249767056b37984756b6031e2bd080f329df5bba72eab3d95d9498e58b16af50",
+  "verification": "macOS read launchd and dyld; both byte-identical to source",
+  "reference": "https://github.com/jrk/afsctool/blob/master/afsctool.c"
+}

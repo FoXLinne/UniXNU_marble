@@ -516,7 +516,7 @@ def zlib_rsrc(content):
     # the resource map: Apple's own for these forks (the 'cmpf' resource, id 1, named nothing)
     rmap = bytearray(50)
     rmap_off = data_off + len(data)
-    struct.pack_into('>IIII', rmap, 0, data_off, rmap_off, len(data), 50)
+    # decmpfs requires the resource map header reservation to stay zero.
     struct.pack_into('>HH', rmap, 24, 28, 50)               # type list at 28, name list at 50 (none)
     struct.pack_into('>H', rmap, 28, 0)                     # one type (count - 1)
     rmap[30:34] = b'cmpf'
