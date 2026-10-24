@@ -3,10 +3,13 @@
 import argparse
 from contextlib import contextmanager
 import hashlib
+import io
 import json
+import os
 from pathlib import Path
 import plistlib
 import subprocess
+import struct
 import time
 
 import usb.backend.libusb1
@@ -14,6 +17,8 @@ import usb.core
 import usb.util
 
 CHUNK = 1024**2
+LOG_BYTES = 65536
+LOG_MAGIC = b'ROOTLOG1'
 
 
 class RootUsb:
@@ -66,6 +71,10 @@ class RootUsb:
 
 @contextmanager
 def image_stream(image):
+    if 'payload' in image:
+        with io.BytesIO(image['payload']) as stream:
+            yield stream
+        return
     if image.get('format') == 'raw':
         with open(image['source'], 'rb', buffering=0) as stream:
             yield stream
@@ -83,17 +92,23 @@ def image_stream(image):
         subprocess.run(['hdiutil', 'detach', disk], check=True, capture_output=True)
 
 
-def load(channel, images, kernel=None):
+def load(channel, images, kernel=None, observe_seconds=0):
     if channel.command('getvar:version') != 'RootStage2':
         raise RuntimeError('Load the RootStage2 boot image to use resident disks')
     if not 1 <= len(images) <= 2:
         raise ValueError('RootStage accepts one or two root disks')
     entries = list(enumerate(images))
     if kernel:
-        with kernel.open('rb') as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        data = kernel.read_bytes()
+        source_digest = hashlib.sha256(data).hexdigest()
+        # A separate output mailbox follows the Mach-O; its nonce starts a fresh run.
+        data += bytes(-len(data) % CHUNK)
+        data += (struct.pack('<8sII', LOG_MAGIC, 1, 0) + os.urandom(16) +
+                 struct.pack('<I', observe_seconds) + bytes(LOG_BYTES - 36))
+        digest = hashlib.sha256(data).hexdigest()
         entries.append((2, dict(name='kernel', source=str(kernel), format='raw',
-                                raw_bytes=kernel.stat().st_size, sha256=digest)))
+                                raw_bytes=len(data), sha256=digest, payload=data,
+                                source_sha256=source_digest)))
     reports = []
     for index, image in entries:
         began = time.monotonic()
@@ -122,6 +137,8 @@ def load(channel, images, kernel=None):
         report = dict(name=image['name'], bytes=total, sha256=digest,
                       reused_bytes=offset, transmitted_bytes=sent,
                       elapsed_seconds=time.monotonic() - began)
+        if 'source_sha256' in image:
+            report['source_sha256'] = image['source_sha256']
         reports.append(report)
     channel.command(f'oem disks:{len(images)}')
     return reports
@@ -129,10 +146,12 @@ def load(channel, images, kernel=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'load', 'start', 'continue', 'selftest', 'reboot'])
+    parser.add_argument('command', choices=['status', 'load', 'start', 'logs', 'continue', 'selftest', 'reboot'])
     parser.add_argument('--images', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--kernel', type=Path)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--observe-seconds', type=int, default=0)
     args = parser.parse_args()
     channel = RootUsb()
     try:
@@ -140,11 +159,23 @@ def main():
             if args.images is None:
                 parser.error('--images is required')
             images = json.loads(args.images.read_text())
-            result = load(channel, images, args.kernel)
+            result = load(channel, images, args.kernel, args.observe_seconds)
             if args.command == 'start':
                 channel.command('continue')
         elif args.command == 'status':
             result = {name: channel.command('getvar:' + name) for name in ('version', 'kernel-memory', 'received', 'returns', 'handoff-fault')}
+        elif args.command == 'logs':
+            if args.output is None:
+                parser.error('logs requires --output')
+            channel.command('oem select:2')
+            data = channel.read_back()
+            if len(data) != LOG_BYTES or data[:8] != LOG_MAGIC:
+                raise RuntimeError('Resident kernel has no log mailbox')
+            version, length = struct.unpack_from('<II', data, 8)
+            if version != 1 or not 0 < length <= LOG_BYTES - 16:
+                raise RuntimeError('Kernel log has not been captured')
+            args.output.write_bytes(data[16:16 + length])
+            result = dict(output=str(args.output), bytes=length)
         else:
             result = channel.command(args.command)
         if args.report:

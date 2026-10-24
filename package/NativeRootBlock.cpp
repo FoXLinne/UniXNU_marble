@@ -11,14 +11,52 @@
 #include <libkern/c++/OSString.h>
 #include <IOKit/IOBSD.h>
 #include <Protocol/RootStage.h>
+#include <arm/machine_routines.h>
 
 extern "C" {
 #include <vm/pmap.h>
+#include <kern/clock.h>
+#include <kern/thread_call.h>
 
 extern kmod_info_t g_kernel_kmod_info;
 kern_return_t OSKextLoadKextWithIdentifier(const char *);
 void root_block_static_init(void) __asm__("__GLOBAL__sub_I_NativeRootBlock.cpp");
 volatile uint64_t native_root_block_reads;
+char native_root_block_panic_text[4096];
+}
+
+static constexpr size_t rootLogBytes = 65536;
+static IOMemoryMap *rootLogMapping;
+static uint32_t observationSeconds;
+static thread_call_t observationCall;
+
+static void observationExpired(thread_call_param_t, thread_call_param_t)
+{
+  panic("RootStage observation timeout after %u seconds", observationSeconds);
+}
+
+extern "C" void native_root_block_capture_log(void)
+{
+  if (!rootLogMapping) return;
+  static struct {
+    char magic[8];
+    uint32_t version, length;
+    char text[rootLogBytes - 16];
+  } log;
+  memcpy(log.magic, "ROOTLOG1", sizeof(log.magic));
+  log.version = 1;
+  size_t used = 0;
+  size_t length = MIN((size_t)msgbufp->msg_size, sizeof(log.text) - sizeof(native_root_block_panic_text) - 16);
+  size_t start = (msgbufp->msg_bufx + msgbufp->msg_size - length) % msgbufp->msg_size;
+  for (size_t i = 0; i < length; i++) {
+    char c = msgbufp->msg_bufc[(start + i) % msgbufp->msg_size];
+    if (c) log.text[used++] = c;
+  }
+  used += snprintf(log.text + used, sizeof(log.text) - used, "\nPANIC\n%s\n", native_root_block_panic_text);
+  log.length = (uint32_t)used;
+  void *output = (void *)rootLogMapping->getVirtualAddress();
+  memcpy(output, &log, sizeof(log));
+  flush_dcache64((addr64_t)output, sizeof(log), FALSE);
 }
 
 class NativeRootBlock : public IOBlockStorageDevice {
@@ -122,6 +160,19 @@ extern "C" void native_root_block_start(void)
   if (!mapping) panic("RootStage: table mapping failed");
   const auto *table = reinterpret_cast<const ROOT_STAGE_TABLE *>(mapping->getVirtualAddress());
   if (table->Magic != ROOT_STAGE_MAGIC || table->Version != 2) panic("RootStage: invalid table header");
+  const ROOT_STAGE_DISK &kernel = table->Disks[2];
+  if (kernel.Count == 1 && kernel.Bytes >= rootLogBytes && kernel.Bytes <= kernel.Extents[0].Bytes) {
+    uint64_t address = kernel.Extents[0].Address + kernel.Bytes - rootLogBytes;
+    IOMemoryDescriptor *memory = IOMemoryDescriptor::withAddressRange(
+        address, rootLogBytes, kIODirectionOut | kIOMemoryMapperNone, nullptr);
+    IOMemoryMap *log = memory ? memory->map(kIOMapAnywhere | kIOMapCopybackCache) : nullptr;
+    OSSafeReleaseNULL(memory);
+    if (!log) panic("RootStage: log mailbox mapping failed");
+    if (!memcmp((const void *)log->getVirtualAddress(), "ROOTLOG1", 8)) {
+      rootLogMapping = log;
+      memcpy(&observationSeconds, (const char *)log->getVirtualAddress() + 32, sizeof(observationSeconds));
+    } else log->release();
+  }
   extern void native_resident_configure(uint64_t);
   native_resident_configure(table->ReturnStub);
   kern_return_t result = OSKextLoadKextWithIdentifier("com.apple.iokit.IOStorageFamily");
@@ -196,6 +247,13 @@ extern "C" int native_root_block_cache_authorized(dev_t device)
 
 extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, char *path, size_t size)
 {
+  if (observationSeconds && !observationCall) {
+    observationCall = thread_call_allocate(observationExpired, nullptr);
+    if (!observationCall) panic("RootStage: observation timer allocation failed");
+    uint64_t deadline;
+    clock_interval_to_deadline(observationSeconds, NSEC_PER_SEC, &deadline);
+    thread_call_enter_delayed(observationCall, deadline);
+  }
   IORegistryIterator *iterator = IORegistryIterator::iterateOver(gIOServicePlane, kIORegistryIterateRecursively);
   if (!iterator) return 0;
   bool found = false;

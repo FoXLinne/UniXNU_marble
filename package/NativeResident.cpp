@@ -6,6 +6,7 @@
 extern "C" void native_resident_configure(uint64_t);
 extern "C" void native_resident_return(void);
 extern "C" void native_resident_panic_return(void);
+extern "C" void native_root_block_capture_log(void);
 
 static uint64_t return_stub;
 static uint64_t level1[512] __attribute__((aligned(4096)));
@@ -19,6 +20,7 @@ void native_resident_configure(uint64_t address)
 extern "C" __attribute__((used)) void native_resident_panic_return(void)
 {
   if (!return_stub) return;
+  native_root_block_capture_log();
   uint64_t start, now, frequency;
   __asm__ volatile("mrs %0, cntvct_el0" : "=r"(start));
   __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(frequency));

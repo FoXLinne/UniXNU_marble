@@ -17,10 +17,20 @@
     "work/UniXNU/scripts/check-owner-union-checkpoints.py"
   ],
   "build_log": "outputs/UniXNU_marble/root_union_build.log",
-  "device_result": "continue accepted; immediate RootStage query unavailable; awaiting screen evidence",
+  "device_result": "Union root startup reached dyld; initproc failed namespace 6 code 1, /usr/lib/libSystem.B.dylib missing with no dyld cache; kernel returned to RootStage, returns=2",
   "build": "passed",
   "kernel": "outputs/UniXNU_marble/kernel_root_union.macho",
   "kernel_sha256": "d9611cad04e34d65d59799bf32a7aae79d69fb48baa411addfaaa953127a9476",
   "reused_system_bytes": 9380595200,
-  "transmitted_kernel_bytes": 51978240
+  "transmitted_kernel_bytes": 51978240,
+  "rootstage_after": {
+    "version": "RootStage2",
+    "returns": 2,
+    "handoff_fault": [
+      0,
+      0,
+      0
+    ]
+  },
+  "confirmed_photo": "/var/folders/wp/72cjqq5d3xd8wh2bkdc5bt540000gn/T/codex-clipboard-a5e4e59f-e929-434c-a743-1cdc97af3370.jpg"
 }

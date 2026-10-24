@@ -38,7 +38,9 @@ struct ctx {
 #ifndef PANIC_TEXT
 #define PANIC_TEXT 0UL
 #endif
+#ifndef PANIC_TEXT_BYTES
 #define PANIC_TEXT_BYTES 256
+#endif
 
 __attribute__((noreturn)) static void park (void)
 {

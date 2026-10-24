@@ -1,0 +1,14 @@
+{
+  "change": "Append a 64 KiB mutable log mailbox after the Mach-O update; premap it before panic, preserve msgbuf tail and 4096-byte formatted panic text, read it through existing RootStage2 USB upload",
+  "log_bytes": 61688,
+  "log": "records/resident_kernel.log.gz",
+  "build": "passed",
+  "device_result": "USB log readback passed; kernel returned to RootStage, returns=1; complete original OS/SystemOS RAM contents retained",
+  "failure_evidence": [
+    "disallowing unsupported code signature page shift: 14",
+    "unable to create a validated cs_blob object: 85"
+  ],
+  "source": "original iPadOS shared cache CodeDirectory page_shift=14, hash_type=2",
+  "fix": "Enable CONFIG_XNU_NATIVE_CS_HASH_CACHE=y; original 16 KiB signing blocks are authenticated before deriving native 4 KiB page hashes",
+  "observation": "--observe-seconds enables a single delayed panic for bounded autonomous boot observation; default 0"
+}

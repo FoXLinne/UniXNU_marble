@@ -195,11 +195,16 @@ def assemble_c(source, va, workdir, symbols):
     # Optional: the board's banner buffer for the panic message (kits/sheng/BootProgress.c); kernels without it get 0 (no copy).
     if '_native_resident_panic_return' in symbols:
         definitions.append(f'-DRESIDENT_RETURN={symbols["_native_resident_panic_return"]:#x}UL')
-    text = symbols.get('_boot_progress_panic_text')
+    text = symbols.get('_native_root_block_panic_text')
+    text_bytes = 4096
+    if text is None:
+        text = symbols.get('_boot_progress_panic_text')
+        text_bytes = 256
     if text is not None:
-        if not any(base <= text and text + 256 <= base + size for base, size, _, _ in SEGMENTS):
-            raise SystemExit('Invalid _boot_progress_panic_text')
+        if not any(base <= text and text + text_bytes <= base + size for base, size, _, _ in SEGMENTS):
+            raise SystemExit('Invalid panic text buffer')
         definitions.append(f'-DPANIC_TEXT={text:#x}UL')
+        definitions.append(f'-DPANIC_TEXT_BYTES={text_bytes}')
     subprocess.run([clang, '--target=aarch64-none-elf', '-ffreestanding', '-fno-builtin', '-fno-stack-protector',
                     '-mgeneral-regs-only', '-fno-pic', '-mcmodel=tiny', '-Oz', f'-DVINFO={VINFO_VA:#x}UL',
                     *definitions, f'-I{font_dir}', '-c', source, '-o', obj], check=True)
