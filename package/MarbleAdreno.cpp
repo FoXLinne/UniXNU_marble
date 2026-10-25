@@ -85,6 +85,19 @@ class CommandProcessor {
             smmu[(0x800 + stream.slot * 4) / 4] = (1U << 31) | stream.sid;
         }
         barrier(nullptr);
+        // GX was reset before this boot; retire the context retained by the previous kernel.
+        const unsigned contextBase = 0x34000;
+        uint32_t inheritedControl = smmu[contextBase / 4];
+        smmu[contextBase / 4] = 0;
+        barrier(nullptr);
+        smmu[(contextBase + 0x618) / 4] = 0;
+        smmu[(contextBase + 0x7f0) / 4] = 0xffffffff;
+        barrier(nullptr);
+        unsigned elapsed = 0;
+        for (; elapsed < 100 && (smmu[(contextBase + 0x7f4) / 4] & 1); ++elapsed) IOSleep(1);
+        IOLog("MarbleGPU: GPU context reset SCTLR=%x/%x TLB=%x elapsed=%u\n",
+            inheritedControl, smmu[contextBase / 4], smmu[(contextBase + 0x7f4) / 4], elapsed);
+        if (elapsed == 100) return -110;
         NativeAdrenoGmuContextReport report = {};
         IOReturn status = NativeAdrenoGpuContextBringup(reinterpret_cast<volatile uint8_t *>(smmu),
             0x40000, 20, 21, streams, 4, contextProgress, &report);

@@ -183,15 +183,6 @@ def assemble_c(source, va, workdir, symbols):
     font_dir = Path(os.environ.get('UNIXNU_UEFI') or ROOT / 'uefi-sheng') / 'Silicon/Silicium/SiliciumPkg/Library/FrameBufferSerialPortLib'
     obj, elf, binary = (workdir / name for name in ('panic.o', 'panic.elf', 'panic.bin'))
     definitions = []
-    for macro, name, width in (('MAX_MEM', '_max_mem', 8),
-                               ('PAGE_TOTAL', '_vm_page_pages', 4),
-                               ('PAGE_FREE', '_vm_page_free_count', 4)):
-        address = symbols.get(name)
-        if address is None or address % width or not any(
-                base <= address and address + width <= base + size
-                for base, size, _, _ in SEGMENTS):
-            raise SystemExit(f'Missing or invalid diagnostic symbol {name}')
-        definitions.append(f'-D{macro}={address:#x}UL')
     # Optional: the board's banner buffer for the panic message (kits/sheng/BootProgress.c); kernels without it get 0 (no copy).
     if '_native_resident_panic_return' in symbols:
         definitions.append(f'-DRESIDENT_RETURN={symbols["_native_resident_panic_return"]:#x}UL')
@@ -244,11 +235,11 @@ def panic_common_entry(workdir, code, load):
              if len(parts := line.split()) == 3}
     entry = names.get('panic_screen_common')
     main = names.get('panic_screen_main')
-    if entry is None or main is None or not load <= entry <= load + len(code) - 8:
+    if entry is None or main is None or not load <= entry <= load + len(code) - 16:
         raise SystemExit('Common panic renderer entry is missing or out of bounds')
     at = entry - load
-    if code[at:at + 8] != struct.pack('<II', 0xf9400021, branch(entry + 4, main)):
-        raise SystemExit('Common panic entry does not dereference the Darwin va_list pointer and branch to the renderer')
+    if code[at:at + 16] != struct.pack('<4I', 0xf9400021, 0xaa1d03e2, 0xaa1e03e3, branch(entry + 12, main)):
+        raise SystemExit('Common panic entry must pass the Darwin va_list, frame pointer and link register to the renderer')
     return entry
 
 

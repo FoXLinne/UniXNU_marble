@@ -140,8 +140,12 @@ static void format (struct ctx *g, const char *fmt, const u64 *args)
       continue;
     }
     u32 width = 0;
-    int zero = 0, longs = 0;
+    int zero = 0, longs = 0, alternate = 0;
     c = (u8)fmt[++i];
+    if (c == '#') {
+      alternate = 1;
+      c = (u8)fmt[++i];
+    }
     if (c == '0') {
       zero = 1;
       c = (u8)fmt[++i];
@@ -178,6 +182,11 @@ static void format (struct ctx *g, const char *fmt, const u64 *args)
       break;
     }
     u64 v = args[used++];
+    if (c == 'p') {
+      alternate = 1;
+      longs = 1;
+      c = 'x';
+    }
     if (c == 's') {
       const char *s = (const char *)v;
       u32 k;
@@ -193,34 +202,20 @@ static void format (struct ctx *g, const char *fmt, const u64 *args)
         put (g, ch);
       }
     } else if (c == 'x' || c == 'X') {
+      if (alternate) {
+        put (g, '0');
+        put (g, 'x');
+      }
       number (g, longs ? v : (v & 0xFFFFFFFFu), 16, width, zero);
     } else if (c == 'u' || c == 'd') {
       number (g, longs ? v : (v & 0xFFFFFFFFu), 10, width, zero);
-    } else if (c == 'p') {
-      put (g, '0');
-      put (g, 'x');
-      number (g, v, 16, width, zero);
     }
   }
 }
 
-static void text (struct ctx *g, const char *s)
-{
-  while (*s) {
-    put (g, (u8)*s++);
-  }
-}
-
-static void hex (struct ctx *g, const char *label, u64 v)
-{
-  text (g, label);
-  put (g, '0');
-  put (g, 'x');
-  number (g, v, 16, 16, 1);
-}
-
 /* x0 = fmt as for panic(); x1 is set by the stub to the entry stack pointer. */
-__attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main (const char *fmt, const u64 *args)
+__attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main (const char *fmt, const u64 *args,
+                                                                            const u64 *frame, u64 caller)
 {
   volatile struct vc_info *v = (volatile struct vc_info *)VINFO;
   struct ctx g;
@@ -257,22 +252,16 @@ __attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main 
     g.log = (u8 *)PANIC_TEXT;
   }
   format (&g, fmt, args);
+  format (&g, "\nLR=%p", &caller);
+  for (u32 depth = 0; depth < 20; depth++) {
+    if (((u64)frame & 15) || !readable ((const char *)frame, args)) break;
+    format (&g, "\nBT=%p", frame + 1);
+    const u64 *next = (const u64 *)frame[0];
+    if (next <= frame || (u64)next - (u64)frame > 0x10000) break;
+    frame = next;
+  }
   g.log = 0;
   __asm__ volatile ("dsb sy");
-  /* Sample the active CPU translation regime, without changing it. This is
-   * panic-time evidence only; it does not establish early mappings or EL0 ABI. */
-  {
-    u64 tcr, sctlr;
-    __asm__ volatile ("mrs %0, tcr_el1" : "=r" (tcr));
-    __asm__ volatile ("mrs %0, sctlr_el1" : "=r" (sctlr));
-    hex (&g, "\nTCR=", tcr);
-    hex (&g, "\nSCTLR=", sctlr);
-  }
-  /* Resolved from this candidate's symbols by the patcher, never fixed addresses.
-   * Values are sampled at panic time and need not form an atomic VM snapshot. */
-  (void)MAX_MEM;
-  hex (&g, "\npages=", *(volatile const u32 *)PAGE_TOTAL);
-  hex (&g, "\nfree=", *(volatile const u32 *)PAGE_FREE);
   /* The raw argument slots are not dumped: the formatted message above already carries them (room for the PANIC_TEXT copy). */
   mark[0] = 0xC0FFEE11u;
   mark[1] = 0x5CEEDA7Au;
@@ -283,7 +272,7 @@ __attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main 
 /* Entry from panic(): keep the stack pointer, which addresses the variadic arguments. */
 __attribute__((naked, noreturn, section(".text.a_entry"))) void panic_screen (const char *fmt)
 {
-  __asm__ volatile ("mov x1, sp\n\tb panic_screen_main");
+  __asm__ volatile ("mov x1, sp\n\tmov x2, x29\n\tmov x3, x30\n\tb panic_screen_main");
 }
 
 /* The real panic_trap_to_debugger signature takes (fmt, va_list *, ...).
@@ -293,7 +282,7 @@ __attribute__((naked, noreturn, section(".text.a_entry"))) void panic_screen (co
  */
 __attribute__((naked, noreturn, section(".text.a_common"))) void panic_screen_common (void)
 {
-  __asm__ volatile ("ldr x1, [x1]\n\tb panic_screen_main");
+  __asm__ volatile ("ldr x1, [x1]\n\tmov x2, x29\n\tmov x3, x30\n\tb panic_screen_main");
 }
 
 #include "Font.h"

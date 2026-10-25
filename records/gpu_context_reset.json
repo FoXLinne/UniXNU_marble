@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-26",
+  "kernel": "outputs/UniXNU_marble/kernel_context_reset1.macho",
+  "change": "Fault four owned GPU routes, disable context bank 20, invalidate and synchronize its TLB before programming the new context",
+  "hardware": {
+    "checkpoint": 60,
+    "status": 0,
+    "ready": 1
+  },
+  "evidence": "outputs/UniXNU_marble/gpu_diagnostics/context_reset1_boot.log",
+  "panic_diagnostic": {
+    "physical_address_format": "%#llx",
+    "frame_limit": 20,
+    "stack_evidence": "outputs/UniXNU_marble/gpu_diagnostics/context_reset1_backtrace.txt"
+  }
+}
