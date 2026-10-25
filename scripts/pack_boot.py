@@ -22,6 +22,7 @@ parser.add_argument('--unique-chip-id')
 parser.add_argument('--root-stage', action='store_true')
 parser.add_argument('--root-images', type=Path)
 parser.add_argument('--trust-cache', type=Path)
+parser.add_argument('--iphone-identity', action='store_true', help='Write the phone identity into the payload ADT instead of the iPad one')
 args = parser.parse_args()
 OUT.mkdir(parents=True, exist_ok=True)
 if (OUT / 'stage').exists():
@@ -41,7 +42,7 @@ if args.kernel:
                     '--output', payloads / 'kernel.macho.adt', '--dram-size', '0x400000000',
                     '--owned-memory-size', board['payload']['adt']['owned_memory_size'],
                     '--cpu-regs', board['payload']['adt']['cpu_regs'],
-                    '--unique-chip-id', args.unique_chip_id, '--chip-id', '207', '--ipad-identity']
+                    '--unique-chip-id', args.unique_chip_id, '--chip-id', '207', '--iphone-identity' if args.iphone_identity else '--ipad-identity']
     if args.root_stage:
         if args.root_images is None:
             parser.error('--root-stage requires --root-images')
