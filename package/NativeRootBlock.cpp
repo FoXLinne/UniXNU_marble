@@ -75,6 +75,11 @@ extern "C" int boot_log_export_put(uint32_t generation, uint32_t total, uint32_t
   return status;
 }
 
+extern "C" kern_return_t native_load_board_owner_trust(void)
+{
+  return native_load_owner_trust_module(nativeMetalOwnerTrust, sizeof(nativeMetalOwnerTrust));
+}
+
 static constexpr size_t rootLogBytes = 65536;
 static constexpr size_t rootOutputBytes = 1048576;
 static IOMemoryMap *rootLogMapping;
@@ -700,7 +705,6 @@ extern "C" void native_root_block_start(void)
   }
   mapping->release();
   started = true;
-  IOLog("RootStage: native Metal owner trust status=%d\n", native_load_owner_trust_module(nativeMetalOwnerTrust, sizeof(nativeMetalOwnerTrust)));
   native_runtime_usb_start();
   native_marble_gpu_start();
 }

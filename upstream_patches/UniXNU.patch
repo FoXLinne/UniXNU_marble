@@ -896,13 +896,13 @@ index 0000000..7775c81
 + 	if (query_type >= kTCQueryTypeTotal) {
 diff --git a/patches/xnu/native-trust-cache-registration.patch b/patches/xnu/native-trust-cache-registration.patch
 new file mode 100644
-index 0000000..afa0574
+index 0000000..9c6cf5b
 --- /dev/null
 +++ b/patches/xnu/native-trust-cache-registration.patch
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,28 @@
 +--- a/libkern/amfi/amfi.c
 ++++ b/libkern/amfi/amfi.c
-+@@ -3,6 +3,12 @@
++@@ -3,6 +3,13 @@
 + #include <libkern/amfi/amfi.h>
 + 
 + SECURITY_READ_ONLY_LATE(const amfi_t *) amfi = NULL;
@@ -910,12 +910,13 @@ index 0000000..afa0574
 ++#ifdef BCM2837
 ++extern void trust_cache_runtime_init(void);
 ++extern void load_static_trust_cache(void);
+++extern int native_load_board_owner_trust(void);
 ++bool native_prelink_trust_cache_ready;
 ++#endif
 + 
 + void
 + amfi_interface_register(const amfi_t *mfi)
-+@@ -11,4 +17,10 @@
++@@ -11,4 +18,11 @@
 + 		panic("AppleMobileFileIntegrity interface already set");
 + 	}
 + 	amfi = mfi;
@@ -923,6 +924,7 @@ index 0000000..afa0574
 ++	/* The runtime consumes callbacks from the registered AMFI interface. */
 ++	trust_cache_runtime_init();
 ++	load_static_trust_cache();
+++	(void)native_load_board_owner_trust();
 ++	native_prelink_trust_cache_ready = true;
 ++#endif
 + }

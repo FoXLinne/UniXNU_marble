@@ -1,10 +1,12 @@
 {
-  "failure": "AMFI trust-cache module loader wrote into the const owner-module bytes",
+  "failure": "AMFI engineering module admission writes trust_cache_rt_storage after its late read-only lockdown",
   "panic_pc": "0xfffffff004abbb6c",
   "fault_address": "0xfffffff0071ab708",
   "esr": "0x9600004f",
-  "fix": "Copy the owner module into persistent writable kalloc storage before loadModule; release storage if admission fails",
+  "fix": "Admit the owner engineering module during AMFI registration immediately after the original external modules, before runtime storage lockdown",
   "resident_return": "RootStage returns=1, handoff-fault=0:0:0; OS and SystemOS RAM disks retained",
   "build": "passed",
-  "hardware_validation": "fixed candidate pending launch"
+  "hardware_validation": "early-admission candidate pending launch",
+  "fault_symbol": "trust_cache_rt_storage+24",
+  "writable_payload_result": "same fault after copying payload; payload mutability was not the failing write"
 }
