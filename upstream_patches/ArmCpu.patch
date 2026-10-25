@@ -1,8 +1,8 @@
 diff --git a/ArmCpu.cpp b/ArmCpu.cpp
-index a1f7bc6..d738211 100644
+index a1f7bc6..f0dc8e7 100644
 --- a/ArmCpu.cpp
 +++ b/ArmCpu.cpp
-@@ -6,6 +6,7 @@
+@@ -6,10 +6,12 @@
  #include <libkern/c++/OSSymbol.h>
  #include <machine/machine_routines.h>
  #include <pexpert/pexpert.h>
@@ -10,7 +10,12 @@ index a1f7bc6..d738211 100644
  
  // Exact private entry from Darwin 23 arm/rtclock.h. Its full data header is
  // not exported to IOKit; the IRQ path calls the real kernel implementation.
-@@ -31,8 +32,9 @@ volatile uint64_t armcpu_ipi_selftest_sent = 0;
+ extern "C" void rtclock_intr (unsigned int);
++extern "C" void native_marble_watchdog_start(void) __attribute__((weak_import));
+ // Kernel-internal entries used for secondary CPU startup (Darwin 23 osfmk).
+ extern "C" vm_offset_t ml_static_vtop (vm_offset_t);
+ extern "C" char LowResetVectorBase[], LowResetVectorEnd[], ResetHandlerData[], const_boot_args[];
+@@ -31,8 +33,9 @@ volatile uint64_t armcpu_ipi_selftest_sent = 0;
  volatile uint32_t armcpu_gic_boot[8];
  volatile uint32_t armcpu_core_timer[8], armcpu_core_sgi[8];   // per logical core: architectural timer interrupts and SGI 0 taken
  static bool gSpiIpi = false;                // boot-arg armcpu-spi-ipi=1: IPIs are software-pended SPIs 1008+core routed to that core (ICC_SGI1R_EL1 generates nothing on this board)
@@ -21,7 +26,7 @@ index a1f7bc6..d738211 100644
  volatile uint32_t armcpu_quiesce_calls = 0,armcpu_halt_calls = 0;
  // Secondary-CPU bring-up evidence (sheng-smp=1). Step values: 1 nub started, 2 registered, 3 start thread running,
  // 4 PSCI CPU_ON issued, 5 entered initCPU on the new core, 6 GIC redistributor ready, 7 running.
-@@ -125,7 +127,7 @@ static void spiIpiSend (uintptr_t dist, uint32_t core)
+@@ -125,7 +128,7 @@ static void spiIpiSend (uintptr_t dist, uint32_t core)
  static uint64_t counter (void)
  {
    uint64_t value;
@@ -30,7 +35,7 @@ index a1f7bc6..d738211 100644
    return value;
  }
  
-@@ -301,6 +303,7 @@ bool ArmCpu::wakeRedistributor (bool local)
+@@ -301,6 +304,7 @@ bool ArmCpu::wakeRedistributor (bool local)
    write32 (sgi, 0x80, 0xffffffff);
    write32 (sgi, 0xd00, 0);
    write32 (sgi, 0x280, 0xffffffff);
@@ -38,7 +43,7 @@ index a1f7bc6..d738211 100644
    for (unsigned offset = 0x400; offset < 0x420; offset += 4) {
      write32 (sgi, offset, 0x80808080);
    }
-@@ -321,10 +324,16 @@ void ArmCpu::enableGic (void)
+@@ -321,10 +325,16 @@ void ArmCpu::enableGic (void)
    uint64_t value;
    __asm__ volatile ("mrs %0, icc_sre_el1" : "=r" (value));
    value |= 1;
@@ -56,7 +61,7 @@ index a1f7bc6..d738211 100644
    value &= ~2ULL; // EOImode 0: EOIR also deactivates the interrupt.
    __asm__ volatile ("msr icc_ctlr_el1, %0" :: "r" (value) : "memory");
    value = 0xff;
-@@ -337,7 +346,7 @@ void ArmCpu::enableGic (void)
+@@ -337,7 +347,7 @@ void ArmCpu::enableGic (void)
      write32 (dist, 0, read32 (dist, 0) | 0x12U);
    }
    value = 1;
@@ -65,7 +70,7 @@ index a1f7bc6..d738211 100644
    if (!secondary) {
      uint64_t pmr, ig, sre;
      __asm__ volatile ("mrs %0, icc_pmr_el1" : "=r" (pmr));
-@@ -361,7 +370,7 @@ bool ArmCpu::start (IOService *provider)
+@@ -361,7 +371,7 @@ bool ArmCpu::start (IOService *provider)
    unsigned skip = 0;
    PE_parse_boot_argn ("armcpu-skip-gic", &skip, sizeof (skip));
    skipGic = skip != 0;
@@ -74,7 +79,15 @@ index a1f7bc6..d738211 100644
    PE_parse_boot_argn ("armcpu-self-ipi", &selfIpi, sizeof (selfIpi));
    gSelfIpi = selfIpi == 1;
    unsigned spiIpi = 0;
-@@ -564,6 +573,7 @@ void ArmCpu::interrupt (void)
+@@ -424,6 +434,7 @@ bool ArmCpu::start (IOService *provider)
+   }
+   gController = controller;
+   initCPU (true);
++  if (native_marble_watchdog_start) native_marble_watchdog_start();
+   registerService ();
+   __atomic_store_n (&gBootRegistered, 1U, __ATOMIC_RELEASE);
+   drainPending ();
+@@ -564,6 +575,7 @@ void ArmCpu::interrupt (void)
      __asm__ volatile ("mrs %0, icc_iar1_el1" : "=r" (id));
      armcpu_irq_id=static_cast<uint32_t>(id & 0xffffff);
      if ((id & 0xffffff) >= 1020) { armcpu_irq_phase=0;break; }
@@ -82,7 +95,7 @@ index a1f7bc6..d738211 100644
      if(diagnosePower && ++drained>128)panic("ArmCpu: IRQ drain exceeds 128 id=%llx timer=%llu IPI=%llu",id,armcpu_timer_interrupts,armcpu_ipi_interrupts);
      if ((id & 0xffffff) == 27) {
        armcpu_timer_interrupts = armcpu_timer_interrupts + 1;
-@@ -603,7 +613,8 @@ void ArmCpu::interrupt (void)
+@@ -603,7 +615,8 @@ void ArmCpu::interrupt (void)
        }
      }
      armcpu_irq_phase=6;
@@ -92,7 +105,7 @@ index a1f7bc6..d738211 100644
    }
  }
  
-@@ -618,7 +629,7 @@ void ArmCpu::signalCPU (IOCPU *target)
+@@ -618,7 +631,7 @@ void ArmCpu::signalCPU (IOCPU *target)
                   ((aff & 0xff00) << 8) | (1ULL << (aff & 0xff));
    armcpu_ipi_sent = armcpu_ipi_sent + 1;
    if (gSpiIpi) { spiIpiSend (gDist, peer->logicalId & 7); return; }
@@ -101,7 +114,7 @@ index a1f7bc6..d738211 100644
  }
  
  // Diagnostic: sends SGI 0 to the core whose MPIDR affinity is aff (the DT "reg" value, e.g. 0x100 for core 1) exactly as signalCPU
-@@ -664,7 +675,7 @@ extern "C" void armcpu_sgi_selfprobe (uint64_t *out)
+@@ -664,7 +677,7 @@ extern "C" void armcpu_sgi_selfprobe (uint64_t *out)
  {
    uint64_t mpidr, daif, v;
    __asm__ volatile ("mrs %0, mpidr_el1" : "=r" (mpidr));
@@ -110,7 +123,7 @@ index a1f7bc6..d738211 100644
    for (unsigned i = 0; i < 10; i++) { out[i] = 0; }
    out[0] = mpidr;
    __asm__ volatile ("mrs %0, icc_pmr_el1" : "=r" (v)); out[3] = v;
-@@ -677,8 +688,8 @@ extern "C" void armcpu_sgi_selfprobe (uint64_t *out)
+@@ -677,8 +690,8 @@ extern "C" void armcpu_sgi_selfprobe (uint64_t *out)
      for (uint64_t intid = 0; intid < 16; intid++) {
        const uint64_t sgi = base | (intid << 24);
        uint64_t h = 1023, ta, tb;
@@ -121,7 +134,7 @@ index a1f7bc6..d738211 100644
        if (intid == 0) { out[8] = tb - ta; }
        for (unsigned polls = 0; polls < 400; polls++) {
          __asm__ volatile ("mrs %0, icc_hppir1_el1" : "=r" (h));
-@@ -688,10 +699,10 @@ extern "C" void armcpu_sgi_selfprobe (uint64_t *out)
+@@ -688,10 +701,10 @@ extern "C" void armcpu_sgi_selfprobe (uint64_t *out)
        if ((h & 0xffffff) == intid) {
          out[1] |= 1ULL << intid;
          __asm__ volatile ("mrs %0, icc_iar1_el1" : "=r" (v));
@@ -134,7 +147,7 @@ index a1f7bc6..d738211 100644
        for (unsigned polls = 0; polls < 400; polls++) {
          __asm__ volatile ("mrs %0, icc_hppir0_el1" : "=r" (h));
          if ((h & 0xffffff) == intid) { break; }
-@@ -700,16 +711,16 @@ extern "C" void armcpu_sgi_selfprobe (uint64_t *out)
+@@ -700,16 +713,16 @@ extern "C" void armcpu_sgi_selfprobe (uint64_t *out)
        if ((h & 0xffffff) == intid) {
          out[2] |= 1ULL << intid;
          __asm__ volatile ("mrs %0, icc_iar0_el1" : "=r" (v));
@@ -154,7 +167,7 @@ index a1f7bc6..d738211 100644
  }
  
  extern "C" void armcpu_ipi_selftest (uint64_t aff)
-@@ -717,13 +728,13 @@ extern "C" void armcpu_ipi_selftest (uint64_t aff)
+@@ -717,13 +730,13 @@ extern "C" void armcpu_ipi_selftest (uint64_t aff)
    uint64_t sgi = ((aff & 0xff00000000ULL) << 16) | ((aff & 0xff0000) << 16) | ((aff & 0xff00) << 8) | (1ULL << (aff & 0xff));
    armcpu_ipi_selftest_sent = armcpu_ipi_selftest_sent + 1;
    if (gSpiIpi) { spiIpiSend (gDist, static_cast<uint32_t> ((aff >> 8) & 7)); return; }
@@ -170,7 +183,7 @@ index a1f7bc6..d738211 100644
  }
  
  void ArmCpu::quiesceCPU (void)
-@@ -732,7 +743,7 @@ void ArmCpu::quiesceCPU (void)
+@@ -732,7 +745,7 @@ void ArmCpu::quiesceCPU (void)
    if(diagnosePower)panic("ArmCpu: unsupported quiesce requested before timer/GIC disable caller=%p halt=%u timer=%llu phase=%u",__builtin_return_address(0),armcpu_halt_calls,armcpu_timer_interrupts,armcpu_irq_phase);
    enableCPUTimeBase (false);
    uint64_t value = 0;
@@ -179,7 +192,7 @@ index a1f7bc6..d738211 100644
  }
  
  void ArmCpu::haltCPU (void)
-@@ -754,7 +765,7 @@ static void cleanToMemory (const void *start, size_t length)
+@@ -754,7 +767,7 @@ static void cleanToMemory (const void *start, size_t length)
    uintptr_t line = static_cast<uintptr_t> (4) << ((ctr >> 16) & 15);
    uintptr_t address = reinterpret_cast<uintptr_t> (start) & ~(line - 1), end = reinterpret_cast<uintptr_t> (start) + length;
    for (; address < end; address += line) { __asm__ volatile ("dc civac, %0" :: "r" (address) : "memory"); }
@@ -188,7 +201,7 @@ index a1f7bc6..d738211 100644
  }
  
  kern_return_t ArmCpu::startCPU (vm_offset_t, vm_offset_t)
-@@ -821,3 +832,13 @@ extern "C" uint64_t armcpu_spi_count (uint32_t intid)
+@@ -821,3 +834,13 @@ extern "C" uint64_t armcpu_spi_count (uint32_t intid)
    }
    return 0;
  }

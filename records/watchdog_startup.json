@@ -1,0 +1,16 @@
+{
+  "previous_run": "full system transfer and continue succeeded; device rebooted to Android before runtime USB appeared",
+  "android_pstore": "empty",
+  "cause_status": "boot watchdog handoff gap identified in code; reset cause not captured",
+  "changes": [
+    "CPU initialization starts watchdog pet worker before root disk import",
+    "Runtime USB takes ownership of watchdog petting after controller initialization",
+    "Firmware pets watchdog after memory cache writeback and immediately before DarwinEnter",
+    "Keep watchdog initialization and firmware output before interrupt masking"
+  ],
+  "kernel": "outputs/UniXNU_marble/kernel_watchdog_startup.macho",
+  "kernel_sha256": "4cfda962bc5e9785e0268cad4cbedb8dd973016b4ae611f31fc76fab8d8db119",
+  "build": "passed",
+  "prelink": "passed",
+  "hardware_validation": "pending"
+}

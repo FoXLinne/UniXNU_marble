@@ -280,10 +280,10 @@ index 824c949..2284570 100644
      if blob[:8] == b'DBRDISK1':
 diff --git a/DarwinBootPkg/Driver/Resident.c b/DarwinBootPkg/Driver/Resident.c
 new file mode 100644
-index 0000000..cf7296b
+index 0000000..3b5ff15
 --- /dev/null
 +++ b/DarwinBootPkg/Driver/Resident.c
-@@ -0,0 +1,170 @@
+@@ -0,0 +1,172 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +#include <Uefi.h>
 +#include <Library/BaseLib.h>
@@ -407,7 +407,7 @@ index 0000000..cf7296b
 +    if (mLocalEnabled & (1U << i)) Write8(REDIST+0x400+i,mLocalPriority[i]);
 +  Write32(REDIST+0xc04,mLocalConfig); Write32(REDIST+0x100,mLocalEnabled);
 +  Write32(DIST,mControl);
-+  __asm__ volatile("dsb sy; isb" ::: "memory");
++  __asm__ volatile("dsb sy\n\tisb" ::: "memory");
 +}
 +
 +EFI_STATUS DarwinResidentRun(ROOT_STAGE_TABLE *Stage, UINT64 Args, UINT64 Entry,
@@ -429,7 +429,7 @@ index 0000000..cf7296b
 +      __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");
 +    for (UINT64 P=(UINTN)DarwinResidentContext;P<(UINTN)(DarwinResidentContext+48);P+=64)
 +      __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");
-+    __asm__ volatile("dsb sy; msr vbar_el1, %0; isb" :: "r"((UINTN)&DarwinResidentVectors) : "memory");
++    __asm__ volatile("dsb sy\n\tmsr vbar_el1, %0\n\tisb" :: "r"((UINTN)&DarwinResidentVectors) : "memory");
 +    SaveInterrupts();
 +    // The kernel owns only its allocated window. Retained firmware must reach RAM.
 +    for (UINTN i=0;i<MapSize;i+=Stride) {
@@ -437,9 +437,11 @@ index 0000000..cf7296b
 +      if ((D->Type>=EfiLoaderCode && D->Type<=EfiRuntimeServicesData) || D->Type==EfiACPIReclaimMemory || D->Type==EfiACPIMemoryNVS) {
 +        for (UINT64 P=D->PhysicalStart;P<D->PhysicalStart+EFI_PAGES_TO_SIZE(D->NumberOfPages);P+=64)
 +          __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");
++        VmWatchdogCall(VM_WDT_PET,0,0,NULL);
 +      }
 +    }
 +    __asm__ volatile("dsb sy" ::: "memory");
++    VmWatchdogCall(VM_WDT_PET,0,0,NULL);
 +    DarwinEnter(Args,Stage->ReturnTest ? Stage->ReturnStub : Entry,Base,Size,Video,VideoBytes);
 +  }
 +  DisarmVmWatchdog();

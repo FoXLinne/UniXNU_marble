@@ -20,6 +20,7 @@ extern "C" void native_hid_request_contact(unsigned, unsigned, bool);
 extern "C" void native_root_block_request_snapshot(void);
 extern "C" void native_root_block_capture_log(void);
 extern "C" void native_runtime_usb_start(void);
+extern "C" void native_marble_watchdog_start(void);
 extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_runtime_usb_report(char *, unsigned);
 
@@ -43,6 +44,7 @@ uint32_t controllerId, initialControl, initialStatus, initialPhy, lastCommand;
 bool threeStage, active, controllerOwned, panicOnFailure;
 bool watchdogActive;
 unsigned watchdogTicks;
+volatile bool watchdogRuntimeOwned;
 uint64_t watchdogCall(uint64_t function, uint64_t *control = nullptr) {
     register uint64_t x0 __asm__("x0") = function;
     register uint64_t x1 __asm__("x1") = 0;
@@ -287,6 +289,18 @@ bool initialize() {
     IOLog("RuntimeUSB: ready dma=%llx\n",physical);
     return true;
 }
+void startupWatchdog(void *, wait_result_t) {
+    uint64_t control = 0;
+    uint64_t status = watchdogCall(0x86000006, &control);
+    IOLog("MarbleWatchdog: startup active=%u status=%llx\n", !status && (control & 1), status);
+    if (!status && (control & 1)) {
+        while (!__atomic_load_n(&watchdogRuntimeOwned, __ATOMIC_ACQUIRE)) {
+            watchdogCall(0x86000007);
+            IOSleep(1000);
+        }
+    }
+    thread_terminate(current_thread());
+}
 void worker(void *, wait_result_t) {
     bool initialized=initialize();
     if (!initialized && panicOnFailure) {
@@ -298,6 +312,7 @@ void worker(void *, wait_result_t) {
         uint64_t status = watchdogCall(0x86000006, &control);
         watchdogActive = !status && (control & 1);
         IOLog("MarbleWatchdog: active=%u status=%llx\n", watchdogActive, status);
+        __atomic_store_n(&watchdogRuntimeOwned, true, __ATOMIC_RELEASE);
         while (active) {
             if (watchdogActive && ++watchdogTicks >= 100) {
                 watchdogCall(0x86000007);
@@ -362,4 +377,9 @@ extern "C" void native_runtime_usb_start(void) {
     panicOnFailure=enabled==2;
     thread_t thread;
     if (kernel_thread_start(worker,nullptr,&thread)==KERN_SUCCESS) thread_deallocate(thread);
+}
+
+extern "C" void native_marble_watchdog_start(void) {
+    thread_t thread;
+    if (kernel_thread_start(startupWatchdog, nullptr, &thread) == KERN_SUCCESS) thread_deallocate(thread);
 }
