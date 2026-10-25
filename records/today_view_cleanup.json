@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-26",
+  "trigger": "Today view swipe; also reproduced during boot with native Metal enabled",
+  "panic": "pmap_assert_free",
+  "physical_page": "0xa936ba000",
+  "stack": "outputs/UniXNU_marble/gpu_diagnostics/context_reset1_backtrace.txt",
+  "panic_log": "outputs/UniXNU_marble/gpu_diagnostics/context_reset1_panic.log",
+  "path": [
+    "AGXDeviceUserClient::clientClose",
+    "NativeAdrenoUserClient::releaseAll",
+    "NativeAdrenoUserClient::freeBo",
+    "NativeAdrenoMemory::release",
+    "IOBufferMemoryDescriptor::free",
+    "IOKernelFreePhysical",
+    "vm_object_reap_pages",
+    "pmap_assert_free"
+  ],
+  "cause": "The original dropViews omitted the retained mapping release. Explicit unmap and release in the client list alone did not cover all mappings during process death.",
+  "fix": "Revoke mappings through the descriptor before BO release, then unmap and release each retained mapping returned by the client list",
+  "hardware": {
+    "result": "startup_client_teardown_passed",
+    "kernel": "outputs/UniXNU_marble/kernel_view_unmap3.macho",
+    "sha256": "441165bd273e74073b18e107478b1c0dca5c60f6a2981882eda2c845cb4c3410",
+    "opens": 90,
+    "closes": 87,
+    "calls": 12400,
+    "status": 0,
+    "forced_unmaps": 288,
+    "frames": 417,
+    "log": "outputs/UniXNU_marble/gpu_diagnostics/view_unmap3_today2.log",
+    "settings_observation": "running"
+  },
+  "first_attempt": {
+    "result": "panic_reproduced_with_fix",
+    "kernel": "outputs/UniXNU_marble/kernel_view_unmap1.macho",
+    "sha256": "4dc6ce6feb352f532841128b2a1624e6ab7f9b3a6e2704a3d2b3ff27504c1102",
+    "deployment": "outputs/UniXNU_marble/gpu_diagnostics/view_unmap1_transfer.json",
+    "panic_log": "outputs/UniXNU_marble/panic_now.log",
+    "physical_page": "0xb2e973000",
+    "process": "iconservicesagent",
+    "process_limit_mib": 6,
+    "dropViews_binary": "0xfffffff0079c96a4",
+    "clientClose_return": "0xfffffff0079c9808"
+  }
+}

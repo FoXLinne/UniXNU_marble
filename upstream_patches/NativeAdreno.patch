@@ -148,7 +148,7 @@ index 4b402ca..a8bfca8 100644
  #include <IOKit/IOLib.h>
  #include <kern/task.h>
 diff --git a/NativeAdrenoPublish.cpp b/NativeAdrenoPublish.cpp
-index 51f3a27..260d413 100644
+index 51f3a27..844aa58 100644
 --- a/NativeAdrenoPublish.cpp
 +++ b/NativeAdrenoPublish.cpp
 @@ -102,16 +102,9 @@ volatile uint32_t native_adreno_mount_fail[4];
@@ -171,7 +171,25 @@ index 51f3a27..260d413 100644
  
  namespace {
  void shiftName(char names[3][17]) {
-@@ -680,9 +673,8 @@ extern "C" IOReturn native_adreno_new_user_client(IOService *provider,task_t own
+@@ -280,8 +273,15 @@ void AGXDeviceUserClient::dropViews(uint32_t token)
+         if(views_)for(size_t i=0;i<MaxViews;++i) {View &v=views_[i];if(v.descriptor && (!token || v.token==token)) {view=v.descriptor;v.descriptor=nullptr;v.token=0;break;}}
+         IOLockUnlock(g.lock);
+         if(!view)return;
+-        /* The returned reference is the last one outside the descriptor's own list: dropping it frees the map, which unmaps the user range. */
+-        while(removeMappingForDescriptor(view))native_adreno_metal_diag.forced_unmaps=native_adreno_metal_diag.forced_unmaps+1;
++        // Task teardown can move the client's mapping set to an IPC owner before clientClose.
++        // Revoke through the descriptor's own mapping set before releasing the BO pages.
++        view->redirect(nullptr,true);
++        IOMemoryMap *mapping;
++        while((mapping=removeMappingForDescriptor(view))) {
++            mapping->unmap();
++            mapping->release();
++            native_adreno_metal_diag.forced_unmaps=native_adreno_metal_diag.forced_unmaps+1;
++        }
+         view->release();
+     }
+ }
+@@ -680,9 +680,8 @@ extern "C" IOReturn native_adreno_new_user_client(IOService *provider,task_t own
          connection->setProperty("NativeSandboxGrant",kOSBooleanTrue);
          native_adreno_metal_diag.grants=native_adreno_metal_diag.grants+1;
      }
@@ -183,7 +201,7 @@ index 51f3a27..260d413 100644
      IOLockLock(g.lock);
      NativeAdrenoClientRecord *record=kernel?nullptr:clientRecord(opener);
      const bool capped=cap && record && record->opens>=cap;
-@@ -733,7 +725,15 @@ extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *vm,NativeAdrenoSubmit
+@@ -733,7 +732,15 @@ extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *vm,NativeAdrenoSubmit
      const NativeAdrenoRingClock *clock,const NativeAdrenoTimer *timer,const NativeAdrenoAbiDeviceInfo *info,
      uint32_t input_bits,uint32_t output_bits)
  {
@@ -200,6 +218,19 @@ index 51f3a27..260d413 100644
      g.lock=IOLockAlloc();
      NativeAdrenoGpuPublished *service=new NativeAdrenoGpuPublished;
      if(!g.lock || !service || !service->init() || !service->attach(IOService::getPlatform())) {
+@@ -751,6 +758,12 @@ extern "C" uint32_t native_adreno_publish_stats(uint32_t *closed)
+     if(closed)*closed=g.closed;
+     return g.opened;
+ }
++extern "C" void native_adreno_runtime_report(char *text,unsigned capacity)
++{
++    const auto &d=native_adreno_metal_diag;
++    snprintf(text,capacity,"NativeMetal opens=%u closes=%u calls=%u status=%x unmaps=%u process=%s\n%s\n%s",
++        d.opens,d.closes,d.calls,d.last_status,d.forced_unmaps,d.opener[0],d.report,d.report2);
++}
+ extern "C" IOService *native_adreno_published_service()
+ {
+     return g.service;
 diff --git a/NativeAdrenoSmmuContext.h b/NativeAdrenoSmmuContext.h
 index 4ed1bcc..fe61a42 100644
 --- a/NativeAdrenoSmmuContext.h

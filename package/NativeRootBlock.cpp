@@ -39,6 +39,7 @@ unsigned native_marble_cpu_report(char *, unsigned);
 kern_return_t native_load_owner_trust_module(const uint8_t *, size_t);
 void native_marble_gpu_start(void);
 void native_marble_gpu_report(char *, unsigned);
+void native_adreno_runtime_report(char *, unsigned);
 unsigned native_legacy_performance_report(char *, unsigned);
 unsigned native_legacy_prepare_report(char *, unsigned);
 unsigned native_legacy_swap_timeline(char *, unsigned);
@@ -325,6 +326,8 @@ extern "C" void native_root_block_capture_log(void)
   native_marble_touch_report(runtime,sizeof(runtime));
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   native_marble_gpu_report(runtime,sizeof(runtime));
+  used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
+  native_adreno_runtime_report(runtime,sizeof(runtime));
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   used += snprintf(log.text + used, sizeof(log.text) - used,
       "ReadWindow hits=%llu misses=%llu bytes=%llu\n",readWindowHits,readWindowMisses,readWindowBytes);
