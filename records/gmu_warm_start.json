@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-26",
+  "handoff_changes": [
+    "package/MarbleAdreno.cpp",
+    "package/MarbleGmu.cpp",
+    "package/MarbleGpu.cpp",
+    "package/MarbleGpu.h",
+    "package/NativeRootBlock.cpp"
+  ],
+  "hfi_failure": {
+    "command": 14,
+    "command_queue": [
+      224,
+      224
+    ],
+    "reply_queue": [
+      8,
+      8
+    ],
+    "debug_queue": [
+      0,
+      20
+    ],
+    "firmware_status": "0x900",
+    "error_code": "0x0073007a",
+    "function": "PwrIdleStateMgrStart"
+  },
+  "firmware_condition": {
+    "function_address": "0xa85c",
+    "check_address": "0xa87a",
+    "helper_address": "0x97b4",
+    "register": "GEN7_GMU_GFX_PWR_CLK_STATUS",
+    "firmware_register_address": "0x1807e340",
+    "requirement": "Register bits 0..1 must contain an off indication before CORE_FW_START",
+    "failed_state": "GX remained on after prior runtime return"
+  },
+  "evidence": [
+    "outputs/UniXNU_marble/gpu_diagnostics/irq_runtime.log",
+    "outputs/UniXNU_marble/gpu_diagnostics/irq2_runtime.log",
+    "outputs/UniXNU_marble/gpu_diagnostics/gx_runtime.log"
+  ],
+  "candidate": "outputs/UniXNU_marble/kernel_gpu_gx1.macho",
+  "gx_validation": {
+    "result": 0,
+    "gx_off_status": "0x88000",
+    "gx_off_power": 3,
+    "gx_off_elapsed_ms": 1,
+    "commands": [
+      4,
+      3,
+      14,
+      30,
+      10
+    ],
+    "RBBM": 1,
+    "runtime_usb": "available"
+  }
+}

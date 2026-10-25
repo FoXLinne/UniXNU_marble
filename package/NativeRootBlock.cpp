@@ -38,6 +38,7 @@ void native_marble_cpu_start(void);
 unsigned native_marble_cpu_report(char *, unsigned);
 kern_return_t native_load_owner_trust_module(const uint8_t *, size_t);
 void native_marble_gpu_start(void);
+void native_marble_gpu_report(char *, unsigned);
 unsigned native_legacy_performance_report(char *, unsigned);
 unsigned native_legacy_prepare_report(char *, unsigned);
 unsigned native_legacy_swap_timeline(char *, unsigned);
@@ -323,6 +324,8 @@ extern "C" void native_root_block_capture_log(void)
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   native_marble_touch_report(runtime,sizeof(runtime));
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
+  native_marble_gpu_report(runtime,sizeof(runtime));
+  used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   used += snprintf(log.text + used, sizeof(log.text) - used,
       "ReadWindow hits=%llu misses=%llu bytes=%llu\n",readWindowHits,readWindowMisses,readWindowBytes);
   char display[512];
@@ -573,7 +576,6 @@ extern "C" void native_root_block_start(void)
   static bool started;
   if (started) return;
   metalCacheLock = IOLockAlloc();
-  native_marble_gpu_quiesce_inherited();
   native_marble_cpu_start();
   IORegistryEntry *map = IORegistryEntry::fromPath("/chosen/memory-map", gIODTPlane);
   OSData *range = map ? OSDynamicCast(OSData, map->getProperty("RootDisks")) : nullptr;
@@ -621,6 +623,7 @@ extern "C" void native_root_block_start(void)
         native_root_block_boot_args = residentBootArgs;
         IOLog("RootStage: extra boot arguments %s\n", extraArgs);
       }
+      native_marble_gpu_quiesce_inherited();
       PE_parse_boot_argn("rootstage-panic-process", panicProcess, sizeof(panicProcess));
       if (bytes) {
         memcpy(dataSeedUUID, mailbox + 64, sizeof(dataSeedUUID));
@@ -665,6 +668,7 @@ extern "C" void native_root_block_start(void)
       }
     } else log->release();
   }
+  if (!rootLogMapping) native_marble_gpu_quiesce_inherited();
   kern_return_t result = OSKextLoadKextWithIdentifier("com.apple.iokit.IOStorageFamily");
   if (result) panic("RootStage: IOStorageFamily load returned %x",result);
   void *handle = OSMetaClass::preModLoad(g_kernel_kmod_info.name);

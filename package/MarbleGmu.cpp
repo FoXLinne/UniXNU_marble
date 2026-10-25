@@ -10,6 +10,7 @@
 #include "AdrenoFirmware.h"
 #include "AdrenoHfi.h"
 #include "AdrenoHfiVotes.h"
+#include "MarbleGpu.h"
 
 extern "C" const uint8_t marble_gmu_firmware[];
 extern "C" const uint64_t marble_gmu_firmware_size;
@@ -54,7 +55,7 @@ struct Memory {
     }
 };
 struct Gmu {
-    Registers core, rscc, pdc, gpu, smmu, database;
+    Registers core, rscc, pdc, gpu, smmu, database, clocks;
     Memory cache, scratch, tables;
     ArmSmmu4KIo smmuIo = {};
     ArmSmmu4KMmio smmuMmio = {};
@@ -95,15 +96,30 @@ struct Gmu {
         if (status) return -5;
         unsigned elapsed = 0;
         for (; elapsed < 100; ++elapsed) {
+            // Match KGSL's inline reply path: acknowledge MSGQ before consuming it.
+            write(0x1f991, 1);
             status = AdrenoHfiPoll(&hfi, reply, 16, &replyWords, &error);
             if (status != AdrenoHfiEmpty) break;
             IOSleep(1);
         }
         IOLog("MarbleGPU: HFI command=%u header=%x status=%u error=%x reply_words=%lu elapsed=%u skipped=%x/%x/%x\n",
             command, header, status, error, replyWords, elapsed, hfi.skipped_header, hfi.skipped_ret, hfi.skipped_code);
+        if (status) {
+            volatile uint32_t *queues = hfi.shared;
+            IOLog("MarbleGPU: HFI timeout queues cmd=%u/%u reply=%u/%u debug=%u/%u AO=%x CM3=%x init=%x HFI=%x FSR=%x\n",
+                queues[16], queues[17], queues[28], queues[29], queues[40], queues[41],
+                read(0x23b05), read(0x1f992), read(0x1f81c), read(0x1f980),
+                smmu.read(programmed.context_offset + 0x58));
+            unsigned debugRead = queues[40], debugWrite = queues[41];
+            for (unsigned at = debugRead; at != debugWrite && at - debugRead < 32; at = (at + 4) & 1023)
+                IOLog("MarbleGPU: HFI debug[%u]=%08x %08x %08x %08x\n", at,
+                    queues[3072 + at], queues[3072 + ((at + 1) & 1023)],
+                    queues[3072 + ((at + 2) & 1023)], queues[3072 + ((at + 3) & 1023)]);
+        }
         return status ? -5 : 0;
     }
     int performance() {
+        native_marble_gpu_checkpoint(MarbleGpuVotes);
         if (!database.map(0x80860000, 0x20000)) return -12;
         Resource gfx = resource("gfx.lvl"), mx = resource("mx.lvl"), cx = resource("cx.lvl");
         IOLog("MarbleGPU: ARC gfx=%x/%u mx=%x/%u cx=%x/%u\n",
@@ -174,6 +190,7 @@ struct Gmu {
         return powerGpu();
     }
     int powerGpu() {
+        native_marble_gpu_checkpoint(MarbleGpuGx);
         // KGSL gen7: blocking DCVS vote, OOB GPU request, then HFI START.
         const uint32_t vote[] = {1, 2, 2}; // 285 MHz and DDR table level 2.
         int result = exchange(30, vote, 3);
@@ -311,6 +328,17 @@ struct Gmu {
             !pdc.map(0xb290000, 0x10000) || !gpu.map(0x3d00000, 0x40000)) return -12;
         write(0x1f800, 1);
         IODelay(100);
+        // CORE_FW_START requires GX off, including after a runtime kernel return.
+        if (!clocks.map(0x3d90000, 0xa000)) return -12;
+        uint32_t gxControl = clocks.read(0x905c);
+        clocks.write(0x905c, (gxControl & ~6U) | 1U);
+        unsigned gxElapsed = 0;
+        for (; gxElapsed < 100 && !(clocks.read(0x9060) & (1U << 15)); ++gxElapsed) IOSleep(1);
+        IOLog("MarbleGPU: GX cold state control=%x/%x status=%x power=%x elapsed=%u\n",
+            gxControl, clocks.read(0x905c), clocks.read(0x9060), read(0x1f8d0), gxElapsed);
+        if (gxElapsed == 100) return -110;
+        clocks.write(0x9504, clocks.read(0x9504) | 1U);
+        native_marble_gpu_checkpoint(MarbleGpuGmuMemory);
         int result = mapMemory();
         if (result) return result;
         const uint32_t setup[][2] = {
@@ -323,6 +351,7 @@ struct Gmu {
         for (unsigned i = 0; i < 5; ++i) rscc.write((0x180 + i) * 4, sequence[i]);
         pdc.write(0x1148 * 4, 0);
         pdc.write(0x1140 * 4, 0x80000001);
+        native_marble_gpu_checkpoint(MarbleGpuGmuFirmware);
         result = loadFirmware();
         if (result) return result;
         if (AdrenoHfiInitializeStopped(&hfi, reinterpret_cast<volatile uint32_t *>(scratch.cpu + 0x8000),
@@ -343,12 +372,21 @@ struct Gmu {
         write(0x1f40f, 1);
         write(0x1f400, 1);
         write(0x1f401, 1);
+        // Runtime polls replies; keep host IRQs masked and clear retained status.
+        write(0x1f993, UINT32_MAX);
+        write(0x23b06, UINT32_MAX);
+        write(0x1f991, UINT32_MAX);
+        write(0x23b04, UINT32_MAX);
+        IOLog("MarbleGPU: HFI interrupt lifecycle v1 AO=%x CM3=%x\n",
+            read(0x23b05), read(0x1f992));
+        native_marble_gpu_checkpoint(MarbleGpuGmuBoot);
         write(0x1f800, 0);
         unsigned elapsed = 0;
         for (; elapsed < 100 && (read(0x1f81c) & 0x1ff) != 0x100; ++elapsed) IOSleep(1);
         IOLog("MarbleGPU: GMU init=%x elapsed=%u AO=%x CM3=%x FSR=%x\n", read(0x1f81c),
             elapsed, read(0x23b05), read(0x1f992), smmu.read(programmed.context_offset + 0x58));
         if (elapsed == 100) { write(0x1f800, 1); return -110; }
+        native_marble_gpu_checkpoint(MarbleGpuHfi);
         write(0x1f986, 1);
         for (elapsed = 0; elapsed < 100 && !(read(0x1f980) & 1); ++elapsed) IOSleep(1);
         IOLog("MarbleGPU: HFI status=%x elapsed=%u\n", read(0x1f980), elapsed);
@@ -357,8 +395,13 @@ struct Gmu {
     }
 };
 Gmu *device;
+bool ready;
+}
+extern "C" bool native_marble_gmu_ready(void) {
+    return __atomic_load_n(&ready, __ATOMIC_ACQUIRE);
 }
 extern "C" void native_marble_gmu_stop(void) {
+    __atomic_store_n(&ready, false, __ATOMIC_RELEASE);
     if (device && device->core.words) {
         device->write(0x1f800, 1);
         IODelay(100);
@@ -368,5 +411,7 @@ extern "C" int native_marble_gmu_load(void) {
     // Context tables and firmware buffers remain mapped while the GMU owns them.
     if (device) return -16;
     device = new Gmu;
-    return device ? device->start() : -12;
+    int status = device ? device->start() : -12;
+    __atomic_store_n(&ready, status == 0, __ATOMIC_RELEASE);
+    return status;
 }

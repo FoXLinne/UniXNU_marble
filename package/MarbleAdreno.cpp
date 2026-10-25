@@ -12,6 +12,7 @@
 #include "NativeAdrenoPwrup.h"
 #include "AdrenoPM4.h"
 #include "MarbleAdrenoRegisters.h"
+#include "MarbleGpu.h"
 
 extern "C" int native_marble_zap_load(void);
 extern "C" const uint8_t marble_sqe_firmware[];
@@ -68,6 +69,9 @@ class CommandProcessor {
         return nanoseconds / 1000;
     }
     static int idle(void *) { IODelay(20); return 0; }
+    static void contextProgress(uint32_t step) {
+        native_marble_gpu_checkpoint(MarbleGpuContextAllocate + step - NativeAdrenoGpuContext::Allocate);
+    }
     int context() {
         gpuMap = map(0x3d00000, 0x40000, kIOMapInhibitCache);
         smmuMap = map(0x3da0000, 0x40000, kIOMapInhibitCache);
@@ -82,7 +86,7 @@ class CommandProcessor {
         barrier(nullptr);
         NativeAdrenoGmuContextReport report = {};
         IOReturn status = NativeAdrenoGpuContextBringup(reinterpret_cast<volatile uint8_t *>(smmu),
-            0x40000, 20, 21, 1, 0, 2, 1, nullptr, &report);
+            0x40000, 20, 21, 1, 0, 2, 1, contextProgress, &report);
         IOLog("MarbleGPU: GPU context status=%x step=%u program=%u routes=%u output_bits=%u\n",
             status, report.step, report.program_status, report.routes_verified, report.output_bits);
         if (status || NativeAdrenoGpuContextBuffers(buffers)) return -5;
@@ -95,6 +99,7 @@ class CommandProcessor {
         return 0;
     }
     int configure() {
+        native_marble_gpu_checkpoint(MarbleGpuCpFirmware);
         if (marble_sqe_firmware_size < 8 || marble_sqe_firmware_size - 4 > buffers[0].bytes) return -22;
         auto *destination = reinterpret_cast<volatile uint32_t *>(cpu[0]);
         for (unsigned at = 4; at < marble_sqe_firmware_size; at += 4) {
@@ -105,6 +110,7 @@ class CommandProcessor {
             uint32_t value; memcpy(&value, marble_sqe_firmware + at, 4);
             if (destination[at / 4 - 1] != value) return -5;
         }
+        native_marble_gpu_checkpoint(MarbleGpuCpRegisters);
         write(GEN7_GBIF_HALT, 0);
         write(GEN7_RBBM_GBIF_HALT, 0);
         write(GEN7_RBBM_SECVID_TSB_CNTL, 0);
@@ -143,6 +149,7 @@ class CommandProcessor {
         // Completion is polled until the GPU interrupt handler is attached.
         write(GEN7_RBBM_INT_0_MASK, 0);
         write64(GEN7_CP_SQE_INSTR_BASE_LO, buffers[0].iova);
+        native_marble_gpu_checkpoint(MarbleGpuCpRing);
         const NativeAdrenoRingIo io{this, writeRegister, readRegister, barrier};
         const NativeAdrenoRingCache cache{this, publish, acquire};
         IOReturn status = ring.attach(&io, &cache, const_cast<uint8_t *>(cpu[1]), buffers[1].bytes,
@@ -160,7 +167,7 @@ class CommandProcessor {
         if (status) return -5;
         barrier(nullptr);
         write(GEN7_CP_SQE_CNTL, 1);
-        IOLog("MarbleGPU: stage cp-init\n");
+        native_marble_gpu_checkpoint(MarbleGpuCpInit);
         const NativeAdrenoCpInitConfig config{buffers[0].iova, buffers[3].iova, 1};
         uint32_t fence = 0, seen = 0;
         status = initializer.run(&io, &ring, &config, &fence);
@@ -169,6 +176,7 @@ class CommandProcessor {
         IOLog("MarbleGPU: CP init=%x fence=%u seen=%u wait=%u RBBM=%x fault=%x\n",
             status, fence, seen, waited, read(GEN7_RBBM_STATUS), read(GEN7_CP_HW_FAULT));
         if (status || waited) return -5;
+        native_marble_gpu_checkpoint(MarbleGpuCpScratch);
         uint32_t words[4] = {};
         AdrenoPM4Type7(0x3d, 3, &words[0]);
         words[1] = uint32_t(buffers[4].iova); words[2] = uint32_t(buffers[4].iova >> 32); words[3] = 0xa7257475;
@@ -177,9 +185,10 @@ class CommandProcessor {
         uint32_t value = *reinterpret_cast<volatile uint32_t *>(cpu[4]);
         IOLog("MarbleGPU: CP write=%x fence=%u seen=%u wait=%u scratch=%x\n", status, fence, seen, waited, value);
         if (status || waited || value != 0xa7257475) return -5;
-        IOLog("MarbleGPU: stage zap\n");
+        native_marble_gpu_checkpoint(MarbleGpuZap);
         int secure = native_marble_zap_load();
         if (secure) return secure;
+        native_marble_gpu_checkpoint(MarbleGpuSecureExit);
         uint32_t leaveSecure[2] = {};
         AdrenoPM4Type7(0x66, 1, leaveSecure);
         status = ring.submit(leaveSecure, 2, &fence);
@@ -195,38 +204,58 @@ class CommandProcessor {
         const NativeAdrenoRingClock clock{nullptr, now, idle};
         if (!status) status = native_adreno_publish(vm, &submit, &ring, &clock, &timer, &deviceInfo, 32, outputBits);
         if (status) return status;
+        native_marble_gpu_checkpoint(MarbleGpuFamily);
         status = OSKextLoadKextWithIdentifier("com.apple.iokit.IOGPUFamily");
         if (status) return status;
+        native_marble_gpu_checkpoint(MarbleGpuMetaclass);
         void *module = OSMetaClass::preModLoad(g_kernel_kmod_info.name);
         if (!module) return kIOReturnNoResources;
         native_adreno_accelerator_static_init();
         status = OSMetaClass::postModLoad(module);
         if (status) return status;
+        native_marble_gpu_checkpoint(MarbleGpuAccelerator);
         IOService *accelerator = native_adreno_accelerator_allocate();
         if (!accelerator || !accelerator->init()) return kIOReturnNoMemory;
         accelerator->setProperty("MetalPluginName", "NativeAdrenoMetal");
         accelerator->setProperty("MetalPluginClassName", "NativeAdrenoMetalDevice");
         accelerator->setProperty("NativeSandboxGrantProcess", "*");
         if (!accelerator->attach(IOService::getPlatform())) return kIOReturnNotAttached;
+        native_marble_gpu_checkpoint(MarbleGpuRegister);
         accelerator->registerService();
         IOLog("MarbleGPU: Adreno 725 Metal accelerator published chip=%x\n", deviceInfo.chip_id);
         return 0;
     }
 public:
     int start() {
-        IOLog("MarbleGPU: stage context\n");
+        native_marble_gpu_checkpoint(MarbleGpuContext);
         int status = context();
         IOLog("MarbleGPU: stage configure entry status=%d\n", status);
         if (!status) status = configure();
-        IOLog("MarbleGPU: stage publish entry status=%d\n", status);
-        return status ? status : publishService();
+        if (!status) {
+            native_marble_gpu_checkpoint(MarbleGpuPublish);
+            status = publishService();
+        }
+        if (!status) native_marble_gpu_checkpoint(MarbleGpuReady);
+        return status;
     }
 };
 CommandProcessor *commandProcessor;
 }
 
 extern "C" int native_marble_adreno_start(void) {
-    if (commandProcessor) return -16;
+    if (!native_marble_gmu_ready()) {
+        IOLog("MarbleGPU: CP requires completed GMU and GX initialization\n");
+        return -6;
+    }
+    static bool starting;
+    if (__atomic_exchange_n(&starting, true, __ATOMIC_ACQ_REL)) return -16;
     commandProcessor = new CommandProcessor;
-    return commandProcessor ? commandProcessor->start() : -12;
+    int status = commandProcessor ? commandProcessor->start() : -12;
+    if (status) {
+        native_marble_gpu_failed(status);
+        char report[128];
+        native_marble_gpu_report(report, sizeof(report));
+        IOLog("%s CP result=%d\n", report, status);
+    }
+    return status;
 }

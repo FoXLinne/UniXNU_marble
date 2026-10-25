@@ -5,6 +5,9 @@
 #include <IOKit/IOService.h>
 #include <IOKit/IOMemoryDescriptor.h>
 #include <kern/thread.h>
+#include "MarbleGpu.h"
+
+extern "C" void native_root_block_capture_log(void);
 extern "C" int native_marble_gmu_load(void);
 extern "C" int native_marble_adreno_start(void);
 
@@ -47,6 +50,54 @@ struct Registers {
         return wait(offset, 1u << 31, 0);
     }
 };
+uint64_t checkpoint;
+bool probeOnly() {
+    unsigned enabled = 0;
+    return PE_parse_boot_argn("marble-gpu-probe", &enabled, sizeof(enabled)) && enabled == 1;
+}
+void drawCheckpoint(unsigned stage, int status) {
+    static IOMemoryMap *mapping;
+    static PE_Video video;
+    if (!mapping) {
+        if (PE_current_console(&video) || !video.v_baseAddr || video.v_depth != 32 ||
+            video.v_width < 112 || video.v_height < 64) return;
+        auto *memory = IODeviceMemory::withRange(video.v_baseAddr, video.v_rowBytes * video.v_height);
+        mapping = memory ? memory->map(kIOMapAnywhere | kIOMapWriteCombineCache) : nullptr;
+        OSSafeReleaseNULL(memory);
+        if (!mapping) return;
+    }
+    static const uint8_t digits[10][7] = {
+        {14,17,19,21,25,17,14}, {4,12,4,4,4,4,14}, {14,17,1,2,4,8,31},
+        {30,1,1,14,1,1,30}, {2,6,10,18,31,2,2}, {31,16,16,30,1,1,30},
+        {14,16,16,30,17,17,14}, {31,1,2,4,8,8,8}, {14,17,17,14,17,17,14},
+        {14,17,17,15,1,1,14}
+    };
+    auto *pixels = reinterpret_cast<volatile uint32_t *>(mapping->getVirtualAddress());
+    for (unsigned y = 0; y < 64; ++y) {
+        for (unsigned x = 0; x < 112; ++x) {
+            unsigned digit = x / 56, column = (x % 56) / 8, row = y / 8;
+            unsigned number = digit ? stage % 10 : stage / 10 % 10;
+            bool ink = column < 5 && row < 7 && (digits[number][row] & (1U << (4 - column)));
+            pixels[y * (video.v_rowBytes / 4) + x] = ink ? 0xffffffff : status ? 0xff800000 : 0xff002060;
+        }
+    }
+    __asm__ volatile("dsb sy" ::: "memory");
+}
+int probe() {
+    native_marble_gpu_checkpoint(MarbleGpuProbe);
+    Registers gcc, cc, gmu;
+    if (!gcc.map(0x100000, 0x82000) || !cc.map(0x3d90000, 0xa000)) return -12;
+    uint32_t cx = cc.read(0x953c), gmuClock = cc.read(0x913c);
+    IOLog("MarbleGPU: probe GCC=%x/%x/%x/%x/%x CX=%x/%x clocks=%x/%x/%x/%x\n",
+        gcc.read(0x62018), gcc.read(0x62000), gcc.read(0x81004), gcc.read(0x81010), gcc.read(0x81018),
+        cc.read(0x9108), cx, gmuClock, cc.read(0x93e8), cc.read(0x9148), cc.read(0x7000));
+    if (!(cx & (1U << 31)) || !(gmuClock & 1) || (gmuClock & (1U << 31))) return -6;
+    if (!gmu.map(0x3d68000, 0x37000)) return -12;
+    IOLog("MarbleGPU: probe GMU reset=%x init=%x HFI=%x GX=%x state=%x AO=%x\n",
+        gmu.read(0x16000), gmu.read(0x16070), gmu.read(0x16600),
+        gmu.read(0x16340), gmu.read(0x163b0), gmu.read(0x26c14));
+    return 0;
+}
 int powerCx() {
     Registers gcc, cc, gmu, smmu;
     if (!gcc.map(0x100000, 0x82000)) return -12;
@@ -80,9 +131,17 @@ int powerCx() {
     return 0;
 }
 void worker(void *, wait_result_t) {
+    if (probeOnly()) {
+        int result = probe();
+        native_marble_gpu_checkpoint(MarbleGpuProbe, result);
+        thread_terminate(current_thread());
+        return;
+    }
+    native_marble_gpu_checkpoint(MarbleGpuCx);
     int result = powerCx();
     IOLog("MarbleGPU: CX initialization result=%d\n", result);
     if (!result) {
+        native_marble_gpu_checkpoint(MarbleGpuGmu);
         result = native_marble_gmu_load();
         IOLog("MarbleGPU: GMU initialization result=%d\n", result);
         unsigned nativeMetal = 0;
@@ -92,9 +151,34 @@ void worker(void *, wait_result_t) {
             IOLog("MarbleGPU: native Metal initialization result=%d\n", result);
         }
     }
+    if (result) native_marble_gpu_failed(result);
+    thread_terminate(current_thread());
 }
+}
+extern "C" void native_marble_gpu_checkpoint(unsigned stage, int status) {
+    __atomic_store_n(&checkpoint, uint64_t(stage) << 32 | uint32_t(status), __ATOMIC_RELEASE);
+    IOLog("MarbleGPU: checkpoint=%u status=%d\n", stage, status);
+    unsigned diagnostics = 0;
+    if (PE_parse_boot_argn("marble-gpu-diagnostics", &diagnostics, sizeof(diagnostics)) && diagnostics == 1) {
+        drawCheckpoint(stage, status);
+        native_root_block_capture_log();
+        unsigned pauseMs = 0;
+        if (stage >= MarbleGpuContextAllocate &&
+            PE_parse_boot_argn("marble-gpu-pause-ms", &pauseMs, sizeof(pauseMs)) && pauseMs)
+            IOSleep(pauseMs);
+    }
+}
+extern "C" void native_marble_gpu_failed(int status) {
+    uint64_t value = __atomic_load_n(&checkpoint, __ATOMIC_ACQUIRE);
+    native_marble_gpu_checkpoint(unsigned(value >> 32), status);
+}
+extern "C" void native_marble_gpu_report(char *text, unsigned capacity) {
+    uint64_t value = __atomic_load_n(&checkpoint, __ATOMIC_ACQUIRE);
+    snprintf(text, capacity, "MarbleGPU checkpoint=%u status=%d ready=%u",
+        unsigned(value >> 32), int32_t(value), native_marble_gmu_ready());
 }
 extern "C" void native_marble_gpu_quiesce_inherited(void) {
+    if (probeOnly()) return;
     Registers cc, core;
     if (!cc.map(0x3d90000, 0xa000)) return;
     if (!(cc.read(0x953c) & (1U << 31)) || !(cc.read(0x913c) & 1)) return;
