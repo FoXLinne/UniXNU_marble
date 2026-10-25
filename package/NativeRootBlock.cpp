@@ -39,7 +39,7 @@ unsigned native_marble_cpu_report(char *, unsigned);
 kern_return_t native_load_owner_trust_module(const uint8_t *, size_t);
 void native_marble_gpu_start(void);
 void native_marble_gpu_report(char *, unsigned);
-void native_adreno_runtime_report(char *, unsigned);
+unsigned native_adreno_runtime_report(char *, unsigned);
 unsigned native_legacy_performance_report(char *, unsigned);
 unsigned native_legacy_prepare_report(char *, unsigned);
 unsigned native_legacy_swap_timeline(char *, unsigned);
@@ -310,7 +310,7 @@ extern "C" void native_root_block_capture_log(void)
   memcpy(log.magic, "ROOTLOG1", sizeof(log.magic));
   log.version = 1;
   size_t used = 0;
-  size_t length = MIN((size_t)msgbufp->msg_size, sizeof(log.text) - sizeof(native_root_block_panic_text) - 8192);
+  size_t length = MIN((size_t)msgbufp->msg_size, sizeof(log.text) - sizeof(native_root_block_panic_text) - 16384);
   size_t start = (msgbufp->msg_bufx + msgbufp->msg_size - length) % msgbufp->msg_size;
   for (size_t i = 0; i < length; i++) {
     char c = msgbufp->msg_bufc[(start + i) % msgbufp->msg_size];
@@ -327,8 +327,7 @@ extern "C" void native_root_block_capture_log(void)
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
   native_marble_gpu_report(runtime,sizeof(runtime));
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
-  native_adreno_runtime_report(runtime,sizeof(runtime));
-  used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
+  used += native_adreno_runtime_report(log.text+used,6144);
   used += snprintf(log.text + used, sizeof(log.text) - used,
       "ReadWindow hits=%llu misses=%llu bytes=%llu\n",readWindowHits,readWindowMisses,readWindowBytes);
   char display[512];

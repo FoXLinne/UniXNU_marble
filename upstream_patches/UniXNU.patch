@@ -206,11 +206,15 @@ index 4a188fb..433b339 100644
  +	boot_progress_stage("temporary watchdog launch policy enter");
  +	int policy_error=sheng_boot_watchdog_policy(p, (uint64_t)scratch_addr);
 diff --git a/scripts/add-gpu-plugin-data.py b/scripts/add-gpu-plugin-data.py
-index 489615a..0047fa2 100644
+index 489615a..c3e3c01 100644
 --- a/scripts/add-gpu-plugin-data.py
 +++ b/scripts/add-gpu-plugin-data.py
-@@ -69,7 +69,7 @@ def main():
-             target.parent.mkdir(parents=True)
+@@ -66,10 +66,10 @@ def main():
+             target = mount / 'ngpu/addons/NativeAdrenoMetal.bundle'
+             if target.exists():
+                 shutil.rmtree(target)
+-            target.parent.mkdir(parents=True)
++            target.parent.mkdir(parents=True, exist_ok=True)
              for directory in (mount / 'ngpu', mount / 'ngpu/addons'):
                  os.chmod(directory, 0o755)
 -            shutil.copytree(BUNDLE, target, symlinks=False)

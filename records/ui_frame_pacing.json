@@ -24,9 +24,56 @@
     "widgets": "incorrect",
     "wallpaper": "absent"
   },
-  "candidate_kernel": "outputs/UniXNU_marble/kernel_ui_profile2.macho",
+  "candidate_kernel": "outputs/UniXNU_marble/kernel_ui_pool2.macho",
   "candidate_gpu_hz": 439000000,
   "candidate_bandwidth_index": 6,
   "candidate_priming": "explicit primelist only",
-  "hardware": "pending"
+  "hardware": "settings_rendered_widgets_pending",
+  "candidate_pool_target_mib": 256,
+  "candidate_measurement": {
+    "kernel": "kernel_ui_pool2.macho",
+    "start": {
+      "protocol": "RuntimeRoot",
+      "serial": "marble",
+      "counter_seconds": 7077.353396093,
+      "first_frame_counter_seconds": 7032.805872239,
+      "reads": 262034,
+      "frames": 80,
+      "data_resident_bytes": 521859072,
+      "data_logical_bytes": 1073741824
+    },
+    "end": {
+      "protocol": "RuntimeRoot",
+      "serial": "marble",
+      "counter_seconds": 7079.786330625,
+      "first_frame_counter_seconds": 7032.805872239,
+      "reads": 262530,
+      "frames": 102,
+      "data_resident_bytes": 521863168,
+      "data_logical_bytes": 1073741824
+    },
+    "frames": 22,
+    "elapsed_seconds": 2.4329345320002176,
+    "frames_per_second": 9.042577887171044,
+    "interpretation": "Cold Today-view transition with widget process relaunches; frame rate remains below the baseline. GPU completion mean 13133 us, max 69 ms."
+  },
+  "settings": {
+    "screen": "outputs/UniXNU_marble/gpu_diagnostics/ui_pool2_settings.png",
+    "log": "outputs/UniXNU_marble/gpu_diagnostics/ui_pool2_settings.log",
+    "rendered": [
+      "account",
+      "network",
+      "notifications",
+      "general",
+      "control_center",
+      "display"
+    ],
+    "runtime_usb": "available",
+    "kernel_panic": false
+  },
+  "widgets": {
+    "screen": "outputs/UniXNU_marble/gpu_diagnostics/ui_pool2_today.png",
+    "crash": "SIGSEGV at PC 0, RenderBox encoder queue, selector setDepthStencilState:, nil receiver",
+    "evidence": "outputs/UniXNU_marble/gpu_diagnostics/ui_profile3_crashes"
+  }
 }

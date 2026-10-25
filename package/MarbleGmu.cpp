@@ -192,9 +192,10 @@ struct Gmu {
     int powerGpu() {
         native_marble_gpu_checkpoint(MarbleGpuGx);
         // KGSL gen7: blocking DCVS vote, OOB GPU request, then HFI START.
-        const uint32_t vote[] = {1, 2, 2}; // 285 MHz and DDR table level 2.
+        const uint32_t vote[] = {1, 5, 6}; // DT pwrlevel 2: 439 MHz and DDR table level 6.
         int result = exchange(30, vote, 3);
         if (result) return result;
+        IOLog("MarbleGPU: performance gpu_hz=439000000 bandwidth_index=6\n");
         write(0x1f994, 1U << 30);
         unsigned elapsed = 0;
         for (; elapsed < 100 && !(read(0x1f992) & (1U << 31)); ++elapsed) IOSleep(1);
