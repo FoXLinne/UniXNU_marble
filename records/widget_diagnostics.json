@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-26",
+  "host_recorder": {
+    "result": "passed",
+    "exit": 0,
+    "fill_words": 512,
+    "compute_words": 0,
+    "render_other": 4096,
+    "evidence": "outputs/UniXNU_marble/gpu_diagnostics/plugin_smoke_resume.log",
+    "signature": "Apple Development: xjhrz1826@163.com (36GT9PM2RH)",
+    "sequence": "fill, compute, render, fence retirement; host peer executes no shaders"
+  },
+  "plugin_build": {
+    "result": "passed",
+    "evidence": "outputs/UniXNU_marble/gpu_diagnostics/plugin_widget_build.log",
+    "cdhash": "8f73476fea169edd624d2e0e966ae89623484b06"
+  },
+  "wallpaper": {
+    "seed_contains_png": true,
+    "source_record": "records/desktop_seed.json",
+    "prior_mount_stage": 5,
+    "prior_mount_status": 0,
+    "hardware_visibility": "black"
+  },
+  "alternate_boot_failures": {
+    "addon_log": "outputs/UniXNU_marble/panic_addon.log",
+    "phone_log": "outputs/UniXNU_marble/panic_phone_identity.log",
+    "external_trust_cache": "segment length zero",
+    "owner_trust_module": "0/0/0",
+    "amfi": "dyld adhoc unsuitable CT policy 0",
+    "interpretation": "Missing trust registration prevents attributing these failures to addon mount timing or phone identity alone."
+  },
+  "candidate": {
+    "kernel": "outputs/UniXNU_marble/kernel_widget_diag1.macho",
+    "seed": "outputs/UniXNU_marble/iPadOS17/widget_diag_seed1/Data.rdisk",
+    "logging": "Distinct widget render target and pipeline formats appended to existing pipelines.log",
+    "hardware": "settings_general_rendered_widgets_blank",
+    "sha256": "458deb44e0b631b88ad2761051481bce327e58eaccb94e77af475027b96de8e8",
+    "transfer": "outputs/UniXNU_marble/gpu_diagnostics/widget_diag1_transfer.json",
+    "runtime_usb": "available",
+    "gpu_offers": 524,
+    "gpu_fallbacks": 0,
+    "pool_mib": 1024,
+    "pool_peak_mib": 336,
+    "pool_fallback": 0,
+    "settings_screen": "outputs/UniXNU_marble/gpu_diagnostics/widget_diag1_settings.png",
+    "today_screen": "outputs/UniXNU_marble/gpu_diagnostics/widget_diag1_today.png"
+  },
+  "widget_evidence": {
+    "boot_uuid": "5B6B71C2-46CC-4CF4-8926-CF41FC0B848E",
+    "unified_log": "outputs/UniXNU_marble/gpu_diagnostics/widget_diag1_current_unified.log",
+    "unified_source": "outputs/UniXNU_marble/gpu_diagnostics/widget_diag1_unified.ndjson",
+    "render_journal": "outputs/UniXNU_marble/gpu_diagnostics/widget_diag1_journals/client_1.log",
+    "render_targets": [
+      80,
+      65,
+      80
+    ],
+    "depth_stencil": 260,
+    "pipelines_created": 4,
+    "pipeline_names": [
+      "plane_color",
+      "resolve_sample"
+    ],
+    "extension_metadata_rows": 0,
+    "chronod_errors": [
+      "Ignoring restricted extension",
+      "Extension not found",
+      "Unknown extension process"
+    ],
+    "pkd_error": "plug-ins outside containing apps must be in /System.",
+    "next": "Trace why parent applications and widget extensions are not registered or are treated as restricted."
+  }
+}

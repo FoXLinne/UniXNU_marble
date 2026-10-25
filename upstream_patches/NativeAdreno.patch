@@ -148,7 +148,7 @@ index 4b402ca..a8bfca8 100644
  #include <IOKit/IOLib.h>
  #include <kern/task.h>
 diff --git a/NativeAdrenoPublish.cpp b/NativeAdrenoPublish.cpp
-index 51f3a27..e14ca78 100644
+index 51f3a27..42a80f3 100644
 --- a/NativeAdrenoPublish.cpp
 +++ b/NativeAdrenoPublish.cpp
 @@ -102,16 +102,9 @@ volatile uint32_t native_adreno_mount_fail[4];
@@ -218,15 +218,19 @@ index 51f3a27..e14ca78 100644
      g.lock=IOLockAlloc();
      NativeAdrenoGpuPublished *service=new NativeAdrenoGpuPublished;
      if(!g.lock || !service || !service->init() || !service->attach(IOService::getPlatform())) {
-@@ -751,6 +758,19 @@ extern "C" uint32_t native_adreno_publish_stats(uint32_t *closed)
+@@ -751,6 +758,23 @@ extern "C" uint32_t native_adreno_publish_stats(uint32_t *closed)
      if(closed)*closed=g.closed;
      return g.opened;
  }
++extern "C" volatile uint32_t native_adreno_pool_stats[8],native_adreno_pool_status,native_adreno_pool_wc;
 +extern "C" unsigned native_adreno_runtime_report(char *text,unsigned capacity)
 +{
 +    const auto &d=native_adreno_metal_diag;
 +    unsigned used=snprintf(text,capacity,"NativeMetal opens=%u closes=%u calls=%u status=%x unmaps=%u process=%s\n%s\n%s\n",
 +        d.opens,d.closes,d.calls,d.last_status,d.forced_unmaps,d.opener[0],d.report,d.report2);
++    used+=snprintf(text+used,capacity-used,"NativeMetal pool=%u MiB used=%u peak=%u allocations=%u fallback=%u wc=%x status=%x\n",
++        native_adreno_pool_stats[0],native_adreno_pool_stats[3],native_adreno_pool_stats[4],native_adreno_pool_stats[1],
++        native_adreno_pool_stats[2],native_adreno_pool_wc,native_adreno_pool_status);
 +    for(unsigned i=0;i<48 && used+112<capacity;++i)
 +        if(native_adreno_metal_rows[i][0])
 +            used+=snprintf(text+used,capacity-used,"GPU%u %s\n",i,native_adreno_metal_rows[i]);

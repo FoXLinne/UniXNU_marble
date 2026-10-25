@@ -31,10 +31,18 @@ index 73d6eb0..869afcb 100644
          gpu->mark(0x6803);
          return device;
 diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
-index 80439db..d09574a 100644
+index 80439db..c30a230 100644
 --- a/NativeBridgeMetalFrontend.mm
 +++ b/NativeBridgeMetalFrontend.mm
-@@ -56,7 +56,9 @@
+@@ -14,6 +14,7 @@
+ #include <atomic>
+ #include <mutex>
+ #include <pthread.h>
++#include <set>
+ #include <string>
+ #include <unordered_map>
+ #include <vector>
+@@ -56,7 +57,9 @@
  static std::mutex gCommitLock;
  static std::mutex gProblemLock;
  static char gLastProblems[2][200];
@@ -44,6 +52,92 @@ index 80439db..d09574a 100644
   gProblems++;
   std::lock_guard<std::mutex> lock(gProblemLock);
   memcpy(gLastProblems[1],gLastProblems[0],sizeof gLastProblems[0]);
+@@ -292,6 +295,39 @@ static void flushSurfaces(NSMutableSet *surfaces) {
+  NBTexture *texture=[NBTexture new];texture.handle=handle;nmb_texture_describe(handle,&descriptor);texture.descriptor=descriptor;
+  texture.buffer=buffer;texture.offset=offset;texture.rowBytes=row;return texture;
+ }
++// Widget renderers log the render targets they ask for, so a blank RenderBox snapshot can be traced to its surface.
++// NSLog only: these lines are evidence, and NBLOG would count each one as a refusal.
++static bool widgetRendererProcess(void) {
++ static int value=-1;
++ if(value<0){NSString *name=NSProcessInfo.processInfo.processName;
++  value=(name && ([name containsString:@"chronod"]||[name containsString:@"WidgetRenderer"]))?1:0;}
++ return value==1;
++}
++static void logWidgetOnce(const std::string &text) {
++ static std::mutex lock;static std::set<std::string> seen;
++ std::lock_guard<std::mutex> guard(lock);
++ if(!seen.insert(text).second)return;
++ journal(std::string("W ")+text);
++ NSLog(@"native-metal: widget %s",text.c_str());
++}
++static void logWidgetTarget(const char *kind,MTLTextureDescriptor *d,IOSurfaceRef surface) {
++ if(!widgetRendererProcess()||!d||!(d.usage&MTLTextureUsageRenderTarget))return;
++ char text[160];
++ snprintf(text,sizeof text,"%s target %lux%lu fmt=%lu usage=%lu surface-format=%u planes=%u",kind,
++  (unsigned long)d.width,(unsigned long)d.height,(unsigned long)d.pixelFormat,(unsigned long)d.usage,
++  surface?(unsigned)IOSurfaceGetPixelFormat(surface):0u,surface?(unsigned)IOSurfaceGetPlaneCount(surface):0u);
++ logWidgetOnce(text);
++}
++static void logWidgetPipeline(MTLRenderPipelineDescriptor *d) {
++ if(!widgetRendererProcess()||!d)return;
++ char text[192];unsigned n=(unsigned)snprintf(text,sizeof text,"pipeline ds=%lu/%lu",
++  (unsigned long)d.depthAttachmentPixelFormat,(unsigned long)d.stencilAttachmentPixelFormat);
++ for(unsigned i=0;i<8 && n+1<sizeof text;i++){
++  MTLRenderPipelineColorAttachmentDescriptor *a=d.colorAttachments[i];if(a.pixelFormat==MTLPixelFormatInvalid)continue;
++  n+=(unsigned)snprintf(text+n,sizeof text-n," c%u=%lu",i,(unsigned long)a.pixelFormat);
++ }
++ logWidgetOnce(text);
++}
+ // A texture over a two-plane surface: the runtime reads plane 1 from the surface's own layout (two-plane RGB and YCbCr formats).
+ static NBTexture *textureOnSurface(NBBuffer *buffer,MTLTextureDescriptor *d,IOSurfaceRef surface,NSUInteger plane,NSUInteger offset,NSUInteger row) {
+  NmbTextureDescriptor descriptor;if(!buffer || !textureDescriptor(d,&descriptor))return nil;
+@@ -364,6 +400,13 @@ static uint64_t constantBytes(uint64_t type) {
+ }
+ static std::string quartzCoreCallers();
+ @implementation NBLibrary
++// The native device cache supplies the pipeline library's compilation cache.
++- (id<MTLFunction>)newFunctionWithName:(NSString *)name constantValues:(MTLFunctionConstantValues *)values pipelineLibrary:(id)library error:(NSError **)error {
++ (void)library;
++ if(values)return [self newFunctionWithName:name constantValues:values error:error];
++ if(error)*error=nil;
++ return [self newFunctionWithName:name];
++}
+ - (void)dealloc {nmb_library_release(_handle);}
+ - (id<MTLFunction>)newFunctionWithName:(NSString *)name constantValues:(MTLFunctionConstantValues *)values error:(NSError **)error {
+  if(!name || !values || !methodABI(values,@selector(newIndexedConstantArray),"@16@0:8") || !methodABI(values,@selector(newNamedConstantArray),"@16@0:8")) {
+@@ -1185,6 +1228,7 @@ - (MTLPurgeableState)setPurgeableState:(MTLPurgeableState)state {
+  return [self bufferWithLength:length options:options offset:offset];
+ }
+ - (id<MTLTexture>)textureWithDescriptor:(MTLTextureDescriptor *)d offset:(uint64_t)offset {
++ logWidgetTarget("heap",d,nil);
+  NmbTextureDescriptor descriptor;if(!textureDescriptor(d,&descriptor))return nil;
+  NmbTexture *handle=nmb_heap_new_texture(_handle,&descriptor,offset);
+  if(!handle){NBLOG(@"native-metal: heap texture refused: %@",lastError());return nil;}
+@@ -1360,6 +1404,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+  return (id<MTLBuffer>)buffer;
+ }
+ - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)d {
++ logWidgetTarget("alloc",d,nil);
+  NmbTextureDescriptor descriptor;if(!textureDescriptor(d,&descriptor))return nil;
+  NmbTexture *handle=nmb_texture_new(gDevice,&descriptor);noteFormat((uint32_t)descriptor.format,handle!=nullptr);
+  if(!handle){NBLOG(@"native-metal: texture refused: %@",lastError());return nil;}
+@@ -1368,6 +1413,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+ // The surface's pages are the texels: its mapping in this process is imported without a copy (pinned by the kernel, mapped into the GPU's
+ // 4 KiB context by Turnip), so every process that imports the surface renders and samples the same memory.
+ - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)d iosurface:(IOSurfaceRef)surface plane:(NSUInteger)plane {
++ logWidgetTarget("surface",d,surface);
+  // A planar surface (Apple's lossless-compressed BGRA spelling has one plane, video formats two) is imported whole; the texture starts at
+  // the plane's own address and rows. Only a plain surface has no planes, and then only plane 0 exists.
+  const size_t planes=surface?IOSurfaceGetPlaneCount(surface):0;
+@@ -1446,6 +1492,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+  if(!pipelineArchives(d.binaryArchives,archives,error)){delete p;return nil;}
+  const NmbPipelineOptions creation={(uint64_t)options,archives.data(),archives.size()};
+  const uint64_t pipelineBegan=nowUs();const NBCost costBegan=NBCost::now();
++ logWidgetPipeline(d);
+  NmbRenderPipeline *handle=nmb_render_pipeline_new_with_options(gDevice,p,&creation);delete p;gTimePipeline.add(pipelineBegan);
+  journalRenderPipeline(d,pipelineBegan,handle?nullptr:nmb_last_error(),gJournalPath.empty()?std::string():NBCost::now().since(costBegan));
+  if(!handle)return failWith<id<MTLRenderPipelineState>>(error,@"render pipeline",nil);
 diff --git a/bridge/patches/0008-alias-padded-rows-of-written-textures.patch b/bridge/patches/0008-alias-padded-rows-of-written-textures.patch
 new file mode 100644
 index 0000000..b508638
@@ -91,3 +185,88 @@ index 0000000..879ee9b
 + 
 + /// What memory a resource needs.
 + #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+diff --git a/bridge/patches/0010-render-two-plane-rgb.patch b/bridge/patches/0010-render-two-plane-rgb.patch
+new file mode 100644
+index 0000000..d1b7585
+--- /dev/null
++++ b/bridge/patches/0010-render-two-plane-rgb.patch
+@@ -0,0 +1,79 @@
++diff --git a/crates/metal2vulkan/src/bind/ycbcr_write.rs b/crates/metal2vulkan/src/bind/ycbcr_write.rs
++index 5fdacf5..bdfecd6 100644
++--- a/crates/metal2vulkan/src/bind/ycbcr_write.rs
+++++ b/crates/metal2vulkan/src/bind/ycbcr_write.rs
++@@ -261,6 +261,20 @@ pub fn ycbcr_store(
++     texels: &[[f32; 3]],
++     size: [u32; 2],
++ ) -> Option<(Vec<u16>, Vec<[u16; 2]>)> {
+++    if codes.output == YCbCrOutput::Codes && !codes.packed
+++        && codes.bits == 8 && codes.subsampling == ChromaSubsampling::Chroma444
+++    {
+++        let [w, h] = size.map(|n| n as usize);
+++        if texels.len() != w * h { return None; }
+++        let mut luma = Vec::with_capacity(texels.len());
+++        let mut chroma = Vec::with_capacity(texels.len());
+++        for &texel in texels {
+++            let [g, b, r] = ycbcr_write(codes, (range, matrix), texel)?;
+++            luma.push(g);
+++            chroma.push([b, r]);
+++        }
+++        return Some((luma, chroma));
+++    }
++     if codes.packed || codes.output != YCbCrOutput::Converted {
++         return None;
++     }
++diff --git a/crates/metal2vulkan/src/metal/format/mod.rs b/crates/metal2vulkan/src/metal/format/mod.rs
++index 1d94ca0..389d848 100644
++--- a/crates/metal2vulkan/src/metal/format/mod.rs
+++++ b/crates/metal2vulkan/src/metal/format/mod.rs
++@@ -136,6 +136,8 @@ pub enum FormatEmulation {
++     /// a fragment function writes unblended through a mask of red, green and blue; admitted for
++     /// that usage only (no blend: the pipeline refuses one).
++     YCbCrRendered,
+++    /// Two-plane RGB8 stored as green and blue/red codes after float rendering and blending.
+++    RgbPlanarRendered,
++     /// A pipeline's color attachment of a packed 10-bit two-plane YCbCr format whose pass is
++     /// refused ([`ycbcr_pass_refused`]): `R32G32B32A32_SFLOAT`, which no pass renders into.
++     /// Metal makes such a pipeline, and its pass into such a texture fails (measured as
++@@ -188,6 +190,9 @@ impl FormatEmulation {
++             FormatEmulation::YCbCr => {
++                 matches!(usage, U::SampledImage | U::SampledImageFilterLinear)
++             }
+++            FormatEmulation::RgbPlanarRendered => {
+++                matches!(usage, U::ColorAttachment | U::ColorAttachmentBlend)
+++            }
++             FormatEmulation::YCbCrRendered | FormatEmulation::YCbCrPassRefused => {
++                 usage == U::ColorAttachment
++             }
++@@ -970,6 +975,7 @@ fn ycbcr_repr(pf: PixelFormat) -> Repr {
++     // A pass renders a format whose store is matched in floats, which the consumer encodes; a
++     // packed format's pipeline is made in the same floats, and its pass refused.
++     let attachment = match (ycbcr_renders(pf), ycbcr_pass_refused(pf)) {
+++        (true, _) if pf == PixelFormat::RGB84442P => Some(FormatEmulation::RgbPlanarRendered),
++         (true, _) => Some(FormatEmulation::YCbCrRendered),
++         (false, true) => Some(FormatEmulation::YCbCrPassRefused),
++         (false, false) => None,
++@@ -1742,6 +1748,10 @@ pub fn ycbcr_writes_stored(pf: PixelFormat) -> bool {
++ /// the `_sRGB`, code or packed formats, whose stores no rule matches yet (a packed one's pass is
++ /// refused, [`ycbcr_pass_refused`]).
++ pub fn ycbcr_renders(pf: PixelFormat) -> bool {
+++    // RenderBox snapshots store green in plane 0 and blue/red in plane 1.
+++    if pf == PixelFormat::RGB84442P {
+++        return true;
+++    }
++     // Every such layout is held ([`ycbcr`]), whose representation asks this.
++     ycbcr_format(pf)
++         .is_some_and(|f| !f.packed && matches!(f.bits, 8 | 10) && f.reads == YCbCrReads::Converted)
++diff --git a/crates/metal2vulkan/src/pipeline/link/graphics.rs b/crates/metal2vulkan/src/pipeline/link/graphics.rs
++index 4b88ffd..b7c6c83 100644
++--- a/crates/metal2vulkan/src/pipeline/link/graphics.rs
+++++ b/crates/metal2vulkan/src/pipeline/link/graphics.rs
++@@ -339,6 +339,7 @@ pub fn graphics_state(
++                         | vk::ColorComponentFlags::G
++                         | vk::ColorComponentFlags::B;
++                     if metal::format::ycbcr_renders(a.pixel_format)
+++                        && a.pixel_format != metal::PixelFormat::RGB84442P
++                         && !(descriptor_mask & rgb).is_empty()
++                         && !descriptor_mask.contains(rgb)
++                     {

@@ -279,7 +279,7 @@ index 005db80..86f184e 100644
 +staging.cleanup()
  print('PASS: Adreno plugin bundle and probe daemon built and 4K-signed, CDHashes', cdhash, daemon_cdhash, turnip_cdhash)
 diff --git a/scripts/build-native-metal-bridge.py b/scripts/build-native-metal-bridge.py
-index 613bcba..c0cf5f1 100644
+index 613bcba..cc1fc9c 100644
 --- a/scripts/build-native-metal-bridge.py
 +++ b/scripts/build-native-metal-bridge.py
 @@ -27,7 +27,8 @@ PATCHES = [ROOT / 'drivers/NativeMetal/bridge/patches' / name for name in [
@@ -288,7 +288,7 @@ index 613bcba..c0cf5f1 100644
      '0005-keep-module-decodes-and-profile-fingerprints.patch', '0006-skip-draws-without-a-pipeline.patch',
 -    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch']]
 +    '0007-accept-two-plane-rgb-surfaces.patch', '0008-alias-padded-rows-of-written-textures.patch',
-+    '0009-use-8mb-memory-blocks.patch']]
++    '0009-use-8mb-memory-blocks.patch', '0010-render-two-plane-rgb.patch']]
  tree_diff = subprocess.check_output(['git', '-C', str(SOURCE), 'diff', 'HEAD', '--'], text=True)
  def canonical_diff(diff):
      # Independent patches touch disjoint files; Git orders the combined diff by
@@ -379,7 +379,7 @@ index 5815dd9..24ea7fc 100755
  fi
  NATIVE_PAN=${XNU_NATIVE_PAN:-0}
 diff --git a/scripts/check-turnip-darwin-host.py b/scripts/check-turnip-darwin-host.py
-index 6deaed9..7513f5b 100644
+index 6deaed9..0a1c4fe 100644
 --- a/scripts/check-turnip-darwin-host.py
 +++ b/scripts/check-turnip-darwin-host.py
 @@ -10,6 +10,7 @@ import subprocess
@@ -399,12 +399,27 @@ index 6deaed9..7513f5b 100644
                  '-Wl,-rpath,' + str(out)], check=True)
  
  plugin_smoke = out / 'plugin_smoke'
-@@ -59,6 +60,11 @@ subprocess.run([sys.executable, ROOT / 'scripts/gen-turnip-smoke-shaders.py'], c
+@@ -59,6 +60,26 @@ subprocess.run([sys.executable, ROOT / 'scripts/gen-turnip-smoke-shaders.py'], c
  subprocess.run(['xcrun', 'clang++', '-std=c++17', '-O1', '-I', ROOT / 'drivers/NativeMetal', '-I', ROOT / '.cache/mesa-work/include',
                  '-I', ROOT / 'build/turnip-smoke',
                  sim / 'plugin_smoke.cpp', '-o', plugin_smoke], check=True)
-+for executable in (shim, smoke, plugin_smoke):
-+    subprocess.run(['codesign', '--force', '--sign', '-', executable], check=True)
++# Ad-hoc signatures are rejected on this host (AMFI: unsuitable CT policy 0, then SIGKILL). A CoreTrust
++# identity plus the dyld entitlement is what lets the recorder load the IOKit shim; without the shim,
++# vkEnumeratePhysicalDevices succeeds with no device and the sequence stops at result -5.
++listed = subprocess.run(['security', 'find-identity', '-p', 'codesigning', '-v'], capture_output=True, text=True)
++identity = next((line.split('"', 2)[1] for line in listed.stdout.splitlines() if '"' in line), '-')
++entitlements = out / 'host-recorder.entitlements'
++entitlements.write_text('''<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0"><dict>
++  <key>com.apple.security.cs.allow-dyld-environment-variables</key><true/>
++  <key>com.apple.security.cs.disable-library-validation</key><true/>
++  <key>com.apple.security.get-task-allow</key><true/>
++</dict></plist>
++''')
++for executable in (smoke, plugin_smoke):
++    subprocess.run(['codesign', '--force', '--sign', identity, '--entitlements', str(entitlements), executable], check=True)
++subprocess.run(['codesign', '--force', '--sign', identity, shim], check=True)
 +if '--build-only' in sys.argv:
 +    print('Built Turnip host command recorder')
 +    sys.exit(0)
