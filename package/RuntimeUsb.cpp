@@ -154,6 +154,7 @@ void startAdreno(void *, wait_result_t) {
     thread_terminate(current_thread());
 }
 void requestAdreno() {
+    IOLog("MarbleGPU: request adreno\n");
     if (__atomic_exchange_n(&adrenoStarting, true, __ATOMIC_ACQ_REL)) return;
     thread_t thread;
     kern_return_t status = kernel_thread_start(startAdreno, nullptr, &thread);

@@ -160,6 +160,7 @@ class CommandProcessor {
         if (status) return -5;
         barrier(nullptr);
         write(GEN7_CP_SQE_CNTL, 1);
+        IOLog("MarbleGPU: stage cp-init\n");
         const NativeAdrenoCpInitConfig config{buffers[0].iova, buffers[3].iova, 1};
         uint32_t fence = 0, seen = 0;
         status = initializer.run(&io, &ring, &config, &fence);
@@ -176,6 +177,7 @@ class CommandProcessor {
         uint32_t value = *reinterpret_cast<volatile uint32_t *>(cpu[4]);
         IOLog("MarbleGPU: CP write=%x fence=%u seen=%u wait=%u scratch=%x\n", status, fence, seen, waited, value);
         if (status || waited || value != 0xa7257475) return -5;
+        IOLog("MarbleGPU: stage zap\n");
         int secure = native_marble_zap_load();
         if (secure) return secure;
         uint32_t leaveSecure[2] = {};
@@ -212,8 +214,11 @@ class CommandProcessor {
     }
 public:
     int start() {
+        IOLog("MarbleGPU: stage context\n");
         int status = context();
+        IOLog("MarbleGPU: stage configure entry status=%d\n", status);
         if (!status) status = configure();
+        IOLog("MarbleGPU: stage publish entry status=%d\n", status);
         return status ? status : publishService();
     }
 };

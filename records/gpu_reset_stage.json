@@ -1,0 +1,18 @@
+{
+  "change": "Locate the GPU bring-up reset",
+  "result": {
+    "runtime_trigger": "request 14 (adreno) returned one USB timeout and the device rebooted into Android; no MarbleGPU lines reached the host",
+    "boot_trigger": "marble-adreno=1 booted, then reset into Android before runtime USB; no Stage markers readable",
+    "prior_capture": "records/gpu_worker_panic.log: kernel data abort pc 0xfffffff004abbb6c lr 0xfffffff004abc1e0 far 0xfffffff0071ab708 (__const, write) esr 0x9600004f at 18 timer ticks",
+    "implication": "The reset discards RAM before any log can be read, so stage markers cannot be recovered; the fault is a write into read-only kernel data from prelinked kext code during GPU bring-up."
+  },
+  "next": [
+    "Draw the stage marker on the frame buffer before each GPU stage so the last stage survives the reset on screen",
+    "Compare the marble GMU/CP sequence with sheng's NativeAdreno GMU/CP start and adopt its power and clock ordering",
+    "Keep the pad-identity desktop bootable; run GPU variants from the runtime trigger"
+  ],
+  "kernel": "outputs/UniXNU_marble/kernel_gpu_stage.macho",
+  "logs": [
+    "outputs/UniXNU_marble/gpu_stage_tail.log"
+  ]
+}
