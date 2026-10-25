@@ -293,6 +293,14 @@ struct Touch {
             result = acknowledge(events);
             if (result) return result;
             if (valid) {
+                // Raw frame trail for the coordinate mapping: one line per contact-count change and every eighth frame.
+                static unsigned framesLogged, lastCount = ~0u;
+                if (count != lastCount || (++framesLogged & 7) == 0) {
+                    IOLog("MarbleTouch: frame n=%u id=%u x=%u y=%u\n", count,
+                        count ? frame[8] >> 4 : 0xff, count ? little16(frame + 10) : 0,
+                        count ? little16(frame + 12) : 0);
+                    lastCount = count;
+                }
                 touchFrames++;
                 native_touch_publish(count, frame + 8);
             } else touchInvalid++;

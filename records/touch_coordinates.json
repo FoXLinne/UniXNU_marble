@@ -1,0 +1,24 @@
+{
+  "change": "Map tenth-of-pixel touch coordinates and mark screen-edge contacts for SpringBoard gestures",
+  "problem": "The Goodix controller reports 0-10800 x 0-24000 (tenths of the 1080x2400 panel pixel). The HID layer clamped to 1080x2400, so every physical contact landed at the bottom-right corner: taps did nothing, holding produced a long press.",
+  "fix": [
+    "NativeHomeInput: scale 10800x24000 to the 0..32767 HID range; synthetic contacts carry the same tenth-of-pixel units",
+    "NativeHomeInput: lift on the first missing frame (hold frames 0) so a short tap keeps its down/up pair",
+    "NativeHomeInput: wrap this digitizer's IOHIDEventDriver dispatch and set kIOHIDDigitizerEventFromEdgeTip (0x800) for contacts starting within 48 px of an edge, as NativeHidInput does for sheng",
+    "MarbleTouch: log each contact-count change and every eighth frame (count/id/x/y)",
+    "runtime_control: follow the runtime log and trigger the adreno request while following"
+  ],
+  "device_validation": {
+    "tap": "physical tap on Settings opened Settings",
+    "home_gesture": "physical swipe up from the bottom edge returned to the Home screen",
+    "edge_wrapper": "MarbleTouchHID: edge wrapper installed",
+    "hid_reports": "slots=1 tip=3 -> tip=2 at 0..1079 x 0..2399 pixel positions",
+    "remaining": "app surfaces still present white (IOMFB default_fb_surface missing); wallpaper still black"
+  },
+  "kernel": "outputs/UniXNU_marble/kernel_edge2.macho",
+  "kernel_sha256": "fefe6f3a3119a502591f9db9799df5da638f115e2411025eff4ce550cd49e51b",
+  "logs": [
+    "outputs/UniXNU_marble/hid_reports3.log",
+    "outputs/UniXNU_marble/touch_frames2.log"
+  ]
+}

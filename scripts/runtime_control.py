@@ -34,6 +34,11 @@ def main():
     parser.add_argument('--duration-ms', type=int, default=400)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--source', action='store_true', help='Capture the compositor surface before scanout copy')
+    parser.add_argument('--follow', action='store_true', help='Keep reading the log ring until the timeout or USB loss')
+    parser.add_argument('--seconds', type=float, default=30, help='Follow duration')
+    parser.add_argument('--interval', type=float, default=0.5, help='Follow poll interval')
+    parser.add_argument('--trigger', choices=['adreno'], help='Send this request once while following')
+    parser.add_argument('--trigger-after', type=float, default=3, help='Seconds before the trigger')
     args = parser.parse_args()
     backend = usb.backend.libusb1.get_backend(find_library=lambda _: '/opt/homebrew/lib/libusb-1.0.dylib')
     device = usb.core.find(idVendor=0x18d1, idProduct=0xd00e, backend=backend)
@@ -110,13 +115,63 @@ def main():
             if args.output: args.output.write_text(text+'\n')
             else: print(text)
         elif args.command == 'logs':
-            header = read(device, 1, 0, 16)
-            magic, version, length = struct.unpack('<8sII', header)
-            if magic != b'ROOTLOG1' or version != 1 or length > 65520:
-                raise RuntimeError('Invalid runtime log header')
-            text = read(device, 1, 16, length).decode(errors='replace')
+            def snapshot():
+                magic, version, length = struct.unpack('<8sII', read(device, 1, 0, 16))
+                if magic != b'ROOTLOG1' or version != 1 or length > 65520:
+                    raise RuntimeError('Invalid runtime log header')
+                return read(device, 1, 16, length).decode(errors='replace')
+            if args.follow:
+                if args.output:
+                    args.output.write_text('')
+                def emit(markup):
+                    if args.output:
+                        with args.output.open('a') as handle:
+                            handle.write(markup)
+                    return markup
+                def delta_of(text):
+                    nonlocal previous
+                    if previous and text.startswith(previous):
+                        change = text[len(previous):]
+                    else:
+                        change = None
+                        if previous:
+                            for size in (4096, 1024, 256):
+                                at = text.find(previous[-size:])
+                                if at >= 0:
+                                    change = text[at + size:]
+                                    break
+                        if change is None:
+                            change = ('\n[log restarted]\n' if previous else '') + text
+                    previous = text
+                    return change
+                began = time.monotonic()
+                deadline = began + args.seconds
+                previous, tail, fired = '', [], False
+                while time.monotonic() < deadline:
+                    if args.trigger and not fired and time.monotonic() - began >= args.trigger_after:
+                        fired = True
+                        stamp = f'\n[trigger {args.trigger} at {time.monotonic() - began:.1f}s: '
+                        try:
+                            device.ctrl_transfer(0x40, {'adreno': 14}[args.trigger], 0, 0, b'')
+                            tail.append(emit(stamp + 'sent]\n'))
+                        except Exception as error:
+                            tail.append(emit(stamp + f'failed: {error}]\n'))
+                            break
+                    try:
+                        text = snapshot()
+                    except Exception as error:
+                        tail.append(emit(f'\n[runtime USB ended: {error}]\n'))
+                        break
+                    change = delta_of(text)
+                    if change:
+                        tail.append(emit(change))
+                    time.sleep(args.interval)
+                text = ''.join(tail)
+            else:
+                text = snapshot()
+                if args.output:
+                    args.output.write_text(text)
             if args.output:
-                args.output.write_text(text)
                 print(args.output)
             else:
                 print(text)

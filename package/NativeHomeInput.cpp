@@ -5,6 +5,8 @@
 #include <IOKit/IOTimerEventSource.h>
 #include <libkern/c++/OSIterator.h>
 #include <libkern/c++/OSString.h>
+#include <libkern/c++/OSArray.h>
+#include <IOKit/IOLib.h>
 extern "C" void native_hid_input_observed(unsigned,int);
 extern "C" void native_hid_live_checkpoint(IOService *);
 extern "C" bool native_hid_input_requested(void);
@@ -32,6 +34,64 @@ static IORegistryEntry *findEventDriver(IORegistryEntry *parent, unsigned depth)
     }
     iterator->release(); return found;
 }
+
+// Screen-edge contacts: SpringBoard's home and switcher recognizers read the edge type of a touch, which the original
+// IOHIDEventDriver never sets. Wrap this device's event driver dispatch in a copied vtable and mark finger events whose
+// contact began within 48 px of an edge with kIOHIDDigitizerEventFromEdgeTip (0x800), as the stock multitouch stack does.
+namespace edge {
+enum {kSlots=256,kDispatch=198,kGetType=18,kGetInteger=23,kSetInteger=24,kGetFixed=25,kContacts=256};
+enum : uint32_t {kDigitizer=11,kX=0xB0000,kY=0xB0001,kIndex=0xB0005,kMask=0xB0007,kTouch=0xB0009,kMaskTouch=2,kFromEdgeTip=0x800};
+static const int32_t kEdgeX=48*65536/1080,kEdgeY=48*65536/2400;
+static uintptr_t originalDispatch;
+static bool fromEdge[kContacts];
+template <typename R,typename... A> static R call(void *object,unsigned slot,A... args) {
+    return reinterpret_cast<R (*)(void *,A...)>((*reinterpret_cast<uintptr_t **>(object))[slot])(object,args...);
+}
+static bool mark(void *child) {
+    if(call<uint32_t,IOOptionBits>(child,kGetType,0)!=kDigitizer)return false;
+    const uint32_t index=(uint32_t)call<int32_t,uint32_t,IOOptionBits>(child,kGetInteger,kIndex,0);
+    if(index>=kContacts)return false;
+    const uint32_t mask=(uint32_t)call<int32_t,uint32_t,IOOptionBits>(child,kGetInteger,kMask,0);
+    const bool touch=call<int32_t,uint32_t,IOOptionBits>(child,kGetInteger,kTouch,0)!=0;
+    if((mask&kMaskTouch) && touch) {
+        const int32_t x=call<int32_t,uint32_t,IOOptionBits>(child,kGetFixed,kX,0),y=call<int32_t,uint32_t,IOOptionBits>(child,kGetFixed,kY,0);
+        fromEdge[index]=x<kEdgeX || x>65536-kEdgeX || y<kEdgeY || y>65536-kEdgeY;
+    }
+    const bool edged=fromEdge[index];
+    if(edged)call<void,uint32_t,int32_t,IOOptionBits>(child,kSetInteger,kMask,(int32_t)(mask|kFromEdgeTip),0);
+    if(!touch && (mask&kMaskTouch))fromEdge[index]=false;
+    return edged;
+}
+static void dispatch(IOService *self,OSObject *event,IOOptionBits options) {
+    if(event && call<uint32_t,IOOptionBits>(event,kGetType,0)==kDigitizer) {
+        OSArray *children=*reinterpret_cast<OSArray **>(reinterpret_cast<uint8_t *>(event)+24);
+        if(children && OSDynamicCast(OSArray,children) && children->getCount()) {
+            bool any=false;
+            for(unsigned i=0;i<children->getCount();++i) {
+                OSObject *child=children->getObject(i);
+                if(child && child->metaCast("IOHIDEvent"))any|=mark(child);
+            }
+            if(any) {
+                const uint32_t mask=(uint32_t)call<int32_t,uint32_t,IOOptionBits>(event,kGetInteger,kMask,0);
+                call<void,uint32_t,int32_t,IOOptionBits>(event,kSetInteger,kMask,(int32_t)(mask|kFromEdgeTip),0);
+            }
+        } else if(!children) mark(event);
+    }
+    reinterpret_cast<void (*)(IOService *,OSObject *,IOOptionBits)>(originalDispatch)(self,event,options);
+}
+bool install(IORegistryEntry *driver) {
+    if(originalDispatch || !driver)return false;
+    uintptr_t *table=*reinterpret_cast<uintptr_t **>(driver);
+    uintptr_t *copy=static_cast<uintptr_t *>(IOMalloc(kSlots*sizeof(uintptr_t)));
+    if(!copy)return false;
+    memcpy(copy,table,kSlots*sizeof(uintptr_t));
+    originalDispatch=copy[kDispatch];copy[kDispatch]=(uintptr_t)&dispatch;
+    __asm__ volatile("dmb ish":::"memory");
+    *reinterpret_cast<uintptr_t **>(driver)=copy;
+    IOLog("MarbleTouchHID: edge wrapper installed\n");
+    return true;
+}
+}  // namespace edge
 class NativeHomeInput : public IOHIDDevice {
     OSDeclareDefaultStructors(NativeHomeInput)
     IOWorkLoop *inputLoop = nullptr;
@@ -97,6 +157,10 @@ class NativeMarbleTouchInput : public IOHIDDevice {
     IOTimerEventSource *tapTimer = nullptr;
     bool eventDriverMatched = false;
     uint8_t previous[10][6] = {};
+    uint8_t missed[10] = {};
+    // A finger absent from up to kHoldFrames frames stays down, then lifts (sheng touch core holds NVT_HOLD_FRAMES=3): one empty
+    // frame otherwise ends a drag, and a short tap is reported for fewer frames than the system accepts.
+    enum { kHoldFrames = 0, kHoldFlushMs = 16 };
     static void releaseTap(OSObject *owner, IOTimerEventSource *) {
         static_cast<NativeMarbleTouchInput *>(owner)->publish(0, nullptr);
     }
@@ -104,42 +168,54 @@ class NativeMarbleTouchInput : public IOHIDDevice {
         auto *self = static_cast<NativeMarbleTouchInput *>(owner);
         unsigned count = reinterpret_cast<uintptr_t>(countValue);
         auto *points = static_cast<const uint8_t *>(pointsValue);
-        uint8_t report[62] = {3}, current[10][6] = {};
-        unsigned active = 0;
-        bool pending = false;
+        uint8_t report[62] = {3}, seen[10][6] = {};
         for (unsigned i = 0; i < count; ++i) {
             const uint8_t *p = points + 8 * i;
             unsigned id = p[0] >> 4;
             if (id >= 10) continue;
             unsigned x = p[2] | unsigned(p[3]) << 8, y = p[4] | unsigned(p[5]) << 8;
-            x = (x < 1080 ? x : 1079) * 32767 / 1079;
-            y = (y < 2400 ? y : 2399) * 32767 / 2399;
-            uint8_t *finger = current[id];
-            finger[0] = 3; finger[1] = id;
-            finger[2] = x; finger[3] = x >> 8; finger[4] = y; finger[5] = y >> 8;
+            // The controller reports tenths of a pixel (config maximum 10800 x 24000); the panel is 1080 x 2400.
+            x = (x < 10800 ? x : 10799) * 32767 / 10799;
+            y = (y < 24000 ? y : 23999) * 32767 / 23999;
+            seen[id][0] = 1;
+            seen[id][2] = x; seen[id][3] = x >> 8; seen[id][4] = y; seen[id][5] = y >> 8;
         }
+        unsigned slots = 0;
+        bool pending = false, holding = false, vanished = false;
         for (unsigned id = 0; id < 10; ++id) {
-            uint8_t *finger = report + 1 + 6 * id;
-            if (current[id][0]) {
-                memcpy(finger, current[id], 6);
-                active++;
+            if (seen[id][0]) {
+                self->missed[id] = 0;
+                uint8_t *finger = report + 1 + 6 * slots++;
+                finger[0] = 3; finger[1] = id;
+                memcpy(finger + 2, seen[id] + 2, 4);
+                self->previous[id][0] = 3;
+                memcpy(self->previous[id] + 2, seen[id] + 2, 4);
                 pending = true;
+            } else if (self->previous[id][0] == 3) {
+                vanished = true;
+                uint8_t *finger = report + 1 + 6 * slots;
+                finger[1] = id;
+                memcpy(finger + 2, self->previous[id] + 2, 4);
+                if (++self->missed[id] > kHoldFrames) {
+                    finger[0] = 2;
+                    self->previous[id][0] = 0;
+                    self->missed[id] = 0;
+                } else {
+                    finger[0] = 3;
+                    holding = true;
+                }
+                ++slots; pending = true;
             }
-            else if (self->previous[id][0]) {
-                memcpy(finger, self->previous[id], 6);
-                finger[0] = 2;
-                pending = true;
-            }
-            // Every parallel collection keeps its own contact identifier, including idle slots.
-            finger[1] = id;
         }
-        memcpy(self->previous, current, sizeof(current));
         if (!pending) return kIOReturnSuccess;
-        report[61] = active;
+        report[61] = slots;
+        IOLog("MarbleTouchHID: slots=%u tip=%u id=%u x=%u y=%u\n", slots, report[1], report[2],
+            report[3] | unsigned(report[4]) << 8, report[5] | unsigned(report[6]) << 8);
         auto *buffer = IOBufferMemoryDescriptor::withBytes(report, sizeof(report), kIODirectionNone);
         IOReturn result = buffer ? self->handleReport(buffer, 0, 0) : kIOReturnNoMemory;
         OSSafeReleaseNULL(buffer);
         native_hid_input_observed(6, result);
+        if (vanished && holding && self->tapTimer) self->tapTimer->setTimeoutMS(kHoldFlushMs);
         return result;
     }
 public:
@@ -173,6 +249,7 @@ public:
                     entry->setProperty("PrimaryUsage", 4ULL, 32);
                 }
                 eventDriverMatched = true;
+                edge::install(driver);
             }
         }
         native_hid_input_observed(7, eventDriverMatched);
@@ -185,6 +262,7 @@ public:
     }
     void contact(unsigned x, unsigned y, bool active) {
         tapTimer->cancelTimeout();
+        x *= 10; y *= 10;   // the same tenth-of-a-pixel units as the controller frames
         uint8_t point[8] = {0, 0, uint8_t(x), uint8_t(x >> 8), uint8_t(y), uint8_t(y >> 8), 1, 0};
         publish(active ? 1 : 0, point);
     }
@@ -201,7 +279,15 @@ extern "C" IOService *native_hid_touch_allocate(void) {
     return touchInput;
 }
 extern "C" void native_touch_publish(unsigned count, const uint8_t *points) {
-    if (touchInput) touchInput->publish(count, points);
+    if (!touchInput) return;
+    // Drive the same path the synthetic tap uses: one pixel coordinate and an explicit release, so the controller frame
+    // timing cannot swallow the down or the up edge of a short tap.
+    if (count) {
+        unsigned x = points[2] | unsigned(points[3]) << 8, y = points[4] | unsigned(points[5]) << 8;
+        touchInput->contact(x / 10, y / 10, true);
+    } else {
+        touchInput->contact(0, 0, false);
+    }
 }
 extern "C" void native_hid_request_tap(unsigned x, unsigned y) {
     if (touchInput && x < 1080 && y < 2400) touchInput->tap(x, y);
