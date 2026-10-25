@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-26",
+  "previous_kernel": "outputs/UniXNU_marble/kernel_gpu_gx1.macho",
+  "previous_result": {
+    "gmu": 0,
+    "context": 0,
+    "routes_verified": 2,
+    "output_bits": 36,
+    "sqe_copy": "passed",
+    "last_checkpoint": 42,
+    "runtime_usb": "lost",
+    "android_pstore": "empty"
+  },
+  "previous_log": "outputs/UniXNU_marble/gpu_diagnostics/cp_gx_runtime.log",
+  "candidate": "outputs/UniXNU_marble/kernel_cp_regs2.macho",
+  "change": "Enable hardware clock gating after register programming, matching KGSL gen7_start",
+  "register_stages": {
+    "70": "GBIF",
+    "71": "SECVID",
+    "72": "HWCG",
+    "73": "UCHE",
+    "74": "CP protection",
+    "75": "noncoherent configuration",
+    "76": "host aperture",
+    "77": "SQE instruction base"
+  },
+  "validation": {
+    "register_stages_passed": [
+      70,
+      71,
+      73,
+      74,
+      75,
+      76,
+      77,
+      72
+    ],
+    "last_checkpoint": 43,
+    "runtime_usb": "lost",
+    "device": "Android",
+    "log": "outputs/UniXNU_marble/gpu_diagnostics/cp_regs2_runtime.log"
+  }
+}

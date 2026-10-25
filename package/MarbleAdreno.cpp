@@ -111,15 +111,16 @@ class CommandProcessor {
             if (destination[at / 4 - 1] != value) return -5;
         }
         native_marble_gpu_checkpoint(MarbleGpuCpRegisters);
+        native_marble_gpu_checkpoint(MarbleGpuGbif);
         write(GEN7_GBIF_HALT, 0);
         write(GEN7_RBBM_GBIF_HALT, 0);
+        native_marble_gpu_checkpoint(MarbleGpuSecvid);
         write(GEN7_RBBM_SECVID_TSB_CNTL, 0);
         write64(GEN7_RBBM_SECVID_TSB_TRUSTED_BASE_LO, 0);
         write(GEN7_RBBM_SECVID_TSB_TRUSTED_SIZE, 0);
-        for (const auto &entry : MarbleHwcg) write(entry[0], entry[1]);
-        write(GEN7_RBBM_CLOCK_CNTL, 0x8aa8aa82);
         write(GEN7_RBBM_GBIF_CLIENT_QOS_CNTL, 0x2120212);
         write(GEN7_UCHE_GBIF_GX_CONFIG, 0x10240e0);
+        native_marble_gpu_checkpoint(MarbleGpuUche);
         write(GEN7_RBBM_PERFCTR_GPU_BUSY_MASKED, 0xffffffff);
         write64(GEN7_UCHE_TRAP_BASE_LO, 0x1fffffffff000ULL);
         write64(GEN7_UCHE_WRITE_THRU_BASE_LO, 0x1fffffffff000ULL);
@@ -128,8 +129,10 @@ class CommandProcessor {
         write(GEN7_RBBM_PERFCTR_CNTL, 1);
         write(GEN7_RBBM_INTERFACE_HANG_INT_CNTL, 0x40cfffff);
         write(GEN7_UCHE_CLIENT_PF, 0x81);
+        native_marble_gpu_checkpoint(MarbleGpuProtect);
         write(GEN7_CP_PROTECT_CNTL, 0xb);
         for (const auto &entry : MarbleProtect) write(entry[0], entry[1]);
+        native_marble_gpu_checkpoint(MarbleGpuNoncoherent);
         write(GEN7_UCHE_CMDQ_CONFIG, 0x6690e);
         write(GEN7_CP_APRIV_CNTL, 0x6f);
         write(GEN7_CP_BV_APRIV_CNTL, 0xf);
@@ -139,6 +142,7 @@ class CommandProcessor {
         write(GEN7_RB_NC_MODE_CNTL, (1U << 11) | (1U << 4) | (3U << 1));
         write(GEN7_TPL1_NC_MODE_CNTL, 3U << 1);
         write(GEN7_SP_NC_MODE_CNTL, (2U << 4) | (3U << 1));
+        native_marble_gpu_checkpoint(MarbleGpuAperture);
         for (unsigned pipe = 1; pipe <= 2; ++pipe) {
             write(GEN7_CP_APERTURE_CNTL_HOST, pipe << 12);
             write(GEN7_GRAS_NC_MODE_CNTL, 3U << 5);
@@ -148,7 +152,12 @@ class CommandProcessor {
         write(GEN7_RBBM_NC_MODE_CNTL, 1);
         // Completion is polled until the GPU interrupt handler is attached.
         write(GEN7_RBBM_INT_0_MASK, 0);
+        native_marble_gpu_checkpoint(MarbleGpuSqeBase);
         write64(GEN7_CP_SQE_INSTR_BASE_LO, buffers[0].iova);
+        // KGSL enables HWCG after programming registers to keep their clocks available.
+        native_marble_gpu_checkpoint(MarbleGpuHwcg);
+        for (const auto &entry : MarbleHwcg) write(entry[0], entry[1]);
+        write(GEN7_RBBM_CLOCK_CNTL, 0x8aa8aa82);
         native_marble_gpu_checkpoint(MarbleGpuCpRing);
         const NativeAdrenoRingIo io{this, writeRegister, readRegister, barrier};
         const NativeAdrenoRingCache cache{this, publish, acquire};

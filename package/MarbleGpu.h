@@ -32,7 +32,15 @@ enum MarbleGpuStage : unsigned {
     MarbleGpuMetaclass = 52,
     MarbleGpuAccelerator = 53,
     MarbleGpuRegister = 54,
-    MarbleGpuReady = 60
+    MarbleGpuReady = 60,
+    MarbleGpuGbif = 70,
+    MarbleGpuSecvid = 71,
+    MarbleGpuHwcg = 72,
+    MarbleGpuUche = 73,
+    MarbleGpuProtect = 74,
+    MarbleGpuNoncoherent = 75,
+    MarbleGpuAperture = 76,
+    MarbleGpuSqeBase = 77
 };
 
 extern "C" void native_marble_gpu_checkpoint(unsigned stage, int status = 0);
