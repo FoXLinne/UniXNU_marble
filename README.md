@@ -1,4 +1,4 @@
-# Marble_UniXNU
+# UniXNU_marble
 
 POCO F5／Redmi Note 12 Turbo（marble，SM7475）的 Goodix GT9916R 触控源码。
 目标环境为 UniXNU 与 iPadOS 17.7.11（21H461）。
