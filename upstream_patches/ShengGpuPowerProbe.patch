@@ -1,0 +1,26 @@
+diff --git a/package/GpuPowerProbe.cpp b/package/GpuPowerProbe.cpp
+index 844e921..0e4347c 100644
+--- a/package/GpuPowerProbe.cpp
++++ b/package/GpuPowerProbe.cpp
+@@ -86,8 +86,8 @@ extern "C" ShengGmuStatus ShengGmuColdStart(ShengGmuDevice *, const ShengGmuConf
+     const ShengGmuStartupLimits *, ShengGmuStartupResult *) __attribute__((weak));
+ extern "C" ShengGmuStatus ShengGmuBindMmio(ShengGmuMmio *, ShengGmuIo *) __attribute__((weak));
+ extern "C" IOReturn NativeAdrenoGmuContextPayloads(NativeAdrenoGmuPayload out[5]) __attribute__((weak));
+-extern "C" IOReturn NativeAdrenoGpuContextBringup(volatile uint8_t *, size_t, unsigned, unsigned, unsigned, unsigned, unsigned,
+-    unsigned, void (*)(uint32_t), NativeAdrenoGmuContextReport *) __attribute__((weak));
++extern "C" IOReturn NativeAdrenoGpuContextBringup(volatile uint8_t *, size_t, unsigned, unsigned, const ArmSmmu4KStream *, unsigned,
++    void (*)(uint32_t), NativeAdrenoGmuContextReport *) __attribute__((weak));
+ extern "C" IOReturn NativeAdrenoGpuContextBuffers(NativeAdrenoGpuBuffer out[5]) __attribute__((weak));
+ extern "C" NativeAdrenoVm *NativeAdrenoGpuContextVm() __attribute__((weak));
+ extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *, NativeAdrenoSubmit *, NativeAdrenoRing *, const NativeAdrenoRingClock *,
+@@ -1428,8 +1428,9 @@ void gpuStart() {
+     // with 1536 MiB no BO fell back to scattered pages (peak 782 MiB in use); with 384 MiB (int-160) 18 did, 81933 single-page spans
+     // whose attribute XNU kept setting back (123847 pages write-combined again at submissions, 766 ms).
+     {unsigned pool = 1536; PE_parse_boot_argn("sheng-gpu-pool", &pool, sizeof pool); native_adreno_pool_mib = pool;}
++    const ArmSmmu4KStream gpuStreams[] = {{0, 0}, {1, 1}};
+     const IOReturn ctx = NativeAdrenoGpuContextBringup(reinterpret_cast<volatile uint8_t *>(gSmmuMap->getVirtualAddress()),
+-        kSmmuWindow, 0, 2, 0, 0, 1, 1, gpuCtxProgress, &q);
++        kSmmuWindow, 0, 2, gpuStreams, 2, gpuCtxProgress, &q);
+     // Q s<step> st<IOReturn> k<program>/<attach kit status> p<phase>e<enabled> r<route phase>v<verified> n<spans>
+     snprintf(row, sizeof row, "Q s%u st%x k%u/%u p%ue%u r%uv%u n%u", q.step, unsigned(ctx), q.program_status, q.route_status,
+              q.program_phase, q.program_enabled, q.route_phase, q.routes_verified, q.spans);

@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-26",
+  "device_tree": "work/marble_hackios/marble_live.dts",
+  "user_iommus": [
+    0,
+    1024
+  ],
+  "lpac_iommus": [
+    1,
+    1024
+  ],
+  "exact_routes": [
+    [
+      1,
+      0
+    ],
+    [
+      2,
+      1
+    ],
+    [
+      3,
+      1024
+    ],
+    [
+      4,
+      1025
+    ]
+  ],
+  "bank": 20,
+  "asid": 21,
+  "candidate": "outputs/UniXNU_marble/kernel_cp_sid1.macho",
+  "build": "passed",
+  "hardware": {
+    "routes_verified": 4,
+    "output_bits": 36,
+    "CP_init": {
+      "status": 0,
+      "fence": 1,
+      "seen": 1,
+      "fault": 0
+    },
+    "GPU_write": {
+      "status": 0,
+      "fence": 2,
+      "seen": 2,
+      "scratch": "0xa7257475"
+    },
+    "ZAP_PAS": {
+      "1": 0,
+      "2": 0,
+      "5": 0
+    },
+    "secure_exit": {
+      "status": 0,
+      "fence": 3,
+      "seen": 3
+    },
+    "accelerator": "Adreno 725",
+    "last_checkpoint": 60,
+    "status": 0
+  },
+  "shared_api": {
+    "function": "NativeAdrenoGpuContextBringup",
+    "input": "ArmSmmu4KStream array and count",
+    "sheng_commit": "2b7a5815110bf75713eb596612b0b33231b181f8",
+    "sheng_integration_patch": "upstream_patches/ShengGpuPowerProbe.patch"
+  },
+  "evidence": "outputs/UniXNU_marble/gpu_diagnostics/cp_sid1_runtime.log"
+}

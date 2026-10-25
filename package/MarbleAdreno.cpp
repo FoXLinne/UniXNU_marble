@@ -78,15 +78,16 @@ class CommandProcessor {
         if (!gpuMap || !smmuMap) return -12;
         registers = reinterpret_cast<volatile uint32_t *>(gpuMap->getVirtualAddress());
         auto *smmu = reinterpret_cast<volatile uint32_t *>(smmuMap->getVirtualAddress());
-        // GMU uses bank 21 and stream slot 0. GPU streams 0 and 1 belong to bank 20.
-        for (unsigned slot = 1; slot <= 2; ++slot) {
-            smmu[(0xc00 + slot * 4) / 4] = 2U << 16;
-            smmu[(0x800 + slot * 4) / 4] = (1U << 31) | (slot - 1);
+        // DT masks SID bit 10: route both values for each GPU stream.
+        const ArmSmmu4KStream streams[] = {{1, 0}, {2, 1}, {3, 0x400}, {4, 0x401}};
+        for (const auto &stream : streams) {
+            smmu[(0xc00 + stream.slot * 4) / 4] = 2U << 16;
+            smmu[(0x800 + stream.slot * 4) / 4] = (1U << 31) | stream.sid;
         }
         barrier(nullptr);
         NativeAdrenoGmuContextReport report = {};
         IOReturn status = NativeAdrenoGpuContextBringup(reinterpret_cast<volatile uint8_t *>(smmu),
-            0x40000, 20, 21, 1, 0, 2, 1, contextProgress, &report);
+            0x40000, 20, 21, streams, 4, contextProgress, &report);
         IOLog("MarbleGPU: GPU context status=%x step=%u program=%u routes=%u output_bits=%u\n",
             status, report.step, report.program_status, report.routes_verified, report.output_bits);
         if (status || NativeAdrenoGpuContextBuffers(buffers)) return -5;
@@ -164,9 +165,11 @@ class CommandProcessor {
         IOReturn status = ring.attach(&io, &cache, const_cast<uint8_t *>(cpu[1]), buffers[1].bytes,
             buffers[1].iova, const_cast<uint8_t *>(cpu[2]), buffers[2].bytes, buffers[2].iova);
         if (status) return -5;
+        native_marble_gpu_checkpoint(MarbleGpuRingReady);
         write64(GEN7_CP_BV_RB_RPTR_ADDR_LO, buffers[2].iova + 8);
         uint32_t ifpcValues[sizeof(MarbleIfpc) / sizeof(*MarbleIfpc)];
         uint32_t preemptValues[sizeof(MarblePreempt) / sizeof(*MarblePreempt)];
+        native_marble_gpu_checkpoint(MarbleGpuPwrupRead);
         for (unsigned i = 0; i < sizeof(ifpcValues) / sizeof(*ifpcValues); ++i) ifpcValues[i] = read(MarbleIfpc[i]);
         for (unsigned i = 0; i < sizeof(preemptValues) / sizeof(*preemptValues); ++i) preemptValues[i] = read(MarblePreempt[i]);
         NativeAdrenoPwrupCounts counts{unsigned(sizeof(ifpcValues) / 4), unsigned(sizeof(preemptValues) / 4), 0};
@@ -175,8 +178,8 @@ class CommandProcessor {
             nullptr, const_cast<uint8_t *>(cpu[3]), buffers[3].bytes, &written);
         if (status) return -5;
         barrier(nullptr);
-        write(GEN7_CP_SQE_CNTL, 1);
         native_marble_gpu_checkpoint(MarbleGpuCpInit);
+        write(GEN7_CP_SQE_CNTL, 1);
         const NativeAdrenoCpInitConfig config{buffers[0].iova, buffers[3].iova, 1};
         uint32_t fence = 0, seen = 0;
         status = initializer.run(&io, &ring, &config, &fence);

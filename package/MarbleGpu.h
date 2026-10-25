@@ -40,7 +40,9 @@ enum MarbleGpuStage : unsigned {
     MarbleGpuProtect = 74,
     MarbleGpuNoncoherent = 75,
     MarbleGpuAperture = 76,
-    MarbleGpuSqeBase = 77
+    MarbleGpuSqeBase = 77,
+    MarbleGpuRingReady = 78,
+    MarbleGpuPwrupRead = 79
 };
 
 extern "C" void native_marble_gpu_checkpoint(unsigned stage, int status = 0);
