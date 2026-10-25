@@ -730,13 +730,13 @@ index 0000000..6a2f5db
 + 		goto done;
 diff --git a/patches/xnu/native-owner-trust-module.patch b/patches/xnu/native-owner-trust-module.patch
 new file mode 100644
-index 0000000..cf63b52
+index 0000000..938e0bd
 --- /dev/null
 +++ b/patches/xnu/native-owner-trust-module.patch
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,32 @@
 +--- a/bsd/kern/kern_trustcache.c
 ++++ b/bsd/kern/kern_trustcache.c
-+@@ -493,6 +493,26 @@
++@@ -493,6 +493,29 @@
 + 	trust_cache_runtime_ready = true;
 + }
 + 
@@ -749,12 +749,15 @@ index 0000000..cf63b52
 ++    if (!module || !bytes || !trust_cache_runtime_ready || !trust_cache_rt) return KERN_FAILURE;
 ++    if (!trust_cache_rt->allowEngineeringTC) return KERN_DENIED;
 ++    TrustCache_t *cache = kalloc_type(TrustCache_t, Z_WAITOK_ZERO);
+++    uint8_t *payload = kalloc_data(bytes, Z_WAITOK);
+++    memcpy(payload, module, bytes);
 ++    lck_rw_lock_exclusive(&trust_cache_rt_lock);
 ++    TCReturn_t result = amfi->TrustCache.loadModule(trust_cache_rt, kTCTypeEngineering,
-++        cache, (uintptr_t)module, bytes);
+++        cache, (uintptr_t)payload, bytes);
 ++    lck_rw_unlock_exclusive(&trust_cache_rt_lock);
 ++    printf("Native owner trust module: %u/%u/%u\n", result.component, result.error, result.uniqueError);
 ++    if (result.error == kTCReturnSuccess) return KERN_SUCCESS;
+++    kfree_data(payload, bytes);
 ++    kfree_type(TrustCache_t, cache);
 ++    return result.error == kTCReturnDuplicate ? KERN_ALREADY_IN_SET : KERN_FAILURE;
 ++}
