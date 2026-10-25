@@ -145,6 +145,24 @@ unsigned descriptor(unsigned type, unsigned index, uint8_t *out) {
     for (unsigned i=0; i<length; i++) { out[2+i*2]=value[i]; out[3+i*2]=0; }
     return out[0];
 }
+volatile bool adrenoStarting;
+void startAdreno(void *, wait_result_t) {
+    IOLog("MarbleGPU: command processor worker entered\n");
+    int status = native_marble_adreno_start();
+    IOLog("MarbleGPU: command processor result=%d\n", status);
+    __atomic_store_n(&adrenoStarting, false, __ATOMIC_RELEASE);
+    thread_terminate(current_thread());
+}
+void requestAdreno() {
+    if (__atomic_exchange_n(&adrenoStarting, true, __ATOMIC_ACQ_REL)) return;
+    thread_t thread;
+    kern_return_t status = kernel_thread_start(startAdreno, nullptr, &thread);
+    if (status == KERN_SUCCESS) thread_deallocate(thread);
+    else {
+        __atomic_store_n(&adrenoStarting, false, __ATOMIC_RELEASE);
+        IOLog("MarbleGPU: command processor worker start=%d\n", status);
+    }
+}
 void handleSetup() {
     for (unsigned i=0; i<8; i++) setup[i]=reinterpret_cast<volatile uint8_t *>(bytes)[setupOffset+i];
     unsigned value = setup[2] | setup[3]<<8, index = setup[4] | setup[5]<<8;
@@ -181,7 +199,7 @@ void handleSetup() {
     } else if (setup[0] == 0x40 && !length && setup[1] == 15) {
         __atomic_store_n(&native_legacy_output_blank, value, __ATOMIC_RELEASE); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 14) {
-        IOLog("MarbleGPU: command processor result=%d\n", native_marble_adreno_start()); return;
+        requestAdreno(); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 10) {
         native_hid_request_tap(value, index); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 11) {

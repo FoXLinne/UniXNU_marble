@@ -18,6 +18,7 @@
 #include <libkern/crypto/sha2.h>
 #include <libkern/zlib.h>
 #include "SparseDisk.h"
+#include "NativeMetalOwnerTrust.h"
 
 extern "C" {
 #include <vm/pmap.h>
@@ -35,6 +36,7 @@ void native_marble_touch_report(char *, unsigned);
 void native_marble_gpu_quiesce_inherited(void);
 void native_marble_cpu_start(void);
 unsigned native_marble_cpu_report(char *, unsigned);
+kern_return_t native_load_owner_trust_module(const uint8_t *, size_t);
 void native_marble_gpu_start(void);
 unsigned native_legacy_performance_report(char *, unsigned);
 unsigned native_legacy_prepare_report(char *, unsigned);
@@ -698,6 +700,7 @@ extern "C" void native_root_block_start(void)
   }
   mapping->release();
   started = true;
+  IOLog("RootStage: native Metal owner trust status=%d\n", native_load_owner_trust_module(nativeMetalOwnerTrust, sizeof(nativeMetalOwnerTrust)));
   native_runtime_usb_start();
   native_marble_gpu_start();
 }
