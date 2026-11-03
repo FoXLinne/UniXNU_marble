@@ -148,10 +148,18 @@ index 4b402ca..a8bfca8 100644
  #include <IOKit/IOLib.h>
  #include <kern/task.h>
 diff --git a/NativeAdrenoPublish.cpp b/NativeAdrenoPublish.cpp
-index 51f3a27..42a80f3 100644
+index 51f3a27..66e01b4 100644
 --- a/NativeAdrenoPublish.cpp
 +++ b/NativeAdrenoPublish.cpp
-@@ -102,16 +102,9 @@ volatile uint32_t native_adreno_mount_fail[4];
+@@ -18,6 +18,7 @@
+ #include <IOKit/IOUserClient.h>
+ #include <string.h>
+ #include <kern/thread.h>
++#include <kern/clock.h>
+ #include "NativeAdrenoUserClient.h"
+ 
+ extern "C" void proc_selfname(char *, int);
+@@ -102,16 +103,9 @@ volatile uint32_t native_adreno_mount_fail[4];
  struct NativeAdrenoAskerRecord {char name[20]; uint32_t reads;};
  struct NativeAdrenoAskerRecord native_adreno_metal_askers[12];
  }
@@ -171,7 +179,7 @@ index 51f3a27..42a80f3 100644
  
  namespace {
  void shiftName(char names[3][17]) {
-@@ -280,8 +273,15 @@ void AGXDeviceUserClient::dropViews(uint32_t token)
+@@ -280,8 +274,15 @@ void AGXDeviceUserClient::dropViews(uint32_t token)
          if(views_)for(size_t i=0;i<MaxViews;++i) {View &v=views_[i];if(v.descriptor && (!token || v.token==token)) {view=v.descriptor;v.descriptor=nullptr;v.token=0;break;}}
          IOLockUnlock(g.lock);
          if(!view)return;
@@ -189,7 +197,37 @@ index 51f3a27..42a80f3 100644
          view->release();
      }
  }
-@@ -680,9 +680,8 @@ extern "C" IOReturn native_adreno_new_user_client(IOService *provider,task_t own
+@@ -399,8 +400,14 @@ IOReturn AGXDeviceUserClient::clientMemoryForType(UInt32 type,IOOptionBits *opti
+ /* Fence waits as the callers see them (int-147; method 6's own statistics count every poll): [0] waits, [1] us waited in total, [2] pauses
+  * taken outside the connection lock, [3] the longest wait in us. */
+ extern "C" {volatile uint64_t native_adreno_wait_outer[4];}
++struct MethodTiming {uint64_t count,totalUs,maxUs;};
++static MethodTiming methodTiming[17];
++static uint64_t runtimeUs() {
++    uint64_t ns=0;absolutetime_to_nanoseconds(mach_absolute_time(),&ns);return ns/1000;
++}
+ static IOReturn runCore(AGXDeviceUserClient *connection,uint32_t method,const void *input,size_t input_size,void *output,size_t output_size)
+ {
++    const uint64_t beganUs=runtimeUs();
+     if(method==NativeAdrenoMethodSetMetadata && input && input_size==sizeof(NativeAdrenoAbiMetadata)) {
+         const NativeAdrenoAbiMetadata *meta=static_cast<const NativeAdrenoAbiMetadata *>(input);
+         /* The raw test's line and the Turnip phase's line ("T ..." result or "W ..." watchdog sample) are kept apart, so neither hides the other. */
+@@ -446,6 +453,14 @@ static IOReturn runCore(AGXDeviceUserClient *connection,uint32_t method,const vo
+                 if(connection->core_->windowPeak()>>20>record->peak_mib)record->peak_mib=uint32_t(connection->core_->windowPeak()>>20);
+         IOLockUnlock(g.lock);
+     }
++    if(method<17) {
++        const uint64_t us=runtimeUs()-beganUs;
++        auto &timing=methodTiming[method];
++        __atomic_fetch_add(&timing.count,1,__ATOMIC_RELAXED);
++        __atomic_fetch_add(&timing.totalUs,us,__ATOMIC_RELAXED);
++        uint64_t peak=__atomic_load_n(&timing.maxUs,__ATOMIC_RELAXED);
++        while(us>peak && !__atomic_compare_exchange_n(&timing.maxUs,&peak,us,true,__ATOMIC_RELAXED,__ATOMIC_RELAXED)) {}
++    }
+     native_adreno_metal_diag.inflight=0;
+     native_adreno_metal_diag.calls=native_adreno_metal_diag.calls+1;
+     native_adreno_metal_diag.last_selector=method;
+@@ -680,9 +695,8 @@ extern "C" IOReturn native_adreno_new_user_client(IOService *provider,task_t own
          connection->setProperty("NativeSandboxGrant",kOSBooleanTrue);
          native_adreno_metal_diag.grants=native_adreno_metal_diag.grants+1;
      }
@@ -201,7 +239,7 @@ index 51f3a27..42a80f3 100644
      IOLockLock(g.lock);
      NativeAdrenoClientRecord *record=kernel?nullptr:clientRecord(opener);
      const bool capped=cap && record && record->opens>=cap;
-@@ -733,7 +732,15 @@ extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *vm,NativeAdrenoSubmit
+@@ -733,7 +747,15 @@ extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *vm,NativeAdrenoSubmit
      const NativeAdrenoRingClock *clock,const NativeAdrenoTimer *timer,const NativeAdrenoAbiDeviceInfo *info,
      uint32_t input_bits,uint32_t output_bits)
  {
@@ -218,7 +256,7 @@ index 51f3a27..42a80f3 100644
      g.lock=IOLockAlloc();
      NativeAdrenoGpuPublished *service=new NativeAdrenoGpuPublished;
      if(!g.lock || !service || !service->init() || !service->attach(IOService::getPlatform())) {
-@@ -751,6 +758,23 @@ extern "C" uint32_t native_adreno_publish_stats(uint32_t *closed)
+@@ -751,6 +773,36 @@ extern "C" uint32_t native_adreno_publish_stats(uint32_t *closed)
      if(closed)*closed=g.closed;
      return g.opened;
  }
@@ -231,6 +269,19 @@ index 51f3a27..42a80f3 100644
 +    used+=snprintf(text+used,capacity-used,"NativeMetal pool=%u MiB used=%u peak=%u allocations=%u fallback=%u wc=%x status=%x\n",
 +        native_adreno_pool_stats[0],native_adreno_pool_stats[3],native_adreno_pool_stats[4],native_adreno_pool_stats[1],
 +        native_adreno_pool_stats[2],native_adreno_pool_wc,native_adreno_pool_status);
++    extern volatile uint64_t native_adreno_cache_stats[5],native_adreno_reassert_ticks;
++    extern volatile uint32_t native_adreno_wc_audit[6],native_adreno_wc_distrusted;
++    uint64_t cacheNs=0,reassertNs=0;
++    absolutetime_to_nanoseconds(native_adreno_cache_stats[0],&cacheNs);
++    absolutetime_to_nanoseconds(native_adreno_reassert_ticks,&reassertNs);
++    used+=snprintf(text+used,capacity-used,"GPU cache_us=%llu bytes=%llu passes=%llu reassert_us=%llu resets=%u dirty=%u distrust=%u\n",
++        cacheNs/1000,native_adreno_cache_stats[1],native_adreno_cache_stats[3],reassertNs/1000,
++        native_adreno_wc_audit[5],native_adreno_wc_audit[2],native_adreno_wc_distrusted);
++    for(unsigned i=1;i<17 && used+128<capacity;++i) {
++        const auto &t=methodTiming[i];
++        if(t.count)used+=snprintf(text+used,capacity-used,"GPU method=%u count=%llu total_us=%llu max_us=%llu\n",
++            i,t.count,t.totalUs,t.maxUs);
++    }
 +    for(unsigned i=0;i<48 && used+112<capacity;++i)
 +        if(native_adreno_metal_rows[i][0])
 +            used+=snprintf(text+used,capacity-used,"GPU%u %s\n",i,native_adreno_metal_rows[i]);

@@ -1,0 +1,68 @@
+{
+  "date": "2026-11-03",
+  "device": "marble",
+  "soc": "SM7475",
+  "gpu": "Adreno 725",
+  "system": "iPadOS 17.7.11 21H461",
+  "kernel": "kernel_widget_diag1.macho",
+  "kernel_sha256": "458deb44e0b631b88ad2761051481bce327e58eaccb94e77af475027b96de8e8",
+  "boot_mode": "fastboot boot; temporary RAM image",
+  "observation_limit_seconds": 180,
+  "recovery": {
+    "loader_selftest_returns": 1,
+    "final_returns": 3,
+    "handoff_fault": "0000000000000000:0000000000000000:0000000000000000",
+    "android_boot_completed": 1,
+    "android_slot": "_a",
+    "battery_temperature_celsius": 30.3
+  },
+  "gpu_checkpoints": {
+    "CP_init": 0,
+    "CP_init_fence": 1,
+    "GPU_write": 0,
+    "GPU_write_fence": 2,
+    "GPU_write_scratch": "a7257475",
+    "secure_exit": 0,
+    "secure_exit_fence": 3,
+    "accelerator_published": true,
+    "checkpoint": 60,
+    "gpu_offers": 124,
+    "gpu_fallbacks": 0,
+    "gpu_status": 0
+  },
+  "ui": {
+    "desktop": "rendered",
+    "wallpaper": "black",
+    "widget_page": "white empty cards",
+    "presented_frames_before_swipe": 87,
+    "captured_frames_after_swipe": 112,
+    "swipe": {
+      "frames": 22,
+      "seconds": 2.413819999999987,
+      "frames_per_second": 9.114184156233737
+    },
+    "input": "USB-injected home and swipe accepted; physical touch hardware initialized"
+  },
+  "findings": {
+    "widget_sandbox": "WidgetRenderer_Default deny iokit-open-user-client AGXDeviceUserClient",
+    "native_metal_status": "e00002c7",
+    "pool_mib": 1024,
+    "pool_used_mib": 215,
+    "pool_fallbacks": 0,
+    "free_pages_at_return": 2003
+  },
+  "evidence_directory": "outputs/UniXNU_marble/hardware_20261103",
+  "runtime_diagnostics": [
+    "HID status=0 ticks=110 home=2 reports=3/3 results=0/0 matched=1 touch=102 result=0 touch_matched=1",
+    "MarbleTouch stage=3 result=0 irq=1 events=3 frames=3 invalid=0 header=00000380",
+    "MarbleGPU checkpoint=60 status=0 ready=1",
+    "NativeMetal opens=8 closes=4 calls=2854 status=e00002c7 unmaps=0 process=WidgetRenderer_D",
+    "NativeMetal pool=1024 MiB used=215 peak=215 allocations=357 fallback=0 wc=80000000 status=0",
+    "Display copies=0 last_us=0 max_us=0 total_us=0 accepted=124 rejected=0 reason=0 retirements=124 gpu_offers=124 gpu_fallbacks=0 gpu_status=0 PAR=44000000b8000b00 MAIR=c0804ff00bb44ff"
+  ],
+  "boot_arguments": "-apfs_shared_datavolume offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-unit-scale=3 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 offline-key-events=1 sheng-aks=1 sheng-aks-sls=3 offline-hid-home=1 offline-hid-auto-home=10 offline-hid-auto-home-count=2 offline-hid-auto-home-interval=20 sheng-vsync=60 sheng-disable-watchdogd=1 sheng-disable-jobs=com.apple.locationd rootstage-panic-process=SpringBoard,backboardd boot-ui-follow=0 boot-ui-focus=Preferences boot-ui-focus4=iconservicesagent rootstage-runtime-usb=2 rootstage-read-window=1 marble-touch=1 sheng-gpu-addon=1 armcpu-self-ipi=1 marble-adreno=1 sheng-fb-gpu=1",
+  "next": [
+    "Trace the WidgetRenderer_Default user-client denial",
+    "Measure memory pressure and frame latency with the current GPU allocation strategy"
+  ]
+}

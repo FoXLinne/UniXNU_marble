@@ -1,8 +1,23 @@
 diff --git a/NativeAdrenoMetalPlugin.mm b/NativeAdrenoMetalPlugin.mm
-index 73d6eb0..869afcb 100644
+index 73d6eb0..06b8660 100644
 --- a/NativeAdrenoMetalPlugin.mm
 +++ b/NativeAdrenoMetalPlugin.mm
-@@ -368,17 +368,16 @@ static id deviceForPort(unsigned port) {
+@@ -203,12 +203,8 @@ static id deviceForPort(unsigned port) {
+         if (tried) return device;
+         tried = true;
+         exceptiondiag::start(); // the throw site of an uncaught exception, for the kernel's THROW row (ExceptionDiag.h)
+-        // Every Metal process renders in system memory: Turnip's GMEM passes hand work between the BV and BR threads, and with IFPC off
+-        // and a context reset on every client switch the two still stopped waiting on each other inside a pass (int-261p, int-262: GPU idle,
+-        // BR one IB ahead, BV inside a draw IB2). int-257's nobin covered the render server only. System memory alone still let BV run
+-        // ahead of BR across passes (concurrent binning is emitted for sysmem passes too) and it hung the same way in int-265: no
+-        // concurrent binning either.
+-        setenv("TU_DEBUG", "sysmem,nocb", 0);
++        // Keep binning on the render thread while allowing GMEM tile rendering for every client.
++        setenv("TU_DEBUG", "nocb,nobin", 0);
+         if (strcmp(getprogname(), "backboardd") != 0) return device = clientDevice(port);
+         // The discovery releases the accelerator port when it is done; the monitor and the scanout client keep using it.
+         if (void *iokit = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW | RTLD_LOCAL)) {
+@@ -368,17 +364,16 @@ static id deviceForPort(unsigned port) {
              cacheexport::run(*static_cast<Gpu *>(arg), gCacheDirectory);
              return nullptr;
          }, gpu);
