@@ -378,6 +378,23 @@ index 5815dd9..24ea7fc 100755
    printf '%s\n' "$NATIVE_ARCH_TIMER" > "$NATIVE_TIMER_STAMP"
  fi
  NATIVE_PAN=${XNU_NATIVE_PAN:-0}
+diff --git a/scripts/check-smmu4k-live.py b/scripts/check-smmu4k-live.py
+index 6e57443..8a03978 100644
+--- a/scripts/check-smmu4k-live.py
++++ b/scripts/check-smmu4k-live.py
+@@ -45,10 +45,10 @@ counts = re.search(r'(\d+) native4K lower/upper mapping profiles, (\d+) I/O/cach
+ if not counts or int(counts[1]) != 3264:
+     raise SystemExit('Expected independent profile coverage absent')
+ pairs = re.search(r'(\d+) dual-region native4K profiles and (\d+) dual-region failure/alias/isolation controls', host.stdout)
+-if not pairs or tuple(map(int,pairs.groups())) != (1632,339):
++if not pairs or tuple(map(int,pairs.groups())) != (1632,343):
+     raise SystemExit('Expected dual-region coverage absent')
+ batches = re.search(r'(\d+) batched scattered-page map/unmap transactions', host.stdout)
+-if not batches or int(batches[1]) != 174:
++if not batches or int(batches[1]) != 185:
+     raise SystemExit('Expected batched update coverage absent')
+ alias_test = out / 'test-alias'
+ subprocess.run(['xcrun', 'clang', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
 diff --git a/scripts/check-turnip-darwin-host.py b/scripts/check-turnip-darwin-host.py
 index 6deaed9..0a1c4fe 100644
 --- a/scripts/check-turnip-darwin-host.py

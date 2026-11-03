@@ -14,7 +14,6 @@
 #include "MarbleAdrenoRegisters.h"
 #include "MarbleGpu.h"
 
-extern "C" volatile uint32_t native_adreno_pool_mib;
 extern "C" int native_marble_zap_load(void);
 extern "C" const uint8_t marble_sqe_firmware[];
 extern "C" const uint64_t marble_sqe_firmware_size;
@@ -99,8 +98,6 @@ class CommandProcessor {
         IOLog("MarbleGPU: GPU context reset SCTLR=%x/%x TLB=%x elapsed=%u\n",
             inheritedControl, smmu[contextBase / 4], smmu[(contextBase + 0x7f4) / 4], elapsed);
         if (elapsed == 100) return -110;
-        native_adreno_pool_mib = 256;
-        IOLog("MarbleGPU: BO pool target=256 MiB\n");
         NativeAdrenoGmuContextReport report = {};
         IOReturn status = NativeAdrenoGpuContextBringup(reinterpret_cast<volatile uint8_t *>(smmu),
             0x40000, 20, 21, streams, 4, contextProgress, &report);

@@ -1,0 +1,104 @@
+{
+  "date": "2026-11-03",
+  "change": "Port upstream pageable BO allocation and GPU mapping and submission optimizations",
+  "references": {
+    "wiki": [
+      "https://unixnu.com/zh/porting/gpu",
+      "https://unixnu.com/zh/porting/platform",
+      "https://unixnu.com/zh/porting/gpu-diagnostics"
+    ],
+    "UniXNU": "3fa5ff5f409398c0555a9561d6437ce5d4c3b3b7",
+    "UniXNU_sheng": "7cff07ea9933428e27769014e903f103ab31155d",
+    "Adreno740_pin": "1030485546ef7ebb9abbfb7c17fbca93cca40971",
+    "AdrenoMetal_pin": "816022307852de7e1741ac05ae9111982318763f",
+    "Adreno740_changes": [
+      "c8806db0e558d1752107776ac7b39c3fb772d99b",
+      "1c4065cfb1f3e05e4bff30fbfabc6c291f472c28",
+      "5c8c1453c67d6ef6b10ec43ab1f8fc570a2f33e1",
+      "1c184195b1706e864f1a8c3fef4c933dba7f2fd6"
+    ],
+    "AdrenoMetal_change": "ce5e19e33e05e1873d38d818e23cabfe0ac708c3",
+    "ArmSmmu4K_changes": [
+      "0d680d621da8cd57fb4dba4a9bb97ee779a95f4d",
+      "3ba92451bd44bb742d11758fbfcd3a446ecad685"
+    ]
+  },
+  "implementation": [
+    "Allocate ordinary BOs through pageable VM descriptors with no task or permanent kernel mapping; prepare wires their pages; explicit contiguous allocations retain their existing path",
+    "Remove the boot-time BO pool and its board setting; map the VM-owned descriptor into the client and release mappings without redirecting the reusable VM descriptor",
+    "Use exclusive SMMU mapping for system-owned BOs, binary IOVA overlap lookup, and growing range metadata; preserve imported-memory alias checks",
+    "Invalidate removed pages individually through 512 pages and invalidate the ASID for larger unmaps",
+    "Retain TLB translations on ordinary submission; invalidate once after 50 ms without fence progress while retaining job references",
+    "Audit the first 16 submissions and sample CPU/DRAM coherence every 64 submissions",
+    "Return a refusing Metal render encoder when backend or attachment creation fails"
+  ],
+  "validation": {
+    "host_command": "python3 scripts/check_gpu_host.py",
+    "host_cases_passed": [
+      "memory",
+      "smmu_memory",
+      "vm",
+      "submit",
+      "userclient"
+    ],
+    "host_sanitizers": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ],
+    "system_BO_controls": {
+      "allocation_profiles": 6,
+      "allocation_failure_controls": 5,
+      "completion_failure_quarantine": true
+    },
+    "submission_controls": [
+      "TLB retained on normal submit and short timeout",
+      "single TLB recovery after 50 ms",
+      "job references retained on timeout",
+      "64 submission coherence sampling",
+      "initial 16 submission IB audit"
+    ],
+    "smmu_command": "python3 scripts/check-smmu4k-live.py",
+    "smmu_profiles": 3264,
+    "smmu_failure_controls": 175,
+    "smmu_descriptor_mutations": 5120,
+    "smmu_dual_region_profiles": 1632,
+    "smmu_dual_region_failure_controls": 343,
+    "smmu_batch_controls": 185,
+    "smmu_arm64_ios17_archive": true,
+    "smmu_static_analysis": true,
+    "ios_arm64_compiled": [
+      "NativeAdrenoMemory",
+      "NativeAdrenoVm",
+      "NativeAdrenoSubmit",
+      "NativeAdrenoUserClient",
+      "NativeAdrenoPublish",
+      "NativeAdrenoGpuContext",
+      "NativeAdrenoService",
+      "MarbleAdreno",
+      "NativeBridgeMetalFrontend"
+    ],
+    "kernel_headers": "XNU 10063.141.1 exported Kernel.framework headers",
+    "compile_logs": "../UniXNU/build/marble_gpu_host"
+  },
+  "hardware": {
+    "status": "pending new kernel image",
+    "device_runs_in_this_batch": 0,
+    "frame_rate_measurement_for_this_batch": null
+  },
+  "kernel_build_inputs_missing": [
+    "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json",
+    "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.link/mach.development.bcm2837.a"
+  ],
+  "integration_scope": {
+    "fixed_object_table_limit": 4096,
+    "import_fast_path": "existing alias checks",
+    "dual_ring_preemption": "upstream reference only",
+    "runtime_backing_reuse": "upstream reference only",
+    "XNU_owned_memory_bytes": 4294967296
+  },
+  "display_reference": {
+    "repository": "UniXNU-sheng",
+    "source": "README.md",
+    "timing_request_hz": 120
+  }
+}

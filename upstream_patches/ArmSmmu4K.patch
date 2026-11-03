@@ -1,0 +1,404 @@
+diff --git a/ArmSmmu4KLive.c b/ArmSmmu4KLive.c
+index a400d3f..5a3137e 100644
+--- a/ArmSmmu4KLive.c
++++ b/ArmSmmu4KLive.c
+@@ -122,11 +122,10 @@ static void sift(const ArmSmmu4KRange *r,uint32_t *h,size_t root,size_t n)
+         uint32_t t=h[root];h[root]=h[child];h[child]=t;root=child;
+     }
+ }
+-static int alias_pass(const ArmSmmu4KLiveArena *arena,const AliasSide *p,const AliasSide *q)
++/* np and nq: the members of each side, from the caller's one count per class (counting them here walked both sides again in every
++ * pass, four extra walks of the whole range list per buffer map). */
++static int alias_pass(const ArmSmmu4KLiveArena *arena,const AliasSide *p,const AliasSide *q,size_t np,size_t nq)
+ {
+-    size_t np=0,nq=0;
+-    for(size_t i=0;i<p->count;++i)np+=(size_t)alias_member(p,i);
+-    for(size_t j=0;j<q->count;++j)nq+=(size_t)alias_member(q,j);
+     if(!np || !nq)return 0;
+     const AliasSide *sorted=np<=nq?p:q,*probe=np<=nq?q:p;
+     const size_t n=np<=nq?np:nq;
+@@ -165,19 +164,20 @@ static int any_conflicting_alias(const ArmSmmu4KLiveArena *arena,const ArmSmmu4K
+     const ArmSmmu4KRange *b,size_t nb)
+ {
+     if(!na || !nb)return 0;
+-    size_t members[16]={0};
+-    for(size_t i=0;i<na;++i)++members[alias_class(&a[i])];
+-    for(size_t j=0;j<nb;++j)++members[alias_class(&b[j])];
++    size_t ma[16]={0},mb[16]={0},members[16];
++    for(size_t i=0;i<na;++i)++ma[alias_class(&a[i])];
++    const int self=a==b && na==nb;
++    if(self)for(unsigned k=0;k<16;++k)mb[k]=ma[k];else for(size_t j=0;j<nb;++j)++mb[alias_class(&b[j])];
++    for(unsigned k=0;k<16;++k)members[k]=self?ma[k]:ma[k]+mb[k];
+     unsigned reference=0;
+     for(unsigned k=1;k<16;++k)if(members[k]>members[reference])reference=k;
+-    const int self=a==b && na==nb;
+     for(unsigned k=0;k<16;++k) {
+         if(k==reference || !members[k])continue;
+         const AliasSide ak={a,na,k,1},bo={b,nb,k,0};
+-        if(alias_pass(arena,&ak,&bo))return 1;
++        if(alias_pass(arena,&ak,&bo,ma[k],nb-mb[k]))return 1;
+         if(self)continue;
+         const AliasSide bk={b,nb,k,1},ao={a,na,k,0};
+-        if(alias_pass(arena,&bk,&ao))return 1;
++        if(alias_pass(arena,&bk,&ao,mb[k],na-ma[k]))return 1;
+     }
+     return 0;
+ }
+@@ -324,6 +324,10 @@ static int overlaps(uint64_t a,uint64_t abytes,uint64_t b,uint64_t bbytes)
+ {return a<b+bbytes && b<a+abytes;}
+ static int touches_pool(const ArmSmmu4KRange *r,const ArmSmmu4KLiveArena *a)
+ {return overlaps(r->physical,r->bytes,a->config.table_physical,a->capacity_pages*PAGE);}
++/* aliases=0 (an update that is not its region's whole-verification one) trusts the existing ranges: each was checked as a change when it
++ * was added (valid, disjoint from the others by the empty leaves it replaced, clear of both pools, in budget) and only those updates
++ * modified the list. Scanning every range in each of the update's five metadata passes cost about 1 ms per buffer map at 52609 ranges
++ * (i567: 15831 maps spent 15.5 s in the update, and the compositor dropped to 5-25 fps while it mapped). */
+ static ArmSmmu4KStatus region_metadata(const ArmSmmu4KLiveRegion *region,
+     const ArmSmmu4KConfig *config,const ArmSmmu4KResult *root,unsigned upper,int aliases)
+ {
+@@ -336,12 +340,13 @@ static ArmSmmu4KStatus region_metadata(const ArmSmmu4KLiveRegion *region,
+     const ArmSmmu4KResult *r=&region->state->tables;
+     if(r->root_physical!=shape.root_physical || r->mair!=shape.mair || r->table_pages!=shape.table_pages ||
+         r->start_level!=shape.start_level || r->upper_region!=shape.upper_region)return ArmSmmu4KArgument;
++    if(!aliases)return (region->count && !region->ranges) || region->count>r->leaf_pages?ArmSmmu4KArgument:ArmSmmu4KSuccess;
+     size_t leaves=0;
+     status=validate_ranges_checked(region->arena,region->ranges,region->count,&leaves,aliases);if(status)return status;
+     return leaves==r->leaf_pages?ArmSmmu4KSuccess:ArmSmmu4KArgument;
+ }
+-/* aliases=0 (an update that is not its region's whole-verification one) skips the existing ranges' alias checks against each other
+- * and across the regions: each range was checked against all of them when it was mapped, and the 64th update re-proves them. */
++/* aliases=0 (an update that is not its region's whole-verification one) skips the existing ranges' alias and pool checks against each
++ * other and across the regions: each range was checked against all of them when it was mapped. */
+ static ArmSmmu4KStatus context_metadata(const ArmSmmu4KContextConfig *context,
+     const ArmSmmu4KLiveRegion *lower,const ArmSmmu4KLiveRegion *upper,int aliases)
+ {
+@@ -354,9 +359,10 @@ static ArmSmmu4KStatus context_metadata(const ArmSmmu4KContextConfig *context,
+             overlaps(a->config.table_physical,a->capacity_pages*PAGE,b->config.table_physical,b->capacity_pages*PAGE) ||
+             overlaps((uintptr_t)a->mapping,a->capacity_pages*PAGE,(uintptr_t)b->mapping,b->capacity_pages*PAGE))
+             return ArmSmmu4KOverlap;
++        if(!aliases)return ArmSmmu4KSuccess;
+         for(size_t i=0;i<lower->count;++i)if(touches_pool(&lower->ranges[i],b))return ArmSmmu4KOverlap;
+         for(size_t i=0;i<upper->count;++i)if(touches_pool(&upper->ranges[i],a))return ArmSmmu4KOverlap;
+-        if(aliases && any_conflicting_alias(lower->arena,lower->ranges,lower->count,upper->ranges,upper->count))return ArmSmmu4KOverlap;
++        if(any_conflicting_alias(lower->arena,lower->ranges,lower->count,upper->ranges,upper->count))return ArmSmmu4KOverlap;
+     }
+     return ArmSmmu4KSuccess;
+ }
+@@ -376,13 +382,13 @@ ArmSmmu4KStatus ArmSmmu4KLiveAuditContext(const ArmSmmu4KContextConfig *context,
+ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *state,
+     const ArmSmmu4KIo *io,unsigned bank,const ArmSmmu4KContextConfig *context,
+     const ArmSmmu4KLiveVisibility *visibility,const ArmSmmu4KRange *before,size_t count,
+-    const ArmSmmu4KLiveRegion *peer,const ArmSmmu4KRange *changes,size_t change_count,unsigned map,unsigned budget,
++    const ArmSmmu4KLiveRegion *peer,const ArmSmmu4KRange *changes,size_t change_count,unsigned map,unsigned exclusive,unsigned budget,
+     ArmSmmu4KLiveResult *r)
+ {
+     if(!r)return ArmSmmu4KArgument;
+     *r=(ArmSmmu4KLiveResult){0};r->must_retain_resources=1;
+     if(!state || !state->prepared || state->poisoned || !context ||
+-        !visibility || !visibility->publish_table_page || map>1 || !change_count ||
++        !visibility || !visibility->publish_table_page || map>1 || exclusive>map || !change_count ||
+         !budget || budget>1048576 || state->generation==UINT64_MAX)return ArmSmmu4KArgument;
+     ArmSmmu4KResult shape;
+     ArmSmmu4KStatus status=layout(a,&shape);
+@@ -394,16 +400,21 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
+         state->tables.mair!=shape.mair || state->tables.table_pages!=shape.table_pages ||
+         state->tables.start_level!=shape.start_level || state->tables.upper_region!=shape.upper_region)
+         return ArmSmmu4KArgument;
+-    /* Every 64th update of a region (its first included) re-proves the whole region: the existing ranges against each other and every
+-     * table descriptor before and after. The others prove what they change: each changed leaf holds its old descriptor before the store
+-     * and its new one after it, the existing ranges are still sorted, disjoint and in budget, and the changes conflict with none of
+-     * them. The ranges were each checked as changes when they were added, and the tables were last proved whole at most 63 updates ago.
+-     * A whole-region walk read every descriptor of a 2 GiB aperture four times per update (int-143: 10 ms per buffer map). */
+-    const int whole=(state->generation&63)==0;
++    /* A region's first update proves the whole region: the existing ranges against each other and every table descriptor before and
++     * after. The others prove what they change: each changed leaf holds its old descriptor before the store and its new one after it,
++     * the existing ranges are still sorted, disjoint and in budget, and the changes conflict with none of them. The ranges were each
++     * checked as changes when they were added, so the tables stay what the first proof and the proved changes made them.
++     * A whole-region walk read every descriptor of a 2 GiB aperture four times per update (int-143: 10 ms per buffer map); repeated
++     * every 64th update it still stalled the caller 37 ms on a map and 79 ms on an unmap (i557u, 4.8 GiB apertures). */
++    const int whole=state->generation==0;
+     r->whole_verification=whole?1u:0u;
+-    size_t leaves=0;
+-    status=validate_ranges_checked(a,before,count,&leaves,whole);if(status!=ArmSmmu4KSuccess)return status;
+-    if(leaves!=state->tables.leaf_pages)return ArmSmmu4KArgument;
++    /* The others take the leaf count the proved updates kept and the existing ranges as region_metadata() trusts them: a changed page
++     * that an existing range covers still refuses below, through the binary search of the sorted list. */
++    size_t leaves=state->tables.leaf_pages;
++    if(whole) {
++        status=validate_ranges_checked(a,before,count,&leaves,1);if(status!=ArmSmmu4KSuccess)return status;
++        if(leaves!=state->tables.leaf_pages)return ArmSmmu4KArgument;
++    } else if((count && !before) || count>leaves)return ArmSmmu4KArgument;
+     /* The changes: sorted, disjoint, each valid; together within the leaf budget. */
+     size_t changed=0;
+     if(!changes)return ArmSmmu4KBadRange;
+@@ -420,18 +431,18 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
+         status=context_metadata(context,a->upper_region?peer:&target,a->upper_region?&target:peer,whole);
+         if(status)return status;
+         for(size_t i=0;i<change_count;++i)if(touches_pool(&changes[i],peer->arena))return ArmSmmu4KOverlap;
+-        if(map && any_conflicting_alias(a,changes,change_count,peer->ranges,peer->count))return ArmSmmu4KOverlap;
++        if(map && !exclusive && any_conflicting_alias(a,changes,change_count,peer->ranges,peer->count))return ArmSmmu4KOverlap;
+     }
+     if(map && changed>a->config.leaf_budget-leaves)return ArmSmmu4KBudget;
+     if(map && (any_conflicting_alias(a,changes,change_count,changes,change_count) ||
+-        any_conflicting_alias(a,changes,change_count,before,count)))return ArmSmmu4KOverlap;
++        (!exclusive && any_conflicting_alias(a,changes,change_count,before,count))))return ArmSmmu4KOverlap;
+     for(size_t i=0;i<change_count;++i)for(uint64_t offset=0;offset<changes[i].bytes;offset+=PAGE) {
+         uint64_t va=changes[i].iova+offset,old=expected(before,count,va);
+         if(map?old!=0:old!=descriptor(&changes[i],va))return ArmSmmu4KStateMismatch;
+     }
+-    /* The context image and faults are observed around the stores of the whole-verification updates only (every 64th, the first
+-     * included), and remembered there. Between them the bank stays the caller's exclusively owned one; each of these reads is a
+-     * device register access, and an update observed it five times (int-159: 1.1 ms of a 1.7 ms buffer map). */
++    /* The context image and faults are observed around the stores of the whole-verification update only, and remembered there; the
++     * caller observes its routes on its own schedule. After it the bank stays the caller's exclusively owned one; each of these
++     * reads is a device register access, and an update observed it five times (int-159: 1.1 ms of a 1.7 ms buffer map). */
+     const int observed=whole || !state->context_offset;
+     if(observed) {
+         status=ArmSmmu4KObserveOwnedContext(io,bank,context,&r->synchronization);
+@@ -478,7 +489,11 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
+         status=ArmSmmu4KSynchronizeOwnedContext(io,bank,context,budget,&r->synchronization);
+         if(status!=ArmSmmu4KSuccess)goto poisoned;
+     } else if(!map) {
+-        status=ArmSmmu4KSyncContextTlb(io,state->context_offset,context->asid,0,budget,&r->synchronization);
++        /* Up to ArmSmmu4KTlbPageLimit pages are dropped one by one and the rest of the ASID's translations stay cached; a bigger
++         * unmap invalidates the ASID (i568: 3622 unmaps each emptied the GPU's TLB). */
++        status=changed<=ArmSmmu4KTlbPageLimit?
++            ArmSmmu4KSyncContextTlbPages(io,state->context_offset,context->asid,changes,change_count,budget,&r->synchronization):
++            ArmSmmu4KSyncContextTlb(io,state->context_offset,context->asid,0,budget,&r->synchronization);
+         if(status!=ArmSmmu4KSuccess)goto poisoned;
+     }
+     if(whole) {
+@@ -508,21 +523,31 @@ ArmSmmu4KStatus ArmSmmu4KLiveUpdate(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveSta
+     const ArmSmmu4KIo *io,unsigned bank,const ArmSmmu4KContextConfig *context,
+     const ArmSmmu4KLiveVisibility *visibility,const ArmSmmu4KRange *before,size_t count,
+     const ArmSmmu4KRange *change,unsigned map,unsigned budget,ArmSmmu4KLiveResult *r)
+-{return update(a,state,io,bank,context,visibility,before,count,0,change,1,map,budget,r);}
+-ArmSmmu4KStatus ArmSmmu4KLiveUpdateContextBatch(const ArmSmmu4KIo *io,unsigned bank,
++{return update(a,state,io,bank,context,visibility,before,count,0,change,1,map,0,budget,r);}
++static ArmSmmu4KStatus update_context(const ArmSmmu4KIo *io,unsigned bank,
+     const ArmSmmu4KContextConfig *context,const ArmSmmu4KLiveRegion *lower,
+     const ArmSmmu4KLiveRegion *upper,unsigned change_upper,const ArmSmmu4KLiveVisibility *visibility,
+-    const ArmSmmu4KRange *changes,size_t change_count,unsigned map,unsigned budget,ArmSmmu4KLiveResult *r)
++    const ArmSmmu4KRange *changes,size_t change_count,unsigned map,unsigned exclusive,unsigned budget,ArmSmmu4KLiveResult *r)
+ {
+     if(!r)return ArmSmmu4KArgument;
+     *r=(ArmSmmu4KLiveResult){0};r->must_retain_resources=1;
+     if(change_upper>1)return ArmSmmu4KArgument;
+     const ArmSmmu4KLiveRegion *target=change_upper?upper:lower,*peer=change_upper?lower:upper;
+     if(!target || !target->state)return ArmSmmu4KArgument;
+-    ArmSmmu4KStatus status=context_metadata(context,lower,upper,(target->state->generation&63)==0);if(status)return status;
++    ArmSmmu4KStatus status=context_metadata(context,lower,upper,target->state->generation==0);if(status)return status;
+     return update(target->arena,target->state,io,bank,context,visibility,target->ranges,target->count,
+-        peer,changes,change_count,map,budget,r);
++        peer,changes,change_count,map,exclusive,budget,r);
+ }
++ArmSmmu4KStatus ArmSmmu4KLiveUpdateContextBatch(const ArmSmmu4KIo *io,unsigned bank,
++    const ArmSmmu4KContextConfig *context,const ArmSmmu4KLiveRegion *lower,
++    const ArmSmmu4KLiveRegion *upper,unsigned change_upper,const ArmSmmu4KLiveVisibility *visibility,
++    const ArmSmmu4KRange *changes,size_t change_count,unsigned map,unsigned budget,ArmSmmu4KLiveResult *r)
++{return update_context(io,bank,context,lower,upper,change_upper,visibility,changes,change_count,map,0,budget,r);}
++ArmSmmu4KStatus ArmSmmu4KLiveMapContextBatchExclusive(const ArmSmmu4KIo *io,unsigned bank,
++    const ArmSmmu4KContextConfig *context,const ArmSmmu4KLiveRegion *lower,
++    const ArmSmmu4KLiveRegion *upper,unsigned change_upper,const ArmSmmu4KLiveVisibility *visibility,
++    const ArmSmmu4KRange *changes,size_t change_count,unsigned budget,ArmSmmu4KLiveResult *r)
++{return update_context(io,bank,context,lower,upper,change_upper,visibility,changes,change_count,1,1,budget,r);}
+ ArmSmmu4KStatus ArmSmmu4KLiveUpdateContext(const ArmSmmu4KIo *io,unsigned bank,
+     const ArmSmmu4KContextConfig *context,const ArmSmmu4KLiveRegion *lower,
+     const ArmSmmu4KLiveRegion *upper,unsigned change_upper,const ArmSmmu4KLiveVisibility *visibility,
+diff --git a/ArmSmmu4KLive.h b/ArmSmmu4KLive.h
+index d796657..8229a89 100644
+--- a/ArmSmmu4KLive.h
++++ b/ArmSmmu4KLive.h
+@@ -39,7 +39,7 @@ typedef struct {
+ typedef struct {
+     size_t descriptor_reads,descriptor_writes,published_pages;
+     unsigned complete,translation_removed,must_retain_resources;
+-    unsigned whole_verification;   /* this update re-proved the whole region (every 64th of a region) */
++    unsigned whole_verification;   /* this update proved the whole region (a region's first) */
+     ArmSmmu4KProgramResult synchronization;
+ } ArmSmmu4KLiveResult;
+ /* Prepare an INACTIVE empty native4K arena. Preallocate only real intermediate
+@@ -108,6 +108,14 @@ ArmSmmu4KStatus ArmSmmu4KLiveUpdateContextBatch(const ArmSmmu4KIo *,unsigned ban
+     const ArmSmmu4KLiveRegion *upper,unsigned change_upper,
+     const ArmSmmu4KLiveVisibility *,const ArmSmmu4KRange *changes,size_t change_count,
+     unsigned map,unsigned poll_budget,ArmSmmu4KLiveResult *);
++/* UpdateContextBatch for a map whose physical pages the caller owns exclusively: no other range of either region can name them, so
++ * the changes are not checked for cache-attribute aliases against the existing ranges (they still are against each other). Every
++ * other check stays. Those alias passes walked every existing range per class on each map (i568: 52609 ranges, 0.4 ms a map). */
++ArmSmmu4KStatus ArmSmmu4KLiveMapContextBatchExclusive(const ArmSmmu4KIo *,unsigned bank,
++    const ArmSmmu4KContextConfig *,const ArmSmmu4KLiveRegion *lower,
++    const ArmSmmu4KLiveRegion *upper,unsigned change_upper,
++    const ArmSmmu4KLiveVisibility *,const ArmSmmu4KRange *changes,size_t change_count,
++    unsigned poll_budget,ArmSmmu4KLiveResult *);
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/ArmSmmu4KProgram.c b/ArmSmmu4KProgram.c
+index 2cb6695..92b142a 100644
+--- a/ArmSmmu4KProgram.c
++++ b/ArmSmmu4KProgram.c
+@@ -187,6 +187,38 @@ ArmSmmu4KStatus ArmSmmu4KSyncContextTlb(const ArmSmmu4KIo *io,uint64_t context_o
+     if(status==ArmSmmu4KSuccess)r->phase=9;
+     return status;
+ }
++ArmSmmu4KStatus ArmSmmu4KSyncContextTlbPages(const ArmSmmu4KIo *io,uint64_t context_offset,unsigned asid,
++    const ArmSmmu4KRange *ranges,size_t count,unsigned budget,ArmSmmu4KProgramResult *r)
++{
++    if(!r)return ArmSmmu4KArgument;
++    *r=(ArmSmmu4KProgramResult){0};r->must_retain_tables=1;
++    if(!io || !io->write32 || !io->write64 || !io->read32 || !io->barrier || !budget || budget>1048576 || !context_offset ||
++        context_offset>io->register_bytes || io->register_bytes-context_offset<0x7f8 || !count || !ranges || asid>0xffff)
++        return ArmSmmu4KArgument;
++    size_t pages=0;
++    for(size_t i=0;i<count;++i) {
++        if(((ranges[i].iova|ranges[i].bytes)&4095) || !ranges[i].bytes || ranges[i].bytes/4096>ArmSmmu4KTlbPageLimit-pages)
++            return ArmSmmu4KArgument;
++        pages+=(size_t)(ranges[i].bytes/4096);
++    }
++    r->context_offset=context_offset;r->tlb_synchronized=0;
++    const size_t cb=(size_t)context_offset;
++    if(io->barrier(io->cookie))return ArmSmmu4KIoError;
++    /* TLBIVAL (+0x620), AArch64 format: VA[55:12] in bits 43:0, the ASID in bits 63:48. Leaf entries only: the tables above the leaves
++     * are fixed for the context's life. */
++    for(size_t i=0;i<count;++i)for(uint64_t offset=0;offset<ranges[i].bytes;offset+=4096)
++        if(write64(io,cb+0x620,(((ranges[i].iova+offset)>>12)&((UINT64_C(1)<<44)-1))|((uint64_t)asid<<48),r))return ArmSmmu4KIoError;
++    if(write32(io,cb+0x7f0,UINT32_MAX,r) || io->barrier(io->cookie))return ArmSmmu4KIoError;
++    for(unsigned i=0;i<budget;++i) {
++        uint32_t status;++r->poll_reads;
++        if(io->read32(io->cookie,cb+0x7f4,&status))return ArmSmmu4KIoError;
++        if(!(status&1)) {
++            if(io->barrier(io->cookie))return ArmSmmu4KIoError;
++            r->tlb_synchronized=1;r->phase=9;return ArmSmmu4KSuccess;
++        }
++    }
++    return ArmSmmu4KTimeout;
++}
+ ArmSmmu4KStatus ArmSmmu4KSynchronizeOwnedContext(const ArmSmmu4KIo *io,unsigned bank,
+     const ArmSmmu4KContextConfig *config,unsigned budget,ArmSmmu4KProgramResult *r)
+ {return synchronize(io,bank,config,0,budget,r);}
+diff --git a/ArmSmmu4KProgram.h b/ArmSmmu4KProgram.h
+index 25ccf6d..a8b165e 100644
+--- a/ArmSmmu4KProgram.h
++++ b/ArmSmmu4KProgram.h
+@@ -58,6 +58,12 @@ ArmSmmu4KStatus ArmSmmu4KSynchronizeOwnedContext(const ArmSmmu4KIo *,unsigned ba
+  * between its whole-verification updates). */
+ ArmSmmu4KStatus ArmSmmu4KSyncContextTlb(const ArmSmmu4KIo *,uint64_t context_offset,unsigned asid,unsigned all,
+     unsigned poll_budget,ArmSmmu4KProgramResult *);
++/* As ArmSmmu4KSyncContextTlb, but TLBIVAL of every page of the given ranges (4K aligned, at most ArmSmmu4KTlbPageLimit pages) for the ASID
++ * instead of TLBIASID, then the bounded TLBSYNC: an unmap drops the translations it removed and keeps every other cached one, as
++ * Linux's io-pgtable unmap does (TLBIASID on each unmap emptied the GPU's whole TLB). For leaf changes only. */
++enum {ArmSmmu4KTlbPageLimit=512};
++ArmSmmu4KStatus ArmSmmu4KSyncContextTlbPages(const ArmSmmu4KIo *,uint64_t context_offset,unsigned asid,
++    const ArmSmmu4KRange *ranges,size_t count,unsigned poll_budget,ArmSmmu4KProgramResult *);
+ /* As ArmSmmu4KSynchronizeOwnedContext, but with TLBIALL for the bank instead of TLBIASID: every cached translation of the bank goes,
+  * whatever ASID it was tagged with. */
+ ArmSmmu4KStatus ArmSmmu4KInvalidateAllOwnedContext(const ArmSmmu4KIo *,unsigned bank,
+diff --git a/test_live.c b/test_live.c
+index a36b817..27d7127 100644
+--- a/test_live.c
++++ b/test_live.c
+@@ -15,7 +15,7 @@ static ArmSmmu4KLiveState peer_state;
+ static unsigned pair_mode;
+ typedef struct {
+     uint64_t registers[MMIO_BYTES/8];
+-    size_t calls,fail_call,publication_calls,fail_publication,tlbi_calls,sync_calls;
++    size_t calls,fail_call,publication_calls,fail_publication,tlbi_calls,sync_calls,page_tlbi_calls;
+     size_t writes,barriers,cb;
+     unsigned after_write,timeout,dirty,require_published,mutate_on_publish;
+     unsigned synced,clean_observed;
+@@ -56,7 +56,7 @@ static int write32(void *cookie,size_t at,uint32_t value)
+         CHECK(f.publication_calls && f.clean_observed && !f.dirty);
+     }
+     if(at==f.cb+0x610) {CHECK(value==context.asid);++f.tlbi_calls;f.synced=0;}
+-    if(at==f.cb+0x7f0) {CHECK(f.tlbi_calls && value==UINT32_MAX);++f.sync_calls;}
++    if(at==f.cb+0x7f0) {CHECK((f.tlbi_calls || f.page_tlbi_calls) && value==UINT32_MAX);++f.sync_calls;}
+     if(at==f.cb+0x58)put32(at,get32(at)&~value);
+     else put32(at,value);
+     return fail;
+@@ -64,7 +64,9 @@ static int write32(void *cookie,size_t at,uint32_t value)
+ static int write64(void *cookie,size_t at,uint64_t value)
+ {
+     int fail=call(cookie,at,8);++f.writes;
+-    CHECK(!f.require_published);
++    /* The one 64-bit write of a live update: TLBIVAL of a removed page, tagged with the context's ASID. */
++    if(at==f.cb+0x620) {CHECK((value>>48)==context.asid);++f.page_tlbi_calls;f.synced=0;}
++    else CHECK(!f.require_published);
+     if(fail && !f.after_write)return 1;put64(at,value);return fail;
+ }
+ static int barrier(void *cookie)
+@@ -89,7 +91,7 @@ static int publish(void *cookie,volatile uint64_t *page,size_t bytes)
+ static void reset_counters(void)
+ {
+     f.calls=f.fail_call=f.publication_calls=f.fail_publication=0;
+-    f.tlbi_calls=f.sync_calls=f.writes=f.barriers=0;
++    f.tlbi_calls=f.sync_calls=f.page_tlbi_calls=f.writes=f.barriers=0;
+     f.after_write=f.timeout=f.mutate_on_publish=f.synced=f.clean_observed=0;
+     f.require_published=f.dirty=1;
+ }
+@@ -143,8 +145,9 @@ static void complete(unsigned removed,size_t pages)
+     /* A whole-verification update observes the context and synchronizes its ASID; between them an unmap synchronizes it alone and a
+      * map of invalid leaves needs neither. */
+     if(result.whole_verification)CHECK(result.synchronization.tlb_synchronized && f.tlbi_calls==1 && f.sync_calls==1 && f.synced && f.barriers>=4);
+-    else if(removed)CHECK(result.synchronization.tlb_synchronized && f.tlbi_calls==1 && f.sync_calls==1 && f.synced && f.barriers>=3);
+-    else CHECK(!result.synchronization.tlb_synchronized && !f.tlbi_calls && !f.sync_calls);
++    else if(removed)CHECK(result.synchronization.tlb_synchronized && (f.page_tlbi_calls?!f.tlbi_calls:f.tlbi_calls==1) &&
++        f.sync_calls==1 && f.synced && f.barriers>=2);
++    else CHECK(!result.synchronization.tlb_synchronized && !f.tlbi_calls && !f.page_tlbi_calls && !f.sync_calls);
+     /* A whole-region update reads every descriptor; the others read each changed leaf's path before and after the store. */
+     CHECK(result.whole_verification?result.descriptor_reads>=state.tables.table_pages*1024:result.descriptor_reads>=2);
+ }
+@@ -409,10 +412,28 @@ static unsigned batches(void)
+     CHECK(batch(pages,4,pages+2,2,1)==ArmSmmu4KStateMismatch && !f.calls && !memcmp(snapshot,tables,sizeof(tables)));++controls;
+     /* Unmap a sub-batch given as part of the region's own ranges. */
+     reset_counters();CHECK(batch(pages,4,pages+1,2,0)==ArmSmmu4KSuccess);complete(1,2);
++    CHECK(f.page_tlbi_calls==2 && !f.tlbi_calls);   /* the two removed pages, each by its own TLBIVAL */
+     CHECK(pte(pages[0].iova) && !pte(pages[1].iova) && !pte(pages[2].iova) && pte(pages[3].iova));++controls;
+     ArmSmmu4KRange rest[2]={pages[0],pages[3]},wrong[2]={pages[0],pages[3]};wrong[1].physical+=4096;
+     reset_counters();CHECK(batch(rest,2,wrong,2,0)==ArmSmmu4KStateMismatch && !f.calls);++controls;
+     reset_counters();CHECK(batch(rest,2,rest,2,0)==ArmSmmu4KSuccess);complete(1,0);++controls;
++    /* An exclusive map skips the alias check against the existing ranges only: a page of another class over a mapped one's physical
++     * page refuses as a plain map and is taken as an exclusive one; aliases among its own changes still refuse, and so does a mapped page. */
++    {
++        ArmSmmu4KLiveRegion lo={&arena,&state,0,0};
++        reset_counters();CHECK(batch(0,0,pages,1,1)==ArmSmmu4KSuccess);
++        ArmSmmu4KRange other=pages[1];other.physical=pages[0].physical;other.writeback=1;other.shareability=3;
++        CHECK(batch(pages,1,&other,1,1)==ArmSmmu4KOverlap);++controls;
++        lo.ranges=pages;lo.count=1;
++        ArmSmmu4KRange pair[2]={pages[1],pages[2]};pair[1].physical=pair[0].physical;pair[1].writeback=1;pair[1].shareability=3;
++        CHECK(ArmSmmu4KLiveMapContextBatchExclusive(&io,0,&context,&lo,0,0,&visibility,pair,2,4,&result)==ArmSmmu4KOverlap);++controls;
++        CHECK(ArmSmmu4KLiveMapContextBatchExclusive(&io,0,&context,&lo,0,0,&visibility,pages,1,4,&result)==ArmSmmu4KStateMismatch);++controls;
++        CHECK(!state.poisoned);
++        reset_counters();CHECK(ArmSmmu4KLiveMapContextBatchExclusive(&io,0,&context,&lo,0,0,&visibility,&other,1,4,&result)==ArmSmmu4KSuccess);
++        CHECK(pte(other.iova));++controls;
++        ArmSmmu4KRange both[2]={pages[0],other};
++        reset_counters();CHECK(batch(both,2,both,2,0)==ArmSmmu4KSuccess);CHECK(!pte(pages[0].iova) && !pte(other.iova));++controls;
++    }
+     /* Every register access of a batch failing, before or after its write, poisons and retains. */
+     for(unsigned unmap=0;unmap<2;++unmap)for(unsigned after=0;after<2;++after) {
+     /* The accesses without a failure: the first map's (whole verification) or the unmap's after it (not). */
+@@ -442,8 +463,8 @@ static uint64_t *leaf_of(uint64_t va)
+         at=(size_t)(((*entry&UINT64_C(0x0000fffffffff000))-arena.config.table_physical)/8);++level;
+     }
+ }
+-/* Between whole-region updates (every 64th of a region) an update proves the leaves it changes: a changed leaf holding something
+- * else refuses before any store; a corrupted descriptor elsewhere is found by the next whole-region update. */
++/* After a region's first, whole-region update an update proves the leaves it changes: a changed leaf holding something else refuses
++ * before any store; a descriptor elsewhere is not read again (ArmSmmu4KLiveAudit proves the whole region on request). */
+ static unsigned incremental(void)
+ {
+     unsigned count=0;
+@@ -464,7 +485,7 @@ static unsigned incremental(void)
+     }
+     reset_counters();CHECK(update(&r,1,&r2,1)==ArmSmmu4KSuccess && !result.whole_verification && state.generation==64);
+     *leaf_of(r.iova+8*4096)=UINT64_C(0x40000703);reset_counters();
+-    CHECK(update(both,2,&r2,0)==ArmSmmu4KStateMismatch && result.whole_verification && state.poisoned && !f.writes);++count;
++    CHECK(update(both,2,&r2,0)==ArmSmmu4KSuccess && !result.whole_verification && !state.poisoned);++count;
+     return count;
+ }
+ int main(void)
+@@ -475,5 +496,5 @@ int main(void)
+     unsigned pairs=pair_profiles(),pair_faults=pair_failures();
+     printf("PASS: %u dual-region native4K profiles and %u dual-region failure/alias/isolation controls, both graphs audited and retained on uncertainty\n",pairs,pair_faults);
+     printf("PASS: %u batched scattered-page map/unmap transactions and refusals: one publication per leaf page, a TLB synchronization for each unmap and whole verification\n",batches());
+-    printf("PASS: %u incremental-verification controls: a changed leaf is proved before and after its store, the whole region every 64th update\n",incremental());
++    printf("PASS: %u incremental-verification controls: a changed leaf is proved before and after its store, the whole region on the first update\n",incremental());
+ }

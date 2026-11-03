@@ -17,6 +17,7 @@ SOURCES = {
     'NativeGeniSpi': (WORK / 'UniXNU/drivers/NativeGeniSpi', None),
     'NativeKeyStoreEvents': (WORK / 'UniXNU/drivers/NativeKeyStoreEvents', None),
     'Mu_Basecore': (WORK / 'marble_hackios/Mu-Silicium/Mu_Basecore', []),
+    'ArmSmmu4K': (WORK / 'UniXNU/kits/ArmSmmu4K', None),
     'NativePrelink': (WORK / 'UniXNU/kits/NativePrelink', None),
     'Mu_Silicium': (WORK / 'marble_hackios/Mu-Silicium', [
         'Silicon/Silicium/SiliciumPkg/Library/BootManagerLib/XnuLoader.c',

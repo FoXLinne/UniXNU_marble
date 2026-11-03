@@ -46,7 +46,7 @@ index 73d6eb0..06b8660 100644
          gpu->mark(0x6803);
          return device;
 diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
-index 80439db..c30a230 100644
+index 80439db..841a9b7 100644
 --- a/NativeBridgeMetalFrontend.mm
 +++ b/NativeBridgeMetalFrontend.mm
 @@ -14,6 +14,7 @@
@@ -121,7 +121,35 @@ index 80439db..c30a230 100644
  - (void)dealloc {nmb_library_release(_handle);}
  - (id<MTLFunction>)newFunctionWithName:(NSString *)name constantValues:(MTLFunctionConstantValues *)values error:(NSError **)error {
   if(!name || !values || !methodABI(values,@selector(newIndexedConstantArray),"@16@0:8") || !methodABI(values,@selector(newNamedConstantArray),"@16@0:8")) {
-@@ -1185,6 +1228,7 @@ - (MTLPurgeableState)setPurgeableState:(MTLPurgeableState)state {
+@@ -834,7 +877,8 @@ - (CFTimeInterval)GPUStartTime {return nmb_command_buffer_gpu_time(_handle,false
+ - (CFTimeInterval)GPUEndTime {return nmb_command_buffer_gpu_time(_handle,true);}
+ - (id)encoder:(NBEncoder *)encoder handle:(NmbEncoder *)handle what:(NSString *)what {
+  if(self.committed){[self refuse:[what stringByAppendingString:@" after commit"]];return nil;}
+- if(!handle){[self refuse:[NSString stringWithFormat:@"%@: %@",what,lastError()]];return nil;}
++ // RenderBox caches encoder methods; retain the object when its runtime handle is refused.
++ if(!handle){[self refuse:[NSString stringWithFormat:@"%@: %@",what,lastError()]];encoder.commandBuffer=self;return encoder;}
+  encoder.handle=handle;encoder.commandBuffer=self;return encoder;
+ }
+ - (id<MTLComputeCommandEncoder>)computeCommandEncoder {
+@@ -869,14 +913,14 @@ - (id)encoder:(NBEncoder *)encoder handle:(NmbEncoder *)handle what:(NSString *)
+  };
+  for(unsigned i=0;i<8;i++) {
+   MTLRenderPassColorAttachmentDescriptor *c=d.colorAttachments[i];
+-  if(!attachment(c,pass.colors[i])){[self refuse:@"foreign color attachment"];return nil;}
++  if(!attachment(c,pass.colors[i])){[self refuse:@"foreign color attachment"];return [self encoder:[NBRenderEncoder new] handle:nullptr what:@"renderCommandEncoder"];}
+   pass.colors[i].clear[0]=c.clearColor.red;pass.colors[i].clear[1]=c.clearColor.green;pass.colors[i].clear[2]=c.clearColor.blue;pass.colors[i].clear[3]=c.clearColor.alpha;
+  }
+- if(!attachment(d.depthAttachment,pass.depth) || !attachment(d.stencilAttachment,pass.stencil)){[self refuse:@"foreign depth/stencil attachment"];return nil;}
++ if(!attachment(d.depthAttachment,pass.depth) || !attachment(d.stencilAttachment,pass.stencil)){[self refuse:@"foreign depth/stencil attachment"];return [self encoder:[NBRenderEncoder new] handle:nullptr what:@"renderCommandEncoder"];}
+  pass.depth.clear[0]=d.depthAttachment.clearDepth;pass.stencil.clear[0]=d.stencilAttachment.clearStencil;
+  pass.width=d.renderTargetWidth;pass.height=d.renderTargetHeight;pass.array_length=d.renderTargetArrayLength;pass.samples=d.defaultRasterSampleCount;
+  if(d.visibilityResultBuffer) {
+-  if(![(id)d.visibilityResultBuffer isKindOfClass:[NBBuffer class]]){[self refuse:@"foreign visibility result buffer"];return nil;}
++  if(![(id)d.visibilityResultBuffer isKindOfClass:[NBBuffer class]]){[self refuse:@"foreign visibility result buffer"];return [self encoder:[NBRenderEncoder new] handle:nullptr what:@"renderCommandEncoder"];}
+   [_resourceOwners addObject:d.visibilityResultBuffer];
+   pass.visibility=[(NBBuffer *)d.visibilityResultBuffer handle];
+  }
+@@ -1185,6 +1229,7 @@ - (MTLPurgeableState)setPurgeableState:(MTLPurgeableState)state {
   return [self bufferWithLength:length options:options offset:offset];
  }
  - (id<MTLTexture>)textureWithDescriptor:(MTLTextureDescriptor *)d offset:(uint64_t)offset {
@@ -129,7 +157,7 @@ index 80439db..c30a230 100644
   NmbTextureDescriptor descriptor;if(!textureDescriptor(d,&descriptor))return nil;
   NmbTexture *handle=nmb_heap_new_texture(_handle,&descriptor,offset);
   if(!handle){NBLOG(@"native-metal: heap texture refused: %@",lastError());return nil;}
-@@ -1360,6 +1404,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -1360,6 +1405,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
   return (id<MTLBuffer>)buffer;
  }
  - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)d {
@@ -137,7 +165,7 @@ index 80439db..c30a230 100644
   NmbTextureDescriptor descriptor;if(!textureDescriptor(d,&descriptor))return nil;
   NmbTexture *handle=nmb_texture_new(gDevice,&descriptor);noteFormat((uint32_t)descriptor.format,handle!=nullptr);
   if(!handle){NBLOG(@"native-metal: texture refused: %@",lastError());return nil;}
-@@ -1368,6 +1413,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -1368,6 +1414,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
  // The surface's pages are the texels: its mapping in this process is imported without a copy (pinned by the kernel, mapped into the GPU's
  // 4 KiB context by Turnip), so every process that imports the surface renders and samples the same memory.
  - (id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)d iosurface:(IOSurfaceRef)surface plane:(NSUInteger)plane {
@@ -145,7 +173,7 @@ index 80439db..c30a230 100644
   // A planar surface (Apple's lossless-compressed BGRA spelling has one plane, video formats two) is imported whole; the texture starts at
   // the plane's own address and rows. Only a plain surface has no planes, and then only plane 0 exists.
   const size_t planes=surface?IOSurfaceGetPlaneCount(surface):0;
-@@ -1446,6 +1492,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -1446,6 +1493,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
   if(!pipelineArchives(d.binaryArchives,archives,error)){delete p;return nil;}
   const NmbPipelineOptions creation={(uint64_t)options,archives.data(),archives.size()};
   const uint64_t pipelineBegan=nowUs();const NBCost costBegan=NBCost::now();
