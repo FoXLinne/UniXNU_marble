@@ -139,8 +139,8 @@ def main():
                         # described separately by ephemeral-storage below.
                         ('osenvironment', b'main\0'),
                         *([('display-scale', struct.pack('<I', identity[5]))] if identity else []),
-                        *([('canvas-width', struct.pack('<I', 1125)),
-                           ('canvas-height', struct.pack('<I', 2436))]
+                        *([('canvas-width', struct.pack('<I', 1080)),
+                           ('canvas-height', struct.pack('<I', 2400))]
                           if identity and identity[3] == b'phone\0' else []),
                         # Security status as on a dev-fused, undemoted board (tuple 0,0,1,1), as read by MobileGestalt: mobileactivationd's
                         # DeviceType then takes its native "Hactivation" branch (Activated without an activation record; no SEP or

@@ -137,9 +137,18 @@ index 85c2cef..90ecf66 100644
   
   			if ((kIOReturnSuccess == res)
 diff --git a/patches/xnu/zzy-native-gpu-addon-mount.patch b/patches/xnu/zzy-native-gpu-addon-mount.patch
-index 7961cb7..dec19ac 100644
+index 7961cb7..b7f6ae8 100644
 --- a/patches/xnu/zzy-native-gpu-addon-mount.patch
 +++ b/patches/xnu/zzy-native-gpu-addon-mount.patch
+@@ -2,7 +2,7 @@ diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+ index a5ff474..4704203 100644
+ --- a/bsd/kern/kern_exec.c
+ +++ b/bsd/kern/kern_exec.c
+-@@ -7193,6 +7193,321 @@ uint64_t native_owner_data_seed_base, native_owner_data_seed_size;
++@@ -7193,6 +7193,348 @@ uint64_t native_owner_data_seed_base, native_owner_data_seed_size;
+  uint8_t native_owner_data_seed_sha256[32];
+  char native_owner_data_device_path[64];
+  
 @@ -71,7 +71,7 @@ index a5ff474..4704203 100644
  + * be part of the Data seed and the seed's persistent store survives a plugin rebuild. Missing directories below /private/var/ngpu are
  + * created. A malformed addon is refused as a whole; a file that cannot be written keeps its old content.
@@ -158,7 +167,59 @@ index 7961cb7..dec19ac 100644
  +		return;
  +	}
  +	uint32_t count = 0;
-@@ -400,3 +400,33 @@ index c3bebc8..4555530 100644
+@@ -309,6 +309,33 @@ index a5ff474..4704203 100644
+ +	native_gpu_addon_mount(p, scratch, 0x600, daemons_source, sizeof(daemons_source), daemons_point, sizeof(daemons_point),
+ +	    "/System/Library/LaunchDaemons/com.apple.backboardd.plist",
+ +	    "/System/Library/LaunchDaemons/org.blu-sharky.adrenoprobed.plist", &native_gpu_addon2_stage, &native_gpu_addon2_status);
+++	/* Phone layouts are separate resources in iOS; iPadOS omits these files. */
+++	volatile int phone_stage = 0, phone_status = -1;
+++	static const char control_source[] = "/private/var/ngpu/phone-control-center",
+++	    control_point[] = "/System/Library/PrivateFrameworks/ControlCenterUI.framework";
+++	native_gpu_addon_mount(p, scratch, 0x800, control_source, sizeof(control_source), control_point, sizeof(control_point),
+++	    "/System/Library/PrivateFrameworks/ControlCenterUI.framework/DefaultModuleSettings~ipad.plist",
+++	    "/System/Library/PrivateFrameworks/ControlCenterUI.framework/DefaultModuleSettings~iphone.plist",
+++	    &phone_stage, &phone_status);
+++	printf("phone control center resources: stage=%d status=%d\n", phone_stage, phone_status);
+++	static const char keyboard_source[] = "/private/var/ngpu/phone-keyboard",
+++	    keyboard_point[] = "/System/Library/PrivateFrameworks/TextInputUI.framework";
+++	native_gpu_addon_mount(p, scratch, 0x800, keyboard_source, sizeof(keyboard_source), keyboard_point, sizeof(keyboard_point),
+++	    "/System/Library/PrivateFrameworks/TextInputUI.framework/KBLayouts_iPad.dat",
+++	    "/System/Library/PrivateFrameworks/TextInputUI.framework/KBLayouts_iPhone.dat",
+++	    &phone_stage, &phone_status);
+++	printf("phone keyboard resources: stage=%d status=%d\n", phone_stage, phone_status);
+++	static const char collections_source[] = "/private/var/ngpu/collections";
+++	vnode_t collections = NULLVP;
+++	if (!vnode_lookup(collections_source, 0, &collections, vfs_context_current())) {
+++		vnode_put(collections);
+++		static const char collections_point[] = "/Library/Wallpaper/Collections";
+++		native_gpu_addon_mount(p, scratch, 0x800, collections_source, sizeof(collections_source),
+++		    collections_point, sizeof(collections_point),
+++		    "/Library/Wallpaper/Collections/Collections~ipad.plist",
+++		    "/Library/Wallpaper/Collections/Collections~iphone.plist", &native_gpu_addon3_stage, &native_gpu_addon3_status);
+++		return;
+++	}
+ +	/* The default iPadOS 17 wallpaper's layered animation with PNG images in place of its HEIC ones (no hardware HEVC decoder here).
+ +	 * The overlay carries the animation's documents and the PNG images; the sealed assets directory stays visible below it. */
+ +	static const char wallpaper_source[] = "/private/var/ngpu/wallpaper",
+@@ -371,7 +398,7 @@ diff --git a/bsd/miscfs/bindfs/bind_vnops.c b/bsd/miscfs/bindfs/bind_vnops.c
+ index 8609009..0c659c7 100644
+ --- a/bsd/miscfs/bindfs/bind_vnops.c
+ +++ b/bsd/miscfs/bindfs/bind_vnops.c
+-@@ -105,6 +105,14 @@ bindfs_getattr(struct vnop_getattr_args * args)
++@@ -105,5 +105,13 @@ bindfs_getattr(struct vnop_getattr_args * args)
+  		vnode_put(lowervp);
+ 
+  		if (error == 0) {
+@@ -390,7 +417,7 @@ diff --git a/bsd/miscfs/bindfs/bindfs.h b/bsd/miscfs/bindfs/bindfs.h
+ index c3bebc8..4555530 100644
+ --- a/bsd/miscfs/bindfs/bindfs.h
+ +++ b/bsd/miscfs/bindfs/bindfs.h
+-@@ -81,6 +81,9 @@
++@@ -81,4 +81,7 @@
+  //#define BINDFS_DEBUG 0
+ 
+  #define BINDM_CACHE 0x0001
+@@ -400,3 +427,33 @@ index c3bebc8..4555530 100644
   #define BINDM_CASEINSENSITIVE 0x0000000000000002
  
   typedef int (*vop_t)(void *);
