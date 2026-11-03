@@ -124,7 +124,7 @@ def main():
     if args.ipad_identity and args.iphone_identity:
         parser.error('--ipad-identity and --iphone-identity are exclusive')
     # (root model, target-type, product name, artwork idiom, artwork subtype, scale, fallback), docs/guide/mobilegestalt.md.
-    identity = ((b'iPhone10,3\0', b'D22\0', b'iPhone X\0', b'phone\0', 2436, 3, b'iPhone10,3\0') if args.iphone_identity else
+    identity = ((b'iPhone10,3\0', b'D22\0', b'iPhone X\0', b'phone\0', 2400, 3, b'iPhone10,3\0') if args.iphone_identity else
                 (b'iPad7,1\0', b'J120\0', b'iPad Pro (12.9-inch) (2nd generation)\0', b'pad\0', 2732, 2, b'iPad6,7\0')
                 if args.ipad_identity else None)
     cpus = [node('cpu%d' % index, [('state', b'running\0' if index == 0 else b'waiting\0'),
