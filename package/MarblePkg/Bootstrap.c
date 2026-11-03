@@ -17,7 +17,8 @@ typedef struct { CHAR8 Name[16]; UINT32 Size, Reserved; } PAYLOAD_BLOB;
 
 STATIC UINT8 *mVolume;
 STATIC UINTN mVolumeSize;
-STATIC BOOLEAN mRootStage;
+STATIC BOOLEAN mRootStage, mRootStorage;
+EFI_STATUS MarbleRootStorage(VOID);
 EFI_STATUS MarbleRootUsb(VOID);
 STATIC EFI_BLOCK_IO_MEDIA mMedia = {
   .MediaId = 1, .MediaPresent = TRUE, .ReadOnly = TRUE, .BlockSize = 512, .IoAlign = 1
@@ -72,6 +73,7 @@ FindVolume(VOID)
   while (Cursor + sizeof(PAYLOAD_BLOB) <= End) {
     PAYLOAD_BLOB *Blob = (VOID *)Cursor;
     if (!Blob->Name[0] || Blob->Size > (UINTN)(End - Cursor - sizeof(*Blob))) break;
+    if (CompareMem(Blob->Name, "root.storage", sizeof("root.storage")) == 0) mRootStorage = TRUE;
     if (CompareMem(Blob->Name, "root.stage", sizeof("root.stage")) == 0) mRootStage = TRUE;
     if (CompareMem(Blob->Name, "volume.img", sizeof("volume.img")) == 0) {
       mVolume = (VOID *)(Blob + 1);
@@ -93,6 +95,10 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   if (!FindVolume()) return EFI_NOT_FOUND;
   // Dedicated panic log, inside marble's reserved 0xA8000000..0xB8000000 window.
   ZeroMem((VOID *)(UINTN)0xB7000000, 0x100000);
+  if (mRootStorage) {
+    Status = MarbleRootStorage();
+    if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
+  }
   if (mRootStage) {
     Status = MarbleRootUsb();
     if (EFI_ERROR(Status)) { Print(L"RootStage: %r\r\n",Status); return Status; }

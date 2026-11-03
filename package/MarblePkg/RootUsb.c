@@ -164,7 +164,9 @@ STATIC UINT8 *DiskAddress(ROOT_STAGE_DISK *Disk, UINT64 Offset)
   return (UINT8 *)(UINTN)(Disk->Extents[Offset / ROOT_STAGE_CHUNK].Address + Offset % ROOT_STAGE_CHUNK);
 }
 
-EFI_STATUS MarbleRootUsb(VOID)
+EFI_STATUS MarbleRootUsb(VOID);
+
+STATIC EFI_STATUS InitializeUsb(VOID)
 {
   EFI_STATUS Status;
   EFI_EVENT Event;
@@ -204,6 +206,21 @@ StartUsb:
   if (!mRx) Status = mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mRx);
   if (EFI_ERROR(Status)) return Status;
   if (!mTx) Status = mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mTx);
+  if (EFI_ERROR(Status)) return Status;
+  return EFI_SUCCESS;
+}
+
+EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
+{
+  mStage = Stage;
+  EFI_STATUS Status = InitializeUsb();
+  if (!EFI_ERROR(Status)) mRuntimeUsb = TRUE;
+  return Status;
+}
+
+EFI_STATUS MarbleRootUsb(VOID)
+{
+  EFI_STATUS Status = InitializeUsb();
   if (EFI_ERROR(Status)) return Status;
   Print(L"UniXNU RootStage USB\r\n");
   for (;;) {
@@ -333,4 +350,13 @@ StartUsb:
       Reply("OKAY",""); mUsb->Stop(); gRT->ResetSystem(EfiResetCold,EFI_SUCCESS,0,NULL);
     } else Reply("FAIL","unknown command");
   }
+}
+
+EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage)
+{
+  mStage=Stage;
+  mDisk=2;
+  mLastOffset=Stage->Disks[2].Bytes-0x100000;
+  mLastBytes=0x100000;
+  return MarbleRootUsb();
 }

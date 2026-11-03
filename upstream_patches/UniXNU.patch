@@ -278,6 +278,19 @@ index 005db80..86f184e 100644
 +shutil.copytree(OUT, DESTINATION, copy_function=shutil.copyfile)
 +staging.cleanup()
  print('PASS: Adreno plugin bundle and probe daemon built and 4K-signed, CDHashes', cdhash, daemon_cdhash, turnip_cdhash)
+diff --git a/scripts/build-native-adreno-accelerator.py b/scripts/build-native-adreno-accelerator.py
+index 5205a68..5cd048f 100644
+--- a/scripts/build-native-adreno-accelerator.py
++++ b/scripts/build-native-adreno-accelerator.py
+@@ -56,7 +56,7 @@ while i < len(args):
+     i += 1
+     if v in ('-MF', '-MJ'):
+         i += 1
+-cmd += ['-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-Wno-unnecessary-virtual-specifier', '-Wno-c99-designator',
++cmd += ['-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-Wno-incompatible-sysroot', '-Wno-unnecessary-virtual-specifier', '-Wno-c99-designator',
+         '-Wno-reorder-init-list', '-Wno-deprecated-enum-enum-conversion', '-Wno-overloaded-virtual',
+         '-I', str(ROOT / '.cache/xnu-work/osfmk')]
+ subprocess.run(cmd, cwd=record['directory'], check=True)
 diff --git a/scripts/build-native-metal-bridge.py b/scripts/build-native-metal-bridge.py
 index 613bcba..cc1fc9c 100644
 --- a/scripts/build-native-metal-bridge.py
@@ -293,23 +306,35 @@ index 613bcba..cc1fc9c 100644
  def canonical_diff(diff):
      # Independent patches touch disjoint files; Git orders the combined diff by
 diff --git a/scripts/build-xnu-4k-baseline.sh b/scripts/build-xnu-4k-baseline.sh
-index 5815dd9..24ea7fc 100755
+index 5815dd9..3468ea4 100755
 --- a/scripts/build-xnu-4k-baseline.sh
 +++ b/scripts/build-xnu-4k-baseline.sh
-@@ -35,8 +35,10 @@ fi
+@@ -35,13 +35,22 @@ fi
  # Remove them first so earlier independent patches retain their idempotent checks.
  # The same holds for the boot-time GPU addon mount and the staged system apps copy (zzy), which edit the owner Data mount function
  # inside the systemos patch. Reverse newest first; the loop below re-applies them in name order.
 -for LATE_PATCH in "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
 -    "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch"; do
-+for LATE_PATCH in "$ROOT/patches/xnu/zz-root-stage-data.patch" "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
++for LATE_PATCH in "$ROOT/patches/xnu/native-owner-trust-module.patch" "$ROOT/patches/xnu/zz-root-stage-data.patch" "$ROOT/patches/xnu/zzz-boot-progress.patch" "$ROOT/patches/xnu/zzy-staged-system-apps.patch" \
 +    "$ROOT/patches/xnu/zzy-native-gpu-addon-mount.patch" \
 +    "$ROOT/patches/xnu/zz-root-stage-manifest.patch" \
 +    "$ROOT/patches/xnu/zz-root-stage-owner-auth.patch" "$ROOT/patches/xnu/zz-root-stage-cache.patch"; do
    if git -C .cache/xnu-work apply --reverse --check "$LATE_PATCH" >/dev/null 2>&1; then
      git -C .cache/xnu-work apply --reverse "$LATE_PATCH"
    fi
-@@ -324,8 +326,10 @@ fi
+ done
++PATCHES=()
+ for PATCH in "$ROOT"/patches/xnu/*.patch "$ROOT"/kits/NativePrelink/patches/*.patch; do
++  if [ "$PATCH" != "$ROOT/patches/xnu/native-owner-trust-module.patch" ]; then
++    PATCHES+=("$PATCH")
++  fi
++done
++PATCHES+=("$ROOT/patches/xnu/native-owner-trust-module.patch")
++for PATCH in "${PATCHES[@]}"; do
+   if ! git -C .cache/xnu-work apply --reverse --check "$PATCH" >/dev/null 2>&1; then
+     git -C .cache/xnu-work apply --check "$PATCH"
+     git -C .cache/xnu-work apply "$PATCH"
+@@ -324,8 +333,10 @@ fi
  SHENG_PMGR_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.sheng-pmgr-mode
  if [ "$(cat "$SHENG_PMGR_STAMP" 2>/dev/null || echo 0)" != "$SHENG_PMGR" ]; then
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o"
@@ -320,7 +345,7 @@ index 5815dd9..24ea7fc 100755
  EXTRA_MAKE_ARGS+=("bsd_init.o_CFLAGS_ADD=-DXNU_SHENG_PMGR=$SHENG_PMGR -DXNU_VERIFIED_ROOT_PROBE=$OWNER_ROOT_PROBE -DXNU_OWNER_ROOT_AUDIT=$OWNER_ROOT_AUDIT -DXNU_OWNER_ROOT_TRUST=$OWNER_ROOT_TRUST -DXNU_ADRENO_FIRMWARE_PROBE=$ADRENO_FIRMWARE_PROBE -DXNU_ADRENO_PM4_PROBE=$ADRENO_PM4_PROBE -DXNU_SMMU4K_PROBE=$SMMU4K_PROBE -DXNU_CONSTANT_UPLOADS_PROBE=$CONSTANT_UPLOADS_PROBE -DXNU_NATIVE_LEGACY_DISPLAY=${XNU_NATIVE_LEGACY_DISPLAY:-0} -DXNU_NATIVE_OFFLINE_GPU=$NATIVE_OFFLINE_GPU")
  NATIVE_MOBILE_DISPLAY=${XNU_NATIVE_MOBILE_DISPLAY:-0}
  if [ "$NATIVE_MOBILE_DISPLAY" != 0 ] && [ "$NATIVE_MOBILE_DISPLAY" != 1 ]; then
-@@ -348,13 +352,14 @@ if [ "$(cat "$OWNER_ROOT_STAMP" 2>/dev/null || echo 0:0:0:0:0:0)" != "$OWNER_ROO
+@@ -348,13 +359,14 @@ if [ "$(cat "$OWNER_ROOT_STAMP" 2>/dev/null || echo 0:0:0:0:0:0)" != "$OWNER_ROO
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o"
    printf '%s\n' "$OWNER_ROOT_PROBE:$OWNER_ROOT_AUDIT:$OWNER_ROOT_TRUST:$ADRENO_FIRMWARE_PROBE:$ADRENO_PM4_PROBE:$SMMU4K_PROBE:$CONSTANT_UPLOADS_PROBE:$NATIVE_LEGACY_DISPLAY:$NATIVE_OFFLINE_GPU" > "$OWNER_ROOT_STAMP"
  fi
@@ -337,7 +362,7 @@ index 5815dd9..24ea7fc 100755
    exit 1
  fi
  OWNER_CACHE_STARTUP=${XNU_OWNER_CACHE_STARTUP:-0}
-@@ -375,7 +380,7 @@ if [ "$OWNER_BOOT_MANIFEST" = 1 ] && [ "$OWNER_CACHE_STARTUP" != 1 ]; then
+@@ -375,7 +387,7 @@ if [ "$OWNER_BOOT_MANIFEST" = 1 ] && [ "$OWNER_CACHE_STARTUP" != 1 ]; then
    echo 'Owner boot metadata requires real authenticated owner root/cache startup' >&2
    exit 1
  fi
@@ -346,7 +371,7 @@ index 5815dd9..24ea7fc 100755
  OWNER_MANIFEST_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.owner-boot-manifest-mode
  if [ "$(cat "$OWNER_MANIFEST_STAMP" 2>/dev/null || echo 0)" != "$OWNER_BOOT_MANIFEST" ]; then
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOKitBSDInit.cpo"
-@@ -463,11 +468,15 @@ if [ "$(cat "$NATIVE_AIR_STAMP" 2>/dev/null || echo 0)" != "$NATIVE_AIR_INIT" ];
+@@ -463,11 +475,15 @@ if [ "$(cat "$NATIVE_AIR_STAMP" 2>/dev/null || echo 0)" != "$NATIVE_AIR_INIT" ];
    rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/kern_exec.o"
    printf '%s\n' "$NATIVE_AIR_INIT" > "$NATIVE_AIR_STAMP"
  fi
@@ -366,7 +391,7 @@ index 5815dd9..24ea7fc 100755
  fi
  OWNER_CACHE_CARRIER=${XNU_OWNER_CACHE_CARRIER:-0}
  OWNER_CACHE_CARRIER_WRONG_UUID=${XNU_OWNER_CACHE_CARRIER_WRONG_UUID:-0}
-@@ -519,9 +528,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
+@@ -519,9 +535,11 @@ if [ "$NATIVE_ARCH_TIMER" = 1 ] && [ "${XNU_ARMCPU:-0}" != 1 ]; then
    exit 1
  fi
  EXTRA_MAKE_ARGS+=("start.o_SFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER")

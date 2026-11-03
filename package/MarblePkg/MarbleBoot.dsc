@@ -54,3 +54,6 @@
   UniXNUPkg/Application/UniXNU/UniXNU.inf
   UniXNUPkg/Test/HelloPayload/HelloPayload.inf
   DarwinBootPkg/Driver/DarwinBoot.inf
+
+[BuildOptions]
+  *_CLANGPDB_*_CC_FLAGS = -fno-lto
