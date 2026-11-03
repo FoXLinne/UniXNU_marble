@@ -53,13 +53,22 @@ EFI_STATUS MarbleRootStorage(VOID) {
       ReadUnaligned32((UINT32 *)(Header+12))!=3) { FreePages(Header,1); return EFI_COMPROMISED_DATA; }
   UINT64 ImageBytes=ReadUnaligned64((UINT64 *)(Header+16));
   if (ImageBytes/Sector>Last-First+1 || ImageBytes%4096) { FreePages(Header,1); return EFI_BAD_BUFFER_SIZE; }
-  mStorage=AllocatePages(EFI_SIZE_TO_PAGES(sizeof(*mStorage)));
-  if (!mStorage) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }
-  ZeroMem(mStorage,sizeof(*mStorage));
-  mStorage->Magic=ROOT_STAGE_MAGIC; mStorage->Version=2; mStorage->DiskCount=2;
-  mStorage->KernelBytes=0x100000000ULL;
-  mStorage->KernelBase=(UINTN)AllocateAlignedPages(EFI_SIZE_TO_PAGES(mStorage->KernelBytes+0x200000),0x200000);
-  if (!mStorage->KernelBase) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }
+  EFI_GUID StageGuid=ROOT_STAGE_GUID;
+  for (UINTN I=0;I<gST->NumberOfTableEntries;I++) {
+    if (CompareGuid(&gST->ConfigurationTable[I].VendorGuid,&StageGuid))
+      mStorage=gST->ConfigurationTable[I].VendorTable;
+  }
+  BOOLEAN UsbReady=mStorage!=NULL;
+  if (!mStorage) {
+    mStorage=AllocatePages(EFI_SIZE_TO_PAGES(sizeof(*mStorage)));
+    if (!mStorage) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }
+    ZeroMem(mStorage,sizeof(*mStorage));
+    mStorage->Magic=ROOT_STAGE_MAGIC; mStorage->Version=2;
+    mStorage->KernelBytes=0x100000000ULL;
+    mStorage->KernelBase=(UINTN)AllocateAlignedPages(EFI_SIZE_TO_PAGES(mStorage->KernelBytes+0x200000),0x200000);
+    if (!mStorage->KernelBase) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }
+  }
+  mStorage->DiskCount=2;
   mStorage->WaitForHost=(UINTN)&StorageReturn;
   CONST CHAR8 *Names[]={"OS","SystemOS","KernelSeed"};
   for (UINTN I=0;I<3;I++) {
@@ -86,7 +95,7 @@ EFI_STATUS MarbleRootStorage(VOID) {
   {
     EFI_GUID Guid=ROOT_STAGE_GUID;
     Status=gBS->InstallConfigurationTable(&Guid,mStorage);
-    if (!EFI_ERROR(Status)) {
+    if (!EFI_ERROR(Status) && !UsbReady) {
       EFI_STATUS UsbStatus=MarbleRootUsbPrepare(mStorage);
       if (EFI_ERROR(UsbStatus)) Print(L"RootStage USB: %r\r\n",UsbStatus);
     }

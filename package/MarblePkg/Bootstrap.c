@@ -95,13 +95,13 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   if (!FindVolume()) return EFI_NOT_FOUND;
   // Dedicated panic log, inside marble's reserved 0xA8000000..0xB8000000 window.
   ZeroMem((VOID *)(UINTN)0xB7000000, 0x100000);
-  if (mRootStorage) {
-    Status = MarbleRootStorage();
-    if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
-  }
   if (mRootStage) {
     Status = MarbleRootUsb();
     if (EFI_ERROR(Status)) { Print(L"RootStage: %r\r\n",Status); return Status; }
+  }
+  if (mRootStorage) {
+    Status = MarbleRootStorage();
+    if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
   }
   mMedia.LastBlock = mVolumeSize / 512 - 1;
   Status = gBS->InstallMultipleProtocolInterfaces(&Disk,
