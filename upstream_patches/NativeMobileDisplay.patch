@@ -1,5 +1,176 @@
+diff --git a/NativeGOPPresenter.cpp b/NativeGOPPresenter.cpp
+index 83dae5e..72ee4eb 100644
+--- a/NativeGOPPresenter.cpp
++++ b/NativeGOPPresenter.cpp
+@@ -16,8 +16,13 @@ volatile uint64_t native_gop_gpu_offers,native_gop_gpu_completions,native_gop_gp
+ /* waitSwap: [0] calls, [1] timeouts, [2] the requested timeout of the last call (ms), [3] time the last timed-out call really waited (ns), [4] the shortest
+  * and [5] the longest such wait (ns), [6] total ns waited in timed-out calls. A timed wait that returns long before its deadline shows here. */
+ volatile uint64_t native_gop_wait_stats[7];
++/* The waits that ended without a swap, the newest 64: [0] microseconds since boot at the end, [1] ns waited | wake reason << 56 (0 deadline passed, 1 interrupted,
++ * 2 any other result), [2] the waiting process | swap offered << 32 | swap delivered << 33 | online << 34 | requested timeout in ms << 40. The object waited
++ * on is always the presenter's swap slot. native_gop_wait_reasons: [0] deadline, [1] interrupted, [2] other, [3] woken with a swap. */
++volatile uint64_t native_gop_wait_ring[64][3];volatile uint32_t native_gop_wait_ring_count;volatile uint32_t native_gop_wait_reasons[4];
++int proc_selfpid(void);
+ IOService *native_gop_presenter_create(void);
+-bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height);
++bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height,uint32_t format);
+ void native_gop_presenter_set_source(IOService *presenter,IOService *nub);
+ // Provided by the display driver: finishes (status 0) or fails the swap that was offered.
+ void native_legacy_gpu_complete(void *display,int status);
+@@ -37,8 +42,16 @@ class NativeGOPPresenter : public IOService {
+     // GPU hand-off (sheng-fb-gpu=1): one offered frame at a time, from the display driver to the privileged client.
+     bool gpuMode=false,gpuClient=false;
+     struct {bool offered,delivered;uint64_t sequence;void *display;IOMemoryDescriptor *memory;IOMemoryMap *map;
+-            uint64_t stride;uint32_t width,height;} swap={};
++            uint64_t stride;uint32_t width,height,format;} swap={};
+     uint64_t swapSequence=0;
++    // The compositor swaps the same few surfaces. Each one's mapping into the client stays here under an id (NGPSwap reserved), so the client
++    // keeps its GPU import of those pages and neither side maps 12000 scattered pages again per frame (untagged-203fd45bf: a half-float
++    // frame's import and mapping took most of its 22 ms commit-to-complete). The client keeps fewer imports (4) than these mappings.
++    struct Kept {IOMemoryDescriptor *memory;IOMemoryMap *map;task_t task;uint32_t id;uint64_t used;};
++    static constexpr unsigned kKept=6;
++    Kept kept[kKept]={};
++    uint32_t keptId=0;uint64_t keptUse=0;
++    void dropKept();
+     IOReturn waitSwap(task_t,uint64_t timeoutMs,NGPSwap *);
+     IOReturn completeSwap(uint64_t sequence,int status);
+     void abandonSwap();
+@@ -46,7 +59,7 @@ public:
+     void setMemorySource(IOService *source) {memorySource=source;}
+     static IOReturn handoffCall(uint32_t op,task_t task,const void *in,size_t inSize,void *out,size_t outSize);
+     static IOMemoryDescriptor *handoffMemory();
+-    bool offer(void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height);
++    bool offer(void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height,uint32_t format);
+ private:
+     IOReturn transfer(task_t,const NGPPresent &,NGPTransfer *);
+ public:
+@@ -128,13 +141,13 @@ IOReturn NativeGOPPresenter::transfer(task_t task,const NGPPresent &q,NGPTransfe
+ }
+ // The display driver offers a finished frame. Accepted only while the privileged GPU client is alive and waiting for work; otherwise the
+ // display driver keeps its own path (counted by it as a fallback).
+-bool NativeGOPPresenter::offer(void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height) {
++bool NativeGOPPresenter::offer(void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height,uint32_t format) {
+     if(!gpuMode || !memory || !display || !gate)return false;
+     IOLockLock(gate);
+     bool accepted=online && gpuClient && !swap.offered;
+     if(accepted) {
+         memory->retain();
+-        swap={true,false,++swapSequence,display,memory,nullptr,stride,width,height};
++        swap={true,false,++swapSequence,display,memory,nullptr,stride,width,height,format};
+         native_gop_gpu_offers=native_gop_gpu_offers+1;
+         IOLockWakeup(gate,&swap,false);
+     }
+@@ -149,9 +162,19 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
+     IOLockLock(gate);
+     gpuClient=true;
+     while(online && (!swap.offered || swap.delivered)) {
+-        if(IOLockSleepDeadline(gate,&swap,deadline,THREAD_ABORTSAFE)!=THREAD_AWAKENED) {
++        const wait_result_t woke=IOLockSleepDeadline(gate,&swap,deadline,THREAD_ABORTSAFE);
++        if(woke!=THREAD_AWAKENED) {
++            const uint64_t state=(uint64_t)swap.offered<<32|(uint64_t)swap.delivered<<33|(uint64_t)online<<34|timeoutMs<<40;
+             IOLockUnlock(gate);
+             uint64_t ns=0;absolutetime_to_nanoseconds(mach_absolute_time()-began,&ns);
++            const unsigned reason=woke==THREAD_TIMED_OUT?0:woke==THREAD_INTERRUPTED?1:2;
++            native_gop_wait_reasons[reason]=native_gop_wait_reasons[reason]+1;
++            if(ns>=100000000ull) {
++                uint64_t end=0;absolutetime_to_nanoseconds(mach_absolute_time(),&end);
++                const uint32_t n=native_gop_wait_ring_count;volatile uint64_t *at=native_gop_wait_ring[n&63];
++                at[0]=end/1000;at[1]=ns|(uint64_t)reason<<56;at[2]=state|(uint32_t)proc_selfpid();
++                native_gop_wait_ring_count=n+1;
++            }
+             native_gop_wait_stats[1]=native_gop_wait_stats[1]+1;native_gop_wait_stats[3]=ns;
+             if(!native_gop_wait_stats[4] || ns<native_gop_wait_stats[4])native_gop_wait_stats[4]=ns;
+             if(ns>native_gop_wait_stats[5])native_gop_wait_stats[5]=ns;
+@@ -160,12 +183,30 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
+         }
+     }
+     if(!online) {IOLockUnlock(gate);return kIOReturnNotReady;}
++    native_gop_wait_reasons[3]=native_gop_wait_reasons[3]+1;
+     swap.delivered=true;
+     IOMemoryDescriptor *memory=swap.memory;memory->retain();
+-    const uint64_t sequence=swap.sequence,stride=swap.stride;const uint32_t width=swap.width,height=swap.height;
++    const uint64_t sequence=swap.sequence,stride=swap.stride;const uint32_t width=swap.width,height=swap.height,format=swap.format;
++    IOMemoryMap *map=nullptr;uint32_t id=0;
++    for(Kept &k:kept)if(k.map && k.memory==memory && k.task==task && k.map->getLength()==memory->getLength()) {
++        map=k.map;map->retain();id=k.id;k.used=++keptUse;break;
++    }
+     IOLockUnlock(gate);
+     // The frame's pages go into the client's task here, writable like any import (the GPU maps them for reading; the kernel pins and maintains them).
+-    IOMemoryMap *map=memory->createMappingInTask(task,0,kIOMapAnywhere);
++    if(!map) {
++        map=memory->createMappingInTask(task,0,kIOMapAnywhere);
++        if(map && map->getVirtualAddress()) {
++            IOLockLock(gate);
++            Kept *victim=&kept[0];
++            for(Kept &k:kept) {if(!k.map) {victim=&k;break;} if(k.used<victim->used)victim=&k;}
++            Kept old=*victim;
++            memory->retain();map->retain();task_reference(task);
++            id=++keptId;if(!id)id=++keptId;
++            *victim={memory,map,task,id,++keptUse};
++            IOLockUnlock(gate);
++            OSSafeReleaseNULL(old.map);OSSafeReleaseNULL(old.memory);if(old.task)task_deallocate(old.task);
++        }
++    }
+     memory->release();
+     IOLockLock(gate);
+     if(!map || !map->getVirtualAddress() || !swap.offered || swap.sequence!=sequence) {
+@@ -173,7 +214,7 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
+     }
+     swap.map=map;
+     out->sequence=sequence;out->address=map->getVirtualAddress();out->bytes=map->getLength();out->stride=stride;
+-    out->width=width;out->height=height;out->format=NGP_BGRX8888;out->reserved=0;
++    out->width=width;out->height=height;out->format=format;out->reserved=id;
+     IOLockUnlock(gate);return kIOReturnSuccess;
+ }
+ IOReturn NativeGOPPresenter::completeSwap(uint64_t sequence,int status) {
+@@ -187,8 +228,18 @@ IOReturn NativeGOPPresenter::completeSwap(uint64_t sequence,int status) {
+     native_legacy_gpu_complete(done.display,status);return kIOReturnSuccess;
+ }
+ // The client went away with a frame outstanding: the display driver is told it failed, so it can use its own path instead of waiting forever.
++// The kept mappings go with the client (its task's mappings, the surfaces they hold).
++void NativeGOPPresenter::dropKept() {
++    if(!gate)return;
++    Kept all[kKept];
++    IOLockLock(gate);
++    for(unsigned i=0;i<kKept;++i){all[i]=kept[i];kept[i]={};}
++    IOLockUnlock(gate);
++    for(Kept &k:all){OSSafeReleaseNULL(k.map);OSSafeReleaseNULL(k.memory);if(k.task)task_deallocate(k.task);}
++}
+ void NativeGOPPresenter::abandonSwap() {
+     if(!gate)return;
++    dropKept();
+     IOLockLock(gate);
+     gpuClient=false;
+     auto done=swap;swap={};
+@@ -201,9 +252,9 @@ void NativeGOPPresenter::abandonSwap() {
+ extern "C" void native_gop_presenter_set_source(IOService *presenter,IOService *nub) {
+     if(NativeGOPPresenter *p=OSDynamicCast(NativeGOPPresenter,presenter))p->setMemorySource(nub);
+ }
+-extern "C" bool native_gop_gpu_offer(IOService *presenter,void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height) {
++extern "C" bool native_gop_gpu_offer(IOService *presenter,void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height,uint32_t format) {
+     NativeGOPPresenter *p=OSDynamicCast(NativeGOPPresenter,presenter);
+-    return p && p->offer(display,memory,stride,width,height);
++    return p && p->offer(display,memory,stride,width,height,format);
+ }
+ // Entry points for the GPU client that reaches the hand-off through an already admitted connection (the Adreno accelerator's user client, which
+ // the original sandbox profiles allow where they do not allow this service): op 0 mode, 2 wait for a frame, 3 complete it (the NGP_METHOD_*
+diff --git a/NativeGOPWire.h b/NativeGOPWire.h
+index 44014f3..0ce3c04 100644
+--- a/NativeGOPWire.h
++++ b/NativeGOPWire.h
+@@ -2,7 +2,9 @@
+ // Actual firmware scanout transfer, not a compositor or hardware vblank ABI.
+ #pragma once
+ #include <stdint.h>
+-enum { NGP_BGRX8888=1,NGP_VERSION=1 };
++// Scanout format (NGPMode) and frame formats (NGPSwap.format). A half-float frame is RGBA 16F rows, converted to the scanout's BGRX by the
++// client on the GPU: LINEAR holds linear light (encoded to sRGB on the way), ENCODED holds values already sRGB-encoded.
++enum { NGP_BGRX8888=1,NGP_RGBA16F_LINEAR=2,NGP_RGBA16F_ENCODED=3,NGP_VERSION=1 };
+ struct NGPMode {uint32_t version,format;uint64_t width,height,stride,bytes;};
+ struct NGPPresent {uint64_t address,bytes;uint32_t width,height,stride,format;};
+ struct NGPTransfer {uint64_t sequence,bytes;};
 diff --git a/NativeLegacyDisplay.cpp b/NativeLegacyDisplay.cpp
-index 8e6aba9..dbcbce8 100644
+index 8e6aba9..9212fc5 100644
 --- a/NativeLegacyDisplay.cpp
 +++ b/NativeLegacyDisplay.cpp
 @@ -32,6 +32,8 @@ extern "C" void native_legacy_surface_rejected(uint64_t,uint64_t,uint32_t,uint32
@@ -28,7 +199,28 @@ index 8e6aba9..dbcbce8 100644
          startVsync();return true;
      }
      bool startDisplay(IOService *provider) {
-@@ -294,7 +297,8 @@ public:
+@@ -253,7 +256,8 @@ public:
+         if(!surface) {
+             // Validated blank swap (all layers disabled over black): solid-fill the actual GOP.
+             PE_Video blank={};
+-            uint32_t bw=0,bh=0;getDisplayDimensions(&bw,&bh);
++            if(PE_current_console(&blank))return;
++            uint32_t bw=(uint32_t)blank.v_width,bh=(uint32_t)blank.v_height;
+             uint64_t blankLength=(uint64_t)bw*bh*4;
+             if(PE_current_console(&blank) || blank.v_baseAddr!=bootMapping->getPhysicalAddress() ||
+                blank.v_width!=bw || blank.v_height!=bh || blank.v_depth!=32 || blank.v_rotate ||
+@@ -285,8 +289,8 @@ public:
+            native_legacy_surface_width(surface)<width || native_legacy_surface_height(surface)<height ||
+            !nativeBgra(native_legacy_surface_format(surface),native_legacy_surface_planes(surface)) ||
+            PE_current_console(&video) || video.v_baseAddr!=bootMapping->getPhysicalAddress() ||
+-           video.v_width!=width || video.v_height!=height || video.v_depth!=32 || video.v_rotate ||
+-           !native_legacy_surface_bounds(width,height,video.v_rowBytes,bootMapping->getLength(),bootMapping->getLength())) {
++           video.v_depth!=32 || video.v_rotate ||
++           !native_legacy_surface_bounds(video.v_width,video.v_height,video.v_rowBytes,bootMapping->getLength(),bootMapping->getLength())) {
+             native_legacy_transfer_observed(kIOReturnNotReady,request,0);return;
+         }
+         // The diagnostic renderer repaints the page over the scanout until it is told the system owns the display; the GPU path needs that as much
+@@ -294,7 +298,8 @@ public:
          if(!gpuBypass) {
              if(!native_legacy_prepare_scanout()) {native_legacy_transfer_observed(kIOReturnNotReady,request,0);return;}
          }
@@ -38,7 +230,25 @@ index 8e6aba9..dbcbce8 100644
              // The GPU writes the scanout memory behind the CPU's back: the differential copy's picture of it is stale from now on.
              native_legacy_swap_stage(1);
              shadowValid=false;gpuRequest=request;gpuLength=length;transferred=true;
-@@ -317,9 +321,27 @@ public:
+@@ -312,14 +317,45 @@ public:
+         if(!source || !source->getVirtualAddress() || source->getLength()<allocation) {
+             OSSafeReleaseNULL(source);native_legacy_transfer_observed(kIOReturnNoMemory,request,0);return;
+         }
++        if(video.v_width!=width || video.v_height!=height) {
++            const auto *pixels=reinterpret_cast<const uint8_t *>(source->getVirtualAddress());
++            auto *output=reinterpret_cast<volatile uint8_t *>(bootMapping->getVirtualAddress());
++            for(uint32_t y=0;y<video.v_height;++y) {
++                const auto *row=reinterpret_cast<const uint32_t *>(pixels+((uint64_t)y*height+height/2)/video.v_height*sourceStride);
++                auto *target=reinterpret_cast<volatile uint32_t *>(output+(uint64_t)y*video.v_rowBytes);
++                for(uint32_t x=0;x<video.v_width;++x)target[x]=row[((uint64_t)x*width+width/2)/video.v_width]|0xff000000U;
++            }
++            __asm__ volatile("dsb oshst" ::: "memory");
++            source->release();transferred=true;
++            native_legacy_transfer_observed(kIOReturnSuccess,request,(uint64_t)video.v_width*video.v_height*4);
++            finishTransfer(request);return;
++        }
+         if(!native_legacy_copy_layout(reinterpret_cast<volatile void *>(bootMapping->getVirtualAddress()),
+             bootMapping->getLength(),video.v_rowBytes,reinterpret_cast<const void *>(source->getVirtualAddress()),
              source->getLength(),sourceStride,width,height)) {
              OSSafeReleaseNULL(source);native_legacy_transfer_observed(kIOReturnBadArgument,request,0);return;
          }
@@ -66,7 +276,7 @@ index 8e6aba9..dbcbce8 100644
              uint64_t scan[5];
              if(native_legacy_frame_scan(reinterpret_cast<const void *>(source->getVirtualAddress()),source->getLength(),sourceStride,width,height,scan))
                  native_legacy_frame_observed(0,scan[0],scan[1],scan[2],scan[3],scan[4]);
-@@ -495,7 +517,7 @@ public:
+@@ -495,17 +531,25 @@ public:
             !video.v_width || !video.v_height || video.v_depth!=32 || video.v_rotate ||
             video.v_width>16384 || video.v_height>16384 || video.v_rowBytes<video.v_width*4 ||
             video.v_rowBytes>UINT64_MAX/video.v_height)return false;
@@ -75,3 +285,84 @@ index 8e6aba9..dbcbce8 100644
          if(!mapping)return false;
          bool valid=mapping->getVirtualAddress() && mapping->getPhysicalAddress()==video.v_baseAddr &&
                     mapping->getLength()==video.v_rowBytes*video.v_height;
+         if(valid) {
+-            installBootDimensions((uint32_t)video.v_width,(uint32_t)video.v_height);
++            uint32_t canvasWidth=(uint32_t)video.v_width,canvasHeight=(uint32_t)video.v_height;
++            OSData *cw=OSDynamicCast(OSData,provider->getProperty("canvas-width"));
++            OSData *ch=OSDynamicCast(OSData,provider->getProperty("canvas-height"));
++            if(cw && ch && cw->getLength()==4 && ch->getLength()==4) {
++                memcpy(&canvasWidth,cw->getBytesNoCopy(),4);memcpy(&canvasHeight,ch->getBytesNoCopy(),4);
++            }
++            if(!canvasWidth || !canvasHeight || canvasWidth>16384 || canvasHeight>16384) {mapping->release();return false;}
++            installBootDimensions(canvasWidth,canvasHeight);
+             uint32_t width=0,height=0;getDisplayDimensions(&width,&height);
+-            valid=width==video.v_width && height==video.v_height;
++            valid=width==canvasWidth && height==canvasHeight;
+             if(valid) {
+                 OSSafeReleaseNULL(bootMapping);bootMapping=mapping;mapping=nullptr;primary=video.v_display==1;
+-                valid=native_legacy_gop_mapping_observed(this,bootMapping,width,height);
++                valid=native_legacy_gop_mapping_observed(this,bootMapping,video.v_width,video.v_height);
++                IOLog("NativeLegacyDisplay: canvas=%ux%u scanout=%lux%lu\n",width,height,(unsigned long)video.v_width,(unsigned long)video.v_height);
+             }
+         }
+         OSSafeReleaseNULL(mapping);return valid;
+diff --git a/NativeHalfCodes.h b/NativeHalfCodes.h
+new file mode 100644
+index 0000000..f2702b6
+--- /dev/null
++++ b/NativeHalfCodes.h
+@@ -0,0 +1,54 @@
++// SPDX-License-Identifier: BSD-2-Clause-Patent
++// The 8-bit code of every half-float pattern, shared by the display driver's CPU conversion and the GPU client's (GpuScanoutPresenter.h),
++// so both store the same bytes for a half-float frame.
++#pragma once
++#include <stdint.h>
++namespace native_half {
++// Half-float bit patterns of the smallest value that reaches each 8-bit code k = 1..255 (positive halves order like their values):
++// kLinear for linear light encoded to sRGB, kEncoded for values already sRGB-encoded (boot-arg sheng-fb-half=2).
++inline constexpr uint16_t kLinear[255]={
++    0x08fa,0x0f76,0x1238,0x145a,0x1599,0x16d7,0x180b,0x18aa,0x1949,0x19e8,0x1a88,0x1b30,0x1be2,0x1c4f,0x1cb2,0x1d19,
++    0x1d86,0x1df7,0x1e6e,0x1eea,0x1f6c,0x1ff2,0x203f,0x2088,0x20d4,0x2122,0x2173,0x21c7,0x221e,0x2278,0x22d5,0x2335,
++    0x2397,0x23fd,0x2433,0x2469,0x24a1,0x24da,0x2514,0x2550,0x258e,0x25ce,0x260f,0x2651,0x2695,0x26db,0x2723,0x276c,
++    0x27b7,0x2802,0x2829,0x2851,0x287a,0x28a4,0x28cf,0x28fa,0x2927,0x2954,0x2982,0x29b1,0x29e1,0x2a12,0x2a44,0x2a77,
++    0x2aaa,0x2adf,0x2b15,0x2b4b,0x2b82,0x2bbb,0x2bf4,0x2c17,0x2c35,0x2c53,0x2c72,0x2c91,0x2cb0,0x2cd1,0x2cf1,0x2d12,
++    0x2d34,0x2d56,0x2d78,0x2d9b,0x2dbf,0x2de3,0x2e08,0x2e2d,0x2e52,0x2e78,0x2e9f,0x2ec6,0x2eee,0x2f16,0x2f3f,0x2f68,
++    0x2f92,0x2fbc,0x2fe7,0x300a,0x301f,0x3036,0x304c,0x3063,0x307a,0x3091,0x30a9,0x30c1,0x30d9,0x30f2,0x310a,0x3123,
++    0x313d,0x3156,0x3170,0x318a,0x31a4,0x31bf,0x31da,0x31f5,0x3211,0x322d,0x3249,0x3265,0x3282,0x329f,0x32bc,0x32da,
++    0x32f8,0x3316,0x3334,0x3353,0x3372,0x3392,0x33b1,0x33d1,0x33f2,0x3409,0x341a,0x342a,0x343b,0x344c,0x345d,0x346e,
++    0x3480,0x3491,0x34a3,0x34b5,0x34c6,0x34d9,0x34eb,0x34fd,0x3510,0x3523,0x3536,0x3549,0x355c,0x356f,0x3583,0x3596,
++    0x35aa,0x35be,0x35d3,0x35e7,0x35fb,0x3610,0x3625,0x363a,0x364f,0x3664,0x367a,0x368f,0x36a5,0x36bb,0x36d1,0x36e8,
++    0x36fe,0x3715,0x372b,0x3742,0x375a,0x3771,0x3788,0x37a0,0x37b8,0x37d0,0x37e8,0x3800,0x380d,0x3819,0x3825,0x3832,
++    0x383e,0x384b,0x3858,0x3865,0x3871,0x387e,0x388c,0x3899,0x38a6,0x38b3,0x38c1,0x38ce,0x38dc,0x38ea,0x38f7,0x3905,
++    0x3913,0x3921,0x392f,0x393e,0x394c,0x395a,0x3969,0x3978,0x3986,0x3995,0x39a4,0x39b3,0x39c2,0x39d1,0x39e0,0x39ef,
++    0x39ff,0x3a0e,0x3a1e,0x3a2e,0x3a3d,0x3a4d,0x3a5d,0x3a6d,0x3a7d,0x3a8d,0x3a9e,0x3aae,0x3abf,0x3acf,0x3ae0,0x3af1,
++    0x3b02,0x3b12,0x3b24,0x3b35,0x3b46,0x3b57,0x3b69,0x3b7a,0x3b8c,0x3b9d,0x3baf,0x3bc1,0x3bd3,0x3be5,0x3bf7,
++};
++inline constexpr uint16_t kEncoded[255]={
++    0x1805,0x1e07,0x2106,0x2308,0x2485,0x2586,0x2687,0x2788,0x2845,0x28c5,0x2946,0x29c6,0x2a47,0x2ac7,0x2b48,0x2bc8,
++    0x2c25,0x2c65,0x2ca5,0x2ce5,0x2d26,0x2d66,0x2da6,0x2de6,0x2e27,0x2e67,0x2ea7,0x2ee7,0x2f28,0x2f68,0x2fa8,0x2fe8,
++    0x3015,0x3035,0x3055,0x3075,0x3095,0x30b5,0x30d5,0x30f5,0x3116,0x3136,0x3156,0x3176,0x3196,0x31b6,0x31d6,0x31f6,
++    0x3217,0x3237,0x3257,0x3277,0x3297,0x32b7,0x32d7,0x32f7,0x3318,0x3338,0x3358,0x3378,0x3398,0x33b8,0x33d8,0x33f8,
++    0x340d,0x341d,0x342d,0x343d,0x344d,0x345d,0x346d,0x347d,0x348d,0x349d,0x34ad,0x34bd,0x34cd,0x34dd,0x34ed,0x34fd,
++    0x350e,0x351e,0x352e,0x353e,0x354e,0x355e,0x356e,0x357e,0x358e,0x359e,0x35ae,0x35be,0x35ce,0x35de,0x35ee,0x35fe,
++    0x360f,0x361f,0x362f,0x363f,0x364f,0x365f,0x366f,0x367f,0x368f,0x369f,0x36af,0x36bf,0x36cf,0x36df,0x36ef,0x36ff,
++    0x3710,0x3720,0x3730,0x3740,0x3750,0x3760,0x3770,0x3780,0x3790,0x37a0,0x37b0,0x37c0,0x37d0,0x37e0,0x37f0,0x3800,
++    0x3809,0x3811,0x3819,0x3821,0x3829,0x3831,0x3839,0x3841,0x3849,0x3851,0x3859,0x3861,0x3869,0x3871,0x3879,0x3881,
++    0x3889,0x3891,0x3899,0x38a1,0x38a9,0x38b1,0x38b9,0x38c1,0x38c9,0x38d1,0x38d9,0x38e1,0x38e9,0x38f1,0x38f9,0x3902,
++    0x390a,0x3912,0x391a,0x3922,0x392a,0x3932,0x393a,0x3942,0x394a,0x3952,0x395a,0x3962,0x396a,0x3972,0x397a,0x3982,
++    0x398a,0x3992,0x399a,0x39a2,0x39aa,0x39b2,0x39ba,0x39c2,0x39ca,0x39d2,0x39da,0x39e2,0x39ea,0x39f2,0x39fa,0x3a03,
++    0x3a0b,0x3a13,0x3a1b,0x3a23,0x3a2b,0x3a33,0x3a3b,0x3a43,0x3a4b,0x3a53,0x3a5b,0x3a63,0x3a6b,0x3a73,0x3a7b,0x3a83,
++    0x3a8b,0x3a93,0x3a9b,0x3aa3,0x3aab,0x3ab3,0x3abb,0x3ac3,0x3acb,0x3ad3,0x3adb,0x3ae3,0x3aeb,0x3af3,0x3afb,0x3b04,
++    0x3b0c,0x3b14,0x3b1c,0x3b24,0x3b2c,0x3b34,0x3b3c,0x3b44,0x3b4c,0x3b54,0x3b5c,0x3b64,0x3b6c,0x3b74,0x3b7c,0x3b84,
++    0x3b8c,0x3b94,0x3b9c,0x3ba4,0x3bac,0x3bb4,0x3bbc,0x3bc4,0x3bcc,0x3bd4,0x3bdc,0x3be4,0x3bec,0x3bf4,0x3bfc,
++};
++// The code of one 16-bit half pattern: negatives and NaNs 0, values of 1.0 and above (and +infinity) 255.
++inline uint8_t code(uint16_t bits,bool encoded) {
++    if(bits&0x8000)return 0;
++    if(bits>=0x7c00)return bits==0x7c00?255:0;
++    const uint16_t *thresholds=encoded?kEncoded:kLinear;
++    unsigned lo=0,hi=255;   // the number of thresholds at or below bits
++    while(lo<hi){const unsigned mid=(lo+hi)/2;if(bits>=thresholds[mid])lo=mid+1;else hi=mid;}
++    return uint8_t(lo);
++}
++}  // namespace native_half

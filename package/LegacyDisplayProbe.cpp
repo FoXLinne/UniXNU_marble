@@ -12,6 +12,7 @@
 #include <sys/proc.h>
 #include <pexpert/pexpert.h>
 #include <mach/kmod.h>
+#include "NativeGOPWire.h"
 #include <machine/machine_routines.h>
 extern "C" kmod_info_t g_kernel_kmod_info;
 extern "C" void native_root_block_register_display(uint64_t,uint64_t,uint32_t,uint32_t);
@@ -32,7 +33,7 @@ static IOService *pendingLegacyDisplay;
 static IOService *activeGOPPresenter,*activeGOPNub;
 // GPU hand-off presenter (sheng-fb-gpu=1, phase 4): lives beside the display driver, which offers it frames instead of copying them.
 static IOService *gpuHandoffPresenter;
-extern "C" bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height);
+extern "C" bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height,uint32_t format);
 extern "C" void native_gop_presenter_set_source(IOService *presenter,IOService *nub);
 volatile uint32_t native_legacy_gpu_fallbacks,native_legacy_gpu_last_status,native_legacy_gpu_offers;
 static IOService *activeLegacyDisplay;
@@ -230,11 +231,14 @@ extern "C" unsigned native_legacy_performance_report(char *out,unsigned cap) {
             : "=r"(translation),"=r"(mair) : "r"(native_legacy_gop_virtual) : "memory");
         ml_set_interrupts_enabled(irq);
     }
-    return snprintf(out,cap,"Display copies=%llu last_us=%llu max_us=%llu total_us=%llu accepted=%u rejected=%u reason=%u retirements=%u gpu_offers=%u gpu_fallbacks=%u gpu_status=%x PAR=%llx MAIR=%llx",
+    uint32_t canvas[2]={};
+    if(activeLegacyDisplay)memcpy(canvas,reinterpret_cast<const uint8_t *>(activeLegacyDisplay)+5808,sizeof(canvas));
+    return snprintf(out,cap,"Display copies=%llu last_us=%llu max_us=%llu total_us=%llu accepted=%u rejected=%u reason=%u retirements=%u gpu_offers=%u gpu_fallbacks=%u gpu_status=%x PAR=%llx MAIR=%llx canvas=%ux%u scanout=%ux%u",
         native_legacy_copy_n,native_legacy_copy_last*1000000/frequency,
         native_legacy_copy_max*1000000/frequency,native_legacy_copy_sum*1000000/frequency,
         native_legacy_swap_accepted_count,native_legacy_swap_rejected_count,
-        native_legacy_rej_reason,native_legacy_retirement_calls,native_legacy_gpu_offers,native_legacy_gpu_fallbacks,native_legacy_gpu_last_status,translation,mair);
+        native_legacy_rej_reason,native_legacy_retirement_calls,native_legacy_gpu_offers,native_legacy_gpu_fallbacks,native_legacy_gpu_last_status,translation,mair,
+        canvas[0],canvas[1],native_legacy_gop_width,native_legacy_gop_height);
 }
 void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes) {
     native_legacy_copy_bytes_last=bytes;native_legacy_copy_bytes_sum=native_legacy_copy_bytes_sum+bytes;
@@ -250,7 +254,7 @@ __attribute__((noinline)) void native_legacy_transfer_observed(IOReturn status,c
 bool native_legacy_gpu_offer(void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height) {
     if(!gpuHandoffPresenter) return false;
     native_legacy_gpu_offers=native_legacy_gpu_offers+1;
-    return native_gop_gpu_offer(gpuHandoffPresenter,display,memory,stride,width,height);
+    return native_gop_gpu_offer(gpuHandoffPresenter,display,memory,stride,width,height,NGP_BGRX8888);
 }
 void native_legacy_gpu_fallback_observed(int status) {
     native_legacy_gpu_last_status=(uint32_t)status;native_legacy_gpu_fallbacks=native_legacy_gpu_fallbacks+1;
@@ -497,6 +501,15 @@ void native_legacy_display_late_probe(void) {
         OSArray *ranges=OSArray::withCapacity(1);
         if(nub && memory && ranges && parent && nub->init()) {
             ranges->setObject(memory);nub->setDeviceMemory(ranges);nub->setName("NativeGOPFramebuffer");
+            IORegistryEntry *chosen=IORegistryEntry::fromPath("/chosen",gIODTPlane);
+            if(chosen) {
+                const char *keys[]={"canvas-width","canvas-height"};
+                for(const char *key:keys) {
+                    OSData *value=OSDynamicCast(OSData,chosen->getProperty(key));
+                    if(value && value->getLength()==sizeof(uint32_t))nub->setProperty(key,value);
+                }
+                chosen->release();
+            }
             nubAttached=nub->attach(parent);if(nubAttached)nubStarted=nub->start(parent);
             if(nubStarted) {
                 unsigned phase=0;PE_parse_boot_argn("offline-legacy-phase",&phase,sizeof(phase));

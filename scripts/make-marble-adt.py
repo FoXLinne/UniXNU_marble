@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the minimal marble hardware Apple-format DT for the first boot.
-
-The tree mirrors the proven QEMU entry fixture structure (same required
-nodes and properties the source XNU boot converged on) with real pinned
-marble SM7475 values taken from the compiled board DT:
-
-  - GICv3 distributor 0x17100000/0x10000, redistributor 0x17180000/0x200000
-    (arm-io child offsets under an APSS range at 0x17000000), stride 0x40000
-  - CPU timebase 19200000 Hz (Qualcomm SM8xxx architectural counter)
-  - DRAM base 0x80000000; size comes from the actual device observation and
-    is cross-checked at build time.
-
-This is first-boot bring-up data: the platform has no matching platform
-expert yet, so the kernel is expected to reach the video console and report
-the genuine missing-driver panic on screen. No Apple device identity is
-claimed and no property is invented beyond these pinned sources.
-"""
+"""Generate the marble Apple device tree with SM7475 resources and the selected UI identity."""
 from pathlib import Path
 import argparse
 import os
@@ -86,9 +70,10 @@ def main():
     parser.add_argument('--ipad-identity', action='store_true',
                         help='/product and /buttons describe an iPad-class device without a Home button (MobileGestalt reads these from the tree); '
                              'values follow the unchanged iPad7,1 tree, the panel geometry and button set are marble\'s')
+    parser.add_argument('--phone-idiom', action='store_true',
+                        help='Keep the iPad model and target, use phone artwork and scaling')
     parser.add_argument('--iphone-identity', action='store_true',
-                        help='Use the phone identity from docs/guide/mobilegestalt.md (iPhone10,3 / D22 / iPhone X / phone); an iPadOS root '
-                             'expects the pad identity, so this is an experiment for layout and coordinate comparison')
+                        help='Use the iPhone10,3 / D22 identity, phone artwork and scaling from docs/guide/mobilegestalt.md')
     parser.add_argument('--cpu-regs', default='0',
                         help='Comma-separated CPU MPIDR affinity values (the /cpus reg of each core); the first is the running boot CPU. '
                              'SM7475 numbers its cores 0x000..0x700 in Affinity1 (sm7475.dtsi). More than one adds /psci')
@@ -124,9 +109,11 @@ def main():
     if args.ipad_identity and args.iphone_identity:
         parser.error('--ipad-identity and --iphone-identity are exclusive')
     # (root model, target-type, product name, artwork idiom, artwork subtype, scale, fallback), docs/guide/mobilegestalt.md.
-    identity = ((b'iPhone10,3\0', b'D22\0', b'iPhone X\0', b'phone\0', 2400, 3, b'iPhone10,3\0') if args.iphone_identity else
+    identity = ((b'iPhone10,3\0', b'D22\0', b'iPhone X\0', b'phone\0', 2436, 3, b'iPhone10,3\0') if args.iphone_identity else
                 (b'iPad7,1\0', b'J120\0', b'iPad Pro (12.9-inch) (2nd generation)\0', b'pad\0', 2732, 2, b'iPad6,7\0')
                 if args.ipad_identity else None)
+    if args.phone_idiom and identity:
+        identity = (identity[0], identity[1], b'iPhone X\0', b'phone\0', 2436, 3, b'iPhone10,3\0')
     cpus = [node('cpu%d' % index, [('state', b'running\0' if index == 0 else b'waiting\0'),
                                    ('reg', struct.pack('<I', reg)),
                                    ('device_type', b'cpu\0'), ('compatible', b'arm,cortex-a510\0'),
@@ -151,6 +138,10 @@ def main():
                         # This boots the normal target OS. Volatile Data is
                         # described separately by ephemeral-storage below.
                         ('osenvironment', b'main\0'),
+                        *([('display-scale', struct.pack('<I', identity[5]))] if identity else []),
+                        *([('canvas-width', struct.pack('<I', 1125)),
+                           ('canvas-height', struct.pack('<I', 2436))]
+                          if identity and identity[3] == b'phone\0' else []),
                         # Security status as on a dev-fused, undemoted board (tuple 0,0,1,1), as read by MobileGestalt: mobileactivationd's
                         # DeviceType then takes its native "Hactivation" branch (Activated without an activation record; no SEP or
                         # baseband). Values established on hardware by github.com/dipa-studio/ios-sweet (tools/mkadt.py).
