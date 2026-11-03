@@ -1,3 +1,4 @@
+#include <Protocol/RootStage.h>
 #include <Uefi.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DevicePathLib.h>
@@ -20,6 +21,8 @@ STATIC UINTN mVolumeSize;
 STATIC BOOLEAN mRootStage, mRootStorage;
 EFI_STATUS MarbleRootStorage(VOID);
 EFI_STATUS MarbleRootUsb(VOID);
+EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
+EFI_STATUS MarbleRootUsbContinue(VOID);
 STATIC EFI_BLOCK_IO_MEDIA mMedia = {
   .MediaId = 1, .MediaPresent = TRUE, .ReadOnly = TRUE, .BlockSize = 512, .IoAlign = 1
 };
@@ -95,13 +98,15 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   if (!FindVolume()) return EFI_NOT_FOUND;
   // Dedicated panic log, inside marble's reserved 0xA8000000..0xB8000000 window.
   ZeroMem((VOID *)(UINTN)0xB7000000, 0x100000);
-  if (mRootStage) {
-    Status = MarbleRootUsb();
-    if (EFI_ERROR(Status)) { Print(L"RootStage: %r\r\n",Status); return Status; }
-  }
   if (mRootStorage) {
-    Status = MarbleRootStorage();
+    Status=MarbleRootUsbPrepare(NULL);
+    if (EFI_ERROR(Status)) Print(L"RootStage USB: %r\r\n",Status);
+    Status=MarbleRootStorage();
     if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
+  }
+  if (mRootStage) {
+    Status=mRootStorage ? MarbleRootUsbContinue() : MarbleRootUsb();
+    if (EFI_ERROR(Status)) { Print(L"RootStage: %r\r\n",Status); return Status; }
   }
   mMedia.LastBlock = mVolumeSize / 512 - 1;
   Status = gBS->InstallMultipleProtocolInterfaces(&Disk,

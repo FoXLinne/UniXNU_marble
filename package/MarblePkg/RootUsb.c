@@ -231,10 +231,9 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
   return EFI_TIMEOUT;
 }
 
-EFI_STATUS MarbleRootUsb(VOID)
+EFI_STATUS MarbleRootUsbContinue(VOID)
 {
-  EFI_STATUS Status = InitializeUsb();
-  if (EFI_ERROR(Status)) return Status;
+  EFI_STATUS Status;
   Print(L"UniXNU RootStage USB\r\n");
   for (;;) {
     if (!mConnected) { WaitTransfer(0xff); continue; }
@@ -363,6 +362,12 @@ EFI_STATUS MarbleRootUsb(VOID)
       Reply("OKAY",""); mUsb->Stop(); gRT->ResetSystem(EfiResetCold,EFI_SUCCESS,0,NULL);
     } else Reply("FAIL","unknown command");
   }
+}
+
+EFI_STATUS MarbleRootUsb(VOID)
+{
+  EFI_STATUS Status=InitializeUsb();
+  return EFI_ERROR(Status) ? Status : MarbleRootUsbContinue();
 }
 
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage)

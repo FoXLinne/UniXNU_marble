@@ -10,7 +10,6 @@
 
 STATIC ROOT_STAGE_TABLE *mStorage;
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage);
-EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
 STATIC EFI_STATUS StorageReturn(VOID) { return MarbleRootUsbResume(mStorage); }
 
 EFI_STATUS MarbleRootStorage(VOID) {
@@ -58,7 +57,6 @@ EFI_STATUS MarbleRootStorage(VOID) {
     if (CompareGuid(&gST->ConfigurationTable[I].VendorGuid,&StageGuid))
       mStorage=gST->ConfigurationTable[I].VendorTable;
   }
-  BOOLEAN UsbReady=mStorage!=NULL;
   if (!mStorage) {
     mStorage=AllocatePages(EFI_SIZE_TO_PAGES(sizeof(*mStorage)));
     if (!mStorage) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }
@@ -95,10 +93,6 @@ EFI_STATUS MarbleRootStorage(VOID) {
   {
     EFI_GUID Guid=ROOT_STAGE_GUID;
     Status=gBS->InstallConfigurationTable(&Guid,mStorage);
-    if (!EFI_ERROR(Status) && !UsbReady) {
-      EFI_STATUS UsbStatus=MarbleRootUsbPrepare(mStorage);
-      if (EFI_ERROR(UsbStatus)) Print(L"RootStage USB: %r\r\n",UsbStatus);
-    }
     Print(L"UniXNU UFS boot\r\n");
   }
 Done:

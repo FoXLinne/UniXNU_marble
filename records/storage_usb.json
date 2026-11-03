@@ -1,7 +1,17 @@
 {
   "firmware_build": "passed",
-  "storage_usb": "RootStage command session precedes storage loading and supplies the shared kernel allocation; storage reuses the active session",
+  "storage_usb": "USB initialization precedes UFS loading; storage and commands share one RootStage table and USB session",
   "device_observation": "Touch responsive; launchd early boot complete; APFS transactions visible on screen",
   "live_log_read": "runtime USB unavailable",
-  "hardware_validation": "pending boot of reordered handoff image"
+  "hardware_validation": "RootStage status and continue succeeded; RuntimeRoot logs/status/screen reads succeeded",
+  "runtime_usb": {
+    "active": 1,
+    "failures": 0
+  },
+  "persistent_data": {
+    "restored_pages": 35465,
+    "generation": 1,
+    "apfs_checkpoint": 821
+  },
+  "display_frames": 0
 }
