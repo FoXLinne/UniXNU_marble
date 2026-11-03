@@ -214,8 +214,21 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
 {
   mStage = Stage;
   EFI_STATUS Status = InitializeUsb();
-  if (!EFI_ERROR(Status)) mRuntimeUsb = TRUE;
-  return Status;
+  if (EFI_ERROR(Status)) return Status;
+  mRuntimeUsb = TRUE;
+  for (UINTN Tick=0;Tick<5000;Tick++) {
+    USB_DEVICE_EVENT Event=UsbDeviceEventNoEvent;
+    USB_DEVICE_EVENT_DATA Data;
+    UINTN Size=0;
+    Status=mUsb->HandleEvent(&Event,&Size,&Data);
+    if (EFI_ERROR(Status) && Status!=EFI_NOT_READY) return Status;
+    if (Event==UsbDeviceEventDeviceStateChange) {
+      mConnected=Data.DeviceState==0;
+      if (mConnected) return EFI_SUCCESS;
+    }
+    gBS->Stall(1000);
+  }
+  return EFI_TIMEOUT;
 }
 
 EFI_STATUS MarbleRootUsb(VOID)
