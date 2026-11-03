@@ -23,6 +23,7 @@ parser.add_argument('--root-stage', action='store_true')
 parser.add_argument('--root-images', type=Path)
 parser.add_argument('--trust-cache', type=Path)
 parser.add_argument('--iphone-identity', action='store_true', help='Write the phone identity into the payload ADT instead of the iPad one')
+parser.add_argument('--gpu-addon', type=Path, help='GPU addon file handed to the kernel as kernel.macho.gpuaddon')
 args = parser.parse_args()
 OUT.mkdir(parents=True, exist_ok=True)
 if (OUT / 'stage').exists():
@@ -52,6 +53,9 @@ if args.kernel:
     if args.trust_cache:
         shutil.copy2(args.trust_cache, payloads / 'kernel.macho.trustcache')
         adt_command.append('--trust-cache')
+    if args.gpu_addon:
+        shutil.copy2(args.gpu_addon, payloads / 'kernel.macho.gpuaddon')
+        adt_command.append('--gpu-addon')
     subprocess.run(adt_command, check=True)
     kernel_args = ' '.join(board['payload']['kernel_args'])
     entry = f'type = "xnu"\npath = "Payloads/kernel.macho"\nargs = "{kernel_args}"\n'

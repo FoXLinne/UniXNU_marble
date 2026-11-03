@@ -7,7 +7,7 @@
 extern kmod_info_t g_kernel_kmod_info;
 extern "C" void native_keyevents_static_init(void) __asm__("__GLOBAL__sub_I_NativeKeyStoreEvents.cpp");
 extern "C" IOService *native_keyevents_allocate(void);
-extern "C" bool native_root_block_data_is_ephemeral(void);
+extern "C" bool native_root_block_has_data(void);
 static uint32_t refusedOpens, openedClients, clientCalls;
 
 extern "C" void native_keyevents_open_refused(void) { refusedOpens++; }
@@ -29,7 +29,7 @@ extern "C" void native_keyevents_report(char *out, unsigned size) {
 extern "C" void native_keyevents_start(void) {
     unsigned enabled = 0;
     if (!PE_parse_boot_argn("offline-key-events", &enabled, sizeof(enabled)) || enabled != 1) return;
-    if (!native_root_block_data_is_ephemeral()) panic("RootStage: KeyStoreEvents requires RAM Data");
+    if (!native_root_block_has_data()) panic("RootStage: KeyStoreEvents Data volume unavailable");
     const OSSymbol *name = OSSymbol::withCString("AppleKeyStore");
     bool present = name && OSMetaClass::getMetaClassWithName(name);
     OSSafeReleaseNULL(name);

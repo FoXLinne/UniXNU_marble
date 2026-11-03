@@ -34,7 +34,7 @@ static IOService *activeGOPPresenter,*activeGOPNub;
 static IOService *gpuHandoffPresenter;
 extern "C" bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height);
 extern "C" void native_gop_presenter_set_source(IOService *presenter,IOService *nub);
-volatile uint32_t native_legacy_gpu_fallbacks,native_legacy_gpu_last_status;
+volatile uint32_t native_legacy_gpu_fallbacks,native_legacy_gpu_last_status,native_legacy_gpu_offers;
 static IOService *activeLegacyDisplay;
 static IORegistryEntry *unitScaleChosen;
 static bool unitScaleAdded,unitRotationAdded;
@@ -230,11 +230,11 @@ extern "C" unsigned native_legacy_performance_report(char *out,unsigned cap) {
             : "=r"(translation),"=r"(mair) : "r"(native_legacy_gop_virtual) : "memory");
         ml_set_interrupts_enabled(irq);
     }
-    return snprintf(out,cap,"Display copies=%llu last_us=%llu max_us=%llu total_us=%llu accepted=%u rejected=%u reason=%u retirements=%u PAR=%llx MAIR=%llx",
+    return snprintf(out,cap,"Display copies=%llu last_us=%llu max_us=%llu total_us=%llu accepted=%u rejected=%u reason=%u retirements=%u gpu_offers=%u gpu_fallbacks=%u gpu_status=%x PAR=%llx MAIR=%llx",
         native_legacy_copy_n,native_legacy_copy_last*1000000/frequency,
         native_legacy_copy_max*1000000/frequency,native_legacy_copy_sum*1000000/frequency,
         native_legacy_swap_accepted_count,native_legacy_swap_rejected_count,
-        native_legacy_rej_reason,native_legacy_retirement_calls,translation,mair);
+        native_legacy_rej_reason,native_legacy_retirement_calls,native_legacy_gpu_offers,native_legacy_gpu_fallbacks,native_legacy_gpu_last_status,translation,mair);
 }
 void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes) {
     native_legacy_copy_bytes_last=bytes;native_legacy_copy_bytes_sum=native_legacy_copy_bytes_sum+bytes;
@@ -248,7 +248,9 @@ __attribute__((noinline)) void native_legacy_transfer_observed(IOReturn status,c
     if(status!=kIOReturnSuccess)IOLog("RootStage: display copy failed %x\n",status);
 }
 bool native_legacy_gpu_offer(void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height) {
-    return gpuHandoffPresenter && native_gop_gpu_offer(gpuHandoffPresenter,display,memory,stride,width,height);
+    if(!gpuHandoffPresenter) return false;
+    native_legacy_gpu_offers=native_legacy_gpu_offers+1;
+    return native_gop_gpu_offer(gpuHandoffPresenter,display,memory,stride,width,height);
 }
 void native_legacy_gpu_fallback_observed(int status) {
     native_legacy_gpu_last_status=(uint32_t)status;native_legacy_gpu_fallbacks=native_legacy_gpu_fallbacks+1;

@@ -1,0 +1,76 @@
+{
+  "device": "Redmi Note 12 Turbo / marble",
+  "serial": "556fdfe",
+  "date": "2026-11-03",
+  "kernel": "outputs/UniXNU_marble/persistent_boot/kernel.macho",
+  "boot_image": "outputs/UniXNU_marble/persistent_boot/marble_persistent_boot.img",
+  "command_handoff_image": "outputs/UniXNU_marble/persistent_boot/marble_usb_handoff.img",
+  "boot": {
+    "slot": "b",
+    "successful": true,
+    "automatic_start": "passed",
+    "software_bootloader_reboot": "passed",
+    "first_frame_counter_seconds": 103.090583333
+  },
+  "usb": {
+    "status": "passed",
+    "logs": "passed",
+    "screen": "passed",
+    "command_handoff": "passed",
+    "failures": 0
+  },
+  "metal": {
+    "desktop": "passed",
+    "settings_navigation": "passed",
+    "physical_touch": "passed",
+    "physical_touch_frames": 1220,
+    "submitted_fence": 825,
+    "completed_fence": 825,
+    "scanout": "GPU",
+    "display_rejections": 0,
+    "gpu_fallbacks": 0
+  },
+  "interactive_performance": {
+    "application": "Settings",
+    "gestures": 27,
+    "elapsed_seconds": 20.496741062495857,
+    "display_frames": 142,
+    "fps": 6.927930619166873,
+    "vsync_configuration": 120
+  },
+  "data": {
+    "restored_pages": 149905,
+    "generation": 1,
+    "apfs_checkpoint": 1909,
+    "reboot_restore": "passed",
+    "kernel_window_bytes": 137363456,
+    "os_and_systemos": "retained"
+  },
+  "android": {
+    "slot": "a",
+    "version": "17",
+    "boot_completed": 1,
+    "root": "passed"
+  },
+  "validation": {
+    "firmware_build": "passed",
+    "kernel_compile_link_prelink": "passed",
+    "usb_event_lifecycle": "passed",
+    "cp_init_dms": "passed",
+    "ring_context_switch": "passed",
+    "gpu_memory_and_submit": "passed",
+    "ufs_commands_partition_and_data_overlay": "passed"
+  },
+  "evidence": {
+    "boot": "cache/persistent_boot/boot_b_initial.log",
+    "reboot": "cache/persistent_boot/reboot_restore.log",
+    "touch": "cache/persistent_boot/touch_acceptance.log",
+    "final_touch": "cache/persistent_boot/boot_b_touch.log",
+    "fps": "cache/persistent_boot/final_interactive_fps.json",
+    "slots": "cache/persistent_boot/final_boot_slot.txt",
+    "android": "cache/persistent_boot/android_a_acceptance.txt",
+    "desktop": "records/persistent_desktop.png",
+    "settings": "records/persistent_settings.png",
+    "final_runtime": "cache/persistent_boot/final_runtime.log"
+  }
+}

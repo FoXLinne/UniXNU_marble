@@ -18,6 +18,8 @@
 #include <libkern/crypto/sha2.h>
 #include <libkern/zlib.h>
 #include "SparseDisk.h"
+#include "PersistOverlay.h"
+#include "MarbleUfs.h"
 #include "NativeMetalOwnerTrust.h"
 
 extern "C" {
@@ -201,9 +203,17 @@ extern "C" void native_root_block_capture_surface(const void *pixels, uint64_t s
   }
 }
 
+static bool ufsRoot;
+static persist::Overlay dataOverlay;
+static uint8_t *persistScratch;
+struct PersistOps {
+  bool read(uint64_t b, uint32_t n, void *p) { return marble_ufs_store_read(b,n,p); }
+  bool write(uint64_t b, uint32_t n, const void *p) { return marble_ufs_store_write(b,n,p); }
+  bool sync() { return marble_ufs_store_sync(); }
+};
 static RamSparseDisk dataSeed = {};
 static IOBufferMemoryDescriptor *dataExportIndex;
-extern "C" bool native_root_block_data_is_ephemeral(void) { return dataSeed.pages != nullptr; }
+extern "C" bool native_root_block_has_data(void) { return dataSeed.pages != nullptr; }
 static uint64_t dataSeedBytes;
 static uint8_t dataSeedHash[32];
 static char dataSeedUUID[37];
@@ -451,6 +461,11 @@ class NativeRootBlock : public IOBlockStorageDevice {
   }
 public:
   void configure(const ROOT_STAGE_DISK &source, unsigned index) {
+    if (ufsRoot) {
+      disk.Bytes=marble_ufs_root_bytes(index); diskIndex=index;
+      if (!disk.Bytes) panic("MarbleUfs: root window %u missing",index);
+      return;
+    }
     if (!source.Bytes || source.Received != source.Bytes ||
         source.Count != (source.Bytes + ROOT_STAGE_CHUNK - 1) / ROOT_STAGE_CHUNK ||
         source.Count > ROOT_STAGE_EXTENTS)
@@ -510,8 +525,10 @@ public:
   }
   IOReturn reportRemovability(bool *value) override { *value = false; return kIOReturnSuccess; }
   IOReturn reportWriteProtection(bool *value) override { *value = !writableData; return kIOReturnSuccess; }
-  IOReturn doSynchronizeCache() override { return kIOReturnSuccess; }
-  IOReturn doSynchronize(UInt64, UInt64, IOOptionBits) override { return kIOReturnSuccess; }
+  IOReturn doSynchronizeCache() override {
+    return writableData && ufsRoot && !marble_ufs_store_sync() ? kIOReturnIOError : kIOReturnSuccess;
+  }
+  IOReturn doSynchronize(UInt64, UInt64, IOOptionBits) override { return doSynchronizeCache(); }
   IOReturn getWriteCacheState(bool *value) override { *value = false; return kIOReturnSuccess; }
   IOReturn setWriteCacheState(bool) override { return kIOReturnUnsupported; }
   IOReturn doAsyncReadWrite(IOMemoryDescriptor *buffer, UInt64 block, UInt64 count,
@@ -532,12 +549,28 @@ public:
       bool noMemory;
       IOLockLock(dataGate);
       done = ramSparseIO(*writableData, write, offset, bytes, ops, noMemory);
+      if (write && ufsRoot && done) {
+        PersistOps store;
+        uint64_t first=offset/4096, end=(offset+done+4095)/4096;
+        bool saved=dataOverlay.active;
+        for (uint64_t i=first; saved && i<end;) {
+          uint32_t n=(uint32_t)MIN(uint64_t(32),end-i);
+          for (uint32_t j=0;j<n;j++) {
+            const uint8_t *page=writableData->pages[i+j];
+            if (page) memcpy(persistScratch+j*4096,page,4096);
+            else bzero(persistScratch+j*4096,4096);
+          }
+          saved=dataOverlay.writeRun(store,i,n,persistScratch); i+=n;
+        }
+        if (!saved) { dataOverlay.active=false; done=0; }
+      }
       IOLockUnlock(dataGate);
       IOReturn result = done == bytes ? kIOReturnSuccess : noMemory ? kIOReturnNoMemory : kIOReturnIOError;
       completion->action(completion->target, completion->parameter, result, done);
       return kIOReturnSuccess;
     }
-    while (done < bytes) {
+    if (ufsRoot) done=marble_ufs_root_read(diskIndex,buffer,offset,bytes);
+    while (!ufsRoot && done < bytes) {
       uint64_t position = offset + done;
       unsigned index = position / ROOT_STAGE_CHUNK;
       uint64_t within = position % ROOT_STAGE_CHUNK;
@@ -573,11 +606,29 @@ public:
 };
 OSDefineMetaClassAndStructors(NativeRootBlock, IOBlockStorageDevice)
 
+// Product identifier from the original 21H461 j120ap DeviceTree, used by MobileGestalt's device map.
+static void publishProductIdentity()
+{
+  IORegistryEntry *root = IORegistryEntry::fromPath("/", gIODTPlane);
+  OSData *model = root ? OSDynamicCast(OSData, root->getProperty("model")) : nullptr;
+  if (model && model->getLength() == sizeof("iPad7,1") &&
+      !memcmp(model->getBytesNoCopy(), "iPad7,1", sizeof("iPad7,1"))) {
+    uint8_t identifier[] = {0xe9,0xfe,0xfe,0xf6,0xe6,0xf9,0xd1,0x2a,0x5b,0xa1,
+        0xa2,0x55,0x18,0x66,0xcb,0xbd,0x74,0x9f,0x0e,0xc3};
+    IORegistryEntry *product = IORegistryEntry::fromPath("/product", gIODTPlane);
+    bool published = product && product->setProperty("product-id", identifier, sizeof(identifier));
+    IOLog("MarbleIdentity: j120 product-id published=%u\n", published);
+    OSSafeReleaseNULL(product);
+  }
+  OSSafeReleaseNULL(root);
+}
+
 extern "C" void native_root_block_start(void)
 {
   static bool started;
   if (started) return;
   metalCacheLock = IOLockAlloc();
+  publishProductIdentity();
   native_marble_cpu_start();
   IORegistryEntry *map = IORegistryEntry::fromPath("/chosen/memory-map", gIODTPlane);
   OSData *range = map ? OSDynamicCast(OSData, map->getProperty("RootDisks")) : nullptr;
@@ -679,6 +730,35 @@ extern "C" void native_root_block_start(void)
   if (result) panic("RootStage: class registration returned %x",result);
   result = OSKextLoadKextWithIdentifier("com.apple.filesystems.apfs");
   if (result) panic("RootStage: APFS load returned %x",result);
+  unsigned storage=0;
+  PE_parse_boot_argn("marble-ufs",&storage,sizeof(storage));
+  ufsRoot=storage==1;
+  if (ufsRoot) {
+    native_runtime_usb_start();
+    if (!marble_ufs_start()) panic("MarbleUfs: storage initialization failed");
+    if (!dataSeed.pages) panic("MarbleUfs: Data seed missing");
+    auto pages=dataSeed.bytes/4096;
+    auto bitmapBytes=persist::bitmapBlocks(pages)*4096;
+    auto *bits=(uint8_t *)IOMallocZero(bitmapBytes);
+    persistScratch=(uint8_t *)IOMalloc(32*4096);
+    if (!bits || !persistScratch || !marble_ufs_store_open(persist::windowBlocks(pages)))
+      panic("MarbleUfs: Data store allocation failed");
+    PersistOps store;
+    auto status=dataOverlay.open(store,pages,dataSeedHash,false,bits);
+    if (status!=persist::Open::Fresh && status!=persist::Open::Resumed)
+      panic("MarbleUfs: Data store header failed");
+    auto restore=[](uint64_t index,const uint8_t *page) {
+      if (!dataSeed.pages[index]) {
+        dataSeed.pages[index]=(uint8_t *)IOMalloc(4096);
+        if (!dataSeed.pages[index]) return false;
+        dataSeed.resident+=4096;
+      }
+      memcpy(dataSeed.pages[index],page,4096); return true;
+    };
+    if (!dataOverlay.forEachPresent(store,restore,persistScratch,32))
+      panic("MarbleUfs: Data restoration failed");
+    IOLog("MarbleUfs: Data persistent pages=%llu generation=%llu\n",dataOverlay.present,dataOverlay.generation);
+  }
   IOService *parent = IOService::getPlatform();
   if (!parent) panic("RootStage: platform is unavailable");
   for (unsigned i = 0; i < table->DiskCount; i++) {
@@ -711,7 +791,7 @@ extern "C" void native_root_block_start(void)
   }
   mapping->release();
   started = true;
-  native_runtime_usb_start();
+  if (!ufsRoot) native_runtime_usb_start();
   native_marble_gpu_start();
 }
 

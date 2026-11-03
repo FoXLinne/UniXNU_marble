@@ -26,7 +26,7 @@ def read(device, kind, offset, length):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'gpu', 'adreno', 'hide_display', 'show_display', 'tap', 'swipe', 'trace', 'trace_start', 'metal_cache', 'return'])
+    parser.add_argument('command', choices=['status', 'logs', 'screen', 'surface', 'home', 'touch', 'gpu', 'adreno', 'hide_display', 'show_display', 'tap', 'swipe', 'trace', 'trace_start', 'metal_cache', 'return', 'reboot_bootloader'])
     parser.add_argument('--x', type=int)
     parser.add_argument('--y', type=int)
     parser.add_argument('--to-x', type=int)
@@ -72,8 +72,8 @@ def main():
         elif args.command in ('hide_display', 'show_display'):
             device.ctrl_transfer(0x40, 15, int(args.command == 'hide_display'), 0, b'')
             print(args.command)
-        elif args.command in ('home', 'touch', 'gpu', 'adreno', 'return', 'trace_start'):
-            device.ctrl_transfer(0x40, {'home': 3, 'return': 4, 'touch': 8, 'gpu': 9, 'trace_start': 11, 'adreno': 14}[args.command], 0, 0, b'')
+        elif args.command in ('home', 'touch', 'gpu', 'adreno', 'return', 'trace_start', 'reboot_bootloader'):
+            device.ctrl_transfer(0x40, {'home': 3, 'return': 4, 'touch': 8, 'gpu': 9, 'trace_start': 11, 'adreno': 14, 'reboot_bootloader': 17}[args.command], 0, 0, b'')
             print(args.command)
         elif args.command == 'trace':
             magic, version, length = struct.unpack('<8sII', read(device, 8, 0, 16))

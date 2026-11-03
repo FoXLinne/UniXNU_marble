@@ -45,7 +45,7 @@ while index < len(arguments):
         command.append(value)
     index += 1
 command += ['-I', str(out / 'include'), '-I', str(ROOT / '.cache/xnu-work/osfmk'),
-            '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-Wno-deprecated-declarations',
+            '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-Wno-incompatible-sysroot', '-Wno-deprecated-declarations',
             '-Wno-c99-designator', '-Wno-reorder-init-list', '-Wno-unnecessary-virtual-specifier',
             '-Wno-deprecated-enum-enum-conversion']
 (out / 'compile-command.json').write_text(json.dumps(command, indent=2) + '\n')
@@ -259,7 +259,11 @@ gmu = out / 'MarbleGmu.o'
 gmu_command = [str(ROOT / 'kits/marble/MarbleGmu.cpp') if v == str(source) else str(gmu) if v == str(obj_path) else v for v in command]
 gmu_command += ['-I', str(ROOT / 'kits/ArmSmmu4K'), '-I', str(ROOT / 'kits/AdrenoFirmware')]
 subprocess.run(gmu_command, cwd=record['directory'], check=True)
-gpu_objects = [gmu, cpu]
+ufs = out / 'MarbleUfs.o'
+ufs_command = [str(ROOT / 'kits/marble/MarbleUfs.cpp') if v == str(source) else str(ufs) if v == str(obj_path) else v for v in command]
+ufs_command += ['-I', str(ROOT / 'drivers/NativeUfs')]
+subprocess.run(ufs_command, cwd=record['directory'], check=True)
+gpu_objects = [gmu, cpu, ufs]
 for source_path in [ROOT / 'kits/marble/MarbleAdreno.cpp', ROOT / 'kits/marble/MarbleZap.cpp', *[
     ROOT / 'drivers/NativeAdreno' / ('NativeAdreno' + name + '.cpp')
     for name in ('Memory', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit', 'Pwrup', 'Submit', 'UserClient', 'Publish', 'Timer', 'KernelTime')

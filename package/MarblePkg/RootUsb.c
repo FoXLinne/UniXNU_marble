@@ -23,6 +23,8 @@ STATIC UINTN mLastBytes;
 STATIC UINT64 mLastOffset;
 STATIC BOOLEAN mConnected;
 STATIC BOOLEAN mReceivePending;
+STATIC BOOLEAN mReceiveReady;
+STATIC INTN mReceiveBytes;
 STATIC BOOLEAN mDirty[3];
 STATIC BOOLEAN mRuntimeUsb;
 STATIC UINT8 *mExport;
@@ -202,6 +204,7 @@ STATIC EFI_STATUS InitializeUsb(VOID)
 StartUsb:
   mConnected = FALSE;
   mReceivePending = FALSE;
+  mReceiveReady = FALSE;
   if (mRuntimeUsb) mUsb->Stop();
   Status = mUsb->StartEx(&Set);
   if (EFI_ERROR(Status)) return Status;
@@ -218,6 +221,7 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
   EFI_STATUS Status = InitializeUsb();
   if (EFI_ERROR(Status)) return Status;
   mRuntimeUsb = TRUE;
+  UINTN ConnectedTicks=0;
   for (UINTN Tick=0;Tick<5000;Tick++) {
     USB_DEVICE_EVENT Event=UsbDeviceEventNoEvent;
     USB_DEVICE_EVENT_DATA Data;
@@ -226,15 +230,45 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
     if (EFI_ERROR(Status) && Status!=EFI_NOT_READY) return Status;
     if (Event==UsbDeviceEventDeviceStateChange) {
       mConnected=Data.DeviceState==0;
-      if (mConnected) {
-        Status=mUsb->Send(EP_OUT,64,mRx);
-        if (!EFI_ERROR(Status)) mReceivePending=TRUE;
-        return Status;
-      }
+    }
+    // Service enumeration requests after the physical connection event.
+    if (!mConnected) ConnectedTicks=0;
+    else if (++ConnectedTicks>=500) {
+      Status=mUsb->Send(EP_OUT,64,mRx);
+      if (!EFI_ERROR(Status)) mReceivePending=TRUE;
+      return Status;
     }
     gBS->Stall(1000);
   }
   return EFI_TIMEOUT;
+}
+
+EFI_STATUS MarbleRootUsbPoll(VOID)
+{
+  if (!mUsb) return EFI_NOT_READY;
+  for (UINTN Tick=0;Tick<64;Tick++) {
+    USB_DEVICE_EVENT Event=UsbDeviceEventNoEvent;
+    USB_DEVICE_EVENT_DATA Data;
+    UINTN Size=0;
+    EFI_STATUS Status=mUsb->HandleEvent(&Event,&Size,&Data);
+    if (EFI_ERROR(Status) && Status!=EFI_NOT_READY) return Status;
+    if (Event==UsbDeviceEventNoEvent) break;
+    if (Event==UsbDeviceEventDeviceStateChange) {
+      mConnected=Data.DeviceState==0;
+      if (!mConnected) { mReceivePending=FALSE; mReceiveReady=FALSE; }
+    } else if (Event==UsbDeviceEventTransferNotification &&
+               Data.TransferOutcome.EndpointIndex==EP_OUT && mReceivePending) {
+      mReceiveBytes=Data.TransferOutcome.Status==UsbDeviceTransferStatusCompleteOK ?
+        (INTN)Data.TransferOutcome.BytesCompleted : -1;
+      mReceiveReady=TRUE;
+    }
+  }
+  if (mConnected && !mReceivePending) {
+    EFI_STATUS Status=mUsb->Send(EP_OUT,64,mRx);
+    if (EFI_ERROR(Status)) return Status;
+    mReceivePending=TRUE;
+  }
+  return EFI_SUCCESS;
 }
 
 EFI_STATUS MarbleRootUsbContinue(VOID)
@@ -246,7 +280,8 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     INTN Size;
     if (mReceivePending) {
       mReceivePending=FALSE;
-      Size=WaitTransfer(EP_OUT);
+      if (mReceiveReady) { Size=mReceiveBytes; mReceiveReady=FALSE; }
+      else Size=WaitTransfer(EP_OUT);
     } else Size=Transfer(EP_OUT,mRx,64);
     if (Size <= 0) continue;
     mRx[Size] = 0;

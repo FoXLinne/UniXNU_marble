@@ -37,7 +37,7 @@ uint64_t physical;
 unsigned eventPosition, controlState, resource[2];
 unsigned statusEndpoint;
 bool resourceOwned[2];
-unsigned events, requests, failures, configuration, returnTicks;
+unsigned events, requests, failures, configuration, returnTicks, rebootTicks;
 unsigned controlTicks;
 unsigned enumerationTicks;
 uint32_t controllerId, initialControl, initialStatus, initialPhy, lastCommand;
@@ -52,6 +52,67 @@ uint64_t watchdogCall(uint64_t function, uint64_t *control = nullptr) {
         "x2","x3","x4","x5","x6","x7","x8","x9","x10","x11","x12","x13","x14","x15","x16","x17","memory");
     if (control) *control = x1;
     return x0;
+}
+IOMemoryMap *rebootMap(uint64_t address, unsigned length) {
+    auto *memory=IOMemoryDescriptor::withPhysicalAddress(address,length,kIODirectionInOut);
+    auto *mapping=memory ? memory->map(kIOMapInhibitCache) : nullptr;
+    OSSafeReleaseNULL(memory);
+    return mapping;
+}
+bool rebootTransfer(volatile uint32_t *channel, uint32_t command) {
+    channel[0]=command;
+    __asm__ volatile("dsb sy" ::: "memory");
+    for (unsigned tick=0;tick<1000;++tick) {
+        uint32_t status=channel[2];
+        if (status&1) return (status&15)==1;
+        IODelay(1);
+    }
+    return false;
+}
+void rebootBootloader() {
+    IOMemoryMap *core=rebootMap(0xc400000,0x3000), *config=rebootMap(0xc42d000,0x4000);
+    IOMemoryMap *observer=rebootMap(0xc440000,0x80000), *writer=nullptr, *imem=nullptr;
+    bool ready=false;
+    if (core && config && observer) {
+        auto *table=reinterpret_cast<volatile uint32_t *>(core->getVirtualAddress());
+        auto *owners=reinterpret_cast<volatile uint32_t *>(config->getVirtualAddress());
+        uint32_t version=table[0];
+        bool v7=version>=0x70000000;
+        unsigned apid=v7 ? 1024 : 512;
+        if (version>=0x50000000) for (unsigned index=0;index<(v7?1024u:512u);++index) {
+            unsigned offset=(v7?0x2000:0x900)+4*index;
+            unsigned owner=(v7?0:0x700)+4*index;
+            if (((table[offset/4]>>8)&0xfff)==0x71 && (owners[owner/4]&7)==0) apid=index;
+        }
+        if (apid<(v7?1024u:512u)) {
+            writer=rebootMap(0xc500000ULL+apid*(v7?0x1000:0x10000),0x1000);
+            if (writer) {
+                auto *rd=reinterpret_cast<volatile uint32_t *>(observer->getVirtualAddress()+apid*(v7?0x20:0x80));
+                auto *wr=reinterpret_cast<volatile uint32_t *>(writer->getVirtualAddress());
+                // marble's PMK8350 SDAM restart cell is SID 0, address 0x7148, bits 1..7.
+                if (rebootTransfer(rd,(1u<<27)|(0x48u<<4))) {
+                    uint32_t previous=rd[6]&255;
+                    wr[4]=(previous&1)|(2u<<1);
+                    __asm__ volatile("dsb sy" ::: "memory");
+                    ready=rebootTransfer(wr,0x48u<<4) && rebootTransfer(rd,(1u<<27)|(0x48u<<4)) && ((rd[6]>>1)&127)==2;
+                    IOLog("MarbleReboot: arbiter=%x apid=%u reason=%x->%x ready=%u\n",version,apid,previous,rd[6]&255,ready);
+                }
+            }
+        }
+        if (ready) {
+            imem=rebootMap(0x146aa000,0x1000);
+            if (imem) {
+                reinterpret_cast<volatile uint32_t *>(imem->getVirtualAddress())[0x65c/4]=0x77665500;
+                __asm__ volatile("dsb sy" ::: "memory");
+            }
+            native_root_block_capture_log();
+            native_runtime_usb_stop();
+            watchdogCall(0x84000009);
+        }
+    }
+    IOLog("MarbleReboot: bootloader reset returned ready=%u\n",ready);
+    OSSafeReleaseNULL(imem); OSSafeReleaseNULL(writer); OSSafeReleaseNULL(observer);
+    OSSafeReleaseNULL(config); OSSafeReleaseNULL(core);
 }
 uint8_t setup[8];
 
@@ -193,6 +254,8 @@ void handleSetup() {
         native_hid_request_home(); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 4) {
         returnTicks = 50; return;
+    } else if (setup[0] == 0x40 && !length && setup[1] == 17) {
+        rebootTicks = 50; return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 8) {
         native_marble_touch_start(); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 9) {
@@ -363,6 +426,7 @@ void worker(void *, wait_result_t) {
                 native_root_block_capture_log();
                 panic("RootStage runtime return requested");
             }
+            if (rebootTicks && !--rebootTicks) rebootBootloader();
             IOSleep(10);
         }
     }

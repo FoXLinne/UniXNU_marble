@@ -1,22 +1,27 @@
 {
   "firmware_build": "passed",
-  "storage_usb": "USB initialization and EP_OUT receive precede UFS loading; command mode consumes the same pending receive",
-  "device_observation": "Touch responsive; launchd early boot complete; APFS transactions visible on screen",
-  "live_log_read": "runtime USB unavailable",
-  "hardware_validation": "command handoff runtime USB passed; unattended boot_b runtime USB unavailable; queued receive boot pending",
+  "storage_usb": "Enumeration events are serviced during UFS reads and before kernel handoff; completed command receives are retained",
+  "device_observation": "SpringBoard and Settings displayed; physical touch opened and scrolled Settings",
+  "live_log_read": "passed",
+  "hardware_validation": "boot_b automatic startup and command handoff: RuntimeRoot status, logs and screen passed",
   "runtime_usb": {
     "active": 1,
     "failures": 0
   },
   "persistent_data": {
-    "restored_pages": 35465,
+    "restored_pages": 149905,
     "generation": 1,
-    "apfs_checkpoint": 821
+    "apfs_checkpoint": 1909,
+    "reboot_restore": "passed",
+    "kernel_window_bytes": 137363456,
+    "os_and_systemos": "retained"
   },
-  "display_frames": 0,
+  "display_frames": 492,
   "boot_install": {
     "slot": "b",
     "successful": true,
     "bytes": 14192640
-  }
+  },
+  "software_bootloader_reboot": "passed",
+  "android_a": "boot_completed=1"
 }

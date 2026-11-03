@@ -23,6 +23,7 @@ EFI_STATUS MarbleRootStorage(VOID);
 EFI_STATUS MarbleRootUsb(VOID);
 EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsbContinue(VOID);
+EFI_STATUS MarbleRootUsbPoll(VOID);
 STATIC EFI_BLOCK_IO_MEDIA mMedia = {
   .MediaId = 1, .MediaPresent = TRUE, .ReadOnly = TRUE, .BlockSize = 512, .IoAlign = 1
 };
@@ -103,6 +104,12 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     if (EFI_ERROR(Status)) Print(L"RootStage USB: %r\r\n",Status);
     Status=MarbleRootStorage();
     if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
+    for (UINTN Tick=0;Tick<500;Tick++) {
+      Status=MarbleRootUsbPoll();
+      if (EFI_ERROR(Status)) break;
+      gBS->Stall(1000);
+    }
+    if (EFI_ERROR(Status)) Print(L"UFS USB handoff: %r\r\n",Status);
   }
   if (mRootStage) {
     Status=mRootStorage ? MarbleRootUsbContinue() : MarbleRootUsb();

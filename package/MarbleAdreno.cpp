@@ -3,6 +3,7 @@
 #include <IOKit/IOLib.h>
 #include <IOKit/IODeviceMemory.h>
 #include <kern/clock.h>
+#include <kern/task.h>
 #include <IOKit/IOService.h>
 #include <IOKit/IOPlatformExpert.h>
 #include <mach/kmod.h>
@@ -14,6 +15,10 @@
 #include "MarbleAdrenoRegisters.h"
 #include "MarbleGpu.h"
 
+extern "C" volatile uint32_t native_adreno_io_coherent;
+extern "C" volatile uint32_t native_adreno_wc_enabled;
+extern "C" vm_offset_t ml_io_map_unmappable(vm_offset_t, vm_size_t, unsigned int);
+extern "C" void ml_io_unmap(vm_offset_t, vm_size_t);
 extern "C" int native_marble_zap_load(void);
 extern "C" const uint8_t marble_sqe_firmware[];
 extern "C" const uint64_t marble_sqe_firmware_size;
@@ -193,7 +198,7 @@ class CommandProcessor {
         barrier(nullptr);
         native_marble_gpu_checkpoint(MarbleGpuCpInit);
         write(GEN7_CP_SQE_CNTL, 1);
-        const NativeAdrenoCpInitConfig config{buffers[0].iova, buffers[3].iova, 1};
+        const NativeAdrenoCpInitConfig config{buffers[0].iova, buffers[3].iova, 1, true};
         uint32_t fence = 0, seen = 0;
         status = initializer.run(&io, &ring, &config, &fence);
         const NativeAdrenoRingClock clock{nullptr, now, idle};
@@ -221,8 +226,105 @@ class CommandProcessor {
         IOLog("MarbleGPU: secure mode exit status=%x fence=%u seen=%u wait=%u\n", status, fence, seen, waited);
         return status || waited ? -5 : 0;
     }
+    static bool dramPage(uint64_t pa, uint32_t *out) {
+        const vm_offset_t page = ml_io_map_unmappable(vm_offset_t(pa), 0x1000, 0x7 /* VM_WIMG_IO */);
+        if (!page) return false;
+        for (unsigned i = 0; i < 1024; ++i) out[i] = reinterpret_cast<const volatile uint32_t *>(page)[i];
+        ml_io_unmap(page, 0x1000);
+        return true;
+    }
+    static int dramWord(uint64_t physical, uint32_t *out) {
+        const vm_offset_t page=ml_io_map_unmappable(vm_offset_t(physical&~0xfffULL),0x1000,0x7);
+        if (!page) return -1;
+        *out=reinterpret_cast<const volatile uint32_t *>(page)[(physical&0xfff)/4];
+        ml_io_unmap(page,0x1000);
+        return 0;
+    }
+    bool gpuCopyPage(uint64_t src, uint64_t dst) {
+        uint32_t words[8] = {};
+        if (AdrenoPM4Type7(0x75, 5, &words[0]) != AdrenoPM4Success || AdrenoPM4Type7(0x12, 0, &words[6]) != AdrenoPM4Success) return false;
+        words[1] = 1024; words[2] = uint32_t(src); words[3] = uint32_t(src >> 32); words[4] = uint32_t(dst); words[5] = uint32_t(dst >> 32);
+        const NativeAdrenoRingClock clock{nullptr, now, idle};
+        uint32_t fence=0;
+        return !ring.submit(words,7,&fence) && !ring.wait(fence,&clock,200000,nullptr);
+    }
+    void coherenceProbe(NativeAdrenoVm *vm) {
+        uint32_t k[8] = {};
+        unsigned gCoherenceAttempts=0;
+        unsigned wanted = 1;
+        PE_parse_boot_argn("marble-gpu-coherent", &wanted, sizeof wanted);
+        if (!wanted || !vm) {
+            IOLog("MarbleGPU: coherence disabled arg=%u vm=%u\n",wanted,vm!=nullptr);
+            return;
+        }
+        constexpr uint64_t kIova = 0x18000000;
+        constexpr size_t kBytes = 4 * 4096;
+        uint8_t *buf = static_cast<uint8_t *>(IOMallocAligned(kBytes, 4096));
+        NativeAdrenoMemory mem;
+        uint64_t handle = 0;
+        IOReturn st = buf ? mem.importTask(kernel_task, uint64_t(uintptr_t(buf)), kBytes, 40, kBytes) : kIOReturnNoMemory;
+        k[0] = 1;
+        if (!st) {k[0] = 2; st = vm->map(&mem, 0, kIova, 3, 1, 3, &handle);}
+        uint64_t phys[4] = {};
+        for (size_t j = 0; !st && j < mem.spanCount(); ++j)
+            for (size_t at = 0; at < mem.spans()[j].bytes; at += 4096) phys[(mem.spans()[j].offset + at) / 4096] = mem.spans()[j].physical + at;
+        static uint32_t words[1024];
+        bool pass = false;
+        if (!st && phys[0] && phys[1] && phys[2] && phys[3]) {
+            k[0] = 3;
+            volatile uint32_t *S = reinterpret_cast<volatile uint32_t *>(buf), *D = S + 1024, *R = S + 2048, *T = S + 3072;
+            // read direction. The proof needs S's new words still dirty in a CPU cache (DRAM still holding the old ones, k[1] >= 48 of 64
+            // lines) when the GPU copies S. int-150 found every line already written back once (d0/64) while both directions were right
+            // (r1024/0 w1024/1024): the precondition, not the snoop, had failed, and the whole boot ran with per-submission maintenance.
+            // So the setup repeats until the lines are seen dirty, up to eight times (attempts in the row), and only then does the GPU copy.
+            bool dirty = false;
+            for (unsigned attempt = 0; attempt < 8 && !st && !dirty; ++attempt) {
+                gCoherenceAttempts = attempt + 1;
+                for (unsigned i = 0; i < 1024; ++i) {S[i] = 0x11110000u | i; D[i] = 0; R[i] = 0x33330000u | i; T[i] = 0x44440000u | i;}
+                st = NativeAdrenoMaintainOwnedPages(buf, kBytes, NativeAdrenoCleanInvalidate);
+                for (unsigned i = 0; i < 1024; ++i) S[i] = 0x22220000u | i;
+                __asm__ volatile("dsb sy" ::: "memory");
+                k[1] = 0;
+                if (!st && dramPage(phys[0], words)) for (unsigned i = 0; i < 1024; i += 16) k[1] += words[i] == (0x11110000u | i);
+                dirty = k[1] >= 48;
+            }
+            if (!st && dirty) {
+                k[0] = 4;
+                if (gpuCopyPage(kIova, kIova + 4096) && dramPage(phys[1], words)) {
+                    k[0] = 5;
+                    for (unsigned i = 0; i < 1024; ++i) {k[2] += words[i] == (0x22220000u | i); k[3] += words[i] == (0x11110000u | i);}
+                }
+            }
+            // write direction: T written back and kept (clean, resident), then read so its lines are present when the GPU writes
+            if (!st && k[0] == 5) st = NativeAdrenoMaintainOwnedPages(const_cast<uint32_t *>(T), 4096, NativeAdrenoClean);
+            uint32_t touch = 0;
+            for (unsigned i = 0; i < 1024; ++i) touch += T[i];
+            __asm__ volatile("dsb sy" ::: "memory");
+            if (!st && k[0] == 5 && gpuCopyPage(kIova + 8192, kIova + 12288)) {
+                k[0] = 6;
+                for (unsigned i = 0; i < 1024; ++i) k[4] += T[i] == (0x33330000u | i);
+                if (dramPage(phys[3], words)) for (unsigned i = 0; i < 1024; ++i) k[5] += words[i] == (0x33330000u | i);
+            }
+            (void)touch;   /* the loads are volatile; the sum only keeps them one expression */
+            pass = k[0] == 6 && k[1] >= 48 && k[2] == 1024 && k[4] == 1024 && k[5] == 1024;
+        }
+        k[6] = uint32_t(st);
+        if (handle) (void)vm->unmap(handle);
+        // Release the imported pages after their GPU copies and cache maintenance.
+        if (buf) (void)NativeAdrenoMaintainOwnedPages(buf, kBytes, NativeAdrenoCleanInvalidate);
+        (void)mem.release();
+        if (buf) IOFreeAligned(buf, kBytes);
+        k[7] = pass;
+        native_adreno_io_coherent = pass ? 1 : 0;
+        IOLog("MarbleGPU: coherence dirty=%u/64 attempts=%u read=%u/%u write=%u/%u status=%x stage=%u enabled=%u\n",
+            k[1],gCoherenceAttempts,k[2],k[3],k[4],k[5],k[6],k[0],k[7]);
+    }
     int publishService() {
         NativeAdrenoVm *vm = NativeAdrenoGpuContextVm();
+        native_adreno_dram_read32=dramWord;
+        // System BO user mappings are cached and require submission/completion maintenance.
+        native_adreno_wc_enabled=0;
+        coherenceProbe(vm);
         IOReturn status = submit.attach(vm, &ring);
         const NativeAdrenoTimeIo timeIo{this, readRegister};
         if (!status) status = timer.attach(&timeIo, NativeAdrenoTimeCp);
@@ -251,6 +353,14 @@ class CommandProcessor {
         return 0;
     }
 public:
+    unsigned report(char *text, unsigned capacity) const {
+        if (!registers) return 0;
+        const auto *fence = reinterpret_cast<const volatile uint32_t *>(cpu[2]);
+        return snprintf(text,capacity,"GPU hardware status=%x irq=%x fault=%x/%x protect=%x/%x IB=%x:%x/%x shadows=%u/%u/%u\n",
+            read(GEN7_RBBM_STATUS),read(GEN7_RBBM_INT_0_STATUS),read(GEN7_CP_HW_FAULT),read(GEN7_CP_BV_HW_FAULT),
+            read(GEN7_CP_PROTECT_STATUS),read(GEN7_CP_BV_PROTECT_STATUS),read(GEN7_CP_IB1_BASE_HI),read(GEN7_CP_IB1_BASE_LO),read(GEN7_CP_IB1_REM_SIZE),
+            fence ? fence[0] : 0,fence ? fence[2] : 0,fence ? fence[3] : 0);
+    }
     int start() {
         native_marble_gpu_checkpoint(MarbleGpuContext);
         int status = context();
@@ -265,6 +375,10 @@ public:
     }
 };
 CommandProcessor *commandProcessor;
+}
+
+extern "C" unsigned native_marble_adreno_report(char *text, unsigned capacity) {
+    return commandProcessor ? commandProcessor->report(text,capacity) : 0;
 }
 
 extern "C" int native_marble_adreno_start(void) {

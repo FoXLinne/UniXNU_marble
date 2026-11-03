@@ -10,6 +10,7 @@
 extern "C" void native_root_block_capture_log(void);
 extern "C" int native_marble_gmu_load(void);
 extern "C" int native_marble_adreno_start(void);
+extern "C" unsigned native_marble_adreno_report(char *, unsigned);
 
 namespace {
 struct Registers {
@@ -174,8 +175,9 @@ extern "C" void native_marble_gpu_failed(int status) {
 }
 extern "C" void native_marble_gpu_report(char *text, unsigned capacity) {
     uint64_t value = __atomic_load_n(&checkpoint, __ATOMIC_ACQUIRE);
-    snprintf(text, capacity, "MarbleGPU checkpoint=%u status=%d ready=%u",
+    unsigned used=snprintf(text, capacity, "MarbleGPU checkpoint=%u status=%d ready=%u\n",
         unsigned(value >> 32), int32_t(value), native_marble_gmu_ready());
+    if (used<capacity) native_marble_adreno_report(text+used,capacity-used);
 }
 extern "C" void native_marble_gpu_quiesce_inherited(void) {
     if (probeOnly()) return;

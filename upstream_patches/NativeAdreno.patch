@@ -21,6 +21,31 @@ index 97a39ad..68bbabc 100644
  }
  OSObject *AGXAccelerator::copyProperty(const OSSymbol *key) const
  {
+diff --git a/NativeAdrenoCpInit.cpp b/NativeAdrenoCpInit.cpp
+index 23759d2..44a6bec 100644
+--- a/NativeAdrenoCpInit.cpp
++++ b/NativeAdrenoCpInit.cpp
+@@ -47,7 +47,7 @@ IOReturn NativeAdrenoCpInit::run(const NativeAdrenoRingIo *io,NativeAdrenoRing *
+     if(AdrenoPM4Type7(CpThreadControlOpcode,1,&words[0])!=AdrenoPM4Success ||
+         AdrenoPM4Type7(CpMeInitOpcode,7,&words[2])!=AdrenoPM4Success)return poison();
+     words[1]=CpConcurrentBinDisable;
+-    words[3]=meInitMask();
++    words[3]=meInitMask()|(config->disable_dms?(1u<<11):0);
+     words[4]=0x00000003;      /* hardware contexts */
+     words[5]=0x20000000;      /* error detection */
+     words[6]=0x00000002;      /* operation mode */
+diff --git a/NativeAdrenoCpInit.h b/NativeAdrenoCpInit.h
+index 7406ff9..8f333e2 100644
+--- a/NativeAdrenoCpInit.h
++++ b/NativeAdrenoCpInit.h
+@@ -8,6 +8,7 @@ struct NativeAdrenoCpInitConfig {
+     /* Nonzero when the caller already wrote CP_SQE_INSTR_BASE before CP_SQE_CNTL, as a6xx hw_init does: the base is
+      * then read back and compared instead of rewritten after the SQE started. */
+     uint32_t sqe_base_programmed;
++    bool disable_dms=false;       /* CP_ME_INIT bit 11 for targets without ADRENO_DMS */
+ };
+ /* One-shot A7XX command-processor start sequence, not a GPU power or reset
+  * driver. The caller must have completed GMU boot, powered GX/core clocks,
 diff --git a/NativeAdrenoGpuContext.cpp b/NativeAdrenoGpuContext.cpp
 index dfac46d..7c169c1 100644
 --- a/NativeAdrenoGpuContext.cpp
@@ -495,7 +520,7 @@ index f91b19e..3984bba 100644
      IOReturn holdForDevice();
      IOReturn retireAfterQuiescence();
 diff --git a/NativeAdrenoPublish.cpp b/NativeAdrenoPublish.cpp
-index 51f3a27..6b99f69 100644
+index 51f3a27..ad90859 100644
 --- a/NativeAdrenoPublish.cpp
 +++ b/NativeAdrenoPublish.cpp
 @@ -18,6 +18,7 @@
@@ -653,16 +678,42 @@ index 51f3a27..6b99f69 100644
      g.lock=IOLockAlloc();
      NativeAdrenoGpuPublished *service=new NativeAdrenoGpuPublished;
      if(!g.lock || !service || !service->init() || !service->attach(IOService::getPlatform())) {
-@@ -751,6 +782,36 @@ extern "C" uint32_t native_adreno_publish_stats(uint32_t *closed)
+@@ -751,6 +782,62 @@ extern "C" uint32_t native_adreno_publish_stats(uint32_t *closed)
      if(closed)*closed=g.closed;
      return g.opened;
  }
 +extern "C" volatile uint32_t native_adreno_bo_memory[6];
++extern "C" {extern volatile uint32_t native_adreno_fence_wait[8];}
 +extern "C" unsigned native_adreno_runtime_report(char *text,unsigned capacity)
 +{
 +    const auto &d=native_adreno_metal_diag;
 +    unsigned used=snprintf(text,capacity,"NativeMetal opens=%u closes=%u calls=%u status=%x unmaps=%u process=%s\n%s\n%s\n",
 +        d.opens,d.closes,d.calls,d.last_status,d.forced_unmaps,d.opener[0],d.report,d.report2);
++    if(g.ring && used+256<capacity)
++        used+=snprintf(text+used,capacity-used,"GPU fence submitted=%u completed=%u rptr=%u requested=%u observed=%u timeouts=%u\n",
++            g.ring->lastSubmitted(),g.ring->completedFence(),g.ring->readPointer(),
++            native_adreno_fence_wait[2],native_adreno_fence_wait[3],native_adreno_fence_wait[1]);
++    extern volatile uint32_t native_adreno_ring_log[4][4+112],native_adreno_ring_log_count;
++    if(g.ring && g.ring->lastSubmitted()!=g.ring->completedFence() && native_adreno_ring_log_count && used+1200<capacity) {
++        const volatile uint32_t *row=native_adreno_ring_log[(native_adreno_ring_log_count-1)&3];
++        for(unsigned slot=0;slot<4;++slot)
++            if(native_adreno_ring_log[slot][0]==g.ring->completedFence()+1)row=native_adreno_ring_log[slot];
++        used+=snprintf(text+used,capacity-used,"GPU ring fence=%u start=%u end=%u words=%u\n",row[0],row[1],row[2],row[3]);
++        for(unsigned i=0;i<row[3] && i<112 && used+32<capacity;++i)
++            used+=snprintf(text+used,capacity-used,"%u:%08x%c",row[1]+i,row[4+i],i%8==7?'\n':' ');
++        if(used+2<capacity)used+=snprintf(text+used,capacity-used,"\n");
++        extern volatile uint32_t native_adreno_ib_log[4][4+28],native_adreno_ib_tail[4][28];
++        for(unsigned slot=0;slot<4;++slot) {
++            const volatile uint32_t *ib=native_adreno_ib_log[slot];
++            if(ib[0]!=row[0] || used+800>=capacity)continue;
++            used+=snprintf(text+used,capacity-used,"GPU IB fence=%u iova=%x:%x bytes=%u\n",ib[0],ib[2],ib[1],ib[3]);
++            for(unsigned i=0;i<28;++i)used+=snprintf(text+used,capacity-used,"%08x%c",ib[4+i],i%8==7?'\n':' ');
++            used+=snprintf(text+used,capacity-used,"\n");
++            used+=snprintf(text+used,capacity-used,"GPU IB tail\n");
++            for(unsigned i=0;i<28;++i)used+=snprintf(text+used,capacity-used,"%08x%c",native_adreno_ib_tail[slot][i],i%8==7?'\n':' ');
++            used+=snprintf(text+used,capacity-used,"\n");
++        }
++    }
 +    used+=snprintf(text+used,capacity-used,"NativeMetal system BOs=%u spans=%u failures=%u status=%x used=%u MiB peak=%u MiB\n",
 +        native_adreno_bo_memory[0],native_adreno_bo_memory[1],native_adreno_bo_memory[2],native_adreno_bo_memory[3],
 +        native_adreno_bo_memory[4],native_adreno_bo_memory[5]);
@@ -690,6 +741,29 @@ index 51f3a27..6b99f69 100644
  extern "C" IOService *native_adreno_published_service()
  {
      return g.service;
+diff --git a/NativeAdrenoRing.cpp b/NativeAdrenoRing.cpp
+index 1711ea1..62e9fd3 100644
+--- a/NativeAdrenoRing.cpp
++++ b/NativeAdrenoRing.cpp
+@@ -55,7 +55,7 @@ enum : uint32_t {
+     RingPerfctrSramInitStatus = 0x050f,
+     RingWaitRegMem = 0x3c,
+     RingWaitWriteEq = 3,
+-    RingResetWords = 26,
++    RingResetWords = 28,
+     RingFenceWords = 7,       /* kernel bring-up submissions: TYPE4 scratch + TYPE7 event */
+     RingFramedFenceWords = 31,/* user submissions: scratch, BV timestamp, BR wait, ring timestamp */
+     RingBvFenceOffset = 12    /* msm_rbmemptrs.bv_fence; +8 is bv_rptr, the BV RPTR shadow hw init programs */
+@@ -102,7 +102,8 @@ IOReturn NativeAdrenoRing::emitPrologue(uint32_t at,bool reset,uint32_t *end)
+         if(n)n=packet(words,n,RingWaitTimestamp,wait,4);
+         if(n)n=packet(words,n,RingThreadControl,&syncBoth,1);
+         if(n)n=packet(words,n,RingResetContextState,&all,1);
+-        if(n)n=packet(words,n,RingThreadControl,&syncBoth,1);
++        if(n)n=packet(words,n,RingThreadControl,&br,1);
++        if(n)n=packet(words,n,RingThreadControl,&both,1);
+         if(n)n=packet(words,n,RingFenceOpcode,&lrz,1);
+         if(n)n=packet(words,n,RingThreadControl,&br,1);
+         if(n && AdrenoPM4Type4(RingPerfctrSramInit,1,&words[n])==AdrenoPM4Success) {words[n+1]=1;n+=2;} else n=0;
 diff --git a/NativeAdrenoService.cpp b/NativeAdrenoService.cpp
 index b8c5cbf..d065a6b 100644
 --- a/NativeAdrenoService.cpp
@@ -728,10 +802,18 @@ index 4ed1bcc..fe61a42 100644
      /* output_bits: the context's output size, at most the SMMU's ID2.OAS (Linux uses OAS for stage 1). */
      IOReturn prepare(NativeAdrenoMemory *tables,unsigned upper,uint64_t iova,size_t bytes,
 diff --git a/NativeAdrenoSubmit.cpp b/NativeAdrenoSubmit.cpp
-index 238ebb6..3a088a4 100644
+index 238ebb6..d955ce9 100644
 --- a/NativeAdrenoSubmit.cpp
 +++ b/NativeAdrenoSubmit.cpp
-@@ -40,6 +40,7 @@ IOReturn NativeAdrenoSubmit::attach(NativeAdrenoVm *vm,NativeAdrenoRing *ring)
+@@ -21,6 +21,7 @@ extern "C" {volatile uint32_t native_adreno_wc_audit[6];}
+ extern "C" {volatile uint32_t native_adreno_fence_wait[8];}
+ /* The IBs of the last submissions: [slot] fence, iova low/high, bytes, then the first 28 dwords of the first IB (read as the kernel maps it). */
+ extern "C" {volatile uint32_t native_adreno_ib_log[4][4+28];volatile uint32_t native_adreno_ib_log_count;}
++extern "C" {volatile uint32_t native_adreno_ib_tail[4][28];}
+ IOReturn NativeAdrenoSubmit::poison()
+ {
+     poisoned_=true;return kIOReturnIOError;
+@@ -40,6 +41,7 @@ IOReturn NativeAdrenoSubmit::attach(NativeAdrenoVm *vm,NativeAdrenoRing *ring)
      if(attached_ || poisoned_ || vm_ || ring_)return kIOReturnBusy;
      if(!vm || !ring || vm->poisoned() || ring->poisoned())return kIOReturnBadArgument;
      vm_=vm;ring_=ring;attached_=true;stats_={};
@@ -739,7 +821,7 @@ index 238ebb6..3a088a4 100644
      return kIOReturnSuccess;
  }
  IOReturn NativeAdrenoSubmit::release(Job &job)
-@@ -131,9 +132,9 @@ IOReturn NativeAdrenoSubmit::submit(const NativeAdrenoSubmitBuffer *buffers,size
+@@ -131,9 +133,9 @@ IOReturn NativeAdrenoSubmit::submit(const NativeAdrenoSubmitBuffer *buffers,size
          native_adreno_wc_audit[5]=native_adreno_wc_audit[5]+reset;
          uint32_t lines=0,dirty=0,stale=0;size_t budget=SubmitAuditBytes;
          /* The re-assertion above is the correction and runs every time; the audit only detects, and found no dirty line in int-141's
@@ -751,7 +833,7 @@ index 238ebb6..3a088a4 100644
          if(!audit_now)budget=0;
          for(size_t i=0;i<count && budget && !audited;++i) {   /* a failed re-assertion skips the audit and ends the trust */
              const size_t bytes=buffers[i].bytes<budget?(size_t)buffers[i].bytes:budget;
-@@ -148,12 +149,13 @@ IOReturn NativeAdrenoSubmit::submit(const NativeAdrenoSubmitBuffer *buffers,size
+@@ -148,12 +150,13 @@ IOReturn NativeAdrenoSubmit::submit(const NativeAdrenoSubmitBuffer *buffers,size
          }
          if(dirty || (audited && audited!=kIOReturnUnsupported)) {
              vm_->distrustWriteCombined();
@@ -768,7 +850,7 @@ index 238ebb6..3a088a4 100644
          (void)vm_->sampleWord(buffers[0].iova,&ignored,&after);
          native_adreno_coherence[0]=native_adreno_coherence[0]+1;
          native_adreno_coherence[1]=cached;native_adreno_coherence[2]=before;native_adreno_coherence[3]=after;
-@@ -163,8 +165,8 @@ IOReturn NativeAdrenoSubmit::submit(const NativeAdrenoSubmitBuffer *buffers,size
+@@ -163,15 +166,22 @@ IOReturn NativeAdrenoSubmit::submit(const NativeAdrenoSubmitBuffer *buffers,size
              }
              native_adreno_coherence[4]=native_adreno_coherence[4]+1;
          }
@@ -778,7 +860,22 @@ index 238ebb6..3a088a4 100644
      if(status) {
          for(size_t i=0;i<handle_count;++i) {vm_->retireJobAfterCompletion(handles[i]);++stats_.references_retired;}
          return status;
-@@ -208,6 +210,21 @@ IOReturn NativeAdrenoSubmit::observeFence(uint32_t fence,const NativeAdrenoRingC
+     }
+-    {
++    if(native_adreno_ib_log_count<4) {
+         const uint32_t slot=native_adreno_ib_log_count&3;uint32_t head[28];
+         (void)vm_->peekWords(buffers[0].iova,head,28);
++        {
++            const size_t tailCount=buffers[0].bytes/4<28?buffers[0].bytes/4:28;
++            uint32_t tail[28]={};
++            const uint64_t tailIova=buffers[0].iova+buffers[0].bytes-tailCount*4;
++            (void)vm_->peekWords(tailIova,tail,tailCount);
++            for(unsigned i=0;i<28;++i)native_adreno_ib_tail[slot][i]=tail[i];
++        }
+         native_adreno_ib_log[slot][0]=ring_->lastSubmitted()+1;native_adreno_ib_log[slot][1]=(uint32_t)buffers[0].iova;
+         native_adreno_ib_log[slot][2]=(uint32_t)(buffers[0].iova>>32);native_adreno_ib_log[slot][3]=(uint32_t)buffers[0].bytes;
+         for(unsigned i=0;i<28;++i)native_adreno_ib_log[slot][4+i]=head[i];
+@@ -208,6 +218,21 @@ IOReturn NativeAdrenoSubmit::observeFence(uint32_t fence,const NativeAdrenoRingC
      if(result==NativeAdrenoRingFenceTimeout)return kIOReturnTimeout;
      return kIOReturnSuccess;
  }
@@ -800,7 +897,7 @@ index 238ebb6..3a088a4 100644
  IOReturn NativeAdrenoSubmit::wait(uint32_t fence,const NativeAdrenoRingClock *clock,
      uint32_t timeout_us)
  {
-@@ -224,7 +241,7 @@ IOReturn NativeAdrenoSubmit::wait(uint32_t fence,const NativeAdrenoRingClock *cl
+@@ -224,7 +249,7 @@ IOReturn NativeAdrenoSubmit::wait(uint32_t fence,const NativeAdrenoRingClock *cl
              ++stats_.timeouts;
              native_adreno_fence_wait[1]=native_adreno_fence_wait[1]+1;native_adreno_fence_wait[2]=fence;native_adreno_fence_wait[3]=observed;
              native_adreno_fence_wait[4]=ring_->lastSubmitted();native_adreno_fence_wait[5]=ring_->completedFence();
@@ -809,7 +906,7 @@ index 238ebb6..3a088a4 100644
          }
          return kIOReturnSuccess;
      }
-@@ -235,8 +252,9 @@ IOReturn NativeAdrenoSubmit::wait(uint32_t fence,const NativeAdrenoRingClock *cl
+@@ -235,8 +260,9 @@ IOReturn NativeAdrenoSubmit::wait(uint32_t fence,const NativeAdrenoRingClock *cl
          ++stats_.timeouts;
          native_adreno_fence_wait[1]=native_adreno_fence_wait[1]+1;native_adreno_fence_wait[2]=fence;native_adreno_fence_wait[3]=observed;
          native_adreno_fence_wait[4]=ring_->lastSubmitted();native_adreno_fence_wait[5]=ring_->completedFence();
@@ -1095,6 +1192,40 @@ index de8e1a0..95dc743 100644
      if(up!=kIOReturnSuccess) {std::fprintf(stderr,"host gpu: context bring-up failed %d at step %u\n",up,report.step);return false;}
      const NativeAdrenoMemory &ringmem=context->buffer(1),&memory=context->buffer(2);
      memptrs=static_cast<volatile uint32_t *>(memory.mapping());
+diff --git a/tests/test_cpinit.cpp b/tests/test_cpinit.cpp
+index 4ad7fbb..ee89d60 100644
+--- a/tests/test_cpinit.cpp
++++ b/tests/test_cpinit.cpp
+@@ -37,10 +37,10 @@ static void reset(void)
+ int main()
+ {
+     /* Exact SQE base and CP_ME_INIT sequence through the ring. */
+-    {
++    for (bool disable_dms : {false,true}) {
+         reset();NativeAdrenoRing ring;CHECK(ring.attach(&io,&cache,ringmem,sizeof(ringmem),0x100000,fencemem,sizeof(fencemem),0x108000)==kIOReturnSuccess);
+         NativeAdrenoCpInit init;
+-        NativeAdrenoCpInitConfig config{0x200000,0x300000,0};
++        NativeAdrenoCpInitConfig config{0x200000,0x300000,0,disable_dms};
+         uint32_t fence=0;
+         CHECK(init.run(&io,&ring,&config,&fence)==kIOReturnSuccess && fence==1 && init.completed());
+         bool paired=false;
+@@ -50,7 +50,8 @@ int main()
+         CHECK((ringmem[0]>>16&0x7fu)==0x17 && (ringmem[0]&0x3fffu)==1);
+         CHECK(ringmem[1]==(1u<<27));
+         CHECK((ringmem[2]>>16&0x7fu)==0x48 && (ringmem[2]&0x3fffu)==7);
+-        CHECK(ringmem[3]==NativeAdrenoCpInit::meInitMask() && ringmem[3]==0x14b);
++        CHECK(NativeAdrenoCpInit::meInitMask()==0x14b);
++        CHECK(ringmem[3]==(disable_dms ? 0x94bu : 0x14bu));
+         CHECK(ringmem[4]==3 && ringmem[5]==0x20000000 && ringmem[6]==2);
+         CHECK(ringmem[7]==0x300000 && ringmem[8]==0 && ringmem[9]==(1u<<31));
+         CHECK(peer.regs[0x0807]==17); /* ten init words plus the seven-word fence */
+@@ -90,5 +91,5 @@ int main()
+         CHECK(init.run(&io,&ring,&config,&fence)==kIOReturnIOError && init.poisoned());
+         CHECK(ring.poisoned() && ring.detach()==kIOReturnBusy);
+     }
+-    std::printf("PASS: 1 exact CP_ME_INIT sequence with SQE base, 8 pre-MMIO refusals, 1 SQE write failure and 1 ring commit failure over a software CP register peer\n");
++    std::printf("PASS: 2 exact CP_ME_INIT sequences with SQE base and DMS selection, 8 pre-MMIO refusals, 1 SQE write failure and 1 ring commit failure over a software CP register peer\n");
+ }
 diff --git a/tests/test_memory.cpp b/tests/test_memory.cpp
 index 5337f12..b3c8fa3 100644
 --- a/tests/test_memory.cpp
@@ -1143,6 +1274,40 @@ index 5337f12..b3c8fa3 100644
      std::printf("PASS: %u allocation profiles, %u allocation/cache/lifetime failure controls, %u argument/CPU refusal controls\n",profiles,failure_controls,argument_controls);
      std::puts("Host IOKit doubles only; no real kernel allocation, physical provenance, cache/DMA, SMMU, GPU or fence qualification");
  }
+diff --git a/tests/test_ring.cpp b/tests/test_ring.cpp
+index 5bdd1d8..5376f6e 100644
+--- a/tests/test_ring.cpp
++++ b/tests/test_ring.cpp
+@@ -111,20 +111,21 @@ int main()
+         uint32_t end=0;
+         r.requestContextReset();
+         CHECK(r.submitFramed(words,1,&end)==kIOReturnSuccess && end==1);
+-        CHECK(peer.writes.back().first==0x0807 && peer.writes.back().second==11+26+1+31);
++        CHECK(peer.writes.back().first==0x0807 && peer.writes.back().second==11+28+1+31);
+         auto op=[](uint32_t header) {return (header>>28)==7u?(header>>16)&0x7fu:0xffu;};
+         CHECK(op(ring[0])==0x17 && ring[1]==0x80000001u);
+         CHECK(op(ring[2])==0x14 && ring[3]==0 && ring[4]==0x108004 && ring[5]==0 && ring[6]==0);   /* wait for the last fence */
+         CHECK(op(ring[7])==0x17 && ring[8]==0x80000003u && op(ring[9])==0x1f && ring[10]==0xf);
+-        CHECK(op(ring[11])==0x17 && ring[12]==0x80000003u && op(ring[13])==0x46 && ring[14]==0x26);
+-        CHECK(op(ring[15])==0x17 && ring[16]==0x80000001u && (ring[17]>>8&0x3ffffu)==0x50e && ring[18]==1);
+-        CHECK(op(ring[19])==0x46 && ring[20]==0x31);
+-        CHECK(op(ring[21])==0x3c && ring[22]==3 && ring[23]==0x50f && ring[24]==0 && ring[25]==1 && ring[26]==1 && ring[27]==0);
+-        CHECK(op(ring[28])==0x46 && ring[29]==0x32 && op(ring[30])==0x46 && ring[31]==0x33 && op(ring[32])==0x26);
+-        CHECK(op(ring[33])==0x17 && ring[34]==3 && op(ring[35])==0x65 && ring[36]==0x101 && ring[37]==words[0]);
++        CHECK(op(ring[11])==0x17 && ring[12]==0x80000001u);
++        CHECK(op(ring[13])==0x17 && ring[14]==3 && op(ring[15])==0x46 && ring[16]==0x26);
++        CHECK(op(ring[17])==0x17 && ring[18]==0x80000001u && (ring[19]>>8&0x3ffffu)==0x50e && ring[20]==1);
++        CHECK(op(ring[21])==0x46 && ring[22]==0x31);
++        CHECK(op(ring[23])==0x3c && ring[24]==3 && ring[25]==0x50f && ring[26]==0 && ring[27]==1 && ring[28]==1 && ring[29]==0);
++        CHECK(op(ring[30])==0x46 && ring[31]==0x32 && op(ring[32])==0x46 && ring[33]==0x33 && op(ring[34])==0x26);
++        CHECK(op(ring[35])==0x17 && ring[36]==3 && op(ring[37])==0x65 && ring[38]==0x101 && ring[39]==words[0]);
+         fence[1]=1;
+         CHECK(r.submitFramed(words,1,&end)==kIOReturnSuccess && end==2);
+-        CHECK(peer.writes.back().second==69+11+1+31 && op(ring[69+2])==0x46 && op(ring[69+7])==0x17 && ring[69+8]==3);
++        CHECK(peer.writes.back().second==71+11+1+31 && op(ring[71+2])==0x46 && op(ring[71+7])==0x17 && ring[71+8]==3);
+     }
+     /* Wrap-around emission keeps packets contiguous modulo the ring. */
+     {
 diff --git a/tests/test_submit.cpp b/tests/test_submit.cpp
 index cc256d7..d22fd2e 100644
 --- a/tests/test_submit.cpp

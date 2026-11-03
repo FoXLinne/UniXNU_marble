@@ -10,6 +10,7 @@
 
 STATIC ROOT_STAGE_TABLE *mStorage;
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage);
+EFI_STATUS MarbleRootUsbPoll(VOID);
 STATIC EFI_STATUS StorageReturn(VOID) { return MarbleRootUsbResume(mStorage); }
 
 EFI_STATUS MarbleRootStorage(VOID) {
@@ -88,6 +89,10 @@ EFI_STATUS MarbleRootStorage(VOID) {
       UINTN Size=(UINTN)MIN((UINT64)0x100000,Bytes-At);
       Status=Block->ReadBlocks(Block,Block->Media->MediaId,First+(Offset+At)/Sector,Size,Data+At);
       if (EFI_ERROR(Status)) goto Done;
+      EFI_STATUS UsbStatus=MarbleRootUsbPoll();
+      if (EFI_ERROR(UsbStatus) && UsbStatus!=EFI_NOT_READY) {
+        Print(L"UFS USB: %r\r\n",UsbStatus);
+      }
     }
   }
   {
