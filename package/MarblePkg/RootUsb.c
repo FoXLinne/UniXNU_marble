@@ -22,6 +22,7 @@ STATIC UINTN mDisk;
 STATIC UINTN mLastBytes;
 STATIC UINT64 mLastOffset;
 STATIC BOOLEAN mConnected;
+STATIC BOOLEAN mReceivePending;
 STATIC BOOLEAN mDirty[3];
 STATIC BOOLEAN mRuntimeUsb;
 STATIC UINT8 *mExport;
@@ -200,6 +201,7 @@ STATIC EFI_STATUS InitializeUsb(VOID)
   if (EFI_ERROR(Status)) return Status;
 StartUsb:
   mConnected = FALSE;
+  mReceivePending = FALSE;
   if (mRuntimeUsb) mUsb->Stop();
   Status = mUsb->StartEx(&Set);
   if (EFI_ERROR(Status)) return Status;
@@ -224,7 +226,11 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
     if (EFI_ERROR(Status) && Status!=EFI_NOT_READY) return Status;
     if (Event==UsbDeviceEventDeviceStateChange) {
       mConnected=Data.DeviceState==0;
-      if (mConnected) return EFI_SUCCESS;
+      if (mConnected) {
+        Status=mUsb->Send(EP_OUT,64,mRx);
+        if (!EFI_ERROR(Status)) mReceivePending=TRUE;
+        return Status;
+      }
     }
     gBS->Stall(1000);
   }
@@ -237,7 +243,11 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
   Print(L"UniXNU RootStage USB\r\n");
   for (;;) {
     if (!mConnected) { WaitTransfer(0xff); continue; }
-    INTN Size = Transfer(EP_OUT,mRx,64);
+    INTN Size;
+    if (mReceivePending) {
+      mReceivePending=FALSE;
+      Size=WaitTransfer(EP_OUT);
+    } else Size=Transfer(EP_OUT,mRx,64);
     if (Size <= 0) continue;
     mRx[Size] = 0;
     CHAR8 *Command = (CHAR8 *)mRx;

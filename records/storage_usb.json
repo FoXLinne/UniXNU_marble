@@ -1,9 +1,9 @@
 {
   "firmware_build": "passed",
-  "storage_usb": "USB initialization precedes UFS loading; storage and commands share one RootStage table and USB session",
+  "storage_usb": "USB initialization and EP_OUT receive precede UFS loading; command mode consumes the same pending receive",
   "device_observation": "Touch responsive; launchd early boot complete; APFS transactions visible on screen",
   "live_log_read": "runtime USB unavailable",
-  "hardware_validation": "RootStage status and continue succeeded; RuntimeRoot logs/status/screen reads succeeded",
+  "hardware_validation": "command handoff runtime USB passed; unattended boot_b runtime USB unavailable; queued receive boot pending",
   "runtime_usb": {
     "active": 1,
     "failures": 0
@@ -13,5 +13,10 @@
     "generation": 1,
     "apfs_checkpoint": 821
   },
-  "display_frames": 0
+  "display_frames": 0,
+  "boot_install": {
+    "slot": "b",
+    "successful": true,
+    "bytes": 14192640
+  }
 }
