@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read retained firmware output and XNU memory through RootStage USB."""
 import argparse
+from bisect import bisect_right
 import json
 from pathlib import Path
 import re
@@ -62,7 +63,14 @@ def kernel_symbols(kernel):
     from kc_image import Image
     collection = Image(kernel.read_bytes())
     image = Image(collection.data, collection.entries['com.apple.kernel'][1])
-    return {name: address for address, names in image.symbols().items() for name in names}
+    symbols = {name: address for address, names in image.symbols().items() for name in names}
+    for identifier, (_, offset) in collection.entries.items():
+        if identifier == 'com.apple.kernel':
+            continue
+        component = Image(collection.data, offset)
+        for address in component.function_starts():
+            symbols[f'{identifier}+{address - component.base:#x}'] = address
+    return symbols
 
 
 def capture(channel, kernel, output):
@@ -83,6 +91,28 @@ def capture(channel, kernel, output):
         result['translation'] = {'ttbr1': hex(memory.ttbr1), 'tcr': hex(memory.tcr),
                                  'base': hex(memory.base), 'size': memory.size}
         symbols = kernel_symbols(kernel)
+        addresses = sorted((address, name) for name, address in symbols.items())
+        starts = [address for address, name in addresses]
+        def symbolicate(raw):
+            address = raw & ((1 << memory.bits) - 1)
+            address |= ((1 << 64) - 1) ^ ((1 << memory.bits) - 1)
+            index = bisect_right(starts, address) - 1
+            resolved = {'address': hex(address)}
+            if index >= 0 and address - starts[index] < 65536:
+                resolved.update(symbol=addresses[index][1], offset=hex(address - starts[index]))
+            return resolved
+        frames = [symbolicate(int(value, 16)) for value in
+                  re.findall(r'Resident frame \d+: fp=[0-9A-Fa-f]+ lr=([0-9A-Fa-f]+)', console)]
+        result['frames'] = frames
+        for label in ('message', 'format'):
+            match = re.search(r'Resident ' + label + r': ([^\r\n]+)', console)
+            if match:
+                result[label] = match[1]
+        result['globals'] = {}
+        for name, size in (('_mac_late', 4), ('_amfi', 8), ('_armcpu_registered', 4),
+                           ('_armcpu_timer_interrupts', 8), ('_armcpu_ipi_sent', 8)):
+            if name in symbols:
+                result['globals'][name] = int.from_bytes(memory.read(symbols[name], size), 'little')
         address, = struct.unpack('<Q', memory.read(symbols['_msgbufp'], 8))
         header = memory.read(address, 24)
         (output / 'msgbuf-header.bin').write_bytes(header)
@@ -96,12 +126,14 @@ def capture(channel, kernel, output):
         result['msgbuf'] = {'address': hex(address), 'data': hex(data), 'size': size,
                             'cursor': cursor, 'reader': reader, 'exported': len(ring)}
         varargs = re.search(r'Resident varargs: ([0-9A-Fa-f ]+)', console)
-        if varargs and 'PAC failure' in console:
+        if varargs and '(saved state: %p%s)' in console:
             values = [int(value, 16) for value in varargs[1].split()]
             if len(values) > 3:
                 state = values[3]
                 (output / 'saved-state.bin').write_bytes(memory.read(state, 512))
                 result['saved_state'] = hex(state)
+                result['exception_pc'] = symbolicate(values[1])
+                result['exception_lr'] = symbolicate(values[2])
         frame = re.search(r'Resident fp=([0-9A-Fa-f]+)', console)
         if frame:
             address = int(frame[1], 16) & ~4095

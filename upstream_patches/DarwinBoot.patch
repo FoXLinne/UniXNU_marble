@@ -1,5 +1,5 @@
 diff --git a/DarwinBootPkg/Driver/DarwinBoot.c b/DarwinBootPkg/Driver/DarwinBoot.c
-index 25ce2d2..ebc0523 100644
+index 3b6cafc..560d751 100644
 --- a/DarwinBootPkg/Driver/DarwinBoot.c
 +++ b/DarwinBootPkg/Driver/DarwinBoot.c
 @@ -12,6 +12,9 @@
@@ -12,44 +12,43 @@ index 25ce2d2..ebc0523 100644
  #include "BootArgs.h"
  #include "BootVideo.h"
  #include "PackedRamdisk.h"
-@@ -125,7 +128,8 @@ ParseKernel (CONST UINT8 *Data, UINTN Size, KERNEL *Kernel)
-   BOOLEAN  Executable;
- 
-   if ((Size < 32) || (U32 (Data) != 0xfeedfacf) || (U32 (Data + 4) != 0x100000c) ||
--      (U32 (Data + 8) != 0) || (U32 (Data + 12) != 2)) {
-+      (((U32 (Data + 8) & 0x00ffffff) != 0) && ((U32 (Data + 8) & 0x00ffffff) != 2)) ||
-+      ((U32 (Data + 12) != 2) && (U32 (Data + 12) != 12))) {
-     return EFI_UNSUPPORTED;
-   }
-   if (U32 (Data + 20) > Size - 32) { return EFI_LOAD_ERROR; }
-@@ -183,7 +187,7 @@ ParseKernel (CONST UINT8 *Data, UINTN Size, KERNEL *Kernel)
+@@ -235,7 +238,7 @@ ParseKernel (CONST UINT8 *Data, UINTN Size, KERNEL *Kernel)
+       if ((Index - Name == sizeof ("com.apple.kernel") - 1) &&
+           (CompareMem (Data + Offset + Name, "com.apple.kernel", sizeof ("com.apple.kernel")) == 0)) {
+         if (Found || (U32 (Data + Header + 12) != 2) ||
+-            (U32 (Data + Header + 8) != U32 (Data + 8)) ||
++            ((U32 (Data + Header + 8) & 0x00ffffff) != (U32 (Data + 8) & 0x00ffffff)) ||
+             ((U32 (Data + Header + 24) & 0x80000000) == 0)) { return EFI_LOAD_ERROR; }
+         Found = TRUE;
+         Status = ParseKernelHeader (Data, Size, Header, &Member);
+@@ -267,7 +270,7 @@ ParseKernel (CONST UINT8 *Data, UINTN Size, KERNEL *Kernel)
  
  STATIC
  BOOLEAN
--AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN ParentPath, UINTN *RamdiskOffset, UINTN *TrustCacheOffset, UINTN *AddonOffset, UINT64 *WindowSize, BOOLEAN *KeepPacked)
-+AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN ParentPath, UINTN *RamdiskOffset, UINTN *TrustCacheOffset, UINTN *AddonOffset, UINTN *RootOffset, UINT64 *WindowSize, BOOLEAN *KeepPacked)
+-AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN ParentPath, UINTN *RamdiskOffset, UINTN *TrustCacheOffset, UINTN *AddonOffset, UINTN *PolicyOffset, UINT64 *WindowSize, BOOLEAN *KeepPacked)
++AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN ParentPath, UINTN *RamdiskOffset, UINTN *TrustCacheOffset, UINTN *AddonOffset, UINTN *PolicyOffset, UINTN *RootOffset, UINT64 *WindowSize, BOOLEAN *KeepPacked)
  {
    UINT32 Properties;
    UINT32 Children;
-@@ -194,6 +198,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
-   UINTN  TrustCandidate;
+@@ -279,6 +282,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
    UINTN  AddonCandidate;
+   UINTN  PolicyCandidate;
    UINTN  MemoryCandidate;
 +  UINTN  RootCandidate;
    CONST UINT8 *Name;
    UINTN  NameLength;
  
-@@ -203,6 +208,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
-   TrustCandidate = MAX_UINTN;
+@@ -289,6 +293,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
    AddonCandidate = MAX_UINTN;
+   PolicyCandidate = MAX_UINTN;
    MemoryCandidate = MAX_UINTN;
 +  RootCandidate = MAX_UINTN;
    if ((Depth > 64) || (Size - *Offset < 8)) { return FALSE; }
    Properties = U32 (Data + *Offset);
    Children = U32 (Data + *Offset + 4);
-@@ -236,6 +242,10 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
-       if ((AddonCandidate != MAX_UINTN) || (Length != 16)) { return FALSE; }
-       AddonCandidate = *Offset;
+@@ -326,6 +331,10 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+       if ((PolicyCandidate != MAX_UINTN) || (Length != 16)) { return FALSE; }
+       PolicyCandidate = *Offset;
      }
 +    if (AsciiStrCmp ((CONST CHAR8 *)(Data + *Offset - 36), "RootDisks") == 0) {
 +      if ((RootCandidate != MAX_UINTN) || (Length != 16)) { return FALSE; }
@@ -58,7 +57,7 @@ index 25ce2d2..ebc0523 100644
      if (AsciiStrCmp ((CONST CHAR8 *)(Data + *Offset - 36), "darwinboot-memory-size") == 0) {
        if ((MemoryCandidate != MAX_UINTN) || (Length != 8)) { return FALSE; }
        MemoryCandidate = *Offset;
-@@ -265,9 +275,13 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+@@ -359,9 +368,13 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
      *WindowSize = U64 (Data + MemoryCandidate);
      if (!DarwinWindowSizeValid (*WindowSize)) { return FALSE; }
    }
@@ -68,12 +67,12 @@ index 25ce2d2..ebc0523 100644
 +  }
    if (Children > (Size - *Offset) / 8) { return FALSE; }
    for (Index = 0; Index < Children; Index++) {
--    if (!AdtNode (Data, Size, Offset, Depth + 1, Path, RamdiskOffset, TrustCacheOffset, AddonOffset, WindowSize, KeepPacked)) { return FALSE; }
-+    if (!AdtNode (Data, Size, Offset, Depth + 1, Path, RamdiskOffset, TrustCacheOffset, AddonOffset, RootOffset, WindowSize, KeepPacked)) { return FALSE; }
+-    if (!AdtNode (Data, Size, Offset, Depth + 1, Path, RamdiskOffset, TrustCacheOffset, AddonOffset, PolicyOffset, WindowSize, KeepPacked)) { return FALSE; }
++    if (!AdtNode (Data, Size, Offset, Depth + 1, Path, RamdiskOffset, TrustCacheOffset, AddonOffset, PolicyOffset, RootOffset, WindowSize, KeepPacked)) { return FALSE; }
    }
    return TRUE;
  }
-@@ -489,8 +503,13 @@ Boot (
+@@ -583,12 +596,17 @@ Boot (
    BOOLEAN                         KeepPacked;
    UINTN                           TrustCacheOffset;
    UINT64                          TrustCacheAddress;
@@ -82,12 +81,16 @@ index 25ce2d2..ebc0523 100644
 +  UINT64                          KernelAddress;
    UINTN                           AddonOffset;
    UINT64                          AddonAddress;
+   VOID                            *Policies;
+   UINTN                           PolicySize;
+   UINTN                           PolicyOffset;
+   UINT64                          PolicyAddress;
 +  UINTN                           RootOffset;
 +  ROOT_STAGE_TABLE                *RootStage;
    DARWIN_BOOT_ARGS                *Args;
    EFI_MEMORY_DESCRIPTOR           *Map;
    UINTN                           Capacity;
-@@ -523,6 +542,7 @@ Boot (
+@@ -621,6 +639,7 @@ Boot (
        CommandLine[Index] = (CHAR8)Request->BootArgs[Index];
      }
    }
@@ -95,7 +98,7 @@ index 25ce2d2..ebc0523 100644
    Root = NULL;
    Image = NULL;
    Tree = NULL;
-@@ -532,12 +552,26 @@ Boot (
+@@ -632,12 +651,26 @@ Boot (
    TreePath = NULL;
    Map = NULL;
    Address = 0;
@@ -123,19 +126,20 @@ index 25ce2d2..ebc0523 100644
    if (EFI_ERROR (Status)) { goto Fail; }
    Status = ParseKernel (Image, ImageSize, &Kernel);
    if (EFI_ERROR (Status)) { goto Fail; }
-@@ -552,9 +586,10 @@ Boot (
+@@ -652,10 +685,11 @@ Boot (
    RamdiskOffset = MAX_UINTN;
    TrustCacheOffset = MAX_UINTN;
    AddonOffset = MAX_UINTN;
 +  RootOffset = MAX_UINTN;
+   PolicyOffset = MAX_UINTN;
    WindowSize = 0;
    KeepPacked = FALSE;
--  if (!AdtNode (Tree, TreeSize, &Offset, 0, 3, &RamdiskOffset, &TrustCacheOffset, &AddonOffset, &WindowSize, &KeepPacked) || (Offset != TreeSize)) { Status = EFI_COMPROMISED_DATA; goto Fail; }
-+  if (!AdtNode (Tree, TreeSize, &Offset, 0, 3, &RamdiskOffset, &TrustCacheOffset, &AddonOffset, &RootOffset, &WindowSize, &KeepPacked) || (Offset != TreeSize)) { Status = EFI_COMPROMISED_DATA; goto Fail; }
+-  if (!AdtNode (Tree, TreeSize, &Offset, 0, 3, &RamdiskOffset, &TrustCacheOffset, &AddonOffset, &PolicyOffset, &WindowSize, &KeepPacked) || (Offset != TreeSize)) { Status = EFI_COMPROMISED_DATA; goto Fail; }
++  if (!AdtNode (Tree, TreeSize, &Offset, 0, 3, &RamdiskOffset, &TrustCacheOffset, &AddonOffset, &PolicyOffset, &RootOffset, &WindowSize, &KeepPacked) || (Offset != TreeSize)) { Status = EFI_COMPROMISED_DATA; goto Fail; }
    if (KeepPacked && (!RamdiskPacked || (RamdiskOffset == MAX_UINTN))) { Status = EFI_COMPROMISED_DATA; goto Fail; }
    if (WindowSize == 0) { WindowSize = WINDOW_SIZE; }
    if (Kernel.Base > MAX_UINT64 - WindowSize) { Status = EFI_LOAD_ERROR; goto Fail; }
-@@ -599,14 +634,33 @@ Boot (
+@@ -719,14 +753,33 @@ Boot (
    }
    Status = ReadBootVideo (Video);
    if (EFI_ERROR (Status)) { goto Fail; }
@@ -171,10 +175,10 @@ index 25ce2d2..ebc0523 100644
 -  AddonAddress = ALIGN_VALUE (TrustCacheAddress + TrustCacheSize, SIZE_16KB);
 +  TrustCacheAddress = Address;
 +  AddonAddress = ALIGN_VALUE (RamdiskAddress + RamdiskBytes, SIZE_16KB);
-   Used = ALIGN_VALUE (AddonAddress + AddonSize, SIZE_16KB) - Address;
+   PolicyAddress = ALIGN_VALUE (AddonAddress + AddonSize, SIZE_16KB);
+   Used = ALIGN_VALUE (PolicyAddress + PolicySize, SIZE_16KB) - Address;
    if (Used > WindowSize - BLOCK_SIZE) {
-     Print (L"DARWINBOOT: used %lu window %lu kernel %lu ramdisk %lu\n", (UINT64)Used, (UINT64)WindowSize, (UINT64)(Kernel.End - Kernel.Base), (UINT64)RamdiskBytes);
-@@ -615,22 +669,26 @@ Boot (
+@@ -736,22 +789,26 @@ Boot (
    }
    ZeroMem ((VOID *)(UINTN)Address, (UINTN)Used);
    for (Index = 0; Index < Kernel.Count; Index++) {
@@ -204,7 +208,7 @@ index 25ce2d2..ebc0523 100644
    if (Request->Ramdisk != NULL) {
      if (KeepPacked) { CopyMem ((VOID *)(UINTN)RamdiskAddress, Request->Ramdisk, Request->RamdiskSize); }
      else { CopyRamdisk ((VOID *)(UINTN)RamdiskAddress, Request->Ramdisk, Request->RamdiskSize, RamdiskPacked); }
-@@ -640,7 +698,7 @@ Boot (
+@@ -761,7 +818,7 @@ Boot (
    if (TrustCaches != NULL) {
      CopyMem ((VOID *)(UINTN)TrustCacheAddress, TrustCaches, TrustCacheSize);
      WriteUnaligned64 ((UINT64 *)(UINTN)(TreeAddress + TrustCacheOffset), TrustCacheAddress);
@@ -213,7 +217,7 @@ index 25ce2d2..ebc0523 100644
      FreePool (TrustCaches); TrustCaches = NULL;
    }
    if (Addon != NULL) {
-@@ -656,7 +714,7 @@ Boot (
+@@ -783,7 +840,7 @@ Boot (
    Status = GetMap (&Map, &Capacity, &MapSize, &Key, &Stride);
    if (EFI_ERROR (Status)) { goto Fail; }
    Print (L"DARWINBOOT: ARM64 va=0x%lx pa=0x%lx args=0x%lx entry=0x%lx owned=0x%lx\n",
@@ -221,8 +225,8 @@ index 25ce2d2..ebc0523 100644
 +         Args->VirtualBase, Address, ArgsAddress, KernelAddress + Kernel.Entry - Kernel.Base, (UINT64)WindowSize);
    Print (L"DARWINBOOT: video base=0x%lx display=%lu row=%lu width=%lu height=%lu depth=%lu\n",
           Video[0], Video[1], Video[2], Video[3], Video[4], Video[5]);
-   Print (L"DARWINBOOT: inputs validated; exiting boot services\n");
-@@ -667,20 +725,30 @@ Boot (
+   Print (L"DARWINBOOT: command line: %a\n", CommandLine);
+@@ -795,20 +852,30 @@ Boot (
    // screen first. This is what stays visible if the kernel never draws.
    //
    DEBUG ((DEBUG_ERROR, "\fDARWINBOOT: hand-off to the kernel\n\n"));
@@ -245,7 +249,7 @@ index 25ce2d2..ebc0523 100644
    DEBUG ((DEBUG_ERROR, "ID_AA64MMFR0_EL1 0x%lx  (PARange %lu, 4 KiB granule %a)\n", READ_SYSREG (id_aa64mmfr0_el1),
            READ_SYSREG (id_aa64mmfr0_el1) & 0xF, (((READ_SYSREG (id_aa64mmfr0_el1) >> 28) & 0xF) == 0xF) ? "NOT supported" : "supported"));
    DEBUG ((DEBUG_ERROR, "ID_AA64PFR0_EL1  0x%lx\n", READ_SYSREG (id_aa64pfr0_el1)));
-   DEBUG ((DEBUG_ERROR, "\nExiting boot services. A green bar across the top\nmeans the kernel entry code ran.\n"));
+   DEBUG ((DEBUG_ERROR, "\nExiting boot services. A green bar across the top\nmarks the loader handoff before the kernel branch.\n"));
 +  if (RootStage) {
 +    Status=DarwinResidentRun(RootStage,ArgsAddress,KernelAddress+Kernel.Entry-Kernel.Base,
 +        Address,WindowSize,Video[0],Video[2]*Video[4],Map,MapSize,Stride);
@@ -259,7 +263,7 @@ index 25ce2d2..ebc0523 100644
    for (Attempt = 0; Attempt < 3; Attempt++) {
      MapSize = Capacity;
      Status = gBS->GetMemoryMap (&MapSize, Map, &Key, &Stride, &Version);
-@@ -690,7 +758,7 @@ Boot (
+@@ -818,7 +885,7 @@ Boot (
      }
      Status = gBS->ExitBootServices (mImage, Key);
      if (!EFI_ERROR (Status)) {
@@ -268,8 +272,8 @@ index 25ce2d2..ebc0523 100644
        CpuDeadLoop ();
      }
      if (Status != EFI_INVALID_PARAMETER) { CpuDeadLoop (); }
-@@ -705,18 +773,21 @@ Fail:
-   if (Addon != NULL) { FreePool (Addon); }
+@@ -834,18 +901,21 @@ Fail:
+   if (Policies != NULL) { FreePool (Policies); }
    if (TreePath != NULL) { FreePool (TreePath); }
    if (Map != NULL) { FreePool (Map); }
 -  if (Address != 0) { gBS->FreePages (Address, EFI_SIZE_TO_PAGES (WindowSize)); }
@@ -291,7 +295,7 @@ index 25ce2d2..ebc0523 100644
    return gBS->UninstallMultipleProtocolInterfaces (ImageHandle, &gUniXNULoaderProtocolGuid, &mLoader, NULL);
  }
  
-@@ -734,7 +805,10 @@ DarwinBootEntry (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+@@ -863,7 +933,10 @@ DarwinBootEntry (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
    Status = gBS->HandleProtocol (ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&Loaded);
    if (EFI_ERROR (Status)) { return Status; }
    mImage = ImageHandle;
@@ -316,7 +320,7 @@ index 3a90c96..fd4fa05 100644
  [Packages]
    MdePkg/MdePkg.dec
 diff --git a/DarwinBootPkg/Driver/Entry.S b/DarwinBootPkg/Driver/Entry.S
-index 890d4df..374de59 100644
+index a7a55c2..59f212d 100644
 --- a/DarwinBootPkg/Driver/Entry.S
 +++ b/DarwinBootPkg/Driver/Entry.S
 @@ -5,10 +5,15 @@ ASM_FUNC(DarwinCurrentEl)
@@ -333,8 +337,8 @@ index 890d4df..374de59 100644
 +  msr cntv_ctl_el0, xzr
 +  dsb sy
 +  isb
-   // Breadcrumb: a green bar (BGRA 0xFF00FF00) over the top 1/16 of the frame
-   // buffer shows that this code ran, whatever the kernel does afterwards.
+   // Paint the top 1/16 of the framebuffer green (BGRA 0xFF00FF00)
+   // before cache maintenance, MMU shutdown and the branch to the kernel.
    cbz x4, 2f
 @@ -40,6 +45,17 @@ ASM_FUNC(DarwinEnter)
    ic iallu
@@ -355,7 +359,7 @@ index 890d4df..374de59 100644
    bic x4, x4, #1
    bic x4, x4, #4
 diff --git a/Test/packed_ramdisk.py b/Test/packed_ramdisk.py
-index 824c949..2284570 100644
+index 87501ab..495dc15 100644
 --- a/Test/packed_ramdisk.py
 +++ b/Test/packed_ramdisk.py
 @@ -6,7 +6,7 @@ from pathlib import Path
@@ -376,6 +380,36 @@ index 824c949..2284570 100644
      blob = path.read_bytes()
      encoded_hash = hashlib.sha256(blob).hexdigest()
      if blob[:8] == b'DBRDISK1':
+diff --git a/Test/test-kernel-parser.py b/Test/test-kernel-parser.py
+index bb21e23..406b697 100644
+--- a/Test/test-kernel-parser.py
++++ b/Test/test-kernel-parser.py
+@@ -62,6 +62,25 @@ with tempfile.TemporaryDirectory(prefix='darwinboot-kernel-') as tmp:
+         struct.pack_into(fmt, bad, offset, value)
+         assert check(bad) == status, (offset, value)
+     assert check(blob[:31]) == 3
++    collection = bytearray(8192)
++    root_segment = struct.pack('<II16sQQQQiiII', 0x19, 72, b'__TEXT', base, 8192, 0, 8192, 5, 5, 0, 0)
++    member = struct.pack('<8I', 0xfeedfacf, 0x100000c, 0xc0000002, 2, 2, 360, 0x80000000, 0)
++    entry = struct.pack('<IIQQII', 0x80000035, 56, base + 4096, 4096, 32, 0) + b'com.apple.kernel\0' + bytes(7)
++    struct.pack_into('<8I', collection, 0, 0xfeedfacf, 0x100000c, 2, 12, 3, 416, 0, 0)
++    collection[32:448] = root_segment + thread + entry
++    collection[4096:4488] = member + root_segment + thread
++    for root_subtype in (2, 0x80000002, 0xc0000002):
++        for member_subtype in (2, 0x80000002, 0xc0000002):
++            struct.pack_into('<I', collection, 8, root_subtype)
++            struct.pack_into('<I', collection, 4096 + 8, member_subtype)
++            assert check(collection) == 0, (root_subtype, member_subtype)
++    for offset, fmt, value in ((4096 + 8, '<I', 3), (4096 + 24, '<I', 0),
++                               (392 + 8, '<Q', base + 8192),
++                               (4096 + 32 + 72 + 272, '<Q', base + 2048),
++                               (4096 + 32 + 40, '<Q', 4096)):
++        bad = bytearray(collection)
++        struct.pack_into(fmt, bad, offset, value)
++        assert check(bad) == 1, (offset, value)
+     for filename in sys.argv[1:]:
+         assert check(Path(filename).read_bytes()) == 0, filename
+         print('PASS: actual kernel', filename)
 diff --git a/DarwinBootPkg/Driver/Resident.c b/DarwinBootPkg/Driver/Resident.c
 new file mode 100644
 index 0000000..b77575d

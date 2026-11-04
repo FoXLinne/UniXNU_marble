@@ -8,6 +8,9 @@ ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT.parent
 SOURCES = {
     'UniXNU': (WORK / 'UniXNU', None),
+    'UniXNUBuild': (WORK / 'upstream/UniXNU', []),
+    'ArmDTPlatform': (WORK / 'UniXNU/drivers/ArmDTPlatform', None),
+    'XnuPrelink': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/XnuPrelink', None),
     'DarwinBoot': (WORK / 'UniXNU/drivers/DarwinBoot', None),
     'ArmCpu': (WORK / 'UniXNU/drivers/ArmCpu', None),
     'NativeAdreno': (WORK / 'UniXNU/drivers/NativeAdreno', None),
@@ -17,6 +20,7 @@ SOURCES = {
     'NativeGeniSpi': (WORK / 'UniXNU/drivers/NativeGeniSpi', None),
     'NativeKeyStoreEvents': (WORK / 'UniXNU/drivers/NativeKeyStoreEvents', None),
     'Mu_Basecore': (WORK / 'marble_hackios/Mu-Silicium/Mu_Basecore', []),
+    'MarbleBinaries': (WORK / 'marble_hackios/Mu-Silicium/Binaries', []),
     'ArmSmmu4K': (WORK / 'UniXNU/kits/ArmSmmu4K', None),
     'NativePrelink': (WORK / 'UniXNU/kits/NativePrelink', None),
     'Mu_Silicium': (WORK / 'marble_hackios/Mu-Silicium', [

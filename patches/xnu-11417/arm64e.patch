@@ -27,6 +27,20 @@ index 1b3361e..554272c 100644
  $(SOBJS): .SFLAGS
  .SFLAGS: ALWAYS
  	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
+diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+index fc185bb..8eab2a8 100644
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -688,6 +688,9 @@ bsd_init(void)
+ 	bsd_init_kprintf("calling bsd_bufferinit\n");
+ 	bsd_bufferinit();
+ 
++	extern void native_marble_pmgr_start(void);
++	native_marble_pmgr_start();
++
+ 	/*
+ 	 * Initialize the calendar.
+ 	 */
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
 index 240bbf6..6bde2a7 100644
 --- a/bsd/kern/kern_exec.c
@@ -978,7 +992,7 @@ index 2b3b974..c300580 100644
  .SFLAGS: ALWAYS
  	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
 diff --git a/libkern/c++/OSKext.cpp b/libkern/c++/OSKext.cpp
-index 8c4d510..0585896 100644
+index 8c4d510..8473166 100644
 --- a/libkern/c++/OSKext.cpp
 +++ b/libkern/c++/OSKext.cpp
 @@ -74,6 +74,15 @@ extern "C" {
@@ -997,7 +1011,7 @@ index 8c4d510..0585896 100644
  
  #include <IOKit/IOLib.h>
  #include <IOKit/IOCatalogue.h>
-@@ -8451,9 +8460,67 @@ OSKext::start(bool startDependenciesFlag)
+@@ -8451,9 +8460,63 @@ OSKext::start(bool startDependenciesFlag)
  	OSKextLogKextInfo(this, kmod_info->address, kmod_info->size, firehose_tracepoint_code_load);
  	result = OSRuntimeInitializeCPP(this);
  	if (result == KERN_SUCCESS) {
@@ -1052,11 +1066,7 @@ index 8c4d510..0585896 100644
 +		    : "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
 +		    "x17", "x30", "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v16", "v17", "v18", "v19", "v20",
 +		    "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "cc", "memory");
-+		result = (int)x0;
-+		if (result != KERN_SUCCESS) {
-+			OSKextLog(this, kOSKextLogErrorLevel | kOSKextLogLoadFlag,
-+			    "Kext %s early security initializer failed: %d", getIdentifierCString(), result);
-+		}
++		/* The registration routine ends in sysctl_register_oid, whose return type is void. */
 +#else
 +		panic("NativePrelink: early security initializer requires the MAC framework");
 +#endif

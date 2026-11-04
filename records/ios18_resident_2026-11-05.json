@@ -3,40 +3,125 @@
   "device": "marble",
   "profile": "ios-18.7.11-22H384",
   "architecture": "arm64e",
+  "sources": {
+    "UniXNU": {
+      "commit": "1a01c2afa197d975d04da892325c56b6b14aaecb",
+      "remote": "https://github.com/UniXNU/UniXNU.git"
+    },
+    "UniXNUBuild": {
+      "commit": "350ddc2a23dcaea7d74d8a469259c2efcec3e4a9",
+      "remote": "https://github.com/UniXNU/UniXNU.git"
+    },
+    "ArmDTPlatform": {
+      "commit": "417ff95d6a6e8607ddea9309ec45c3bfd4a67c60",
+      "remote": "https://github.com/UniXNU/ArmDTPlatform.git"
+    },
+    "XnuPrelink": {
+      "commit": "2b39ff73dc4d49ad64e349c711ca4aa8d1dd64ea",
+      "remote": "https://github.com/UniXNU/XnuPrelink.git"
+    },
+    "DarwinBoot": {
+      "commit": "3c75734014cdab0acd9541e88057b7606ee7ae08",
+      "remote": "https://github.com/UniXNU/DarwinBoot.git"
+    },
+    "ArmCpu": {
+      "commit": "93a5030c5d983d0ef90f0fca93879d6e36ad1ba8",
+      "remote": "https://github.com/UniXNU/ArmCpu.git"
+    },
+    "NativeAdreno": {
+      "commit": "b686b9054f57d393c80195b82568a09f8ca106a2",
+      "remote": "https://github.com/UniXNU/NativeAdreno.git"
+    },
+    "NativeMetal": {
+      "commit": "c6d29caad6d880cc8204ebe3bc34d77479a3255d",
+      "remote": "https://github.com/UniXNU/NativeMetal.git"
+    },
+    "NativeMobileDisplay": {
+      "commit": "8666a9950c9699b368931d18cac92c0fdb2ce9c0",
+      "remote": "https://github.com/UniXNU/NativeMobileDisplay.git"
+    },
+    "NativeRamBlock": {
+      "commit": "d4d22d9819b0162eda49f6402235dddc2279410d",
+      "remote": "https://github.com/UniXNU/NativeRamBlock.git"
+    },
+    "NativeGeniSpi": {
+      "commit": "b5399b5646c4d7415deec6d887fd51715a97a024",
+      "remote": "https://github.com/UniXNU/NativeGeniSpi.git"
+    },
+    "NativeKeyStoreEvents": {
+      "commit": "e59bac4ad1ac8825919ae94da8440a64d8ab90b3",
+      "remote": "https://github.com/UniXNU/NativeKeyStoreEvents.git"
+    },
+    "Mu_Basecore": {
+      "commit": "3c9c7b2e211e62d2a954ad760a36fe05adc43aa3",
+      "remote": "https://github.com/microsoft/mu_basecore.git"
+    },
+    "MarbleBinaries": {
+      "commit": "a1501e0c2e642d6ac0d8f52c85af2a67b75a7799",
+      "remote": "https://github.com/Project-Silicium/Device-Binaries.git"
+    },
+    "ArmSmmu4K": {
+      "commit": "4d0d6598b1a36aeec3de01091893fa6660e49388",
+      "remote": "https://github.com/UniXNU/ArmSmmu4K.git"
+    },
+    "NativePrelink": {
+      "commit": "2b6ffb50117eee820b98aca9bd51b5c7dfb2970e",
+      "remote": "https://github.com/UniXNU/NativePrelink.git"
+    },
+    "Mu_Silicium": {
+      "commit": "42fe563791e51bf5500c2e470ed294ca0c94b97c",
+      "remote": "https://github.com/Project-Silicium/Mu-Silicium.git"
+    }
+  },
   "hardware": {
-    "last_capture": "outputs/UniXNU_marble/ios18_arm64e/boot-amfi-registered.txt",
-    "amfi_interface_check": "passed",
-    "failure": "PAC failure from kernel with IA key while branching to x8",
-    "failure_pc": "0xfffffff007f9ae84",
-    "failure_symbol": "sleh_irq+0x30",
-    "last_usb_serial": "556fdfe",
-    "last_usb_state": "device",
-    "resident_memory_export_tested": false,
-    "resident_retry_tested": false,
-    "ios_userspace_boot_verified": false
+    "kernel_entry_verified": true,
+    "cpu_registration": 1,
+    "timer_interrupts": 103,
+    "amfi_interface_registered": true,
+    "pmgr_original_nub_discovered": true,
+    "corecrypto_post": "all tests PASSED",
+    "apfs_initialized": true,
+    "root_device_published": false,
+    "failure": "Failed to mount root device",
+    "entrypoint": "resident RAM probe with no root disks",
+    "device_resets": 0,
+    "resident_replacements": 3,
+    "usb_capture_verified": true,
+    "resident_retry_verified": true,
+    "ios_userspace_boot_verified": false,
+    "capture": "outputs/UniXNU_marble/ios18_arm64e/session-20261105/pmgr-retry/after",
+    "kernel_log": "records/ios18_root_kernel.log.gz",
+    "firmware_log": "records/ios18_root_firmware.log.gz"
   },
-  "changes": [
-    "Twenty-page bootstrap page table pool",
-    "CNTV_CTL_EL0 on the Gunyah timer path",
-    "Original iOS 18 AMFI early registration",
-    "Sign-extension masking in the retained kernel page-table reader",
-    "Read-only USB export of retained kernel memory",
-    "Firmware return with watchdog disabled",
-    "Kernel replacement within the retained firmware session",
-    "Capture required before kernel replacement"
-  ],
+  "build": {
+    "release_lto": "pass",
+    "native": "outputs/UniXNU_marble/ios18_arm64e/kernel.native.macho",
+    "native_sha256": "0d99912c6d764b9fce635ae609515b96bd2016e893b1bdabc6601b6085ff05ce",
+    "prelinked": "outputs/UniXNU_marble/ios18_arm64e/kernel.fileset.macho",
+    "prelinked_sha256": "9c7a263226927a565ec9d3ec9186a8b67a7ef7bf7cbe38bbb928ae7e63052068",
+    "unresolved_references": 0,
+    "stubbed_functions": 0,
+    "pmgr_contract": {
+      "kernelcache": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/ipsw/22H384/kernelcache.decompressed",
+      "profile": "ios-18.7.11-22H384",
+      "provider_offset": "0x88",
+      "read": "original null-provider path returns UINT32_MAX",
+      "write": "original null-provider path returns without a hardware operation",
+      "qualified_functions": [
+        "0xfffffff00916b680",
+        "0xfffffff0091695e4"
+      ]
+    }
+  },
   "verification": {
-    "release_lto_build": "pass",
-    "strict_prelink_unresolved": 0,
-    "strict_prelink_stubs": 0,
-    "uefi_build": "pass",
+    "fileset_host_tests": 54,
+    "fileset_host_result": "pass",
+    "darwinboot_real_native_and_fileset": "pass",
+    "darwinboot_nested_capability_and_bounds": "pass",
+    "current_native_required_for_bootimg": "pass",
+    "changed_and_old_probe_refused_before_usb": "pass",
     "xnu_patch_reverse_check": "pass",
-    "host_memory_capture": "38-bit TTBR1, page crossing, full ring bytes, chronological order, unmapped-page rejection",
-    "host_retry": "capture failure prevents upload; successful capture permits replacement; reset command absent"
+    "uefi_build": "pass"
   },
-  "image": "outputs/UniXNU_marble/ios18_arm64e/probe-early/marble_ios18_early.img",
-  "tools": [
-    "scripts/capture_ios18_resident.py",
-    "scripts/retry_ios18_resident.py"
-  ]
+  "next_action": "Connect the iOS 18 root images through the source-built IOStorageFamily adapter"
 }

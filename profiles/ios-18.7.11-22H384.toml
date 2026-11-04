@@ -25,17 +25,17 @@ fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustC
 
 [kernel]
 patch = "patches/xnu-11417/arm64e.patch"
-roots = ["com.apple.driver.AppleARMPlatform", "com.apple.filesystems.apfs", "com.apple.driver.AppleMobileFileIntegrity"]
+roots = ["com.apple.driver.AppleARMPlatform", "com.apple.filesystems.apfs", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.kec.pthread"]
 
 [kernel.prelink]
 kernelcache_sha256 = "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70"
-early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff00907fcb4"
+early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff009083bcc"
 
 [upstream]
-commit = "3fa5ff5f409398c0555a9561d6437ce5d4c3b3b7"
+commit = "350ddc2a23dcaea7d74d8a469259c2efcec3e4a9"
 scripts_patch = "patches/UniXNU/ios18-static-if.patch"
 prelink_url = "https://github.com/UniXNU/XnuPrelink.git"
-prelink_commit = "b1888c12456c46a2226d63c794465dfcee08d465"
+prelink_commit = "2b39ff73dc4d49ad64e349c711ca4aa8d1dd64ea"
 prelink_patch = "patches/XnuPrelink/ios18-layout.patch"
 
 [payload]

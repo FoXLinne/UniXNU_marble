@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build resident iOS 18 kernel checkpoints with USB exception reporting."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -9,7 +10,7 @@ import struct
 import subprocess
 import tomllib
 
-from build_ios18_arm64e import DEVICE, PROFILE, read_adt, write_adt
+from build_ios18_arm64e import DEVICE, PROFILE, read_adt, write_adt, validate_prelink
 from build_pac_uefi import build_applications, pack_boot_image
 
 
@@ -80,7 +81,10 @@ def exception_filter(out, platform):
 
 
 def patch_kernel(root, kernel, out, platform, mode):
+    baseline = validate_prelink(root)
     data = bytearray(kernel.read_bytes())
+    if hashlib.sha256(data).hexdigest() != baseline['candidate_sha256']:
+        raise RuntimeError('Probe input differs from the current prelinked kernel')
     native = (root / 'kernel.native.macho').read_bytes()
     native_base, _, native_file, _ = segments(native)['__TEXT_EXEC']
     cache_base, _, cache_file, _ = segments(data)['__TEXT_EXEC']
@@ -142,6 +146,10 @@ def patch_kernel(root, kernel, out, platform, mode):
             data[at + 8:at + 8 + len(code)] = code
         else:
             struct.pack_into('<2I', data, at, 0xf9440690, 0xd61f0200)
+    report.update(source_kernel=str((root / 'kernel.fileset.macho').resolve()),
+                  native_sha256=baseline['inputs']['native_sha256'],
+                  source_sha256=baseline['candidate_sha256'],
+                  kernel_sha256=hashlib.sha256(data).hexdigest())
     kernel.write_bytes(data)
     (out / 'checkpoint.json').write_text(json.dumps(report, indent=2) + '\n')
 

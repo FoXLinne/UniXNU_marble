@@ -9,6 +9,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import tomllib
 from types import SimpleNamespace
 
@@ -140,33 +141,70 @@ def fetch(out, upstream, profile):
     return cache
 
 
+def qualify_pmgr(out, profile):
+    cache = out / 'ipsw' / profile['ipsw']['build'] / 'kernelcache.decompressed'
+    raw = cache.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != profile['kernel']['prelink']['kernelcache_sha256']:
+        raise RuntimeError('PMGR qualification requires the pinned original collection')
+    def read(address, count):
+        at = 32
+        for _ in range(struct.unpack_from('<I', raw, 16)[0]):
+            command, size = struct.unpack_from('<II', raw, at)
+            if command == 0x19:
+                virtual, _, offset, backed = struct.unpack_from('<4Q', raw, at + 24)
+                if virtual <= address and address + count <= virtual + backed:
+                    return raw[offset + address - virtual:offset + address - virtual + count]
+            at += size
+        raise RuntimeError('PMGR contract address is outside the collection')
+    contracts = {
+        0xfffffff00916b680: [0xd503245f, 0xf9404400, 0xb40001a0, 0xf9400010, 0xaa0003f1,
+            0xf2f9b431, 0xdac11a30, 0xd2814311, 0x8b110210, 0xf9400208, 0xaa1003e1,
+            0xaa0803f0, 0xaa0103f1, 0xf2e7fcb1, 0xd71f0a11, 0x12800000, 0xd65f03c0],
+        0xfffffff0091695e4: [0xd503245f, 0xf9404400, 0xb40001a0, 0xf9400010, 0xaa0003f1,
+            0xf2f9b431, 0xdac11a30, 0xd2814411, 0x8b110210, 0xf9400208, 0xaa1003e2,
+            0xaa0803f0, 0xaa0203f1, 0xf2e3a5d1, 0xd71f0a11, 0xd65f03c0],
+    }
+    for address, words in contracts.items():
+        if read(address, len(words) * 4) != struct.pack('<' + 'I' * len(words), *words):
+            raise RuntimeError(f'Original absent-provider PMGR contract changed at {address:#x}')
+    (out / 'pmgr-contract.json').write_text(json.dumps({
+        'kernelcache': str(cache), 'profile': profile['os']['name'], 'provider_offset': '0x88',
+        'read': 'original null-provider path returns UINT32_MAX',
+        'write': 'original null-provider path returns without a hardware operation',
+        'qualified_functions': [hex(a) for a in contracts],
+    }, indent=2) + '\n')
+
+
 def build_board(tree, env):
     record_path = tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json'
     record = json.loads(record_path.read_text().strip().rstrip(','))
     out = tree / 'build/marble-boot'
     out.mkdir(parents=True, exist_ok=True)
-    obj = out / 'MarbleBootWatchdog.o'
-    command = []
-    arguments = iter(record['arguments'])
-    for argument in arguments:
-        if argument == record['file']:
-            command.append(str(DEVICE / 'package/MarbleBootWatchdog.cpp'))
-        elif argument in ('-o', '-MF', '-MT', '-MJ'):
-            next(arguments)
-            if argument == '-o':
-                command += ['-o', str(obj)]
-        else:
-            command.append(argument)
-    command += ['-Werror', '-Wno-c99-designator', '-Wno-missing-include-dirs']
+    objects = []
     with (out / 'compile.log').open('w') as log:
-        subprocess.run(command, cwd=record['directory'], env=env,
-                       stdout=log, stderr=subprocess.STDOUT, check=True)
-    magic, cpu, subtype, kind = struct.unpack_from('<4I', obj.read_bytes())
-    if (magic, cpu, subtype & 0xffffff, kind) != (0xfeedfacf, 0x100000c, 2, 1):
-        raise RuntimeError('Marble boot archive must contain arm64e objects')
+        for name in ('MarbleBootWatchdog', 'MarblePmgr'):
+            obj = out / (name + '.o')
+            command = []
+            arguments = iter(record['arguments'])
+            for argument in arguments:
+                if argument == record['file']:
+                    command.append(str(DEVICE / 'package' / (name + '.cpp')))
+                elif argument in ('-o', '-MF', '-MT', '-MJ'):
+                    next(arguments)
+                    if argument == '-o':
+                        command += ['-o', str(obj)]
+                else:
+                    command.append(argument)
+            command += ['-Werror', '-Wno-c99-designator', '-Wno-missing-include-dirs']
+            subprocess.run(command, cwd=record['directory'], env=env,
+                           stdout=log, stderr=subprocess.STDOUT, check=True)
+            magic, cpu, subtype, kind = struct.unpack_from('<4I', obj.read_bytes())
+            if (magic, cpu, subtype & 0xffffff, kind) != (0xfeedfacf, 0x100000c, 2, 1):
+                raise RuntimeError('Marble boot archive must contain arm64e objects')
+            objects.append(obj)
     archive = out / 'libMarbleBoot.a'
     archive.unlink(missing_ok=True)
-    subprocess.run(['xcrun', 'ar', 'rcs', archive, obj], env=env, check=True)
+    subprocess.run(['xcrun', 'ar', 'rcs', archive, *objects], env=env, check=True)
 
 
 def read_adt(data, offset=0):
@@ -194,8 +232,7 @@ def write_adt(tree):
     return bytes(data) + b''.join(write_adt(child) for child in children)
 
 
-def boot_image(out, upstream, stack, profile, unique_chip_id):
-    from build_pac_uefi import build_applications, pack_boot_image
+def validate_prelink(out):
     report = json.loads((out / 'kernel.fileset.json').read_text())
     if (not report.get('mapping_complete') or not report.get('candidate_written') or
             report.get('allow_missing') or any(report.get('stubbed', {}).values())):
@@ -206,6 +243,16 @@ def boot_image(out, upstream, stack, profile, unique_chip_id):
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     if digest != report['candidate_sha256']:
         raise RuntimeError('Kernel differs from the complete prelink report')
+    native_digest = hashlib.sha256((out / 'kernel.native.macho').read_bytes()).hexdigest()
+    if report['inputs']['native_sha256'] != native_digest:
+        raise RuntimeError('Prelink differs from the current compiled kernel; rerun prelink')
+    return report
+
+
+def boot_image(out, upstream, stack, profile, unique_chip_id):
+    from build_pac_uefi import build_applications, pack_boot_image
+    report = validate_prelink(out)
+    kernel = out / 'kernel.fileset.macho'
     if report['inputs']['kernelcache_sha256'] != profile['kernel']['prelink']['kernelcache_sha256']:
         raise RuntimeError('Kernel collection differs from the iOS 18 profile')
     if not unique_chip_id or not 0 < int(unique_chip_id, 16) < 1 << 64:
@@ -320,6 +367,7 @@ def main():
         env = dict(env, XNU_BOOTSTRAP='0', XNU_SOURCE_CORECRYPTO14='1',
                    XNU_ARM_DT_PLATFORM='1', XNU_ARMCPU='1',
                    XNU_EXTRA_LD_ARCHIVES=f'-Wl,-force_load,{tree}/build/marble-boot/libMarbleBoot.a')
+        qualify_pmgr(out, profile)
         build_board(tree, env)
         with (out / 'kernel-build.log').open('w') as log:
             subprocess.run(['bash', str(tree / 'scripts/build-xnu-4k-baseline.sh')],
@@ -332,16 +380,30 @@ def main():
     apply_patch(tool, DEVICE / profile['upstream']['prelink_patch'])
     native = out / 'kernel.native.macho'
     output = out / 'kernel.fileset.macho'
-    command = [sys.executable, str(tool / 'emit_prelink.py'), '--kernel', str(native),
-               '--prelinked', str(cache), '--slide=-0x1000000', '--output', str(output)]
-    for root in profile['kernel']['roots']:
-        command += ['--root', root]
-    if profile['kernel']['prelink'].get('early_security_init'):
-        command += ['--early-security-init', profile['kernel']['prelink']['early_security_init']]
-    with (out / 'prelink.log').open('w') as log:
-        result = subprocess.run(command, cwd=tree, env=env, stdout=log, stderr=subprocess.STDOUT)
-    if result.returncode:
-        raise SystemExit(f'prelink: {out / "prelink.log"}')
+    with tempfile.TemporaryDirectory(prefix='prelink-', dir=out) as temporary:
+        candidate = Path(temporary) / output.name
+        mapping = output.with_suffix('.map.json')
+        if mapping.is_file():
+            shutil.copyfile(mapping, candidate.with_suffix('.map.json'))
+        command = [sys.executable, str(tool / 'emit_prelink.py'), '--kernel', str(native),
+                   '--prelinked', str(cache), '--slide=-0x1000000', '--output', str(candidate)]
+        for root in profile['kernel']['roots']:
+            command += ['--root', root]
+        if profile['kernel']['prelink'].get('early_security_init'):
+            command += ['--early-security-init', profile['kernel']['prelink']['early_security_init']]
+        with (out / 'prelink.log').open('w') as log:
+            result = subprocess.run(command, cwd=tree, env=env, stdout=log, stderr=subprocess.STDOUT)
+        if candidate.with_suffix('.map.json').is_file():
+            candidate.with_suffix('.map.json').replace(mapping)
+        if result.returncode:
+            if candidate.with_suffix('.json').is_file():
+                candidate.with_suffix('.json').replace(out / 'prelink-failure.json')
+            raise SystemExit(f'prelink: {out / "prelink.log"}')
+        report = json.loads(candidate.with_suffix('.json').read_text())
+        report.update(output=str(output), map=str(mapping))
+        candidate.with_suffix('.json').write_text(json.dumps(report, indent=2) + '\n')
+        candidate.replace(output)
+        candidate.with_suffix('.json').replace(output.with_suffix('.json'))
     print(output)
 
 
