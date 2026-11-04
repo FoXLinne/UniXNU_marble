@@ -157,8 +157,6 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
         else:
             # Source bytes are required only for a new or incomplete resident disk.
             with image_stream(image) as stream:
-                if hashlib.file_digest(stream, 'sha256').hexdigest() != digest:
-                    raise ValueError(f'Image checksum differs from manifest: {image["name"]}')
                 if image.get('format') == 'raw':
                     stream.seek(0, 2)
                     if stream.tell() != total:

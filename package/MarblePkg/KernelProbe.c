@@ -21,7 +21,7 @@ RunProbe(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable, BOOLEAN SelfTest
   EFI_GUID Guid = ROOT_STAGE_GUID;
   Stage.Magic = ROOT_STAGE_MAGIC;
   Stage.Version = 2;
-  Stage.KernelBytes = 0x200000000ULL;
+  Stage.KernelBytes = 0x80000000ULL;
   Stage.KernelBase = (UINTN)AllocateAlignedPages(
       EFI_SIZE_TO_PAGES(Stage.KernelBytes + 0x200000), 0x200000);
   if (!Stage.KernelBase) return EFI_OUT_OF_RESOURCES;

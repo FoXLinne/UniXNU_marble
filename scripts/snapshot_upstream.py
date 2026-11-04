@@ -47,6 +47,8 @@ def main():
         if extra is None:
             extra = git(repo, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')
         for name_in_repo in filter(None, extra):
+            if '__pycache__' in Path(name_in_repo).parts or Path(name_in_repo).suffix == '.pyc':
+                continue
             result = subprocess.run(['git', 'diff', '--no-index', '--binary', '--',
                                      '/dev/null', name_in_repo], cwd=repo, capture_output=True)
             if result.returncode not in (0, 1):

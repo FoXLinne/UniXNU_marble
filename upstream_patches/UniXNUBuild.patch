@@ -1,0 +1,18 @@
+diff --git a/scripts/make-data-seed.py b/scripts/make-data-seed.py
+index eeaf3cb..8899fdd 100644
+--- a/scripts/make-data-seed.py
++++ b/scripts/make-data-seed.py
+@@ -50,11 +50,10 @@ def main():
+         raw = work / 'seed.cdr'
+         subprocess.run(['hdiutil', 'create', '-size', '32m', '-layout', 'NONE', '-fs', 'APFS',
+                         '-volname', 'Data', '-type', 'UDTO', raw], check=True)
+-        mount = work / 'mount'
+-        mount.mkdir()
+         attached = plistlib.loads(subprocess.check_output(['hdiutil', 'attach', '-nobrowse', '-owners', 'off',
+-                                                           '-mountpoint', mount, '-plist', raw]))
++                                                           '-plist', raw]))
+         device = attached['system-entities'][0]['dev-entry']
++        mount = Path(next(entry['mount-point'] for entry in attached['system-entities'] if entry.get('mount-point')))
+         try:
+             for current, dirs, files in os.walk(source, followlinks=False):
+                 dirs[:] = [name for name in dirs if name != 'staged_system_apps']

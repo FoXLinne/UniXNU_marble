@@ -152,6 +152,7 @@ def patch_kernel(root, kernel, out, platform, mode):
                   kernel_sha256=hashlib.sha256(data).hexdigest())
     kernel.write_bytes(data)
     (out / 'checkpoint.json').write_text(json.dumps(report, indent=2) + '\n')
+    shutil.copyfile(root / 'kernel.layout.json', kernel.with_name('kernel.layout.json'))
 
 
 def build(root, mode):
@@ -174,14 +175,17 @@ def build(root, mode):
     memory[0]['RootDisks'] = bytes(16)
     adt.write_bytes(write_adt(tree))
     if mode != 'selftest':
-        patch_kernel(root, stage / 'Payloads/kernel.macho', out, platform, mode)
+        patch_kernel(root, stage / 'Payloads/kernel.macho', out, platform, 'early' if mode == 'root' else mode)
     volume = out / 'volume.img'
     with volume.open('wb') as stream:
         stream.truncate(70 * 1024**2)
     subprocess.run(['mformat', '-i', volume, '-v', 'MARBLEESP', '::'], check=True)
     subprocess.run(['mcopy', '-i', volume, '-s', '-Q', stage.parent, '::/'], check=True)
     application = 'MarbleResidentSelftest.efi' if mode == 'selftest' else 'MarbleKernelProbe.efi'
-    blobs = [('loader.efi', (binaries / application).read_bytes()), ('volume.img', volume.read_bytes())]
+    blobs = [('loader.efi', (binaries / application).read_bytes())]
+    if mode == 'root':
+        blobs.append(('root.stage', b'1'))
+    blobs.append(('volume.img', volume.read_bytes()))
     body = b''.join(struct.pack('<16sII', name.encode(), len(data), 0) + data + bytes(-len(data) % 16)
                     for name, data in blobs) + bytes(24)
     image = pack_boot_image(out, platform, struct.pack('<II', 0x50554e58, len(body)) + body,
@@ -192,7 +196,7 @@ def build(root, mode):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('checkpoint', choices=['selftest', 'early', 'tables', 'pre-mmu', 'post-mmu', 'arm-init', 'fault'])
+    parser.add_argument('checkpoint', choices=['selftest', 'early', 'root', 'tables', 'pre-mmu', 'post-mmu', 'arm-init', 'fault'])
     parser.add_argument('--output', type=Path, default=DEVICE.parent.parent / 'outputs/UniXNU_marble/ios18_arm64e')
     arguments = parser.parse_args()
     print(build(arguments.output.resolve(), arguments.checkpoint))

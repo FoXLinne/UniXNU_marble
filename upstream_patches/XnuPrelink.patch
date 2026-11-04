@@ -610,10 +610,10 @@ index 8e8b499..9530edc 100644
      unittest.main()
 diff --git a/fixtures/fileset-22H384-symbols.json b/fixtures/fileset-22H384-symbols.json
 new file mode 100644
-index 0000000..1f059ab
+index 0000000..38181ab
 --- /dev/null
 +++ b/fixtures/fileset-22H384-symbols.json
-@@ -0,0 +1,2107 @@
+@@ -0,0 +1,2114 @@
 +{
 +  "inputs": {
 +    "kernelcache_sha256": "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70",
@@ -2495,6 +2495,13 @@ index 0000000..1f059ab
 +      "original_sha256": "a40c4a3c5ec632a0785dde6c6a1701efacb38e8b4bba36c69e3df496a8989cc0",
 +      "native_symbol": "_hashdestroy",
 +      "evidence": "Computes checked (hashmask+1)*sizeof(LIST_HEAD), selects overflow sentinel INT64_MIN and frees the hash-table allocation through matched kfree_ext and a typed allocation view. Native has the same data flow and overflow behavior. Source: bsd/kern/kern_subr.c."
++    },
++    {
++      "original": "0xfffffff0080148a0",
++      "original_size": 84,
++      "original_sha256": "fa43710065b095615705a792382735bd0a209fa511b6a18161f2255f06d8afe3",
++      "native_symbol": "_VNOP_GETXATTR",
++      "evidence": "Builds vnop_getxattr_args with six arguments, dispatches through vnode v_op at +0xd0 with discriminator 0x307a and returns the result. All 21 instructions match after masking the two ADRP immediates, ADD and LDRSW descriptor offsets. Both descriptor operands resolve to the paired vnop_getxattr_desc. Source: bsd/vfs/kpi_vfs.c VNOP_GETXATTR."
 +    }
 +  ],
 +  "data": [

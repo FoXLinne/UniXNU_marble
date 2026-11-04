@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import struct
 import subprocess
@@ -92,7 +93,7 @@ def release(tree, out, env, profile):
     version = os_spec['ios_version']
     archives = [tree / 'build/corecrypto-2023/libcorecrypto_kernel_noasm-namespaced.a']
     forced = [tree / 'build/armdt-platform/libArmDTPlatform.a', tree / 'build/armcpu/libArmCpu.a',
-              tree / 'build/marble-boot/libMarbleBoot.a']
+              tree / 'build/marble-boot/libMarbleBoot.a', tree / 'build/marble-storage/libMarbleStorage.a']
     args = ['make', '-C', str(tree / '.cache/xnu-work'), 'build', 'SDKROOT=iphoneos',
             'ARCH_CONFIGS=ARM64', 'MACHINE_CONFIGS=BCM2837', 'KERNEL_CONFIGS=RELEASE',
             'ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG=arm64e', 'LARGE_MEMORY_DEFINE=-UARM_LARGE_MEMORY',
@@ -107,7 +108,7 @@ def release(tree, out, env, profile):
             'CFLAGS_EXTRA=-Wno-reserved-identifier -Wno-pre-c11-compat '
             '-Wno-missing-designated-field-initializers -Wno-suggest-override '
             '-Wno-unnecessary-virtual-specifier -Wno-suggest-destructor-override '
-            '-Wno-ms-bitfield-padding -DXNU_NATIVE_PAN=0 -DXNU_BOOT_PROGRESS=0 '
+            '-Wno-ms-bitfield-padding -DXNU_NATIVE_PAN=1 -DXNU_BOOT_PROGRESS=0 '
             '-DXNU_SOURCE_CORECRYPTO14=1 -DXNU_ARM_DT_PLATFORM=1 -DXNU_ARMCPU=1',
             'LD_KERNEL_ARCHIVES=' + ' '.join([f'-L{sdk}/usr/local/lib/kernel', '-lfirehose_kernel',
                                              *map(str, archives), *(f'-Wl,-force_load,{p}' for p in forced)]),
@@ -122,7 +123,48 @@ def release(tree, out, env, profile):
                    cwd=tree, env=env, check=True)
     output = out / 'kernel.native.macho'
     shutil.copyfile(native, output)
+    build_capture_layout(tree, out)
     return output
+
+
+def build_capture_layout(tree, out):
+    directory = out / 'capture-layout'
+    directory.mkdir(exist_ok=True)
+    fields = {
+        'proc': ('bsd/RELEASE/kern_exec.o.json', '#include <sys/proc_internal.h>\n', {
+            'pid': 'offsetof(struct proc,p_pid)', 'state': 'offsetof(struct proc,p_stat)',
+            'name': 'offsetof(struct proc,p_name)'}),
+        'thread': ('osfmk/RELEASE/startup.o.json', '#include <kern/task.h>\n#include <kern/thread.h>\n', {
+            'task_threads_head': 'offsetof(struct task,threads)',
+            **{name: f'offsetof(struct thread,{name})' for name in
+               ('task_threads', 'state', 'continuation', 'kernel_stack', 'wait_event')},
+            **{name: f'offsetof(struct thread,machine)+offsetof(struct machine_thread,{name})'
+               for name in ('upcb', 'kstackptr')},
+            'bytes': 'sizeof(struct thread)'})}
+    result = {}
+    for name, (record, includes, expressions) in fields.items():
+        source, assembly = directory / (name + '.c'), directory / (name + '.ll')
+        source.write_text('#include <stddef.h>\n' + includes +
+                          'const unsigned long layout[] = {' + ','.join(expressions.values()) + '};\n')
+        record = json.loads((tree / 'build/xnu/ios-release-obj/RELEASE_ARM64_BCM2837' / record)
+                            .read_text().strip().rstrip(','))
+        command, arguments = [], iter(record['arguments'])
+        for value in arguments:
+            if value == record['file']:
+                command.append(str(source))
+            elif value in ('-o', '-MF', '-MT', '-MJ'):
+                next(arguments)
+                if value == '-o':
+                    command += ['-o', str(assembly)]
+            elif value != '-c':
+                command.append(value)
+        with (directory / (name + '.log')).open('w') as log:
+            subprocess.run(command + ['-S', '-emit-llvm', '-g0'], cwd=record['directory'],
+                           stdout=log, stderr=subprocess.STDOUT, check=True)
+        line = next(line for line in assembly.read_text().splitlines() if '@layout =' in line)
+        values = [int(value) for value in re.findall(r'i64 (\d+)', line)]
+        result[name] = dict(zip(expressions, values, strict=True))
+    (out / 'kernel.layout.json').write_text(json.dumps(result, indent=2) + '\n')
 
 
 def fetch(out, upstream, profile):
@@ -296,7 +338,8 @@ def boot_image(out, upstream, stack, profile, unique_chip_id):
     adt = payloads / 'kernel.macho.adt'
     subprocess.run([sys.executable, DEVICE / 'scripts/make-marble-adt.py', '--output', adt,
                     '--dram-size', board['payload']['dram_size'],
-                    '--owned-memory-size', board['payload']['adt']['owned_memory_size'],
+                    '--owned-memory-size', profile['payload']['owned_memory_size'],
+                    '--root-match-volume-uuid', profile['payload']['root_volume_uuid'],
                     '--cpu-regs', '0', '--unique-chip-id', unique_chip_id,
                     '--chip-id', f"{profile['ipsw']['chip_id']:x}", '--iphone-identity', '--trust-cache'], check=True)
     tree, end = read_adt(adt.read_bytes())
@@ -365,10 +408,16 @@ def main():
                 subprocess.run([sys.executable, tree / 'scripts' / arguments[0], *arguments[1:]],
                                cwd=tree, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
         env = dict(env, XNU_BOOTSTRAP='0', XNU_SOURCE_CORECRYPTO14='1',
-                   XNU_ARM_DT_PLATFORM='1', XNU_ARMCPU='1',
-                   XNU_EXTRA_LD_ARCHIVES=f'-Wl,-force_load,{tree}/build/marble-boot/libMarbleBoot.a')
+                   XNU_ARM_DT_PLATFORM='1', XNU_ARMCPU='1', XNU_NATIVE_PAN='1',
+                   XNU_EXTRA_LD_ARCHIVES=f'-Wl,-force_load,{tree}/build/marble-boot/libMarbleBoot.a '
+                                        f'-Wl,-force_load,{tree}/build/marble-storage/libMarbleStorage.a')
         qualify_pmgr(out, profile)
         build_board(tree, env)
+        storage = out / 'IOStorageFamily-323'
+        checkout(storage, 'https://github.com/apple-oss-distributions/IOStorageFamily.git',
+                 '1b96f8f04b9dff4dc0277ac43625bf694e62c5aa', 'IOStorageFamily-323')
+        from build_ios18_storage import build as build_storage
+        build_storage(tree, storage)
         with (out / 'kernel-build.log').open('w') as log:
             subprocess.run(['bash', str(tree / 'scripts/build-xnu-4k-baseline.sh')],
                            cwd=tree, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
@@ -379,6 +428,8 @@ def main():
     checkout(tool, profile['upstream']['prelink_url'], profile['upstream']['prelink_commit'])
     apply_patch(tool, DEVICE / profile['upstream']['prelink_patch'])
     native = out / 'kernel.native.macho'
+    from build_ios18_storage import qualify as qualify_storage
+    qualify_storage(native, cache, tool, out / 'storage-abi.json')
     output = out / 'kernel.fileset.macho'
     with tempfile.TemporaryDirectory(prefix='prelink-', dir=out) as temporary:
         candidate = Path(temporary) / output.name

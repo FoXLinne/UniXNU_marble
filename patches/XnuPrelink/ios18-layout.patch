@@ -610,10 +610,10 @@ index 8e8b499..9530edc 100644
      unittest.main()
 diff --git a/fixtures/fileset-22H384-symbols.json b/fixtures/fileset-22H384-symbols.json
 new file mode 100644
-index 0000000..c6b6e7e
+index 0000000..38181ab
 --- /dev/null
 +++ b/fixtures/fileset-22H384-symbols.json
-@@ -0,0 +1,2058 @@
+@@ -0,0 +1,2114 @@
 +{
 +  "inputs": {
 +    "kernelcache_sha256": "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70",
@@ -2446,6 +2446,62 @@ index 0000000..c6b6e7e
 +      "original_sha256": "22284f4acf6ea32d5a7b13cafe5149c22a7621ff79a890b74b532f3d8fc0d101",
 +      "native_symbol": "_mac_vnode_check_setflags",
 +      "evidence": "Obtains context credential, bypasses kernel credential, iterates MAC policies and calls mpo_vnode_check_setflags at policy-ops offset0x8a8 with credential/vnode/label/flags. Native unique setflags method uses the same policy slot. Source: security/mac_vfs.c."
++    },
++    {
++      "original": "0xfffffff007e6e058",
++      "original_size": 56,
++      "original_sha256": "f63c8e9f4e2a2740c46f324ae7315d77fc2d4e195af1b9060f660f54bb8b0602",
++      "native_symbol": "_lck_mtx_lock_spin",
++      "evidence": "Increments current thread preemption count, CAS-acquires the mutex owner with spin bits 0x30000000, and passes type 1 to the matched lck_mtx_lock_contended on contention. Native has the same flow with native thread offsets and a BTI prefix. Source: osfmk/arm64/locks.c."
++    },
++    {
++      "original": "0xfffffff007eb11a8",
++      "original_size": 136,
++      "original_sha256": "089057818e6b6d69aea52dee59926697aad3e1d2218e3092b946627ca29ba12d",
++      "native_symbol": "_thread_reference",
++      "evidence": "Checks a non-null thread against the thread zone (zone ID 25), atomically increments its reference count and calls os_ref_panic_retain on overflow. Native uses its own thread structure size and reference-count offset. Source: osfmk/kern/thread.c."
++    },
++    {
++      "original": "0xfffffff007f1fbb4",
++      "original_size": 32,
++      "original_sha256": "4ab0ddb93abb05e69cb70f1c71dc383296d5e1fb5ec2dac0193093eb1f362fe4",
++      "native_symbol": "_vm_map_page_mask",
++      "evidence": "Returns (1 << map->hdr.page_shift)-1, using the kernel page shift for a null map. Native reads PAGE_SHIFT_CONST for the 4 KiB kernel instead of the original 16 KiB constant. Source: osfmk/vm/vm_map.c."
++    },
++    {
++      "original": "0xfffffff007f2eecc",
++      "original_size": 28,
++      "original_sha256": "db25cb49b3c765f69958c2a15af6e87797696e17f62e8b6d835d8e31754c2ab4",
++      "native_symbol": "_vm_map_page_size",
++      "evidence": "Returns 1 << map->hdr.page_shift, using the kernel page shift for a null map. Native reads PAGE_SHIFT_CONST for its configured page size. Source: osfmk/vm/vm_map.c."
++    },
++    {
++      "original": "0xfffffff007f6a434",
++      "original_size": 32,
++      "original_sha256": "3a0a8993bf1a3246fde142b0dcf03bd14fc3727aac9ab1fa63bc17c981d77102",
++      "native_symbol": "_vm_protect",
++      "evidence": "Rejects a null map with KERN_INVALID_ARGUMENT, accepts a zero-sized range, converts size to end address and tail-calls the matched vm_map_protect with the protection arguments preserved. Native vm_protect has the same complete body after BTI. Source: osfmk/vm/vm_user.c."
++    },
++    {
++      "original": "0xfffffff0082ed7f4",
++      "original_size": 36,
++      "original_sha256": "8c331f7c506c8db25cb815e148837b8888c24c97c451fdfc33d385408c361f40",
++      "native_symbol": "_proc_is64bit_data",
++      "evidence": "Locates proc_ro using the matched proc_struct_size and proc p_lflag P_LHASTASK bit, then extracts the task TFLAGS_64B_DATA bit from its t_flags. Native has the same operations with the native t_flags offset. Source: bsd/kern/kern_proc.c."
++    },
++    {
++      "original": "0xfffffff0083046d4",
++      "original_size": 48,
++      "original_sha256": "a40c4a3c5ec632a0785dde6c6a1701efacb38e8b4bba36c69e3df496a8989cc0",
++      "native_symbol": "_hashdestroy",
++      "evidence": "Computes checked (hashmask+1)*sizeof(LIST_HEAD), selects overflow sentinel INT64_MIN and frees the hash-table allocation through matched kfree_ext and a typed allocation view. Native has the same data flow and overflow behavior. Source: bsd/kern/kern_subr.c."
++    },
++    {
++      "original": "0xfffffff0080148a0",
++      "original_size": 84,
++      "original_sha256": "fa43710065b095615705a792382735bd0a209fa511b6a18161f2255f06d8afe3",
++      "native_symbol": "_VNOP_GETXATTR",
++      "evidence": "Builds vnop_getxattr_args with six arguments, dispatches through vnode v_op at +0xd0 with discriminator 0x307a and returns the result. All 21 instructions match after masking the two ADRP immediates, ADD and LDRSW descriptor offsets. Both descriptor operands resolve to the paired vnop_getxattr_desc. Source: bsd/vfs/kpi_vfs.c VNOP_GETXATTR."
 +    }
 +  ],
 +  "data": [

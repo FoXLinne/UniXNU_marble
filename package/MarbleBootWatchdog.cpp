@@ -22,17 +22,20 @@ static void watchdogWorker(void *, wait_result_t) {
     IOLog("MarbleWatchdog: startup active=%u status=%llx\n", !status && (control & 1), status);
     if (!status && (control & 1)) {
         unsigned bootSeconds = 0;
-        while (bootSeconds < 90 || rootvnode) {
+        while (bootSeconds < 90 || (rootvnode && bootSeconds < 120)) {
             watchdogCall(0x86000007);
             IOSleep(1000);
-            if (bootSeconds < 90) ++bootSeconds;
+            ++bootSeconds;
         }
-        IOLog("MarbleWatchdog: root mount timeout\n");
+        if (rootvnode) panic("MarbleWatchdog: resident root observation complete");
+        panic("MarbleWatchdog: root mount timeout");
     }
     thread_terminate(current_thread());
 }
 
 extern "C" void native_marble_watchdog_start(void) {
+    static int started;
+    if (__atomic_exchange_n(&started, 1, __ATOMIC_ACQ_REL)) return;
     thread_t thread;
     if (kernel_thread_start(watchdogWorker, nullptr, &thread) == KERN_SUCCESS)
         thread_deallocate(thread);

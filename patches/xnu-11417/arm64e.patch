@@ -28,7 +28,7 @@ index 1b3361e..554272c 100644
  .SFLAGS: ALWAYS
  	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
 diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
-index fc185bb..8eab2a8 100644
+index fc185bb..195306e 100644
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
 @@ -688,6 +688,9 @@ bsd_init(void)
@@ -41,6 +41,40 @@ index fc185bb..8eab2a8 100644
  	/*
  	 * Initialize the calendar.
  	 */
+@@ -942,7 +945,19 @@ bsd_init(void)
+ 		if (require_rootauth) {
+ 			/* enforce sealedness */
+ 			int autherr = VNOP_IOCTL(rootvnode, FSIOC_KERNEL_ROOTAUTH, NULL, 0, vfs_context_kernel());
++			int owner_authorized = 0;
+ 			if (autherr) {
++				extern int native_root_block_authorized(dev_t);
++				mount_t root_mount = vnode_mount(rootvnode);
++				vnode_t device_vnode = vfs_devvp(root_mount);
++				if (device_vnode) {
++					owner_authorized = (vfs_flags(root_mount) & MNT_RDONLY) &&
++					    native_root_block_authorized(vnode_specrdev(device_vnode));
++					vnode_put(device_vnode);
++				}
++				printf("MarbleStorage: APFS root authentication %d, resident policy %d\n", autherr, owner_authorized);
++			}
++			if (autherr && !owner_authorized) {
+ 				panic("rootvp not authenticated after mounting");
+ 			}
+ 		}
+@@ -1117,7 +1132,12 @@ bsd_autoconf(void)
+ 		}
+ 	}
+ 
+-	return IOKitBSDInit();
++	kern_return_t status = IOKitBSDInit();
++	if (status == KERN_SUCCESS) {
++		extern void native_marble_root_start(void);
++		native_marble_root_start();
++	}
++	return status;
+ }
+ 
+ 
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
 index 240bbf6..6bde2a7 100644
 --- a/bsd/kern/kern_exec.c

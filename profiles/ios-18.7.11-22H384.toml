@@ -25,18 +25,20 @@ fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustC
 
 [kernel]
 patch = "patches/xnu-11417/arm64e.patch"
-roots = ["com.apple.driver.AppleARMPlatform", "com.apple.filesystems.apfs", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.kec.pthread"]
+roots = ["com.apple.driver.AppleARMPlatform", "com.apple.filesystems.apfs", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.kec.pthread", "com.apple.iokit.IOStorageFamily", "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib"]
 
 [kernel.prelink]
 kernelcache_sha256 = "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70"
 early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff009083bcc"
 
 [upstream]
-commit = "350ddc2a23dcaea7d74d8a469259c2efcec3e4a9"
+commit = "8ddccb1e42d0063a2e613f897155c83994f60b11"
 scripts_patch = "patches/UniXNU/ios18-static-if.patch"
 prelink_url = "https://github.com/UniXNU/XnuPrelink.git"
 prelink_commit = "2b39ff73dc4d49ad64e349c711ca4aa8d1dd64ea"
 prelink_patch = "patches/XnuPrelink/ios18-layout.patch"
 
 [payload]
+owned_memory_size = "0x80000000"
+root_volume_uuid = "D38FFE6A-C933-4C2C-BDE0-CCCDC3889156"
 kernel_args = ["-v", "serial=0", "keepsyms=1", "debug=0x14e", "msgbuf=1048576"]

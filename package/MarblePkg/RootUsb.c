@@ -188,6 +188,15 @@ STATIC EFI_STATUS InitializeUsb(VOID)
   Status = gBS->LocateProtocol(&gEfiCpuArchProtocolGuid,NULL,(VOID **)&mCpu);
   if (EFI_ERROR(Status)) return Status;
   if (mStage) goto StartUsb;
+  for (UINTN I=0;I<gST->NumberOfTableEntries;I++) {
+    if (CompareGuid(&TableGuid,&gST->ConfigurationTable[I].VendorGuid)) {
+      ROOT_STAGE_TABLE *Installed=gST->ConfigurationTable[I].VendorTable;
+      if (!Installed || Installed->Magic!=ROOT_STAGE_MAGIC || Installed->Version!=2 ||
+          !Installed->KernelBase || !Installed->KernelBytes) return EFI_COMPROMISED_DATA;
+      mStage=Installed;
+      goto StartUsb;
+    }
+  }
   mStage = AllocatePages(EFI_SIZE_TO_PAGES(sizeof(*mStage)));
   if (!mStage) return EFI_OUT_OF_RESOURCES;
   ZeroMem(mStage, sizeof(*mStage));
