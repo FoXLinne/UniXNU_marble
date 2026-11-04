@@ -54,28 +54,28 @@
   },
   "prelink": {
     "closure_components": 21,
-    "unresolved_references": 7821,
-    "unresolved_targets": 584,
+    "unresolved_references": 1756,
+    "unresolved_targets": 312,
     "mapping_complete": false,
     "loadable": false,
     "candidate_written": false,
     "missing_by_component": {
-      "com.apple.filesystems.apfs": 3254,
-      "com.apple.driver.AppleARMPlatform": 1512,
-      "com.apple.driver.ApplePMGR": 1101,
-      "com.apple.driver.AppleMobileFileIntegrity": 492,
-      "com.apple.iokit.IOStorageFamily": 354,
-      "com.apple.kec.corecrypto": 290,
-      "com.apple.driver.AppleARMWatchdogTimer": 196,
-      "com.apple.iokit.CoreAnalyticsFamily": 164,
-      "com.apple.security.AppleImage4": 148,
-      "com.apple.iokit.IOCryptoAcceleratorFamily": 107,
-      "com.apple.driver.AppleEffaceableStorage": 78,
-      "com.apple.iokit.IOSlowAdaptiveClockingFamily": 73,
-      "com.apple.iokit.IOReportFamily": 52
+      "com.apple.driver.AppleARMPlatform": 361,
+      "com.apple.driver.AppleARMWatchdogTimer": 62,
+      "com.apple.driver.AppleEffaceableStorage": 15,
+      "com.apple.driver.AppleMobileFileIntegrity": 188,
+      "com.apple.driver.ApplePMGR": 216,
+      "com.apple.filesystems.apfs": 649,
+      "com.apple.iokit.CoreAnalyticsFamily": 76,
+      "com.apple.iokit.IOCryptoAcceleratorFamily": 37,
+      "com.apple.iokit.IOReportFamily": 9,
+      "com.apple.iokit.IOSlowAdaptiveClockingFamily": 9,
+      "com.apple.iokit.IOStorageFamily": 100,
+      "com.apple.security.AppleImage4": 34
     },
     "report": "outputs/UniXNU_marble/ios18_arm64e/kernel.fileset.json",
-    "command": "work/marble_hackios/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py prelink --output outputs/UniXNU_marble/ios18_arm64e"
+    "command": "work/marble_hackios/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py prelink --output outputs/UniXNU_marble/ios18_arm64e",
+    "corecrypto_unresolved_references": 0
   },
   "verification": {
     "fileset_layout_emit_tests": 17,
@@ -83,15 +83,25 @@
     "xnu_patch_base_check": "pass",
     "script_patch_base_check": "pass",
     "python_toml_inputs": "pass",
-    "upstream_snapshot": "pass"
+    "upstream_snapshot": "pass",
+    "fileset_host_tests": 69,
+    "fileset_host_result": "pass",
+    "fileset_host_command": "python -m unittest discover -p 'test_*.py'",
+    "reviewed_functions": 25,
+    "reviewed_data": 29
   },
   "hardware": {
     "el0_cpu_probe": "USB control transfer timeout",
     "bus_reset": "timeout",
     "hub_port_power_cycle": "pass",
     "last_adb_devices": 0,
-    "last_fastboot_devices": 0,
-    "hardware_requirement": "设备硬件复位",
-    "ios18_userspace_boot_verified": false
+    "last_fastboot_devices": 1,
+    "ios18_userspace_boot_verified": false,
+    "last_fastboot_query": {
+      "serial": "556fdfe",
+      "product": "marble",
+      "current-slot": "a",
+      "is-userspace": "no"
+    }
   }
 }
