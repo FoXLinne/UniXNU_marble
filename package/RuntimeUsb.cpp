@@ -192,7 +192,7 @@ void stall() {
 }
 unsigned descriptor(unsigned type, unsigned index, uint8_t *out) {
     static const uint8_t device[] = {18,1,0,2,0,0,0,64,0xd1,0x18,0x0e,0xd0,0,1,1,2,3,1};
-    static const uint8_t config[] = {9,2,18,0,1,1,0,0x80,50,9,4,0,0,0,0xff,0x42,0x42,0};
+    static const uint8_t config[] = {9,2,18,0,1,1,0,0x80,250,9,4,0,0,0,0xff,0x42,0x42,0};
     static const uint8_t qualifier[] = {10,6,0,2,0,0,0,64,1,0};
     if (type == 1) { memcpy(out,device,sizeof(device)); return sizeof(device); }
     if (type == 2 || type == 7) { memcpy(out,config,sizeof(config)); out[1]=type; return sizeof(config); }
@@ -242,7 +242,7 @@ void handleSetup() {
         case 5:
             write(DWC3_DCFG,(read(DWC3_DCFG)&~DWC3_DCFG_DEVADDR_MASK)|DWC3_DCFG_DEVADDR(value&127));
             return;
-        case 9: configuration = value; return;
+        case 9: __atomic_store_n(&configuration, value, __ATOMIC_RELEASE); return;
         case 8: out[0] = configuration; count = 1; break;
         case 0: out[0] = out[1] = 0; count = 2; break;
         case 1: case 3: case 11: return;
@@ -283,7 +283,7 @@ void handleEvent(uint32_t event) {
         if (DWC3_DEVT_CATEGORY(event) != DWC3_EVENT_TYPE_DEV) return;
         switch (DWC3_DEVT_TYPE(event)) {
         case DWC3_DEVICE_EVENT_RESET:
-            configuration = 0;
+            __atomic_store_n(&configuration, 0, __ATOMIC_RELEASE);
             end(1);
             if (controlState != 0) end(0);
             controlState=0;
@@ -302,7 +302,7 @@ void handleEvent(uint32_t event) {
             IOLog("RuntimeUSB: connected speed=%x\n",read(DWC3_DSTS)&7);
             break;
         }
-        case DWC3_DEVICE_EVENT_DISCONNECT: configuration=0; break;
+        case DWC3_DEVICE_EVENT_DISCONNECT: __atomic_store_n(&configuration, 0, __ATOMIC_RELEASE); break;
         }
         return;
     }
@@ -466,3 +466,5 @@ extern "C" void native_marble_watchdog_start(void) {
     thread_t thread;
     if (kernel_thread_start(startupWatchdog, nullptr, &thread) == KERN_SUCCESS) thread_deallocate(thread);
 }
+
+extern "C" bool native_runtime_usb_configured(void) {return __atomic_load_n(&configuration, __ATOMIC_ACQUIRE) != 0;}

@@ -311,6 +311,7 @@ spi_command = [str(ROOT / 'drivers/NativeGeniSpi/GeniSpi.c') if v == str(policy_
 subprocess.run(spi_command, cwd=policy_recipe['directory'], check=True)
 archive.unlink(missing_ok=True)
 subprocess.run(['xcrun', 'ar', 'rcs', archive, late, resident, out / 'original-bindings.o', policy_object, runtime, touch, gpu, spi, *gpu_objects], check=True)
+subprocess.run([sys.executable, str(Path(__file__).resolve().with_name('build_charging.py'))], check=True)
 report = dict(reference_kernel_sha256=plan['candidate_sha256'], original_executable_code_unchanged=True,
               method_slots=len(methods), compiled_public_class_size=int(class_size[1], 16),
               bindings={name:hex(value) for name,value in bindings.items()}, runtime_qualified=False,

@@ -37,6 +37,8 @@ void native_hid_report(char *, unsigned);
 void native_marble_touch_report(char *, unsigned);
 void native_marble_gpu_quiesce_inherited(void);
 void native_marble_cpu_start(void);
+void native_marble_charging_start(void);
+unsigned native_marble_charging_report(char *, unsigned);
 unsigned native_marble_cpu_report(char *, unsigned);
 kern_return_t native_load_owner_trust_module(const uint8_t *, size_t);
 void native_marble_gpu_start(void);
@@ -328,6 +330,7 @@ extern "C" void native_root_block_capture_log(void)
   }
   if (native_root_block_panic_text[0])
     used += snprintf(log.text + used, sizeof(log.text) - used, "\nPANIC\n%s\n", native_root_block_panic_text);
+  used += native_marble_charging_report(log.text + used, 2048);
   char runtime[256];
   native_runtime_usb_report(runtime,sizeof(runtime));
   used += snprintf(log.text + used, sizeof(log.text) - used, "%s\n",runtime);
@@ -793,6 +796,7 @@ extern "C" void native_root_block_start(void)
   started = true;
   if (!ufsRoot) native_runtime_usb_start();
   native_marble_gpu_start();
+  native_marble_charging_start();
 }
 
 extern "C" const char *native_root_block_report(void)
