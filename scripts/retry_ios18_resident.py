@@ -9,10 +9,10 @@ import time
 
 from build_ios18_arm64e import validate_prelink
 from capture_ios18_resident import capture
-from root_control import CHUNK, RootUsb
+from root_control import CHUNK, RootUsb, load
 
 
-def retry(previous, replacement, output):
+def retry(previous, replacement, output, images=None, data_seed=None, boot_args=''):
     checkpoint = json.loads(replacement.with_name('checkpoint.json').read_text())
     baseline = validate_prelink(Path(checkpoint['source_kernel']).parent)
     data = replacement.read_bytes()
@@ -23,22 +23,29 @@ def retry(previous, replacement, output):
     channel = RootUsb()
     try:
         capture(channel, previous, output / 'before')
-        if len(data) > 192 * CHUNK:
-            raise ValueError('Replacement exceeds the firmware kernel slot')
-        identity = hashlib.sha256(data).hexdigest()[:32]
-        channel.command(f'oem begin:2:{len(data):016x}:{identity}')
-        for offset in range(0, len(data), CHUNK):
-            channel.write(data[offset:offset + CHUNK])
-        received, size = (int(v, 16) for v in channel.command('getvar:received').split(':'))
-        if received != len(data) or size != len(data):
-            raise IOError('Replacement transfer is incomplete')
+        if images:
+            report = load(channel, json.loads(images.read_text()), kernel=replacement,
+                          data_seed=data_seed, boot_args=boot_args)
+            (output / 'transfer.json').write_text(json.dumps(report, indent=2) + '\n')
+        else:
+            if data_seed or boot_args:
+                raise ValueError('Data seed and boot arguments require the resident image manifest')
+            if len(data) > 192 * CHUNK:
+                raise ValueError('Replacement exceeds the firmware kernel slot')
+            identity = hashlib.sha256(data).hexdigest()[:32]
+            channel.command(f'oem begin:2:{len(data):016x}:{identity}')
+            for offset in range(0, len(data), CHUNK):
+                channel.write(data[offset:offset + CHUNK])
+            received, size = (int(v, 16) for v in channel.command('getvar:received').split(':'))
+            if received != len(data) or size != len(data):
+                raise IOError('Replacement transfer is incomplete')
         channel.command('oem retry')
     finally:
         channel.close()
     time.sleep(5)
     fastboot = '/opt/homebrew/share/android-commandlinetools/platform-tools/fastboot'
     completed = subprocess.run([fastboot, '-s', 'marble', 'getvar', 'returns'],
-                               capture_output=True, text=True, timeout=180)
+                               capture_output=True, text=True, timeout=360)
     (output / 'usb-return.log').write_text(completed.stdout + completed.stderr)
     completed.check_returncode()
     channel = RootUsb()
@@ -53,5 +60,9 @@ if __name__ == '__main__':
     parser.add_argument('--previous-kernel', type=Path, required=True)
     parser.add_argument('--kernel', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--images', type=Path)
+    parser.add_argument('--data-seed', type=Path)
+    parser.add_argument('--boot-args', default='')
     args = parser.parse_args()
-    print(json.dumps(retry(args.previous_kernel.resolve(), args.kernel.resolve(), args.output.resolve()), indent=2))
+    print(json.dumps(retry(args.previous_kernel.resolve(), args.kernel.resolve(), args.output.resolve(),
+                           args.images, args.data_seed, args.boot_args), indent=2))

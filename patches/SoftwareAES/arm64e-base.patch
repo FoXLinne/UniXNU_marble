@@ -1,0 +1,21 @@
+diff --git a/OriginalAESABI.h b/OriginalAESABI.h
+index e38d62b..a255201 100644
+--- a/OriginalAESABI.h
++++ b/OriginalAESABI.h
+@@ -6,6 +6,8 @@
+ // Ordinary iOS ABI, qualified against the original component and live metadata.
+ class IOCryptoAccelerator : public IOService {
+   OSDeclareDefaultStructors(IOCryptoAccelerator)
++public:
++  virtual const char *getAlgorithmName();
+ };
+ struct IOAESIV { unsigned char bytes[16]; };
+ struct IOAESKeyData {
+@@ -23,7 +25,6 @@ public:
+   bool start(IOService *) override;
+   IOWorkLoop *getWorkLoop() const override;
+   IOReturn callPlatformFunction(const OSSymbol *, bool, void *, void *, void *, void *) override;
+-  virtual const char *getAlgorithmName();
+   virtual IOReturn performAES(void *, void *, task_t, unsigned long long, IOAESIV *,
+                              IOAESOperation, IOAESKeyData *, IOAESCompletion, void *);
+   virtual IOReturn performAES(IOMemoryDescriptor *, IOMemoryDescriptor *, unsigned long long,

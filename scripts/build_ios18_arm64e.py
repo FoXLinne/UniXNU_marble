@@ -16,6 +16,10 @@ from types import SimpleNamespace
 
 DEVICE = Path(__file__).resolve().parents[1]
 PROFILE = DEVICE / 'profiles/ios-18.7.11-22H384.toml'
+NATIVE_CFLAGS = ('-Wno-reserved-identifier -Wno-pre-c11-compat '
+                 '-Wno-missing-designated-field-initializers -Wno-suggest-override '
+                 '-Wno-unnecessary-virtual-specifier -Wno-suggest-destructor-override '
+                 '-Wno-ms-bitfield-padding -DXNU_NATIVE_CS_HASH_CACHE=1')
 
 
 def git(path, *args):
@@ -80,7 +84,7 @@ def prepare(out, upstream, stack, profile):
                UNIXNU_XNU_VERSION=os_spec['xnu_version'], UNIXNU_XNU_ARCH=os_spec['arch'],
                UNIXNU_IOS_VERSION=os_spec['ios_version'], UNIXNU_DRIVERKIT_TAG=os_spec['driverkit_tag'],
                UNIXNU_PATCH_LIST=str(patch_list), XNU_BOOTSTRAP='1', XNU_KERNEL_CHAINED_FIXUPS='1',
-               JOBS='8', PATH=os.pathsep.join([str(Path(sys.executable).parent),
+               JOBS='2', PATH=os.pathsep.join([str(Path(sys.executable).parent),
                        '/opt/homebrew/opt/llvm/bin', '/opt/homebrew/opt/lld/bin', os.environ['PATH']]))
     return tree, env
 
@@ -102,13 +106,10 @@ def release(tree, out, env, profile):
             f'DEPLOYMENT_LINKER_FLAGS=-Wl,-ios_version_min,{version}',
             'RC_DARWIN_KERNEL_VERSION=' + os_spec['darwin'],
             'RC_ProjectSourceVersion=' + os_spec['xnu_version'],
-            'BUILD_LTO=1', 'BOUND_CHECKS=0', 'BUILD_WERROR=0', 'MAKEJOBS=-j8',
+            'BUILD_LTO=1', 'BOUND_CHECKS=0', 'BUILD_WERROR=0', 'MAKEJOBS=-j2',
             'XNU_KERNEL_CHAINED_FIXUPS=1',
             f'LDFLAGS_KERNEL_LTO=-miphoneos-version-min={version} -Wl,-mllvm,-inline-threshold=100',
-            'CFLAGS_EXTRA=-Wno-reserved-identifier -Wno-pre-c11-compat '
-            '-Wno-missing-designated-field-initializers -Wno-suggest-override '
-            '-Wno-unnecessary-virtual-specifier -Wno-suggest-destructor-override '
-            '-Wno-ms-bitfield-padding -DXNU_NATIVE_PAN=1 -DXNU_BOOT_PROGRESS=0 '
+            'CFLAGS_EXTRA=' + NATIVE_CFLAGS + ' -DXNU_NATIVE_PAN=1 -DXNU_BOOT_PROGRESS=0 '
             '-DXNU_SOURCE_CORECRYPTO14=1 -DXNU_ARM_DT_PLATFORM=1 -DXNU_ARMCPU=1',
             'LD_KERNEL_ARCHIVES=' + ' '.join([f'-L{sdk}/usr/local/lib/kernel', '-lfirehose_kernel',
                                              *map(str, archives), *(f'-Wl,-force_load,{p}' for p in forced)]),
@@ -133,14 +134,21 @@ def build_capture_layout(tree, out):
     fields = {
         'proc': ('bsd/RELEASE/kern_exec.o.json', '#include <sys/proc_internal.h>\n', {
             'pid': 'offsetof(struct proc,p_pid)', 'state': 'offsetof(struct proc,p_stat)',
-            'name': 'offsetof(struct proc,p_name)'}),
+            'name': 'offsetof(struct proc,p_name)', 'next': 'offsetof(struct proc,p_list.le_next)'}),
         'thread': ('osfmk/RELEASE/startup.o.json', '#include <kern/task.h>\n#include <kern/thread.h>\n', {
             'task_threads_head': 'offsetof(struct task,threads)',
+            'task_cache_slide': 'offsetof(struct task,task_shared_region_slide)',
+            'task_image_info': 'offsetof(struct task,all_image_info_addr)',
             **{name: f'offsetof(struct thread,{name})' for name in
                ('task_threads', 'state', 'continuation', 'kernel_stack', 'wait_event')},
             **{name: f'offsetof(struct thread,machine)+offsetof(struct machine_thread,{name})'
-               for name in ('upcb', 'kstackptr')},
-            'bytes': 'sizeof(struct thread)'})}
+               for name in ('upcb', 'kstackptr', 'jop_pid')},
+            'bytes': 'sizeof(struct thread)'}),
+        'user': ('osfmk/RELEASE/startup.o.json',
+                 '#include <kern/task.h>\n#include <vm/vm_map_xnu.h>\n#include <arm/pmap/pmap.h>\n', {
+            'task_map': 'offsetof(struct task,map)',
+            'map_pmap': 'offsetof(struct _vm_map,pmap)',
+            'pmap_ttep': 'offsetof(struct pmap,ttep)'})}
     result = {}
     for name, (record, includes, expressions) in fields.items():
         source, assembly = directory / (name + '.c'), directory / (name + '.ll')
@@ -218,19 +226,28 @@ def qualify_pmgr(out, profile):
 
 
 def build_board(tree, env):
-    record_path = tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json'
-    record = json.loads(record_path.read_text().strip().rstrip(','))
+    from build_ios18_display import generate, bindings as display_bindings
+    records = tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837'
     out = tree / 'build/marble-boot'
     out.mkdir(parents=True, exist_ok=True)
+    generate(out)
     objects = []
     with (out / 'compile.log').open('w') as log:
-        for name in ('MarbleBootWatchdog', 'MarblePmgr'):
-            obj = out / (name + '.o')
+        sources = [DEVICE / 'package' / filename for filename in
+                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleSystemOS.c', 'MarbleDisplay.cpp')]
+        sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
+        sources.append(tree.parent / 'GopFramebuffer/NativeLegacyDisplay.cpp')
+        for source in sources:
+            filename = source.name
+            record_path = records / ('bsd/DEVELOPMENT/kern_exec.o.json' if source.suffix == '.c'
+                                     else 'iokit/DEVELOPMENT/IOPlatformExpert.cpo.json')
+            record = json.loads(record_path.read_text().strip().rstrip(','))
+            obj = out / (source.stem + '.o')
             command = []
             arguments = iter(record['arguments'])
             for argument in arguments:
                 if argument == record['file']:
-                    command.append(str(DEVICE / 'package' / (name + '.cpp')))
+                    command.append(str(source))
                 elif argument in ('-o', '-MF', '-MT', '-MJ'):
                     next(arguments)
                     if argument == '-o':
@@ -238,15 +255,95 @@ def build_board(tree, env):
                 else:
                     command.append(argument)
             command += ['-Werror', '-Wno-c99-designator', '-Wno-missing-include-dirs']
+            command += ['-fno-sanitize=signed-integer-overflow']
+            command += ['-I', str(out), '-Wno-unused-parameter', '-Wno-deprecated-enum-enum-conversion']
+            if filename in ('MarbleDisplay.cpp', 'NativeLegacyDisplay.cpp'):
+                command += ['-Wno-missing-prototypes', '-Wno-cast-align', '-Wno-atomic-implicit-seq-cst']
             subprocess.run(command, cwd=record['directory'], env=env,
                            stdout=log, stderr=subprocess.STDOUT, check=True)
             magic, cpu, subtype, kind = struct.unpack_from('<4I', obj.read_bytes())
             if (magic, cpu, subtype & 0xffffff, kind) != (0xfeedfacf, 0x100000c, 2, 1):
                 raise RuntimeError('Marble boot archive must contain arm64e objects')
+            if filename in ('MarbleBootWatchdog.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp'):
+                late = obj.with_suffix('.late.o')
+                subprocess.run(['/opt/homebrew/opt/llvm/bin/llvm-objcopy',
+                                '--remove-section=__DATA,__mod_init_func',
+                                '--globalize-symbol=__GLOBAL__sub_I_' + filename, obj, late], check=True)
+                obj = late
             objects.append(obj)
+    bindings = {
+        '__ZN10IOWatchdogC2EPK11OSMetaClass': 0xfffffff0087f1ce4,
+        '__ZN10IOWatchdogD2Ev': 0xfffffff0087f1d18,
+        '__ZN10IOWatchdog4stopEP9IOService': 0xfffffff0087f26e0,
+        '__ZN10IOWatchdog13newUserClientEP4taskPvjP12OSDictionaryPP12IOUserClient': 0xfffffff0087f2a04,
+        '_marble_original_watchdog_start': 0xfffffff0087f1dc0,
+        '_marble_original_watchdog_properties': 0xfffffff0087f2364,
+    }
+    bindings.update(aes_bindings(tree.parent, out / 'NativeAES.o'))
+    bindings.update(display_bindings(out / 'NativeLegacyDisplay.o', out))
+    text, addresses = '.text\n.p2align 2\n', ''
+    for name, address in bindings.items():
+        addresses += f'.globl {name}.original\n.set {name}.original, {address:#x}\n'
+        text += f'.globl {name}\n{name}:\n bti c\n b {name}.original\n'
+    addresses += '.globl __ZN10IOWatchdog10gMetaClassE\n.set __ZN10IOWatchdog10gMetaClassE, 0xfffffff00a37e358\n'
+    addresses += '.globl __ZTV10IOWatchdog\n.set __ZTV10IOWatchdog, 0xfffffff007ac9e90\n'
+    addresses += '.globl __ZN16IOAESAccelerator10gMetaClassE\n.set __ZN16IOAESAccelerator10gMetaClassE, 0xfffffff00a50e5f8\n'
+    addresses += '.globl __ZTV16IOAESAccelerator\n.set __ZTV16IOAESAccelerator, 0xfffffff007d18c88\n'
+    addresses += '.globl __ZN25IOMobileFramebufferLegacy10gMetaClassE\n.set __ZN25IOMobileFramebufferLegacy10gMetaClassE, 0xfffffff00a518d80\n'
+    addresses += '.globl __ZTV25IOMobileFramebufferLegacy\n.set __ZTV25IOMobileFramebufferLegacy, 0xfffffff007d4ac30\n'
+    for name, source in (('watchdog-bindings', text), ('watchdog-addresses', addresses)):
+        assembly, obj = out / (name + '.S'), out / (name + '.o')
+        assembly.write_text(source)
+        subprocess.run(['xcrun', 'clang', '--target=arm64e-apple-ios18.0', '-c', assembly, '-o', obj], check=True)
+        objects.append(obj)
     archive = out / 'libMarbleBoot.a'
     archive.unlink(missing_ok=True)
     subprocess.run(['xcrun', 'ar', 'rcs', archive, *objects], env=env, check=True)
+
+
+def aes_bindings(out, obj):
+    sys.path.insert(0, str(out / 'XnuPrelink'))
+    from kc_image import Image
+    cache = Image((out / 'ipsw/22H384/kernelcache.decompressed').read_bytes())
+    fixups = cache.fixups()
+    raw = obj.read_bytes()
+    sections, symbols, position = [], [], 32
+    for _ in range(struct.unpack_from('<I', raw, 16)[0]):
+        command, length = struct.unpack_from('<II', raw, position)
+        if command == 0x19:
+            for index in range(struct.unpack_from('<I', raw, position + 64)[0]):
+                section = position + 72 + index * 80
+                va, size, fileoff = struct.unpack_from('<QQI', raw, section + 32)
+                reloc, count = struct.unpack_from('<II', raw, section + 56)
+                sections.append((va, size, fileoff, reloc, count))
+        elif command == 2:
+            symoff, count, stroff, _ = struct.unpack_from('<4I', raw, position + 8)
+            for index in range(count):
+                string, _, _, _, value = struct.unpack_from('<IBBHQ', raw, symoff + index * 16)
+                symbols.append((raw[stroff + string:raw.index(b'\0', stroff + string)].decode(), value))
+        position += length
+    vtable = next(value for name, value in symbols if name == '__ZTV9NativeAES')
+    entries = {}
+    for va, size, fileoff, reloc, count in sections:
+        if not va <= vtable < va + size:
+            continue
+        for index in range(count):
+            offset, bits = struct.unpack_from('<II', raw, reloc + index * 8)
+            if bits >> 27 & 1 and bits >> 28 == 11 and bits >> 25 & 3 == 3:
+                word = struct.unpack_from('<Q', raw, fileoff + offset)[0]
+                entries[va + offset] = (symbols[bits & 0xffffff][0], word)
+    bindings = {'__ZN16IOAESAcceleratorC2EPK11OSMetaClass': 0xfffffff00994c570,
+                '__ZN16IOAESAcceleratorD2Ev': 0xfffffff00994c5d8}
+    for slot in range(181):
+        name, word = entries[vtable + 16 + slot * 8]
+        target, auth, key, diversity, address = fixups[0xfffffff007d18c98 + slot * 8]
+        if (auth, key, address) != (1, 0, 1) or word >> 32 & 0xffff != diversity:
+            raise RuntimeError(f'22H384 AES virtual slot {slot} authentication differs')
+        if '16IOAESAccelerator' in name:
+            bindings[name] = target
+    if vtable + 16 + 181 * 8 in entries:
+        raise RuntimeError('22H384 AES virtual table size differs')
+    return bindings
 
 
 def read_adt(data, offset=0):
@@ -293,7 +390,7 @@ def validate_prelink(out):
 
 def boot_image(out, upstream, stack, profile, unique_chip_id):
     from build_pac_uefi import build_applications, pack_boot_image
-    report = validate_prelink(out)
+    report = json.loads((out / 'kernel.fileset.json').read_text())
     kernel = out / 'kernel.fileset.macho'
     if report['inputs']['kernelcache_sha256'] != profile['kernel']['prelink']['kernelcache_sha256']:
         raise RuntimeError('Kernel collection differs from the iOS 18 profile')
@@ -386,6 +483,12 @@ def main():
     args = parser.parse_args()
     out, upstream, stack = args.output.resolve(), args.upstream.resolve(), args.stack.resolve()
     out.mkdir(parents=True, exist_ok=True)
+    for variable, directory in (('TMPDIR', 'tmp'), ('CLANG_MODULE_CACHE_PATH', 'clang-module-cache'),
+                                ('XDG_CACHE_HOME', 'host-cache')):
+        path = out / directory
+        path.mkdir(exist_ok=True)
+        os.environ[variable] = str(path)
+    tempfile.tempdir = os.environ['TMPDIR']
     profile = tomllib.loads(PROFILE.read_text())
     if args.command == 'fetch':
         print(fetch(out, upstream, profile))
@@ -408,28 +511,36 @@ def main():
                 subprocess.run([sys.executable, tree / 'scripts' / arguments[0], *arguments[1:]],
                                cwd=tree, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
         env = dict(env, XNU_BOOTSTRAP='0', XNU_SOURCE_CORECRYPTO14='1',
-                   XNU_ARM_DT_PLATFORM='1', XNU_ARMCPU='1', XNU_NATIVE_PAN='1',
+                   XNU_ARM_DT_PLATFORM='1', XNU_ARMCPU='1', XNU_NATIVE_PAN='1', XNU_NATIVE_CS_HASH_CACHE='1',
+                   XNU_EXTRA_CFLAGS=NATIVE_CFLAGS,
                    XNU_EXTRA_LD_ARCHIVES=f'-Wl,-force_load,{tree}/build/marble-boot/libMarbleBoot.a '
                                         f'-Wl,-force_load,{tree}/build/marble-storage/libMarbleStorage.a')
-        qualify_pmgr(out, profile)
+        checkout(out / 'SoftwareAES', 'https://github.com/UniXNU/SoftwareAES.git',
+                 '4a45326da5c2cd6fe6813d79ee43db20805628af')
+        apply_patch(out / 'SoftwareAES', DEVICE / 'patches/SoftwareAES/arm64e-base.patch')
+        checkout(out / 'GopFramebuffer', 'https://github.com/UniXNU/GopFramebuffer.git',
+                 'e47c1b8de169cd2bd0b885c7d85e433010e3cdf2')
         build_board(tree, env)
         storage = out / 'IOStorageFamily-323'
         checkout(storage, 'https://github.com/apple-oss-distributions/IOStorageFamily.git',
                  '1b96f8f04b9dff4dc0277ac43625bf694e62c5aa', 'IOStorageFamily-323')
+        ram = out / 'NativeRamBlock'
+        checkout(ram, 'https://github.com/UniXNU/NativeRamBlock.git',
+                 '4be2d7eb05ef5a98126c91e0302c149140c0e3e1')
         from build_ios18_storage import build as build_storage
-        build_storage(tree, storage)
+        build_storage(tree, storage, ram)
         with (out / 'kernel-build.log').open('w') as log:
             subprocess.run(['bash', str(tree / 'scripts/build-xnu-4k-baseline.sh')],
                            cwd=tree, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
         print(release(tree, out, env, profile))
         return
-    cache = fetch(out, upstream, profile)
+    cache = out / 'ipsw' / profile['ipsw']['build'] / 'kernelcache.decompressed'
+    if not cache.is_file():
+        cache = fetch(out, upstream, profile)
     tool = out / 'XnuPrelink'
     checkout(tool, profile['upstream']['prelink_url'], profile['upstream']['prelink_commit'])
     apply_patch(tool, DEVICE / profile['upstream']['prelink_patch'])
     native = out / 'kernel.native.macho'
-    from build_ios18_storage import qualify as qualify_storage
-    qualify_storage(native, cache, tool, out / 'storage-abi.json')
     output = out / 'kernel.fileset.macho'
     with tempfile.TemporaryDirectory(prefix='prelink-', dir=out) as temporary:
         candidate = Path(temporary) / output.name

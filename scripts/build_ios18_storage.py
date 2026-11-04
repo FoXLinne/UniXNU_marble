@@ -10,7 +10,7 @@ import subprocess
 DEVICE = Path(__file__).resolve().parents[1]
 
 
-def build(tree, storage):
+def build(tree, storage, ram):
     out = tree / 'build/marble-storage'
     out.mkdir(parents=True, exist_ok=True)
     headers = out / 'include/IOKit/storage'
@@ -19,6 +19,7 @@ def build(tree, storage):
         shutil.copyfile(source, headers / source.name)
     sdk = Path(subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-path'], text=True).strip())
     shutil.copyfile(sdk / 'usr/include/TargetConditionals.h', out / 'include/TargetConditionals.h')
+    shutil.copyfile(ram / 'SparseDisk.h', out / 'include/SparseDisk.h')
     original = (storage / 'IOBlockStorageDevice.cpp').read_text()
     marker = 'OSDefineMetaClassAndAbstractStructors(IOBlockStorageDevice,IOService)'
     if original.count(marker) != 1:
@@ -115,5 +116,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tree', type=Path, required=True)
     parser.add_argument('--storage', type=Path, required=True)
+    parser.add_argument('--ram-source', type=Path, required=True)
     args = parser.parse_args()
-    print(build(args.tree.resolve(), args.storage.resolve()))
+    print(build(args.tree.resolve(), args.storage.resolve(), args.ram_source.resolve()))

@@ -11,7 +11,8 @@ import struct
 def symbolicate(cache, addresses, slide):
     # Apple dyld_cache_format.h: imagesTextOffset 136, sharedRegionStart 224,
     # localSymbolsOffset 72, symbolFileUUID 400; entries use 64-bit dylib offsets.
-    main = (cache / 'dyld_shared_cache_arm64').read_bytes()
+    name = 'dyld_shared_cache_arm64e' if (cache / 'dyld_shared_cache_arm64e').is_file() else 'dyld_shared_cache_arm64'
+    main = (cache / name).read_bytes()
     region = struct.unpack_from('<Q', main, 224)[0]
     offset, count = struct.unpack_from('<QQ', main, 136)
     images = []
@@ -19,7 +20,7 @@ def symbolicate(cache, addresses, slide):
         _, address, size, path = struct.unpack_from('<16sQII', main, offset + i * 32)
         images.append((address, size, main[path:main.index(b'\0', path)].decode()))
     rows = []
-    with (cache / 'dyld_shared_cache_arm64.symbols').open('rb') as stream, \
+    with (cache / (name + '.symbols')).open('rb') as stream, \
             mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as symbols:
         if symbols[88:104] != main[400:416]:
             raise ValueError('Local symbols UUID differs from the main cache')

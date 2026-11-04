@@ -3,9 +3,13 @@
 #include <IOKit/IOService.h>
 #include <IOKit/IOPlatformExpert.h>
 #include <libkern/c++/OSMetaClass.h>
+#include <mach/kmod.h>
 
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" void native_marble_pmgr_start(void);
+extern "C" void native_marble_watchdog_publish(void);
+extern "C" void native_marble_aes_init(void) __asm__("__GLOBAL__sub_I_NativeAES.cpp");
+extern "C" kmod_info_t g_kernel_kmod_info;
 
 extern "C" void native_marble_pmgr_start(void)
 {
@@ -27,4 +31,17 @@ extern "C" void native_marble_pmgr_start(void)
     nub->setName("marble-platform-power");
     nub->registerService(kIOServiceSynchronous);
     IOLog("MarblePMGR: original ApplePMGRNub published; Apple AON provider absent\n");
+    native_marble_watchdog_publish();
+    status = OSKextLoadKextWithIdentifier("com.apple.iokit.IOCryptoAcceleratorFamily");
+    if (status) panic("MarbleAES: module load failed: %d", status);
+    void *handle = OSMetaClass::preModLoad(g_kernel_kmod_info.name);
+    if (!handle) panic("MarbleAES: class initialization unavailable");
+    native_marble_aes_init();
+    status = OSMetaClass::postModLoad(handle);
+    if (status) panic("MarbleAES: class registration failed: %d", status);
+    OSObject *aesObject = OSMetaClass::allocClassWithName("NativeAES");
+    IOService *aes = OSDynamicCast(IOService, aesObject);
+    if (!aes || !aes->init() || !aes->attach(platform) || !aes->start(platform))
+        panic("MarbleAES: software provider initialization failed");
+    IOLog("MarbleAES: software IOAESAccelerator published\n");
 }

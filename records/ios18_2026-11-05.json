@@ -1,0 +1,66 @@
+{
+  "os": "iOS 18.7.11 (22H384)",
+  "device": "marble",
+  "evidence": "outputs/UniXNU_marble/ios18_arm64e/session-20261105",
+  "watchdog": {
+    "opens": 1,
+    "checkins": 16,
+    "monitoring": 1
+  },
+  "aes_run": {
+    "process_count": 142,
+    "return": "MarbleWatchdog: resident root observation complete",
+    "capture": "display-retry/before/capture.json",
+    "globals": {
+      "_native_aes_kat_status": 1,
+      "_native_aes_registered": 1,
+      "_native_aes_interface_status": 1,
+      "_native_aes_completed": 3,
+      "_native_aes_unsupported_key": 1
+    }
+  },
+  "display_abi": {
+    "instance_size": 6592,
+    "virtual_slots": 368,
+    "fixture": "profiles/legacy-display-22H384.json",
+    "caller_diversity": {
+      "212": "0xb486",
+      "214": "0xbd70",
+      "247": "0x358b"
+    }
+  },
+  "display_provider": {
+    "capture": "display-parent-retry/after/capture.json",
+    "stage": 5,
+    "registrations": 1,
+    "client_opens": 2,
+    "physical_base": "0xb8000000",
+    "bytes": 10368000,
+    "width": 1080,
+    "height": 2400
+  },
+  "display_run": {
+    "capture": "display-caller-retry/after/capture.json",
+    "process_count": 161,
+    "return": "MarbleWatchdog: resident root observation complete @%s:%d",
+    "globals": {
+      "_marble_watchdog_checkins": 11,
+      "_marble_watchdog_opens": 1,
+      "_marble_watchdog_monitoring": 1,
+      "_marble_display_stage": 5,
+      "_marble_display_registered": 1,
+      "_marble_display_clients": 5,
+      "_marble_display_client_status": 0,
+      "_marble_display_frames": 0,
+      "_marble_display_transfers": 4,
+      "_marble_display_transfer_status": 0,
+      "_marble_display_retirements": 4,
+      "_marble_display_swap_stage": 0,
+      "_marble_display_validation": 0,
+      "_marble_display_rejections": 0,
+      "_marble_display_mapping": 18446744047370289152
+    },
+    "waiting": "LaunchServices database seeding; lsd scans system applications and requests Data containers",
+    "stacks": "display-services/capture.json"
+  }
+}

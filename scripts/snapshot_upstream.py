@@ -11,6 +11,8 @@ SOURCES = {
     'UniXNUBuild': (WORK / 'upstream/UniXNU', []),
     'ArmDTPlatform': (WORK / 'UniXNU/drivers/ArmDTPlatform', None),
     'XnuPrelink': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/XnuPrelink', None),
+    'GopFramebuffer18': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/GopFramebuffer', None),
+    'SoftwareAES': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/SoftwareAES', None),
     'DarwinBoot': (WORK / 'UniXNU/drivers/DarwinBoot', None),
     'ArmCpu': (WORK / 'UniXNU/drivers/ArmCpu', None),
     'NativeAdreno': (WORK / 'UniXNU/drivers/NativeAdreno', None),
