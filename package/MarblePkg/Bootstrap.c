@@ -8,6 +8,8 @@
 #include <Protocol/BlockIo.h>
 #include <Protocol/DevicePath.h>
 #include <Protocol/SimpleFileSystem.h>
+#include <Protocol/UniXNULoader.h>
+#include "GunyahWatchdog.h"
 
 // The existing marble BootShim places the appended blobs in this reserved window.
 #define PAYLOAD_BASE 0xA8000000ULL
@@ -24,6 +26,63 @@ EFI_STATUS MarbleRootUsb(VOID);
 EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsbContinue(VOID);
 EFI_STATUS MarbleRootUsbPoll(VOID);
+EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage);
+STATIC EFI_TEXT_STRING mOutputString;
+STATIC CHAR16 mBootText[32768];
+STATIC UINTN mBootTextUsed;
+STATIC UNIXNU_LOADER_BOOT mLoaderBoot;
+
+STATIC EFI_STATUS EFIAPI
+BootOutput(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This, CHAR16 *Text)
+{
+  for (UINTN Index = 0; Text[Index] && mBootTextUsed + 1 < ARRAY_SIZE(mBootText); Index++)
+    mBootText[mBootTextUsed++] = Text[Index];
+  return mOutputString(This, Text);
+}
+
+STATIC EFI_STATUS
+BootReturn(EFI_STATUS Status, UINTN Checkpoint)
+{
+  STATIC ROOT_STAGE_TABLE Report;
+  ZeroMem(&Report, sizeof(Report));
+  Report.Magic = ROOT_STAGE_MAGIC;
+  Report.Version = 2;
+  Report.KernelBase = Checkpoint;
+  Report.ReturnCount = Status;
+  if (mOutputString) gST->ConOut->OutputString = mOutputString;
+  Print(L"Marble boot checkpoint %u: %r\r\n", Checkpoint, Status);
+  MarbleWatchdogStart(32000);
+  VOID *Log = AllocatePages(EFI_SIZE_TO_PAGES(0x100000));
+  if (Log) {
+    ZeroMem(Log, 0x100000);
+    CopyMem(Log, mBootText, mBootTextUsed * sizeof(CHAR16));
+    Report.Disks[2].Bytes = 0x100000;
+    Report.Disks[2].Count = 1;
+    Report.Disks[2].Extents[0].Address = (UINTN)Log;
+    Report.Disks[2].Extents[0].Bytes = 0x100000;
+    MarbleRootUsbResume(&Report);
+  }
+  return Status;
+}
+
+STATIC EFI_STATUS EFIAPI
+BootLoader(UNIXNU_LOADER_PROTOCOL *This, CONST UNIXNU_LOADER_BOOT_REQUEST *Request)
+{
+  return BootReturn(mLoaderBoot(This, Request), 6);
+}
+
+STATIC VOID EFIAPI
+LoaderAvailable(EFI_EVENT Event, VOID *Context)
+{
+  EFI_GUID Guid = UNIXNU_LOADER_PROTOCOL_GUID;
+  UNIXNU_LOADER_PROTOCOL *Loader;
+  if (!EFI_ERROR(gBS->LocateProtocol(&Guid, NULL, (VOID **)&Loader)) &&
+      Loader->Boot != BootLoader) {
+    mLoaderBoot = Loader->Boot;
+    Loader->Boot = BootLoader;
+  }
+}
+
 STATIC EFI_BLOCK_IO_MEDIA mMedia = {
   .MediaId = 1, .MediaPresent = TRUE, .ReadOnly = TRUE, .BlockSize = 512, .IoAlign = 1
 };
@@ -95,8 +154,17 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   EFI_HANDLE Disk = NULL, *Volumes = NULL;
   UINTN Count = 0;
   EFI_STATUS Status;
+  EFI_EVENT LoaderEvent;
+  VOID *Registration;
+  EFI_GUID LoaderGuid = UNIXNU_LOADER_PROTOCOL_GUID;
+  mOutputString = gST->ConOut->OutputString;
+  gST->ConOut->OutputString = BootOutput;
+  Status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, LoaderAvailable, NULL, &LoaderEvent);
+  if (EFI_ERROR(Status)) return BootReturn(Status, 7);
+  Status = gBS->RegisterProtocolNotify(&LoaderGuid, LoaderEvent, &Registration);
+  if (EFI_ERROR(Status)) return BootReturn(Status, 8);
   Print(L"UniXNU marble\r\n");
-  if (!FindVolume()) return EFI_NOT_FOUND;
+  if (!FindVolume()) return BootReturn(EFI_NOT_FOUND, 1);
   // Dedicated panic log, inside marble's reserved 0xA8000000..0xB8000000 window.
   ZeroMem((VOID *)(UINTN)0xB7000000, 0x100000);
   if (mRootStorage) {
@@ -118,11 +186,11 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   mMedia.LastBlock = mVolumeSize / 512 - 1;
   Status = gBS->InstallMultipleProtocolInterfaces(&Disk,
     &gEfiBlockIoProtocolGuid, &mBlock, &gEfiDevicePathProtocolGuid, &mPath, NULL);
-  if (EFI_ERROR(Status)) return Status;
+  if (EFI_ERROR(Status)) return BootReturn(Status, 2);
   Status = gBS->ConnectController(Disk, NULL, NULL, TRUE);
-  if (EFI_ERROR(Status)) return Status;
+  if (EFI_ERROR(Status)) return BootReturn(Status, 3);
   Status = gBS->LocateHandleBuffer(ByProtocol, &gEfiSimpleFileSystemProtocolGuid, NULL, &Count, &Volumes);
-  if (EFI_ERROR(Status)) return Status;
+  if (EFI_ERROR(Status)) return BootReturn(Status, 4);
   Status = EFI_NOT_FOUND;
   for (UINTN i = 0; i < Count; i++) {
     EFI_DEVICE_PATH_PROTOCOL *Device = DevicePathFromHandle(Volumes[i]);
@@ -131,10 +199,14 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     EFI_HANDLE Application;
     Status = gBS->LoadImage(FALSE, ImageHandle, Path, NULL, 0, &Application);
     FreePool(Path);
-    if (!EFI_ERROR(Status)) Status = gBS->StartImage(Application, NULL, NULL);
+    if (!EFI_ERROR(Status)) {
+      Status = MarbleWatchdogStart(32000);
+      Print(L"Marble watchdog: %r, timeout 32000 ms\r\n", Status);
+      if (!EFI_ERROR(Status)) Status = gBS->StartImage(Application, NULL, NULL);
+    }
     break;
   }
   FreePool(Volumes);
   Print(L"UniXNU returned: %r\r\n", Status);
-  return Status;
+  return BootReturn(Status, 5);
 }

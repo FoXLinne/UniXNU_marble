@@ -36,7 +36,7 @@
     "development": "pass",
     "release_lto": "pass",
     "native_kernel": "outputs/UniXNU_marble/ios18_arm64e/kernel.native.macho",
-    "native_bytes": 14848856,
+    "native_bytes": 14848976,
     "components": [
       "ArmDTPlatform",
       "ArmCpu",
@@ -53,30 +53,25 @@
     "log": "outputs/UniXNU_marble/ios18_arm64e/kernel-command.log",
     "development_relink": "pass",
     "release_lto_relink": "pass",
-    "ubc_getobject_export": true
+    "ubc_getobject_export": true,
+    "ml_get_cluster_count_export": true,
+    "root_mount_timeout_seconds": 90,
+    "watchdog_timeout_ms": 32000
   },
   "prelink": {
     "closure_components": 21,
-    "unresolved_references": 371,
-    "unresolved_targets": 139,
-    "mapping_complete": false,
+    "unresolved_references": 0,
+    "unresolved_targets": 0,
+    "mapping_complete": true,
     "loadable": false,
-    "candidate_written": false,
-    "missing_by_component": {
-      "com.apple.driver.AppleARMPlatform": 78,
-      "com.apple.driver.AppleARMWatchdogTimer": 24,
-      "com.apple.driver.AppleMobileFileIntegrity": 21,
-      "com.apple.driver.ApplePMGR": 21,
-      "com.apple.filesystems.apfs": 178,
-      "com.apple.iokit.CoreAnalyticsFamily": 4,
-      "com.apple.iokit.IOCryptoAcceleratorFamily": 3,
-      "com.apple.iokit.IOReportFamily": 3,
-      "com.apple.iokit.IOStorageFamily": 27,
-      "com.apple.security.AppleImage4": 12
-    },
+    "candidate_written": true,
+    "missing_by_component": {},
     "report": "outputs/UniXNU_marble/ios18_arm64e/kernel.fileset.json",
     "command": "work/marble_hackios/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py prelink --output outputs/UniXNU_marble/ios18_arm64e",
-    "corecrypto_unresolved_references": 0
+    "corecrypto_unresolved_references": 0,
+    "candidate_bytes": 64585728,
+    "candidate_sha256": "eab836ed5b4708765977f06f794fb066bc00fd54948a89d3d920e0da773e7bf9",
+    "stubbed_functions": 0
   },
   "verification": {
     "fileset_layout_emit_tests": 17,
@@ -88,20 +83,31 @@
     "fileset_host_tests": 80,
     "fileset_host_result": "pass",
     "fileset_host_command": "python -m unittest discover -p 'test_*.py'",
-    "reviewed_functions": 137,
-    "reviewed_data": 29,
+    "reviewed_functions": 261,
+    "reviewed_data": 44,
     "prelink_patch_base_check": "pass",
     "prelink_entrypoint": "strict rejection of unresolved references",
     "pac_uefi_build": "pass",
     "apple_adt_roundtrip": "pass",
-    "apple_adt_bytes": 208156
+    "apple_adt_bytes": 208156,
+    "uefi_boot_build": "pass",
+    "firmware_build": "pass",
+    "firmware_payload_max_bytes": 251658240,
+    "firmware_reserved_end": "0xb7000000",
+    "firmware_build_command": "sh work/marble_hackios/build_uefi.sh",
+    "firmware_log": "outputs/UniXNU_marble/ios18_arm64e/firmware-build.log",
+    "toolchain_linker": "/opt/homebrew/bin/lld-link",
+    "loader_kernel_parser_cases": 8,
+    "loader_kernel_parser_result": "pass",
+    "loader_kernel_parser_log": "outputs/UniXNU_marble/ios18_arm64e/loader-validation/result.txt",
+    "panic_reader_build": "pass"
   },
   "hardware": {
     "el0_cpu_probe": "USB control transfer timeout",
     "bus_reset": "timeout",
     "hub_port_power_cycle": "pass",
-    "last_adb_devices": 0,
-    "last_fastboot_devices": 1,
+    "last_adb_devices": 1,
+    "last_fastboot_devices": 0,
     "ios18_userspace_boot_verified": false,
     "last_fastboot_query": {
       "serial": "556fdfe",
@@ -115,6 +121,58 @@
       "location": "0x02114000",
       "vendor_id": "0x18d1",
       "product_id": "0x4ee7"
-    }
+    },
+    "ios18_kernel_entry_verified": false,
+    "logdump_partition": "unavailable",
+    "physical_memory_map": "outputs/UniXNU_marble/ios18_arm64e/physical-memory.txt",
+    "watchdog_start_verified": true,
+    "watchdog_timeout_ms": 32000,
+    "firmware_application_verified": true,
+    "darwinboot_inputs_verified": true,
+    "exit_boot_services_checkpoint_verified": true,
+    "handoff": {
+      "virtual_base": "0xfffffff007004000",
+      "physical_base": "0x840004000",
+      "entry": "0x840e0d488",
+      "boot_args": "0x843d9c000",
+      "owned_bytes": 8589934592,
+      "display": [
+        1080,
+        2400,
+        32
+      ],
+      "report": "outputs/UniXNU_marble/ios18_arm64e/boot-handoff-confirmed.json"
+    },
+    "runtime_transport": "outputs/UniXNU_marble/ios18_arm64e/boot-runtime-transport.json",
+    "runtime_observation": "内核交接后复位，USB 连接返回",
+    "diagnostic_usb_export": "pass",
+    "panic_reader": {
+      "report": "outputs/UniXNU_marble/ios18_arm64e/panic-reader-transport.json",
+      "image": "outputs/UniXNU_marble/ios18_arm64e/boot/marble_ios18_panic_reader.img",
+      "region": "outputs/UniXNU_marble/ios18_arm64e/panic-region.bin",
+      "bytes": 1048576,
+      "magic": "0x461f0480",
+      "expected_magic": "0x46554e4b",
+      "valid_xnu_panic": false
+    },
+    "remaining": "内核交接后缺少有效内核日志；存储驱动和 iOS 用户态启动待适配"
+  },
+  "boot_image": {
+    "profile": "ios-18.7.11-22H384",
+    "kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/kernel.fileset.macho",
+    "prelink_complete": true,
+    "enabled_cpus": [
+      0
+    ],
+    "kernel_args": [
+      "-v",
+      "serial=3",
+      "keepsyms=1",
+      "debug=0x14e"
+    ],
+    "model": "iPhone11,8",
+    "volume_bytes": 67108864,
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/boot/marble_ios18_arm64e_boot.img",
+    "image_bytes": 22753280
   }
 }

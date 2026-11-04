@@ -1,5 +1,5 @@
 diff --git a/DarwinBootPkg/Driver/DarwinBoot.c b/DarwinBootPkg/Driver/DarwinBoot.c
-index 25ce2d2..f39c53a 100644
+index 25ce2d2..67b286a 100644
 --- a/DarwinBootPkg/Driver/DarwinBoot.c
 +++ b/DarwinBootPkg/Driver/DarwinBoot.c
 @@ -12,6 +12,9 @@
@@ -12,7 +12,17 @@ index 25ce2d2..f39c53a 100644
  #include "BootArgs.h"
  #include "BootVideo.h"
  #include "PackedRamdisk.h"
-@@ -183,7 +186,7 @@ ParseKernel (CONST UINT8 *Data, UINTN Size, KERNEL *Kernel)
+@@ -125,7 +128,8 @@ ParseKernel (CONST UINT8 *Data, UINTN Size, KERNEL *Kernel)
+   BOOLEAN  Executable;
+ 
+   if ((Size < 32) || (U32 (Data) != 0xfeedfacf) || (U32 (Data + 4) != 0x100000c) ||
+-      (U32 (Data + 8) != 0) || (U32 (Data + 12) != 2)) {
++      (((U32 (Data + 8) & 0x00ffffff) != 0) && ((U32 (Data + 8) & 0x00ffffff) != 2)) ||
++      ((U32 (Data + 12) != 2) && (U32 (Data + 12) != 12))) {
+     return EFI_UNSUPPORTED;
+   }
+   if (U32 (Data + 20) > Size - 32) { return EFI_LOAD_ERROR; }
+@@ -183,7 +187,7 @@ ParseKernel (CONST UINT8 *Data, UINTN Size, KERNEL *Kernel)
  
  STATIC
  BOOLEAN
@@ -21,7 +31,7 @@ index 25ce2d2..f39c53a 100644
  {
    UINT32 Properties;
    UINT32 Children;
-@@ -194,6 +197,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+@@ -194,6 +198,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
    UINTN  TrustCandidate;
    UINTN  AddonCandidate;
    UINTN  MemoryCandidate;
@@ -29,7 +39,7 @@ index 25ce2d2..f39c53a 100644
    CONST UINT8 *Name;
    UINTN  NameLength;
  
-@@ -203,6 +207,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+@@ -203,6 +208,7 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
    TrustCandidate = MAX_UINTN;
    AddonCandidate = MAX_UINTN;
    MemoryCandidate = MAX_UINTN;
@@ -37,7 +47,7 @@ index 25ce2d2..f39c53a 100644
    if ((Depth > 64) || (Size - *Offset < 8)) { return FALSE; }
    Properties = U32 (Data + *Offset);
    Children = U32 (Data + *Offset + 4);
-@@ -236,6 +241,10 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+@@ -236,6 +242,10 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
        if ((AddonCandidate != MAX_UINTN) || (Length != 16)) { return FALSE; }
        AddonCandidate = *Offset;
      }
@@ -48,7 +58,7 @@ index 25ce2d2..f39c53a 100644
      if (AsciiStrCmp ((CONST CHAR8 *)(Data + *Offset - 36), "darwinboot-memory-size") == 0) {
        if ((MemoryCandidate != MAX_UINTN) || (Length != 8)) { return FALSE; }
        MemoryCandidate = *Offset;
-@@ -265,9 +274,13 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
+@@ -265,9 +275,13 @@ AdtNode (CONST UINT8 *Data, UINTN Size, UINTN *Offset, UINTN Depth, UINTN Parent
      *WindowSize = U64 (Data + MemoryCandidate);
      if (!DarwinWindowSizeValid (*WindowSize)) { return FALSE; }
    }
@@ -63,7 +73,7 @@ index 25ce2d2..f39c53a 100644
    }
    return TRUE;
  }
-@@ -491,6 +504,8 @@ Boot (
+@@ -491,6 +505,8 @@ Boot (
    UINT64                          TrustCacheAddress;
    UINTN                           AddonOffset;
    UINT64                          AddonAddress;
@@ -72,7 +82,7 @@ index 25ce2d2..f39c53a 100644
    DARWIN_BOOT_ARGS                *Args;
    EFI_MEMORY_DESCRIPTOR           *Map;
    UINTN                           Capacity;
-@@ -523,6 +538,7 @@ Boot (
+@@ -523,6 +539,7 @@ Boot (
        CommandLine[Index] = (CHAR8)Request->BootArgs[Index];
      }
    }
@@ -80,7 +90,7 @@ index 25ce2d2..f39c53a 100644
    Root = NULL;
    Image = NULL;
    Tree = NULL;
-@@ -532,12 +548,26 @@ Boot (
+@@ -532,12 +549,26 @@ Boot (
    TreePath = NULL;
    Map = NULL;
    Address = 0;
@@ -108,7 +118,7 @@ index 25ce2d2..f39c53a 100644
    if (EFI_ERROR (Status)) { goto Fail; }
    Status = ParseKernel (Image, ImageSize, &Kernel);
    if (EFI_ERROR (Status)) { goto Fail; }
-@@ -552,9 +582,10 @@ Boot (
+@@ -552,9 +583,10 @@ Boot (
    RamdiskOffset = MAX_UINTN;
    TrustCacheOffset = MAX_UINTN;
    AddonOffset = MAX_UINTN;
@@ -120,7 +130,7 @@ index 25ce2d2..f39c53a 100644
    if (KeepPacked && (!RamdiskPacked || (RamdiskOffset == MAX_UINTN))) { Status = EFI_COMPROMISED_DATA; goto Fail; }
    if (WindowSize == 0) { WindowSize = WINDOW_SIZE; }
    if (Kernel.Base > MAX_UINT64 - WindowSize) { Status = EFI_LOAD_ERROR; goto Fail; }
-@@ -599,8 +630,24 @@ Boot (
+@@ -599,8 +631,24 @@ Boot (
    }
    Status = ReadBootVideo (Video);
    if (EFI_ERROR (Status)) { goto Fail; }
@@ -147,7 +157,7 @@ index 25ce2d2..f39c53a 100644
    ArgsAddress = ALIGN_VALUE (Address + Kernel.End - Kernel.Base, SIZE_16KB);
    TreeAddress = ArgsAddress + EFI_PAGE_SIZE;
    RamdiskAddress = ALIGN_VALUE (TreeAddress + TreeSize, EFI_PAGE_SIZE);
-@@ -631,6 +678,10 @@ Boot (
+@@ -631,6 +679,10 @@ Boot (
    Args->DeviceTreeLength = (UINT32)TreeSize;
    CopyMem (Args->CommandLine, CommandLine, sizeof (CommandLine));
    CopyMem ((VOID *)(UINTN)TreeAddress, Tree, TreeSize);
@@ -158,7 +168,7 @@ index 25ce2d2..f39c53a 100644
    if (Request->Ramdisk != NULL) {
      if (KeepPacked) { CopyMem ((VOID *)(UINTN)RamdiskAddress, Request->Ramdisk, Request->RamdiskSize); }
      else { CopyRamdisk ((VOID *)(UINTN)RamdiskAddress, Request->Ramdisk, Request->RamdiskSize, RamdiskPacked); }
-@@ -681,6 +732,16 @@ Boot (
+@@ -681,6 +733,16 @@ Boot (
            READ_SYSREG (id_aa64mmfr0_el1) & 0xF, (((READ_SYSREG (id_aa64mmfr0_el1) >> 28) & 0xF) == 0xF) ? "NOT supported" : "supported"));
    DEBUG ((DEBUG_ERROR, "ID_AA64PFR0_EL1  0x%lx\n", READ_SYSREG (id_aa64pfr0_el1)));
    DEBUG ((DEBUG_ERROR, "\nExiting boot services. A green bar across the top\nmeans the kernel entry code ran.\n"));
@@ -175,7 +185,7 @@ index 25ce2d2..f39c53a 100644
    for (Attempt = 0; Attempt < 3; Attempt++) {
      MapSize = Capacity;
      Status = gBS->GetMemoryMap (&MapSize, Map, &Key, &Stride, &Version);
-@@ -705,18 +766,21 @@ Fail:
+@@ -705,18 +767,21 @@ Fail:
    if (Addon != NULL) { FreePool (Addon); }
    if (TreePath != NULL) { FreePool (TreePath); }
    if (Map != NULL) { FreePool (Map); }
@@ -198,7 +208,7 @@ index 25ce2d2..f39c53a 100644
    return gBS->UninstallMultipleProtocolInterfaces (ImageHandle, &gUniXNULoaderProtocolGuid, &mLoader, NULL);
  }
  
-@@ -734,7 +798,10 @@ DarwinBootEntry (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+@@ -734,7 +799,10 @@ DarwinBootEntry (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
    Status = gBS->HandleProtocol (ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&Loaded);
    if (EFI_ERROR (Status)) { return Status; }
    mImage = ImageHandle;

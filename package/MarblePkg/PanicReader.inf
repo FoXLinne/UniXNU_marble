@@ -1,0 +1,28 @@
+[Defines]
+  INF_VERSION = 0x00010019
+  BASE_NAME = MarblePanicReader
+  FILE_GUID = E7818B9D-2560-4B38-899A-88D434AE1A91
+  MODULE_TYPE = UEFI_APPLICATION
+  VERSION_STRING = 1.0
+  ENTRY_POINT = MarblePanicReaderEntry
+
+[Sources]
+  PanicReader.c
+  GunyahWatchdog.h
+  RootUsb.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  UniXNUPkg/UniXNUPkg.dec
+
+[LibraryClasses]
+  BaseMemoryLib
+  BaseLib
+  MemoryAllocationLib
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  UefiLib
+
+[Protocols]
+  gEfiCpuArchProtocolGuid

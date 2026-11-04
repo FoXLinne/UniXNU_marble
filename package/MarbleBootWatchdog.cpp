@@ -3,6 +3,7 @@
 #include <kern/thread.h>
 
 extern "C" void native_marble_watchdog_start(void);
+extern "C" struct vnode *rootvnode;
 
 static uint64_t watchdogCall(uint64_t function, uint64_t *control = nullptr) {
     register uint64_t x0 __asm__("x0") = function;
@@ -19,10 +20,13 @@ static void watchdogWorker(void *, wait_result_t) {
     uint64_t status = watchdogCall(0x86000006, &control);
     IOLog("MarbleWatchdog: startup active=%u status=%llx\n", !status && (control & 1), status);
     if (!status && (control & 1)) {
-        for (;;) {
+        unsigned bootSeconds = 0;
+        while (bootSeconds < 90 || rootvnode) {
             watchdogCall(0x86000007);
             IOSleep(1000);
+            if (bootSeconds < 90) ++bootSeconds;
         }
+        IOLog("MarbleWatchdog: root mount timeout\n");
     }
     thread_terminate(current_thread());
 }

@@ -805,10 +805,18 @@ index 126605f..6a3e7be 100644
  __ZN24IOBufferMemoryDescriptor20inTaskWithGuardPagesEP4taskjy
  __ZN27IOGuardPageMemoryDescriptor12initWithSizeEm
 diff --git a/config/Private.exports b/config/Private.exports
-index 73504c4..ffceb78 100644
+index 73504c4..0696c59 100644
 --- a/config/Private.exports
 +++ b/config/Private.exports
-@@ -902,11 +902,9 @@ _kernel_image4_get_monitor_exports
+@@ -827,6 +827,7 @@ _mbuf_set_gso_info
+ _mbuf_get_lro_info
+ _mbuf_set_lro_info
+ _mcl_to_paddr
++_ml_get_cluster_count
+ _ml_io_increase_timeouts
+ _ml_io_increase_timeouts_phys
+ _ml_io_read
+@@ -902,11 +903,9 @@ _kernel_image4_get_monitor_exports
  _pmap_claim_reserved_ppl_page
  _pmap_free_reserved_ppl_page
  _pmap_in_ppl
@@ -820,7 +828,7 @@ index 73504c4..ffceb78 100644
  _port_name_to_task:_port_name_to_task_external
  _port_name_to_thread
  _post_sys_powersource
-@@ -1210,6 +1208,7 @@ _kdebug_lookup_gen_events
+@@ -1210,6 +1209,7 @@ _kdebug_lookup_gen_events
  _kdebug_vnode
  _set_vm_privilege
  _throttle_io_will_be_throttled
