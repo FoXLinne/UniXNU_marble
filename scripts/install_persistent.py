@@ -10,6 +10,33 @@ import subprocess
 import zlib
 
 
+def data_store_boundary(partition_bytes, entries):
+    kernel = next(image for image in entries if image['name'] == 'KernelSeed')
+    identity = kernel['data_seed']
+    logical = identity['logical_bytes']
+    if not logical or logical % 4096 or partition_bytes % 4096:
+        raise RuntimeError('Invalid persistent Data geometry')
+    pages = logical // 4096
+    bitmap_blocks = (pages + 32767) // 32768
+    first = partition_bytes // 4096 - 256 - (1 + bitmap_blocks + pages)
+    if first < 0 or any(image['offset'] + image['raw_bytes'] + 4 * 1024**2 > first * 4096 for image in entries):
+        raise RuntimeError('Images overlap the persistent Data window')
+    return first, pages, identity
+
+
+def validate_data_store(header, pages, identity):
+    if len(header) != 4096:
+        raise RuntimeError('Short persistent Data header')
+    if header[:8] != b'SHNGDATA':
+        return
+    if (struct.unpack_from('<II', header, 8) != (1, 64) or
+            zlib.crc32(header[:60]) != struct.unpack_from('<I', header, 60)[0]):
+        raise RuntimeError('Persistent Data header is damaged')
+    if (struct.unpack_from('<Q', header, 16)[0] != pages or
+            header[24:56].hex() != identity['logical_sha256']):
+        raise RuntimeError('Installed Data belongs to a different seed')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=('partition','images','test','boot'))
@@ -63,6 +90,9 @@ def main():
         if size!=plan['unixnu_bytes']:
             raise RuntimeError('UniXNU partition size differs from installation layout')
         entries=json.loads((assets/'storage_images.json').read_text())
+        first,pages,identity=data_store_boundary(size,entries)
+        data_header=read(f'dd if=/dev/block/by-name/unixnu bs=4096 skip={first} count=1 2>/dev/null')
+        validate_data_store(data_header,pages,identity)
         old_header=read('dd if=/dev/block/by-name/unixnu bs=4096 count=1 2>/dev/null')
         installed={}
         checkpoint_file=cache/'install_checkpoint.json'

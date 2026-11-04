@@ -54,7 +54,8 @@ def main():
     mailbox+=boot_args.encode()+bytes(1048576-128-len(boot_args.encode()))
     data+=mailbox;(out/'KernelSeed.bin').write_bytes(data)
     images=json.loads(args.images.read_text())
-    images.append(dict(name='KernelSeed',source=str(out/'KernelSeed.bin'),format='raw',raw_bytes=len(data),sha256=hashlib.sha256(data).hexdigest()))
+    images.append(dict(name='KernelSeed',source=str(out/'KernelSeed.bin'),format='raw',raw_bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),
+                       data_seed={key:meta[key] for key in ('logical_bytes','logical_sha256','volume_uuid')}))
     header=bytearray(4096);header[:8]=b'SHNGROOT';struct.pack_into('<II',header,8,1,len(images));cursor=1048576
     for index,image in enumerate(images):
         image['offset']=cursor;at=24+128*index
