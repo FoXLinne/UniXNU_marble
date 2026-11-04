@@ -8,6 +8,7 @@
 #include "RootUsb.h"
 #include <Protocol/RootStage.h>
 #include <Protocol/Cpu.h>
+#include "../MarblePac.h"
 
 #define TRANSFER_BYTES 0x400000
 #define EP_OUT 0x01
@@ -289,6 +290,23 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     ROOT_STAGE_DISK *Disk = &mStage->Disks[mDisk];
     if (AsciiStrCmp(Command,"upload")) mExportBytes=0;
     if (!AsciiStrCmp(Command,"getvar:version")) Reply("OKAY","RootStage2");
+    else if (!AsciiStrCmp(Command,"getvar:cpu-features")) {
+      UINT64 Isar1, Isar2, Level;
+      __asm__ volatile("mrs %0, ID_AA64ISAR1_EL1" : "=r"(Isar1));
+      __asm__ volatile("mrs %0, S3_0_C0_C6_2" : "=r"(Isar2));
+      __asm__ volatile("mrs %0, CurrentEL" : "=r"(Level));
+      CHAR8 Text[51];
+      Hex(Text,Isar1,16); Text[16]=':';
+      Hex(Text+17,Isar2,16); Text[33]=':';
+      Hex(Text+34,Level,16); Reply("OKAY",Text);
+    }
+    else if (!AsciiStrCmp(Command,"getvar:pac-el1")) {
+      struct MarblePacResult Result = {0};
+      marbleProbePac(&Result);
+      CHAR8 Text[34];
+      Hex(Text,Result.keys,16); Text[16]=':';
+      Hex(Text+17,Result.authenticated,16); Reply("OKAY",Text);
+    }
     else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache,zero-fill");
     else if (!AsciiStrnCmp(Command,"oem runtime-usb:",16) && (Command[16]=='0' || Command[16]=='1') && !Command[17]) {
       mRuntimeUsb=Command[16]=='1'; Reply("OKAY","");

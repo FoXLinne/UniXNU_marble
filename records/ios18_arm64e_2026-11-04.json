@@ -1,0 +1,97 @@
+{
+  "date": "2026-11-04",
+  "device": "marble",
+  "soc": "SM7475",
+  "profile": "ios-18.7.11-22H384",
+  "architecture": "arm64e",
+  "device_base_revision": "b34883bd96b1c8fd3cc45c0e15f7974f986eeda9",
+  "ipsw": {
+    "product": "iPhone11,8",
+    "version": "18.7.11",
+    "build": "22H384",
+    "kernel_version": "Darwin 24.6.0 / xnu-11417.140.69.706.66~1",
+    "fileset_entries": 224
+  },
+  "sources": {
+    "xnu": "43a90889846e00bfb5cf1d255cdc0a701a1e05a4",
+    "UniXNU": "3fa5ff5f409398c0555a9561d6437ce5d4c3b3b7",
+    "XnuPrelink": "b1888c12456c46a2226d63c794465dfcee08d465",
+    "kernel_patch": "patches/xnu-11417/arm64e.patch",
+    "scripts_patch": "patches/UniXNU/ios18-static-if.patch",
+    "prelink_patch": "patches/XnuPrelink/ios18-layout.patch"
+  },
+  "pac": {
+    "scope": "boot-cpu-el1",
+    "isar1": "0x10011101211052",
+    "isar2": "0x0",
+    "current_el": 1,
+    "APA": 5,
+    "GPA": 1,
+    "key_register_mask": 31,
+    "authentication_mask": 31,
+    "required_mask": 31,
+    "evidence": "outputs/UniXNU_marble/ios18_arm64e/pac-el1.json"
+  },
+  "build": {
+    "development": "pass",
+    "release_lto": "pass",
+    "native_kernel": "outputs/UniXNU_marble/ios18_arm64e/kernel.native.macho",
+    "native_bytes": 14848760,
+    "components": [
+      "ArmDTPlatform",
+      "ArmCpu",
+      "corecrypto-14",
+      "MarbleBootWatchdog"
+    ],
+    "crypto_sources": 529,
+    "crypto_compile_failures": 0,
+    "corecrypto_namespaced": true,
+    "watchdog_werror": "pass",
+    "post_hmac": "populated",
+    "runtime_post_verified": false,
+    "command": "work/marble_hackios/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py kernel --output outputs/UniXNU_marble/ios18_arm64e",
+    "log": "outputs/UniXNU_marble/ios18_arm64e/kernel-command.log"
+  },
+  "prelink": {
+    "closure_components": 21,
+    "unresolved_references": 7821,
+    "unresolved_targets": 584,
+    "mapping_complete": false,
+    "loadable": false,
+    "candidate_written": false,
+    "missing_by_component": {
+      "com.apple.filesystems.apfs": 3254,
+      "com.apple.driver.AppleARMPlatform": 1512,
+      "com.apple.driver.ApplePMGR": 1101,
+      "com.apple.driver.AppleMobileFileIntegrity": 492,
+      "com.apple.iokit.IOStorageFamily": 354,
+      "com.apple.kec.corecrypto": 290,
+      "com.apple.driver.AppleARMWatchdogTimer": 196,
+      "com.apple.iokit.CoreAnalyticsFamily": 164,
+      "com.apple.security.AppleImage4": 148,
+      "com.apple.iokit.IOCryptoAcceleratorFamily": 107,
+      "com.apple.driver.AppleEffaceableStorage": 78,
+      "com.apple.iokit.IOSlowAdaptiveClockingFamily": 73,
+      "com.apple.iokit.IOReportFamily": 52
+    },
+    "report": "outputs/UniXNU_marble/ios18_arm64e/kernel.fileset.json",
+    "command": "work/marble_hackios/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py prelink --output outputs/UniXNU_marble/ios18_arm64e"
+  },
+  "verification": {
+    "fileset_layout_emit_tests": 17,
+    "fileset_layout_emit_result": "pass",
+    "xnu_patch_base_check": "pass",
+    "script_patch_base_check": "pass",
+    "python_toml_inputs": "pass",
+    "upstream_snapshot": "pass"
+  },
+  "hardware": {
+    "el0_cpu_probe": "USB control transfer timeout",
+    "bus_reset": "timeout",
+    "hub_port_power_cycle": "pass",
+    "last_adb_devices": 0,
+    "last_fastboot_devices": 0,
+    "hardware_requirement": "设备硬件复位",
+    "ios18_userspace_boot_verified": false
+  }
+}

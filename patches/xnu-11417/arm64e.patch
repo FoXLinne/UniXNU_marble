@@ -1,0 +1,2471 @@
+diff --git a/EXTERNAL_HEADERS/CoreEntitlements/CoreEntitlements.h b/EXTERNAL_HEADERS/CoreEntitlements/CoreEntitlements.h
+index 60e7e8f..5831a6c 100644
+--- a/EXTERNAL_HEADERS/CoreEntitlements/CoreEntitlements.h
++++ b/EXTERNAL_HEADERS/CoreEntitlements/CoreEntitlements.h
+@@ -5,6 +5,11 @@
+ #ifndef CORE_ENTITLEMENTS_H
+ #define CORE_ENTITLEMENTS_H
+ 
++#define kCSWebBrowserNetworkEntitlement "com.apple.developer.web-browser-engine.networking"
++#define kCSWebBrowserWebContentEntitlement "com.apple.developer.web-browser-engine.webcontent"
++#define kCSWebBrowserGPUEntitlement "com.apple.developer.web-browser-engine.rendering"
++#define kCSWebBrowserHostEntitlement "com.apple.developer.web-browser-engine.host"
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+diff --git a/bsd/conf/Makefile.template b/bsd/conf/Makefile.template
+index 1b3361e..554272c 100644
+--- a/bsd/conf/Makefile.template
++++ b/bsd/conf/Makefile.template
+@@ -590,7 +590,7 @@ $(COBJS): .CFLAGS
+ 	$(_v)$(REPLACECONTENTS) $@ $(KCC) $(CFLAGS) $(INCFLAGS)
+ $(CXXOBJS): .CXXFLAGS
+ .CXXFLAGS: ALWAYS
+-	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CXXFLAGS) $(INCFLAGS)
++	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CFLAGS) $(CXXFLAGS) $(INCFLAGS)
+ $(SOBJS): .SFLAGS
+ .SFLAGS: ALWAYS
+ 	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index 240bbf6..6bde2a7 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -186,7 +186,7 @@
+ 
+ #include "kern_exec_internal.h"
+ 
+-#include <CodeSignature/Entitlements.h>
++#include <CoreEntitlements/CoreEntitlements.h>
+ 
+ #include <mach/exclaves.h>
+ 
+diff --git a/bsd/kern/kern_priv.c b/bsd/kern/kern_priv.c
+index 88adf2d..05e7679 100644
+--- a/bsd/kern/kern_priv.c
++++ b/bsd/kern/kern_priv.c
+@@ -82,6 +82,16 @@ priv_check_cred(kauth_cred_t cred, int priv, int flags)
+ #endif
+ 	int error;
+ 
++	/*
++	 * CoreAnimation creates its render-server work interval as an ordinary user, and
++	 * UIKit processes (SpringBoard, apps) abort with "Failed to create work interval"
++	 * without it. This board loads no Sandbox/AMFI privilege policy that would grant it,
++	 * and the policy set that is present denies it, so it is decided before the policies.
++	 */
++	if (priv == PRIV_WORK_INTERVAL) {
++		return 0;
++	}
++
+ 	/*
+ 	 * We first evaluate policies that may deny the granting of
+ 	 * privilege unilaterally.
+diff --git a/bsd/kern/kern_trustcache.c b/bsd/kern/kern_trustcache.c
+index e10a7fe..23992cf 100644
+--- a/bsd/kern/kern_trustcache.c
++++ b/bsd/kern/kern_trustcache.c
+@@ -557,8 +557,16 @@ SECURITY_READ_ONLY_LATE(TrustCacheRuntime_t) trust_cache_rt_storage;
+ SECURITY_READ_ONLY_LATE(TrustCacheRuntime_t*) trust_cache_rt = &trust_cache_rt_storage;
+ 
+ /* Mutable part of the runtime */
+-TrustCacheMutableRuntime_t trust_cache_mut_rt_storage;
+-SECURITY_READ_ONLY_LATE(TrustCacheMutableRuntime_t*) trust_cache_mut_rt = &trust_cache_mut_rt_storage;
++/*
++ * The kernel only allocates this runtime; libTrustCache in AMFI owns its layout. Newer AMFI keeps
++ * two loadable lists here (the xnu-8796 header declares one), so reserve zeroed room past the
++ * declared type. trustCacheInitializeRuntime clears only the declared part; the rest stays zero.
++ */
++static struct {
++	TrustCacheMutableRuntime_t runtime;
++	uint64_t reserved[7];
++} trust_cache_mut_rt_reserved;
++SECURITY_READ_ONLY_LATE(TrustCacheMutableRuntime_t*) trust_cache_mut_rt = &trust_cache_mut_rt_reserved.runtime;
+ 
+ void
+ trust_cache_runtime_init(void)
+diff --git a/bsd/kern/mach_loader.c b/bsd/kern/mach_loader.c
+index 6450d5c..7ab3dfd 100644
+--- a/bsd/kern/mach_loader.c
++++ b/bsd/kern/mach_loader.c
+@@ -506,7 +506,11 @@ load_machfile(
+ #if defined(__arm64__)
+ 	if (result->is_64bit_addr) {
+ 		/* enforce 16KB alignment of VM map entries */
++		#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++		vm_map_set_page_shift(map, FOURK_PAGE_SHIFT);
++#else
+ 		vm_map_set_page_shift(map, SIXTEENK_PAGE_SHIFT);
++#endif
+ 	} else {
+ 		vm_map_set_page_shift(map, page_shift_user32);
+ 	}
+diff --git a/bsd/kern/sys_work_interval.c b/bsd/kern/sys_work_interval.c
+index b544bf3..3edde7c 100644
+--- a/bsd/kern/sys_work_interval.c
++++ b/bsd/kern/sys_work_interval.c
+@@ -265,6 +265,20 @@ work_interval_ctl(__unused proc_t p, struct work_interval_ctl_args *uap,
+ 
+ 		break;
+ 
++	/*
++	 * sheng: the interval instance operations of the OS's libsystem_kernel (start 6, update 7, finish 8; their numbers and argument
++	 * are not in this source). os_workgroup_interval_start/update/finish use them on every audio IO cycle; refusing them made the
++	 * audio server log a failure from its real-time IO thread each cycle. Without a performance controller there is nothing to
++	 * report them to, so the call succeeds.
++	 */
++	case 6:
++	case 7:
++	case 8:
++		if (uap->arg == USER_ADDR_NULL || uap->work_interval_id == 0) {
++			return EINVAL;
++		}
++		break;
++
+ 	default:
+ 		return ENOTSUP;
+ 	}
+diff --git a/bsd/kern/ubc_subr.c b/bsd/kern/ubc_subr.c
+index 69b9d1f..c998c10 100644
+--- a/bsd/kern/ubc_subr.c
++++ b/bsd/kern/ubc_subr.c
+@@ -103,6 +103,9 @@ static void ubc_cs_free(struct ubc_info *uip);
+ 
+ static boolean_t ubc_cs_supports_multilevel_hash(struct cs_blob *blob);
+ static kern_return_t ubc_cs_convert_to_multilevel_hash(struct cs_blob *blob);
++#if defined(XNU_NATIVE_CS_HASH_CACHE) && XNU_NATIVE_CS_HASH_CACHE
++static int cs_native4k_prepare(vnode_t vp, struct cs_blob *blob);
++#endif
+ 
+ ZONE_DEFINE_TYPE(ubc_info_zone, "ubc_info zone", struct ubc_info,
+     ZC_ZFREE_CLEARMEM);
+@@ -366,7 +369,11 @@ cs_validate_codedirectory(const CS_CodeDirectory *cd, size_t length)
+ 	if (ntohl(cd->magic) != CSMAGIC_CODEDIRECTORY) {
+ 		return EBADEXEC;
+ 	}
+-	if ((cd->pageSize != PAGE_SHIFT_4K) && (cd->pageSize != PAGE_SHIFT)) {
++	if ((cd->pageSize != PAGE_SHIFT_4K) && (cd->pageSize != PAGE_SHIFT)
++#if defined(XNU_NATIVE_CS_HASH_CACHE) && XNU_NATIVE_CS_HASH_CACHE
++	    && !(PAGE_SHIFT == 12 && cd->pageSize == 14)
++#endif
++	    ) {
+ 		printf("disallowing unsupported code signature page shift: %u\n", cd->pageSize);
+ 		return EBADEXEC;
+ 	}
+@@ -3948,6 +3955,13 @@ ubc_cs_convert_to_multilevel_hash(struct cs_blob *blob)
+ static void
+ cs_blob_cleanup(struct cs_blob *blob)
+ {
++	if (blob->csb_native4k_hashes != NULL) {
++		kmem_free(kernel_map, (vm_offset_t)blob->csb_native4k_hashes,
++		    blob->csb_native4k_hashes_size);
++		blob->csb_native4k_hashes = NULL;
++		blob->csb_native4k_hashes_size = 0;
++		blob->csb_native4k_hash_count = 0;
++	}
+ 	if (blob->csb_entitlements != NULL) {
+ 		amfi->OSEntitlements_invalidate(blob->csb_entitlements);
+ 		osobject_release(blob->csb_entitlements);
+@@ -4945,6 +4959,14 @@ ubc_cs_blob_add(
+ 		goto out;
+ 	}
+ 
++#if defined(XNU_NATIVE_CS_HASH_CACHE) && XNU_NATIVE_CS_HASH_CACHE
++	/* Authenticate before publishing the signed object or taking its locks. */
++	error = cs_native4k_prepare(vp, &tmp_blob);
++	if (error != 0) {
++		goto out;
++	}
++#endif
++
+ 	/*
+ 	 * The vnode_lock, linked list traversal, and marking of the memory object as
+ 	 * signed can all be blocking operations. Compute a PAC over the tmp_blob.
+@@ -5812,6 +5834,145 @@ ubc_get_cs_mtime(
+ 
+ unsigned long cs_validate_page_no_hash = 0;
+ unsigned long cs_validate_page_bad_hash = 0;
++#if defined(XNU_NATIVE_CS_HASH_CACHE) && XNU_NATIVE_CS_HASH_CACHE
++__attribute__((used)) const uint32_t cs_native4k_hash_cache_version = 1;
++unsigned long cs_native4k_full_blocks = 0;
++unsigned long cs_native4k_page_checks = 0;
++unsigned long cs_native4k_ready_blobs = 0;
++/* The boot cost, for a board's diagnostics: mach_absolute_time ticks in vn_rdwr (the storage driver's work included) and in the
++ * hashing, and the bytes read. */
++uint64_t cs_native4k_read_ticks = 0, cs_native4k_hash_ticks = 0, cs_native4k_bytes = 0;
++extern uint64_t mach_absolute_time(void);
++
++/* The original signed 16K hash authenticates the whole immutable input
++ * buffer first. Only then derive native-page digests from that same buffer.
++ * Publish nothing until every original block has passed, and make the
++ * derived array readonly before its owning RO cs_blob can become visible.
++ * VM fault validation consequently performs no vnode I/O under object locks.
++ */
++/* One read covers 64 original blocks. Files above 32 MiB (the 3 GB dyld shared cache, read whole by launchd at every boot) are read
++ * uncached: through the page cache they left almost no free memory when the first daemons started. */
++#define CS_NATIVE4K_CHUNK       (1024 * 1024)
++#define CS_NATIVE4K_UNCACHED    (32 * 1024 * 1024)
++
++__attribute__((noinline))
++static int
++cs_native4k_prepare(vnode_t vp, struct cs_blob *blob)
++{
++	const CS_CodeDirectory *cd = blob->csb_cd;
++	const struct cs_hash *md = blob->csb_hashtype;
++	vm_offset_t storage = 0;
++	vm_size_t allocation = 0, count = 0;
++	uint8_t *buffer = NULL;
++	uint64_t limit, offset, chunk;
++	int error = EBADEXEC, ioflags;
++	kern_return_t kr;
++
++	if (blob->csb_hash_pageshift <= PAGE_SHIFT) {
++		return 0;
++	}
++	if (PAGE_SHIFT != 12 || blob->csb_hash_pageshift != 14 || cd == NULL || md == NULL ||
++	    md->cs_size == 0 || md->cs_size > CS_HASH_MAX_SIZE ||
++	    md->cs_digest_size > CS_HASH_MAX_SIZE || blob->csb_base_offset < 0 ||
++	    (blob->csb_base_offset & PAGE_MASK) || blob->csb_hash_firstlevel_pageshift ||
++	    ((ntohl(cd->version) >= CS_SUPPORTSSCATTER) && ntohl(cd->scatterOffset))) {
++		return ENOTSUP;
++	}
++	limit = ntohl(cd->codeLimit);
++	if (!limit || ((ntohl(cd->version) >= CS_SUPPORTSCODELIMIT64) &&
++	    ntohll(cd->codeLimit64) && ntohll(cd->codeLimit64) != limit) ||
++	    ntohl(cd->nCodeSlots) != ((limit + 16383) >> 14)) {
++		return ENOTSUP;
++	}
++	count = (limit + PAGE_MASK) >> PAGE_SHIFT;
++	if (os_mul_overflow(count, (vm_size_t)md->cs_size, &allocation) ||
++	    round_page_overflow(allocation, &allocation)) {
++		return EOVERFLOW;
++	}
++	kr = kmem_alloc(kernel_map, &storage, allocation,
++	    KMA_KOBJECT | KMA_DATA | KMA_ZERO, VM_KERN_MEMORY_SECURITY);
++	if (kr != KERN_SUCCESS) {
++		return ENOMEM;
++	}
++	buffer = kalloc_data(CS_NATIVE4K_CHUNK, Z_WAITOK);
++	if (buffer == NULL) {
++		error = ENOMEM;
++		goto out;
++	}
++	/* Executables are faulted in right after their signature is added and stay cached. */
++	ioflags = limit > CS_NATIVE4K_UNCACHED ? IO_NOCACHE : 0;
++	for (chunk = 0; chunk < limit; chunk += CS_NATIVE4K_CHUNK) {
++		size_t chunk_length = MIN((uint64_t)CS_NATIVE4K_CHUNK, limit - chunk);
++		int resid = 0;
++		off_t position;
++		if (os_add_overflow(blob->csb_base_offset, (off_t)chunk, &position)) {
++			error = EOVERFLOW;
++			goto out;
++		}
++		const uint64_t read_start = mach_absolute_time();
++		error = vn_rdwr(UIO_READ, vp, (caddr_t)buffer, (int)chunk_length, position,
++		    UIO_SYSSPACE, ioflags, vfs_context_ucred(vfs_context_current()),
++		    &resid, current_proc());
++		const uint64_t hash_start = mach_absolute_time();
++		os_atomic_add(&cs_native4k_read_ticks, hash_start - read_start, relaxed);
++		os_atomic_add(&cs_native4k_bytes, (uint64_t)chunk_length, relaxed);
++		if (error || resid) {
++			error = error ? error : EIO;
++			goto out;
++		}
++		for (size_t block = 0; block < chunk_length; block += 16384) {
++			union cs_hash_union ctx;
++			uint8_t digest[CS_HASH_MAX_SIZE];
++			const uint8_t *expected;
++			const uint8_t *data = buffer + block;
++			const char *lower = blob->csb_mem_kaddr;
++			const char *upper = lower + blob->csb_mem_size;
++			size_t length = MIN((size_t)16384, chunk_length - block);
++			offset = chunk + block;
++			expected = hashes(cd, (uint32_t)(offset >> 14), md->cs_size, lower, upper);
++			if (expected == NULL) {
++				error = EBADEXEC;
++				goto out;
++			}
++			md->cs_init(&ctx);
++			md->cs_update(&ctx, data, length);
++			md->cs_final(digest, &ctx);
++			if (bcmp(expected, digest, md->cs_size)) {
++				os_atomic_inc(&cs_validate_page_bad_hash, relaxed);
++				error = EBADEXEC;
++				goto out;
++			}
++			os_atomic_inc(&cs_native4k_full_blocks, relaxed);
++			for (size_t sub = 0; sub < length; sub += PAGE_SIZE) {
++				size_t bytes = MIN((size_t)PAGE_SIZE, length - sub);
++				vm_size_t index = (offset + sub) >> PAGE_SHIFT;
++				md->cs_init(&ctx);
++				md->cs_update(&ctx, data + sub, bytes);
++				md->cs_final(digest, &ctx);
++				memcpy((void *)(storage + index * md->cs_size), digest, md->cs_size);
++			}
++		}
++		os_atomic_add(&cs_native4k_hash_ticks, mach_absolute_time() - hash_start, relaxed);
++	}
++	kr = mach_vm_protect(kernel_map, storage, allocation, FALSE, VM_PROT_READ);
++	if (kr != KERN_SUCCESS) {
++		error = EPERM;
++		goto out;
++	}
++	blob->csb_native4k_hashes = (const uint8_t *)storage;
++	blob->csb_native4k_hashes_size = allocation;
++	blob->csb_native4k_hash_count = count;
++	storage = 0;
++	os_atomic_inc(&cs_native4k_ready_blobs, relaxed);
++	error = 0;
++out:
++	kfree_data(buffer, CS_NATIVE4K_CHUNK);
++	if (storage) {
++		kmem_free(kernel_map, storage, allocation);
++	}
++	return error;
++}
++#endif
+ static boolean_t
+ cs_validate_hash(
+ 	struct cs_blob          *blobs,
+@@ -5834,6 +5995,7 @@ cs_validate_hash(
+ 	size_t                  size;
+ 	off_t                   codeLimit = 0;
+ 	const char              *lower_bound, *upper_bound;
++	boolean_t               native4k_cached = FALSE;
+ 	vm_offset_t             kaddr, blob_addr;
+ 
+ 	/* retrieve the expected hash */
+@@ -5870,15 +6032,31 @@ cs_validate_hash(
+ 			if (hashtype->cs_digest_size > sizeof(actual_hash)) {
+ 				panic("hash size too large");
+ 			}
+-			if (offset & ((1U << blob->csb_hash_pageshift) - 1)) {
+-				panic("offset not aligned to cshash boundary");
+-			}
+-
+ 			codeLimit = ntohl(cd->codeLimit);
+-
+-			hash = hashes(cd, (uint32_t)(offset >> blob->csb_hash_pageshift),
+-			    hashtype->cs_size,
+-			    lower_bound, upper_bound);
++#if defined(XNU_NATIVE_CS_HASH_CACHE) && XNU_NATIVE_CS_HASH_CACHE
++			if (PAGE_SHIFT == 12 && blob->csb_hash_pageshift == 14) {
++				vm_size_t index = (vm_size_t)offset >> PAGE_SHIFT;
++				if ((offset & PAGE_MASK) || offset >= codeLimit ||
++				    blob->csb_native4k_hashes == NULL ||
++				    index >= blob->csb_native4k_hash_count ||
++				    hashtype->cs_size > blob->csb_native4k_hashes_size ||
++				    index > (blob->csb_native4k_hashes_size - hashtype->cs_size) / hashtype->cs_size) {
++					*bytes_processed = PAGE_SIZE;
++					*tainted = CS_VALIDATE_TAINTED;
++					return FALSE;
++				}
++				hash = blob->csb_native4k_hashes + index * hashtype->cs_size;
++				native4k_cached = TRUE;
++				os_atomic_inc(&cs_native4k_page_checks, relaxed);
++			} else
++#endif
++			{
++				if (offset & ((1U << blob->csb_hash_pageshift) - 1)) {
++					panic("offset not aligned to cshash boundary");
++				}
++				hash = hashes(cd, (uint32_t)(offset >> blob->csb_hash_pageshift),
++				    hashtype->cs_size, lower_bound, upper_bound);
++			}
+ 			if (hash != NULL) {
+ 				bcopy(hash, expected_hash, hashtype->cs_size);
+ 				found_hash = TRUE;
+@@ -5908,7 +6086,7 @@ cs_validate_hash(
+ 	} else {
+ 		*tainted = 0;
+ 
+-		size = (1U << blob->csb_hash_pageshift);
++		size = native4k_cached ? PAGE_SIZE : (1U << blob->csb_hash_pageshift);
+ 		*bytes_processed = size;
+ 
+ 		const uint32_t *asha1, *esha1;
+@@ -5974,6 +6152,172 @@ cs_validate_hash(
+ 	return validated;
+ }
+ 
++/*
++ * Fixups of signed file text, each <file name>,<file offset>,<original>,<replacement> (offset in hex, byte strings in hex, at
++ * most 16 bytes): the board's table in the device tree (/chosen/text-fixups, NUL-separated entries, so it takes no command line
++ * space), then the boot arguments text-fixup0..7. A page is changed only after it passed signature validation and only when
++ * the original bytes match, so a different file or build is left alone.
++ */
++#include <pexpert/device_tree.h>
++#define CS_TEXT_FIXUP_MAX 32
++#define CS_TEXT_FIXUP_BYTES 16
++struct cs_text_fixup {
++	char            name[64];
++	uint64_t        offset;
++	uint8_t         original[CS_TEXT_FIXUP_BYTES];
++	uint8_t         replacement[CS_TEXT_FIXUP_BYTES];
++	uint32_t        length;
++};
++static TUNABLE_STR(cs_text_fixup_arg0, 160, "text-fixup0", "");
++static TUNABLE_STR(cs_text_fixup_arg1, 160, "text-fixup1", "");
++static TUNABLE_STR(cs_text_fixup_arg2, 160, "text-fixup2", "");
++static TUNABLE_STR(cs_text_fixup_arg3, 160, "text-fixup3", "");
++static TUNABLE_STR(cs_text_fixup_arg4, 160, "text-fixup4", "");
++static TUNABLE_STR(cs_text_fixup_arg5, 160, "text-fixup5", "");
++static TUNABLE_STR(cs_text_fixup_arg6, 160, "text-fixup6", "");
++static TUNABLE_STR(cs_text_fixup_arg7, 160, "text-fixup7", "");
++static struct cs_text_fixup cs_text_fixups[CS_TEXT_FIXUP_MAX];
++static uint32_t cs_text_fixup_count;
++uint32_t cs_text_fixup_parsed;
++uint32_t cs_text_fixup_applied;
++
++static int
++cs_text_fixup_hex(char c)
++{
++	if (c >= '0' && c <= '9') {
++		return c - '0';
++	}
++	if (c >= 'a' && c <= 'f') {
++		return c - 'a' + 10;
++	}
++	if (c >= 'A' && c <= 'F') {
++		return c - 'A' + 10;
++	}
++	return -1;
++}
++
++/* Hex bytes up to the next ',' or the end; returns the count or 0 on a malformed field. */
++static uint32_t
++cs_text_fixup_bytes(const char **cursor, uint8_t *out)
++{
++	const char *s = *cursor;
++	uint32_t n = 0;
++	while (*s && *s != ',') {
++		int hi = cs_text_fixup_hex(s[0]), lo = s[1] ? cs_text_fixup_hex(s[1]) : -1;
++		if (hi < 0 || lo < 0 || n == CS_TEXT_FIXUP_BYTES) {
++			return 0;
++		}
++		out[n++] = (uint8_t)(hi << 4 | lo);
++		s += 2;
++	}
++	*cursor = *s ? s + 1 : s;
++	return n;
++}
++
++static bool
++cs_text_fixup_parse(const char *arg, struct cs_text_fixup *f)
++{
++	const char *comma = strchr(arg, ',');
++	if (comma == NULL || comma == arg || (size_t)(comma - arg) >= sizeof(f->name)) {
++		return false;
++	}
++	strlcpy(f->name, arg, (size_t)(comma - arg) + 1);
++	const char *s = comma + 1;
++	f->offset = 0;
++	for (; *s && *s != ','; s++) {
++		int v = cs_text_fixup_hex(*s);
++		if (v < 0) {
++			return false;
++		}
++		f->offset = f->offset << 4 | (uint64_t)v;
++	}
++	if (*s++ != ',') {
++		return false;
++	}
++	uint32_t n = cs_text_fixup_bytes(&s, f->original);
++	if (n == 0 || cs_text_fixup_bytes(&s, f->replacement) != n || *s) {
++		return false;
++	}
++	/* One page holds the whole fixup, so a single validated page carries it. */
++	if ((f->offset & PAGE_MASK) + n > PAGE_SIZE) {
++		return false;
++	}
++	f->length = n;
++	return true;
++}
++
++static void
++cs_text_fixup_init(void)
++{
++	DTEntry chosen;
++	void const *table;
++	unsigned int size;
++	if (SecureDTLookupEntry(NULL, "/chosen", &chosen) == kSuccess &&
++	    SecureDTGetProperty(chosen, "text-fixups", &table, &size) == kSuccess) {
++		const char *s = table, *end = s + size;
++		for (int i = 0; s < end && *s; i++) {
++			char entry[160];
++			size_t length = strnlen(s, (size_t)(end - s));
++			if (length < sizeof(entry) && cs_text_fixup_count < CS_TEXT_FIXUP_MAX) {
++				strlcpy(entry, s, length + 1);
++				if (cs_text_fixup_parse(entry, &cs_text_fixups[cs_text_fixup_count])) {
++					cs_text_fixup_count++;
++				} else {
++					printf("text-fixups[%d]: malformed, ignored\n", i);
++				}
++			} else {
++				printf("text-fixups[%d]: too long or table full, ignored\n", i);
++			}
++			s += length + 1;
++		}
++	}
++	const char *args[] = {
++		cs_text_fixup_arg0, cs_text_fixup_arg1, cs_text_fixup_arg2, cs_text_fixup_arg3,
++		cs_text_fixup_arg4, cs_text_fixup_arg5, cs_text_fixup_arg6, cs_text_fixup_arg7,
++	};
++	for (int i = 0; i < (int)(sizeof(args) / sizeof(args[0])); i++) {
++		if (args[i][0] == '\0' || cs_text_fixup_count == CS_TEXT_FIXUP_MAX) {
++			continue;
++		}
++		if (cs_text_fixup_parse(args[i], &cs_text_fixups[cs_text_fixup_count])) {
++			cs_text_fixup_count++;
++		} else {
++			printf("text-fixup%d: malformed, ignored\n", i);
++		}
++	}
++	cs_text_fixup_parsed = cs_text_fixup_count;
++}
++STARTUP(EARLY_BOOT, STARTUP_RANK_MIDDLE, cs_text_fixup_init);
++
++/*
++ * Applies the fixups that fall in this validated page of vp. kva is a writable kernel address of the page. Returns the
++ * number of fixups written, so the caller makes the instruction cache coherent.
++ */
++uint32_t
++cs_text_fixup_page(struct vnode *vp, memory_object_offset_t page_offset, void *kva)
++{
++	uint32_t written = 0;
++	for (uint32_t i = 0; i < cs_text_fixup_count; i++) {
++		const struct cs_text_fixup *f = &cs_text_fixups[i];
++		if (f->offset < page_offset || f->offset + f->length > page_offset + PAGE_SIZE) {
++			continue;
++		}
++		if (vp == NULLVP || vp->v_name == NULL || strcmp(vp->v_name, f->name) != 0) {
++			continue;
++		}
++		uint8_t *at = (uint8_t *)kva + (f->offset - page_offset);
++		if (memcmp(at, f->original, f->length) != 0) {
++			continue;
++		}
++		memcpy(at, f->replacement, f->length);
++		written++;
++		if (os_atomic_inc(&cs_text_fixup_applied, relaxed) <= 16) {
++			printf("text-fixup: %s+0x%llx (%u bytes) applied\n", f->name, f->offset, f->length);
++		}
++	}
++	return written;
++}
++
+ boolean_t
+ cs_validate_range(
+ 	struct vnode    *vp,
+diff --git a/bsd/net/necp_client.c b/bsd/net/necp_client.c
+index 9ffc871..a8904d4 100644
+--- a/bsd/net/necp_client.c
++++ b/bsd/net/necp_client.c
+@@ -68,7 +68,7 @@
+ 
+ #include <os/refcnt.h>
+ 
+-#include <CodeSignature/Entitlements.h>
++#include <CoreEntitlements/CoreEntitlements.h>
+ 
+ #if SKYWALK
+ #include <skywalk/os_skywalk_private.h>
+diff --git a/bsd/sys/make_symbol_aliasing.sh b/bsd/sys/make_symbol_aliasing.sh
+index 24fb244..91b2cf5 100755
+--- a/bsd/sys/make_symbol_aliasing.sh
++++ b/bsd/sys/make_symbol_aliasing.sh
+@@ -34,7 +34,7 @@ fi
+ SDKROOT="$1"
+ OUTPUT="$2"
+ 
+-AVAILABILITY_PL="${SDKROOT}/${DRIVERKITROOT}/usr/local/libexec/availability.pl"
++AVAILABILITY_PL="${XNU_AVAILABILITY_PL:-${SDKROOT}/${DRIVERKITROOT}/usr/local/libexec/availability.pl}"
+ 
+ if [ ! -x "${AVAILABILITY_PL}" ] ; then
+     echo "Unable to locate ${AVAILABILITY_PL} (or not executable)" >&2
+diff --git a/bsd/sys/ubc_internal.h b/bsd/sys/ubc_internal.h
+index 56f0444..923d38b 100644
+--- a/bsd/sys/ubc_internal.h
++++ b/bsd/sys/ubc_internal.h
+@@ -162,6 +162,13 @@ struct cs_blob {
+ 	bool csb_csm_managed;
+ 	uint32_t csb_csm_trust_level;
+ #endif
++
++	/* Native 4K authenticators derived only from fully verified original
++	 * 16K blocks. Append fields to preserve the existing binary prefix.
++	 */
++	const uint8_t   *csb_native4k_hashes;
++	vm_size_t       csb_native4k_hashes_size;
++	vm_size_t       csb_native4k_hash_count;
+ };
+ 
+ /*
+diff --git a/config/MASTER b/config/MASTER
+index e9170fd..f7d1e8a 100644
+--- a/config/MASTER
++++ b/config/MASTER
+@@ -331,6 +331,8 @@ options		CONFIG_EXCLAVES			# <config_exclaves>
+ # Compile XNU with PPL support.
+ options   CONFIG_PMAP_PPL			# <config_pmap_ppl>
+ 
++options   CONFIG_APPLE_AMCC			# <apple_amcc>
++
+ options   NOS_ARM_ASM			# <nos_arm_asm>
+ options   NOS_ARM_PMAP			# <nos_arm_pmap>
+ 
+diff --git a/config/MASTER.arm64.bcm2837 b/config/MASTER.arm64.bcm2837
+new file mode 100644
+index 0000000..fa3d43f
+--- /dev/null
++++ b/config/MASTER.arm64.bcm2837
+@@ -0,0 +1,128 @@
++#
++# Mach Operating System
++# Copyright (c) 1986 Carnegie-Mellon University
++# Copyright 2001-2024 Apple Inc.
++#
++# All rights reserved.  The CMU software License Agreement
++# specifies the terms and conditions for use and redistribution.
++#
++######################################################################
++#
++#  Master Apple configuration file (see the master machine independent
++#  configuration file for a description of the file format).
++#
++######################################################################
++#
++#  Standard Apple OS Configurations:
++#  -------- ----- -- ---------------
++#
++#  ARM_EXTRAS_BASE = [ config_pmap_ppl nos_arm_asm nos_arm_pmap ]
++#  KERNEL_BASE =    [ arm64 xsmall msgb_small config_embedded config_enforce_signed_code config_code_signature_reconstitution config_requires_u32_munging config_darkboot ARM_EXTRAS_BASE ]
++#  KERNEL_RELEASE = [ KERNEL_BASE release ]
++#  KERNEL_DEV =     [ KERNEL_BASE development mach_assert config_xnupost proc_ref_debug config_proc_resource_limits config_ext_paniclog ]
++#  KERNEL_DEBUG =   [ KERNEL_BASE debug mach_assert config_xnupost config_waitq_stats config_workloop_debug config_proc_resource_limits config_ext_paniclog ]
++#  BSD_EXTRAS_BASE = [ ]
++#  BSD_EXTRAS_DEV = [ config_coredump config_ucoredump ]
++#  BSD_EXTRAS_DEBUG = [ config_coredump config_ucoredump ]
++#  BSD_BASE =       [ mach_bsd psynch config_proc_uuid_policy config_personas config_imageboot config_imageboot_img4 BSD_EXTRAS_BASE ]
++#  BSD_RELEASE =    [ BSD_BASE no_printf_str no_kprintf_str secure_kernel config_imgsrc_access ]
++#  BSD_DEV =        [ BSD_BASE config_netboot config_imgsrc_access pgo config_vnguard rosetta BSD_EXTRAS_DEV ]
++#  BSD_DEBUG =      [ BSD_BASE config_netboot config_imgsrc_access pgo config_vnguard rosetta BSD_EXTRAS_DEBUG ]
++#  FILESYS_BASE =   [ devfs fifo fs_compression config_protect config_mnt_rootsnap config_triggers config_fse routefs namedstreams config_dataless_files bindfs]
++#  FILESYS_RELEASE= [ FILESYS_BASE ]
++#  FILESYS_DEV =    [ FILESYS_BASE fdesc config_union_mounts ]
++#  FILESYS_DEBUG =  [ FILESYS_BASE fdesc config_union_mounts ]
++#  SKYWALK_BASE =   [ skywalk config_nexus_user_pipe config_nexus_kernel_pipe config_nexus_flowswitch config_nexus_netif ]
++#  SKYWALK_RELEASE = [ SKYWALK_BASE ]
++#  SKYWALK_DEV =    [ SKYWALK_BASE ]
++#  SKYWALK_DEBUG =  [ SKYWALK_BASE ]
++#  NETWORKING =     [ inet tcpdrop_synfin bpfilter if_bridge traffic_mgt dummynet ah_all_crypto if_fake if_redirect vlan ]
++#  NETWORKING_RELEASE = [ NETWORKING ]
++#  NETWORKING_DEV = [ NETWORKING_RELEASE packet_mangler if_headless kctl_test ]
++#  NETWORKING_DEBUG = [ NETWORKING_DEV ]
++#  VPN =            [ ipsec flow_divert necp content_filter ]
++#  PF_RELEASE =     [ pf pflog ]
++#  PF_DEV =         [ PF_RELEASE ]
++#  PF_DEBUG =       [ PF_DEV ]
++#  MULTIPATH =      [ multipath mptcp ]
++#  IOKIT_BASE =     [ iokit iokitcpp no_kernel_hid config_sleep ]
++#  IOKIT_RELEASE =  [ IOKIT_BASE ]
++#  IOKIT_DEV =      [ IOKIT_BASE iokitstats iotracking ]
++#  IOKIT_DEBUG =    [ IOKIT_BASE iokitstats iotracking]
++#  LIBKERN_BASE =   [ libkerncpp config_blocks config_kec_fips zlib crypto_sha2 config_img4 ]
++#  LIBKERN_RELEASE =[ LIBKERN_BASE ]
++#  LIBKERN_DEV =    [ LIBKERN_BASE iotracking ]
++#  LIBKERN_DEBUG =  [ LIBKERN_BASE iotracking ]
++
++#  CPU_COUNTERS_BASE = [ ]
++#  PERF_EXTRAS_BASE = [ ]
++#  PERF_EXTRAS_DEV = [ kdp_interactive_debugging config_kdp_coredump_encryption ]
++#  PERF_EXTRAS_DEBUG = [ kdp_interactive_debugging config_kdp_coredump_encryption ]
++
++#  PERF_DBG_BASE =  [ mach_kdp config_serial_kdp CPU_COUNTERS_BASE kperf PERF_EXTRAS_BASE ]
++#  PERF_DBG_RELEASE=[ PERF_DBG_BASE ist_kdebug ]
++#  PERF_DBG_DEV =   [ PERF_DBG_BASE config_dtrace lock_stats zleaks alternate_debugger sched_hygiene_debug config_debug_syscall_rejection config_iotrace PERF_EXTRAS_DEV config_memory_microstackshot ]
++#  PERF_DBG_DEBUG = [ PERF_DBG_BASE config_dtrace lock_stats zleaks alternate_debugger sched_hygiene_debug config_debug_syscall_rejection config_iotrace PERF_EXTRAS_DEBUG config_memory_microstackshot ]
++#  PERF_DBG_KASAN = [ PERF_DBG_BASE config_dtrace lock_stats zleaks alternate_debugger config_debug_syscall_rejection config_iotrace PERF_EXTRAS_DEV config_memory_microstackshot ]
++#if SOC_IS_VIRTUALIZED
++#  PARAVIRT_BASE =  [ config_pv_ticket ]
++#else
++#  PARAVIRT_BASE =  [ ]
++#endif
++#  MACH_BASE =      [ mach config_ecc_logging vc_progress_white importance_inheritance config_atm config_coalitions config_iosched config_library_validation config_sysdiagnose config_telemetry config_mach_bridge_recv_time config_quiesce_counter config_io_compression_stats phys_write_acct config_service_port_info PARAVIRT_BASE ]
++#  MACH_RELEASE =   [ MACH_BASE config_skip_precise_user_kernel_time debugger_for_zone_info ]
++#  MACH_DEV =       [ MACH_BASE config_io_accounting importance_trace config_task_suspend_stats ]
++#  MACH_DEBUG =     [ MACH_BASE config_io_accounting importance_trace importance_debug config_task_suspend_stats ]
++#  SCHED_BASE =     [ config_sched_timeshare_core config_sched_deferred_ast config_clutch config_sched_sfi config_taskwatch config_preadopt_tg ]
++#  SCHED_RELEASE =  [ SCHED_BASE ]
++#  SCHED_DEV =      [ SCHED_BASE ]
++#  SCHED_DEBUG =    [ SCHED_BASE ]
++#if MASTER_CONFIG_ENABLE_KERNEL_TAG && MASTER_CONFIG_ENABLE_SPTM
++#  VM_EXTRA =       [ kernel_tagging ]
++#  VM_EXTRA_DEV =   [ ]
++#elif MASTER_CONFIG_ENABLE_SPTM
++#  VM_EXTRA =       [ ]
++#  VM_EXTRA_DEV =   [ ]
++#else
++#  VM_EXTRA =       [ ]
++#  VM_EXTRA_DEV =   [ ]
++#endif /* MASTER_CONFIG_ENABLE_KERNEL_TAG && MASTER_CONFIG_ENABLE_SPTM */
++#  VM_BASE =        [ vps_dynamic_prio vm_pressure_events jetsam freeze memorystatus config_code_decryption phantom_cache config_secluded_memory config_cs_validation_bitmap config_deferred_reclaim config_map_ranges VM_EXTRA ]
++#  VM_RELEASE =     [ VM_BASE ]
++#  VM_DEV =         [ VM_BASE dynamic_codesigning ubsan_minimal VM_EXTRA_DEV ]
++#  VM_DEBUG =       [ VM_BASE dynamic_codesigning ubsan_minimal VM_EXTRA_DEV ]
++#  VM_KASAN =       [ VM_BASE dynamic_codesigning config_kasan config_ubsan config_kcov config_ksancov kernel_tagging kernel_tbi]
++#  SECURITY_BASE =    [ config_macf kernel_integrity config_secure_bsd_root reslide_shared_cache ]
++#  SECURITY_RELEASE = [ SECURITY_BASE ]
++#  SECURITY_DEV =     [ SECURITY_BASE config_setuid config_kas_info ]
++#  SECURITY_DEBUG =   [ SECURITY_BASE config_setuid config_kas_info ]
++#  BASE =           [ MULTIPATH VPN ]
++#  RELEASE =        [ BASE KERNEL_RELEASE BSD_RELEASE FILESYS_RELEASE             SKYWALK_RELEASE NETWORKING_RELEASE PF_RELEASE IOKIT_RELEASE LIBKERN_RELEASE PERF_DBG_RELEASE MACH_RELEASE SCHED_RELEASE VM_RELEASE SECURITY_RELEASE ]
++#  DEVELOPMENT =    [ BASE KERNEL_DEV     BSD_DEV     FILESYS_DEV     SKYWALK_DEV     NETWORKING_DEV     PF_DEV     IOKIT_DEV     LIBKERN_DEV     PERF_DBG_DEV     MACH_DEV     SCHED_DEV     VM_DEV     SECURITY_DEV     ]
++#  DEBUG =          [ BASE KERNEL_DEBUG   BSD_DEBUG   FILESYS_DEBUG   SKYWALK_DEBUG   NETWORKING_DEBUG   PF_DEBUG   IOKIT_DEBUG   LIBKERN_DEBUG   PERF_DBG_DEBUG   MACH_DEBUG   SCHED_DEBUG   VM_DEBUG   SECURITY_DEBUG   ]
++#  KASAN =          [ BASE KERNEL_DEV     BSD_DEV     FILESYS_DEV     SKYWALK_DEV     NETWORKING_DEV     PF_DEV     IOKIT_DEV     LIBKERN_DEV     PERF_DBG_KASAN   MACH_DEV     SCHED_DEV     VM_KASAN   SECURITY_DEV     ]
++#  SPTM =           [ BASE KERNEL_DEV     BSD_DEV     FILESYS_DEV     SKYWALK_DEV     NETWORKING_DEV     PF_DEV     IOKIT_DEV     LIBKERN_DEV     PERF_DBG_DEV     MACH_DEV     SCHED_DEV     VM_DEV     SECURITY_DEV     ]
++#
++######################################################################
++#
++machine		"arm64"						# <arm64>
++
++makeoptions	OSFMK_MACHINE = "arm64"				# <mach>
++
++options		COUNT_SYSCALLS		# count bsd system calls 	# <countcalls>
++options     TRASH_VFP_ON_SAVE   # <debug,trash_vfp>
++options		ALTERNATE_DEBUGGER	# <alternate_debugger>
++
++options   CONFIG_VNODES=1024		# <xsmall>
++
++options   CONFIG_FREEZE_SUSPENDED_MIN=4		# <xsmall>
++
++options	  CONFIG_MACH_APPROXIMATE_TIME
++
++options   CONFIG_KERNEL_INTEGRITY		# <kernel_integrity>
++
++options   CONFIG_RESLIDE_SHARED_CACHE		# <reslide_shared_cache>
++
++options   CONFIG_UBSAN_MINIMAL		# <ubsan_minimal>
++options   CONFIG_KERNEL_TBI		# <kernel_tbi>
++options   CONFIG_KERNEL_TAGGING		# <kernel_tagging>
+diff --git a/config/Private.arm64.exports b/config/Private.arm64.exports
+index 126605f..6a3e7be 100644
+--- a/config/Private.arm64.exports
++++ b/config/Private.arm64.exports
+@@ -84,51 +84,16 @@ _mach_bridge_recv_timestamps
+ _mach_bridge_init_timestamp
+ _mach_bridge_set_params
+ _vfs_resolver_result
+-_pmap_iommu_init
+-_pmap_iommu_iovmalloc
+-_pmap_iommu_map
+-_pmap_iommu_unmap
+-_pmap_iommu_iovmfree
+-_pmap_iommu_ioctl
+-_pmap_iommu_alloc_contiguous_pages
+-_nvme_ppl_get_desc
+-_sart_get_desc
+-_t8020dart_get_desc
+-_t8020dart_vo_tte
+-_t6000dart_get_desc
+-_t6000dart_vo_tte
+-_t8110dart_get_desc
+-_t8110dart_max_translation_levels
+-_t8110dart_vo_tte
+-_t8110dart_vo_tt_index
+ _ml_amcc_error_inject_register
+ _ml_dcs_error_inject_register
+ _ml_mem_fault_report_enable_register
+ _ml_mcache_flush_callback_register
+-_uat_get_desc
+ _set_invalidate_hmac_function
+ _PE_panic_debugging_enabled
+ _register_additional_panic_data_buffer
+ _apply_func_phys
+ _Switch_context
+ _gT1Sz
+-__ZN26IOUnifiedAddressTranslator10gMetaClassE
+-__ZN26IOUnifiedAddressTranslator10superClassE
+-__ZN26IOUnifiedAddressTranslator17getPageTableEntryEy
+-__ZN26IOUnifiedAddressTranslator18setClientContextIDEjb
+-__ZN26IOUnifiedAddressTranslator21removeClientContextIDEv
+-__ZN26IOUnifiedAddressTranslator19isPageFaultExpectedEyj
+-__ZN26IOUnifiedAddressTranslator22registerTaskForServiceEP4taskP9IOService
+-__ZN26IOUnifiedAddressTranslator23createMappingInApertureEjP18IOMemoryDescriptorjym
+-__ZN26IOUnifiedAddressTranslator23getTotalPageTableMemoryEv
+-__ZN26IOUnifiedAddressTranslator3mapEP11IOMemoryMapj
+-__ZN26IOUnifiedAddressTranslator5doMapEP18IOMemoryDescriptoryyj
+-__ZN26IOUnifiedAddressTranslator5unmapEP11IOMemoryMap
+-__ZN26IOUnifiedAddressTranslator7doUnmapEP18IOMemoryDescriptoryy
+-__ZN26IOUnifiedAddressTranslator8taskDiedEv
+-__ZN26IOUnifiedAddressTranslator12commitUnmapsEv
+-__ZN26IOUnifiedAddressTranslator14prepareFWUnmapEyy
+-__ZTV26IOUnifiedAddressTranslator
+ __ZN24IOBufferMemoryDescriptor18initWithGuardPagesEP4taskjy
+ __ZN24IOBufferMemoryDescriptor20inTaskWithGuardPagesEP4taskjy
+ __ZN27IOGuardPageMemoryDescriptor12initWithSizeEm
+diff --git a/config/Private.exports b/config/Private.exports
+index 73504c4..a678bce 100644
+--- a/config/Private.exports
++++ b/config/Private.exports
+@@ -902,11 +902,9 @@ _kernel_image4_get_monitor_exports
+ _pmap_claim_reserved_ppl_page
+ _pmap_free_reserved_ppl_page
+ _pmap_in_ppl
+-_pmap_has_iofilter_protected_write
+ _pmap_iofilter_protected_write
+ _pmap_lookup_in_static_trust_cache
+ _pmap_lookup_in_loaded_trust_caches
+-_pmap_cs_configuration
+ _port_name_to_task:_port_name_to_task_external
+ _port_name_to_thread
+ _post_sys_powersource
+diff --git a/iokit/Kernel/IOMemoryDescriptor.cpp b/iokit/Kernel/IOMemoryDescriptor.cpp
+index 4fa1008..b342f8b 100644
+--- a/iokit/Kernel/IOMemoryDescriptor.cpp
++++ b/iokit/Kernel/IOMemoryDescriptor.cpp
+@@ -33,6 +33,10 @@
+ #include <IOKit/system.h>
+ #include <IOKit/IOLib.h>
+ #include <IOKit/IOMemoryDescriptor.h>
++/* Native board kernels map driver-owned (managed) pages through physical descriptors on purpose: GPU buffer views and the
++ * scanout hand-off. The DEVELOPMENT report below then ran once per segment of every such mapping, with a backtrace, hundreds of
++ * times a second while the UI animates (int-148 msgbuf), and pushed every other message out of the 128 KiB buffer. */
++#define NATIVE_QUIET_MANAGED_PAGE_REPORT 1
+ #include <IOKit/IOMapper.h>
+ #include <IOKit/IODMACommand.h>
+ #include <IOKit/IOKitKeysPrivate.h>
+@@ -5265,7 +5269,7 @@ IOMemoryDescriptor::populateDevicePager(
+ 			break;
+ 		}
+ 
+-#if DEBUG || DEVELOPMENT
++#if (DEBUG || DEVELOPMENT) && !NATIVE_QUIET_MANAGED_PAGE_REPORT
+ 		if ((kIOMemoryTypeUPL != type)
+ 		    && pmap_has_managed_page((ppnum_t) atop_64(physAddr), (ppnum_t) atop_64(physAddr + segLen - 1))) {
+ 			OSReportWithBacktrace("IOMemoryDescriptor physical with managed page 0x%qx:0x%qx",
+diff --git a/iokit/Kernel/IOService.cpp b/iokit/Kernel/IOService.cpp
+index 39f62c7..5454d96 100644
+--- a/iokit/Kernel/IOService.cpp
++++ b/iokit/Kernel/IOService.cpp
+@@ -5297,14 +5297,16 @@ IOService::setRootMedia(IOService * root)
+ 	const OSMetaClass * ioblockstoragedriverClass;
+ 	bool unhide;
+ 
+-	ioblockstoragedriverClass = OSMetaClass::getMetaClassWithName(gIOBlockStorageDriverKey);
+-	assert(ioblockstoragedriverClass);
++	if (root) {
++		ioblockstoragedriverClass = OSMetaClass::getMetaClassWithName(gIOBlockStorageDriverKey);
++		assert(ioblockstoragedriverClass);
+ 
+-	while (root) {
+-		if (root->metaCast(ioblockstoragedriverClass)) {
+-			break;
++		while (root) {
++			if (root->metaCast(ioblockstoragedriverClass)) {
++				break;
++			}
++			root = root->getProvider();
+ 		}
+-		root = root->getProvider();
+ 	}
+ 
+ 	LOCKWRITENOTIFY();
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index 559a9db..2f374b7 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -35,6 +35,23 @@
+ const char * gIOKernelConfigTables =
+     "("
+     "   {"
++    "     'IOClass'         = ArmCpu;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IOProbeScore'    = 2000:32;"
++    "   },"
++    "   {"
++    "     'IOClass'         = ArmVirtPlatform;"
++    "     'IOProviderClass' = IOPlatformExpertDevice;"
++    "     'IONameMatch'     = 'linux,dummy-virt';"
++    "     'IOProbeScore'    = 10000:32;"
++    "   },"
++    "   {"
++    "     'IOClass'         = ArmDTPlatform;"
++    "     'IOProviderClass' = IOPlatformExpertDevice;"
++    "     'IONameMatch'     = 'device-tree';"
++    "     'IOProbeScore'    = 5000:32;"
++    "   },"
++    "   {"
+     "     'IOClass'         = IOPanicPlatform;"
+     "     'IOProviderClass' = IOPlatformExpertDevice;"
+     "     'IOProbeScore'    = 0:32;"
+@@ -44,4 +61,48 @@ const char * gIOKernelConfigTables =
+     "     'IOProviderClass' = IOService;"
+     "     'IOExclaveProxy'  = 1:32;"
+     "   }"
++#if defined(XNU_NATIVE_AES) && XNU_NATIVE_AES
++    "   ,{"
++    "     'IOClass'         = NativeAES;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOResourceMatch' = IOBSD;"
++    "     'IOProbeScore'    = 1000:32;"
++    "   }"
++#endif
++#if defined(XNU_NATIVE_VIRTIO_BLOCK) && XNU_NATIVE_VIRTIO_BLOCK
++    "   ,{"
++    "     'IOClass'         = NativeVirtioBlock;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IOProbeScore'    = 1000:32;"
++    "   }"
++#endif
++#if defined(XNU_NATIVE_VIRTIO_CONSOLE) && XNU_NATIVE_VIRTIO_CONSOLE
++    "   ,{"
++    "     'IOClass'         = NativeVirtioConsole;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IOProbeScore'    = 1000:32;"
++    "   }"
++#endif
++#if defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
++    "   ,{"
++    "     'IOClass'         = NativeRamBlock;"
++    "     'IOMatchCategory' = NativeRamBlock;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOResourceMatch' = IOBSD;"
++    "     'IOProbeScore'    = 1000:32;"
++    "   }"
++#endif
++#if defined(XNU_NATIVE_UFS) && XNU_NATIVE_UFS
++    "   ,{"
++    "     'IOClass'         = NativeUfs;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IOProbeScore'    = 1000:32;"
++    "   }"
++    "   ,{"
++    "     'IOClass'         = NativeUfs;"
++    "     'IOMatchCategory' = NativeUfsRoot;"
++    "     'IOProviderClass' = IOPlatformExpertDevice;"
++    "     'IOProbeScore'    = 500:32;"
++    "   }"
++#endif
+     ")";
+diff --git a/iokit/conf/Makefile.template b/iokit/conf/Makefile.template
+index 2b3b974..c300580 100644
+--- a/iokit/conf/Makefile.template
++++ b/iokit/conf/Makefile.template
+@@ -209,7 +209,7 @@ $(COBJS): .CFLAGS
+ 	$(_v)$(REPLACECONTENTS) $@ $(KCC) $(CFLAGS) $(INCFLAGS)
+ $(CXXOBJS): .CXXFLAGS
+ .CXXFLAGS: ALWAYS
+-	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CXXFLAGS) $(INCFLAGS)
++	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CFLAGS) $(CXXFLAGS) $(INCFLAGS)
+ $(SOBJS): .SFLAGS
+ .SFLAGS: ALWAYS
+ 	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
+diff --git a/libkern/c++/OSKext.cpp b/libkern/c++/OSKext.cpp
+index 8c4d510..0fcd714 100644
+--- a/libkern/c++/OSKext.cpp
++++ b/libkern/c++/OSKext.cpp
+@@ -74,6 +74,15 @@ extern "C" {
+ #include <libkern/OSKextLibPrivate.h>
+ #include <libkern/c++/OSKext.h>
+ #include <libkern/c++/OSLib.h>
++#include <ptrauth.h>
++
++#if CONFIG_MACF
++extern "C" int mac_late;
++#endif
++#if defined(XNU_SOURCE_CORECRYPTO14)
++extern "C" kmod_info_t *source_corecrypto14_original(void);
++extern "C" kern_return_t source_corecrypto14_start_once(kmod_info_t *module, void *data);
++#endif
+ 
+ #include <IOKit/IOLib.h>
+ #include <IOKit/IOCatalogue.h>
+@@ -8451,9 +8460,67 @@ OSKext::start(bool startDependenciesFlag)
+ 	OSKextLogKextInfo(this, kmod_info->address, kmod_info->size, firehose_tracepoint_code_load);
+ 	result = OSRuntimeInitializeCPP(this);
+ 	if (result == KERN_SUCCESS) {
++#if defined(XNU_SOURCE_CORECRYPTO14)
++		if (kmod_info == source_corecrypto14_original()) {
++			/* The kernel already started the original corecrypto; share that one result. */
++			result = source_corecrypto14_start_once(kmod_info, kmodStartData);
++		} else
++#endif
+ 		result = startfunc(kmod_info, kmodStartData);
+ 	}
+ 
++	/* A boot collection component whose start leaves its security policy unregistered names its
++	 * own registration routine in _NativePrelinkEarlySecurityInit. It runs here, with dependencies
++	 * and constructors ready and before MAC policy lockdown. Original component code runs; no
++	 * policy result is supplied.
++	 */
++	if (result == KERN_SUCCESS && getPropertyForHostArch("_NativePrelinkEarlySecurityInit") != NULL) {
++#if CONFIG_MACF
++		OSNumber *earlyInit = OSDynamicCast(OSNumber, getPropertyForHostArch("_NativePrelinkEarlySecurityInit"));
++		uintptr_t target = 0;
++		bool executable = false;
++		if (!earlyInit || !isPrelinked() || mac_late ||
++		    getPropertyForHostArch(kAppleSecurityExtensionKey) != kOSBooleanTrue ||
++		    __builtin_add_overflow((uintptr_t)earlyInit->unsigned64BitValue(), vm_kernel_slide, &target) ||
++		    (target & 3)) {
++			panic("NativePrelink: invalid early security initializer or phase for %s", getIdentifierCString());
++		}
++		kernel_mach_header_t *header = (kernel_mach_header_t *)kmod_info->address;
++		for (kernel_segment_command_t *seg = firstsegfromheader(header); seg != NULL;
++		    seg = nextsegfromheader(header, seg)) {
++			if (seg->initprot == (VM_PROT_READ | VM_PROT_EXECUTE) && !(seg->maxprot & VM_PROT_WRITE) &&
++			    seg->vmsize >= 4 && target >= seg->vmaddr && target - seg->vmaddr <= seg->vmsize - 4) {
++				executable = true;
++				break;
++			}
++		}
++		if (!executable) {
++			panic("NativePrelink: early security initializer %p outside %s code", (void *)target,
++			    getIdentifierCString());
++		}
++		/*
++		 * A function pointer cast here is signed with the type discriminator but called with a zero one,
++		 * so the call fails authentication. Branch to the checked address directly; the entry is a
++		 * BTI-c function and the clobbers are the AAPCS64 caller-saved set.
++		 */
++		register uint64_t x0 __asm__("x0");
++		register uint64_t x16 __asm__("x16") = target;
++		__asm__ volatile ("blr x16"
++		    : "=r"(x0), "+r"(x16)
++		    :
++		    : "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
++		    "x17", "x30", "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v16", "v17", "v18", "v19", "v20",
++		    "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "cc", "memory");
++		result = (int)x0;
++		if (result != KERN_SUCCESS) {
++			OSKextLog(this, kOSKextLogErrorLevel | kOSKextLogLoadFlag,
++			    "Kext %s early security initializer failed: %d", getIdentifierCString(), result);
++		}
++#else
++		panic("NativePrelink: early security initializer requires the MAC framework");
++#endif
++	}
++
+ 	flags.starting = 0;
+ 
+ 	/* On success overlap the setting of started/starting. On failure just
+diff --git a/libkern/conf/Makefile.template b/libkern/conf/Makefile.template
+index f0c8a72..c382184 100644
+--- a/libkern/conf/Makefile.template
++++ b/libkern/conf/Makefile.template
+@@ -144,7 +144,7 @@ $(COBJS): .CFLAGS
+ 	$(_v)$(REPLACECONTENTS) $@ $(KCC) $(CFLAGS) $(INCFLAGS)
+ $(CXXOBJS): .CXXFLAGS
+ .CXXFLAGS: ALWAYS
+-	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CXXFLAGS) $(INCFLAGS)
++	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CFLAGS) $(CXXFLAGS) $(INCFLAGS)
+ $(SOBJS): .SFLAGS
+ .SFLAGS: ALWAYS
+ 	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
+diff --git a/libsa/conf/Makefile.template b/libsa/conf/Makefile.template
+index bb36037..3b08b38 100644
+--- a/libsa/conf/Makefile.template
++++ b/libsa/conf/Makefile.template
+@@ -59,7 +59,7 @@ $(COBJS): .CFLAGS
+ 	$(_v)$(REPLACECONTENTS) $@ $(KCC) $(CFLAGS) $(INCFLAGS)
+ $(CXXOBJS): .CXXFLAGS
+ .CXXFLAGS: ALWAYS
+-	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CXXFLAGS) $(INCFLAGS)
++	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CFLAGS) $(CXXFLAGS) $(INCFLAGS)
+ $(SOBJS): .SFLAGS
+ .SFLAGS: ALWAYS
+ 	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
+diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
+index 8830671..78aa606 100644
+--- a/makedefs/MakeInc.def
++++ b/makedefs/MakeInc.def
+@@ -29,7 +29,7 @@ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
+ else ifneq ($(findstring _host,$(RC_ProjectName)),)
+ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
+ else
+-SUPPORTED_ARM64_MACHINE_CONFIGS = T6000 T6020 T6030 T6031 T6041 T8101 T8103 T8112 T8122 T8132 VMAPPLE
++SUPPORTED_ARM64_MACHINE_CONFIGS = BCM2837 T6000 T6020 T6030 T6031 T6041 T8101 T8103 T8112 T8122 T8132 VMAPPLE
+ 
+ SPTM_ENABLED_SOCS_MacOSX = t6041 t8132
+ 
+@@ -70,6 +70,7 @@ COMPONENT_LIST	= osfmk bsd libkern iokit pexpert libsa security san
+ COMPONENT	= $(if $(word 2,$(subst /, ,$(RELATIVE_SOURCE_PATH))),$(word 2,$(subst /, ,$(RELATIVE_SOURCE_PATH))),$(firstword $(subst /, ,$(RELATIVE_SOURCE_PATH))))
+ COMPONENT_IMPORT_LIST = $(filter-out $(COMPONENT),$(COMPONENT_LIST))
+ 
++MACHINE_FLAGS_ARM64_BCM2837 = -DARM64_BOARD_CONFIG_BCM2837
+ MACHINE_FLAGS_ARM64_T8101 = -DARM64_BOARD_CONFIG_T8101			-mcpu=apple-a14
+ MACHINE_FLAGS_ARM64_T8103 = -DARM64_BOARD_CONFIG_T8103                  -mcpu=apple-a14
+ MACHINE_FLAGS_ARM64_T6000 = -DARM64_BOARD_CONFIG_T6000			-mcpu=apple-a14
+@@ -813,7 +814,8 @@ LDFLAGS_KERNEL_GEN = \
+ 	-Wl,-headerpad,152
+ 
+ # LDFLAGS_KERNEL_SDK	= -L$(SDKROOT)/usr/local/lib/kernel -lfirehose_kernel
+-LDFLAGS_KERNEL_SDK	= -L$(SDKROOT)/usr/local/lib/kernel -L$(SDKROOT)/usr/local/lib/kernel/platform
++export KERNEL_SDKROOT ?= $(SDKROOT)
++LDFLAGS_KERNEL_SDK	= -L$(KERNEL_SDKROOT)/usr/local/lib/kernel -L$(KERNEL_SDKROOT)/usr/local/lib/kernel/platform
+ ifneq ($(KDKROOT),)
+ LDFLAGS_KERNEL_SDK     += -L$(KDKROOT)/usr/local/lib/kernel/platform
+ endif
+@@ -1020,9 +1022,17 @@ LDFLAGS_KERNEL_ONLY_CONFIG_DEBUGARM64 = $(LDFLAGS_KERNEL_ONLY_CONFIG_DEVELOPMENT
+ # arm64e specific linker flags that should be used only when linking the kernel
+ # (and not the static kernel cache / kcgen)
+ #
++ifeq ($(XNU_KERNEL_CHAINED_FIXUPS),1)
+ LDFLAGS_KERNEL_ONLY_SUBARCH_arm64e = \
+ 	-Wl,-add_split_seg_info \
+ 	-Wl,-kernel
++else
++# A standalone arm64e MH_EXECUTE boots without a kernel collection builder:
++# arm_init rebases and signs __TEXT,__thread_starts, which only ld-classic emits.
++LDFLAGS_KERNEL_ONLY_SUBARCH_arm64e = \
++	-fuse-ld=$(shell $(XCRUN) -sdk $(SDKROOT) -find ld-classic) \
++	-Wl,-threaded_starts_section
++endif
+ 
+ LDFLAGS_KERNEL_ONLY_SUBARCH_x86_64 = \
+ 	-Wl,-add_split_seg_info \
+@@ -1052,8 +1062,11 @@ LD_KERNEL_LIBS	   = -lcc_kext
+ LD_KERNEL_ARCHIVES = $(LDFLAGS_KERNEL_SDK) -lfirehose_kernel
+ 
+ # Link binary support library
++KERNEL_SUPPORT_ARCHIVE = $(KDKROOT)/System/Library/KernelSupport/lib$(CURRENT_MACHINE_CONFIG).os.$(CURRENT_KERNEL_CONFIG).a
+ ifneq ($(KDKROOT),)
+-        LDFLAGS_KERNEL_ONLY += -rdynamic -Wl,-force_load,$(KDKROOT)/System/Library/KernelSupport/lib$(CURRENT_MACHINE_CONFIG).os.$(CURRENT_KERNEL_CONFIG).a
++ifneq ($(wildcard $(KERNEL_SUPPORT_ARCHIVE)),)
++        LDFLAGS_KERNEL_ONLY += -rdynamic -Wl,-force_load,$(KERNEL_SUPPORT_ARCHIVE)
++endif
+ endif
+ 
+ #
+@@ -1085,7 +1098,9 @@ ifeq ($(EXCLAVES_ENABLED),1)
+  DOCONF_EXCLAVES := -exclaves
+ endif # !EXCLAVES_ENABLED
+ 
++ifneq ($(MACHINE_CONFIGS),BCM2837)
+ TIGHTBEAM_EXPORTS := $(SRCROOT)/config/libTightbeam.exports
++endif
+ 
+ #
+ # DTrace support
+@@ -1107,7 +1122,7 @@ INCFLAGS_IMPORT	= $(patsubst %, -I$(OBJROOT)/EXPORT_HDRS/%, $(COMPONENT_IMPORT_L
+ INCFLAGS_EXTERN	= -I$(SRCROOT)/EXTERNAL_HEADERS
+ INCFLAGS_GEN	= -I$(SRCROOT)/$(COMPONENT) -I$(OBJROOT)/EXPORT_HDRS/$(COMPONENT)
+ INCFLAGS_LOCAL	= -I.
+-INCFLAGS_SDK	= -I$(SDKROOT)/usr/local/include/kernel -I$(SDKROOT)/$(KPINCDIR)/AppleFeatures
++INCFLAGS_SDK	= -I$(KERNEL_SDKROOT)/usr/local/include/kernel -I$(KERNEL_SDKROOT)/usr/local/include -I$(SDKROOT)/$(KPINCDIR)/AppleFeatures
+ INCFLAGS_PLATFORM = -I$(SDKROOT)/$(KPINCDIR)/platform
+ ifneq ($(KDKROOT),)
+ INCFLAGS_SDK   += -I$(KDKROOT)/$(KPINCDIR)
+diff --git a/makedefs/MakeInc.kernel b/makedefs/MakeInc.kernel
+index 3939409..016113f 100644
+--- a/makedefs/MakeInc.kernel
++++ b/makedefs/MakeInc.kernel
+@@ -187,6 +187,9 @@ $(TARGET)/lib$(KERNEL_FILE_NAME).a: $(addprefix $(TARGET)/,$(foreach component,$
+ 	$(_v)$(LN) $(call function_convert_build_config_to_objdir,$(CURRENT_BUILD_CONFIG))/lib$(KERNEL_FILE_NAME).a $(OBJROOT)/lib$(KERNEL_FILE_NAME).a
+ endif
+ 
++# Explicit external source archives participate in incremental relinking.
++$(TARGET)/$(KERNEL_FILE_NAME).unstripped.noctf: $(XNU_EXTERNAL_KERNEL_ARCHIVES)
++
+ $(TARGET)/$(KERNEL_FILE_NAME).unstripped.noctf: $(addprefix $(TARGET)/,$(foreach component,$(COMPONENT_LIST),$(component)/$(CURRENT_KERNEL_CONFIG)/$(component).filelist)) lastkerneldataconst.o lastkernelconstructor.o nonlto.o version.o $(LDFILES_KERNEL_ONLY) .LDFLAGS $(filter %/MakeInc.kernel,$(MAKEFILE_LIST))
+ ifeq ($(PRE_LTO),1)
+ 	@$(LOG_LTO) "$(@F)"
+diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
+index 02ab93c..18697cf 100644
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -407,6 +407,10 @@ arm_init(
+ 
+ 
+ 	{
++		/* Native non-Apple 4K builds expose the hardware page size at any RAM size. */
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++		PAGE_SHIFT_CONST = ARM_PGSHIFT;
++#else
+ 		/*
+ 		 * Select the advertised kernel page size.
+ 		 */
+@@ -425,8 +429,14 @@ arm_init(
+ 			PAGE_SHIFT_CONST = ARM_PGSHIFT;
+ 		}
+ 
++#endif
++
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++		page_shift_user32 = ARM_PGSHIFT;
++#else
+ 		/* 32-bit apps always see 16KB page size */
+ 		page_shift_user32 = PAGE_MAX_SHIFT;
++#endif
+ #ifdef  APPLETYPHOON
+ 		if (PE_parse_boot_argn("cpus_defeatures", &cpus_defeatures, sizeof(cpus_defeatures))) {
+ 			if ((cpus_defeatures & 0xF) != 0) {
+diff --git a/osfmk/arm/commpage/commpage.c b/osfmk/arm/commpage/commpage.c
+index 591ab6c..057daaf 100644
+--- a/osfmk/arm/commpage/commpage.c
++++ b/osfmk/arm/commpage/commpage.c
+@@ -153,8 +153,13 @@ commpage_populate(void)
+ #if __arm64__
+ 	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_32_LEGACY + _COMM_PAGE_RW_OFFSET)) = (uint8_t) page_shift_user32;
+ 	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_32 + _COMM_PAGE_RO_OFFSET)) = (uint8_t) page_shift_user32;
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_64_LEGACY + _COMM_PAGE_RW_OFFSET)) = (uint8_t) FOURK_PAGE_SHIFT;
++	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_64 + _COMM_PAGE_RO_OFFSET)) = (uint8_t) FOURK_PAGE_SHIFT;
++#else
+ 	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_64_LEGACY + _COMM_PAGE_RW_OFFSET)) = (uint8_t) SIXTEENK_PAGE_SHIFT;
+ 	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_64 + _COMM_PAGE_RO_OFFSET)) = (uint8_t) SIXTEENK_PAGE_SHIFT;
++#endif
+ #endif /* __arm64__ */
+ 
+ 	commpage_update_timebase();
+diff --git a/osfmk/arm/machine_routines_common.c b/osfmk/arm/machine_routines_common.c
+index b279420..a692c8e 100644
+--- a/osfmk/arm/machine_routines_common.c
++++ b/osfmk/arm/machine_routines_common.c
+@@ -1482,3 +1482,12 @@ machine_init(void)
+ 	}
+ 	ml_lockdown_init();
+ }
++
++#if !defined(APPLE_ARM64_ARCH_FAMILY)
++/* Non-Apple SoCs have no Apple fuses; report production like x86. */
++boolean_t
++ml_device_is_prod_fused(void)
++{
++	return TRUE;
++}
++#endif /* !defined(APPLE_ARM64_ARCH_FAMILY) */
+diff --git a/osfmk/arm/pmap/pmap.c b/osfmk/arm/pmap/pmap.c
+index a5de704..36ff1b7 100644
+--- a/osfmk/arm/pmap/pmap.c
++++ b/osfmk/arm/pmap/pmap.c
+@@ -84,8 +84,12 @@
+ 
+ #include <arm64/proc_reg.h>
+ #include <pexpert/arm64/boot.h>
++#if XNU_MONITOR_ANS2_SART
+ #include <arm64/ppl/sart.h>
++#endif
++#if XNU_MONITOR_UAT_PPL
+ #include <arm64/ppl/uat.h>
++#endif
+ 
+ #if defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR)
+ #include <arm64/amcc_rorgn.h>
+@@ -2315,13 +2319,17 @@ pmap_bootstrap(
+ 	/**
+ 	 * Bootstrap any necessary UAT data structures and values needed from the device tree.
+ 	 */
++	#if XNU_MONITOR_UAT_PPL
+ 	uat_bootstrap();
++#endif
+ 
+ 
+ 	/**
+ 	 * Bootstrap any necessary SART data structures and values needed from the device tree.
+ 	 */
++	#if XNU_MONITOR_ANS2_SART
+ 	sart_bootstrap();
++#endif
+ 
+ 	/**
+ 	 * Don't make any assumptions about the alignment of avail_start before this
+@@ -4916,12 +4924,12 @@ pmap_page_protect_options_with_flush_range(
+ #if XNU_MONITOR
+ 			if (__improbable(pvh_flags & PVH_FLAG_LOCKDOWN_MASK)) {
+ 				panic("pmap_page_protect: ppnum 0x%x locked down, cannot be owned by iommu %p, pve_p=%p",
+-				    ppnum, ptep_get_iommu(pte_p), pve_p);
++				    ppnum, (void *)pte_p, pve_p);
+ 			}
+ #endif
+ 			if (remove && (options & PMAP_OPTIONS_COMPRESSOR)) {
+ 				panic("pmap_page_protect: attempt to compress ppnum 0x%x owned by iommu %p, pve_p=%p",
+-				    ppnum, ptep_get_iommu(pte_p), pve_p);
++				    ppnum, (void *)pte_p, pve_p);
+ 			}
+ 			goto protect_skip_pve_pass1;
+ 		}
+@@ -6102,6 +6110,8 @@ pmap_construct_pte(
+ 	return pte;
+ }
+ 
++MARK_AS_PMAP_TEXT static void pmap_phys_write_disable(vm_address_t va);
++
+ MARK_AS_PMAP_TEXT kern_return_t
+ pmap_enter_options_internal(
+ 	pmap_t pmap,
+@@ -7163,7 +7173,9 @@ void
+ pmap_sync_page_attributes_phys(
+ 	ppnum_t pp)
+ {
+-	flush_dcache((vm_offset_t) (pp << PAGE_SHIFT), PAGE_SIZE, TRUE);
++	/* ptoa() widens before the shift: pp << PAGE_SHIFT is a 32-bit shift and drops the high bits of physical
++	 * addresses at or above 4 GiB (all of DRAM on boards whose memory starts there), which phystokv() then rejects. */
++	flush_dcache((vm_offset_t) ptoa(pp), PAGE_SIZE, TRUE);
+ }
+ 
+ #if CONFIG_COREDUMP
+@@ -12186,13 +12198,15 @@ pmap_unpin_kernel_pages(vm_offset_t kva __unused, size_t nbytes __unused)
+ #endif /* !XNU_MONITOR */
+ 
+ 
++#if PMAP_CS_PPL_MONITOR || PMAP_CS_INCLUDE_CODE_SIGNING
+ MARK_AS_PMAP_TEXT static inline void
+ pmap_cs_lockdown_pages(vm_address_t kva, vm_size_t size, bool ppl_writable)
+ {
+ #if XNU_MONITOR
+ 	pmap_ppl_lockdown_pages(kva, size, PVH_FLAG_LOCKDOWN_CS, ppl_writable);
+ #else
+-	pmap_ppl_lockdown_pages(kva, size, 0, ppl_writable);
++	/* Without a monitor there is no lockdown state. */
++#pragma unused(kva, size, ppl_writable)
+ #endif
+ }
+ 
+@@ -12202,10 +12216,13 @@ pmap_cs_unlockdown_pages(vm_address_t kva, vm_size_t size, bool ppl_writable)
+ #if XNU_MONITOR
+ 	pmap_ppl_unlockdown_pages(kva, size, PVH_FLAG_LOCKDOWN_CS, ppl_writable);
+ #else
+-	pmap_ppl_unlockdown_pages(kva, size, 0, ppl_writable);
++	/* Without a monitor there is no lockdown state. */
++#pragma unused(kva, size, ppl_writable)
+ #endif
+ }
+ 
++#endif /* PMAP_CS_PPL_MONITOR || PMAP_CS_INCLUDE_CODE_SIGNING */
++
+ /**
+  * Perform basic validation checks on the destination only and
+  * corresponding offset/sizes prior to writing to a read only allocation.
+@@ -15099,3 +15116,11 @@ pmap_test_text_corruption_internal(pmap_paddr_t pa)
+ }
+ 
+ #endif /* DEVELOPMENT || DEBUG */
++
++#if SCHED_HYGIENE_DEBUG && (DEBUG || DEVELOPMENT)
++bool
++pmap_pending_preemption(void)
++{
++	return _pmap_pending_preemption_real();
++}
++#endif
+diff --git a/osfmk/arm/pmap/pmap.h b/osfmk/arm/pmap/pmap.h
+index 449dba7..425791b 100644
+--- a/osfmk/arm/pmap/pmap.h
++++ b/osfmk/arm/pmap/pmap.h
+@@ -115,6 +115,11 @@
+  * Upper limit on how many pages can be consumed by bootstrap page tables
+  */
+ #define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 34)
++#elif !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++/* Native 4 KiB: two roots plus up to seven L2 pages per 6 GiB mapping.
++ * The physical and virtual bases may each straddle an extra 1 GiB region.
++ */
++#define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 16)
+ #else /* defined(ARM_LARGE_MEMORY) */
+ #define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 8)
+ #endif /* defined(ARM_LARGE_MEMORY) */
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+index e050e53..52feebb 100644
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -1027,6 +1027,19 @@ arm_vm_page_granular_helper(vm_offset_t start, vm_offset_t _end, vm_offset_t va,
+ 
+ 			ppte = (pt_entry_t*)alloc_ptpage(pa_offset == 0);
+ 			bzero(ppte, ARM_PGBYTES);
++			if ((tmplate & ARM_TTE_VALID) && (tmplate & ARM_TTE_TYPE_MASK) == ARM_TTE_TYPE_BLOCK) {
++				/*
++				 * Keep the rest of the block mapped: with 4 KiB pages a fileset
++				 * collection places kext headers in the same 2 MiB block as the
++				 * end of the kernel __TEXT, and a request for part of the block
++				 * must not unmap them.
++				 */
++				pmap_paddr_t block_pa = tmplate & ARM_TTE_BLOCK_L2_MASK;
++				pt_entry_t attributes = tmplate & ~(ARM_TTE_BLOCK_L2_MASK | ARM_PTE_HINT_MASK | ARM_PTE_TYPE_VALID);
++				for (i = 0; i <= (ARM_TT_L3_INDEX_MASK >> ARM_TT_L3_SHIFT); i++) {
++					ppte[i] = (block_pa + ((pmap_paddr_t)i << ARM_TT_L3_SHIFT)) | attributes | ARM_PTE_TYPE_VALID;
++				}
++			}
+ 			ppte_phys = kvtophys((vm_offset_t)ppte);
+ 
+ 			*tte2 = pa_to_tte(ppte_phys) | ARM_TTE_TYPE_TABLE | ARM_TTE_VALID;
+@@ -2177,7 +2190,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 	arm_vm_physmap_init(args);
+ 	set_mmu_ttb_alternate(cpu_ttep & TTBR_BADDR_MASK);
+ 
++#if XNU_MONITOR
+ 	ml_enable_monitor();
++#endif
+ 
+ 	set_mmu_ttb(invalid_ttep & TTBR_BADDR_MASK);
+ 
+diff --git a/osfmk/arm64/caches_asm.s b/osfmk/arm64/caches_asm.s
+index 1a45a0a..6b3cca0 100644
+--- a/osfmk/arm64/caches_asm.s
++++ b/osfmk/arm64/caches_asm.s
+@@ -304,6 +304,10 @@ L_cpudr_loop:
+  */
+ 	.text
+ 	.align 2
++#if !defined(APPLE_ARM64_ARCH_FAMILY)
++	.globl EXT(CleanPoC_DcacheRegion_Force_nopreempt_nohid)
++LEXT(CleanPoC_DcacheRegion_Force_nopreempt_nohid)
++#endif
+ LEXT(CleanPoC_DcacheRegion_internal)
+ 	dsb		sy
+ 	CLEANPOC_DCACHEREGION
+diff --git a/osfmk/arm64/genassym.c b/osfmk/arm64/genassym.c
+index 4f8404f..287ac88 100644
+--- a/osfmk/arm64/genassym.c
++++ b/osfmk/arm64/genassym.c
+@@ -286,6 +286,7 @@ main(int     argc,
+ 
+ 
+ 	DECLARE("PGBYTES", ARM_PGBYTES);
++	DECLARE("BOOTSTRAP_TABLE_BYTES", BOOTSTRAP_TABLE_SIZE);
+ 	DECLARE("PGSHIFT", ARM_PGSHIFT);
+ 
+ 	DECLARE("VM_MIN_KERNEL_ADDRESS", VM_MIN_KERNEL_ADDRESS);
+diff --git a/osfmk/arm64/machine_routines_asm.s b/osfmk/arm64/machine_routines_asm.s
+index 24cd966..d7c3444 100644
+--- a/osfmk/arm64/machine_routines_asm.s
++++ b/osfmk/arm64/machine_routines_asm.s
+@@ -94,6 +94,11 @@ Lcre_start_\@:
+ 	.globl EXT(ml_enable_user_jop_key)
+ LEXT(ml_enable_user_jop_key)
+ 	ARM64_PROLOG
++#if HAS_NATIVE_PAC
++	/* The kernel and every process share one key set; nothing to switch. */
++	mov		x0, #0
++	ret
++#endif /* HAS_NATIVE_PAC */
+ #if HAS_PARAVIRTUALIZED_PAC
+ 	mov 	x2, x0
+ 	MOV64	x0, VMAPPLE_PAC_SET_EL0_DIVERSIFIER_AT_EL1
+@@ -111,6 +116,9 @@ LEXT(ml_enable_user_jop_key)
+ 	.globl EXT(ml_disable_user_jop_key)
+ LEXT(ml_disable_user_jop_key)
+ 	ARM64_PROLOG
++#if HAS_NATIVE_PAC
++	ret
++#endif /* HAS_NATIVE_PAC */
+ #if HAS_PARAVIRTUALIZED_PAC
+ 	mov 	x2, x1
+ 	MOV64	x0, VMAPPLE_PAC_SET_EL0_DIVERSIFIER_AT_EL1
+diff --git a/osfmk/arm64/pac_asm.h b/osfmk/arm64/pac_asm.h
+index d5038a9..97b8e4b 100644
+--- a/osfmk/arm64/pac_asm.h
++++ b/osfmk/arm64/pac_asm.h
+@@ -43,6 +43,10 @@
+ 
+ #if defined(HAS_APPLE_PAC)
+ 
++#if HAS_NATIVE_PAC
++/* IA, IB, DA, DB and GA keys, two words each */
++#define NATIVE_PAC_KEY_WORDS	10
++#endif /* HAS_NATIVE_PAC */
+ 
+ /* BEGIN IGNORE CODESTYLE */
+ 
+@@ -146,6 +150,55 @@
+  *   tmp2 - scratch register
+  */
+ .macro PAC_INIT_KEY_STATE	tmp, tmp2
++#if HAS_NATIVE_PAC
++	/*
++	 * ARMv8.3 keys are shared by EL0 and EL1. The kernel and every process
++	 * use one key set per boot. The first CPU through here derives it from
++	 * the counter with splitmix64; every later entry, including warm resets,
++	 * loads the stored set. The MMU is off on this path, so the stores reach
++	 * memory and later CPUs read them there. Clobbers x2-x6.
++	 */
++	adrp	\tmp, EXT(native_pac_keys)@page
++	add		\tmp, \tmp, EXT(native_pac_keys)@pageoff
++	ldr		\tmp2, [\tmp, #(NATIVE_PAC_KEY_WORDS * 8)]
++	cbnz	\tmp2, 2f
++	mrs		\tmp2, CNTPCT_EL0
++	MOV64	x3, 0x9e3779b97f4a7c15
++	MOV64	x4, 0xbf58476d1ce4e5b9
++	MOV64	x5, 0x94d049bb133111eb
++	mov		x2, #0
++1:
++	add		\tmp2, \tmp2, x3
++	eor		x6, \tmp2, \tmp2, lsr #30
++	mul		x6, x6, x4
++	eor		x6, x6, x6, lsr #27
++	mul		x6, x6, x5
++	eor		x6, x6, x6, lsr #31
++	str		x6, [\tmp, x2, lsl #3]
++	add		x2, x2, #1
++	cmp		x2, #(NATIVE_PAC_KEY_WORDS)
++	b.lo	1b
++	mov		x2, #1
++	str		x2, [\tmp, #(NATIVE_PAC_KEY_WORDS * 8)]
++	dsb		sy
++2:
++	ldp		x2, x3, [\tmp, #0]
++	msr		APIAKeyLo_EL1, x2
++	msr		APIAKeyHi_EL1, x3
++	ldp		x2, x3, [\tmp, #16]
++	msr		APIBKeyLo_EL1, x2
++	msr		APIBKeyHi_EL1, x3
++	ldp		x2, x3, [\tmp, #32]
++	msr		APDAKeyLo_EL1, x2
++	msr		APDAKeyHi_EL1, x3
++	ldp		x2, x3, [\tmp, #48]
++	msr		APDBKeyLo_EL1, x2
++	msr		APDBKeyHi_EL1, x3
++	ldp		x2, x3, [\tmp, #64]
++	msr		APGAKeyLo_EL1, x2
++	msr		APGAKeyHi_EL1, x3
++	isb		sy
++#endif /* HAS_NATIVE_PAC */
+ #if HAS_PARAVIRTUALIZED_PAC
+ #if HIBERNATION
+ 	#error PAC_INIT_KEY_STATE is not implemented for HAS_PARAVIRTUALIZED_PAC && HIBERNATION
+diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
+index d4e10cd..75d7023 100644
+--- a/osfmk/arm64/proc_reg.h
++++ b/osfmk/arm64/proc_reg.h
+@@ -227,6 +227,10 @@
+ /* D-Cache, 128KB for AppleH16 PCore, 8-way. 64KB for ECore, 8-way. */
+ #define MMU_CLINE   6                      /* cache line size is 1<<MMU_CLINE (64) */
+ 
++#elif defined (BCM2837)
++#define MMU_I_CLINE 6
++#define MMU_CLINE 6
++
+ #elif defined (VMAPPLE)
+ 
+ /* I-Cache. */
+diff --git a/osfmk/arm64/sptm/pmap/pmap.c b/osfmk/arm64/sptm/pmap/pmap.c
+index 72f63ef..677b0e0 100644
+--- a/osfmk/arm64/sptm/pmap/pmap.c
++++ b/osfmk/arm64/sptm/pmap/pmap.c
+@@ -6506,7 +6506,9 @@ void
+ pmap_sync_page_attributes_phys(
+ 	ppnum_t pp)
+ {
+-	flush_dcache((vm_offset_t) (pp << PAGE_SHIFT), PAGE_SIZE, TRUE);
++	/* ptoa() widens before the shift: pp << PAGE_SHIFT is a 32-bit shift and drops the high bits of physical
++	 * addresses at or above 4 GiB (all of DRAM on boards whose memory starts there), which phystokv() then rejects. */
++	flush_dcache((vm_offset_t) ptoa(pp), PAGE_SIZE, TRUE);
+ }
+ 
+ #if CONFIG_COREDUMP
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index da9002e..b704611 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -33,7 +33,9 @@
+ #include <pexpert/arm64/board_config.h>
+ #include <mach_assert.h>
+ #include <machine/asm.h>
++#if defined(APPLE_ARM64_ARCH_FAMILY)
+ #include <arm64/tunables/tunables.s>
++#endif
+ #include <arm64/exception_asm.h>
+ 
+ #if __ARM_KERNEL_PROTECT__
+@@ -433,6 +435,10 @@ start_cpu:
+ 
+ 	/* allocate an L2 table */
+ 3:	add	$4, $4, PGBYTES
++	/* Refuse before a new table can overwrite adjacent kernel globals. */
++	add $6, x25, #(BOOTSTRAP_TABLE_BYTES >> 12), lsl #12
++	cmp $4, $6
++	b.hs Lbootstrap_tables_exhausted
+ 
+ 	/* create_l1_table_entry(virt_base, L1 table, L2 table, scratch1, scratch2, scratch3) */
+ 	create_l1_table_entry	$0, $3, $4, $6, $7, $8
+@@ -535,8 +541,8 @@ LEXT(start_first_cpu)
+ 	// Invalidate all entries in the bootstrap page tables
+ 	mov		x0, #(ARM_TTE_EMPTY)				// Load invalid entry template
+ 	mov		x1, x25								// Start at V=P pagetable root
+-	mov		x2, #(TTE_PGENTRIES)				// Load number of entries per page
+-	lsl		x2, x2, #2							// Shift by 2 for num entries on 4 pages
++	mov		x2, #(BOOTSTRAP_TABLE_BYTES / ARM_PGBYTES)
++	lsl		x2, x2, #(ARM_PGSHIFT - TTE_SHIFT) // Clear the whole reserved pool
+ 
+ Linvalidate_bootstrap:							// do {
+ 	str		x0, [x1], #(1 << TTE_SHIFT)			//   Invalidate and advance
+@@ -620,6 +626,12 @@ Lkernelcache_base_found:
+ 	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
+ 	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
+ 
++	b Lbootstrap_tables_ready
++Lbootstrap_tables_exhausted:
++	// MMU is still off. Stop with the offending cursor/end preserved for
++	// the early debugger rather than corrupting memory or forging a map.
++	b Lbootstrap_tables_exhausted
++Lbootstrap_tables_ready:
+ 	/* Ensure TTEs are visible */
+ 	dsb		ish
+ 
+@@ -779,10 +791,13 @@ common_start:
+ 	// Initialization common to all non-virtual Apple targets
+ #endif  // APPLE_ARM64_ARCH_FAMILY
+ 
++
++#if defined(APPLE_ARM64_ARCH_FAMILY)
+ 	// Read MIDR before start of per-SoC tunables
+ 	mrs x12, MIDR_EL1
+ 
+ 	APPLY_TUNABLES x12, x13, x14
++#endif
+ 
+ #if HAS_CLUSTER && !NO_CPU_OVRD
+ 	// Unmask external IRQs if we're restarting from non-retention WFI
+@@ -875,3 +890,12 @@ arm_init_tramp:
+ //#include	"globals_asm.h"
+ 
+ /* vim: set ts=4: */
++
++#if HAS_NATIVE_PAC
++	/* Key set of PAC_INIT_KEY_STATE and its ready word; written with the MMU off. */
++	.section __DATA, __data
++	.align 4
++	.globl EXT(native_pac_keys)
++LEXT(native_pac_keys)
++	.space	(NATIVE_PAC_KEY_WORDS + 1) * 8, 0
++#endif /* HAS_NATIVE_PAC */
+diff --git a/osfmk/conf/Makefile.template b/osfmk/conf/Makefile.template
+index 0066474..d676224 100644
+--- a/osfmk/conf/Makefile.template
++++ b/osfmk/conf/Makefile.template
+@@ -459,7 +459,7 @@ $(COBJS): .CFLAGS
+ 	$(_v)$(REPLACECONTENTS) $@ $(KCC) $(CFLAGS) $(INCFLAGS)
+ $(CXXOBJS): .CXXFLAGS
+ .CXXFLAGS: ALWAYS
+-	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CXXFLAGS) $(INCFLAGS)
++	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CFLAGS) $(CXXFLAGS) $(INCFLAGS)
+ $(SOBJS): .SFLAGS
+ .SFLAGS: ALWAYS
+ 	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
+diff --git a/osfmk/conf/files.arm64 b/osfmk/conf/files.arm64
+index 4806f20..8ebf4e1 100644
+--- a/osfmk/conf/files.arm64
++++ b/osfmk/conf/files.arm64
+@@ -20,7 +20,7 @@ osfmk/arm64/sptm/pmap/pmap_iommu.c	optional nos_arm_asm config_sptm
+ osfmk/arm64/sptm/pmap/pmap_misc.c	optional nos_arm_asm config_sptm
+ osfmk/arm64/sptm/pmap/pmap_ppl_interface.c	optional nos_arm_asm config_sptm
+ osfmk/arm64/sptm/start_sptm.s		optional nos_arm_asm config_sptm
+-osfmk/arm64/amcc_rorgn_sptm.c		optional nos_arm_asm config_sptm
++osfmk/arm64/amcc_rorgn_sptm.c		optional nos_arm_asm config_sptm apple_amcc
+ osfmk/arm64/sptm/arm_init_sptm.c	optional config_sptm
+ 
+ osfmk/arm64/bsd_arm64.c		optional mach_bsd
+@@ -33,10 +33,10 @@ osfmk/arm64/WKdmCompress_4k.s	standard
+ osfmk/arm64/WKdmData.s		standard
+ osfmk/arm64/lz4_decode_arm64.s  standard
+ osfmk/arm64/lz4_encode_arm64.s  standard
+-osfmk/arm64/amcc_rorgn_ppl.c optional nos_arm_asm config_pmap_ppl
+-osfmk/arm64/amcc_rorgn_ppl_amcc.c optional nos_arm_asm config_pmap_ppl
+-osfmk/arm64/amcc_rorgn_ppl_ctrr3.c optional nos_arm_asm config_pmap_ppl
+-osfmk/arm64/amcc_rorgn_common.c optional nos_arm_asm
++osfmk/arm64/amcc_rorgn_ppl.c optional nos_arm_asm config_pmap_ppl apple_amcc
++osfmk/arm64/amcc_rorgn_ppl_amcc.c optional nos_arm_asm config_pmap_ppl apple_amcc
++osfmk/arm64/amcc_rorgn_ppl_ctrr3.c optional nos_arm_asm config_pmap_ppl apple_amcc
++osfmk/arm64/amcc_rorgn_common.c optional nos_arm_asm apple_amcc
+ osfmk/arm64/bcopy.s standard
+ osfmk/arm64/bzero.s standard
+ osfmk/arm/caches.c		standard
+diff --git a/osfmk/kern/debug.c b/osfmk/kern/debug.c
+index 331291b..85879ee 100644
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -2459,3 +2459,11 @@ debug_fatal_panic_begin(void)
+ 	sptm_xnu_panic_begin();
+ #endif /* CONFIG_SPTM */
+ }
++
++__attribute__((noinline, noreturn, used))
++void
++unixnu_fileset_unmapped(uint64_t arg0, uint64_t arg1)
++{
++	panic("fileset: unmapped kernel call from %p (x0 0x%llx x1 0x%llx)",
++	    __builtin_ptrauth_strip(__builtin_return_address(0), 0), arg0, arg1);
++}
+diff --git a/osfmk/kern/work_interval.c b/osfmk/kern/work_interval.c
+index 5a144b3..94db9e9 100644
+--- a/osfmk/kern/work_interval.c
++++ b/osfmk/kern/work_interval.c
+@@ -1126,7 +1126,7 @@ kern_work_interval_create(thread_t thread,
+ 			return KERN_FAILURE;
+ 		}
+ 		if (!task_is_app(creating_task)) {
+-#if XNU_TARGET_OS_OSX
++#if XNU_TARGET_OS_OSX || 1  /* sheng: UIKit aborts on a refused CA_CLIENT interval; soft-fail it as macOS does */
+ 			/*
+ 			 * Soft-fail the case of a non-app pretending to be an
+ 			 * app, by allowing it to press the buttons, but they're
+@@ -1142,7 +1142,8 @@ kern_work_interval_create(thread_t thread,
+ #endif /* XNU_TARGET_OS_OSX */
+ 		}
+ 		if (task_set_ca_client_wi(creating_task, true) == false) {
+-			return KERN_FAILURE;
++			/* sheng: a second CA_CLIENT interval in a task is accepted but not connected, instead of aborting the app */
++			create_flags |= WORK_INTERVAL_FLAG_IGNORED;
+ 		}
+ 	}
+ 
+diff --git a/osfmk/prng/prng_random.c b/osfmk/prng/prng_random.c
+index f51b4b0..91662ff 100644
+--- a/osfmk/prng/prng_random.c
++++ b/osfmk/prng/prng_random.c
+@@ -544,3 +544,122 @@ random_bool_gen_bits(struct bool_gen * bg, unsigned int * buffer, unsigned int c
+ 	}
+ 	return rbits;
+ }
++
++/* Internal source-provider verification; no replacement callbacks or skipped POST. */
++#if defined(XNU_SOURCE_CORECRYPTO14)
++#include <kern/startup.h>
++#include <mach/kmod.h>
++#include <mach-o/loader.h>
++
++extern struct mach_header_64 _mh_execute_header;
++extern kern_return_t corecrypto_kext_start(kmod_info_t *, void *);
++SECURITY_READ_ONLY_LATE(kern_return_t) source_corecrypto14_status = KERN_FAILURE;
++
++/*
++ * A boot kernel collection that carries the original corecrypto makes it the only provider: it is
++ * started here, before anything needs crypto, and OSKext's later start of the same module returns
++ * this result. Registering two providers would leave the second one's PRNG context uninitialized.
++ */
++static SECURITY_READ_ONLY_LATE(kmod_info_t *) source_corecrypto14_original_kmod;
++static unsigned source_corecrypto14_original_state;
++
++kmod_info_t *source_corecrypto14_original(void);
++kern_return_t source_corecrypto14_start_once(kmod_info_t *module, void *data);
++
++kmod_info_t *
++source_corecrypto14_original(void)
++{
++	static const char identifier[] = "com.apple.kec.corecrypto";
++	static bool searched;
++	struct mach_header_64 *kc = (struct mach_header_64 *)PE_get_kc_header(KCKindPrimary);
++
++	if (searched || kc == NULL || kc->filetype != MH_FILESET) {
++		return source_corecrypto14_original_kmod;
++	}
++	searched = true;
++	struct load_command *lc = (struct load_command *)(kc + 1);
++	for (uint32_t i = 0; i < kc->ncmds; i++, lc = (struct load_command *)((uintptr_t)lc + lc->cmdsize)) {
++		struct fileset_entry_command *entry = (struct fileset_entry_command *)lc;
++		if (lc->cmd != LC_FILESET_ENTRY ||
++		    strcmp((const char *)entry + entry->entry_id.offset, identifier) != 0) {
++			continue;
++		}
++		/* The module has no symbols; its kmod_info is the one data record that names it. */
++		struct mach_header_64 *mh = (struct mach_header_64 *)entry->vmaddr;
++		struct load_command *sc = (struct load_command *)(mh + 1);
++		kmod_info_t *found = NULL;
++		for (uint32_t j = 0; j < mh->ncmds; j++, sc = (struct load_command *)((uintptr_t)sc + sc->cmdsize)) {
++			struct segment_command_64 *seg = (struct segment_command_64 *)sc;
++			if (sc->cmd != LC_SEGMENT_64 || !(seg->initprot & VM_PROT_WRITE) || seg->filesize < sizeof(kmod_info_t)) {
++				continue;
++			}
++			for (uintptr_t at = seg->vmaddr; at + sizeof(kmod_info_t) <= seg->vmaddr + seg->filesize; at += 4) {
++				kmod_info_t *candidate = (kmod_info_t *)at;
++				if (candidate->info_version == KMOD_INFO_VERSION &&
++				    strncmp(candidate->name, identifier, sizeof(candidate->name)) == 0) {
++					if (found != NULL) {
++						panic("original corecrypto: more than one kmod_info");
++					}
++					found = candidate;
++				}
++			}
++		}
++		if (found == NULL || found->start == NULL) {
++			panic("original corecrypto: no kmod_info in its boot collection entry");
++		}
++		source_corecrypto14_original_kmod = found;
++	}
++	return source_corecrypto14_original_kmod;
++}
++
++kern_return_t
++source_corecrypto14_start_once(kmod_info_t *module, void *data)
++{
++	unsigned expected = 0;
++
++	if (module == NULL || module != source_corecrypto14_original()) {
++		panic("original corecrypto: unexpected module %p", module);
++	}
++	if (!__atomic_compare_exchange_n(&source_corecrypto14_original_state, &expected, 1, false,
++	    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
++		if (expected == 1) {
++			panic("original corecrypto: recursive initialization");
++		}
++		return source_corecrypto14_status;
++	}
++	source_corecrypto14_status = module->start(module, data);
++	__atomic_store_n(&source_corecrypto14_original_state, source_corecrypto14_status == KERN_SUCCESS ? 2 : 3,
++	    __ATOMIC_RELEASE);
++	return source_corecrypto14_status;
++}
++
++static void
++source_corecrypto14_bootstrap(void)
++{
++	static kmod_info_t info = {
++		.info_version = KMOD_INFO_VERSION,
++		.name = "source-corecrypto14-evaluation",
++		.version = "14.0",
++	};
++	uint32_t mode = 0;
++
++	if (PE_parse_boot_argn("fips_mode", &mode, sizeof(mode)) && mode != 0) {
++		panic("source corecrypto verification requires complete default POST");
++	}
++	kmod_info_t *original = source_corecrypto14_original();
++	if (original != NULL) {
++		source_corecrypto14_status = source_corecrypto14_start_once(original, NULL);
++		if (source_corecrypto14_status != KERN_SUCCESS) {
++			panic("original corecrypto initialization failed: %d", source_corecrypto14_status);
++		}
++		return;
++	}
++	info.address = (vm_address_t)&_mh_execute_header;
++	source_corecrypto14_status = corecrypto_kext_start(&info, NULL);
++	if (source_corecrypto14_status != KERN_SUCCESS) {
++		panic("source corecrypto initialization failed: %d", source_corecrypto14_status);
++	}
++}
++/* PE_init_iokit hashes the platform UUID through the crypto KPIs before EARLY_BOOT runs. */
++STARTUP(SYSCTL, STARTUP_RANK_LAST, source_corecrypto14_bootstrap);
++#endif
+diff --git a/osfmk/vm/vm_fault.c b/osfmk/vm/vm_fault.c
+index 1a206a8..0fef4b9 100644
+--- a/osfmk/vm/vm_fault.c
++++ b/osfmk/vm/vm_fault.c
+@@ -101,6 +101,9 @@
+ #include <vm/memory_object.h>
+ #include <vm/vm_purgeable_internal.h>   /* Needed by some vm_page.h macros */
+ #include <vm/vm_shared_region.h>
++#if __arm64__
++#include <arm/caches_internal.h>
++#endif
+ #include <vm/vm_page_internal.h>
+ 
+ #include <sys/codesign.h>
+@@ -8047,6 +8050,14 @@ vm_page_validate_cs_mapped_slow(
+ 	page->vmp_cs_tainted |= tainted;
+ 	page->vmp_cs_nx |= nx;
+ 
++#if __arm64__
++	/* Boot-argument fixups of signed text land after validation, through the physical aperture, before any mapping. */
++	if (validated == VMP_CS_ALL_TRUE && tainted == VMP_CS_ALL_FALSE &&
++	    cs_text_fixup_page(vnode, mo_offset, (void *)phystokv((pmap_paddr_t)VM_PAGE_GET_PHYS_PAGE(page) << PAGE_SHIFT)) != 0) {
++		cache_sync_page(VM_PAGE_GET_PHYS_PAGE(page));
++	}
++#endif
++
+ #if CHECK_CS_VALIDATION_BITMAP
+ 	if (page->vmp_cs_validated == VMP_CS_ALL_TRUE &&
+ 	    page->vmp_cs_tainted == VMP_CS_ALL_FALSE) {
+diff --git a/osfmk/vm/vm_protos.h b/osfmk/vm/vm_protos.h
+index 1e6d32d..6fff1eb 100644
+--- a/osfmk/vm/vm_protos.h
++++ b/osfmk/vm/vm_protos.h
+@@ -278,6 +278,7 @@ extern boolean_t cs_validate_range(struct vnode *vp,
+     const void *data,
+     vm_size_t size,
+     unsigned *result);
++extern uint32_t cs_text_fixup_page(struct vnode *vp, memory_object_offset_t page_offset, void *kva);
+ extern void cs_validate_page(
+ 	struct vnode *vp,
+ 	memory_object_t pager,
+diff --git a/osfmk/vm/vm_shared_region.c b/osfmk/vm/vm_shared_region.c
+index 39fe08a..b9e9691 100644
+--- a/osfmk/vm/vm_shared_region.c
++++ b/osfmk/vm/vm_shared_region.c
+@@ -790,7 +790,11 @@ vm_shared_region_create(
+ 			if (is_64bit ||
+ 			    page_shift_user32 == SIXTEENK_PAGE_SHIFT) {
+ 				/* enforce 16KB alignment of VM map entries */
++				#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++				vm_map_set_page_shift(sub_map, FOURK_PAGE_SHIFT);
++#else
+ 				vm_map_set_page_shift(sub_map, SIXTEENK_PAGE_SHIFT);
++#endif
+ 			}
+ #if __ARM_MIXED_PAGE_SIZE__
+ 			if (cputype == CPU_TYPE_ARM64 &&
+@@ -3537,6 +3541,97 @@ vm_shared_region_slide_page_v5(
+ 
+ 
+ 
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++/*
++ * A 4 KiB kernel pages a 16 KiB v5 slide page in four parts, each on its own. vaddr holds part `part` of the page and uservaddr is
++ * its user address; start is the offset (in the 16 KiB page) of the first rebase in this part. *next receives the offset of the
++ * first rebase after this part, or VM_SR_PART_NONE when the chain ends here. With apply false the chain is only followed (a source
++ * copy of an earlier part, to find where the chain enters a later one).
++ */
++kern_return_t
++vm_shared_region_slide_part_v5(
++	vm_shared_region_slide_info_t si,
++	vm_offset_t vaddr,
++	__unused mach_vm_offset_t uservaddr,
++	uint32_t part,
++	uint32_t start,
++	bool apply,
++	uint32_t *next,
++#if !__has_feature(ptrauth_calls)
++	__unused
++#endif /* !__has_feature(ptrauth_calls) */
++	uint64_t jop_key)
++{
++	vm_shared_region_slide_info_entry_v5_t s_info = &si->si_slide_info_entry->v5;
++	const uint32_t slide_amount = si->si_slide;
++	const uint64_t value_add = s_info->value_add;
++	const uint32_t part_start = part * PAGE_SIZE;
++	uint8_t *page_content = (uint8_t *)vaddr;
++
++	*next = VM_SR_PART_NONE;
++	if (start < part_start || start >= part_start + PAGE_SIZE || (start & 7)) {
++		return KERN_FAILURE;
++	}
++	uint32_t location = start;
++	for (;;) {
++		uint8_t *rebaseLocation = page_content + (location - part_start);
++		uint64_t value;
++		memcpy(&value, rebaseLocation, sizeof(value));
++		const uint64_t delta = ((value & 0x7FF0000000000000ULL) >> 52) * sizeof(uint64_t);
++
++		if (apply) {
++			/* The pointer formats and their rebase are those of vm_shared_region_slide_page_v5(). */
++#if __has_feature(ptrauth_calls)
++			bool        addrDiv = ((value & (1ULL << 50)) != 0);
++			bool        keyIsData = ((value & (1ULL << 51)) != 0);
++			ptrauth_key key = keyIsData ? ptrauth_key_asda : ptrauth_key_asia;
++			uint16_t    diversity = (uint16_t)((value >> 34) & 0xFFFF);
++#endif /* __has_feature(ptrauth_calls) */
++			uint64_t    high8 = (value << 22) & 0xFF00000000000000ULL;
++			bool        isAuthenticated = (value & (1ULL << 63)) != 0;
++
++			value = (value & 0x3FFFFFFFFULL) + value_add + slide_amount;
++			if (isAuthenticated) {
++#if __has_feature(ptrauth_calls)
++				uint64_t discriminator = diversity;
++				if (addrDiv) {
++					uintptr_t pageOffset = rebaseLocation - page_content;
++					discriminator = __builtin_ptrauth_blend_discriminator((void*)(((uintptr_t)uservaddr) + pageOffset), discriminator);
++				}
++				if (jop_key != 0 && si->si_ptrauth && !arm_user_jop_disabled()) {
++#if CONFIG_SPTM
++					pmap_batch_sign_user_ptr(rebaseLocation, (void *)value, key, discriminator, jop_key);
++#else /* CONFIG_SPTM */
++					value = (uintptr_t)pmap_sign_user_ptr((void *)value, key, discriminator, jop_key);
++					memcpy(rebaseLocation, &value, sizeof(value));
++#endif /* CONFIG_SPTM */
++				} else {
++					memcpy(rebaseLocation, &value, sizeof(value));
++				}
++#endif /* __has_feature(ptrauth_calls) */
++			} else {
++				value += high8;
++				memcpy(rebaseLocation, &value, sizeof(value));
++			}
++		}
++		if (delta == 0) {
++			break;
++		}
++		location += (uint32_t)delta;
++		if (location >= part_start + PAGE_SIZE) {
++			*next = location < s_info->page_size ? location : VM_SR_PART_NONE;
++			break;
++		}
++	}
++#if CONFIG_SPTM
++	if (apply) {
++		pmap_batch_sign_user_ptr(NULL, NULL, 0, 0, 0);
++	}
++#endif /* CONFIG_SPTM */
++	return KERN_SUCCESS;
++}
++#endif
++
+ kern_return_t
+ vm_shared_region_slide_page(
+ 	vm_shared_region_slide_info_t si,
+diff --git a/osfmk/vm/vm_shared_region_internal.h b/osfmk/vm/vm_shared_region_internal.h
+index 8f6dcf6..0a06e4a 100644
+--- a/osfmk/vm/vm_shared_region_internal.h
++++ b/osfmk/vm/vm_shared_region_internal.h
+@@ -41,6 +41,19 @@ extern kern_return_t vm_shared_region_slide_page(
+ 	mach_vm_offset_t              uservaddr,
+ 	uint32_t                      pageIndex,
+ 	uint64_t                      jop_key);
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++/* One 4 KiB part of a 16 KiB v5 slide page; offsets count from the start of the 16 KiB page. */
++#define VM_SR_PART_NONE 0xFFFFu
++extern kern_return_t vm_shared_region_slide_part_v5(
++	vm_shared_region_slide_info_t si,
++	vm_offset_t                   vaddr,
++	mach_vm_offset_t              uservaddr,
++	uint32_t                      part,
++	uint32_t                      start,
++	bool                          apply,
++	uint32_t                      *next,
++	uint64_t                      jop_key);
++#endif
+ 
+ #endif /* MACH_KERNEL_PRIVATE */
+ 
+diff --git a/osfmk/vm/vm_shared_region_pager.c b/osfmk/vm/vm_shared_region_pager.c
+index 09e7cc7..907b786 100644
+--- a/osfmk/vm/vm_shared_region_pager.c
++++ b/osfmk/vm/vm_shared_region_pager.c
+@@ -323,6 +323,10 @@ typedef struct shared_region_pager {
+ #if __has_feature(ptrauth_calls)
+ 	uint64_t                srp_jop_key;        /* zero if used for arm64 */
+ #endif /* __has_feature(ptrauth_calls) */
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++	uint16_t                *srp_part_starts;   /* 16 KiB slide pages: first rebase of each 4 KiB part, see shared_region_pager_slide_part() */
++	vm_size_t               srp_part_bytes;
++#endif
+ } *shared_region_pager_t;
+ #define SHARED_REGION_PAGER_NULL        ((shared_region_pager_t) NULL)
+ 
+@@ -477,6 +481,187 @@ shared_region_pager_data_initialize(
+ 	return KERN_FAILURE;
+ }
+ 
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++#define SRP_PART_UNKNOWN 0xFFFEu
++
++/* One source page of the shared cache, copied out (a part of a 16 KiB slide page that comes before the one being paged in). */
++static kern_return_t
++shared_region_pager_peek(
++	shared_region_pager_t           pager,
++	vm_object_offset_t              backing_offset,
++	void                            *buffer,
++	struct vm_object_fault_info     *fault_info)
++{
++	vm_object_t object = pager->srp_backing_object;
++	vm_page_t page, top_page;
++	vm_prot_t prot;
++	kern_return_t error_code;
++	vm_fault_return_t vmfr;
++
++retry:
++	vm_object_lock(object);
++	vm_object_paging_begin(object);
++	error_code = 0;
++	prot = VM_PROT_READ;
++	page = VM_PAGE_NULL;
++	vmfr = vm_fault_page(object, backing_offset, VM_PROT_READ, FALSE, FALSE, &prot, &page, &top_page, NULL,
++	    &error_code, FALSE, fault_info);
++	switch (vmfr) {
++	case VM_FAULT_SUCCESS:
++		break;
++	case VM_FAULT_RETRY:
++		goto retry;
++	case VM_FAULT_MEMORY_SHORTAGE:
++		if (vm_page_wait(fault_info->interruptible)) {
++			goto retry;
++		}
++		return KERN_RESOURCE_SHORTAGE;
++	case VM_FAULT_SUCCESS_NO_VM_PAGE:
++		vm_object_paging_end(object);
++		vm_object_unlock(object);
++		return KERN_MEMORY_ERROR;
++	default:
++		return KERN_MEMORY_ERROR;
++	}
++	vm_object_t page_object = VM_PAGE_OBJECT(page);
++	const void *source = (const void *)phystokv((pmap_paddr_t)VM_PAGE_GET_PHYS_PAGE(page) << PAGE_SHIFT);
++	if (page_object->code_signed) {
++		vm_page_validate_cs_mapped(page, PAGE_SIZE, 0, source);
++	}
++	const bool tainted = page->vmp_cs_tainted;
++	if (!tainted) {
++		bcopy(source, buffer, PAGE_SIZE);
++	}
++	vm_page_wakeup_done(page_object, page);
++	vm_object_paging_end(page_object);
++	vm_object_unlock(page_object);
++	if (top_page != VM_PAGE_NULL) {
++		vm_object_lock(object);
++		VM_PAGE_FREE(top_page);
++		vm_object_paging_end(object);
++		vm_object_unlock(object);
++	}
++	return tainted ? KERN_CODESIGN_ERROR : KERN_SUCCESS;
++}
++
++/*
++ * The v5 slide info of Darwin 26 caches has 16 KiB pages and one chain start per page; this kernel pages 4 KiB. A part slides on
++ * its own once the offset where the chain enters it is known: the page start resolves the parts up to the first rebase, and each
++ * walk of a part (a source copy for earlier parts, the destination for this one) resolves the parts up to the next rebase. The
++ * results are cached per pager, so every part is walked at most once more than it is paged in.
++ */
++static kern_return_t
++shared_region_pager_slide_part(
++	shared_region_pager_t           pager,
++	vm_offset_t                     dst_vaddr,
++	vm_object_offset_t              offset_in_backing_object,
++	mach_vm_offset_t                slide_start_address,
++	struct vm_object_fault_info     *fault_info)
++{
++	vm_shared_region_slide_info_t si = pager->srp_slide_info;
++	if (si->si_slide_info_entry->version != 5) {
++		return KERN_FAILURE;
++	}
++	vm_shared_region_slide_info_entry_v5_t v5 = &si->si_slide_info_entry->v5;
++	const uint32_t parts = (uint32_t)(v5->page_size / PAGE_SIZE);
++	const vm_object_offset_t offset_in_sliding_range = offset_in_backing_object - si->si_start;
++	const uint32_t page_index = (uint32_t)(offset_in_sliding_range / v5->page_size);
++	const uint32_t part = (uint32_t)((offset_in_sliding_range % v5->page_size) / PAGE_SIZE);
++	if (page_index >= v5->page_starts_count || parts > 4) {
++		return KERN_FAILURE;
++	}
++
++	uint16_t *starts = os_atomic_load(&pager->srp_part_starts, acquire);
++	if (starts == NULL) {
++		const vm_size_t bytes = (vm_size_t)v5->page_starts_count * parts * sizeof(uint16_t);
++		uint16_t *fresh = kalloc_data(bytes, Z_WAITOK);
++		if (fresh == NULL) {
++			return KERN_RESOURCE_SHORTAGE;
++		}
++		for (vm_size_t i = 0; i < bytes / sizeof(uint16_t); ++i) {
++			fresh[i] = SRP_PART_UNKNOWN;
++		}
++		pager->srp_part_bytes = bytes;
++		if (os_atomic_cmpxchg(&pager->srp_part_starts, NULL, fresh, acq_rel)) {
++			starts = fresh;
++		} else {
++			kfree_data(fresh, bytes);
++			starts = os_atomic_load(&pager->srp_part_starts, acquire);
++		}
++	}
++	uint16_t *mine = starts + (vm_size_t)page_index * parts;
++
++	/* Every walk resolves the parts from its own up to the one that holds the next rebase (or to the end of the page). */
++#define SRP_RESOLVE(from, next_start) do { \
++	const uint32_t __next = (next_start); \
++	const uint32_t __to = __next == VM_SR_PART_NONE ? parts : __next / PAGE_SIZE; \
++	for (uint32_t __p = (from); __p < parts && __p <= __to; ++__p) { \
++	        uint16_t __v = (__p == __to && __next != VM_SR_PART_NONE) ? (uint16_t)__next : VM_SR_PART_NONE; \
++	        os_atomic_store(&mine[__p], __v, relaxed); \
++	} \
++} while (0)
++
++	if (os_atomic_load(&mine[0], relaxed) == SRP_PART_UNKNOWN) {
++		const uint16_t first = v5->page_starts[page_index];
++		if (first != DYLD_CACHE_SLIDE_V5_PAGE_ATTR_NO_REBASE && (first >= v5->page_size || (first & 7))) {
++			return KERN_FAILURE;
++		}
++		SRP_RESOLVE(0, first == DYLD_CACHE_SLIDE_V5_PAGE_ATTR_NO_REBASE ? VM_SR_PART_NONE : first);
++	}
++	kern_return_t kr = KERN_SUCCESS;
++	if (os_atomic_load(&mine[part], relaxed) == SRP_PART_UNKNOWN) {
++		void *buffer = kalloc_data(PAGE_SIZE, Z_WAITOK);
++		if (buffer == NULL) {
++			return KERN_RESOURCE_SHORTAGE;
++		}
++		while (kr == KERN_SUCCESS && os_atomic_load(&mine[part], relaxed) == SRP_PART_UNKNOWN) {
++			/* The last resolved part before this one holds a rebase whose chain leads further. */
++			uint32_t known = part;
++			while (known > 0 && os_atomic_load(&mine[known], relaxed) == SRP_PART_UNKNOWN) {
++				--known;
++			}
++			const uint16_t start = os_atomic_load(&mine[known], relaxed);
++			if (start == VM_SR_PART_NONE || start == SRP_PART_UNKNOWN) {
++				kr = KERN_FAILURE;
++				break;
++			}
++			kr = shared_region_pager_peek(pager,
++			    si->si_start + (vm_object_offset_t)page_index * v5->page_size + (vm_object_offset_t)known * PAGE_SIZE,
++			    buffer, fault_info);
++			if (kr == KERN_SUCCESS) {
++				uint32_t next;
++				kr = vm_shared_region_slide_part_v5(si, (vm_offset_t)buffer, 0, known, start, false, &next, 0);
++				if (kr == KERN_SUCCESS) {
++					SRP_RESOLVE(known + 1, next);
++				}
++			}
++		}
++		kfree_data(buffer, PAGE_SIZE);
++		if (kr != KERN_SUCCESS) {
++			return kr;
++		}
++	}
++	const uint16_t start = os_atomic_load(&mine[part], relaxed);
++	if (start == VM_SR_PART_NONE) {
++		return KERN_SUCCESS;
++	}
++	uint32_t next;
++	kr = vm_shared_region_slide_part_v5(si, dst_vaddr, (mach_vm_offset_t)(offset_in_sliding_range + slide_start_address), part, start,
++	    true, &next,
++#if __has_feature(ptrauth_calls)
++	    si->si_ptrauth ? pager->srp_jop_key : 0
++#else /* __has_feature(ptrauth_calls) */
++	    0
++#endif /* __has_feature(ptrauth_calls) */
++	    );
++	if (kr == KERN_SUCCESS && part + 1 < parts && os_atomic_load(&mine[part + 1], relaxed) == SRP_PART_UNKNOWN) {
++		SRP_RESOLVE(part + 1, next);
++	}
++#undef SRP_RESOLVE
++	return kr;
++}
++#endif
++
+ /*
+  * shared_region_pager_data_request()
+  *
+@@ -708,6 +893,28 @@ retry_src_fault:
+ 		 * Process the original contents of the source page
+ 		 * into the destination page.
+ 		 */
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++		if (slide_info_page_size > PAGE_SIZE) {
++			vm_object_offset_t offset_in_backing_object = offset + cur_offset + pager->srp_backing_offset;
++			bcopy((const char *)src_vaddr, (char *)dst_vaddr, PAGE_SIZE);
++			if (offset_in_backing_object < pager->srp_slide_info->si_start ||
++			    offset_in_backing_object >= pager->srp_slide_info->si_end) {
++				shared_region_pager_copied++;
++			} else {
++				kr = shared_region_pager_slide_part(pager, dst_vaddr, offset_in_backing_object, slide_start_address, &fault_info);
++				if (kr != KERN_SUCCESS) {
++					if (panic_on_dyld_issue) {
++						panic("%s(): shared region 4 KiB part slide error %d", __func__, kr);
++					}
++					shared_region_pager_slid_error++;
++					retval = KERN_MEMORY_ERROR;
++				} else {
++					shared_region_pager_slid++;
++				}
++			}
++			goto part_done;
++		}
++#endif
+ 		for (offset_in_page = 0;
+ 		    offset_in_page < PAGE_SIZE;
+ 		    offset_in_page += slide_info_page_size) {
+@@ -790,6 +997,9 @@ retry_src_fault:
+ 			shared_region_pager_slid++;
+ 		}
+ 
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++part_done:
++#endif
+ 		assert(VM_PAGE_OBJECT(src_page) == src_page_object);
+ 		assert(src_page->vmp_busy);
+ 		assert(src_page_object->paging_in_progress > 0);
+@@ -990,6 +1200,12 @@ shared_region_pager_deallocate_internal(
+ 			pager->srp_slide_info = NULL;
+ 		}
+ 
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++		if (pager->srp_part_starts != NULL) {
++			kfree_data(pager->srp_part_starts, pager->srp_part_bytes);
++			pager->srp_part_starts = NULL;
++		}
++#endif
+ 		if (pager->srp_header.mo_control != MEMORY_OBJECT_CONTROL_NULL) {
+ 			memory_object_control_deallocate(pager->srp_header.mo_control);
+ 			pager->srp_header.mo_control = MEMORY_OBJECT_CONTROL_NULL;
+@@ -1180,6 +1396,10 @@ shared_region_pager_create(
+ 	pager->srp_header.mo_pager_ops = &shared_region_pager_ops;
+ 	pager->srp_header.mo_control = MEMORY_OBJECT_CONTROL_NULL;
+ 
++	#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++	pager->srp_part_starts = NULL;
++	pager->srp_part_bytes = 0;
++#endif
+ 	pager->srp_is_ready = FALSE;/* not ready until it has a "name" */
+ 	/* existence reference (for the cache) + 1 for the caller */
+ 	os_ref_init_count_raw(&pager->srp_ref_count, NULL, 2);
+diff --git a/pexpert/arm/pe_init.c b/pexpert/arm/pe_init.c
+index 666b87b..7ba5b2e 100644
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -108,7 +108,7 @@ void PE_slide_devicetree(vm_offset_t);
+ static void
+ check_for_panic_log(void)
+ {
+-#ifdef PLATFORM_PANIC_LOG_PADDR
++#if defined(PLATFORM_PANIC_LOG_PADDR) && !(defined(XNU_DT_PANIC_REGION) && XNU_DT_PANIC_REGION)
+ 	gPanicBase = ml_io_map_wcomb(PLATFORM_PANIC_LOG_PADDR, PLATFORM_PANIC_LOG_SIZE);
+ 	panic_text_len = PLATFORM_PANIC_LOG_SIZE - sizeof(struct embedded_panic_header);
+ 	gPanicSize = PLATFORM_PANIC_LOG_SIZE;
+@@ -138,7 +138,10 @@ check_for_panic_log(void)
+ 		return;
+ 	}
+ 
+-	if (kSuccess != SecureDTGetProperty(entry, "reg", (void const **)&reg_prop, &size)) {
++	if (kSuccess != SecureDTGetProperty(entry, "reg", (void const **)&reg_prop, &size) ||
++	    size != 2 * sizeof(*reg_prop) || !reg_prop[0] ||
++	    reg_prop[1] < sizeof(struct embedded_panic_header) ||
++	    reg_prop[0] > UINTPTR_MAX - reg_prop[1]) {
+ 		return;
+ 	}
+ 
+@@ -146,11 +149,17 @@ check_for_panic_log(void)
+ 		return;
+ 	}
+ 
+-	if (kSuccess != SecureDTGetProperty(chosen, "embedded-panic-log-size", (void const **) &panic_region_length, &size)) {
++	if (kSuccess != SecureDTGetProperty(chosen, "embedded-panic-log-size", (void const **) &panic_region_length, &size) ||
++	    size != sizeof(*panic_region_length) ||
++	    panic_region_length[0] < sizeof(struct embedded_panic_header) ||
++	    panic_region_length[0] > reg_prop[1]) {
+ 		return;
+ 	}
+ 
+ 	gPanicBase = ml_io_map_wcomb(reg_prop[0], panic_region_length[0]);
++	if (!gPanicBase) {
++		return;
++	}
+ 
+ 	/* Deduct the size of the panic header from the panic region size */
+ 	panic_text_len = panic_region_length[0] - sizeof(struct embedded_panic_header);
+diff --git a/pexpert/conf/Makefile.template b/pexpert/conf/Makefile.template
+index 2d65891..30b79ba 100644
+--- a/pexpert/conf/Makefile.template
++++ b/pexpert/conf/Makefile.template
+@@ -78,7 +78,7 @@ $(COBJS): .CFLAGS
+ 	$(_v)$(REPLACECONTENTS) $@ $(KCC) $(CFLAGS) $(INCFLAGS)
+ $(CXXOBJS): .CXXFLAGS
+ .CXXFLAGS: ALWAYS
+-	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CXXFLAGS) $(INCFLAGS)
++	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CFLAGS) $(CXXFLAGS) $(INCFLAGS)
+ $(SOBJS): .SFLAGS
+ .SFLAGS: ALWAYS
+ 	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
+diff --git a/pexpert/pexpert/arm64/BCM2837.h b/pexpert/pexpert/arm64/BCM2837.h
+new file mode 100644
+index 0000000..5a5574e
+--- /dev/null
++++ b/pexpert/pexpert/arm64/BCM2837.h
+@@ -0,0 +1,42 @@
++/*
++ * Copyright (c) 2016 Apple Inc. All rights reserved.
++ */
++
++#ifndef _PEXPERT_ARM_BCM2837_H
++#define _PEXPERT_ARM_BCM2837_H
++
++#define NO_MONITOR 1
++#define NO_ECORE 1
++
++#define BCM2837
++#define ARM_ARCH_TIMER
++
++#define __ARM_ARCH__              8
++#define __ARM_VMSA__              8
++#define __ARM_VFP__               4
++#define __ARM_COHERENT_CACHE__    1
++#define __ARM_DEBUG__             7
++#define __ARM64_PMAP_SUBPAGE_L1__ 1
++
++/* Native ARMv8.1+ targets select PAN explicitly; the original A53 target has none. */
++#if defined(XNU_NATIVE_PAN) && XNU_NATIVE_PAN
++#define __ARM_PAN_AVAILABLE__      1
++#endif
++
++/*
++ * arm64e on a non-Apple ARMv8.3 CPU: pointer authentication uses the
++ * architectural key registers (see HAS_NATIVE_PAC in arm64/pac_asm.h).
++ */
++#if defined(__arm64e__)
++#define HAS_APPLE_PAC             1
++#define HAS_NATIVE_PAC            1
++#endif
++
++#ifndef ASSEMBLER
++#define PLATFORM_PANIC_LOG_DISABLED
++/* Apple CPMU registers are implementation defined; counters stay off and
++ * this only sizes the per-CPU counter state. */
++#define CPMU_PMC_COUNT 10
++#endif /* ! ASSEMBLER */
++
++#endif /* ! _PEXPERT_ARM_BCM2837_H */
+diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
+index 5afac02..2e1e9dd 100644
+--- a/pexpert/pexpert/arm64/Makefile
++++ b/pexpert/pexpert/arm64/Makefile
+@@ -32,7 +32,8 @@ PRIVATE_KERNELFILES = \
+ 	H14.h \
+ 	H15.h \
+ 	H16.h \
+-	VMAPPLE.h
++	VMAPPLE.h \
++	BCM2837.h
+ 
+ 
+ # Headers installed into System.framework/PrivateHeaders (userspace internal SDK only).
+diff --git a/pexpert/pexpert/arm64/apple_arm64_cpu.h b/pexpert/pexpert/arm64/apple_arm64_cpu.h
+index f76d5c8..70a1904 100644
+--- a/pexpert/pexpert/arm64/apple_arm64_cpu.h
++++ b/pexpert/pexpert/arm64/apple_arm64_cpu.h
+@@ -32,6 +32,10 @@
+ 
+ #include <stdbool.h>
+ #include <sys/cdefs.h>
++#include <pexpert/arm64/board_config.h>
++
++/* The MPIDR core type field exists only on Apple cores. */
++#if defined(APPLE_ARM64_ARCH_FAMILY)
+ 
+ /**
+  * Defines the core type of the executing CPU.
+@@ -111,4 +115,6 @@ arm64_core_type_as_string(void)
+ 	return arm64_core_type_to_string(arm64_core_type());
+ }
+ 
++#endif /* defined(APPLE_ARM64_ARCH_FAMILY) */
++
+ #endif /* !defined(__ASSEMBLER__) */
+diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
+index ba15ae4..b10034e 100644
+--- a/pexpert/pexpert/arm64/board_config.h
++++ b/pexpert/pexpert/arm64/board_config.h
+@@ -273,6 +273,16 @@
+ 
+ 
+ 
++#ifdef ARM64_BOARD_CONFIG_BCM2837
++#include <pexpert/arm64/BCM2837.h>
++
++#define MAX_L2_CLINE                   6
++#define MAX_CPUS                       8
++#define MAX_CPU_CLUSTERS               2
++
++#define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
++#endif  /* ARM64_BOARD_CONFIG_BCM2837 */
++
+ #ifdef ARM64_BOARD_CONFIG_VMAPPLE
+ #include <pexpert/arm64/VMAPPLE.h>
+ 
+diff --git a/san/conf/Makefile.template b/san/conf/Makefile.template
+index 30ff35c..d1c449d 100644
+--- a/san/conf/Makefile.template
++++ b/san/conf/Makefile.template
+@@ -55,7 +55,7 @@ $(COBJS): .CFLAGS
+ 	$(_v)$(REPLACECONTENTS) $@ $(KCC) $(CFLAGS) $(INCFLAGS)
+ $(CXXOBJS): .CXXFLAGS
+ .CXXFLAGS: ALWAYS
+-	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CXXFLAGS) $(INCFLAGS)
++	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CFLAGS) $(CXXFLAGS) $(INCFLAGS)
+ $(SOBJS): .SFLAGS
+ .SFLAGS: ALWAYS
+ 	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
+diff --git a/security/conf/Makefile.template b/security/conf/Makefile.template
+index 67b6106..308d638 100644
+--- a/security/conf/Makefile.template
++++ b/security/conf/Makefile.template
+@@ -81,7 +81,7 @@ $(COBJS): .CFLAGS
+ 	$(_v)$(REPLACECONTENTS) $@ $(KCC) $(CFLAGS) $(INCFLAGS)
+ $(CXXOBJS): .CXXFLAGS
+ .CXXFLAGS: ALWAYS
+-	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CXXFLAGS) $(INCFLAGS)
++	$(_v)$(REPLACECONTENTS) $@ $(KC++) $(CFLAGS) $(CXXFLAGS) $(INCFLAGS)
+ $(SOBJS): .SFLAGS
+ .SFLAGS: ALWAYS
+ 	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)

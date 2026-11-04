@@ -233,7 +233,7 @@ def export_data(channel, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'load', 'start', 'logs', 'screen', 'trace', 'data', 'continue', 'selftest', 'reboot'])
+    parser.add_argument('command', choices=['status', 'cpu', 'load', 'start', 'logs', 'screen', 'trace', 'data', 'continue', 'selftest', 'reboot'])
     parser.add_argument('--images', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--kernel', type=Path)
@@ -254,6 +254,13 @@ def main():
             result = load(channel, images, args.kernel, args.observe_seconds, args.data_seed, args.boot_args)
             if args.command == 'start':
                 channel.command('continue')
+        elif args.command == 'cpu':
+            isar1, isar2, level = [int(value, 16) for value in channel.command('getvar:cpu-features').split(':')]
+            keys, authenticated = [int(value, 16) for value in channel.command('getvar:pac-el1').split(':')]
+            result = dict(scope='boot-cpu-el1', current_el=level >> 2,
+                          isar1=hex(isar1), isar2=hex(isar2),
+                          key_register_mask=keys, authentication_mask=authenticated,
+                          passed=level == 4 and keys == authenticated == 31)
         elif args.command == 'status':
             result = {name: channel.command('getvar:' + name) for name in ('version', 'kernel-memory', 'received', 'returns', 'handoff-fault')}
         elif args.command == 'data':
@@ -304,6 +311,8 @@ def main():
         if args.report:
             args.report.write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(result, indent=2))
+        if args.command == 'cpu' and not result['passed']:
+            raise SystemExit(1)
     finally:
         channel.close()
 

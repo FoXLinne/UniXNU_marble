@@ -1,0 +1,49 @@
+diff --git a/README.md b/README.md
+index 86e2510..4909e2b 100644
+--- a/README.md
++++ b/README.md
+@@ -18,8 +18,9 @@ The legacy `--slide` value does not apply to filesets. Rebuilt chains use
+ virtual offsets, including across native BSS gaps.
+ 
+ `fileset_layout.py` places native segments in space freed by the replaced
+-kernel and omitted entries. Code follows retained kext code; constants and
+-data precede their kext ranges as required by XNU's `arm_vm_init`.
++kernel and omitted entries. Code preserves the original kernel's position
++before or after retained kext code. Constants and data precede their kext
++ranges as required by XNU's `arm_vm_init`.
+ `fileset_segmented.py` applies native split-segment v2 records, rebuilds root
+ fixups and function starts, and recomputes corecrypto's HMAC over relocated
+ code. Segment collisions and unsupported relocation kinds stop emission.
+diff --git a/fileset_layout.py b/fileset_layout.py
+index 28b899d..cc8cd95 100644
+--- a/fileset_layout.py
++++ b/fileset_layout.py
+@@ -92,15 +92,24 @@ class Layout:
+         const = self.roots['__DATA_CONST']
+         self.reserve('__DATA_CONST', const['va'])
+         self.reserve('__LASTDATA_CONST', align(self.end('__DATA_CONST')))
+-        # All native code follows selected kext code; XNU derives the kext-code
+-        # range from the start of native __TEXT_EXEC.
+         code = self.roots['__TEXT_EXEC']
+         end_kept = max([code['va']] + [end for begin, end in self.occupied
+                                       if code['va'] <= begin < code['va'] + code['size']])
+-        self.reserve('__TEXT_EXEC', align(end_kept))
++        old_kernel = Image(cache.data, cache.entries['com.apple.kernel'][1])
++        old_code = next(s for s in old_kernel.segments if s['name'] == '__TEXT_EXEC')
++        first_kept = min([end_kept] + [begin for begin, end, name in self.retained_code])
++        if old_code['va'] < first_kept:
++            # Darwin 24 derives kext code from the end of the kernel's __LAST.
++            size = align(self.segment('__TEXT_EXEC')['size']) + self.segment('__KLD')['size'] + self.segment('__LAST')['size']
++            address = self.hole('__TEXT_EXEC', size)
++            if address + size > first_kept:
++                raise ValueError('Native code exceeds the kernel range before retained kexts')
++            self.reserve('__TEXT_EXEC', address)
++        else:
++            self.reserve('__TEXT_EXEC', align(end_kept))
+         self.reserve('__KLD', align(self.end('__TEXT_EXEC')))
+         self.reserve('__LAST', self.end('__KLD'))
+-        code_end = self.end('__KLD')
++        code_end = max(self.end('__LAST'), align(end_kept))
+         # The old kernel boot segment and prelink XML are replaceable, provided
+         # no retained kext uses them. Move XML into its own mapping below.
+         if code_end > self.roots['__DATA']['va']:

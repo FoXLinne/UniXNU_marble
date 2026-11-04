@@ -1,0 +1,12 @@
+diff --git a/scripts/seal-source-crypto-kernel.py b/scripts/seal-source-crypto-kernel.py
+--- a/scripts/seal-source-crypto-kernel.py
++++ b/scripts/seal-source-crypto-kernel.py
+@@ -98,7 +98,7 @@ def symbols(names):
+ 
+ 
+ # osfmk/tests/kernel_tests.c static_if_tests_setup: unconditional, one disable and one enable.
+-flips = [b'_static_if_test_key_true_to_false_jump_key', b'_static_if_test_key_false_to_true_jump_key']
++flips = [b'_key_true_to_false_jump_key', b'_key_false_to_true_jump_key']
+ present = symbols({b'_static_if_tests_setup', *flips})
+ patched = 0
+ if b'_static_if_tests_setup' in present and not header:
