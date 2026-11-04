@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Preserve UIKit's native battery updates and display the reported percentage.
+// Phone UI integration for the marble display and battery services.
 #import <Foundation/Foundation.h>
 #include <dispatch/dispatch.h>
 #include <mach-o/dyld.h>
@@ -98,9 +98,84 @@ static id batteryUpdate(id self, SEL selector, id update, id item)
     return result;
 }
 
+static unsigned photoInstallState;
+static IMP originalPhotoTiling, originalPhotoUpdate;
+
+static void photoTiling(id self, SEL selector, BOOL enabled)
+{
+    (void)enabled;
+    ((void (*)(id, SEL, BOOL))originalPhotoTiling)(self, selector, NO);
+}
+
+static char photoRefreshKey;
+
+static id photoObject(id object, const char *selector)
+{
+    return ((id (*)(id, SEL))objc_msgSend)(object, sel_registerName(selector));
+}
+
+static BOOL photoActive(id controller)
+{
+    return ((BOOL (*)(id, SEL))objc_msgSend)(controller, sel_registerName("isActive")) &&
+        photoObject(photoObject(controller, "view"), "window") != nil;
+}
+
+static void photoUpdate(id self, SEL selector)
+{
+    if (((BOOL (*)(id, SEL))objc_msgSend)(self, sel_registerName("canUseFullSizeTiledLayer"))) {
+        ((void (*)(id, SEL, BOOL))originalPhotoTiling)(self, sel_registerName("setCanUseFullSizeTiledLayer:"), NO);
+        ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_invalidateImage"));
+    }
+    ((void (*)(id, SEL))originalPhotoUpdate)(self, selector);
+    id asset = photoObject(self, "asset");
+    if (!asset || !photoActive(self)) {
+        objc_setAssociatedObject(self, &photoRefreshKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return;
+    }
+    id requester = photoObject(self, "_imageRequester");
+    if (photoObject(requester, "image") || photoObject(requester, "error")) return;
+    NSArray *previous = objc_getAssociatedObject(self, &photoRefreshKey);
+    if (previous.firstObject == asset) return;
+    NSArray *ticket = @[asset];
+    objc_setAssociatedObject(self, &photoRefreshKey, ticket, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        if (objc_getAssociatedObject(self, &photoRefreshKey) != ticket ||
+            photoObject(self, "asset") != asset || !photoActive(self)) return;
+        id pending = photoObject(self, "_imageRequester");
+        if (photoObject(pending, "image") || photoObject(pending, "error")) return;
+        ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_invalidateImage"));
+        photoUpdate(self, selector);
+    });
+}
+
+static void installPhotoRendering(void)
+{
+    if (strcmp(getprogname(), "MobileSlideShow")) return;
+    unsigned expected = 0;
+    if (!__atomic_compare_exchange_n(&photoInstallState, &expected, 1u, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) return;
+    // PhotoKit supplies decoded images for the single-surface display backend.
+    Class controller = objc_lookUpClass("PUImageTileViewController");
+    Method method = class_getInstanceMethod(controller, sel_registerName("setCanUseFullSizeTiledLayer:"));
+    Method update = class_getInstanceMethod(controller, sel_registerName("_updateIfNeeded"));
+    if (!signature(method, 'v', 1, "B") || !signature(update, 'v', 0, "") ||
+        !signature(class_getInstanceMethod(controller, sel_registerName("canUseFullSizeTiledLayer")), 'B', 0, "") ||
+        !signature(class_getInstanceMethod(controller, sel_registerName("_invalidateImage")), 'v', 0, "") ||
+        !signature(class_getInstanceMethod(controller, sel_registerName("isActive")), 'B', 0, "") ||
+        !signature(class_getInstanceMethod(controller, sel_registerName("asset")), '@', 0, "") ||
+        !signature(class_getInstanceMethod(controller, sel_registerName("_imageRequester")), '@', 0, "") ||
+        !signature(class_getInstanceMethod(controller, sel_registerName("view")), '@', 0, "")) {
+        __atomic_store_n(&photoInstallState, 0u, __ATOMIC_RELEASE);
+        return;
+    }
+    originalPhotoTiling = method_setImplementation(method, (IMP)photoTiling);
+    originalPhotoUpdate = method_setImplementation(update, (IMP)photoUpdate);
+    __atomic_store_n(&photoInstallState, 2u, __ATOMIC_RELEASE);
+}
+
 static void install(void *context)
 {
     (void)context;
+    installPhotoRendering();
     __atomic_store_n(&queued, false, __ATOMIC_RELEASE);
     if (installed) return;
     Class item = objc_lookUpClass("_UIStatusBarBatteryItem"), view = objc_lookUpClass("_UIBatteryView");
@@ -115,6 +190,7 @@ static void install(void *context)
 static void imageAdded(const struct mach_header *header, intptr_t slide)
 {
     (void)header; (void)slide;
+    installPhotoRendering();
     bool expected = false;
     if (__atomic_compare_exchange_n(&queued, &expected, true, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
         dispatch_async_f(dispatch_get_main_queue(), NULL, install);
@@ -123,6 +199,7 @@ static void imageAdded(const struct mach_header *header, intptr_t slide)
 __attribute__((constructor)) static void initialize(void)
 {
     installComposition();
+    installPhotoRendering();
     if (!strcmp(getprogname(), "PosterBoard")) installFileProtection();
     char product[64] = {};
     size_t bytes = sizeof(product);

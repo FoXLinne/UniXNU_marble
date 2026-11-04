@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Attach native battery percentage display to the phone runtime addon."""
+"""Build the signed marble phone UI adapter and runtime addon."""
 import argparse
 import hashlib
 import json
