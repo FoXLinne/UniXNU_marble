@@ -36,7 +36,7 @@
     "development": "pass",
     "release_lto": "pass",
     "native_kernel": "outputs/UniXNU_marble/ios18_arm64e/kernel.native.macho",
-    "native_bytes": 14848760,
+    "native_bytes": 14848856,
     "components": [
       "ArmDTPlatform",
       "ArmCpu",
@@ -50,28 +50,29 @@
     "post_hmac": "populated",
     "runtime_post_verified": false,
     "command": "work/marble_hackios/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py kernel --output outputs/UniXNU_marble/ios18_arm64e",
-    "log": "outputs/UniXNU_marble/ios18_arm64e/kernel-command.log"
+    "log": "outputs/UniXNU_marble/ios18_arm64e/kernel-command.log",
+    "development_relink": "pass",
+    "release_lto_relink": "pass",
+    "ubc_getobject_export": true
   },
   "prelink": {
     "closure_components": 21,
-    "unresolved_references": 1354,
-    "unresolved_targets": 301,
+    "unresolved_references": 371,
+    "unresolved_targets": 139,
     "mapping_complete": false,
     "loadable": false,
     "candidate_written": false,
     "missing_by_component": {
-      "com.apple.driver.AppleARMPlatform": 295,
-      "com.apple.driver.AppleARMWatchdogTimer": 53,
-      "com.apple.driver.AppleEffaceableStorage": 15,
-      "com.apple.driver.AppleMobileFileIntegrity": 152,
-      "com.apple.driver.ApplePMGR": 107,
-      "com.apple.filesystems.apfs": 514,
-      "com.apple.iokit.CoreAnalyticsFamily": 64,
-      "com.apple.iokit.IOCryptoAcceleratorFamily": 37,
-      "com.apple.iokit.IOReportFamily": 7,
-      "com.apple.iokit.IOSlowAdaptiveClockingFamily": 7,
-      "com.apple.iokit.IOStorageFamily": 71,
-      "com.apple.security.AppleImage4": 32
+      "com.apple.driver.AppleARMPlatform": 78,
+      "com.apple.driver.AppleARMWatchdogTimer": 24,
+      "com.apple.driver.AppleMobileFileIntegrity": 21,
+      "com.apple.driver.ApplePMGR": 21,
+      "com.apple.filesystems.apfs": 178,
+      "com.apple.iokit.CoreAnalyticsFamily": 4,
+      "com.apple.iokit.IOCryptoAcceleratorFamily": 3,
+      "com.apple.iokit.IOReportFamily": 3,
+      "com.apple.iokit.IOStorageFamily": 27,
+      "com.apple.security.AppleImage4": 12
     },
     "report": "outputs/UniXNU_marble/ios18_arm64e/kernel.fileset.json",
     "command": "work/marble_hackios/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py prelink --output outputs/UniXNU_marble/ios18_arm64e",
@@ -84,13 +85,16 @@
     "script_patch_base_check": "pass",
     "python_toml_inputs": "pass",
     "upstream_snapshot": "pass",
-    "fileset_host_tests": 71,
+    "fileset_host_tests": 80,
     "fileset_host_result": "pass",
     "fileset_host_command": "python -m unittest discover -p 'test_*.py'",
-    "reviewed_functions": 33,
+    "reviewed_functions": 137,
     "reviewed_data": 29,
     "prelink_patch_base_check": "pass",
-    "prelink_entrypoint": "strict rejection of unresolved references"
+    "prelink_entrypoint": "strict rejection of unresolved references",
+    "pac_uefi_build": "pass",
+    "apple_adt_roundtrip": "pass",
+    "apple_adt_bytes": 208156
   },
   "hardware": {
     "el0_cpu_probe": "USB control transfer timeout",
@@ -104,6 +108,13 @@
       "product": "marble",
       "current-slot": "a",
       "is-userspace": "no"
+    },
+    "usb_observation": {
+      "product": "Redmi Note 12 Turbo",
+      "serial": "556fdfe",
+      "location": "0x02114000",
+      "vendor_id": "0x18d1",
+      "product_id": "0x4ee7"
     }
   }
 }

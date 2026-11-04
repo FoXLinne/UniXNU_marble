@@ -805,7 +805,7 @@ index 126605f..6a3e7be 100644
  __ZN24IOBufferMemoryDescriptor20inTaskWithGuardPagesEP4taskjy
  __ZN27IOGuardPageMemoryDescriptor12initWithSizeEm
 diff --git a/config/Private.exports b/config/Private.exports
-index 73504c4..a678bce 100644
+index 73504c4..ffceb78 100644
 --- a/config/Private.exports
 +++ b/config/Private.exports
 @@ -902,11 +902,9 @@ _kernel_image4_get_monitor_exports
@@ -820,6 +820,14 @@ index 73504c4..a678bce 100644
  _port_name_to_task:_port_name_to_task_external
  _port_name_to_thread
  _post_sys_powersource
+@@ -1210,6 +1208,7 @@ _kdebug_lookup_gen_events
+ _kdebug_vnode
+ _set_vm_privilege
+ _throttle_io_will_be_throttled
++_ubc_getobject
+ _ubc_is_mapped
+ _ubc_is_mapped_writable
+ _ubc_setsize_ex
 diff --git a/iokit/Kernel/IOMemoryDescriptor.cpp b/iokit/Kernel/IOMemoryDescriptor.cpp
 index 4fa1008..b342f8b 100644
 --- a/iokit/Kernel/IOMemoryDescriptor.cpp

@@ -13,13 +13,7 @@ import tomllib
 DEVICE = Path(__file__).resolve().parents[1]
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--platform', type=Path, default=DEVICE.parent / 'marble_hackios')
-    parser.add_argument('--stack', type=Path, default=DEVICE.parent / 'UniXNU')
-    args = parser.parse_args()
-    out, platform, stack = args.output.resolve(), args.platform.resolve(), args.stack.resolve()
+def build_applications(out, platform, stack):
     out.mkdir(parents=True, exist_ok=True)
     firmware = platform / 'Mu-Silicium'
     edk = firmware / 'Mu_Basecore'
@@ -41,19 +35,14 @@ def main():
                         '-b', 'RELEASE', '-t', 'CLANGPDB', '-n', '8'],
                        cwd=out, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
     binaries = out / 'Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64'
-    volume = out / 'volume.img'
-    with volume.open('wb') as stream:
-        stream.truncate(1024 * 1024)
-    subprocess.run(['mformat', '-i', volume, '-v', 'MARBLEPAC', '::'], check=True)
-    stage = out / 'stage/EFI/UniXNU'
-    stage.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(binaries / 'UniXNU.efi', stage / 'UniXNU.efi')
-    subprocess.run(['mcopy', '-i', volume, '-s', '-Q', stage.parent, '::/'], check=True)
-    blobs = [('loader.efi', (binaries / 'MarbleBootstrap.efi').read_bytes()),
-             ('root.stage', b'1'), ('volume.img', volume.read_bytes())]
-    body = b''.join(struct.pack('<16sII', name.encode(), len(data), 0) + data + bytes(-len(data) % 16)
-                    for name, data in blobs) + bytes(24)
-    payload = struct.pack('<II', 0x50554e58, len(body)) + body
+    return binaries
+
+
+def pack_boot_image(out, platform, payload, name):
+    # The reserved panic log starts at 0xb7000000.
+    if len(payload) > 0xb7000000 - 0xa8000000:
+        raise RuntimeError('Payload reaches the marble panic-log reservation')
+    firmware = platform / 'Mu-Silicium'
     spec = tomllib.loads((firmware / 'Resources/Configs/marble.toml').read_text())
     fd = firmware / 'Build/marblePkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd'
     if fd.stat().st_size != spec['uefi_fd']['size']:
@@ -69,11 +58,36 @@ def main():
     struct.pack_into('<Q', raw, 16, (len(raw) + 0x1fffff) & ~0x1fffff)
     kernel = out / 'firmware.bin'
     kernel.write_bytes(gzip.compress(raw, 6) + (platform / 'marble_live.dtb').read_bytes())
-    output = out / 'cpu_probe_boot.img'
+    output = out / name
     subprocess.run([sys.executable, firmware / 'Resources/Scripts/mkbootimg.py',
                     '--kernel', kernel, '--ramdisk', firmware / 'Resources/ramdisk',
                     '--header_version', str(spec['boot_image']['header_version']), '-o', output], check=True)
-    print(output)
+    return output
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--platform', type=Path, default=DEVICE.parent / 'marble_hackios')
+    parser.add_argument('--stack', type=Path, default=DEVICE.parent / 'UniXNU')
+    args = parser.parse_args()
+    out, platform, stack = args.output.resolve(), args.platform.resolve(), args.stack.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    binaries = build_applications(out, platform, stack)
+    volume = out / 'volume.img'
+    with volume.open('wb') as stream:
+        stream.truncate(1024 * 1024)
+    subprocess.run(['mformat', '-i', volume, '-v', 'MARBLEPAC', '::'], check=True)
+    stage = out / 'stage/EFI/UniXNU'
+    stage.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(binaries / 'UniXNU.efi', stage / 'UniXNU.efi')
+    subprocess.run(['mcopy', '-i', volume, '-s', '-Q', stage.parent, '::/'], check=True)
+    blobs = [('loader.efi', (binaries / 'MarbleBootstrap.efi').read_bytes()),
+             ('root.stage', b'1'), ('volume.img', volume.read_bytes())]
+    body = b''.join(struct.pack('<16sII', name.encode(), len(data), 0) + data + bytes(-len(data) % 16)
+                    for name, data in blobs) + bytes(24)
+    payload = struct.pack('<II', 0x50554e58, len(body)) + body
+    print(pack_boot_image(out, platform, payload, 'cpu_probe_boot.img'))
 
 
 if __name__ == '__main__':

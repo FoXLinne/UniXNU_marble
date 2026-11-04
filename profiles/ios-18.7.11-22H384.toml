@@ -36,3 +36,6 @@ scripts_patch = "patches/UniXNU/ios18-static-if.patch"
 prelink_url = "https://github.com/UniXNU/XnuPrelink.git"
 prelink_commit = "b1888c12456c46a2226d63c794465dfcee08d465"
 prelink_patch = "patches/XnuPrelink/ios18-layout.patch"
+
+[payload]
+kernel_args = ["-v", "serial=3", "keepsyms=1", "debug=0x14e"]

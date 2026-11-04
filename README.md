@@ -27,3 +27,5 @@ marble 的 UniXNU 适配代码。系统目标为 iPadOS 17.7.11（21H461）。
 `--boot-args="rootstage-panic-process=SpringBoard"` 在指定进程首次崩溃退出时保存寄存器、共享缓存偏移和用户栈。`scripts/symbolicate_root_log.py` 使用同版共享缓存与 `.symbols` 解析地址。
 
 `root_control.py screen --output PATH.png` 读取崩溃或观测期结束前的帧缓冲缩略图，并输出完成的像素复制次数。
+
+`profiles/ios-18.7.11-22H384.toml` 选择 iOS 18 arm64e。使用 `scripts/build_ios18_arm64e.py` 的 `fetch`、`kernel`、`prelink`、`bootimg` 命令，均通过 `--output` 指定独立产物目录；`bootimg` 接收 `--unique-chip-id HEX` 或 `UNIXNU_UNIQUE_CHIP_ID`。打包要求完整预链接映射，设备身份和 trust cache 来自该 profile 固定的 IPSW。结果与启动记录见 `records/ios18_arm64e_2026-11-04.json`。

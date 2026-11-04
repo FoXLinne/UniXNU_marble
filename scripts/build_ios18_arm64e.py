@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fetch iOS 18 ARM64e inputs, build XNU, and bind the original kernel collection."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -168,10 +169,128 @@ def build_board(tree, env):
     subprocess.run(['xcrun', 'ar', 'rcs', archive, obj], env=env, check=True)
 
 
+def read_adt(data, offset=0):
+    count, children = struct.unpack_from('<II', data, offset)
+    offset += 8
+    properties, nodes = {}, []
+    for _ in range(count):
+        name, length = struct.unpack_from('<32sI', data, offset)
+        offset += 36
+        length &= 0x7fffffff
+        properties[name.split(b'\0', 1)[0].decode()] = data[offset:offset + length]
+        offset += (length + 3) & ~3
+    for _ in range(children):
+        child, offset = read_adt(data, offset)
+        nodes.append(child)
+    return (properties, nodes), offset
+
+
+def write_adt(tree):
+    properties, children = tree
+    data = bytearray(struct.pack('<II', len(properties), len(children)))
+    for name, value in properties.items():
+        data += struct.pack('<32sI', name.encode(), len(value))
+        data += value + bytes(-len(value) % 4)
+    return bytes(data) + b''.join(write_adt(child) for child in children)
+
+
+def boot_image(out, upstream, stack, profile, unique_chip_id):
+    from build_pac_uefi import build_applications, pack_boot_image
+    report = json.loads((out / 'kernel.fileset.json').read_text())
+    if (not report.get('mapping_complete') or not report.get('candidate_written') or
+            report.get('allow_missing') or any(report.get('stubbed', {}).values())):
+        missing = sum(sum(component.values()) for component in report.get('missing', {}).values())
+        raise RuntimeError(f'Prelink has {missing} unresolved references')
+    kernel = out / 'kernel.fileset.macho'
+    with kernel.open('rb') as stream:
+        digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+    if digest != report['candidate_sha256']:
+        raise RuntimeError('Kernel differs from the complete prelink report')
+    if report['inputs']['kernelcache_sha256'] != profile['kernel']['prelink']['kernelcache_sha256']:
+        raise RuntimeError('Kernel collection differs from the iOS 18 profile')
+    if not unique_chip_id or not 0 < int(unique_chip_id, 16) < 1 << 64:
+        raise RuntimeError('bootimg requires --unique-chip-id HEX or UNIXNU_UNIQUE_CHIP_ID')
+    platform = DEVICE.parent / 'marble_hackios'
+    boot = out / 'boot'
+    boot.mkdir(exist_ok=True)
+    sys.path.insert(0, str(upstream / 'scripts'))
+    from unixnu.ipsw import im4p_payload
+    cache = out / 'ipsw' / profile['ipsw']['build']
+    paths = {}
+    for filename, expected in profile['ipsw']['sha256'].items():
+        if filename.startswith('kernelcache.'):
+            continue
+        path = cache / filename
+        with path.open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != expected:
+                raise RuntimeError(f'Firmware component differs from the profile: {filename}')
+        paths[filename] = path
+    original = im4p_payload(next(path for name, path in paths.items() if name.startswith('DeviceTree.')).read_bytes())
+    if original.startswith((b'bvx2', b'bvxn', b'bvx-')):
+        packed, decoded = boot / 'apple-device-tree.lzfse', boot / 'apple-device-tree.adt'
+        packed.write_bytes(original)
+        subprocess.run(['/usr/bin/compression_tool', '-decode', '-a', 'lzfse', '-i', packed, '-o', decoded], check=True)
+        original = decoded.read_bytes()
+    apple, end = read_adt(original)
+    if end != len(original) or apple[0]['model'].rstrip(b'\0').decode() != profile['ipsw']['product']:
+        raise RuntimeError('Apple device tree differs from the selected product')
+    binaries = build_applications(boot, platform, stack)
+    stage = boot / 'stage/EFI/UniXNU'
+    payloads = stage / 'Payloads'
+    payloads.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(binaries / 'UniXNU.efi', stage / 'UniXNU.efi')
+    shutil.copyfile(binaries / 'DarwinBoot.efi', payloads / 'DarwinBoot.efi')
+    shutil.copyfile(kernel, payloads / 'kernel.macho')
+    trust = boot / 'ios18.trustcache'
+    caches = [path for name, path in paths.items() if name.endswith('.trustcache')]
+    subprocess.run([sys.executable, upstream / 'scripts/bundle-ipsw-trust.py', trust, *caches], check=True)
+    shutil.copyfile(trust, payloads / 'kernel.macho.trustcache')
+    board = tomllib.loads((DEVICE / 'board.toml').read_text())
+    adt = payloads / 'kernel.macho.adt'
+    subprocess.run([sys.executable, DEVICE / 'scripts/make-marble-adt.py', '--output', adt,
+                    '--dram-size', board['payload']['dram_size'],
+                    '--owned-memory-size', board['payload']['adt']['owned_memory_size'],
+                    '--cpu-regs', '0', '--unique-chip-id', unique_chip_id,
+                    '--chip-id', f"{profile['ipsw']['chip_id']:x}", '--iphone-identity', '--trust-cache'], check=True)
+    tree, end = read_adt(adt.read_bytes())
+    tree[0]['model'], tree[0]['target-type'] = apple[0]['model'], apple[0]['target-type']
+    original_product = next(node[0] for node in apple[1] if node[0].get('name') == b'product\0')
+    product = next(node[0] for node in tree[1] if node[0].get('name') == b'product\0')
+    for key in ('product-name', 'product-description', 'artwork-device-idiom', 'artwork-device-subtype',
+                'artwork-scale-factor', 'artwork-display-gamut', 'compatible-device-fallback', 'thin-bezel'):
+        if key in original_product:
+            product[key] = original_product[key]
+    product['compatible-device-fallback'] = apple[0]['model']
+    chosen = next(node[0] for node in tree[1] if node[0].get('name') == b'chosen\0')
+    chosen['display-scale'] = product['artwork-scale-factor']
+    adt.write_bytes(write_adt(tree))
+    arguments = ' '.join(profile['payload']['kernel_args'])
+    text = (f'version = 1\n[boot]\ntimeout = 0\ndefault = "marble"\n[kits]\nautoload = false\n'
+            '[[driver]]\npath = "Payloads/DarwinBoot.efi"\n[[entry]]\nid = "marble"\n'
+            f'title = "UniXNU"\ntype = "xnu"\npath = "Payloads/kernel.macho"\nargs = "{arguments}"\n')
+    (stage / 'unixnu.toml').write_text(text)
+    volume = boot / 'volume.img'
+    total = sum(path.stat().st_size for path in stage.rglob('*') if path.is_file())
+    volume_bytes = ((total + 4 * 1024**2 - 1) // (2 * 1024**2)) * (2 * 1024**2)
+    with volume.open('wb') as stream:
+        stream.truncate(volume_bytes)
+    subprocess.run(['mformat', '-i', volume, '-v', 'MARBLEESP', '::'], check=True)
+    subprocess.run(['mcopy', '-i', volume, '-s', '-Q', stage.parent, '::/'], check=True)
+    blobs = [('loader.efi', (binaries / 'MarbleBootstrap.efi').read_bytes()), ('volume.img', volume.read_bytes())]
+    body = b''.join(struct.pack('<16sII', name.encode(), len(data), 0) + data + bytes(-len(data) % 16)
+                    for name, data in blobs) + bytes(24)
+    image = pack_boot_image(boot, platform, struct.pack('<II', 0x50554e58, len(body)) + body, 'marble_ios18_arm64e_boot.img')
+    (boot / 'boot.json').write_text(json.dumps({'profile': profile['os']['name'], 'kernel': str(kernel),
+        'prelink_complete': True, 'enabled_cpus': [0], 'kernel_args': profile['payload']['kernel_args'],
+        'model': profile['ipsw']['product'], 'volume_bytes': volume_bytes, 'image': str(image)}, indent=2) + '\n')
+    return image
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['fetch', 'kernel', 'prelink'])
+    parser.add_argument('command', choices=['fetch', 'kernel', 'prelink', 'bootimg'])
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--unique-chip-id', default=os.environ.get('UNIXNU_UNIQUE_CHIP_ID'))
     parser.add_argument('--upstream', type=Path, default=DEVICE.parent / 'upstream/UniXNU')
     parser.add_argument('--stack', type=Path, default=DEVICE.parent / 'UniXNU')
     args = parser.parse_args()
@@ -182,6 +301,9 @@ def main():
         print(fetch(out, upstream, profile))
         return
     tree, env = prepare(out, upstream, stack, profile)
+    if args.command == 'bootimg':
+        print(boot_image(out, upstream, stack, profile, args.unique_chip_id))
+        return
     if args.command == 'kernel':
         record = tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json'
         if not record.is_file():
