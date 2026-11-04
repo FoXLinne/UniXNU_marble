@@ -36,7 +36,7 @@
     "development": "pass",
     "release_lto": "pass",
     "native_kernel": "outputs/UniXNU_marble/ios18_arm64e/kernel.native.macho",
-    "native_bytes": 14848976,
+    "native_bytes": 14865368,
     "components": [
       "ArmDTPlatform",
       "ArmCpu",
@@ -56,7 +56,9 @@
     "ubc_getobject_export": true,
     "ml_get_cluster_count_export": true,
     "root_mount_timeout_seconds": 90,
-    "watchdog_timeout_ms": 32000
+    "watchdog_timeout_ms": 32000,
+    "bootstrap_table_pages": 20,
+    "handoff_cache_range": "loaded kernel and sidecars"
   },
   "prelink": {
     "closure_components": 21,
@@ -70,7 +72,7 @@
     "command": "work/marble_hackios/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py prelink --output outputs/UniXNU_marble/ios18_arm64e",
     "corecrypto_unresolved_references": 0,
     "candidate_bytes": 64585728,
-    "candidate_sha256": "eab836ed5b4708765977f06f794fb066bc00fd54948a89d3d920e0da773e7bf9",
+    "candidate_sha256": "0377955deb10213e3db1159a444752356c178f1729feb877b69627dbb9e6f072",
     "stubbed_functions": 0
   },
   "verification": {
@@ -100,7 +102,10 @@
     "loader_kernel_parser_cases": 8,
     "loader_kernel_parser_result": "pass",
     "loader_kernel_parser_log": "outputs/UniXNU_marble/ios18_arm64e/loader-validation/result.txt",
-    "panic_reader_build": "pass"
+    "panic_reader_build": "pass",
+    "resident_probe_build": "pass",
+    "bootstrap_capacity_build": "pass",
+    "strict_prelink_after_capacity": "pass"
   },
   "hardware": {
     "el0_cpu_probe": "USB control transfer timeout",
@@ -122,7 +127,7 @@
       "vendor_id": "0x18d1",
       "product_id": "0x4ee7"
     },
-    "ios18_kernel_entry_verified": false,
+    "ios18_kernel_entry_verified": true,
     "logdump_partition": "unavailable",
     "physical_memory_map": "outputs/UniXNU_marble/ios18_arm64e/physical-memory.txt",
     "watchdog_start_verified": true,
@@ -155,7 +160,29 @@
       "expected_magic": "0x46554e4b",
       "valid_xnu_panic": false
     },
-    "remaining": "内核交接后缺少有效内核日志；存储驱动和 iOS 用户态启动待适配"
+    "remaining": "C 初始化路径、存储驱动和 iOS 用户态启动待适配",
+    "resident_selftest": {
+      "result": "pass",
+      "report": "outputs/UniXNU_marble/ios18_arm64e/boot-resident-selftest.json"
+    },
+    "bootstrap_exhaustion_checkpoint": {
+      "result": "reached",
+      "report": "outputs/UniXNU_marble/ios18_arm64e/boot-tables-exhausted.json"
+    },
+    "mmu_enabled_checkpoint": {
+      "result": "reached",
+      "report": "outputs/UniXNU_marble/ios18_arm64e/boot-post-mmu.json"
+    },
+    "arm_init_entry_checkpoint": {
+      "result": "reached",
+      "report": "outputs/UniXNU_marble/ios18_arm64e/boot-arm-init.json"
+    },
+    "mmu_fault_capture_selftest": {
+      "result": "pass",
+      "esr": "0xf2000123",
+      "pc": "0x980a0f41c",
+      "report": "outputs/UniXNU_marble/ios18_arm64e/boot-fault-selftest.json"
+    }
   },
   "boot_image": {
     "profile": "ios-18.7.11-22H384",

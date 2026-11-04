@@ -29,6 +29,7 @@ roots = ["com.apple.driver.AppleARMPlatform", "com.apple.filesystems.apfs", "com
 
 [kernel.prelink]
 kernelcache_sha256 = "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70"
+early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff00907fcb4"
 
 [upstream]
 commit = "3fa5ff5f409398c0555a9561d6437ce5d4c3b3b7"
@@ -38,4 +39,4 @@ prelink_commit = "b1888c12456c46a2226d63c794465dfcee08d465"
 prelink_patch = "patches/XnuPrelink/ios18-layout.patch"
 
 [payload]
-kernel_args = ["-v", "serial=3", "keepsyms=1", "debug=0x14e"]
+kernel_args = ["-v", "serial=0", "keepsyms=1", "debug=0x14e", "msgbuf=1048576"]

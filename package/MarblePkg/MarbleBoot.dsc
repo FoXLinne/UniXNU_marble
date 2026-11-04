@@ -53,6 +53,8 @@
   MarblePkg/Bootstrap.inf
   MarblePkg/WatchdogProbe.inf
   MarblePkg/PanicReader.inf
+  MarblePkg/KernelProbe.inf
+  MarblePkg/ResidentSelftest.inf
   UniXNUPkg/Application/UniXNU/UniXNU.inf
   UniXNUPkg/Test/HelloPayload/HelloPayload.inf
   DarwinBootPkg/Driver/DarwinBoot.inf

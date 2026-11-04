@@ -1,0 +1,34 @@
+[Defines]
+  INF_VERSION = 0x00010019
+  BASE_NAME = MarbleResidentSelftest
+  FILE_GUID = B11CD686-FC13-46BD-A402-7D6225D2514B
+  MODULE_TYPE = UEFI_APPLICATION
+  VERSION_STRING = 1.0
+  ENTRY_POINT = MarbleResidentSelftestEntry
+
+[Sources]
+  KernelProbe.c
+  Bootstrap.c
+  GunyahWatchdog.h
+  RootUsb.c
+  RootStorage.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  UniXNUPkg/UniXNUPkg.dec
+
+[LibraryClasses]
+  BaseMemoryLib
+  BaseLib
+  DevicePathLib
+  MemoryAllocationLib
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  UefiLib
+
+[Protocols]
+  gEfiCpuArchProtocolGuid
+  gEfiBlockIoProtocolGuid
+  gEfiDevicePathProtocolGuid
+  gEfiSimpleFileSystemProtocolGuid

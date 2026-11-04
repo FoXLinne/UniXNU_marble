@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-05",
+  "device": "marble",
+  "profile": "ios-18.7.11-22H384",
+  "architecture": "arm64e",
+  "hardware": {
+    "last_capture": "outputs/UniXNU_marble/ios18_arm64e/boot-amfi-registered.txt",
+    "amfi_interface_check": "passed",
+    "failure": "PAC failure from kernel with IA key while branching to x8",
+    "failure_pc": "0xfffffff007f9ae84",
+    "failure_symbol": "sleh_irq+0x30",
+    "last_usb_serial": "556fdfe",
+    "last_usb_state": "device",
+    "resident_memory_export_tested": false,
+    "resident_retry_tested": false,
+    "ios_userspace_boot_verified": false
+  },
+  "changes": [
+    "Twenty-page bootstrap page table pool",
+    "CNTV_CTL_EL0 on the Gunyah timer path",
+    "Original iOS 18 AMFI early registration",
+    "Sign-extension masking in the retained kernel page-table reader",
+    "Read-only USB export of retained kernel memory",
+    "Firmware return with watchdog disabled",
+    "Kernel replacement within the retained firmware session",
+    "Capture required before kernel replacement"
+  ],
+  "verification": {
+    "release_lto_build": "pass",
+    "strict_prelink_unresolved": 0,
+    "strict_prelink_stubs": 0,
+    "uefi_build": "pass",
+    "xnu_patch_reverse_check": "pass",
+    "host_memory_capture": "38-bit TTBR1, page crossing, full ring bytes, chronological order, unmapped-page rejection",
+    "host_retry": "capture failure prevents upload; successful capture permits replacement; reset command absent"
+  },
+  "image": "outputs/UniXNU_marble/ios18_arm64e/probe-early/marble_ios18_early.img",
+  "tools": [
+    "scripts/capture_ios18_resident.py",
+    "scripts/retry_ios18_resident.py"
+  ]
+}

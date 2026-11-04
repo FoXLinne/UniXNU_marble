@@ -194,7 +194,7 @@ STATIC EFI_STATUS InitializeUsb(VOID)
   mStage->Magic = ROOT_STAGE_MAGIC;
   mStage->Version = 2;
   mStage->WaitForHost = (UINTN)&MarbleRootUsb;
-  mStage->KernelBytes = 0x100000000ULL;
+  mStage->KernelBytes = 0x200000000ULL;
   // DarwinBoot preserves the kernel virtual base's offset within a 2 MiB block.
   mStage->KernelBase = (UINTN)AllocateAlignedPages(EFI_SIZE_TO_PAGES(mStage->KernelBytes+KERNEL_ALIGNMENT_SLACK),0x200000);
   if (!mStage->KernelBase) return EFI_OUT_OF_RESOURCES;
@@ -307,7 +307,23 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       Hex(Text,Result.keys,16); Text[16]=':';
       Hex(Text+17,Result.authenticated,16); Reply("OKAY",Text);
     }
-    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache,zero-fill");
+    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache,zero-fill,memory-read");
+    else if (!AsciiStrnCmp(Command,"oem memory-read:",16)) {
+      if (AsciiStrLen(Command)!=41 || Command[32]!=':') {
+        Reply("FAIL","invalid memory request"); continue;
+      }
+      UINT64 Address=AsciiStrHexToUint64(Command+16);
+      UINTN Bytes=AsciiStrHexToUintn(Command+33);
+      if (!Bytes || Bytes>TRANSFER_BYTES || !OwnedRange(Address,Bytes)) {
+        Reply("FAIL","outside retained kernel memory"); continue;
+      }
+      if (!mExport) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mExport);
+      else Status=EFI_SUCCESS;
+      if (EFI_ERROR(Status)) { Reply("FAIL","memory export allocation failed"); continue; }
+      CopyMem(mExport,(VOID *)(UINTN)Address,Bytes);
+      mExportBytes=Bytes;
+      Reply("OKAY","");
+    }
     else if (!AsciiStrnCmp(Command,"oem runtime-usb:",16) && (Command[16]=='0' || Command[16]=='1') && !Command[17]) {
       mRuntimeUsb=Command[16]=='1'; Reply("OKAY","");
     }
@@ -333,6 +349,16 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       Hex(Text,Fault[0],16); Text[16]=':';
       Hex(Text+17,Fault[1],16); Text[33]=':';
       Hex(Text+34,Fault[2],16); Reply("OKAY",Text);
+    } else if (!AsciiStrCmp(Command,"getvar:handoff-translation")) {
+      EFI_GUID Guid = ROOT_STAGE_FAULT_GUID;
+      UINT64 Empty[16] = {0}, *Fault = Empty;
+      for (UINTN i=0;i<gST->NumberOfTableEntries;i++) {
+        if (CompareGuid(&Guid,&gST->ConfigurationTable[i].VendorGuid))
+          Fault=gST->ConfigurationTable[i].VendorTable;
+      }
+      CHAR8 Text[34];
+      Hex(Text,Fault[14],16); Text[16]=':';
+      Hex(Text+17,Fault[15],16); Reply("OKAY",Text);
     }
     else if (!AsciiStrCmp(Command,"getvar:returns")) {
       CHAR8 Text[17]; Hex(Text,mStage->ReturnCount,16); Reply("OKAY",Text);
@@ -401,9 +427,10 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       CopyMem(mTx,DiskAddress(Disk,mLastOffset),First);
       if (First<mLastBytes) CopyMem(mTx+First,DiskAddress(Disk,mLastOffset+First),mLastBytes-First);
       Transfer(EP_IN,mTx,mLastBytes); Reply("OKAY","");
-    } else if (!AsciiStrCmp(Command,"continue") || !AsciiStrCmp(Command,"selftest")) {
+    } else if (!AsciiStrCmp(Command,"continue") || !AsciiStrCmp(Command,"selftest") || !AsciiStrCmp(Command,"oem retry")) {
+      BOOLEAN Retry=!AsciiStrCmp(Command,"oem retry");
       mStage->ReturnTest=!AsciiStrCmp(Command,"selftest");
-      BOOLEAN Complete=mStage->DiskCount>0;
+      BOOLEAN Complete=Retry || mStage->DiskCount>0;
       for (UINTN i=0;i<mStage->DiskCount;i++) Complete &= mStage->Disks[i].Bytes && mStage->Disks[i].Received==mStage->Disks[i].Bytes;
       if (mStage->Disks[2].Bytes) Complete &= mStage->Disks[2].Received==mStage->Disks[2].Bytes;
       if (!Complete && !mStage->ReturnTest) { Reply("FAIL","root images incomplete"); continue; }
@@ -420,7 +447,7 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       if (!EFI_ERROR(Status)) ZeroMem(mDirty,sizeof(mDirty));
       if (!EFI_ERROR(Status)) Status=mCpu->FlushDataCache(mCpu,(UINTN)mStage,sizeof(*mStage),EfiCpuFlushTypeWriteBack);
       if (EFI_ERROR(Status)) { Reply("FAIL","root cache writeback failed"); continue; }
-      Reply("OKAY",""); if (!mRuntimeUsb) mUsb->Stop(); return EFI_SUCCESS;
+      Reply("OKAY",""); if (!mRuntimeUsb) mUsb->Stop(); return Retry ? EFI_NOT_READY : EFI_SUCCESS;
     } else if (!AsciiStrCmp(Command,"reboot")) {
       Reply("OKAY",""); mUsb->Stop(); gRT->ResetSystem(EfiResetCold,EFI_SUCCESS,0,NULL);
     } else Reply("FAIL","unknown command");

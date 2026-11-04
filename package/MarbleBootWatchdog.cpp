@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <IOKit/IOLib.h>
 #include <kern/thread.h>
+#include <kern/startup.h>
 
 extern "C" void native_marble_watchdog_start(void);
 extern "C" struct vnode *rootvnode;
@@ -36,3 +37,5 @@ extern "C" void native_marble_watchdog_start(void) {
     if (kernel_thread_start(watchdogWorker, nullptr, &thread) == KERN_SUCCESS)
         thread_deallocate(thread);
 }
+
+STARTUP(THREAD_CALL, STARTUP_RANK_LAST, native_marble_watchdog_start);

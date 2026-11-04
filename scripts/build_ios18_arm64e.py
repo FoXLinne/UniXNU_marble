@@ -336,6 +336,8 @@ def main():
                '--prelinked', str(cache), '--slide=-0x1000000', '--output', str(output)]
     for root in profile['kernel']['roots']:
         command += ['--root', root]
+    if profile['kernel']['prelink'].get('early_security_init'):
+        command += ['--early-security-init', profile['kernel']['prelink']['early_security_init']]
     with (out / 'prelink.log').open('w') as log:
         result = subprocess.run(command, cwd=tree, env=env, stdout=log, stderr=subprocess.STDOUT)
     if result.returncode:

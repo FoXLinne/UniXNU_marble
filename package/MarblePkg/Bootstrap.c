@@ -7,6 +7,7 @@
 #include <Library/UefiLib.h>
 #include <Protocol/BlockIo.h>
 #include <Protocol/DevicePath.h>
+#include <Protocol/GraphicsOutput.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/UniXNULoader.h>
 #include "GunyahWatchdog.h"
@@ -32,6 +33,40 @@ STATIC CHAR16 mBootText[32768];
 STATIC UINTN mBootTextUsed;
 STATIC UNIXNU_LOADER_BOOT mLoaderBoot;
 
+STATIC VOID
+CaptureBootScreen(UINT8 *Buffer, UINTN Capacity)
+{
+  EFI_GUID Guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+  EFI_GRAPHICS_OUTPUT_PROTOCOL *Gop;
+  if (EFI_ERROR(gBS->LocateProtocol(&Guid, NULL, (VOID **)&Gop)) ||
+      !Gop->Mode || !Gop->Mode->Info) return;
+  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *Info = Gop->Mode->Info;
+  if (Info->PixelFormat != PixelBlueGreenRedReserved8BitPerColor ||
+      !Info->HorizontalResolution || !Info->VerticalResolution ||
+      Info->PixelsPerScanLine < Info->HorizontalResolution ||
+      (UINT64)Info->PixelsPerScanLine * Info->VerticalResolution * 4 > Gop->Mode->FrameBufferSize)
+    return;
+  UINTN Scale = 1;
+  while ((UINT64)(Info->HorizontalResolution / Scale) * (Info->VerticalResolution / Scale) * 3 + 32 > Capacity)
+    Scale++;
+  UINT32 Width = Info->HorizontalResolution / Scale, Height = Info->VerticalResolution / Scale;
+  if (!Width || !Height) return;
+  UINT32 Header[4] = {Width, Height, Width * 3, Width * Height * 3};
+  CopyMem(Buffer, "ROOTRGB1", 8);
+  CopyMem(Buffer + 8, Header, sizeof(Header));
+  ZeroMem(Buffer + 24, 8);
+  volatile UINT32 *Pixels = (VOID *)(UINTN)Gop->Mode->FrameBufferBase;
+  UINT8 *Out = Buffer + 32;
+  for (UINTN Y = 0; Y < Height; Y++) {
+    for (UINTN X = 0; X < Width; X++) {
+      UINT32 Pixel = Pixels[Y * Scale * Info->PixelsPerScanLine + X * Scale];
+      *Out++ = Pixel >> 16;
+      *Out++ = Pixel >> 8;
+      *Out++ = Pixel;
+    }
+  }
+}
+
 STATIC EFI_STATUS EFIAPI
 BootOutput(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This, CHAR16 *Text)
 {
@@ -49,18 +84,40 @@ BootReturn(EFI_STATUS Status, UINTN Checkpoint)
   Report.Version = 2;
   Report.KernelBase = Checkpoint;
   Report.ReturnCount = Status;
+  ROOT_STAGE_TABLE *Resident = NULL;
+  EFI_GUID StageGuid = ROOT_STAGE_GUID;
+  for (UINTN Index = 0; Index < gST->NumberOfTableEntries; Index++) {
+    if (CompareGuid(&StageGuid, &gST->ConfigurationTable[Index].VendorGuid))
+      Resident = gST->ConfigurationTable[Index].VendorTable;
+  }
+  if (Resident && Resident->Magic == ROOT_STAGE_MAGIC && Resident->Version == 2) {
+    CopyMem(&Report, Resident, sizeof(Report));
+    Report.ReturnCount = Status;
+    for (UINTN Index = 0; Index < Resident->Disks[2].Count; Index++) {
+      ROOT_STAGE_EXTENT *Extent = &Resident->Disks[2].Extents[Index];
+      gBS->FreePages(Extent->Address, EFI_SIZE_TO_PAGES(Extent->Bytes));
+    }
+    ZeroMem(&Resident->Disks[2], sizeof(Resident->Disks[2]));
+  }
   if (mOutputString) gST->ConOut->OutputString = mOutputString;
   Print(L"Marble boot checkpoint %u: %r\r\n", Checkpoint, Status);
-  MarbleWatchdogStart(32000);
+  gBS->SetWatchdogTimer(0, 0, 0, NULL);
+  MarbleWatchdogCall(0x86000005, 2, 0, NULL);
   VOID *Log = AllocatePages(EFI_SIZE_TO_PAGES(0x100000));
   if (Log) {
     ZeroMem(Log, 0x100000);
     CopyMem(Log, mBootText, mBootTextUsed * sizeof(CHAR16));
+    CaptureBootScreen((UINT8 *)Log + 65536, 0x100000 - 65536);
+    ZeroMem(&Report.Disks[2], sizeof(Report.Disks[2]));
     Report.Disks[2].Bytes = 0x100000;
     Report.Disks[2].Count = 1;
     Report.Disks[2].Extents[0].Address = (UINTN)Log;
     Report.Disks[2].Extents[0].Bytes = 0x100000;
-    MarbleRootUsbResume(&Report);
+    EFI_STATUS Host = MarbleRootUsbResume(&Report);
+    if (Host == EFI_NOT_READY && Resident) {
+      CopyMem(&Resident->Disks[2], &Report.Disks[2], sizeof(Resident->Disks[2]));
+      return EFI_NOT_READY;
+    }
   }
   return Status;
 }
@@ -68,7 +125,13 @@ BootReturn(EFI_STATUS Status, UINTN Checkpoint)
 STATIC EFI_STATUS EFIAPI
 BootLoader(UNIXNU_LOADER_PROTOCOL *This, CONST UNIXNU_LOADER_BOOT_REQUEST *Request)
 {
-  return BootReturn(mLoaderBoot(This, Request), 6);
+  for (;;) {
+    EFI_STATUS Status = BootReturn(mLoaderBoot(This, Request), 6);
+    if (Status != EFI_NOT_READY) return Status;
+    mBootTextUsed = 0;
+    mBootText[0] = 0;
+    gST->ConOut->OutputString = BootOutput;
+  }
 }
 
 STATIC VOID EFIAPI

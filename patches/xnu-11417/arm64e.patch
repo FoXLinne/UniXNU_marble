@@ -978,7 +978,7 @@ index 2b3b974..c300580 100644
  .SFLAGS: ALWAYS
  	$(_v)$(REPLACECONTENTS) $@ $(S_KCC) $(SFLAGS) $(INCFLAGS)
 diff --git a/libkern/c++/OSKext.cpp b/libkern/c++/OSKext.cpp
-index 8c4d510..0fcd714 100644
+index 8c4d510..0585896 100644
 --- a/libkern/c++/OSKext.cpp
 +++ b/libkern/c++/OSKext.cpp
 @@ -74,6 +74,15 @@ extern "C" {
@@ -1044,10 +1044,10 @@ index 8c4d510..0fcd714 100644
 +		 * so the call fails authentication. Branch to the checked address directly; the entry is a
 +		 * BTI-c function and the clobbers are the AAPCS64 caller-saved set.
 +		 */
-+		register uint64_t x0 __asm__("x0");
++		register uint64_t x0 __asm__("x0") = 0;
 +		register uint64_t x16 __asm__("x16") = target;
 +		__asm__ volatile ("blr x16"
-+		    : "=r"(x0), "+r"(x16)
++		    : "+r"(x0), "+r"(x16)
 +		    :
 +		    : "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
 +		    "x17", "x30", "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v16", "v17", "v18", "v19", "v20",
@@ -1366,7 +1366,7 @@ index a5de704..36ff1b7 100644
 +}
 +#endif
 diff --git a/osfmk/arm/pmap/pmap.h b/osfmk/arm/pmap/pmap.h
-index 449dba7..425791b 100644
+index 449dba7..eb673e2 100644
 --- a/osfmk/arm/pmap/pmap.h
 +++ b/osfmk/arm/pmap/pmap.h
 @@ -115,6 +115,11 @@
@@ -1374,10 +1374,10 @@ index 449dba7..425791b 100644
   */
  #define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 34)
 +#elif !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
-+/* Native 4 KiB: two roots plus up to seven L2 pages per 6 GiB mapping.
++/* Native 4 KiB: two roots plus up to nine L2 pages per 8 GiB mapping.
 + * The physical and virtual bases may each straddle an extra 1 GiB region.
 + */
-+#define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 16)
++#define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 20)
  #else /* defined(ARM_LARGE_MEMORY) */
  #define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 8)
  #endif /* defined(ARM_LARGE_MEMORY) */
@@ -1442,6 +1442,21 @@ index 4f8404f..287ac88 100644
  	DECLARE("PGSHIFT", ARM_PGSHIFT);
  
  	DECLARE("VM_MIN_KERNEL_ADDRESS", VM_MIN_KERNEL_ADDRESS);
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
+index cbb494a..466d104 100644
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -2579,8 +2579,10 @@ _enable_virtual_timer(void)
+ 	uint64_t cntvctl = CNTV_CTL_EL0_ENABLE; /* One wants to use 32 bits, but "mrs" prefers it this way */
+ 
+ 	__builtin_arm_wsr64(KERNEL_CNTV_CTL_EL0, cntvctl);
++#if !defined(XNU_ARMCPU) || !XNU_ARMCPU
+ 	/* disable the physical timer as a precaution, as its registers reset to architecturally unknown values */
+ 	__builtin_arm_wsr64("CNTP_CTL_EL0", CNTP_CTL_EL0_IMASKED);
++#endif
+ #if HAS_APPLE_GENERIC_TIMER
+ 	__builtin_arm_wsr64("S3_1_C15_C13_4", CNTP_CTL_EL0_IMASKED);
+ #endif
 diff --git a/osfmk/arm64/machine_routines_asm.s b/osfmk/arm64/machine_routines_asm.s
 index 24cd966..d7c3444 100644
 --- a/osfmk/arm64/machine_routines_asm.s
