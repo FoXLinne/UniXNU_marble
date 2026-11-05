@@ -17,6 +17,10 @@ extern "C" void native_root_block_capture_log(void);
 extern "C" void armcpu_complete_active_interrupt(void);
 extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_root_block_export_data(void);
+#ifdef MARBLE_IOS18_GPU
+extern "C" int native_marble_adreno_stop(void);
+extern "C" void native_marble_gmu_stop(void);
+#endif
 extern "C" volatile uint32_t armcpu_smp_step[8], armcpu_smp_mpidr[8];
 extern "C" void native_resident_usb_control(volatile uint64_t *);
 extern "C" {
@@ -128,6 +132,10 @@ static void returnOnBootCpu(void *)
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(now));
     if (now - began > frequency / 2) psci(0x84000009);
   }
+#ifdef MARBLE_IOS18_GPU
+  if (native_marble_adreno_stop()) psci(0x84000009);
+  native_marble_gmu_stop();
+#endif
   native_resident_return();
 }
 

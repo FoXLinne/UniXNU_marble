@@ -14,6 +14,7 @@
 
 extern "C" const uint8_t marble_gmu_firmware[];
 extern "C" const uint64_t marble_gmu_firmware_size;
+extern "C" { volatile uint32_t native_gpu_dcvs[15] = {0, 7}; }
 
 namespace {
 struct Registers {
@@ -401,6 +402,12 @@ bool ready;
 extern "C" bool native_marble_gmu_ready(void) {
     return __atomic_load_n(&ready, __ATOMIC_ACQUIRE);
 }
+extern "C" int native_marble_gmu_write(uint32_t reg, uint32_t value) {
+    if (!device || !device->core.words || reg < 0x1a000 || (uint64_t(reg) * 4 - 0x68000) >= 0x37000)
+        return -22;
+    device->write(reg, value);
+    return 0;
+}
 extern "C" void native_marble_gmu_stop(void) {
     __atomic_store_n(&ready, false, __ATOMIC_RELEASE);
     if (device && device->core.words) {
@@ -414,5 +421,6 @@ extern "C" int native_marble_gmu_load(void) {
     device = new Gmu;
     int status = device ? device->start() : -12;
     __atomic_store_n(&ready, status == 0, __ATOMIC_RELEASE);
+    native_gpu_dcvs[0] = status == 0;
     return status;
 }

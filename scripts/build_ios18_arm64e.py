@@ -78,8 +78,9 @@ def prepare(out, upstream, stack, profile):
         raise RuntimeError('Prepared XNU source differs from the OS profile revision')
     patch = DEVICE / profile['kernel']['patch']
     apply_patch(work, patch)
+    apply_patch(work, DEVICE / profile['kernel']['gpu_patch'])
     patch_list = out / 'xnu-patches.list'
-    patch_list.write_text(str(patch) + '\n')
+    patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n')
     env = dict(os.environ, UNIXNU_XNU_TAG='xnu-' + os_spec['xnu_version'],
                UNIXNU_XNU_COMMIT=os_spec['xnu_revision'], UNIXNU_XNU_DARWIN=os_spec['darwin'],
                UNIXNU_XNU_VERSION=os_spec['xnu_version'], UNIXNU_XNU_ARCH=os_spec['arch'],
@@ -98,7 +99,8 @@ def release(tree, out, env, profile):
     version = os_spec['ios_version']
     archives = [tree / 'build/corecrypto-2023/libcorecrypto_kernel_noasm-namespaced.a']
     forced = [tree / 'build/armdt-platform/libArmDTPlatform.a', tree / 'build/armcpu/libArmCpu.a',
-              tree / 'build/marble-boot/libMarbleBoot.a', tree / 'build/marble-storage/libMarbleStorage.a']
+              tree / 'build/marble-boot/libMarbleBoot.a', tree / 'build/marble-storage/libMarbleStorage.a',
+              tree / 'build/marble-gpu/libMarbleGpu.a']
     args = ['make', '-C', str(tree / '.cache/xnu-work'), 'build', 'SDKROOT=iphoneos',
             'ARCH_CONFIGS=ARM64', 'MACHINE_CONFIGS=BCM2837', 'KERNEL_CONFIGS=RELEASE',
             'ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG=arm64e', 'LARGE_MEMORY_DEFINE=-UARM_LARGE_MEMORY',
@@ -250,7 +252,7 @@ def build_board(tree, env):
     objects = []
     with (out / 'compile.log').open('w') as log:
         sources = [DEVICE / 'package' / filename for filename in
-                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp',
+                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
                     'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'NativeResident.cpp',
@@ -267,6 +269,10 @@ def build_board(tree, env):
                 source = resident
             record_path = records / ('bsd/DEVELOPMENT/kern_exec.o.json' if source.suffix == '.c'
                                      else 'iokit/DEVELOPMENT/IOPlatformExpert.cpo.json')
+            if filename == 'MarbleMetal.c':
+                release_record = tree / 'build/xnu/ios-release-obj/RELEASE_ARM64_BCM2837/bsd/RELEASE/kern_exec.o.json'
+                if release_record.is_file():
+                    record_path = release_record
             record = json.loads(record_path.read_text().strip().rstrip(','))
             obj = out / (source.stem + '.o')
             command = []
@@ -283,7 +289,9 @@ def build_board(tree, env):
             strict = filename in ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleSystemOS.c',
                                   'MarbleDisplay.cpp', 'MarblePower18.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp')
             command += ['-Werror' if strict else '-Wno-error', '-Wno-c99-designator', '-Wno-missing-include-dirs']
-            command += ['-fno-sanitize=signed-integer-overflow']
+            command += ['-fno-sanitize=signed-integer-overflow', '-DMARBLE_IOS18_GPU=1']
+            if filename == 'MarbleMetal.c':
+                command += ['-UDEVELOPMENT', '-DDEVELOPMENT=0', '-UDEBUG', '-DDEBUG=0', '-fno-lto']
             command += ['-I', str(out), '-Wno-unused-parameter', '-Wno-deprecated-enum-enum-conversion']
             command += ['-I', str(tree / '.cache/xnu-work/osfmk')]
             command += ['-I', str(DEVICE / 'package')]
@@ -444,7 +452,7 @@ def validate_prelink(out):
 
 def boot_image(out, upstream, stack, profile, unique_chip_id):
     from build_pac_uefi import build_applications, pack_boot_image
-    report = json.loads((out / 'kernel.fileset.json').read_text())
+    report = validate_prelink(out)
     kernel = out / 'kernel.fileset.macho'
     if report['inputs']['kernelcache_sha256'] != profile['kernel']['prelink']['kernelcache_sha256']:
         raise RuntimeError('Kernel collection differs from the iOS 18 profile')
@@ -483,8 +491,15 @@ def boot_image(out, upstream, stack, profile, unique_chip_id):
     shutil.copyfile(kernel, payloads / 'kernel.macho')
     trust = boot / 'ios18.trustcache'
     caches = [path for name, path in paths.items() if name.endswith('.trustcache')]
-    subprocess.run([sys.executable, upstream / 'scripts/bundle-ipsw-trust.py', trust, *caches], check=True)
+    gpu = json.loads((out / 'gpu/userspace.json').read_text())
+    owner = out / 'gpu/owner.trustcache'
+    addon = out / 'gpu/metal.gpuaddon'
+    if hashlib.sha256(owner.read_bytes()).hexdigest() != gpu['trust_cache_sha256'] or \
+            hashlib.sha256(addon.read_bytes()).hexdigest() != gpu['addon_sha256']:
+        raise RuntimeError('GPU payload differs from its signed userspace build')
+    subprocess.run([sys.executable, upstream / 'scripts/bundle-ipsw-trust.py', trust, *caches, owner], check=True)
     shutil.copyfile(trust, payloads / 'kernel.macho.trustcache')
+    shutil.copyfile(addon, payloads / 'kernel.macho.gpuaddon')
     board = tomllib.loads((DEVICE / 'board.toml').read_text())
     adt = payloads / 'kernel.macho.adt'
     subprocess.run([sys.executable, DEVICE / 'scripts/make-marble-adt.py', '--output', adt,
@@ -492,7 +507,7 @@ def boot_image(out, upstream, stack, profile, unique_chip_id):
                     '--owned-memory-size', profile['payload']['owned_memory_size'],
                     '--root-match-volume-uuid', profile['payload']['root_volume_uuid'],
                     '--cpu-regs', '0', '--unique-chip-id', unique_chip_id,
-                    '--chip-id', f"{profile['ipsw']['chip_id']:x}", '--iphone-identity', '--trust-cache'], check=True)
+                    '--chip-id', f"{profile['ipsw']['chip_id']:x}", '--iphone-identity', '--trust-cache', '--gpu-addon'], check=True)
     tree, end = read_adt(adt.read_bytes())
     tree[0]['model'], tree[0]['target-type'] = apple[0]['model'], apple[0]['target-type']
     original_product = next(node[0] for node in apple[1] if node[0].get('name') == b'product\0')
@@ -568,7 +583,8 @@ def main():
                    XNU_ARM_DT_PLATFORM='1', XNU_ARMCPU='1', XNU_NATIVE_PAN='1', XNU_NATIVE_CS_HASH_CACHE='1',
                    XNU_EXTRA_CFLAGS=NATIVE_CFLAGS,
                    XNU_EXTRA_LD_ARCHIVES=f'-Wl,-force_load,{tree}/build/marble-boot/libMarbleBoot.a '
-                                        f'-Wl,-force_load,{tree}/build/marble-storage/libMarbleStorage.a')
+                                        f'-Wl,-force_load,{tree}/build/marble-storage/libMarbleStorage.a '
+                                        f'-Wl,-force_load,{tree}/build/marble-gpu/libMarbleGpu.a')
         checkout(out / 'SoftwareAES', 'https://github.com/UniXNU/SoftwareAES.git',
                  '4a45326da5c2cd6fe6813d79ee43db20805628af')
         checkout(out / 'AppleKeyStoreState', 'https://github.com/UniXNU/AppleKeyStoreState.git',
@@ -578,6 +594,8 @@ def main():
                  'e47c1b8de169cd2bd0b885c7d85e433010e3cdf2')
         checkout(out / 'IOHIDFamily', 'https://github.com/apple-oss-distributions/IOHIDFamily.git',
                  'e31e90a24c27ad6cbe981650d12a1a4124065b03', 'IOHIDFamily-2238.120.5')
+        from build_ios18_gpu import kernel as build_gpu
+        build_gpu(out)
         build_board(tree, env)
         storage = out / 'IOStorageFamily-323'
         checkout(storage, 'https://github.com/apple-oss-distributions/IOStorageFamily.git',

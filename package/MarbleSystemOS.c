@@ -19,6 +19,8 @@ extern uint64_t dyld_flags;
 extern int sheng_boot_watchdog_policy(void *, uint64_t);
 extern int native_marble_setup_policy(proc_t, user_addr_t);
 extern void native_marble_ls_store_rebuild(proc_t, user_addr_t);
+extern int native_marble_metal_prepare(proc_t, user_addr_t);
+extern volatile int native_bindfs_boot_mount;
 /* CoreEntitlements retains its 16 KiB allocation and stack-window ABI. */
 __attribute__((used)) const unsigned int native_ios18_ce_page_shift = 14;
 int native_marble_prepare_systemos(proc_t, user_addr_t, user_addr_t *);
@@ -59,7 +61,7 @@ void native_marble_ui_exit(proc_t process, const char *name, uint32_t reason_nam
 
 int native_marble_bindfs_allowed(void)
 {
-    return bootBindMount && proc_selfpid() == 1;
+    return (bootBindMount || native_bindfs_boot_mount) && proc_selfpid() == 1;
 }
 
 static int preparePreboot(proc_t process, user_addr_t scratch)
@@ -237,7 +239,23 @@ int native_marble_prepare_systemos(proc_t process, user_addr_t scratch, user_add
     if (error) return error;
     error = native_marble_setup_policy(process, scratch);
     if (error) return error;
-    *environment = USER_ADDR_NULL;
+    error = native_marble_metal_prepare(process, scratch);
+    if (error) return error;
+    static const char *const graphics_environment[] = {
+        "CA_DISABLE_FRAMEBUFFER_COMPRESSION=1", "CA_DISPLAY_EDR_HEADROOM=1",
+        "CA_FP16_MIN_HEADROOM=1e30", "CA_FORCE_FP16_FRAMEBUFFER=0", "CA_ALLOW_EDR_MIRRORING=0"};
+    user64_addr_t pointers[6] = {0};
+    user_addr_t cursor = scratch + 0x900;
+    for (unsigned i = 0; i < sizeof(graphics_environment) / sizeof(graphics_environment[0]); ++i) {
+        pointers[i] = cursor;
+        size_t bytes = strlen(graphics_environment[i]) + 1;
+        error = copyout(graphics_environment[i], cursor, bytes);
+        if (error) return error;
+        cursor += bytes;
+    }
+    *environment = scratch + 0xc00;
+    error = copyout(pointers, *environment, sizeof(pointers));
+    if (error) return error;
     dyld_flags |= UINT64_C(8);
     commpage_update_dyld_flags(dyld_flags);
     printf("MarbleStorage: SystemOS resident policy accepted, dyld flags %llx\n", dyld_flags);

@@ -3,12 +3,17 @@
 #include <kern/clock.h>
 #include <sys/msgbuf.h>
 #include <sys/param.h>
+#include <IOKit/IODeviceTreeSupport.h>
+#include <IOKit/IOMemoryDescriptor.h>
+#include <IOKit/IOLocks.h>
+#include <libkern/c++/OSData.h>
 
 extern "C" {
 void native_runtime_usb_start(void);
 void native_runtime_usb_report(char *, unsigned);
 void native_marble_touch_report(char *, unsigned);
 unsigned native_marble_charging_report(char *, unsigned);
+void native_marble_gpu_report(char *, unsigned);
 void native_marble_display_snapshot(void);
 extern uint32_t *marble_display_pixels;
 extern uint32_t marble_display_geometry[3];
@@ -35,6 +40,34 @@ struct RuntimeScreen {
     uint8_t pixels[270 * 600 * 3];
 };
 static RuntimeScreen *runtimeScreen;
+static IOLock *gpuExportLock;
+static uint8_t *gpuExport;
+static uint32_t gpuExportBytes, gpuExportFilled, gpuExportGeneration;
+
+extern "C" int boot_log_export_put(uint32_t generation, uint32_t total, uint32_t offset,
+                                    const void *data, uint32_t size)
+{
+    if (!gpuExportLock || !generation || !total || !data || !size || offset > total || size > total - offset)
+        return -1;
+    IOLockLock(gpuExportLock);
+    int status = 0;
+    if (!offset) {
+        uint8_t *next = static_cast<uint8_t *>(IOMalloc(total));
+        if (!next) status = -2;
+        else {
+            if (gpuExport) IOFree(gpuExport, gpuExportBytes);
+            gpuExport = next; gpuExportBytes = total; gpuExportFilled = 0; gpuExportGeneration = generation;
+        }
+    }
+    if (!status && (generation != gpuExportGeneration || total != gpuExportBytes || offset != gpuExportFilled))
+        status = -3;
+    if (!status) {
+        memcpy(gpuExport + offset, data, size);
+        gpuExportFilled += size;
+    }
+    IOLockUnlock(gpuExportLock);
+    return status;
+}
 
 extern "C" void native_root_block_capture_log(void)
 {
@@ -56,6 +89,8 @@ extern "C" void native_root_block_capture_log(void)
     native_marble_touch_report(status, sizeof(status));
     used += snprintf(runtimeLog->text + used, sizeof(runtimeLog->text) - used, "%s\nUFS reads=%llu writes=%llu Data=%llu\n",
         status, marble_ufs_reads, marble_ufs_writes, marble_data_bytes);
+    native_marble_gpu_report(status, sizeof(status));
+    used += snprintf(runtimeLog->text + used, sizeof(runtimeLog->text) - used, "%s\n", status);
     runtimeLog->length = used;
     // The firmware transport runs on a reserved core after the kernel returns.
     // Publish the diagnostic bytes to the point of coherency before cache/MMU handoff.
@@ -74,6 +109,29 @@ extern "C" void native_root_block_capture_log(void)
     __asm__ volatile("dsb sy" ::: "memory");
 }
 
+extern "C" int native_boot_gpu_addon(const uint8_t **data, uint64_t *bytes)
+{
+    static IOMemoryMap *mapping;
+    *data = nullptr; *bytes = 0;
+    if (!mapping) {
+        IORegistryEntry *node = IORegistryEntry::fromPath("/chosen/memory-map", gIODTPlane);
+        OSData *range = node ? OSDynamicCast(OSData, node->getProperty("GpuAddon")) : nullptr;
+        uint64_t location[2] = {};
+        if (range && range->getLength() == sizeof(location))
+            memcpy(location, range->getBytesNoCopy(), sizeof(location));
+        OSSafeReleaseNULL(node);
+        if (!location[0] || !location[1] || location[1] > (UINT64_C(64) << 20)) return 0;
+        IOMemoryDescriptor *memory = IOMemoryDescriptor::withAddressRange(location[0], location[1],
+            kIODirectionIn | kIOMemoryMapperNone, nullptr);
+        mapping = memory ? memory->map(kIOMapAnywhere | kIOMapCopybackCache) : nullptr;
+        OSSafeReleaseNULL(memory);
+    }
+    if (!mapping) return 0;
+    *data = reinterpret_cast<const uint8_t *>(mapping->getVirtualAddress());
+    *bytes = mapping->getLength();
+    return 1;
+}
+
 extern "C" void native_root_block_request_snapshot(void)
 {
     native_marble_display_snapshot();
@@ -81,6 +139,15 @@ extern "C" void native_root_block_request_snapshot(void)
 
 extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, void *out, unsigned capacity)
 {
+    if (kind == 16) {
+        if (!gpuExportLock) return 0;
+        IOLockLock(gpuExportLock);
+        unsigned count = gpuExportFilled == gpuExportBytes && offset < gpuExportBytes ?
+            MIN(capacity, gpuExportBytes - offset) : 0;
+        if (count) memcpy(out, gpuExport + offset, count);
+        IOLockUnlock(gpuExportLock);
+        return count;
+    }
     const void *source;
     unsigned bytes;
     struct {
@@ -130,6 +197,8 @@ extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, voi
 
 extern "C" void marble_runtime18_start(void)
 {
+    gpuExportLock = IOLockAlloc();
+    if (!gpuExportLock) panic("MarbleRuntime: GPU export lock allocation failed");
     runtimeScreen = static_cast<RuntimeScreen *>(IOMallocZero(sizeof(RuntimeScreen)));
     if (!runtimeScreen) panic("MarbleRuntime: USB screen allocation failed");
     native_runtime_usb_start();

@@ -22,8 +22,9 @@ def main():
     parser.add_argument('--data-seed', required=True, type=Path)
     parser.add_argument('--temporary', action='store_true',
                         help='Embed the kernel and retain the RootStage USB service')
-    parser.add_argument('--vsync', type=int, default=60,
-                        help='Display refresh during software-rendered startup')
+    parser.add_argument('--vsync', type=int, default=120,
+                        help='Display presentation cadence')
+    parser.add_argument('--gpu-addon', type=Path, help='22H384 NGPUADD2 bundle; defaults to ROOT/gpu/metal.gpuaddon')
     parser.add_argument('--display-scale', type=int, choices=(2, 3), default=3,
                         help='Pixels per UI point on the 1080x2400 panel')
     parser.add_argument('--cpu-regs', default='0,0x100,0x200,0x300,0x400,0x500,0x600',
@@ -45,6 +46,10 @@ def main():
     baseline = validate_prelink(root)
     if hashlib.sha256(kernel.read_bytes()).hexdigest() != baseline['candidate_sha256']:
         raise ValueError('Kernel differs from the current prelink report')
+    addon = (args.gpu_addon or root / 'gpu/metal.gpuaddon').resolve()
+    gpu = json.loads((root / 'gpu/userspace.json').read_text())
+    if hashlib.sha256(addon.read_bytes()).hexdigest() != gpu['addon_sha256']:
+        raise ValueError('GPU addon differs from its signed userspace build')
     metadata = json.loads(args.data_seed.with_name('seed.json').read_text())
     data = kernel.read_bytes()
     data += bytes(-len(data) % 4096)
@@ -62,7 +67,9 @@ def main():
                  'offline-legacy-cpu-present=1 offline-legacy-validate=1 '
                  f'sheng-vsync={args.vsync} '
                  'offline-key-events=1 sheng-aks=1 '
-                 'rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1')
+                 'rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 '
+                 'marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 '
+                 'sheng-gpu-preempt=2 sheng-gpu-ttbr=2')
     cpu_args = f'cpus={len(cpu_regs)} sheng-smp={int(len(cpu_regs) > 1)} armcpu-self-ipi=1'
     boot_args += ' ' + cpu_args + f' marble-display-scale={args.display_scale}'
     if args.disabled_jobs:
@@ -73,7 +80,7 @@ def main():
     data += mailbox
     window = out / 'KernelSeed.bin'
     window.write_bytes(data)
-    images = json.loads(args.images.read_text())
+    images = [image for image in json.loads(args.images.read_text()) if image['name'] != 'KernelSeed']
     images.append(dict(name='KernelSeed', source=str(window), format='raw', raw_bytes=len(data),
                        sha256=hashlib.sha256(data).hexdigest()))
     header = bytearray(4096)
@@ -97,6 +104,25 @@ def main():
     shutil.copyfile(binaries / 'DarwinBoot.efi', payloads / 'DarwinBoot.efi')
     for name in ['kernel.macho.adt', 'kernel.macho.trustcache']:
         shutil.copyfile(root / 'boot/stage/EFI/UniXNU/Payloads' / name, payloads / name)
+    shutil.copyfile(addon, payloads / 'kernel.macho.gpuaddon')
+    # Preserve each original trust module and append the owner-built GPU module.
+    original_trust = (payloads / 'kernel.macho.trustcache').read_bytes()
+    count, = struct.unpack_from('<I', original_trust)
+    offsets = struct.unpack_from(f'<{count}I', original_trust, 4)
+    modules = [original_trust[start:end] for start, end in zip(offsets, (*offsets[1:], len(original_trust)))]
+    owner = root / 'gpu/owner.trustcache'
+    owner_bytes = owner.read_bytes()
+    if hashlib.sha256(owner_bytes).hexdigest() != gpu['trust_cache_sha256']:
+        raise ValueError('GPU owner trust module differs from the userspace build')
+    if owner_bytes not in modules:
+        modules.append(owner_bytes)
+    cursor = 4 + 4 * len(modules)
+    offsets = []
+    for module in modules:
+        offsets.append(cursor)
+        cursor += len(module)
+    (payloads / 'kernel.macho.trustcache').write_bytes(
+        struct.pack(f'<{1 + len(modules)}I', len(modules), *offsets) + b''.join(modules))
     adt = payloads / 'kernel.macho.adt'
     tree, _ = read_adt(adt.read_bytes())
     cpus = next(node for node in tree[1] if node[0].get('name') == b'cpus\0')
@@ -115,13 +141,16 @@ def main():
     chosen[0]['darwinboot-memory-size'] = struct.pack('<Q', 0x200000000)
     memory = next(node for node in chosen[1] if node[0].get('name') == b'memory-map\0')
     memory[0]['RootDisks'] = bytes(16)
+    memory[0]['GpuAddon'] = bytes(16)
     adt.write_bytes(write_adt(tree))
     config = (root / 'boot/stage/EFI/UniXNU/unixnu.toml').read_text()
     config = config.replace('args = "', 'args = "rootstage-runtime-usb=3 ' + cpu_args + ' ', 1)
     (stage / 'unixnu.toml').write_text(config)
     volume = out / 'volume.img'
+    volume_size = sum(path.stat().st_size for path in stage.rglob('*') if path.is_file()) + 4 * 1048576
+    volume_size = (volume_size + 1048575) & -1048576
     with volume.open('wb') as stream:
-        stream.truncate(4 * 1048576)
+        stream.truncate(volume_size)
     subprocess.run(['mformat', '-i', volume, '-v', 'MARBLEESP', '::'], check=True)
     subprocess.run(['mcopy', '-i', volume, '-s', '-Q', stage.parent, '::/'], check=True)
     blobs = [('loader.efi', (binaries / 'MarbleBootstrap.efi').read_bytes())]
@@ -140,7 +169,9 @@ def main():
             kernel_source='boot-image', system_source='ufs', exit_boot_services=False,
             resident_usb=True, runtime_usb_mode=3, enabled_cpu_affinities=cpu_regs,
             firmware_usb_affinity=0x700, display_scale=args.display_scale,
-            logical_size=[1080 // args.display_scale, 2400 // args.display_scale], boot_args=boot_args), indent=2) + '\n')
+            logical_size=[1080 // args.display_scale, 2400 // args.display_scale], boot_args=boot_args,
+            gpu_addon_sha256=gpu['addon_sha256'], gpu_sources=gpu['sources'],
+            owner_trust_cache_sha256=gpu['trust_cache_sha256']), indent=2) + '\n')
     print(boot)
 
 

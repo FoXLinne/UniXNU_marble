@@ -18,6 +18,14 @@ extern "C" void native_marble_display_init(void) __asm__("__GLOBAL__sub_I_Native
 extern "C" IOService *native_legacy_display_allocate(void);
 extern "C" void native_marble_charging_start(void);
 extern "C" void native_marble_hid_start(void);
+extern "C" void native_marble_gpu_start(void);
+extern "C" int native_marble_gpu_wait(void);
+extern "C" IOService *native_gop_presenter_create(void);
+extern "C" void native_gop_presenter_set_source(IOService *, IOService *);
+extern "C" bool native_gop_gpu_offer(IOService *, void *, IOMemoryDescriptor *, uint64_t,
+                                     uint32_t, uint32_t, uint32_t);
+extern "C" void marble_gop_static_init(void) __asm__("__GLOBAL__sub_I_NativeGOPPresenter.cpp");
+static IOService *gpuPresenter;
 extern "C" void native_keyevents_start(void);
 extern "C" void native_marble_touch_report(char *, unsigned);
 
@@ -39,6 +47,7 @@ struct MarbleDisplayTrace { uint32_t event, pid, count; uint64_t values[12]; };
 MarbleDisplayTrace marble_display_trace[256];
 uint32_t marble_display_trace_count;
 
+#ifndef MARBLE_IOS18_GPU
 int native_gpu_trace_enabled(void) { return 1; }
 void native_gpu_trace_record(uint32_t event, uint32_t pid, const uint64_t *values, uint32_t count)
 {
@@ -49,6 +58,7 @@ void native_gpu_trace_record(uint32_t event, uint32_t pid, const uint64_t *value
 }
 bool native_adreno_fences(uint32_t *, uint32_t *) { return false; }
 bool native_adreno_fences_detail(uint32_t *, uint32_t *, uint32_t *) { return false; }
+#endif
 uint32_t native_ufs_dpu_map(unsigned, const uint64_t *, unsigned) { return 0; }
 
 __attribute__((noreturn)) void native_legacy_backend_guard(unsigned slot, void *object, void *caller)
@@ -138,9 +148,10 @@ void native_legacy_transfer_observed(IOReturn status, const void *, uint64_t byt
 }
 void native_legacy_copy_timing_observed(uint64_t ticks, uint64_t) { marble_display_copy_ticks += ticks; }
 void native_legacy_retirement_observed(IOService *) { ++marble_display_retirements; }
-bool native_legacy_gpu_offer(void *, IOMemoryDescriptor *, uint64_t, uint32_t, uint32_t, uint32_t)
+bool native_legacy_gpu_offer(void *display, IOMemoryDescriptor *memory, uint64_t stride,
+                             uint32_t width, uint32_t height, uint32_t format)
 {
-    return false;
+    return gpuPresenter && native_gop_gpu_offer(gpuPresenter, display, memory, stride, width, height, format);
 }
 void native_legacy_gpu_fallback_observed(int status) { native_legacy_direct[0] = status; }
 void native_legacy_vsync_observed(unsigned event, unsigned hz)
@@ -197,6 +208,19 @@ void native_marble_display_start(void)
     if (!display->start(nub)) panic("MarbleDisplay: start");
     marble_display_stage = 5;
     IOLog("MarbleDisplay: display started\n");
+    void *module = OSMetaClass::preModLoad(g_kernel_kmod_info.name);
+    if (!module) panic("MarbleGPU: presenter registration");
+    marble_gop_static_init();
+    if (OSMetaClass::postModLoad(module)) panic("MarbleGPU: presenter metaclass");
+    IOService *presenter = native_gop_presenter_create();
+    IOService *home = IOService::getResourceService();
+    if (!presenter || !home || !presenter->init()) panic("MarbleGPU: presenter allocation");
+    native_gop_presenter_set_source(presenter, nub);
+    if (!presenter->attach(home) || !presenter->start(home)) panic("MarbleGPU: presenter start");
+    gpuPresenter = presenter;
+    native_marble_gpu_start();
+    int gpuStatus = native_marble_gpu_wait();
+    if (gpuStatus) panic("MarbleGPU: accelerator startup status=%x", gpuStatus);
     native_keyevents_start();
     native_marble_charging_start();
     native_marble_hid_start();

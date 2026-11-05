@@ -4,6 +4,8 @@
 #include <IOKit/IODeviceMemory.h>
 #include <kern/clock.h>
 #include <kern/task.h>
+#include <kern/thread.h>
+#include <machine/machine_routines.h>
 #include <IOKit/IOService.h>
 #include <IOKit/IOPlatformExpert.h>
 #include <mach/kmod.h>
@@ -28,16 +30,24 @@ extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *, NativeAdrenoSubmit *
 extern "C" void native_adreno_accelerator_static_init(void) __asm__("__GLOBAL__sub_I_NativeAdrenoAccelerator.cpp");
 extern "C" IOService *native_adreno_accelerator_allocate(void);
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
+extern "C" IOReturn armcpu_spi_attach(uint32_t, bool, void (*)(void *), void *, uint32_t *, uint64_t *);
+extern "C" bool native_adreno_preempt_irq(void);
+extern "C" int native_marble_gmu_write(uint32_t, uint32_t);
+extern "C" int get_preemption_level(void);
+extern "C" void native_adreno_set_restart(NativeAdrenoRestart, void *);
 extern "C" kmod_info_t g_kernel_kmod_info;
 
 namespace {
 class CommandProcessor {
-    IOMemoryMap *gpuMap = nullptr, *smmuMap = nullptr, *bufferMaps[5] = {};
+    IOMemoryMap *gpuMap = nullptr, *smmuMap = nullptr, *bufferMaps[GpuBufferCount] = {};
     volatile uint32_t *registers = nullptr;
-    volatile uint8_t *cpu[5] = {};
+    volatile uint8_t *cpu[GpuBufferCount] = {};
     NativeAdrenoGpuBuffer buffers[GpuBufferCount] = {};
     NativeAdrenoRing ring;
-    NativeAdrenoCpInit initializer;
+    NativeAdrenoRing backgroundRing;
+    bool irqAttached = false;
+    volatile uint32_t interrupts = 0;
+    unsigned preemptMode = 2;
     NativeAdrenoSubmit submit;
     NativeAdrenoTimer timer;
     uint32_t outputBits = 0;
@@ -74,7 +84,26 @@ class CommandProcessor {
         absolutetime_to_nanoseconds(mach_absolute_time(), &nanoseconds);
         return nanoseconds / 1000;
     }
-    static int idle(void *) { IODelay(20); return 0; }
+    static int idle(void *cookie) {
+        auto *self = static_cast<CommandProcessor *>(cookie);
+        if (self && self->irqAttached && ml_get_interrupts_enabled() &&
+            !ml_at_interrupt_context() && get_preemption_level() == 0) {
+            assert_wait_timeout(event_t(&self->interrupts), THREAD_UNINT, 1000, NSEC_PER_USEC);
+            thread_block(THREAD_CONTINUE_NULL);
+        } else IODelay(20);
+        return 0;
+    }
+    static void interrupt(void *cookie) {
+        auto *self = static_cast<CommandProcessor *>(cookie);
+        const uint32_t status = self->read(GEN7_RBBM_INT_0_STATUS);
+        if (status) self->write(GEN7_RBBM_INT_CLEAR_CMD, status);
+        ++self->interrupts;
+        if (status & (1U << 8)) (void)native_adreno_preempt_irq();
+        thread_wakeup(event_t(&self->interrupts));
+    }
+    static int gmuWrite(void *, uint32_t reg, uint32_t value) {
+        return native_marble_gmu_write(reg, value);
+    }
     static void contextProgress(uint32_t step) {
         native_marble_gpu_checkpoint(MarbleGpuContextAllocate + step - NativeAdrenoGpuContext::Allocate);
     }
@@ -111,14 +140,32 @@ class CommandProcessor {
             status, report.step, report.program_status, report.routes_verified, report.output_bits);
         if (status || NativeAdrenoGpuContextBuffers(buffers)) return -5;
         outputBits = report.output_bits;
-        for (unsigned i = 0; i < 5; ++i) {
+        for (unsigned i = 0; i < GpuBufferCount; ++i) {
             bufferMaps[i] = map(buffers[i].physical, buffers[i].bytes, kIOMapWriteCombineCache);
             if (!bufferMaps[i]) return -12;
             cpu[i] = reinterpret_cast<volatile uint8_t *>(bufferMaps[i]->getVirtualAddress());
         }
         return 0;
     }
-    int configure() {
+    static IOReturn restart(void *cookie, NativeAdrenoRing *activeRing, uint32_t completed) {
+        auto *self = static_cast<CommandProcessor *>(cookie);
+        if (activeRing != &self->ring) return kIOReturnBadArgument;
+        self->write(GEN7_RBBM_INT_0_MASK, 0);
+        self->write(GEN7_CP_SQE_CNTL, 3);
+        IOReturn status = activeRing->busHalt(true, 1000000);
+        if (status) return status;
+        self->write(GEN7_RBBM_SW_RESET_CMD, 1);
+        (void)self->read(GEN7_RBBM_SW_RESET_CMD);
+        IODelay(100);
+        self->write(GEN7_RBBM_SW_RESET_CMD, 0);
+        (void)self->read(GEN7_RBBM_SW_RESET_CMD);
+        IODelay(1);
+        status = self->configure(true, completed);
+        if (!status) self->write(GEN7_RBBM_INT_0_MASK, (1U << 8) | (1U << 15));
+        IOLog("MarbleGPU: restart fence=%u status=%x\n", completed, status);
+        return status;
+    }
+    int configure(bool restarting = false, uint32_t completed = 0) {
         native_marble_gpu_checkpoint(MarbleGpuCpFirmware);
         if (marble_sqe_firmware_size < 8 || marble_sqe_firmware_size - 4 > buffers[0].bytes) return -22;
         auto *destination = reinterpret_cast<volatile uint32_t *>(cpu[0]);
@@ -182,9 +229,19 @@ class CommandProcessor {
         const NativeAdrenoRingIo io{this, writeRegister, readRegister, barrier};
         const NativeAdrenoRingCache cache{this, publish, acquire};
         ring.setTableUpdateWords(3);
-        IOReturn status = ring.attach(&io, &cache, const_cast<uint8_t *>(cpu[1]), buffers[1].bytes,
-            buffers[1].iova, const_cast<uint8_t *>(cpu[2]), buffers[2].bytes, buffers[2].iova);
+        IOReturn status = restarting ? ring.restart(completed) :
+            ring.attach(&io, &cache, const_cast<uint8_t *>(cpu[1]), buffers[1].bytes,
+                        buffers[1].iova, const_cast<uint8_t *>(cpu[2]), buffers[2].bytes, buffers[2].iova);
         if (status) return -5;
+        PE_parse_boot_argn("sheng-gpu-preempt", &preemptMode, sizeof(preemptMode));
+        if (preemptMode && !restarting) {
+            backgroundRing.setTableUpdateWords(3);
+            status = backgroundRing.attachSecondary(&io, &cache, const_cast<uint8_t *>(cpu[9]),
+                buffers[9].bytes, buffers[9].iova, const_cast<uint8_t *>(cpu[10]), buffers[10].bytes, buffers[10].iova);
+            if (!status) status = ring.setPreempt(buffers[5].iova, buffers[7].iova, buffers[2].iova + 8);
+            if (!status) status = backgroundRing.setPreempt(buffers[6].iova, buffers[8].iova, buffers[10].iova + 8);
+            if (status) return status;
+        }
         native_marble_gpu_checkpoint(MarbleGpuRingReady);
         write64(GEN7_CP_BV_RB_RPTR_ADDR_LO, buffers[2].iova + 8);
         uint32_t ifpcValues[sizeof(MarbleIfpc) / sizeof(*MarbleIfpc)];
@@ -201,9 +258,18 @@ class CommandProcessor {
         native_marble_gpu_checkpoint(MarbleGpuCpInit);
         write(GEN7_CP_SQE_CNTL, 1);
         const NativeAdrenoCpInitConfig config{buffers[0].iova, buffers[3].iova, 1, true};
+        NativeAdrenoCpInit initializer;
         uint32_t fence = 0, seen = 0;
-        status = initializer.run(&io, &ring, &config, &fence);
-        const NativeAdrenoRingClock clock{nullptr, now, idle};
+        status = initializer.run(&io, &ring, &config, &fence, !restarting);
+        const NativeAdrenoRingClock clock{this, now, idle};
+        if (restarting) {
+            if (!status) status = ring.idle(&clock, 1000000);
+            uint32_t leaveSecure[2] = {};
+            AdrenoPM4Type7(0x66, 1, leaveSecure);
+            if (!status) status = ring.submitUnfenced(leaveSecure, 2);
+            if (!status) status = ring.idle(&clock, 1000000);
+            return status;
+        }
         auto waited = status ? NativeAdrenoRingFenceTimeout : ring.wait(fence, &clock, 200000, &seen);
         IOLog("MarbleGPU: CP init=%x fence=%u seen=%u wait=%u RBBM=%x fault=%x\n",
             status, fence, seen, waited, read(GEN7_RBBM_STATUS), read(GEN7_CP_HW_FAULT));
@@ -269,7 +335,7 @@ class CommandProcessor {
         uint32_t words[8] = {};
         if (AdrenoPM4Type7(0x75, 5, &words[0]) != AdrenoPM4Success || AdrenoPM4Type7(0x12, 0, &words[6]) != AdrenoPM4Success) return false;
         words[1] = 1024; words[2] = uint32_t(src); words[3] = uint32_t(src >> 32); words[4] = uint32_t(dst); words[5] = uint32_t(dst >> 32);
-        const NativeAdrenoRingClock clock{nullptr, now, idle};
+        const NativeAdrenoRingClock clock{this, now, idle};
         uint32_t fence=0;
         return !ring.submit(words,7,&fence) && !ring.wait(fence,&clock,200000,nullptr);
     }
@@ -348,18 +414,39 @@ class CommandProcessor {
         NativeAdrenoVm *vm = NativeAdrenoGpuContextVm();
         native_adreno_dram_read32=dramWord;
         // Cacheable system BOs use the GPU's board-qualified coherent mapping.
-        native_adreno_wc_enabled=0;
+        native_adreno_wc_enabled=1;
         native_adreno_owned_coherent=1;
         coherenceProbe(vm);
         openCpAperture();
         IOReturn status = submit.attach(vm, &ring);
+        if (!status && preemptMode) {
+            NativeAdrenoSubmit::PreemptSetup setup{};
+            setup.io = {this, writeRegister, readRegister, barrier, this, gmuWrite};
+            for (unsigned i = 0; i < 2; ++i) {
+                setup.pages.record[i] = buffers[5 + i].iova;
+                setup.pages.smmu_info[i] = buffers[7 + i].iova;
+                setup.pages.record_cpu[i] = const_cast<uint8_t *>(cpu[5 + i]);
+                setup.pages.smmu_cpu[i] = const_cast<uint8_t *>(cpu[7 + i]);
+            }
+            setup.now = now; setup.clock = this; setup.mode = preemptMode;
+            status = submit.setPreemption(&ring, &backgroundRing, setup, true);
+        }
         const NativeAdrenoTimeIo timeIo{this, readRegister};
         if (!status) status = timer.attach(&timeIo, NativeAdrenoTimeCp);
-        const NativeAdrenoRingClock clock{nullptr, now, idle};
+        const NativeAdrenoRingClock clock{this, now, idle};
         static NativeAdrenoAbiDeviceInfo publishedInfo = deviceInfo;
+        const unsigned inputBits = NativeAdrenoGpuContextInputBits();
+        publishedInfo.va_start = GpuClientVaStart;
+        publishedInfo.va_size = inputBits > 32 ? (UINT64_C(1) << inputBits) - GpuClientVaStart : 0;
         if (native_adreno_io_coherent) publishedInfo.flags |= NativeAdrenoDeviceCachedCoherent;
-        if (!status) status = native_adreno_publish(vm, &submit, &ring, &clock, &timer, &publishedInfo, NativeAdrenoGpuContextInputBits(), outputBits);
+        if (!status) status = native_adreno_publish(vm, &submit, &ring, &clock, &timer, &publishedInfo, inputBits, outputBits);
         if (status) return status;
+        native_adreno_set_restart(restart, this);
+        status = armcpu_spi_attach(32 + 300, false, interrupt, this, nullptr, nullptr);
+        if (status) return status;
+        irqAttached = true;
+        write(GEN7_RBBM_INT_CLEAR_CMD, 0xffffffff);
+        write(GEN7_RBBM_INT_0_MASK, (1U << 8) | (1U << 15));
         native_marble_gpu_checkpoint(MarbleGpuFamily);
         status = OSKextLoadKextWithIdentifier("com.apple.iokit.IOGPUFamily");
         if (status) return status;
@@ -382,6 +469,19 @@ class CommandProcessor {
         return 0;
     }
 public:
+    int stop() {
+        if (!registers) return 0;
+        write(GEN7_RBBM_INT_0_MASK, 0);
+        irqAttached = false;
+        write(GEN7_CP_SQE_CNTL, 3);
+        write(GEN7_RBBM_GBIF_HALT, 1);
+        write(GEN7_GBIF_HALT, 3);
+        for (unsigned i = 0; i < 10000; ++i) {
+            if ((read(GEN7_GBIF_HALT_ACK) & 3) == 3) return 0;
+            IODelay(10);
+        }
+        return -110;
+    }
     unsigned report(char *text, unsigned capacity) const {
         if (!registers) return 0;
         const auto *fence = reinterpret_cast<const volatile uint32_t *>(cpu[2]);
@@ -408,6 +508,10 @@ CommandProcessor *commandProcessor;
 
 extern "C" unsigned native_marble_adreno_report(char *text, unsigned capacity) {
     return commandProcessor ? commandProcessor->report(text,capacity) : 0;
+}
+
+extern "C" int native_marble_adreno_stop(void) {
+    return commandProcessor ? commandProcessor->stop() : 0;
 }
 
 extern "C" int native_marble_adreno_start(void) {

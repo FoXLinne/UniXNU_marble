@@ -25,6 +25,7 @@ fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustC
 
 [kernel]
 patch = "patches/xnu-11417/arm64e.patch"
+gpu_patch = "patches/xnu-11417/gpu-trust-cache.patch"
 roots = ["com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMPlatform", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.iokit.IOHIDEventDriver", "com.apple.kec.pthread"]
 
 [kernel.prelink]

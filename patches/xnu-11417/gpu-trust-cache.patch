@@ -1,0 +1,14 @@
+diff --git a/bsd/kern/kern_trustcache.c b/bsd/kern/kern_trustcache.c
+--- a/bsd/kern/kern_trustcache.c
++++ b/bsd/kern/kern_trustcache.c
+@@ -579,7 +579,9 @@ trust_cache_runtime_init(void)
+ 	allow_second_static_cache = true;
+ #endif
+ 
+-#if TRUST_CACHE_INCLUDE_INTERNAL_CODE
++/* The native board boot payload appends the owner-built GPU code's trust
++ * module after the unchanged IPSW modules, including in a RELEASE kernel. */
++#if TRUST_CACHE_INCLUDE_INTERNAL_CODE || defined(ARM64_BOARD_CONFIG_BCM2837)
+ 	allow_engineering_caches = true;
+ #endif
+ 

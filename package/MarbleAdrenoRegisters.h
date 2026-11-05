@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Qualcomm KGSL 2b2d762c0b843c560d2ae2203f6b3cfe1474fb3f
 #pragma once
+#define GEN7_RBBM_INT_CLEAR_CMD 0x00037
+#define GEN7_GBIF_HALT_ACK 0x3c46
+#define GEN7_RBBM_SW_RESET_CMD 0x00043
 #include <stdint.h>
 enum : uint32_t {
     GEN7_CP_APERTURE_CNTL_HOST = 0xa00,

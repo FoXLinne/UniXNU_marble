@@ -4,6 +4,7 @@
 #include <pexpert/pexpert.h>
 #include <IOKit/IOService.h>
 #include <IOKit/IOMemoryDescriptor.h>
+#include <IOKit/IOLocks.h>
 #include <kern/thread.h>
 #include "MarbleGpu.h"
 
@@ -13,6 +14,16 @@ extern "C" int native_marble_adreno_start(void);
 extern "C" unsigned native_marble_adreno_report(char *, unsigned);
 
 namespace {
+IOLock *startupLock;
+bool startupFinished;
+int startupStatus;
+void completeStartup(int status) {
+    IOLockLock(startupLock);
+    startupStatus = status;
+    startupFinished = true;
+    IOLockWakeup(startupLock, &startupFinished, false);
+    IOLockUnlock(startupLock);
+}
 struct Registers {
     IOMemoryMap *mapping = nullptr;
     volatile uint32_t *words = nullptr;
@@ -135,6 +146,7 @@ void worker(void *, wait_result_t) {
     if (probeOnly()) {
         int result = probe();
         native_marble_gpu_checkpoint(MarbleGpuProbe, result);
+        completeStartup(result);
         thread_terminate(current_thread());
         return;
     }
@@ -145,7 +157,7 @@ void worker(void *, wait_result_t) {
         native_marble_gpu_checkpoint(MarbleGpuGmu);
         result = native_marble_gmu_load();
         IOLog("MarbleGPU: GMU initialization result=%d\n", result);
-        unsigned nativeMetal = 0;
+        unsigned nativeMetal = 1;
         PE_parse_boot_argn("marble-adreno", &nativeMetal, sizeof(nativeMetal));
         if (!result && nativeMetal) {
             result = native_marble_adreno_start();
@@ -153,6 +165,7 @@ void worker(void *, wait_result_t) {
         }
     }
     if (result) native_marble_gpu_failed(result);
+    completeStartup(result);
     thread_terminate(current_thread());
 }
 }
@@ -192,8 +205,18 @@ extern "C" void native_marble_gpu_quiesce_inherited(void) {
 extern "C" void native_marble_gpu_start(void) {
     static bool started;
     if (__atomic_exchange_n(&started, true, __ATOMIC_RELAXED)) return;
+    startupLock = IOLockAlloc();
+    if (!startupLock) panic("MarbleGPU: startup lock allocation failed");
     thread_t thread;
     kern_return_t result = kernel_thread_start(worker, nullptr, &thread);
     if (!result) thread_deallocate(thread);
-    else IOLog("MarbleGPU: thread start=%d\n", result);
+    else { completeStartup(result); IOLog("MarbleGPU: thread start=%d\n", result); }
+}
+
+extern "C" int native_marble_gpu_wait(void) {
+    IOLockLock(startupLock);
+    while (!startupFinished) IOLockSleep(startupLock, &startupFinished, THREAD_UNINT);
+    int status = startupStatus;
+    IOLockUnlock(startupLock);
+    return status;
 }

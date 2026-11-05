@@ -1,0 +1,217 @@
+--- a/NativeAdrenoCpInit.h
++++ b/NativeAdrenoCpInit.h
+@@ -8,6 +8,7 @@
+     /* Nonzero when the caller already wrote CP_SQE_INSTR_BASE before CP_SQE_CNTL, as a6xx hw_init does: the base is
+      * then read back and compared instead of rewritten after the SQE started. */
+     uint32_t sqe_base_programmed;
++    bool disable_dms=false;       /* CP_ME_INIT bit 11 for targets without ADRENO_DMS */
+ };
+ /* One-shot A7XX command-processor start sequence, not a GPU power or reset
+  * driver. The caller must have completed GMU boot, powered GX/core clocks,
+--- a/NativeAdrenoCpInit.cpp
++++ b/NativeAdrenoCpInit.cpp
+@@ -47,7 +47,7 @@
+     if(AdrenoPM4Type7(CpThreadControlOpcode,1,&words[0])!=AdrenoPM4Success ||
+         AdrenoPM4Type7(CpMeInitOpcode,7,&words[2])!=AdrenoPM4Success)return poison();
+     words[1]=CpConcurrentBinDisable;
+-    words[3]=meInitMask();
++    words[3]=meInitMask()|(config->disable_dms?(1u<<11):0);
+     words[4]=0x00000003;      /* hardware contexts */
+     words[5]=0x20000000;      /* error detection */
+     words[6]=0x00000002;      /* operation mode */
+--- a/NativeAdrenoRing.h
++++ b/NativeAdrenoRing.h
+@@ -76,6 +76,7 @@
+     uint64_t record_iova_=0,smmu_iova_=0,bv_rptr_iova_=0;
+     void initPreemptPage();
+     uint32_t control_=0;
++    uint32_t table_update_words_=4;
+     IOReturn poison();
+     IOReturn writeWptr(uint32_t value);
+     IOReturn readRptr(uint32_t *);
+@@ -88,6 +89,8 @@
+     IOReturn program();
+ public:
+     NativeAdrenoRing()=default;
++    // KGSL gen7 packets carry three payload words; the A740 path carries four.
++    void setTableUpdateWords(unsigned words) {table_update_words_=words==3?3:4;}
+     ~NativeAdrenoRing()=default;
+     NativeAdrenoRing(const NativeAdrenoRing &)=delete;
+     NativeAdrenoRing &operator=(const NativeAdrenoRing &)=delete;
+--- a/NativeAdrenoRing.cpp
++++ b/NativeAdrenoRing.cpp
+@@ -209,7 +209,7 @@
+     uint32_t words[RingPrologueWords+RingResetWords+RingTableWords+RingTableSnapshotWords+RingStampWords+RingPseudoWords]={0};
+     const uint32_t br=RingSyncThreads|RingThreadBr,syncBoth=RingSyncThreads|RingThreadBoth,both=RingThreadBoth,marker=0x101;
+     if(table && !reset)return poison();
+-    const uint32_t count=RingPrologueWords+(reset?RingResetWords:0)+(table?RingTableWords+(preempt_?RingTableSnapshotWords:0):0)+(stamps_?RingStampWords:0)+(preempt_?RingPseudoWords:0);
++    const uint32_t count=RingPrologueWords+(reset?RingResetWords:0)+(table?RingTableWords-(4-table_update_words_)+(preempt_?RingTableSnapshotWords:0):0)+(stamps_?RingStampWords:0)+(preempt_?RingPseudoWords:0);
+     size_t n=packet(words,0,RingThreadControl,&br,1);
+     if(reset) {
+         const uint64_t at4=fence_iova_+4;
+@@ -224,7 +224,7 @@
+         if(n && AdrenoPM4Type4(RingPerfctrSramInit,1,&words[n])==AdrenoPM4Success) {words[n+1]=1;n+=2;} else n=0;
+         if(table) {
+             const uint32_t update[4]={(uint32_t)table_,(uint32_t)(table_>>32),0,0};
+-            if(n)n=packet(words,n,RingSmmuTableUpdate,update,4);
++            if(n)n=packet(words,n,RingSmmuTableUpdate,update,table_update_words_);
+             if(n && preempt_) {
+                 const uint64_t address=fence_iova_+RingTableSnapshotOffset;
+                 const uint32_t snapshot[5]={(uint32_t)address,(uint32_t)(address>>32),(uint32_t)table_,(uint32_t)(table_>>32),0};
+@@ -571,7 +571,7 @@
+     const uint32_t size_words=(uint32_t)(ring_bytes_/4),mask=size_words-1;
+     const bool reset=framed && reset_pending_,table=reset && table_pending_;
+     /* A plain (kernel) submission cannot carry the switch: a pending table waits for the next framed one. */
+-    const uint32_t extra=framed?RingPrologueWords+(reset?RingResetWords:0)+(table?RingTableWords+(preempt_?RingTableSnapshotWords:0):0)+RingFramedFenceWords+
++    const uint32_t extra=framed?RingPrologueWords+(reset?RingResetWords:0)+(table?RingTableWords-(4-table_update_words_)+(preempt_?RingTableSnapshotWords:0):0)+RingFramedFenceWords+
+         (stamps_?2*RingStampWords:0)+(preempt_?RingPseudoWords+RingYieldWords:0):RingFenceWords;
+     if(word_count>size_words-extra-8)return kIOReturnNoResources;
+     uint32_t rptr=0;IOReturn status=readRptr(&rptr);
+--- a/NativeAdrenoGpuContext.h
++++ b/NativeAdrenoGpuContext.h
+@@ -68,8 +68,7 @@
+     NativeAdrenoGpuContext(const NativeAdrenoGpuContext &)=delete;
+     NativeAdrenoGpuContext &operator=(const NativeAdrenoGpuContext &)=delete;
+     /* The report is the GMU context's: route counts cover both streams. */
+-    IOReturn bringUp(const ArmSmmu4KIo *io,unsigned bank,unsigned asid,const unsigned slots[2],
+-        const uint16_t sids[2],void (*progress)(uint32_t step),NativeAdrenoGmuContextReport *report);
++    IOReturn bringUp(const ArmSmmu4KIo *io,unsigned bank,unsigned asid,const ArmSmmu4KStream *streams,unsigned stream_count,void (*progress)(uint32_t step),NativeAdrenoGmuContextReport *report);
+     bool ready() const {return ready_;}
+     /* The GPU address size of every table of this bank (ias). */
+     unsigned inputBits() const {return input_bits_;}
+@@ -104,7 +103,7 @@
+     unsigned kernel_asid_=0;
+ };
+ extern "C" IOReturn NativeAdrenoGpuContextBringup(volatile uint8_t *smmu,size_t bytes,unsigned bank,unsigned asid,
+-    unsigned slot0,unsigned sid0,unsigned slot1,unsigned sid1,void (*progress)(uint32_t),
++    const ArmSmmu4KStream *streams,unsigned stream_count,void (*progress)(uint32_t),
+     NativeAdrenoGmuContextReport *report);
+ /* sqe, ring, memptrs, pwrup, scratch: physical base, size and GPU address, only after Ready. */
+ extern "C" IOReturn NativeAdrenoGpuContextBuffers(NativeAdrenoGpuBuffer out[GpuBufferCount]);
+--- a/NativeAdrenoGpuContext.cpp
++++ b/NativeAdrenoGpuContext.cpp
+@@ -10,14 +10,12 @@
+     GpuPreemptRecordIova,GpuPreemptRecord1Iova,GpuPreemptSmmuIova,GpuPreemptSmmu1Iova,GpuRing1Iova,GpuMemptrs1Iova};
+ static const size_t kBytes[GpuBufferCount]={GpuSqeBytes,GpuRingBytes,GpuPageBytes,GpuPageBytes,GpuPageBytes,
+     GpuPreemptRecordBytes,GpuPreemptRecordBytes,GpuPageBytes,GpuPageBytes,GpuRingBytes,GpuPageBytes};
+-IOReturn NativeAdrenoGpuContext::bringUp(const ArmSmmu4KIo *io,unsigned bank,unsigned asid,const unsigned slots[2],
+-    const uint16_t sids[2],void (*progress)(uint32_t),NativeAdrenoGmuContextReport *report)
++IOReturn NativeAdrenoGpuContext::bringUp(const ArmSmmu4KIo *io,unsigned bank,unsigned asid,const ArmSmmu4KStream *streams,unsigned stream_count,void (*progress)(uint32_t),NativeAdrenoGmuContextReport *report)
+ {
+     if(!report)return kIOReturnBadArgument;
+     *report={};
+     if(used_)return kIOReturnBusy;
+-    if(!io || !slots || !sids || bank>63 || !asid || asid>0xffff || slots[0]>127 || slots[1]>127 ||
+-        slots[0]==slots[1])return kIOReturnBadArgument;
++    if(!io || !streams || !stream_count || stream_count>8 || bank>63 || !asid || asid>0xffff)return kIOReturnBadArgument;
+     used_=true;kernel_asid_=asid;
+     IOReturn status=kIOReturnSuccess;
+     auto step=[&](Step s) {report->step=s;if(progress)progress(s);};
+@@ -50,8 +48,7 @@
+     }
+     if(!status) {
+         step(Attach);
+-        const ArmSmmu4KStream routes[2]={{slots[0],sids[0]},{slots[1],sids[1]}};
+-        status=smmu_.attach(routes,2);
++        status=smmu_.attach(streams,stream_count);
+         const ArmSmmu4KStreamResult *s=smmu_.streamResult();
+         report->route_status=smmu_.attachStatus();
+         report->route_phase=s->phase;report->route_writes=s->writes;report->routes_verified=s->streams_verified;
+@@ -227,19 +224,17 @@
+ }
+ static NativeAdrenoGpuContext *board_gpu_context;
+ extern "C" IOReturn NativeAdrenoGpuContextBringup(volatile uint8_t *smmu,size_t bytes,unsigned bank,unsigned asid,
+-    unsigned slot0,unsigned sid0,unsigned slot1,unsigned sid1,void (*progress)(uint32_t),
++    const ArmSmmu4KStream *streams,unsigned stream_count,void (*progress)(uint32_t),
+     NativeAdrenoGmuContextReport *report)
+ {
+     static ArmSmmu4KMmio mmio;
+     static ArmSmmu4KIo io;
+-    if(!report || board_gpu_context || !smmu || !bytes || sid0>0xffff || sid1>0xffff)return kIOReturnBadArgument;
++    if(!report || board_gpu_context || !smmu || !bytes || !streams || !stream_count)return kIOReturnBadArgument;
+     mmio={reinterpret_cast<volatile unsigned char *>(smmu),bytes};
+     if(ArmSmmu4KBindMmio(&mmio,&io)!=ArmSmmu4KSuccess)return kIOReturnBadArgument;
+     board_gpu_context=new NativeAdrenoGpuContext;
+     if(!board_gpu_context)return kIOReturnNoMemory;
+-    const unsigned slots[2]={slot0,slot1};
+-    const uint16_t sids[2]={uint16_t(sid0),uint16_t(sid1)};
+-    return board_gpu_context->bringUp(&io,bank,asid,slots,sids,progress,report);
++    return board_gpu_context->bringUp(&io,bank,asid,streams,stream_count,progress,report);
+ }
+ extern "C" IOReturn NativeAdrenoGpuContextBuffers(NativeAdrenoGpuBuffer out[GpuBufferCount])
+ {
+--- a/NativeAdrenoUserClient.cpp
++++ b/NativeAdrenoUserClient.cpp
+@@ -3,7 +3,12 @@
+ /* SPDX-License-Identifier: MIT */
+ #include "NativeAdrenoUserClient.h"
+ #include <kern/task.h>
+-#include <sys/resource_private.h>   /* PRIO_DARWIN_GPU_*: the process's GPU role, set by the system */
++#define template ledger_template
++extern "C" {
++#include <kern/policy_internal.h>
++}
++#undef template
++#include <mach/task_policy.h>
+ extern "C" volatile uint32_t native_adreno_trace_stage;
+ /* 0 keeps user BOs cacheable and maintained before every submission (int-070..097); the board sets it from the sheng-gpu-wc boot argument. */
+ /* sheng-gpu-owned-coherent=1: the GPU's own BOs use the IO-coherent path (CPU write-back view, GPU write-back inner-shareable mapping) instead of
+@@ -386,8 +391,8 @@
+ int32_t NativeAdrenoUserClient::submitPriority() const
+ {
+     if(priority_foreground_<0 && priority_background_<0)return -1;
+-    const int32_t role=task_get_gpu_role(current_task());
+-    const bool background=role==PRIO_DARWIN_GPU_BACKGROUND || role==PRIO_DARWIN_GPU_UTILITY;
++    const bool background=proc_get_effective_task_policy(current_task(),TASK_POLICY_DARWIN_BG) ||
++        proc_get_effective_task_policy(current_task(),TASK_POLICY_ROLE)==TASK_BACKGROUND_APPLICATION;
+     return background?(priority_background_>=0?priority_background_:priority_foreground_)
+                      :(priority_foreground_>=0?priority_foreground_:priority_background_);
+ }
+@@ -400,7 +405,7 @@
+     {
+         const uint32_t n=native_adreno_prio_count;
+         volatile uint32_t *row=native_adreno_prio_log[n&31];
+-        row[0]=uint32_t(proc_selfpid());row[1]=foreground;row[2]=background;row[3]=uint32_t(task_get_gpu_role(current_task()));
++        row[0]=uint32_t(proc_selfpid());row[1]=foreground;row[2]=background;row[3]=uint32_t(proc_get_effective_task_policy(current_task(),TASK_POLICY_ROLE));
+         row[4]=&native_adreno_now_us?uint32_t(native_adreno_now_us()/1000):0;row[5]=priority_told_;
+         native_adreno_prio_count=n+1;
+         if(priority_told_<0xffffffffu)++priority_told_;
+@@ -437,7 +442,7 @@
+     ring_->useContext(context_);
+     submit_->nextOwner(proc_selfpid());
+     submit_->nextPriority(submitPriority());
+-    submit_->nextRole(task_get_gpu_role(current_task()));
++    submit_->nextRole(proc_get_effective_task_policy(current_task(),TASK_POLICY_ROLE));
+     const IOReturn status=submit_->submit(vm_,buffers,request->buffer_count,
+         queue_base_+request->queue,&fence,clock);
+     if(status)return status;
+--- a/NativeAdrenoMemory.cpp
++++ b/NativeAdrenoMemory.cpp
+@@ -308,7 +308,9 @@
+ }
+ /* Frees of an owned BO whose first pages a user task still maps: [0] count, [1] the last mapping's page number. */
+ extern "C" {volatile uint32_t native_adreno_free_user_mapped[2];}
++#ifndef MARBLE_IOS18_GPU
+ extern "C" unsigned int native_pmap_user_mappings(ppnum_t,void **,uint64_t *,char *) __attribute__((weak_import));
++#endif
+ IOReturn NativeAdrenoMemory::release()
+ {
+     native_adreno_trace_stage=30;
+@@ -329,6 +331,8 @@
+         }
+         imported_->release();imported_=nullptr;
+     }
++    // The optional pmap mapping census is absent from XNU 11417.
++#ifndef MARBLE_IOS18_GPU
+     if(descriptor_ && !system_ && native_pmap_user_mappings && spans_) {
+         /* A page a user task still maps (a BO view over physical pages holds no reference to them) is counted before the pages are freed:
+          * the first page of up to 64 spans, then which process maps it. XNU frees such a page under the mapping (pmap_assert_free). A view
+@@ -342,6 +346,8 @@
+             }
+         }
+     }
++
++#endif
+     if(descriptor_) {
+         if(prepared_) {
+             native_adreno_trace_stage=31;

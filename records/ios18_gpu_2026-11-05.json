@@ -1,0 +1,100 @@
+{
+  "date": "2026-11-05",
+  "device": "marble / SM7475 / Adreno 725",
+  "os": "iOS 18.7.11 22H384",
+  "local_port": "completed",
+  "hardware_acceptance": "待执行",
+  "sources": {
+    "UniXNU": "13e5973748a8447cbb90520c9a2dd5e65e272435",
+    "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+    "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+    "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+  },
+  "translator": "624bab3918de5b978e1101517abca2b4fa426565",
+  "performance": {
+    "gpu_hz": 580000000,
+    "bandwidth_index": 11,
+    "priority_rings": 2,
+    "preempt_mode": 2,
+    "table_switch": "CP / 3-word A725 packet",
+    "max_process_va": "SMMU IAS minus 4 GiB kernel aperture",
+    "framebuffer": "GPU copy / IOSurface mapping reuse",
+    "cpu_count": 7,
+    "requested_presentation_hz": 120,
+    "runtime_lto": "fat / codegen-units=1",
+    "cache": "persistent per-process cache, spare backing reuse, 209-library primelist",
+    "fence_wait": "IRQ wake / bounded sleep",
+    "gpu_recovery": "reset, CP init and queued-job replay"
+  },
+  "validation": {
+    "release_lto": "passed",
+    "accelerator_pac_slots": 168,
+    "arm64e_rust_boundary": "10167 blr / 2095 br rewritten",
+    "prelink_complete": true,
+    "unresolved_references": 0,
+    "stubbed_functions": 0,
+    "owner_trust_modules": 3,
+    "addon_handoff": "matched",
+    "boot_partition_bytes": 100663296,
+    "hardware_tests": "待执行",
+    "release_owner_trust": "allowSecondStaticTC=1, allowEngineeringTC=1; native initializer store 0x101 at +8",
+    "quartzcore_resources": "original 22H384 library signed in bundle; deployment-gated private layout; SDR environment before launchd"
+  },
+  "artifacts": {
+    "kernel.native.macho": {
+      "bytes": 14062856,
+      "sha256": "0997160eab1999e74d8bf91fcd02d6d8ce7edb082dcb6daf257f8abe9549b8d8"
+    },
+    "kernel.fileset.macho": {
+      "bytes": 60506112,
+      "sha256": "7f74fab1dc30f998fe6a2c886dd3a6bfc974c5847b56b1bdec5b5e1f17130a3b"
+    },
+    "gpu/metal.gpuaddon": {
+      "bytes": 13502984,
+      "sha256": "6dca51ae936f34a256e3093912378d599714d2ed15f01910385160b9170fe123"
+    },
+    "gpu/owner.trustcache": {
+      "bytes": 96,
+      "sha256": "7d7c74e184e02dfe2fa43115157562ade2ee7cbf1fefc2a5550bff87d3d1eb12"
+    },
+    "gpu/boot/marble_temporary_boot.img": {
+      "bytes": 47218688,
+      "sha256": "41411b4693d0f44b86a6af3235c28cc5ca0c79d7970cbc9fb4d95be957ab1c0b"
+    },
+    "gpu/boot/KernelSeed.bin": {
+      "bytes": 72863744,
+      "sha256": "e5966149abbdeac856121759c80eb6ef01119ef4ffb3bf498385ffce97cd9f2e"
+    }
+  },
+  "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-preempt=2 sheng-gpu-ttbr=2 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1",
+  "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+  "evidence": {
+    "kernel": "gpu-kernel-integration.log",
+    "release": "release-build.log",
+    "prelink": "gpu-prelink-integration.log",
+    "runtime": "gpu/plugin-build.log",
+    "turnip": "gpu/turnip-build.log",
+    "pack": "gpu-pack.log",
+    "trust_policy": "gpu/trust-cache-policy.json"
+  },
+  "scope": "本地源码、构建、预链接、信任与启动镜像打包；真机验收待执行",
+  "quartzcore_metallib_sha256": "e55ea3087accf9b80ef1fe0ea9106d271744e71448b4ae4a310126da4f0ba72e",
+  "source_patches": {
+    "patches/Adreno740/a725.patch": "6a0ac31e4b5e19edca337fc3e5552208e2657e1b5c193cedc5d7699d4e482763",
+    "patches/AdrenoMetal/ios18.patch": "4873f35ac841c25b29a4d4173b22a26f3a87ecf5b3839e3cfb84d82163465b5c",
+    "patches/xnu-11417/gpu-trust-cache.patch": "fa3d909d6843d409a5a7ce336cb26a4b668ad97fa5ee77ee380776c63808debe"
+  },
+  "profile": {
+    "name": "ios-18.7.11-22H384",
+    "arch": "arm64e",
+    "darwin": "24.6.0",
+    "ios_version": "18.0",
+    "xnu_version": "11417.140.69",
+    "xnu_revision": "43a90889846e00bfb5cf1d255cdc0a701a1e05a4",
+    "driverkit_tag": "xnu-11417.140.69"
+  },
+  "kits": {
+    "AdrenoPM4": "282606b528b2595bc4274ea7490b62b323f35a5f",
+    "AdrenoFirmware": "20ad3d7aca14bd46aecab6335c780f5413fa054b"
+  }
+}
