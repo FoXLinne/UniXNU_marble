@@ -68,3 +68,15 @@ Volume Increment bit 2、Volume Decrement bit 3。硬件线程通过工作循环
 运行时待核对项：SPMI/PDC 版本、APID 数值、IRQ owner、固件按键定时器活动、iOS Consumer 匹配与锁屏后的面板行为。
 
 GPU 线程继续拥有设备交互；本调研通过文件与源码读取完成。
+
+## 实现与基础验收记录
+
+2026-11-06：`MarbleButtons.cpp` 接入 PMIC 按键中断，`NativeHomeInput.cpp` 的 report 2 扩展 Power 与音量位，`MarbleHid18.cpp` 实例化按键设备并补充 Keyboard/Consumer 匹配。
+
+真机读取 SPMI `0x70000000`、PDC `0x20700`、APID 数量 768；PON APID 407、GPIO6 APID 434，写入与中断所有权为 EE 0。空闲 PON RT_STS 为 `0x10`，GPIO6 为 `0x01`。
+
+基础验收采样记录电源 15 次、音量加 9 次、音量减 9 次按下与释放；HID 报告 64 份，返回值与错误计数为 0。用户反馈：基本验收通过。细节见 `ios18_buttons_2026-11-06.json`。
+
+固件 `ButtonsDxe.patched.efi` 发布 TextIn/TextInEx 接口，Keypad Device 协议查询返回 `EFI_NOT_FOUND`。二进制的 TextIn 表位于 RVA `0x8128`，TextInEx 表位于 `0x8140`，通知定时器事件位于 `0x84e8`，活动标志位于 `0x8324`，周期为 50 ms。固件交接实现按函数地址与定时器创建指令签名核对该镜像，内核持有按键期间暂停读取入口和活动定时器，驻留返回时恢复定时器。完整驻留返回与系统休眠唤醒列入待验收项。
+
+收尾镜像通过 Fastboot 启动。真机回读固件交接返回成功，通知定时器处于未活动状态；物理按键边沿计数为 0 时，HID 事件驱动完成匹配并提交初始释放报告，报告错误为 0。启动匹配使用退避重试，匹配完成后停止计时器。

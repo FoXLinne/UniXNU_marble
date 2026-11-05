@@ -22,6 +22,9 @@ extern "C" void native_root_block_capture_log(void);
 extern "C" void native_runtime_usb_start(void);
 extern "C" void native_marble_watchdog_start(void);
 extern "C" void native_runtime_usb_stop(void);
+#ifdef MARBLE_IOS18
+extern "C" void native_marble_buttons_stop(void);
+#endif
 extern "C" void native_runtime_usb_report(char *, unsigned);
 
 namespace {
@@ -105,6 +108,9 @@ void rebootBootloader() {
                 reinterpret_cast<volatile uint32_t *>(imem->getVirtualAddress())[0x65c/4]=0x77665500;
                 __asm__ volatile("dsb sy" ::: "memory");
             }
+#ifdef MARBLE_IOS18
+            native_marble_buttons_stop();
+#endif
             native_root_block_capture_log();
             native_runtime_usb_stop();
             watchdogCall(0x84000009);

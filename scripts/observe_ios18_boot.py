@@ -36,6 +36,8 @@ def observe(kernel, layout_path, output, interval, duration):
                 channel = RootUsb(timeout_ms=5000)
                 for key in ('version', 'phase', 'returns'):
                     report[key] = channel.command('getvar:' + key)
+                if '_marble_buttons_stats' in symbols:
+                    report['buttons_firmware'] = channel.command('getvar:buttons-firmware')
                 if report['phase'] == 'firmware':
                     memory = RetainedKernel(channel)
                 else:
@@ -73,6 +75,10 @@ def observe(kernel, layout_path, output, interval, duration):
                         ('_native_adreno_table_switches', 8), ('_native_adreno_recovery', 8),
                         ('_native_adreno_view_diag', 6), ('_native_gpu_dcvs', 15),
                         ('_native_adreno_metal_diag', 24)) if name in symbols}
+                report['buttons'] = {
+                    name: struct.unpack('<' + 'I' * count, memory.read(symbols[name], count * 4))
+                    for name, count in (('_marble_buttons_stats', 64), ('_marble_buttons_hid_stats', 8))
+                    if name in symbols}
                 if '_native_adreno_metal_rows' in symbols:
                     rows = memory.read(symbols['_native_adreno_metal_rows'], 48 * 96)
                     report['metal_rows'] = [rows[i:i + 96].split(b'\0')[0].decode(errors='replace')

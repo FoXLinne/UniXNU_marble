@@ -8,6 +8,8 @@
 #include "RootUsb.h"
 #include <Protocol/RootStage.h>
 #include <Protocol/Cpu.h>
+#include <Protocol/SimpleTextIn.h>
+#include <Protocol/SimpleTextInEx.h>
 #include "../MarblePac.h"
 #include "GunyahWatchdog.h"
 
@@ -45,6 +47,106 @@ STATIC BOOLEAN mWatchdogService;
 STATIC BOOLEAN mResidentService, mServiceStarted;
 STATIC volatile UINT32 mServiceReady, mHostAction, mKernelRunning;
 STATIC ROOT_STAGE_TABLE *mReturnedStage;
+STATIC EFI_INPUT_RESET mButtonReset;
+STATIC EFI_INPUT_READ_KEY mButtonRead;
+STATIC EFI_INPUT_RESET_EX mButtonResetEx;
+STATIC EFI_INPUT_READ_KEY_EX mButtonReadEx;
+STATIC EFI_EVENT mButtonTimer;
+STATIC BOOLEAN mButtonTimerPaused;
+STATIC UINT64 mKeypadCalls, mKeypadBlocked;
+STATIC volatile UINT32 mKeypadActive;
+STATIC EFI_STATUS mKeypadStatus=EFI_NOT_STARTED;
+
+STATIC BOOLEAN BeginFirmwareButtonRead(VOID)
+{
+  __atomic_fetch_add(&mKeypadActive,1,__ATOMIC_ACQ_REL);
+  if (__atomic_load_n(&mKernelRunning,__ATOMIC_ACQUIRE)) {
+    ++mKeypadBlocked;
+    __atomic_fetch_sub(&mKeypadActive,1,__ATOMIC_RELEASE);
+    return FALSE;
+  }
+  ++mKeypadCalls;
+  return TRUE;
+}
+STATIC EFI_STATUS EFIAPI OwnedButtonReset(EFI_SIMPLE_TEXT_INPUT_PROTOCOL *This, BOOLEAN Extended)
+{
+  if (!BeginFirmwareButtonRead()) return EFI_SUCCESS;
+  EFI_STATUS Status=mButtonReset(This,Extended);
+  __atomic_fetch_sub(&mKeypadActive,1,__ATOMIC_RELEASE);
+  return Status;
+}
+STATIC EFI_STATUS EFIAPI OwnedButtonRead(EFI_SIMPLE_TEXT_INPUT_PROTOCOL *This, EFI_INPUT_KEY *Key)
+{
+  if (!BeginFirmwareButtonRead()) return EFI_NOT_READY;
+  EFI_STATUS Status=mButtonRead(This,Key);
+  __atomic_fetch_sub(&mKeypadActive,1,__ATOMIC_RELEASE);
+  return Status;
+}
+STATIC EFI_STATUS EFIAPI OwnedButtonResetEx(EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL *This, BOOLEAN Extended)
+{
+  if (!BeginFirmwareButtonRead()) return EFI_SUCCESS;
+  EFI_STATUS Status=mButtonResetEx(This,Extended);
+  __atomic_fetch_sub(&mKeypadActive,1,__ATOMIC_RELEASE);
+  return Status;
+}
+STATIC EFI_STATUS EFIAPI OwnedButtonReadEx(EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL *This, EFI_KEY_DATA *Key)
+{
+  if (!BeginFirmwareButtonRead()) return EFI_NOT_READY;
+  EFI_STATUS Status=mButtonReadEx(This,Key);
+  __atomic_fetch_sub(&mKeypadActive,1,__ATOMIC_RELEASE);
+  return Status;
+}
+STATIC VOID OwnFirmwareButtons(VOID)
+{
+  if (mKeypadStatus!=EFI_NOT_STARTED) return;
+  // ButtonsDxe.patched.efi SHA256 935f0bcdcdf925d4c7da2da112ef47e85c8c15bf844d4f06deae3fe8db31f91b.
+  // Its TextIn tables are at 0x8128/0x8140; the 50 ms notify timer is at
+  // 0x84e8, with its active flag at 0x8324. Check the code that creates it.
+  STATIC CONST UINT32 Signature[]={0xf0000036,0x90000002,0x52804000,0xf0000024,
+    0x91350042,0x72b00000,0xf94282c8,0x9113a084};
+  EFI_GUID TextGuid=EFI_SIMPLE_TEXT_INPUT_PROTOCOL_GUID;
+  EFI_GUID ExGuid=EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL_GUID;
+  EFI_HANDLE *Handles=NULL;
+  UINTN Count=0;
+  mKeypadStatus=gBS->LocateHandleBuffer(ByProtocol,&TextGuid,NULL,&Count,&Handles);
+  if (EFI_ERROR(mKeypadStatus)) return;
+  mKeypadStatus=EFI_NOT_FOUND;
+  for (UINTN Index=0;Index<Count;++Index) {
+    EFI_SIMPLE_TEXT_INPUT_PROTOCOL *Text=NULL;
+    EFI_STATUS Status=gBS->HandleProtocol(Handles[Index],&TextGuid,(VOID **)&Text);
+    if (EFI_ERROR(Status) || !Text || (UINTN)Text->Reset<0x14a8) continue;
+    UINTN Base=(UINTN)Text->Reset-0x14a8;
+    if ((UINTN)Text!=Base+0x8128 || (UINTN)Text->ReadKeyStroke!=Base+0x14c0 ||
+        CompareMem((VOID *)(Base+0x1814),Signature,sizeof(Signature))) continue;
+    mButtonReset=Text->Reset; mButtonRead=Text->ReadKeyStroke;
+    Text->Reset=OwnedButtonReset; Text->ReadKeyStroke=OwnedButtonRead;
+    EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL *Ex=NULL;
+    Status=gBS->HandleProtocol(Handles[Index],&ExGuid,(VOID **)&Ex);
+    if (!EFI_ERROR(Status) && (UINTN)Ex==Base+0x8140 &&
+        (UINTN)Ex->Reset==Base+0x1590 && (UINTN)Ex->ReadKeyStrokeEx==Base+0x15a8) {
+      mButtonResetEx=Ex->Reset; mButtonReadEx=Ex->ReadKeyStrokeEx;
+      Ex->Reset=OwnedButtonResetEx; Ex->ReadKeyStrokeEx=OwnedButtonReadEx;
+    }
+    if (*(volatile UINT8 *)(Base+0x8324)) mButtonTimer=*(EFI_EVENT *)(Base+0x84e8);
+    mKeypadStatus=EFI_SUCCESS;
+    __asm__ volatile("dsb sy" ::: "memory");
+    break;
+  }
+  gBS->FreePool(Handles);
+}
+STATIC EFI_STATUS PauseFirmwareButtons(VOID)
+{
+  if (!mButtonTimer || mButtonTimerPaused) return EFI_SUCCESS;
+  EFI_STATUS Status=gBS->SetTimer(mButtonTimer,TimerCancel,0);
+  if (!EFI_ERROR(Status)) mButtonTimerPaused=TRUE;
+  return Status;
+}
+STATIC VOID ResumeFirmwareButtons(VOID)
+{
+  if (!mButtonTimerPaused) return;
+  EFI_STATUS Status=gBS->SetTimer(mButtonTimer,TimerPeriodic,500000);
+  if (!EFI_ERROR(Status)) mButtonTimerPaused=FALSE;
+}
 UINT64 MarbleRootUsbContext[16] __attribute__((aligned(64)));
 #define mServiceContext MarbleRootUsbContext
 STATIC VOID *mServiceStack;
@@ -60,6 +162,7 @@ STATIC VOID ServiceUpdatePoint(VOID)
   mLastOffset=Stage->Disks[2].Bytes-0x100000;
   mLastBytes=0x100000;
   __atomic_store_n(&mKernelRunning,0,__ATOMIC_RELEASE);
+  ResumeFirmwareButtons();
 }
 
 STATIC UINT64 RootCounter(VOID)
@@ -249,6 +352,17 @@ STATIC VOID UsbServiceLoop(VOID)
 
 STATIC EFI_STATUS UsbServiceEnter(VOID)
 {
+  OwnFirmwareButtons();
+  __atomic_store_n(&mKernelRunning,1,__ATOMIC_RELEASE);
+  EFI_STATUS ButtonStatus=PauseFirmwareButtons();
+  if (EFI_ERROR(ButtonStatus)) {
+    __atomic_store_n(&mKernelRunning,0,__ATOMIC_RELEASE);
+    return ButtonStatus;
+  }
+  for (UINTN Wait=0;__atomic_load_n(&mKeypadActive,__ATOMIC_ACQUIRE);++Wait) {
+    if (Wait==1000) return EFI_TIMEOUT;
+    gBS->Stall(100);
+  }
   if (!mServiceStarted) {
     // iOS 18 exposes CPU 0 to XNU; affinity 0x700 remains the USB owner.
     UINT64 Value;
@@ -442,6 +556,14 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     ROOT_STAGE_DISK *Disk = &mStage->Disks[mDisk];
     if (AsciiStrCmp(Command,"upload")) mExportBytes=0;
     if (!AsciiStrCmp(Command,"getvar:version")) Reply("OKAY","RootStage2");
+    else if (!AsciiStrCmp(Command,"getvar:buttons-firmware")) {
+      CHAR8 Text[53];
+      Hex(Text,mKeypadStatus,16); Text[16]=':';
+      Hex(Text+17,mKeypadCalls,16); Text[33]=':';
+      Hex(Text+34,mKeypadBlocked,16); Text[50]=':';
+      Text[51]=mButtonTimer ? (mButtonTimerPaused ? '3' : '1') : '0'; Text[52]=0;
+      Reply("OKAY",Text);
+    }
     else if (!AsciiStrCmp(Command,"getvar:phase")) Reply("OKAY",mKernelRunning ? "kernel" : "firmware");
     else if (!AsciiStrCmp(Command,"getvar:kernel-ready")) {
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");

@@ -19,15 +19,18 @@ static constexpr unsigned kInputReportType = 0;
 extern "C" void native_hid_input_observed(unsigned,int);
 extern "C" void native_hid_live_checkpoint(IOService *);
 extern "C" bool native_hid_input_requested(void);
+extern "C" void native_buttons_set_sink(void (*)(void *, uint32_t), void *);
+extern "C" { volatile uint32_t marble_buttons_hid_stats[8]; }
 
-// Keyboard collection selects the original generic event driver. Report 2 is Consumer Menu.
+// Keyboard collection selects the generic event driver. Report 2 carries
+// Consumer Menu, Power, Volume Increment and Volume Decrement.
 static const uint8_t reportDescriptor[] = {
     0x05,0x01,0x09,0x06,0xa1,0x01,0x85,0x01,
     0x05,0x07,0x19,0xe0,0x29,0xe7,0x15,0x00,0x25,0x01,
     0x75,0x01,0x95,0x08,0x81,0x02,0x75,0x08,0x95,0x01,0x81,0x03,
     0x19,0x00,0x29,0x65,0x15,0x00,0x25,0x65,0x75,0x08,0x95,0x06,0x81,0x00,
-    0x85,0x02,0x05,0x0c,0x09,0x40,0x15,0x00,0x25,0x01,
-    0x75,0x01,0x95,0x01,0x81,0x02,0x75,0x07,0x95,0x01,0x81,0x03,0xc0
+    0x85,0x02,0x05,0x0c,0x09,0x40,0x09,0x30,0x09,0xe9,0x09,0xea,0x15,0x00,0x25,0x01,
+    0x75,0x01,0x95,0x04,0x81,0x02,0x75,0x04,0x95,0x01,0x81,0x03,0xc0
 };
 
 static IORegistryEntry *findEventDriver(IORegistryEntry *parent, unsigned depth) {
@@ -220,43 +223,84 @@ class NativeHomeInput : public IOHIDDevice {
     OSDeclareDefaultStructors(NativeHomeInput)
     IOWorkLoop *inputLoop = nullptr;
     IOTimerEventSource *timer = nullptr;
-    bool down = false;
+    IOBufferMemoryDescriptor *reportBuffer = nullptr;
+    bool active = false, matched = false, pending = true;
+    uint8_t buttons = 0;
+    static IOReturn send(OSObject *owner, void *mask, void *, void *, void *) {
+        auto *self = static_cast<NativeHomeInput *>(owner);
+        if (!self->active) return kIOReturnNotReady;
+        self->buttons = uint8_t(uintptr_t(mask) & 0xe);
+        self->pending = true;
+        IOReturn result = self->flush();
+        if (result && self->timer) self->timer->setTimeoutMS(25);
+        return result;
+    }
+    static void buttonsChanged(void *context, uint32_t mask) {
+        auto *self = static_cast<NativeHomeInput *>(context);
+        if (self->inputLoop) self->inputLoop->runAction(send, self, reinterpret_cast<void *>(uintptr_t(mask)));
+    }
+    IOReturn flush() {
+        if (!matched) {
+            marble_buttons_hid_stats[5] = marble_buttons_hid_stats[5] + 1;
+            IORegistryEntry *driver = findEventDriver(this, 4);
+            matched = driver != nullptr;
+            if (driver) {
+                driver->setProperty("Built-In", kOSBooleanTrue);
+                if (auto *interface = driver->getParentEntry(gIOServicePlane)) interface->setProperty("Built-In", kOSBooleanTrue);
+                marble_buttons_hid_stats[0] = 1;
+                native_hid_input_observed(3, 1);
+            }
+        }
+        if (!matched) return kIOReturnNotReady;
+        if (!pending) return kIOReturnSuccess;
+        uint8_t report[] = {2, buttons};
+        reportBuffer->writeBytes(0, report, sizeof(report));
+        IOReturn result = handleReport(reportBuffer, kInputReportType, 0);
+        marble_buttons_hid_stats[1] = marble_buttons_hid_stats[1] + 1;
+        marble_buttons_hid_stats[2] = uint32_t(result);
+        marble_buttons_hid_stats[3] = buttons;
+        native_hid_input_observed(4, result);
+        if (!result) pending = false;
+        else marble_buttons_hid_stats[4] = marble_buttons_hid_stats[4] + 1;
+        return result;
+    }
     static void tick(OSObject *owner, IOTimerEventSource *source) {
         NativeHomeInput *self = OSDynamicCast(NativeHomeInput,owner);
+        if (!self || !self->active) return;
         native_hid_live_checkpoint(self);
-        bool matched = findEventDriver(self,4) != nullptr;
-        native_hid_input_observed(3,matched);
-        if (!self->down && (!matched || !native_hid_input_requested())) { source->setTimeoutMS(1000); return; }
-        uint8_t report[] = {2,static_cast<uint8_t>(self->down ? 0 : 1)};
-        IOBufferMemoryDescriptor *buffer = IOBufferMemoryDescriptor::withBytes(report,sizeof(report),kIODirectionNone);
-        IOReturn result = buffer ? self->handleReport(buffer,kInputReportType,0) : kIOReturnNoMemory;
-        OSSafeReleaseNULL(buffer);
-        native_hid_input_observed(self->down ? 5 : 4,result);
-        self->down = !self->down;
-        source->setTimeoutMS(self->down ? 100 : 1000);
+        self->flush();
+        if (!self->matched || self->pending)
+            source->setTimeoutMS(marble_buttons_hid_stats[5] < 200 ? 25 : 1000);
     }
 public:
     IOWorkLoop *getWorkLoop() const override { return inputLoop; }
-    OSString *newTransportString() const override { return OSString::withCString("Virtual"); }
-    OSString *newProductString() const override { return OSString::withCString("VirtualHomeInput"); }
+    OSString *newTransportString() const override { return OSString::withCString("SPMI"); }
+    OSString *newProductString() const override { return OSString::withCString("MarbleButtons"); }
     IOReturn newReportDescriptor(IOMemoryDescriptor **out) const override {
         *out = IOBufferMemoryDescriptor::withBytes(reportDescriptor,sizeof(reportDescriptor),kIODirectionNone);
         return *out ? kIOReturnSuccess : kIOReturnNoMemory;
     }
     bool start(IOService *provider) override {
         inputLoop = IOWorkLoop::workLoop();
-        if (!inputLoop || !setProperty("HIDDefaultBehavior",true) || !IOHIDDevice::start(provider)) return false;
+        const uint8_t released[] = {2, 0};
+        reportBuffer = IOBufferMemoryDescriptor::withBytes(released, sizeof(released), kIODirectionNone);
+        if (!inputLoop || !reportBuffer || !setProperty("Built-In", true) ||
+            !setProperty("HIDDefaultBehavior",true) || !IOHIDDevice::start(provider)) return false;
         timer = IOTimerEventSource::timerEventSource(this,tick);
         if (!timer || inputLoop->addEventSource(timer) != kIOReturnSuccess) {
             OSSafeReleaseNULL(timer); IOHIDDevice::stop(provider); return false;
         }
-        native_hid_input_observed(2,0); timer->setTimeoutMS(1000); return true;
+        active = true;
+        native_buttons_set_sink(buttonsChanged, this);
+        native_hid_input_observed(2,0); timer->setTimeoutMS(25); return true;
     }
     void stop(IOService *provider) override {
+        active = false;
+        native_buttons_set_sink(nullptr, nullptr);
         if (timer) { timer->cancelTimeout(); inputLoop->removeEventSource(timer); OSSafeReleaseNULL(timer); }
         IOHIDDevice::stop(provider);
     }
-    void free() override { OSSafeReleaseNULL(inputLoop); IOHIDDevice::free(); }
+    void free() override { OSSafeReleaseNULL(reportBuffer); OSSafeReleaseNULL(inputLoop); IOHIDDevice::free(); }
 };
 OSDefineMetaClassAndStructors(NativeHomeInput,IOHIDDevice)
 extern "C" IOService *native_hid_input_allocate(void) { return new NativeHomeInput; }
