@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-05",
+  "device": "marble",
+  "profile": "iOS 18.7.11 22H384",
+  "upstream_reference": "https://github.com/dipa-studio/ios-sweet/blob/main/NOTES.md",
+  "failure": {
+    "service": "CommCenter",
+    "reason": "userspace watchdog timeout: no successful checkins in 180 seconds; unresponsive com.apple.main-thread",
+    "run_seconds": 2455,
+    "capture": "session-20261105/systemos-window-restored/commcenter-return",
+    "return_count": 1,
+    "return_usb_capture": "passed",
+    "post_return_hold_seconds": 60
+  },
+  "changes": [
+    "Invoke the existing board launch policy after Data and SystemOS mounts and before launchd exec",
+    "Select com.apple.CommCenter as an unavailable board service while its modem backend remains unimplemented",
+    "Use a configurable software presentation refresh with 10 Hz startup default",
+    "Keep data migration and watchdogd enabled"
+  ],
+  "build": {
+    "kernel": "passed",
+    "prelink": "passed",
+    "firmware": "passed",
+    "image": {
+      "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/commcenter-policy-10hz/marble_temporary_boot.img",
+      "kernel_sha256": "875a8a69316b3f1193e5d556ca1a19e8a9b39dd519f53a43ec634bf657e09dad",
+      "native_sha256": "c96393b96bd0eee004ed0ea618331713cb621f4e3e48f4c350386db74cebc48a",
+      "kernel_source": "boot-image",
+      "system_source": "ufs",
+      "exit_boot_services": false,
+      "resident_usb": true,
+      "runtime_usb_mode": 3,
+      "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=10 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 sheng-disable-jobs=com.apple.CommCenter"
+    }
+  },
+  "hardware": {
+    "resident_interrupt_return": "passed",
+    "KernelSeed_transfer_bytes": 72814592,
+    "same_session_retry": "passed",
+    "policy_status": 0,
+    "desktop": "pending",
+    "long_run": "in progress"
+  },
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/commcenter-policy-10hz"
+}

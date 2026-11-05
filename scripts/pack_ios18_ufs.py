@@ -22,6 +22,10 @@ def main():
     parser.add_argument('--data-seed', required=True, type=Path)
     parser.add_argument('--temporary', action='store_true',
                         help='Embed the kernel and retain the RootStage USB service')
+    parser.add_argument('--vsync', type=int, default=10,
+                        help='Display refresh during software-rendered startup')
+    parser.add_argument('--disabled-jobs', default='com.apple.CommCenter',
+                        help='Board services excluded until their hardware backend is available')
     args = parser.parse_args()
     root, out = args.root.resolve(), args.assets.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -46,9 +50,12 @@ def main():
     struct.pack_into('<QQQ', mailbox, 104, offset, len(firmware), ADSP_FIRMWARE.stat().st_size)
     boot_args = ('offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 '
                  'offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 '
-                 'offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 '
+                 'offline-legacy-cpu-present=1 offline-legacy-validate=1 '
+                 f'sheng-vsync={args.vsync} '
                  'offline-key-events=1 sheng-aks=1 '
                  'rootstage-runtime-usb=3 marble-ufs=1')
+    if args.disabled_jobs:
+        boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
     mailbox[128:128 + len(boot_args)] = boot_args.encode()
     data += mailbox
     window = out / 'KernelSeed.bin'

@@ -15,6 +15,7 @@ extern int native_root_block_volume_device(const char *, dev_t *, char *, size_t
 extern int native_marble_data_volume(dev_t *, char *, size_t);
 extern void commpage_update_dyld_flags(uint64_t);
 extern uint64_t dyld_flags;
+extern int sheng_boot_watchdog_policy(void *, uint64_t);
 /* CoreEntitlements retains its 16 KiB allocation and stack-window ABI. */
 __attribute__((used)) const unsigned int native_ios18_ce_page_shift = 14;
 int native_marble_prepare_systemos(proc_t, user_addr_t, user_addr_t *);
@@ -194,6 +195,8 @@ int native_marble_prepare_systemos(proc_t process, user_addr_t scratch, user_add
     int cache_visible = vnode_mount(cache) == mounted;
     vnode_put(cache);
     if (!cache_visible) return EAUTH;
+    error = sheng_boot_watchdog_policy(process, scratch);
+    if (error) return error;
     *environment = USER_ADDR_NULL;
     dyld_flags |= UINT64_C(8);
     commpage_update_dyld_flags(dyld_flags);
