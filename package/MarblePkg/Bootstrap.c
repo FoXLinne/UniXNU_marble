@@ -24,6 +24,7 @@ STATIC UINTN mVolumeSize;
 STATIC BOOLEAN mRootStage, mRootStorage;
 STATIC BOOLEAN mResidentUsb;
 EFI_STATUS MarbleRootUsbEnableResident(VOID);
+EFI_STATUS MarbleRootUsbStartResident(VOID);
 EFI_STATUS MarbleRootStorage(VOID);
 EFI_STATUS MarbleRootUsb(VOID);
 EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
@@ -255,6 +256,8 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     if (EFI_ERROR(Status)) Print(L"RootStage USB: %r\r\n",Status);
     Status=MarbleRootStorage();
     if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
+    Status=MarbleRootUsbStartResident();
+    if (EFI_ERROR(Status)) return BootReturn(Status,10);
     for (UINTN Tick=0;Tick<500;Tick++) {
       Status=MarbleRootUsbPoll();
       if (EFI_ERROR(Status)) break;

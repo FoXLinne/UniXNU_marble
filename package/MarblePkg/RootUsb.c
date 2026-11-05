@@ -76,7 +76,11 @@ STATIC VOID RetainUsbWatchdog(VOID)
   // The resident kernel can change the watchdog independently of the loader.
   // Read back control after disabling it; service an active timer while waiting
   // for the host, including periods with no USB transfers.
-  mWatchdogService=FALSE;
+  // Firmware and the kernel can enable the VM watchdog after this status read.
+  // Its pet operation stays on the USB owner's event loop for the session.
+  __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(mWatchdogFrequency));
+  mWatchdogLastPet=RootCounter();
+  mWatchdogService=TRUE;
   mWatchdogControl=0;
   mWatchdogStatus=MarbleWatchdogCall(0x86000006,0,0,&mWatchdogControl);
   if (mWatchdogStatus || !(mWatchdogControl&1)) return;
@@ -84,9 +88,6 @@ STATIC VOID RetainUsbWatchdog(VOID)
   mWatchdogStatus=MarbleWatchdogCall(0x86000006,0,0,&mWatchdogControl);
   if (!mWatchdogStatus && !(mWatchdogControl&1)) return;
   mWatchdogPetStatus=MarbleWatchdogCall(0x86000007,0,0,NULL);
-  __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(mWatchdogFrequency));
-  mWatchdogLastPet=RootCounter();
-  mWatchdogService=TRUE;
 }
 
 typedef struct {
@@ -284,6 +285,11 @@ STATIC VOID UsbServiceResume(VOID)
   __asm__ volatile("dmb ish" ::: "memory");
 }
 
+EFI_STATUS MarbleRootUsbStartResident(VOID)
+{
+  return mResidentService ? UsbServiceEnter() : EFI_SUCCESS;
+}
+
 EFI_STATUS MarbleRootUsbEnableResident(VOID)
 {
   STATIC ROOT_STAGE_SERVICE Service={ROOT_STAGE_SERVICE_MAGIC,(UINTN)&UsbServiceEnter,(UINTN)&UsbServiceResume};
@@ -381,6 +387,8 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
 
 EFI_STATUS MarbleRootUsbPoll(VOID)
 {
+  // After CPU 7 starts, it is the sole controller event consumer.
+  if (mServiceStarted) return EFI_SUCCESS;
   if (!mUsb) return EFI_NOT_READY;
   ServiceWatchdog();
   for (UINTN Tick=0;Tick<64;Tick++) {

@@ -17,6 +17,27 @@
     "hub_port_status_before_recovery": "0x100",
     "fastboot_after_recovery": "absent"
   },
-  "result": "FAILED: USB enumeration lost; Apple logo and SpringBoard not observed",
-  "next_required_hardware_state": "fastboot connection"
+  "result": "FAILED: USB enumeration lost in both follow-up boots; no new kernel log or desktop frame captured",
+  "next_required_hardware_state": "fastboot connection",
+  "followups": [
+    {
+      "image": "ufs-loader-usb-owner",
+      "changes": [
+        "Start USB owner before loading DarwinBoot; use a single controller event consumer"
+      ],
+      "flash": "OKAY",
+      "reboot": "OKAY",
+      "rootstage_read": "device unavailable"
+    },
+    {
+      "image": "ufs-usb-watchdog-owner",
+      "changes": [
+        "Keep watchdog pet service enabled when initial watchdog status is disabled; cover watchdog enable from loader or kernel"
+      ],
+      "flash": "OKAY",
+      "reboot": "OKAY",
+      "rootstage_read": "device unavailable",
+      "kernel_log": "not captured"
+    }
+  ]
 }
