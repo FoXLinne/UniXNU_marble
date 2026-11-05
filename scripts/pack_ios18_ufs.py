@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import shutil
 import struct
@@ -12,6 +13,10 @@ import zlib
 
 from build_ios18_arm64e import DEVICE, ADSP_FIRMWARE, read_adt, write_adt, validate_prelink
 from build_pac_uefi import build_applications, pack_boot_image
+
+USB_AFFINITY = int(re.search(r'^#define MARBLE_USB_AFFINITY (0x[0-9a-fA-F]+)$',
+    (DEVICE / 'package/MarblePkg/MarbleCpuOwnership.h').read_text(), re.M).group(1), 16)
+XNU_AFFINITIES = [value for value in range(0, 0x800, 0x100) if value != USB_AFFINITY]
 
 
 def persistent_data_metadata(seed, profile_path):
@@ -41,8 +46,8 @@ def main():
     parser.add_argument('--gpu-addon', type=Path, help='22H384 NGPUADD2 bundle; defaults to ROOT/gpu/metal.gpuaddon')
     parser.add_argument('--display-scale', type=int, choices=(2, 3), default=3,
                         help='Pixels per UI point on the 1080x2400 panel')
-    parser.add_argument('--cpu-regs', default='0,0x100,0x200,0x300,0x400,0x500,0x600',
-                        help='XNU CPU affinities; affinity 0x700 owns the resident USB service')
+    parser.add_argument('--cpu-regs', default=','.join(hex(value) for value in XNU_AFFINITIES),
+                        help='XNU CPU affinities excluding the resident USB service owner')
     parser.add_argument('--disabled-jobs', default='com.apple.CommCenter,com.apple.locationd',
                         help='Board services excluded until their hardware backend is available')
     parser.add_argument('--kernel-arg', action='append', default=[], help='Additional NAME=VALUE runtime setting')
@@ -50,8 +55,8 @@ def main():
     args = parser.parse_args()
     cpu_regs = [int(value, 0) for value in args.cpu_regs.split(',')]
     if not cpu_regs or cpu_regs[0] != 0 or len(set(cpu_regs)) != len(cpu_regs) or any(
-            value not in range(0, 0x700, 0x100) for value in cpu_regs):
-        parser.error('--cpu-regs must select distinct affinities 0..0x600, starting with 0')
+            value not in XNU_AFFINITIES for value in cpu_regs):
+        parser.error('--cpu-regs must select distinct XNU-owned affinities, starting with 0')
     metadata = persistent_data_metadata(args.data_seed.resolve(), args.storage_profile.resolve())
     root, out = args.root.resolve(), args.assets.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -187,7 +192,7 @@ def main():
             native_sha256=baseline['inputs']['native_sha256'],
             kernel_source='boot-image', system_source='ufs', exit_boot_services=False,
             resident_usb=True, runtime_usb_mode=3, enabled_cpu_affinities=cpu_regs,
-            firmware_usb_affinity=0x700, display_scale=args.display_scale,
+            firmware_usb_affinity=USB_AFFINITY, display_scale=args.display_scale,
             data_logical_bytes=metadata['logical_bytes'], data_uuid=metadata['volume_uuid'],
             storage_profile_sha256=hashlib.sha256(args.storage_profile.read_bytes()).hexdigest(),
             logical_size=[1080 // args.display_scale, 2400 // args.display_scale], boot_args=boot_args,

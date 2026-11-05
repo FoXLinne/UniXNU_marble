@@ -12,6 +12,7 @@
 #include <Protocol/SimpleTextInEx.h>
 #include "../MarblePac.h"
 #include "GunyahWatchdog.h"
+#include "MarbleCpuOwnership.h"
 
 BOOLEAN MarbleRootReadMemory(VOID *Destination, CONST VOID *Source, UINTN Bytes, UINT64 *Fault);
 
@@ -364,7 +365,7 @@ STATIC EFI_STATUS UsbServiceEnter(VOID)
     gBS->Stall(100);
   }
   if (!mServiceStarted) {
-    // iOS 18 exposes CPU 0 to XNU; affinity 0x700 remains the USB owner.
+    // The payload CPU list excludes the resident USB owner's affinity.
     UINT64 Value;
 #define SAVE_USB_REGISTER(Slot, Register) \
     __asm__ volatile("mrs %0, " #Register : "=r"(Value)); mServiceContext[Slot]=Value
@@ -386,7 +387,7 @@ STATIC EFI_STATUS UsbServiceEnter(VOID)
     for (UINTN Offset=0;Offset<sizeof(mServiceContext);Offset+=64)
       __asm__ volatile("dc cvac, %0" :: "r"((UINTN)mServiceContext+Offset) : "memory");
     __asm__ volatile("dsb sy" ::: "memory");
-    UINT64 Result=MarbleWatchdogCall(0xc4000003,0x700,(UINTN)&MarbleRootUsbCore,NULL);
+    UINT64 Result=MarbleWatchdogCall(0xc4000003,MARBLE_USB_AFFINITY,(UINTN)&MarbleRootUsbCore,NULL);
     if (Result) { mServiceStarted=FALSE; return EFI_DEVICE_ERROR; }
     UINT64 Began=RootCounter(), Frequency;
     __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(Frequency));
@@ -565,6 +566,11 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       Reply("OKAY",Text);
     }
     else if (!AsciiStrCmp(Command,"getvar:phase")) Reply("OKAY",mKernelRunning ? "kernel" : "firmware");
+    else if (!AsciiStrCmp(Command,"getvar:usb-affinity")) {
+      UINT64 Affinity;
+      __asm__ volatile("mrs %0, mpidr_el1" : "=r"(Affinity));
+      CHAR8 Text[17]; Hex(Text,Affinity & 0xff00ffffffULL,16); Reply("OKAY",Text);
+    }
     else if (!AsciiStrCmp(Command,"getvar:kernel-ready")) {
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
       Reply("OKAY",mKernelRunning && (mStage->ReturnTest==2 || (mStage->ReturnTest>>32)==1) ? "ready" : "pending");

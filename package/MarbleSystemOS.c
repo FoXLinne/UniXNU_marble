@@ -56,7 +56,7 @@ static void captureAbortReason(char *out, size_t capacity)
     vm_map_offset_t address = 0;
     uint64_t examined = 0;
     int best = 0;
-    while (examined < (160ULL << 20) && best < 2) {
+    while (examined < (160ULL << 20) && best < 4) {
         vm_map_size_t size = 0;
         natural_t depth = 0;
         vm_region_submap_info_data_64_t info;
@@ -68,7 +68,7 @@ static void captureAbortReason(char *out, size_t capacity)
         address += size;
         if (info.is_submap || (info.protection & (VM_PROT_READ | VM_PROT_WRITE)) !=
             (VM_PROT_READ | VM_PROT_WRITE) || info.user_tag < 1 || info.user_tag > 11) continue;
-        for (uint64_t offset = 0; offset < size && examined < (160ULL << 20) && best < 2; offset += 65536) {
+        for (uint64_t offset = 0; offset < size && examined < (160ULL << 20) && best < 4; offset += 65536) {
             size_t length = MIN(size - offset, 65536);
             examined += length;
             if (copyin(base + offset, chunk, length)) continue;
@@ -79,8 +79,10 @@ static void captureAbortReason(char *out, size_t capacity)
                 if (run >= 24) {
                     char saved = chunk[i];
                     chunk[i] = 0;
-                    int rank = strnstr(chunk + start, "uncaught exception", run) ? 2 :
-                        strnstr(chunk + start, "reason: ", run) ? 1 : 0;
+                    int thrown = !strncmp(chunk + start, "SHENGTHROW ", 11);
+                    int uncaught = strnstr(chunk + start, "uncaught exception", run) != NULL;
+                    int reason = strnstr(chunk + start, "reason: ", run) != NULL;
+                    int rank = thrown ? 4 : uncaught && reason ? 3 : reason ? 2 : uncaught ? 1 : 0;
                     if (rank > best) {
                         strlcpy(out, chunk + start, capacity);
                         best = rank;

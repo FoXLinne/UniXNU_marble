@@ -46,4 +46,8 @@ GPU addon 包含从 22H384 提取的 Metal 库清单，运行时缓存保存在�
 
 GPU 真机交互使用 `scripts/root_ui.py`，命令包含 `tap`、`swipe`、`longpress`、`home`、`switcher` 和 `screen`。屏幕坐标为 1080×2400；`screen` 使用本次部署的 `--kernel` 与 `--output` 路径。驻留固件通过 `input-control` 能力和内核共享请求字传递触控及截图请求。
 
+CPU 归属定义位于 `package/MarblePkg/MarbleCpuOwnership.h`。驻留 USB 服务使用 MPIDR `0x100` 效率核心，XNU 使用 `0x000`、`0x200` 至 `0x700`，覆盖 2.9184 GHz 核心。`getvar:usb-affinity` 读取 USB 命令处理核心的 MPIDR；打包清单记录双方归属。
+
+`scripts/observe_ios18_boot.py --once --skip-threads` 保存进程列表、异常退出、GPU 状态与内核日志。`scripts/capture_ios18_gpu_trace.py --swipes 6` 记录滑动窗口、提交到退役时序与交换间隔，输出 `events.json` 和 `summary.json`。交换退役时序与面板刷新时序分别记录。
+
 iOS 18 UFS 打包使用 `profiles/marble-storage-22H384.json` 校验 Data 容量、UUID 和 OS build。设备 Data 容量为 64 GiB，元数据输入为 `outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs/Data.rdisk` 旁的 `seed.json`。

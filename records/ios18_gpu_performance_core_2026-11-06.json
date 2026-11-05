@@ -1,0 +1,158 @@
+{
+  "artifact": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/performance-core/marble_temporary_boot.img",
+    "kernel_sha256": "aa1a64be458c4770153003f464f256aa8808a2a421fd6558c5c564070def3282",
+    "native_sha256": "49107a6bb0b9398e1eb59953a26e615cf6505d8b97089e92732b4d6a29d25d50",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "enabled_cpu_affinities": [
+      0,
+      512,
+      768,
+      1024,
+      1280,
+      1536,
+      1792
+    ],
+    "firmware_usb_affinity": 256,
+    "display_scale": 3,
+    "data_logical_bytes": 68719476736,
+    "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+    "storage_profile_sha256": "2f439c20ac2a30cd6f3b979ff2f590fb3c0e1b04b55b8edfb7806be238b08f56",
+    "logical_size": [
+      360,
+      800
+    ],
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-preempt=2 sheng-gpu-ttbr=2 sheng-diag=1 sheng-gpu-trace=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1",
+    "gpu_addon_sha256": "9872b25955178128e2142c5585e3a7af4b34b8c08da2f8b27fcc0e2100fb243e",
+    "gpu_sources": {
+      "UniXNU": "e2fdae4312d0acc3d8a52bc457101e7918095e6a",
+      "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+      "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+      "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+    },
+    "owner_trust_cache_sha256": "7cb4af5b2e047d0de470f67029aac18d78b61be7f169f989713709f2fbc47b28"
+  },
+  "cpu_ownership": {
+    "elapsed": 241.597513332963,
+    "usb_affinity": "0000000000000100",
+    "phase": "kernel",
+    "_armcpu_smp_mpidr": [
+      0,
+      512,
+      768,
+      1024,
+      1280,
+      1536,
+      1792,
+      0
+    ],
+    "_armcpu_smp_seen_mpidr": [
+      0,
+      2164261376,
+      2164261632,
+      2164261888,
+      2164262144,
+      2164262400,
+      2164262656,
+      0
+    ],
+    "_armcpu_smp_step": [
+      0,
+      3,
+      7,
+      7,
+      7,
+      7,
+      7,
+      0
+    ],
+    "_armcpu_smp_fail": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "display_transfers": 114
+  },
+  "Photos_exit": {
+    "pid": 376,
+    "namespace": 2,
+    "code": "0x6",
+    "name": "Photos",
+    "pc": "0x1e38501dc",
+    "far": "0x0",
+    "esr": "0x56000080",
+    "description": "slide=f3d8000 199fc0160 21cf045a0 21cef2f10 18f513bf8 21cf038b4 21cf070d0 18f511568 191f6f93c 1df809454 1949951a4 194960a28 100f0eec4",
+    "exception_reason": "*** Terminating app due to uncaught exception 'NSInternalInconsistencyException', reason: 'Invalid parameter not satisfying: !PXPixelSizeAreaIsZero(roundedSize)'"
+  },
+  "swipe_motion": {
+    "first_sequence": 17460,
+    "last_sequence": 21599,
+    "dropped": 0,
+    "elapsed_seconds": 8.842840207973495,
+    "swipes": 6,
+    "motion_windows": [
+      {
+        "index": 0,
+        "start_sequence": 17460,
+        "end_sequence": 17942
+      },
+      {
+        "index": 1,
+        "start_sequence": 18203,
+        "end_sequence": 18631
+      },
+      {
+        "index": 2,
+        "start_sequence": 18893,
+        "end_sequence": 19315
+      },
+      {
+        "index": 3,
+        "start_sequence": 19571,
+        "end_sequence": 19982
+      },
+      {
+        "index": 4,
+        "start_sequence": 20238,
+        "end_sequence": 20654
+      },
+      {
+        "index": 5,
+        "start_sequence": 20911,
+        "end_sequence": 21335
+      }
+    ],
+    "event_counts": {
+      "10": 1026,
+      "20": 1539,
+      "21": 513,
+      "11": 1026,
+      "37": 35
+    },
+    "swap_retirement": {
+      "count": 513,
+      "mean_ms": 17.191666015625,
+      "p50_ms": 9.302,
+      "p95_ms": 99.15,
+      "p99_ms": 101.138,
+      "maximum_ms": 105.472
+    },
+    "motion_swap_retirement": {
+      "intervals": 314,
+      "mean_ms": 11.609821656050956,
+      "p99_ms": 25.232,
+      "over_16_667_ms": 64
+    }
+  },
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/performance-core",
+  "acceptance": "in_progress"
+}
