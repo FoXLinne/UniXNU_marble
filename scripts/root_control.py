@@ -39,7 +39,7 @@ class RootUsb:
         usb.util.dispose_resources(self.device)
 
     def reply(self):
-        value = self.device.read(0x81, 64).tobytes()
+        value = self.device.read(0x81, 512).tobytes()
         if value[:4] == b'FAIL':
             raise RuntimeError(value[4:].decode())
         return value

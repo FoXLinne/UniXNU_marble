@@ -43,3 +43,7 @@ iOS 18 GPU 构建使用 `scripts/build_ios18_gpu.py`。`userspace` 构建 arm64e
 该命令使用保留安装的启动模板与 Data 身份。`pack_ios18_ufs.py` 默认携带 GPU addon、配套 trust cache 和 120 Hz 呈现请求。运行配置采用 580 MHz / BW11、双优先级环模式 2、CP 页表切换、GPU 中断唤醒、IOSurface 映射复用与 GPU 扫描缓冲搬运。驱动启动完成后进入用户空间；故障恢复执行 GPU 复位和任务重放；驻留返回在 XNU 次级核心停止后关闭 GPU DMA。
 
 GPU addon 包含从 22H384 提取的 Metal 库清单，运行时缓存保存在持久 Data。产物、版本、构建结果与真机验收状态记录在 `records/ios18_gpu_2026-11-05.json`。
+
+GPU 真机交互使用 `scripts/root_ui.py`，命令包含 `tap`、`swipe`、`longpress`、`home`、`switcher` 和 `screen`。屏幕坐标为 1080×2400；`screen` 使用本次部署的 `--kernel` 与 `--output` 路径。驻留固件通过 `input-control` 能力和内核共享请求字传递触控及截图请求。
+
+iOS 18 UFS 打包使用 `profiles/marble-storage-22H384.json` 校验 Data 容量、UUID 和 OS build。设备 Data 容量为 64 GiB，元数据输入为 `outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs/Data.rdisk` 旁的 `seed.json`。

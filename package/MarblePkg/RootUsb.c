@@ -569,6 +569,22 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
       Reply("OKAY",mKernelRunning && (mStage->ReturnTest==2 || (mStage->ReturnTest>>32)==1) ? "ready" : "pending");
     }
+    else if (!AsciiStrCmp(Command,"getvar:control")) {
+      __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
+      CHAR8 Text[9]; Hex(Text,*(volatile UINT32 *)&mStage->ReturnTest,8); Reply("OKAY",Text);
+    }
+    else if (!AsciiStrnCmp(Command,"oem input:",10)) {
+      if (!mKernelRunning || AsciiStrLen(Command)!=22 || Command[12]!=':' || Command[17]!=':') {
+        Reply("FAIL","invalid input request"); continue;
+      }
+      UINT32 Operation=AsciiStrHexToUintn(Command+10), X=AsciiStrHexToUintn(Command+13), Y=AsciiStrHexToUintn(Command+18);
+      if (Operation<1 || Operation>4 || X>=1080 || Y>=2400) { Reply("FAIL","input outside display"); continue; }
+      __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
+      if (*(volatile UINT32 *)&mStage->ReturnTest) { Reply("FAIL","control request pending"); continue; }
+      *(volatile UINT32 *)&mStage->ReturnTest=0x80000000U|(Operation<<24)|(X<<12)|Y;
+      __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
+      Reply("OKAY","");
+    }
     else if (!AsciiStrCmp(Command,"reboot-bootloader")) {
       if (!mKernelRunning) { Reply("FAIL","bootloader reset requires the kernel reboot service"); continue; }
       *(volatile UINT32 *)&mStage->ReturnTest=2;
@@ -604,7 +620,7 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       Hex(Text,Result.keys,16); Text[16]=':';
       Hex(Text+17,Result.authenticated,16); Reply("OKAY",Text);
     }
-    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache,zero-fill,memory-read");
+    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache,zero-fill,memory-read,input-control");
     else if (!AsciiStrnCmp(Command,"oem memory-read:",16)) {
       if (AsciiStrLen(Command)!=41 || Command[32]!=':') {
         Reply("FAIL","invalid memory request"); continue;

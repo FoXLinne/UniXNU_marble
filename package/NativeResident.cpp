@@ -14,6 +14,9 @@ extern "C" void native_resident_configure(uint64_t);
 extern "C" void native_resident_return(void);
 extern "C" void native_resident_panic_return(void);
 extern "C" void native_root_block_capture_log(void);
+extern "C" void native_marble_display_snapshot(void);
+extern "C" void native_hid_request_tap(unsigned, unsigned);
+extern "C" void native_hid_request_contact(unsigned, unsigned, bool);
 extern "C" void armcpu_complete_active_interrupt(void);
 extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_root_block_export_data(void);
@@ -74,6 +77,16 @@ static void usbControlWorker(void *, wait_result_t)
       native_marble_buttons_stop();
       native_root_block_capture_log();
       panic("RootStage USB host interrupt");
+    }
+    if (request & 0x80000000U) {
+      const unsigned operation=(request>>24)&0x7f, x=(request>>12)&0xfff, y=request&0xfff;
+      if (x<1080 && y<2400) {
+        if (operation==1) native_hid_request_tap(x,y);
+        if (operation==2 || operation==3) native_hid_request_contact(x,y,operation==2);
+      }
+      if (operation==4) native_marble_display_snapshot();
+      usb_interrupt[0]=0;
+      __asm__ volatile("dsb sy" ::: "memory");
     }
     if (request==2) {
       usb_interrupt[0]=0;

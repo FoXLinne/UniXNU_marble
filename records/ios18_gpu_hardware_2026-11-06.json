@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-06",
+  "device": "marble / 556fdfe",
+  "os": "iOS 18.7.11 22H384 / XNU 11417.140.69 arm64e RELEASE",
+  "stage": "GPU hardware iteration: persistent geometry and resident UI control",
+  "cause": {
+    "tested_Data_bytes": 68719476736,
+    "first_pack_Data_bytes": 3221225472,
+    "effect": "Data window start shifted because the UFS store is placed relative to the partition end"
+  },
+  "changes": [
+    "Bind Data geometry and UUID to the board storage profile before packing",
+    "Wait for matched IOMedia with BSD identity",
+    "Add a resident input and scanout snapshot channel",
+    "Read extended RootStage replies with a USB packet-sized host buffer"
+  ],
+  "hardware": {
+    "Data_mount_errno": 0,
+    "SystemOS_mount_errno": 0,
+    "display_capture": [
+      1080,
+      2400
+    ],
+    "home_gesture": "passed",
+    "SpringBoard_pid": 27,
+    "backboardd_pid": 60,
+    "GPU_transfers_observed": 195,
+    "GPU_retirements_observed": 197,
+    "UI_exits_observed": 0,
+    "Photos": "white launch surface observed; abnormal exit investigation active"
+  },
+  "artifact": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/volume-control/marble_temporary_boot.img",
+    "kernel_sha256": "bfbd76592498b14d9b8d8226ee70de5be42a19e97b1f4efd66f5495a26023a10",
+    "native_sha256": "960486dd646112c6cd74d1b31d69004a6a93f487a077e16c523b59693e69aa44",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "enabled_cpu_affinities": [
+      0,
+      256,
+      512,
+      768,
+      1024,
+      1280,
+      1536
+    ],
+    "firmware_usb_affinity": 1792,
+    "display_scale": 3,
+    "data_logical_bytes": 68719476736,
+    "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+    "storage_profile_sha256": "2f439c20ac2a30cd6f3b979ff2f590fb3c0e1b04b55b8edfb7806be238b08f56",
+    "logical_size": [
+      360,
+      800
+    ],
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-preempt=2 sheng-gpu-ttbr=2 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1",
+    "gpu_addon_sha256": "9872b25955178128e2142c5585e3a7af4b34b8c08da2f8b27fcc0e2100fb243e",
+    "gpu_sources": {
+      "UniXNU": "e2fdae4312d0acc3d8a52bc457101e7918095e6a",
+      "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+      "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+      "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+    },
+    "owner_trust_cache_sha256": "7cb4af5b2e047d0de470f67029aac18d78b61be7f169f989713709f2fbc47b28"
+  },
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/volume-control"
+}

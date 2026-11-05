@@ -5,8 +5,10 @@
 #include <IOKit/IOMemoryDescriptor.h>
 #include <IOKit/IODeviceMemory.h>
 #include <IOKit/IOBSD.h>
+#include <IOKit/IOKitKeys.h>
 #include <IOKit/storage/IOBlockStorageDevice.h>
 #include <libkern/c++/OSData.h>
+#include <libkern/c++/OSDictionary.h>
 #include <libkern/c++/OSSymbol.h>
 #include <libkern/c++/OSNumber.h>
 #include <libkern/c++/OSString.h>
@@ -78,7 +80,10 @@ public:
         disk.Bytes = bytes;
         diskIndex = 2;
         marble_data_bytes = bytes;
-        IOLog("MarbleStorage: UFS Data bytes %llu\n", bytes);
+        const bool probe = marble_ufs_store_read(0, 1, dataScratch);
+        uint32_t magic = 0;
+        if (probe) memcpy(&magic, dataScratch + 32, sizeof(magic));
+        IOLog("MarbleStorage: UFS Data bytes %llu header_read=%u magic=%x\n", bytes, probe, magic);
     }
     IOReturn doEjectMedia() override { return kIOReturnUnsupported; }
     IOReturn doFormatMedia(UInt64) override { return kIOReturnUnsupported; }
@@ -193,14 +198,38 @@ static int rootBlockVolume(const char *uuid, unsigned index, dev_t *device, char
     return selected;
 }
 
+static int waitRootBlockVolume(const char *uuid, unsigned index, dev_t *device, char *path, size_t size)
+{
+    if (rootBlockVolume(uuid, index, device, path, size)) return 1;
+    OSDictionary *matching = IOService::serviceMatching("IOMedia");
+    OSDictionary *properties = OSDictionary::withCapacity(1);
+    OSString *identity = OSString::withCString(uuid);
+    OSString *bsd = OSString::withCString(kIOBSDNameKey);
+    if (!matching || !properties || !identity || !bsd) {
+        OSSafeReleaseNULL(matching); OSSafeReleaseNULL(properties);
+        OSSafeReleaseNULL(identity); OSSafeReleaseNULL(bsd);
+        return 0;
+    }
+    properties->setObject("UUID", identity);
+    matching->setObject(kIOPropertyMatchKey, properties);
+    matching->setObject(kIOPropertyExistsMatchKey, bsd);
+    IOLog("MarbleStorage: await volume uuid=%s index=%u\n", uuid, index);
+    IOService *volume = IOService::waitForMatchingService(matching, UINT64_C(10000000000));
+    const int selected = volume && rootBlockVolume(uuid, index, device, path, size);
+    IOLog("MarbleStorage: volume uuid=%s matched=%u selected=%d\n", uuid, volume != nullptr, selected);
+    OSSafeReleaseNULL(volume); OSSafeReleaseNULL(matching); OSSafeReleaseNULL(properties);
+    OSSafeReleaseNULL(identity); OSSafeReleaseNULL(bsd);
+    return selected;
+}
+
 extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, char *path, size_t size)
 {
-    return rootBlockVolume(uuid, 1, device, path, size);
+    return waitRootBlockVolume(uuid, 1, device, path, size);
 }
 
 extern "C" int native_marble_data_volume(dev_t *device, char *path, size_t size)
 {
-    return marble_data_uuid[0] && rootBlockVolume(marble_data_uuid, 2, device, path, size);
+    return marble_data_uuid[0] && waitRootBlockVolume(marble_data_uuid, 2, device, path, size);
 }
 
 static voidpf dataInflateAllocate(voidpf, uInt items, uInt size)

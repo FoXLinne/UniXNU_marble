@@ -14,12 +14,26 @@ from build_ios18_arm64e import DEVICE, ADSP_FIRMWARE, read_adt, write_adt, valid
 from build_pac_uefi import build_applications, pack_boot_image
 
 
+def persistent_data_metadata(seed, profile_path):
+    metadata = json.loads(seed.with_name('seed.json').read_text())
+    profile = json.loads(profile_path.read_text())
+    if metadata['logical_bytes'] != profile['data_logical_bytes']:
+        raise ValueError('Persistent Data size differs from the board storage profile')
+    if metadata['volume_uuid'].upper() != profile['data_volume_uuid'].upper():
+        raise ValueError('Persistent Data UUID differs from the board storage profile')
+    if metadata.get('source_build') != profile['build']:
+        raise ValueError('Data metadata OS build differs from the board storage profile')
+    return metadata
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True, type=Path)
     parser.add_argument('--assets', required=True, type=Path)
     parser.add_argument('--images', required=True, type=Path)
     parser.add_argument('--data-seed', required=True, type=Path)
+    parser.add_argument('--storage-profile', type=Path, default=DEVICE / 'profiles/marble-storage-22H384.json',
+                        help='Persistent Data geometry and identity for this board')
     parser.add_argument('--temporary', action='store_true',
                         help='Embed the kernel and retain the RootStage USB service')
     parser.add_argument('--vsync', type=int, default=120,
@@ -37,6 +51,7 @@ def main():
     if not cpu_regs or cpu_regs[0] != 0 or len(set(cpu_regs)) != len(cpu_regs) or any(
             value not in range(0, 0x700, 0x100) for value in cpu_regs):
         parser.error('--cpu-regs must select distinct affinities 0..0x600, starting with 0')
+    metadata = persistent_data_metadata(args.data_seed.resolve(), args.storage_profile.resolve())
     root, out = args.root.resolve(), args.assets.resolve()
     out.mkdir(parents=True, exist_ok=True)
     platform = DEVICE.parent / 'marble_hackios'
@@ -50,7 +65,6 @@ def main():
     gpu = json.loads((root / 'gpu/userspace.json').read_text())
     if hashlib.sha256(addon.read_bytes()).hexdigest() != gpu['addon_sha256']:
         raise ValueError('GPU addon differs from its signed userspace build')
-    metadata = json.loads(args.data_seed.with_name('seed.json').read_text())
     data = kernel.read_bytes()
     data += bytes(-len(data) % 4096)
     offset = len(data)
@@ -169,6 +183,8 @@ def main():
             kernel_source='boot-image', system_source='ufs', exit_boot_services=False,
             resident_usb=True, runtime_usb_mode=3, enabled_cpu_affinities=cpu_regs,
             firmware_usb_affinity=0x700, display_scale=args.display_scale,
+            data_logical_bytes=metadata['logical_bytes'], data_uuid=metadata['volume_uuid'],
+            storage_profile_sha256=hashlib.sha256(args.storage_profile.read_bytes()).hexdigest(),
             logical_size=[1080 // args.display_scale, 2400 // args.display_scale], boot_args=boot_args,
             gpu_addon_sha256=gpu['addon_sha256'], gpu_sources=gpu['sources'],
             owner_trust_cache_sha256=gpu['trust_cache_sha256']), indent=2) + '\n')
