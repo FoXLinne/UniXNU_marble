@@ -599,8 +599,9 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
         mExportBytes=0; continue;
       }
       if (mFirmwareLog && !mKernelRunning) {
+        DataReply(0x100000);
         CopyMem(mTx,mFirmwareLog,0x100000);
-        DataReply(0x100000); Transfer(EP_IN,mTx,0x100000); Reply("OKAY","");
+        Transfer(EP_IN,mTx,0x100000); Reply("OKAY","");
         continue;
       }
       if (!mLastBytes) { Reply("FAIL","no staged data"); continue; }
