@@ -7,6 +7,7 @@
 #include <IOKit/IOMemoryDescriptor.h>
 #include <IOKit/IOLocks.h>
 #include <libkern/c++/OSData.h>
+#include <pexpert/pexpert.h>
 
 extern "C" {
 void native_runtime_usb_start(void);
@@ -21,6 +22,7 @@ extern volatile uint32_t marble_display_transfers;
 extern uint64_t marble_data_bytes;
 extern volatile uint64_t marble_ufs_reads, marble_ufs_writes;
 void marble_runtime18_start(void);
+void native_marble_reboot_bootloader(void);
 void native_root_block_capture_log(void);
 void native_root_block_request_snapshot(void);
 unsigned native_root_runtime_read(unsigned, unsigned, void *, unsigned);
@@ -197,6 +199,9 @@ extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, voi
 
 extern "C" void marble_runtime18_start(void)
 {
+    unsigned reboot = 0;
+    if (PE_parse_boot_argn("marble-reboot-bootloader", &reboot, sizeof(reboot)) && reboot)
+        native_marble_reboot_bootloader();
     gpuExportLock = IOLockAlloc();
     if (!gpuExportLock) panic("MarbleRuntime: GPU export lock allocation failed");
     runtimeScreen = static_cast<RuntimeScreen *>(IOMallocZero(sizeof(RuntimeScreen)));

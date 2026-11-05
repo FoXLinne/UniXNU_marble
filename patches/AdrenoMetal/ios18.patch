@@ -1,6 +1,8 @@
+diff --git a/NativeAdrenoMetalPlugin.mm b/NativeAdrenoMetalPlugin.mm
+index 415e9c8..e7d3305 100644
 --- a/NativeAdrenoMetalPlugin.mm
 +++ b/NativeAdrenoMetalPlugin.mm
-@@ -77,6 +77,7 @@
+@@ -77,6 +77,7 @@ static bool requested() {
  static unsigned gDiagBits;
  // Reads of the render server's own state for the framebuffer-format question (diagnostic only, for the exact QuartzCore of the target image; a read
  // that fails or a build that differs reports zeros). Each value is one marker, 0x7Kvv: K picks the item, vv the value.
@@ -8,7 +10,7 @@
  static bool readTask(uintptr_t address, void *out, size_t size) {
      vm_size_t got = 0;
      return vm_read_overwrite(mach_task_self(), address, size, (vm_address_t) out, &got) == KERN_SUCCESS && got == size;
-@@ -84,6 +85,7 @@
+@@ -84,6 +85,7 @@ static bool readTask(uintptr_t address, void *out, size_t size) {
  static bool writeTask(uintptr_t address, const void *data, size_t size) {
      return vm_write(mach_task_self(), address, (vm_offset_t) data, (mach_msg_type_number_t) size) == KERN_SUCCESS;
  }
@@ -16,7 +18,7 @@
  // EXPERIMENT (second report onward): this display path takes plain 8-bit BGRA only, so tell the render server's display that it has neither the deep
  // (10-bit) framebuffer nor universal buffer compression. Whether the state it reads those from is the whole story is what the markers show.
  // EXPERIMENT (boot-arg sheng-fb-bgra=1): the render server's framebuffer format with every other virtualized answer left as it is.
-@@ -96,6 +98,7 @@
+@@ -96,6 +98,7 @@ static bool bootArgSet(const char *key) {
      size_t size = sizeof args - 1;
      return sysctlbyname("kern.bootargs", args, &size, nullptr, 0) == 0 && strstr(args, key);
  }
@@ -24,7 +26,7 @@
  static unsigned patchFramebufferBranch(uintptr_t slide) {
      const uintptr_t site = 0x184461928 + slide;
      uint32_t word = 0;
-@@ -112,6 +115,7 @@
+@@ -112,6 +115,7 @@ static unsigned patchFramebufferBranch(uintptr_t slide) {
      if (!restored) return 0x6E53;
      return 0x6E42;
  }
@@ -32,7 +34,7 @@
  // Every process other than the render server: the same runtime on its own connection, with none of the render server's threads (no
  // display hand-off, telemetry, benchmark or cache export). Its shader cache lives in its own cache or temp directory.
  // The reason a client's device failed, as a text line the driver keeps per process (the render server's report row is rewritten every ten seconds):
-@@ -290,7 +294,10 @@
+@@ -290,7 +294,10 @@ static id deviceForPort(unsigned port) {
          }
          // The render server compresses its framebuffer (an Apple/AGX layout this GPU does not write) unless told not to; the display driver takes plain rows.
          setenv("CA_DISABLE_FRAMEBUFFER_COMPRESSION", "1", 1);
@@ -44,9 +46,34 @@
          // iPadOS 27 picks a 64-bit half-float framebuffer ('RGhA') whenever the display's EDR headroom is above 1 (this panel reports XDR
          // headroom), which the display path can only show converted, slowly and greyed. As on iPadOS 17, where the render server drew plain
          // 8-bit BGRA, the headroom is held at 1. IOMFBDisplay::framebuffer_pixel_format (24A446 0x184461838, asked on every update) takes
+@@ -353,6 +360,8 @@ static id deviceForPort(unsigned port) {
+         unsetenv("METAL2VULKAN_LOG_PIPELINES");
+         CFPreferencesSetAppValue(CFSTR("CAEnableFramebufferCompression"), kCFBooleanFalse, kCFPreferencesCurrentApplication);
+         CFPreferencesSetAppValue(CFSTR("CAEnableIOSurfaceCompression"), kCFBooleanFalse, kCFPreferencesCurrentApplication);
++        static void *turnipDiagnosticLibrary = dlopen(turnip, RTLD_NOW | RTLD_LOCAL);
++        (void)turnipDiagnosticLibrary;
+         char candidates[6][512] = {};
+         if (!confstr(_CS_DARWIN_USER_CACHE_DIR, candidates[0], sizeof candidates[0] - 16)) candidates[0][0] = 0;
+         if (!confstr(_CS_DARWIN_USER_TEMP_DIR, candidates[1], sizeof candidates[1] - 16)) candidates[1][0] = 0;
+@@ -397,6 +406,13 @@ static id deviceForPort(unsigned port) {
+             char text[64];
+             snprintf(text, sizeof text, "PUB no device: %.40s", nmb_last_error());
+             streamText(*gpu, text);
++            if (void *library = dlopen(turnip, RTLD_NOW | RTLD_NOLOAD)) {
++                if (auto detail = (const char *(*)(void))dlsym(library, "tu_darwin_last_error")) {
++                    snprintf(text, sizeof text, "T %.61s", detail());
++                    streamText(*gpu, text);
++                }
++                dlclose(library);
++            }
+             return nil;
+         }
+         gpu->mark(0x6802);
+diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
+index b56848c..f0a8eb2 100644
 --- a/NativeBridgeMetalFrontend.mm
 +++ b/NativeBridgeMetalFrontend.mm
-@@ -4227,7 +4227,14 @@
+@@ -4227,7 +4227,14 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
   if(error)*error=nil;return (id<MTLLibrary>)library;
  }
  - (id<MTLLibrary>)newLibraryWithFile:(NSString *)path error:(NSError **)error {
@@ -62,9 +89,11 @@
   const uint64_t libraryBegan=nowUs();
   NmbLibrary *handle=nmb_library_new(gDevice,bytes.bytes,bytes.length,false);gTimeLibrary.add(libraryBegan);
   if(!handle)return failWith<id<MTLLibrary>>(error,@"library",nil);
+diff --git a/README.md b/README.md
+index dc090ab..7f8b6f7 100644
 --- a/README.md
 +++ b/README.md
-@@ -21,3 +21,7 @@
+@@ -21,3 +21,7 @@ With `sheng-gpu-trace=1`, the render server writes command phases, encoding batc
  Slow encoding operations retain source lines and enqueue times. Completion handlers and resource destructors carry individual timing and identities. Kernel sampling of the render, encode and completion threads and blocked-thread waits provide the cross-thread wait record.
  
  `python3 scripts/check-wallpaper-freeze-host.py` in the resolved tree checks real pixels, callbacks, concurrent parked submissions and process selection.

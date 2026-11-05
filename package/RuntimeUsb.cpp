@@ -460,6 +460,7 @@ extern "C" void native_runtime_usb_report(char *out,unsigned length) {
     snprintf(out,length,"RuntimeUSB active=%u id=%x initial=%x/%x/%x current=%x/%x events=%u requests=%u failures=%u last_command=%x dma=%llx",
         active,controllerId,initialControl,initialStatus,initialPhy,control,state,events,requests,failures,lastCommand,physical);
 }
+extern "C" void native_marble_reboot_bootloader(void) { rebootBootloader(); }
 extern "C" void native_runtime_usb_stop(void) {
 #ifndef MARBLE_IOS18
     native_marble_gmu_stop();

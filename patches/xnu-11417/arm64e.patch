@@ -2920,8 +2920,8 @@ index e1d0d4b..84d454c 100644
 +			++length;
 +		}
 +		/* A process name holds 16 characters, so a longer entry is compared by its first 16. */
-+		if (length && 0 == strncmp(name, at, length < sizeof(name) - 1 ? length : sizeof(name) - 1)
-+		    && (length >= sizeof(name) - 1 || name[length] == 0)) {
++		if ((length == 1 && at[0] == '*') || (length && 0 == strncmp(name, at, length < sizeof(name) - 1 ? length : sizeof(name) - 1)
++		    && (length >= sizeof(name) - 1 || name[length] == 0))) {
 +			return true;
 +		}
 +		at += length + (at[length] == ',' ? 1 : 0);

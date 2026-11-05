@@ -447,6 +447,12 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
       Reply("OKAY",mKernelRunning && (mStage->ReturnTest==2 || (mStage->ReturnTest>>32)==1) ? "ready" : "pending");
     }
+    else if (!AsciiStrCmp(Command,"reboot-bootloader")) {
+      if (!mKernelRunning) { Reply("FAIL","bootloader reset requires the kernel reboot service"); continue; }
+      *(volatile UINT32 *)&mStage->ReturnTest=2;
+      __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
+      Reply("OKAY","bootloader reset requested");
+    }
     else if (!AsciiStrCmp(Command,"oem interrupt")) {
       if (!mKernelRunning) { Reply("OKAY","firmware"); continue; }
       *(volatile UINT32 *)&mStage->ReturnTest=1;

@@ -59,8 +59,34 @@ def observe(kernel, layout_path, output, interval, duration):
                           ('_native_staged_apps_error', 4),
                           ('_marble_app_union_status', 4), ('_marble_app_union_visible', 4),
                           ('_marble_ls_store_status', 4), ('_marble_ls_store_error', 4))
+                fields += tuple((name, 4) for name in (
+                    '_marble_display_registered', '_marble_display_retirements',
+                    '_native_gpu_addon_stage', '_native_gpu_addon_status', '_native_gpu_addon_files',
+                    '_native_gpu_addon_written', '_native_gpu_addon_failed', '_native_gpu_addon_error',
+                    '_native_adreno_io_coherent'))
                 report['globals'] = {name: int.from_bytes(memory.read(symbols[name], size), 'little')
                                      for name, size in fields if name in symbols}
+                report['gpu'] = {
+                    name: struct.unpack('<' + 'I' * count, memory.read(symbols[name], count * 4))
+                    for name, count in (
+                        ('_native_adreno_cp_aperture', 4), ('_native_adreno_cp_check', 6),
+                        ('_native_adreno_table_switches', 8), ('_native_adreno_recovery', 8),
+                        ('_native_adreno_view_diag', 6), ('_native_gpu_dcvs', 15),
+                        ('_native_adreno_metal_diag', 24)) if name in symbols}
+                if '_native_adreno_metal_rows' in symbols:
+                    rows = memory.read(symbols['_native_adreno_metal_rows'], 48 * 96)
+                    report['metal_rows'] = [rows[i:i + 96].split(b'\0')[0].decode(errors='replace')
+                                           for i in range(0, len(rows), 96) if rows[i]]
+                if '_native_adreno_metal_diag' in symbols:
+                    text = memory.read(symbols['_native_adreno_metal_diag'] + 390, 128)
+                    report['metal_reports'] = [text[i:i + 64].split(b'\0')[0].decode(errors='replace')
+                                               for i in (0, 64)]
+                if '_native_adreno_client_text' in symbols:
+                    text = memory.read(symbols['_native_adreno_client_text'], 8 * 84)
+                    report['metal_clients'] = [
+                        {'name': text[i:i + 20].split(b'\0')[0].decode(errors='replace'),
+                         'text': text[i + 20:i + 84].split(b'\0')[0].decode(errors='replace')}
+                        for i in range(0, len(text), 84) if text[i]]
                 exit_count = report['globals'].get('_marble_ui_exit_count', 0)
                 if exit_count:
                     exit_size = int.from_bytes(memory.read(symbols['_marble_ui_exit_bytes'], 4), 'little')

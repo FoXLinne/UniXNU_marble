@@ -2,8 +2,8 @@
   "date": "2026-11-05",
   "device": "marble / SM7475 / Adreno 725",
   "os": "iOS 18.7.11 22H384",
-  "local_port": "completed",
-  "hardware_acceptance": "待执行",
+  "local_port": "implemented; GPU UI rendering active on hardware",
+  "hardware_acceptance": "GPU UI rendering active; original LaunchServices rebuild restored and verified after Fastboot boot",
   "sources": {
     "UniXNU": "13e5973748a8447cbb90520c9a2dd5e65e272435",
     "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
@@ -36,7 +36,7 @@
     "owner_trust_modules": 3,
     "addon_handoff": "matched",
     "boot_partition_bytes": 100663296,
-    "hardware_tests": "待执行",
+    "hardware_tests": "GPU CP initialization, addon installation, UI transfers and retirements observed",
     "release_owner_trust": "allowSecondStaticTC=1, allowEngineeringTC=1; native initializer store 0x101 at +8",
     "quartzcore_resources": "original 22H384 library signed in bundle; deployment-gated private layout; SDR environment before launchd"
   },
@@ -77,7 +77,7 @@
     "pack": "gpu-pack.log",
     "trust_policy": "gpu/trust-cache-policy.json"
   },
-  "scope": "本地源码、构建、预链接、信任与启动镜像打包；真机验收待执行",
+  "scope": "iOS 18 GPU integration and hardware repair",
   "quartzcore_metallib_sha256": "e55ea3087accf9b80ef1fe0ea9106d271744e71448b4ae4a310126da4f0ba72e",
   "source_patches": {
     "patches/Adreno740/a725.patch": "6a0ac31e4b5e19edca337fc3e5552208e2657e1b5c193cedc5d7699d4e482763",
@@ -96,5 +96,91 @@
   "kits": {
     "AdrenoPM4": "282606b528b2595bc4274ea7490b62b323f35a5f",
     "AdrenoFirmware": "20ad3d7aca14bd46aecab6335c780f5413fa054b"
+  },
+  "hardware_2026_11_06": {
+    "cp_check": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      6
+    ],
+    "addon_files": 8,
+    "addon_stage": 5,
+    "ui_gpu_transfers": 5271,
+    "error": "Initial IOServiceOpen failure resolved by wildcard service policy matching",
+    "reboot_bootloader": {
+      "relay": "PMK8350 SDAM reason 2, IMEM 0x77665500, PSCI SYSTEM_RESET",
+      "firmware_command": "reboot-bootloader",
+      "verified_fastboot_serial": "556fdfe",
+      "manual_recovery": "earlier cold reset required user recovery"
+    },
+    "evidence_directory": "outputs/UniXNU_marble/ios18_arm64e/gpu/hardware-20261106",
+    "next_action": "Verify first-party application visibility; investigate BO map failure in iconservicesagent",
+    "ui_gpu_retirements": 5284,
+    "user_feedback": "GPU active; disabling LaunchServices rebuild caused app loss",
+    "application_registration": "Original per-boot LaunchServices rebuild restored; one database removed across 24 containers, error 0",
+    "observed_runtime_errors": [
+      "tu_image.cc:769 VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT",
+      "tu_knl_darwin.cc:1058 IOConnectMapMemory64 failed: 0x35; iconservicesagent VkResultCode(-5)"
+    ]
+  },
+  "latest_hardware_candidate": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/gpu/hardware-20261106/app-restore/marble_temporary_boot.img",
+    "kernel_sha256": "6b592d4a87af6b23685d84096a0c4710589f3c43df005fb6db23889e28f3d23f",
+    "native_sha256": "b5737e0553641948684aa27a7af1b97bf1a1f724501941f4741d0f285eb5b866",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "enabled_cpu_affinities": [
+      0,
+      256,
+      512,
+      768,
+      1024,
+      1280,
+      1536
+    ],
+    "firmware_usb_affinity": 1792,
+    "display_scale": 3,
+    "logical_size": [
+      360,
+      800
+    ],
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-preempt=2 sheng-gpu-ttbr=2 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1",
+    "gpu_addon_sha256": "1b5bb8f744b3fe8bb4a4b0f4ffffda8f14581c652e374cb250b5b3702953c366",
+    "gpu_sources": {
+      "UniXNU": "13e5973748a8447cbb90520c9a2dd5e65e272435",
+      "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+      "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+      "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+    },
+    "owner_trust_cache_sha256": "2d8776a90435cf2cca7293bd52431e232d9dcd40380ac7e9f2e83d882ce83e6d",
+    "boot_command": "fastboot -s 556fdfe boot /Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/gpu/hardware-20261106/app-restore/marble_temporary_boot.img",
+    "boot_result": "Sending OKAY, Booting OKAY",
+    "artifacts": {
+      "kernel.native.macho": {
+        "bytes": 14062984,
+        "sha256": "b5737e0553641948684aa27a7af1b97bf1a1f724501941f4741d0f285eb5b866"
+      },
+      "kernel.fileset.macho": {
+        "bytes": 60506112,
+        "sha256": "6b592d4a87af6b23685d84096a0c4710589f3c43df005fb6db23889e28f3d23f"
+      },
+      "gpu/hardware-20261106/app-restore/marble_temporary_boot.img": {
+        "bytes": 47214592,
+        "sha256": "38b0706cab41ceb49e9aeeed6498ce6c935a279905a38fefdf9773ebdb7ca817"
+      }
+    },
+    "LaunchServices_status": 1024,
+    "LaunchServices_error": 0,
+    "app_union_status": 0,
+    "visible_app_mask": 15,
+    "GPU_display_transfers": 1498,
+    "GPU_display_retirements": 1514,
+    "evidence": "gpu/hardware-20261106/app-restore/late/sample-000/state.json"
   }
 }

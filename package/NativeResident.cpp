@@ -17,6 +17,7 @@ extern "C" void native_root_block_capture_log(void);
 extern "C" void armcpu_complete_active_interrupt(void);
 extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_root_block_export_data(void);
+extern "C" void native_marble_reboot_bootloader(void);
 #ifdef MARBLE_IOS18_GPU
 extern "C" int native_marble_adreno_stop(void);
 extern "C" void native_marble_gmu_stop(void);
@@ -70,6 +71,11 @@ static void usbControlWorker(void *, wait_result_t)
     if (request==1) {
       native_root_block_capture_log();
       panic("RootStage USB host interrupt");
+    }
+    if (request==2) {
+      usb_interrupt[0]=0;
+      __asm__ volatile("dsb sy" ::: "memory");
+      native_marble_reboot_bootloader();
     }
     IOSleep(1);
   }

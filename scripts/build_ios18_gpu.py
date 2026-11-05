@@ -235,6 +235,45 @@ def kernel(root):
 
 def userspace(root):
     tree = source_tree(root)
+    mesa_patch = DEVICE / 'patches/mesa/ios18-startup-error.patch'
+    mesa = tree / '.cache/mesa-work'
+    if mesa.resolve() == (DEVICE.parent / 'UniXNU/.cache/mesa-work').resolve():
+        isolated = root / 'gpu/Mesa'
+        if not isolated.exists():
+            subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', mesa.resolve(), isolated], check=True)
+            subprocess.run(['git', '-C', isolated, 'read-tree', 'HEAD'], check=True)
+            origin = mesa.resolve()
+            shutil.copytree(origin, isolated, dirs_exist_ok=True, symlinks=True, copy_function=os.link,
+                            ignore=lambda path, names: ['.git'] if Path(path) == origin else [])
+            shutil.copyfile(origin / '.git/index', isolated / '.git/index')
+            sparse = origin / '.git/info/sparse-checkout'
+            if sparse.is_file():
+                shutil.copyfile(sparse, isolated / '.git/info/sparse-checkout')
+                for flag in ('core.sparseCheckout', 'core.sparseCheckoutCone'):
+                    value = subprocess.check_output(['git', '-C', origin, 'config', '--get', flag], text=True).strip()
+                    subprocess.run(['git', '-C', isolated, 'config', flag, value], check=True)
+                subprocess.run(['git', '-C', isolated, 'sparse-checkout', 'reapply', '--sparse-index'], check=True)
+            for name in re.findall(r'^\+\+\+ b/(.+)$', mesa_patch.read_text(), re.M):
+                path = isolated / name
+                contents = path.read_bytes()
+                path.unlink()
+                path.write_bytes(contents)
+        mesa.unlink()
+        mesa.symlink_to(isolated, target_is_directory=True)
+    applied = subprocess.run(['git', '-C', mesa, 'apply', '--reverse', '--check', mesa_patch],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if applied.returncode:
+        subprocess.run(['git', '-C', mesa, 'apply', mesa_patch], check=True)
+    manifest = tree / 'scripts/data/adreno-compiler-inputs.json'
+    pins = json.loads(subprocess.check_output(['git', '-C', tree, 'show',
+                      'HEAD:scripts/data/adreno-compiler-inputs.json'], text=True))
+    pins['patches'].append(str(mesa_patch))
+    manifest.write_text(json.dumps(pins, indent=2) + '\n')
+    turnip_out = tree / 'build/mesa-tu-ios18'
+    info = turnip_out / 'meson-info/meson-info.json'
+    if info.is_file() and Path(json.loads(info.read_text())['directories']['source']).resolve() != mesa.resolve():
+        previous = turnip_out.with_name('mesa-tu-ios18-before-source-fix')
+        turnip_out.rename(previous)
     # arm64e Metal callers use the upstream Rust PAC boundary, built against the 18.0 ABI.
     for name in ('build-turnip-darwin.py', 'build-adreno-metal-plugin.py', 'build-adreno-metal-bridge.py'):
         original = subprocess.check_output(['git', '-C', tree, 'show', 'HEAD:scripts/' + name], text=True)
