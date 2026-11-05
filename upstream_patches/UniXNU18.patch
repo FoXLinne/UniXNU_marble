@@ -1,0 +1,330 @@
+diff --git a/docs/drivers/adreno-metal.md b/docs/drivers/adreno-metal.md
+index e90eb8f..0b908c8 100644
+--- a/docs/drivers/adreno-metal.md
++++ b/docs/drivers/adreno-metal.md
+@@ -48,3 +48,5 @@ With `sheng-gpu-trace=1`, kernel event 65 identifies the Metal device and comman
+ `sheng-wallpaper-freeze=1` isolates wallpaper rendering. A Poster renderer retains its first successfully drawn and stored IOSurface output of at least two million pixels, then parks later command buffers before runtime submission. Parked buffers remain committed and unscheduled; their owners and queue leases stay retained. Previously submitted work completes normally. PosterBoard, backboardd and other clients continue submitting. The mode defaults to off.
+ 
+ Detailed latency records identify slow encoder calls, callback invoke addresses and resource destruction. Kernel sampling of the render, encode and completion threads correlates upstream waits.
++
++Metal clients preserve requested sample counts. The iOS 18 integration retains IOSurface plane identity in texture views, uses the development translator and exposes a bounded per-process compilation budget through `M2V_PIPELINE_TURNS`. Unused owned backing can be released by the room worker with up to 512 MiB queued.
+diff --git a/docs/drivers/adreno740.md b/docs/drivers/adreno740.md
+index b4028dd..cd6fc40 100644
+--- a/docs/drivers/adreno740.md
++++ b/docs/drivers/adreno740.md
+@@ -36,3 +36,5 @@ The host scheduling check runs the real ring, preemption and submit code over so
+ See [AdrenoMetal](/drivers/adreno-metal) for Metal interfaces, caches and plugin staging.
+ 
+ Frame diagnostics retain allocation, command, completion and GPU/display timing. Pixel capture is disabled. See [GPU frame diagnostics](/porting/gpu-diagnostics).
++
++`NativeAdrenoParamsTaskCpuMap` advertises connection-scoped BO CPU mapping. The driver checks the owning task, BO handle, token and mapped address, and removes task mappings before releasing their backing on connection close.
+diff --git a/docs/zh/drivers/adreno-metal.md b/docs/zh/drivers/adreno-metal.md
+index d81769e..ae29c84 100644
+--- a/docs/zh/drivers/adreno-metal.md
++++ b/docs/zh/drivers/adreno-metal.md
+@@ -48,3 +48,5 @@ python3 scripts/check-native-metal-frontend-host.py
+ `sheng-wallpaper-freeze=1` 用于隔离壁纸渲染。名字包含 Poster 的渲染进程首次成功绘制并保存至少 200 万像素的 IOSurface 后，保留该输出，拦下后续 command buffer 的 runtime 提交。被拦下的缓冲保持已 commit、未调度状态，继续持有资源和队列名额；此前已提交的工作正常完成。PosterBoard、backboardd 和其他客户端继续提交。此模式默认关闭。
+ 
+ 细分延迟记录标出慢编码调用、回调入口地址和资源析构耗时。内核对渲染、编码和完成线程的采样关联上游等待。
++
++iOS 18 集成保留调用方采样数及纹理视图的 IOSurface plane，采用 development 转译器。`M2V_PIPELINE_TURNS` 配置进程编译并发；后台回收队列容纳 512 MiB 自有 backing。
+diff --git a/docs/zh/drivers/adreno740.md b/docs/zh/drivers/adreno740.md
+index 5da2f5c..b91a168 100644
+--- a/docs/zh/drivers/adreno740.md
++++ b/docs/zh/drivers/adreno740.md
+@@ -36,3 +36,5 @@ python3 scripts/check-native-adreno-scheduling.py
+ Metal 接口、缓存和插件打包见 [AdrenoMetal](/zh/drivers/adreno-metal)。
+ 
+ 帧诊断保留分配、命令、完成处理及 GPU、显示时间线，像素抓取关闭。使用方法见 [GPU 帧诊断](/zh/porting/gpu-diagnostics)。
++
++`NativeAdrenoParamsTaskCpuMap` 发布连接内的 BO CPU 映射能力。驱动校验所属 task、BO 句柄、token 和映射地址，连接关闭时解除映射并释放 backing。
+diff --git a/scripts/build-adreno-metal-bridge.py b/scripts/build-adreno-metal-bridge.py
+index c89881a..d468487 100644
+--- a/scripts/build-adreno-metal-bridge.py
++++ b/scripts/build-adreno-metal-bridge.py
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env python3
+ """Build the native Metal bridge (drivers/AdrenoMetal/bridge/NativeMetalBridge.rs): the pinned metal2vulkan runtime behind a C ABI, as a static library.
+ 
+---target ios (default) cross-builds for arm64-apple-ios17.0, --target ios27 for arm64e-apple-ios27.0 (nightly, std built from source), --target host for the macOS host simulation. The runtime's own example library
++--target ios (default) cross-builds for arm64-apple-ios17.0, --target ios18 for arm64e-apple-ios18.0 (nightly, std built from source), --target host for the macOS host simulation. The runtime's own example library
+ (runtime_examples.ll) and its function-constant fixture are assembled to AIR with llvm-as and embedded for the self-tests. Only generated build files hold local paths; nothing here
+ is committed. Output: build/adreno-metal-bridge/<target>/libadreno_metal_bridge.a"""
+ import argparse
+@@ -17,65 +17,13 @@ ROOT = Path(__file__).resolve().parents[1]
+ PIN = json.loads((ROOT / 'scripts/data/gpu-metal-vulkan-inputs.json').read_text())['translator']['commit']
+ SOURCE = ROOT / '.cache/gpu-reference/metal2vulkan'
+ parser = argparse.ArgumentParser(description=__doc__)
+-parser.add_argument('--target', choices=['ios', 'ios27', 'host'], default='ios')
++parser.add_argument('--target', choices=['ios', 'ios18', 'host'], default='ios')
+ parser.add_argument('--manifest-only', action='store_true',
+                     help='write build/adreno-metal-bridge/Cargo.toml (patched source, fixtures) and stop before cargo, for `cargo fetch`')
+ args = parser.parse_args()
+ if subprocess.check_output(['git', '-C', str(SOURCE), 'rev-parse', 'HEAD'], text=True).strip() != PIN:
+     raise SystemExit('Translator revision differs from the qualified source pin')
+-PATCHES = [ROOT / 'drivers/AdrenoMetal/bridge/patches' / name for name in [
+-    # Each stacks on the source the ones before it leave.
+-    '0001-optional-constant-output-members.patch', '0002-resource-wait-storage-dependencies.patch',
+-    '0003-cache-device-entry-point-priming.patch', '0004-fold-constant-global-field-loads.patch',
+-    # A draw whose pipeline the driver refused binds nothing (int-170: tu_CmdBindPipeline in the render server).
+-    '0005-skip-draws-without-a-pipeline.patch',
+-    # A batch's barrier globals on the stack, and the neutral resources' maps by the runtime's key hash.
+-    '0006-batch-barriers-and-key-hash-neutral-maps.patch',
+-    # From the DroidVM board's translator patches: a cache directory a sandboxed process may not write, llvm.bitreverse, a patch
+-    # function with no control points, and Core Image kernel libraries (file_type 1) loaded as Metal loads them.
+-    '0007-optional-shader-cache-directory.patch', '0008-llvm-bitreverse.patch', '0009-patch-with-no-control-points.patch',
+-    '0010-core-image-kernel-libraries.patch',
+-    # A two-plane surface's shadow starts as its memory lies; the Astronomy wallpaper's extended-range sRGB blends take the rounded
+-    # model; pooled blocks start at 4 MiB and grow (the render server alone held 1 GiB of wired memory).
+-    '0011-two-plane-shadow-as-memory-lies.patch', '0012-srgb-extended-range-blend-rounded-model.patch',
+-    '0013-growing-memory-blocks.patch',
+-    # HostPageTexturePolicy::InPlaceWrites: textures over surfaces and padded buffers are images over their bytes, rendered and written
+-    # too, where their tile stores stay within their rows, instead of shadows copied in and out every pass.
+-    '0014-in-place-written-textures.patch', '0015-in-place-written-host-page-textures.patch',
+-    # Device::refuse_rebinds: no call logs or per-command holds of no-copy buffers, which only a rebind or a detach reads.
+-    '0016-refuse-rebinds.patch',
+-    # A heap texture's own-device answer rounded up to a multiple of its alignment, as Metal's answers are: a heap sized as the sum of
+-    # its textures' answers then holds them (iconservicesagent's Core Image heaps ran out: OutOfMemory(Heap)).
+-    '0017-heap-texture-size-a-multiple-of-its-alignment.patch',
+-    # The runtime's live device memory in bytes by kind (pooled, placed, empty kept, dedicated, imported), for the frontend's MEM row.
+-    '0018-memory-census-bytes.patch',
+-    # The call stacks that allocated device memory of 4 MiB or more, by bytes, for the frontend's MA rows.
+-    '0019-allocation-sites.patch',
+-    # A written texture over host pages stays in place at any size: Turnip loads and stores a linear host image of partial tile blocks
+-    # over its texels alone (patches/mesa/turnip-render-mode-for-attachment-memory.patch); its shadow merged every pass back through 94 MB.
+-    '0020-written-host-page-textures-in-place-at-any-size.patch',
+-    # A dedicated block of images whose image went stays spare for the next one of its pool (Core Animation's memoryless attachments,
+-    # backed at their first pass, were each a new 40-112 MiB allocation), freed after 10 s, when a block cannot be made, or under memory
+-    # pressure; room in the pools is kept by a thread of the device's, not in the creation call that asked for it.
+-    '0021-spare-image-blocks-and-room-keeper.patch',
+-    # stage_trace.rs: each command buffer's stages from its commit to its completion (commit, lowering, recording, the scheduler's
+-    # holds, each submission, the completion waiter) and the scheduler's sleeps and wakes, read by the frontend (nmb_stage_ring_read).
+-    '0022-command-buffer-stage-trace.patch',
+-    # The threads that bring command buffers to their handlers run at the user-interactive class and the compile threads at least at
+-    # the user-initiated class on iOS too, not on macOS alone: on the iPad they ran at the default class and woke up to 50 ms late.
+-    '0023-quality-of-service-on-ios.patch',
+-    # The host's diagnostics switch (SHENG_DIAG, from the boot argument sheng-diag=1): without it the stage ring and the allocation sites
+-    # keep nothing. The stage ring also marks the steps inside a batch's submission (SubmitStep: placed, gathered, vkQueueSubmit, changes).
+-    '0024-diagnostics-switch-and-submit-steps.patch',
+-    # Preserve specialized link names and source definitions; share large indexed constants and expose Vulkan allocation sizes.
+-    '0025-specialized-links-shared-constants-and-allocation-size.patch',
+-    '0026-frame-diagnostic-links.patch',
+-    '0027-bounded-image-reuse-and-retired-release.patch',
+-    '0028-guard-memory-release-test-worker.patch',
+-    '0029-latency-stage-selection.patch',
+-    # Spare image blocks have no byte limit (they age, go when a block cannot be made and on memory pressure), and the room keeper takes
+-    # a spare block before it makes a new one: the limit freed spares the render server made again within seconds, each a fresh wiring.
+-    '0030-spare-image-blocks-give-room.patch']]
++PATCHES = [Path('/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/metal2vulkan/ios18-runtime.patch')]
+ 
+ 
+ def git_tree(*steps):
+@@ -140,14 +88,14 @@ manifest.write_text('\n'.join([
+ if args.manifest_only:
+     print(manifest)
+     raise SystemExit(0)
+-triple = {'ios': 'aarch64-apple-ios', 'ios27': 'arm64e-apple-ios', 'host': 'aarch64-apple-darwin'}[args.target]
++triple = {'ios': 'aarch64-apple-ios', 'ios18': 'arm64e-apple-ios', 'host': 'aarch64-apple-darwin'}[args.target]
+ # arm64e has no prebuilt std: it is built from rust-src (RUSTC_BOOTSTRAP for -Z); the iPadOS 27 processes that load the plugin are arm64e.
+-cargo = ['cargo', '+1.98.0'] + (['-Z', 'build-std=std,panic_unwind'] if args.target == 'ios27' else [])
++cargo = ['cargo', '+1.98.0'] + (['-Z', 'build-std=std,panic_unwind'] if args.target == 'ios18' else [])
+ # The translator source the runtime is built from (its pin and recorded patches), which keys the shader cache: shader priming keeps what it
+ # finished while this stays the same (PrimeShaders.h).
+ runtime_id = hashlib.sha256((PIN + '\n' + states[-1]).encode()).hexdigest()[:32]
+-env = dict(os.environ, NMB_RUNTIME_ID=runtime_id, NMB_FIXTURE_AIR=str(air), NMB_FC_AIR=str(fc_air), NMB_SCANOUT_AIR=str(scanout_air), IPHONEOS_DEPLOYMENT_TARGET='27.0' if args.target == 'ios27' else '17.0', MACOSX_DEPLOYMENT_TARGET='14.0')
+-if args.target == 'ios27':
++env = dict(os.environ, NMB_RUNTIME_ID=runtime_id, NMB_FIXTURE_AIR=str(air), NMB_FC_AIR=str(fc_air), NMB_SCANOUT_AIR=str(scanout_air), IPHONEOS_DEPLOYMENT_TARGET='18.0' if args.target == 'ios18' else '17.0', MACOSX_DEPLOYMENT_TARGET='14.0')
++if args.target == 'ios18':
+     env['RUSTC_BOOTSTRAP'] = '1'
+ target_dir = ROOT / 'build/m2v-target'
+ log = out / ('build-%s.log' % args.target)
+diff --git a/scripts/build-adreno-metal-plugin.py b/scripts/build-adreno-metal-plugin.py
+index a593449..1291e0d 100644
+--- a/scripts/build-adreno-metal-plugin.py
++++ b/scripts/build-adreno-metal-plugin.py
+@@ -16,19 +16,20 @@ import sys
+ from pathlib import Path
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-# --target ios27: the arm64e build for iPadOS 27 (24A446), whose render server is an arm64e process.
++# --target ios18: the arm64e build for iPadOS 27 (24A446), whose render server is an arm64e process.
+ parser = argparse.ArgumentParser(description=__doc__)
+-parser.add_argument('--target', choices=('ios', 'ios27'), default='ios')
++parser.add_argument('--target', choices=('ios', 'ios18'), default='ios')
+ parser.add_argument('--no-replay', action='store_true', help='omit the optional host simulation capture used by diagnostic probes')
+ args = parser.parse_args()
+-IOS27 = args.target == 'ios27'
+-OUT = ROOT / ('build/adreno-metal-plugin27' if IOS27 else 'build/adreno-metal-plugin')
++IOS27 = args.target == 'ios18'
++OUT = ROOT / ('build/adreno-metal-plugin18' if IOS27 else 'build/adreno-metal-plugin')
+ bundle = OUT / 'NativeAdrenoMetal.bundle'
+ if OUT.exists():
+     shutil.rmtree(OUT)
+ bundle.mkdir(parents=True)
++shutil.copyfile(ROOT / "build/QuartzCore.metallib", bundle / "QuartzCore.metallib")
+ sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
+-base = ['xcrun', 'clang', '-target', 'arm64e-apple-ios27.0' if IOS27 else 'arm64-apple-ios17.0', '-isysroot', sdk, '-O2', '-g', '-Wall', '-Wextra', '-Werror',
++base = ['xcrun', 'clang', '-target', 'arm64e-apple-ios18.0' if IOS27 else 'arm64-apple-ios17.0', '-isysroot', sdk, '-O2', '-g', '-Wall', '-Wextra', '-Werror',
+         '-fstack-protector-strong']
+ source_hash = hashlib.sha256()
+ for path in sorted((ROOT / 'drivers/AdrenoMetal').rglob('*')):
+@@ -39,21 +40,21 @@ metal_build_id = source_hash.hexdigest()
+ base += ['-DNATIVE_METAL_BUILD_ID="' + metal_build_id + '"']
+ (bundle / 'gpu-build.json').write_text(json.dumps({'metal_source_sha256': metal_build_id, 'target': args.target}, indent=2)+'\n')
+ VULKAN_INCLUDE = ROOT / '.cache/mesa-work/include'
+-TURNIP = ROOT / ('build/mesa-tu-ios27' if IOS27 else 'build/mesa-tu-ios') / 'src/freedreno/vulkan/libvulkan_freedreno.dylib'
++TURNIP = ROOT / ('build/mesa-tu-ios18' if IOS27 else 'build/mesa-tu-ios') / 'src/freedreno/vulkan/libvulkan_freedreno.dylib'
+ turnip_profile = TURNIP.parents[3] / 'builtin-build-profile.json'
+ if turnip_profile.is_file():
+     manifest = json.loads((bundle / 'gpu-build.json').read_text())
+     manifest['turnip'] = json.loads(turnip_profile.read_text())
+     (bundle / 'gpu-build.json').write_text(json.dumps(manifest, indent=2)+'\n')
+ if not TURNIP.is_file():
+-    raise SystemExit('Build Turnip first: python3 scripts/build-turnip-darwin.py --target ' + ('ios27' if IOS27 else 'ios'))
++    raise SystemExit('Build Turnip first: python3 scripts/build-turnip-darwin.py --target ' + ('ios18' if IOS27 else 'ios'))
+ subprocess.run(['python3', ROOT / 'scripts/gen-turnip-smoke-shaders.py'], check=True)
+ # Turnip's first submission, recorded on the host, for the plugin's prefix replay (build/turnip-smoke/TurnipReplay.h).
+ if args.no_replay:
+     (ROOT / 'build/turnip-smoke/TurnipReplay.h').unlink(missing_ok=True)
+ else:
+     subprocess.run(['python3', ROOT / 'scripts/gen-turnip-replay.py'], check=True)
+-BRIDGE_TARGET = 'ios27' if IOS27 else 'ios'
++BRIDGE_TARGET = 'ios18' if IOS27 else 'ios'
+ subprocess.run(['python3', ROOT / 'scripts/build-adreno-metal-bridge.py', '--target', BRIDGE_TARGET], check=True)
+ BRIDGE = ROOT / 'build/adreno-metal-bridge' / BRIDGE_TARGET / 'libadreno_metal_bridge.a'
+ # arm64e: the Rust objects' imports that take a callback go through the signing wrappers of RustPacBoundary.c, and their indirect branches
+@@ -104,7 +105,7 @@ assert re.search(r'^Page size=4096$', turnip_detail, re.M)
+ (bundle / 'Info.plist').write_bytes(plistlib.dumps(dict(
+     CFBundleIdentifier='org.blu-sharky.NativeAdrenoMetal', CFBundleExecutable='NativeAdrenoMetal', CFBundlePackageType='BNDL',
+     CFBundleVersion='1', CFBundleShortVersionString='1', NSPrincipalClass='NativeAdrenoMetalDevice',
+-    MinimumOSVersion='27.0' if IOS27 else '17.0'), fmt=plistlib.FMT_XML))
++    MinimumOSVersion='18.0' if IOS27 else '17.0'), fmt=plistlib.FMT_XML))
+ subprocess.run(['codesign', '--force', '--sign', '-', '--pagesize', '4096', '--identifier', 'org.blu-sharky.NativeAdrenoMetal',
+                 bundle], check=True)
+ subprocess.run(['codesign', '--verify', '--strict', bundle], check=True)
+diff --git a/scripts/build-turnip-darwin.py b/scripts/build-turnip-darwin.py
+index f477b37..1ebd86c 100644
+--- a/scripts/build-turnip-darwin.py
++++ b/scripts/build-turnip-darwin.py
+@@ -2,7 +2,7 @@
+ """Build Turnip (Mesa freedreno Vulkan) with the native Darwin kernel backend (patches/mesa/turnip-darwin-kmd.patch).
+ 
+ --target host builds for the Mac only to prove the backend compiles and links against the real Turnip; --target ios
+-cross-builds the ARM64/iOS 17 library, --target ios27 the arm64e/iOS 27 one. Neither runs a GPU: the backend talks to the NativeAdreno IOKit service, which
++cross-builds the ARM64/iOS 17 library, --target ios18 the arm64e/iOS 18 one. Neither runs a GPU: the backend talks to the NativeAdreno IOKit service, which
+ exists only on the tablet. Output stays under build/ and is never committed."""
+ import argparse
+ import hashlib
+@@ -16,12 +16,12 @@ from mesa_patch_identity import validate_recorded_patches
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+ parser = argparse.ArgumentParser(description=__doc__)
+-parser.add_argument('--target', choices=('host', 'ios', 'ios27'), default='host')
++parser.add_argument('--target', choices=('host', 'ios', 'ios18'), default='host')
+ parser.add_argument('--configure-only', action='store_true')
+ parser.add_argument('--builtin-pack', type=Path, help='Embed an exact-source/profile/GPU-bound own builtin pack; no runtime compiler fallback')
+ args = parser.parse_args()
+ SOURCE = ROOT / '.cache/mesa-work'
+-OUT = ROOT / {'host': 'build/mesa-tu', 'ios': 'build/mesa-tu-ios', 'ios27': 'build/mesa-tu-ios27'}[args.target]
++OUT = ROOT / {'host': 'build/mesa-tu', 'ios': 'build/mesa-tu-ios', 'ios18': 'build/mesa-tu-ios18'}[args.target]
+ LOGS = ROOT / '.cache'
+ 
+ 
+@@ -44,10 +44,10 @@ options = ['-Dgallium-drivers=', '-Dvulkan-drivers=freedreno', '-Dfreedreno-kmds
+            '-Dllvm=disabled', '-Dshared-glapi=disabled', '-Dxmlconfig=disabled', '-Dshader-cache=enabled',
+            '-Dtools=', '-Dbuild-tests=false', '-Dvideo-codecs=', '-Dvulkan-layers=']
+ setup = [ROOT / '.cache/mesa-venv/bin/meson', 'setup', OUT, SOURCE, '--wrap-mode=nodownload']
+-if args.target in ('ios', 'ios27'):
++if args.target in ('ios', 'ios18'):
+     sdk = read(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'])
+     find = lambda tool: read(['xcrun', '--sdk', 'iphoneos', '--find', tool])
+-    triple = 'arm64e-apple-ios27.0' if args.target == 'ios27' else 'arm64-apple-ios17.0'
++    triple = 'arm64e-apple-ios18.0' if args.target == 'ios18' else 'arm64-apple-ios17.0'
+     flags = ['-target', triple, '-isysroot', sdk, '-fstack-protector-strong']
+     cross = ROOT / ('build/mesa-tu-%s.cross' % args.target)
+     cross.parent.mkdir(exist_ok=True)
+diff --git a/scripts/check-turnip-darwin-host.py b/scripts/check-turnip-darwin-host.py
+index 57d1532..30e0a55 100644
+--- a/scripts/check-turnip-darwin-host.py
++++ b/scripts/check-turnip-darwin-host.py
+@@ -21,7 +21,7 @@ if not library.exists():
+     sys.exit('Build the host Turnip first: python3 scripts/build-turnip-darwin.py --target host')
+ 
+ includes = out / 'host-include'
+-for name in ['IOKit/IOTypes.h', 'IOKit/IOReturn.h', 'IOKit/IOBufferMemoryDescriptor.h', 'IOKit/IOLib.h', 'kern/task.h']:
++for name in ['IOKit/IOTypes.h', 'IOKit/IOReturn.h', 'IOKit/IOBufferMemoryDescriptor.h', 'IOKit/IOLib.h', 'kern/task.h', 'kern/policy_internal.h', 'mach/task_policy.h']:
+     path = includes / name
+     path.parent.mkdir(parents=True, exist_ok=True)
+     path.write_text('#include "XnuMemoryFixture.h"\n')
+@@ -39,7 +39,7 @@ service = out / 'host_gpu_service.o'
+ subprocess.run(['xcrun', 'clang++', '-std=c++23', '-O1', '-fPIC', '-I', includes, '-I', sim.parent, '-I', kit, '-I', smmu,
+                 '-I', ROOT / 'kits/AdrenoPM4', '-c', sim / 'host_gpu_service.cpp', '-o', service], check=True)
+ core = []
+-for name in ['NativeAdrenoMemory', 'NativeAdrenoSmmuMemory', 'NativeAdrenoVm', 'NativeAdrenoRing', 'NativeAdrenoSubmit',
++for name in ['NativeAdrenoMemory', 'NativeAdrenoSmmuMemory', 'NativeAdrenoVm', 'NativeAdrenoRing', 'NativeAdrenoPreempt', 'NativeAdrenoSubmit',
+              'NativeAdrenoUserClient', 'NativeAdrenoTimer', 'NativeAdrenoSmmuContext', 'NativeAdrenoGpuContext']:
+     obj = out / (name + '.o')
+     subprocess.run(['xcrun', 'clang++', '-std=c++23', '-O1', '-fPIC', '-I', includes, '-I', sim.parent, '-I', kit, '-I', smmu,
+@@ -51,7 +51,7 @@ shim = out / 'libhostiokit.dylib'
+ subprocess.run(['xcrun', 'clang++', '-dynamiclib', '-o', shim, service, shim_obj, *core, *objects,
+                 '-framework', 'IOKit', '-framework', 'CoreFoundation'], check=True)
+ smoke = out / 'vulkan_smoke'
+-subprocess.run(['xcrun', 'clang', '-std=c11', '-O1', '-I', '/opt/homebrew/include', sim / 'vulkan_smoke.c', '-o', smoke,
++subprocess.run(['xcrun', 'clang', '-std=c11', '-O1', '-I', ROOT / '.cache/mesa-work/include', sim / 'vulkan_smoke.c', '-o', smoke,
+                 '-Wl,-rpath,' + str(out)], check=True)
+ 
+ plugin_smoke = out / 'plugin_smoke'
+@@ -73,7 +73,7 @@ if result.returncode or 'PASS' not in result.stdout:
+ # and preserve ownership on failures. This exercises real transport code, not pixels.
+ deferred = out / 'deferred_bo'
+ subprocess.run(['xcrun', 'clang++', '-std=c++23', '-O1', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
+-                '-I', '/opt/homebrew/include', '-I', kit, sim / 'deferred_bo.cpp', '-o', deferred], check=True)
++                '-I', ROOT / '.cache/mesa-work/include', '-I', kit, sim / 'deferred_bo.cpp', '-o', deferred], check=True)
+ deferred_env = dict(env, TU_DARWIN_RETIRE_TRACE='1')
+ deferred_env.pop('HOSTSIM_FAIL_USER_UNMAP', None)
+ for mode in ['normal', 'busy', 'fence-error', 'free-error', 'lease-error', 'view-error', 'map-cleanup-error', 'pressure']:
+@@ -87,6 +87,9 @@ for mode in ['normal', 'busy', 'fence-error', 'free-error', 'lease-error', 'view
+     if mode == 'pressure' and 'pressure=0' not in test.stderr:
+         sys.exit('Deferred BO pressure control waited for the GPU instead of growing its queue')
+     print(verdict[0])
++if '--transport-only' in sys.argv:
++    print('PASS: Turnip transport and eight deferred BO cases over the software kernel peer')
++    raise SystemExit(0)
+ # Driver cache controls compile Adreno code but submit/execute no shader.
+ subprocess.run([sys.executable, ROOT / 'scripts/check-turnip-pipeline-cache-host.py'], check=True)
+ # Original UI recipes additionally cover graphics-library caches, strict driver
+diff --git a/scripts/data/adreno-compiler-inputs.json b/scripts/data/adreno-compiler-inputs.json
+index 7720acd..6f57e94 100644
+--- a/scripts/data/adreno-compiler-inputs.json
++++ b/scripts/data/adreno-compiler-inputs.json
+@@ -61,7 +61,9 @@
+     "patches/mesa/turnip-transient-attachments-in-gmem.patch",
+     "patches/mesa/turnip-gmem-swap-trace.patch",
+     "patches/mesa/turnip-thread-render-mode.patch",
+-    "patches/mesa/turnip-gmem-memory-side-swap.patch"
++    "patches/mesa/turnip-gmem-memory-side-swap.patch",
++    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/mesa/ios18-startup-error.patch",
++    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/mesa/ios18-task-cpu-map.patch"
+   ],
+   "integer_fma_reference": {
+     "repository": "https://github.com/ucb-bar/berkeley-softfloat-3",
+diff --git a/scripts/data/gpu-metal-vulkan-inputs.json b/scripts/data/gpu-metal-vulkan-inputs.json
+index 895ca16..9b31950 100644
+--- a/scripts/data/gpu-metal-vulkan-inputs.json
++++ b/scripts/data/gpu-metal-vulkan-inputs.json
+@@ -11,14 +11,7 @@
+   },
+   "translator": {
+     "repository": "https://github.com/steelbrain/metal2vulkan",
+-    "commit": "624bab3918de5b978e1101517abca2b4fa426565",
+-    "branch": "development",
+-    "clone": "depth 1, blob filter, checked out source",
+-    "files": {
+-      "README.md": "0df40b723fd5ea51ca91b9e59fa5dac774015dde128a31b6834c3c8efb69a316",
+-      "Cargo.toml": "e2fc374386d6ee10854f9c2996a8c3858cbb4f86f549f15c93dacf20cc4db439",
+-      "crates/metal2vulkan/src/device/policy.rs": "1e07afdb2952046d13f593922fae6a27b6f26939912b6abf542645c60653a5e6"
+-    }
++    "commit": "bf3ce3813c029c96d02594f8568f2ee8343c0ed8"
+   },
+   "mesa": {
+     "repository": "https://gitlab.freedesktop.org/mesa/mesa",

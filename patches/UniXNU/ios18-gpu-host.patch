@@ -1,0 +1,49 @@
+diff --git a/scripts/check-turnip-darwin-host.py b/scripts/check-turnip-darwin-host.py
+--- a/scripts/check-turnip-darwin-host.py
++++ b/scripts/check-turnip-darwin-host.py
+@@ -21,7 +21,7 @@
+     sys.exit('Build the host Turnip first: python3 scripts/build-turnip-darwin.py --target host')
+ 
+ includes = out / 'host-include'
+-for name in ['IOKit/IOTypes.h', 'IOKit/IOReturn.h', 'IOKit/IOBufferMemoryDescriptor.h', 'IOKit/IOLib.h', 'kern/task.h']:
++for name in ['IOKit/IOTypes.h', 'IOKit/IOReturn.h', 'IOKit/IOBufferMemoryDescriptor.h', 'IOKit/IOLib.h', 'kern/task.h', 'kern/policy_internal.h', 'mach/task_policy.h']:
+     path = includes / name
+     path.parent.mkdir(parents=True, exist_ok=True)
+     path.write_text('#include "XnuMemoryFixture.h"\n')
+@@ -39,7 +39,7 @@
+ subprocess.run(['xcrun', 'clang++', '-std=c++23', '-O1', '-fPIC', '-I', includes, '-I', sim.parent, '-I', kit, '-I', smmu,
+                 '-I', ROOT / 'kits/AdrenoPM4', '-c', sim / 'host_gpu_service.cpp', '-o', service], check=True)
+ core = []
+-for name in ['NativeAdrenoMemory', 'NativeAdrenoSmmuMemory', 'NativeAdrenoVm', 'NativeAdrenoRing', 'NativeAdrenoSubmit',
++for name in ['NativeAdrenoMemory', 'NativeAdrenoSmmuMemory', 'NativeAdrenoVm', 'NativeAdrenoRing', 'NativeAdrenoPreempt', 'NativeAdrenoSubmit',
+              'NativeAdrenoUserClient', 'NativeAdrenoTimer', 'NativeAdrenoSmmuContext', 'NativeAdrenoGpuContext']:
+     obj = out / (name + '.o')
+     subprocess.run(['xcrun', 'clang++', '-std=c++23', '-O1', '-fPIC', '-I', includes, '-I', sim.parent, '-I', kit, '-I', smmu,
+@@ -51,7 +51,7 @@
+ subprocess.run(['xcrun', 'clang++', '-dynamiclib', '-o', shim, service, shim_obj, *core, *objects,
+                 '-framework', 'IOKit', '-framework', 'CoreFoundation'], check=True)
+ smoke = out / 'vulkan_smoke'
+-subprocess.run(['xcrun', 'clang', '-std=c11', '-O1', '-I', '/opt/homebrew/include', sim / 'vulkan_smoke.c', '-o', smoke,
++subprocess.run(['xcrun', 'clang', '-std=c11', '-O1', '-I', ROOT / '.cache/mesa-work/include', sim / 'vulkan_smoke.c', '-o', smoke,
+                 '-Wl,-rpath,' + str(out)], check=True)
+ 
+ plugin_smoke = out / 'plugin_smoke'
+@@ -73,7 +73,7 @@
+ # and preserve ownership on failures. This exercises real transport code, not pixels.
+ deferred = out / 'deferred_bo'
+ subprocess.run(['xcrun', 'clang++', '-std=c++23', '-O1', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
+-                '-I', '/opt/homebrew/include', '-I', kit, sim / 'deferred_bo.cpp', '-o', deferred], check=True)
++                '-I', ROOT / '.cache/mesa-work/include', '-I', kit, sim / 'deferred_bo.cpp', '-o', deferred], check=True)
+ deferred_env = dict(env, TU_DARWIN_RETIRE_TRACE='1')
+ deferred_env.pop('HOSTSIM_FAIL_USER_UNMAP', None)
+ for mode in ['normal', 'busy', 'fence-error', 'free-error', 'lease-error', 'view-error', 'map-cleanup-error', 'pressure']:
+@@ -87,6 +87,9 @@
+     if mode == 'pressure' and 'pressure=0' not in test.stderr:
+         sys.exit('Deferred BO pressure control waited for the GPU instead of growing its queue')
+     print(verdict[0])
++if '--transport-only' in sys.argv:
++    print('PASS: Turnip transport and eight deferred BO cases over the software kernel peer')
++    raise SystemExit(0)
+ # Driver cache controls compile Adreno code but submit/execute no shader.
+ subprocess.run([sys.executable, ROOT / 'scripts/check-turnip-pipeline-cache-host.py'], check=True)
+ # Original UI recipes additionally cover graphics-library caches, strict driver

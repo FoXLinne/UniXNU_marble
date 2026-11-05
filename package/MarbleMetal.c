@@ -168,6 +168,7 @@ native_gpu_addon_write(const char *path, const uint8_t *data, uint64_t size, uin
 		struct vnode_attr va;
 		VATTR_INIT(&va);
 		VATTR_SET(&va, va_mode, mode);
+		VATTR_SET(&va, va_data_size, size);
 		error = vnode_setattr(vp, &va, ctx);
 	}
 	if (!error) {

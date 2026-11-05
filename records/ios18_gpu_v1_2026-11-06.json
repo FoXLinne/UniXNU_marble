@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-06",
+  "version": "ios18-gpu-v1",
+  "device": "marble / SM7475 / Adreno 725",
+  "os": "iOS 18.7.11 22H384",
+  "sources": {
+    "UniXNU": "e2fdae4312d0acc3d8a52bc457101e7918095e6a",
+    "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+    "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+    "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17",
+    "metal2vulkan": "bf3ce3813c029c96d02594f8568f2ee8343c0ed8",
+    "XnuPrelink": "f1d80d37528a33e24643583787123c652b70a268"
+  },
+  "changes": [
+    "Rebase the translator onto development bf3ce381 with the retained device integration; include inline copy ordering, Debug AIR and Core Image support",
+    "Map BO memory into the connection owning task through advertised methods 19/20; validate handle/token/address, reject mixed mapping leases and stop mappings at connection close",
+    "Preserve IOSurface plane identity in views and retain surface use counts for every process",
+    "Preserve requested MSAA and memoryless texture storage and resolve semantics",
+    "Use six Turnip compilation turns on iOS 18 and a 512 MiB room-worker release queue",
+    "Apply upstream addon replacement length handling in the board installation entrypoint"
+  ],
+  "validation": {
+    "arm64e_kernel": "passed",
+    "prelink": "passed; zero unresolved closure references and zero stubbed functions",
+    "rust_pac_boundary": "10395 blr and 2106 br rewritten; zero x30 left",
+    "signature_and_addon": "passed",
+    "debug_air_regressions": "2 passed",
+    "host_turnip_transport": "Vulkan smoke and 8 deferred BO cases passed",
+    "denied_map_transport": "protocol, normal, busy and pressure cases passed with generic IOKit mapping denied",
+    "host_gpu_pixels": "2x/4x MSAA memoryless resolve pixels and both IOSurface planes/views/use counts passed on MoltenVK",
+    "payload_identity": "native, fileset, addon and embedded addon hashes matched"
+  },
+  "hardware": {
+    "device_operations": 0,
+    "mode": "preserved",
+    "acceptance": "pending phone run",
+    "fps": null,
+    "next": [
+      "Photos launch and browsing",
+      "Home Screen customization",
+      "App launch and switcher previews",
+      "Blur and horizontal swipes",
+      "Frame-time distribution and input-to-display latency"
+    ]
+  },
+  "retained_hardware_configuration": {
+    "xnu_cpus": 7,
+    "firmware_usb_affinity": "0x700",
+    "managed_memory_request_gib": 8,
+    "gpu_vote_mhz": 580,
+    "bandwidth_index": 11,
+    "presentation_request_hz": 120
+  },
+  "artifacts": {
+    "boot_image": {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/marble_ios18_gpu_v1.img",
+      "bytes": 47284224,
+      "sha256": "61f692f976c8c1f2eec91fce32f536ff6547581af05b8d3f5ed5ce3197859e1b"
+    },
+    "native_kernel": {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/kernel.native.macho",
+      "bytes": 14067384,
+      "sha256": "21fb00c71608da47b6cf41075868230bf07036e7b164c739da9a4a6343aaa893"
+    },
+    "fileset_kernel": {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/kernel.fileset.macho",
+      "bytes": 60506112,
+      "sha256": "38e14e0f64c84292c4f052b6fc5e902e9c53d1bc3bc10b2e198cf770ff645a60"
+    },
+    "gpu_addon": {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/gpu/metal.gpuaddon",
+      "bytes": 13560792,
+      "sha256": "9872b25955178128e2142c5585e3a7af4b34b8c08da2f8b27fcc0e2100fb243e"
+    },
+    "owner_trustcache": {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/gpu/owner.trustcache",
+      "bytes": 96,
+      "sha256": "7cb4af5b2e047d0de470f67029aac18d78b61be7f169f989713709f2fbc47b28"
+    }
+  },
+  "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-preempt=2 sheng-gpu-ttbr=2 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1",
+  "evidence_directory": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06",
+  "patches": {
+    "patches/Adreno740/a725.patch": "f0b7a4f14c97ad551099522bbdc35669a284bd19af67438d70916ae83235adbc",
+    "patches/AdrenoMetal/ios18.patch": "1cc10379adb6e740f0c7f1b15a092c0666b91e89642a6df167008013282a21fa",
+    "patches/mesa/ios18-startup-error.patch": "4fee083ca158291a10a7cdd3a6f538dfb0be1fd0371e55bb48df823723009d0e",
+    "patches/mesa/ios18-task-cpu-map.patch": "14bf66155b0c37df117256062e0b88a420b62d0174541b68b007131439e685ca",
+    "patches/metal2vulkan/ios18-runtime.patch": "49238ccafcf591f2c0501f9c51dfe8ba16c24bfe9d3c9b5cdae1dc5c8c5e7d7c"
+  }
+}

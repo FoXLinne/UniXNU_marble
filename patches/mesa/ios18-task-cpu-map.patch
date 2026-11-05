@@ -1,0 +1,53 @@
+diff --git a/src/freedreno/vulkan/tu_knl_darwin.cc b/src/freedreno/vulkan/tu_knl_darwin.cc
+--- a/src/freedreno/vulkan/tu_knl_darwin.cc
++++ b/src/freedreno/vulkan/tu_knl_darwin.cc
+@@ -594,6 +594,14 @@
+                       uint64_t size, void **mapping, uint32_t *token)
+ {
+    if (*token) {
++      if ((dw.params.flags & NativeAdrenoParamsTaskCpuMap) && *mapping) {
++         NativeAdrenoAbiBoCpuUnmapTask undo = {.handle = handle, .address = (uint64_t)(uintptr_t)*mapping, .token = *token};
++         kern_return_t kr = dw_call(NativeAdrenoMethodBoCpuUnmapTask, &undo, sizeof(undo), NULL, 0);
++         if (kr != KERN_SUCCESS)
++            return retire->failure = vk_device_set_lost(&dev->vk, "deferred task CPU unmap failed: 0x%x", kr);
++         *mapping = NULL;
++         *token = 0;
++      } else {
+       if (*mapping) {
+          kern_return_t kr = IOConnectUnmapMemory64(dw.conn, *token, mach_task_self(), (mach_vm_address_t)(uintptr_t)*mapping);
+          if (kr != KERN_SUCCESS)
+@@ -605,6 +613,7 @@
+       if (kr != KERN_SUCCESS)
+          return retire->failure = vk_device_set_lost(&dev->vk, "deferred CPU lease release failed: 0x%x", kr);
+       *token = 0;
++      }
+    }
+    NativeAdrenoAbiBoFree release = {.handle = handle};
+    kern_return_t kr = dw_call(NativeAdrenoMethodBoFree, &release, sizeof(release), NULL, 0);
+@@ -1036,6 +1045,26 @@
+ static VkResult
+ darwin_bo_map(struct tu_device *dev, struct tu_bo *bo, void *placed_addr)
+ {
++   if (dw.params.flags & NativeAdrenoParamsTaskCpuMap) {
++      NativeAdrenoAbiBoCpuMapTask req = {.handle = bo->darwin_handle, .address = (uint64_t)(uintptr_t)placed_addr};
++      NativeAdrenoAbiBoCpuMapTaskReply reply = {};
++      kern_return_t kr = dw_call(NativeAdrenoMethodBoCpuMapTask, &req, sizeof(req), &reply, sizeof(reply));
++      if (kr != KERN_SUCCESS)
++         return vk_errorf(dev, VK_ERROR_MEMORY_MAP_FAILED, "BoCpuMapTask failed: 0x%x", kr);
++      if (!reply.address || !reply.token || reply.reserved || reply.bytes < bo->size ||
++          (placed_addr && reply.address != (uint64_t)(uintptr_t)placed_addr)) {
++         NativeAdrenoAbiBoCpuUnmapTask undo = {.handle = bo->darwin_handle, .address = reply.address, .token = reply.token};
++         kr = dw_call(NativeAdrenoMethodBoCpuUnmapTask, &undo, sizeof(undo), NULL, 0);
++         if (kr != KERN_SUCCESS)
++            return vk_device_set_lost(&dev->vk, "invalid task CPU mapping cleanup failed: 0x%x", kr);
++         return vk_error(dev, VK_ERROR_MEMORY_MAP_FAILED);
++      }
++      bo->map = (void *)(uintptr_t)reply.address;
++      bo->darwin_token = reply.token;
++      bo->never_unmap = true;
++      TU_RMV(bo_map, dev, bo);
++      return VK_SUCCESS;
++   }
+    NativeAdrenoAbiBoCpuMap req = {.handle = bo->darwin_handle};
+    NativeAdrenoAbiBoCpuMapReply reply = {};
+    kern_return_t kr = dw_call(NativeAdrenoMethodBoCpuMap, &req, sizeof(req), &reply, sizeof(reply));

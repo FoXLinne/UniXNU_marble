@@ -21,6 +21,8 @@ SOURCES = {
     'ArmCpu': (WORK / 'UniXNU/drivers/ArmCpu', None),
     'NativeAdreno': (WORK / 'UniXNU/drivers/NativeAdreno', None),
     'NativeMetal': (WORK / 'UniXNU/drivers/NativeMetal', None),
+    'UniXNU18': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/gpu/UniXNU', []),
+    'MetalTranslator18': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/gpu/UniXNU/.cache/gpu-reference/metal2vulkan', []),
     'Adreno74018': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/gpu/Adreno740', []),
     'AdrenoMetal18': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/gpu/AdrenoMetal', []),
     'ArmSmmu4K18': (WORK.parent / 'outputs/UniXNU_marble/ios18_arm64e/gpu/ArmSmmu4K', []),
@@ -59,6 +61,10 @@ def main():
                       '--ignore-submodules=all', 'HEAD').decode().split('\0')
         paths = [row.split('\t', 2)[2] for row in filter(None, changes)
                  if row.split('\t', 2)[0] != '-']
+        if name == 'UniXNU18':
+            paths = [path for path in paths if path.startswith('scripts/') or path in (
+                'docs/drivers/adreno-metal.md', 'docs/zh/drivers/adreno-metal.md',
+                'docs/drivers/adreno740.md', 'docs/zh/drivers/adreno740.md')]
         patch = git(repo, 'diff', '--no-renames', '--ignore-submodules=all',
                     'HEAD', '--', *paths) if paths else b''
         if extra is None:

@@ -1,5 +1,5 @@
 diff --git a/NativeAdrenoMetalPlugin.mm b/NativeAdrenoMetalPlugin.mm
-index 415e9c8..e7d3305 100644
+index 415e9c8..38ba378 100644
 --- a/NativeAdrenoMetalPlugin.mm
 +++ b/NativeAdrenoMetalPlugin.mm
 @@ -77,6 +77,7 @@ static bool requested() {
@@ -34,7 +34,18 @@ index 415e9c8..e7d3305 100644
  // Every process other than the render server: the same runtime on its own connection, with none of the render server's threads (no
  // display hand-off, telemetry, benchmark or cache export). Its shader cache lives in its own cache or temp directory.
  // The reason a client's device failed, as a text line the driver keeps per process (the render server's report row is rewritten every ten seconds):
-@@ -290,7 +294,10 @@ static id deviceForPort(unsigned port) {
+@@ -239,6 +243,10 @@ static id deviceForPort(unsigned port) {
+         // command buffer was no better (17.8 ms mean and 56.1 ms at p95 in tile memory, 17.1 and 52.1 in system memory), and one home screen frame
+         // still came out with red and blue exchanged. sheng-tu-debug= overrides this for experiments.
+         setenv("TU_DEBUG", bootArgSet("sheng-fb-bgra=1") ? "sysmem,nocb" : "nocb", 0);
++#if __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__ >= 180000 && __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__ < 190000
++        // Turnip compiles on the caller's CPU; this target uses six compilation turns across seven XNU cores.
++        setenv("M2V_PIPELINE_TURNS", "6", 0);
++#endif
+         // sheng-diag=1 turns on every diagnostic of the GPU stack in this process: the frontend's frame trace, Turnip's pass stamps and
+         // submission ring, the runtime's stage ring, and in the render server the status and telemetry lines. Without it none of them runs.
+         if (bootArgSet("sheng-diag=1") || bootArgSet("sheng-gpu-trace=1")) setenv("SHENG_DIAG", "1", 1);
+@@ -290,7 +298,10 @@ static id deviceForPort(unsigned port) {
          }
          // The render server compresses its framebuffer (an Apple/AGX layout this GPU does not write) unless told not to; the display driver takes plain rows.
          setenv("CA_DISABLE_FRAMEBUFFER_COMPRESSION", "1", 1);
@@ -46,7 +57,7 @@ index 415e9c8..e7d3305 100644
          // iPadOS 27 picks a 64-bit half-float framebuffer ('RGhA') whenever the display's EDR headroom is above 1 (this panel reports XDR
          // headroom), which the display path can only show converted, slowly and greyed. As on iPadOS 17, where the render server drew plain
          // 8-bit BGRA, the headroom is held at 1. IOMFBDisplay::framebuffer_pixel_format (24A446 0x184461838, asked on every update) takes
-@@ -353,6 +360,8 @@ static id deviceForPort(unsigned port) {
+@@ -353,6 +364,8 @@ static id deviceForPort(unsigned port) {
          unsetenv("METAL2VULKAN_LOG_PIPELINES");
          CFPreferencesSetAppValue(CFSTR("CAEnableFramebufferCompression"), kCFBooleanFalse, kCFPreferencesCurrentApplication);
          CFPreferencesSetAppValue(CFSTR("CAEnableIOSurfaceCompression"), kCFBooleanFalse, kCFPreferencesCurrentApplication);
@@ -55,7 +66,7 @@ index 415e9c8..e7d3305 100644
          char candidates[6][512] = {};
          if (!confstr(_CS_DARWIN_USER_CACHE_DIR, candidates[0], sizeof candidates[0] - 16)) candidates[0][0] = 0;
          if (!confstr(_CS_DARWIN_USER_TEMP_DIR, candidates[1], sizeof candidates[1] - 16)) candidates[1][0] = 0;
-@@ -397,6 +406,13 @@ static id deviceForPort(unsigned port) {
+@@ -397,6 +410,13 @@ static id deviceForPort(unsigned port) {
              char text[64];
              snprintf(text, sizeof text, "PUB no device: %.40s", nmb_last_error());
              streamText(*gpu, text);
@@ -70,9 +81,72 @@ index 415e9c8..e7d3305 100644
          }
          gpu->mark(0x6802);
 diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
-index b56848c..f0a8eb2 100644
+index b56848c..0595578 100644
 --- a/NativeBridgeMetalFrontend.mm
 +++ b/NativeBridgeMetalFrontend.mm
+@@ -911,6 +911,7 @@ - (void)replacePvrtcRegion:(MTLRegion)r mipmapLevel:(NSUInteger)level slice:(NSU
+ @property(nonatomic) NmbTextureDescriptor descriptor;
+ @property(nonatomic,strong) NBBuffer *buffer;
+ @property(nonatomic) IOSurfaceRef surface;
++@property(nonatomic) NSUInteger surfacePlane;
+ @property(nonatomic) NSUInteger offset,rowBytes;
+ @property(nonatomic,strong) id<MTLTexture> parent;
+ @property(nonatomic,strong) id<MTLHeap> parentHeap;
+@@ -918,8 +919,7 @@ - (void)replacePvrtcRegion:(MTLRegion)r mipmapLevel:(NSUInteger)level slice:(NSU
+ @property(nonatomic) BOOL counted;   // its surface counted in use (countUse)
+ - (void)countUse;
+ @end
+-// The render server counts the surfaces it textures in use while the textures live (countUse).
+-static const bool gCountsSurfaceUse=!strcmp(getprogname(),"backboardd");
++// Each texture and view keeps its imported surface in use until the texture is released.
+ // A no-copy import keeps its pages until the runtime frees it, which can be after the buffer object goes (a command buffer still using
+ // it). The owner's release (Metal's deallocator, an IOSurface's mapping) waits for that, as Metal's does: run earlier, the owner could
+ // unmap or reuse pages the GPU still reads or writes.
+@@ -1120,7 +1120,7 @@ static size_t pvrtcLevelBytes(uint32_t width,uint32_t height,bool twoBit) {
+ static bool singleSample() {
+  static const bool enabled=[] {
+   if(const char *value=getenv("NATIVE_METAL_SINGLE_SAMPLE"))return strcmp(value,"0")!=0;
+-  return true;
++  return false;
+  }();
+  return enabled;
+ }
+@@ -1155,7 +1155,7 @@ - (MTLTextureSwizzleChannels)swizzle {
+  return MTLTextureSwizzleChannelsMake((MTLTextureSwizzle)(s&255),(MTLTextureSwizzle)((s>>8)&255),(MTLTextureSwizzle)((s>>16)&255),(MTLTextureSwizzle)((s>>24)&255));
+ }
+ - (void)dealloc {DetailSpan timing(5,(uintptr_t)_handle);nmb_texture_release(_handle);if(_surface){if(_counted)IOSurfaceDecrementUseCount(_surface);CFRelease(_surface);}}
+-- (void)countUse {if(_surface && !_counted && gCountsSurfaceUse){IOSurfaceIncrementUseCount(_surface);_counted=YES;}}
++- (void)countUse {if(_surface && !_counted){IOSurfaceIncrementUseCount(_surface);_counted=YES;}}
+ - (MTLTextureType)textureType {return (MTLTextureType)_descriptor.type;}
+ - (MTLPixelFormat)pixelFormat {return (MTLPixelFormat)(_pvrtc?_pvrtc:_descriptor.format);}
+ - (NSUInteger)width {return _descriptor.width;}
+@@ -1171,7 +1171,7 @@ - (MTLCPUCacheMode)cpuCacheMode {return (MTLCPUCacheMode)((_descriptor.options&M
+ - (BOOL)isFramebufferOnly {return _descriptor.framebuffer_only!=0;}
+ - (BOOL)isDrawable {return _descriptor.is_drawable!=0;}
+ - (IOSurfaceRef)iosurface {return _surface;}
+-- (NSUInteger)iosurfacePlane {return 0;}
++- (NSUInteger)iosurfacePlane {return _surfacePlane;}
+ - (id<MTLBuffer>)buffer {return _surface?nil:(id<MTLBuffer>)_buffer;}
+ - (NSUInteger)bufferOffset {return _offset;}
+ - (NSUInteger)bufferBytesPerRow {return _rowBytes;}
+@@ -1187,7 +1187,7 @@ - (MTLPurgeableState)setPurgeableState:(MTLPurgeableState)state {
+  if(!handle){NBLOG(@"native-metal: texture view refused: %@",lastError());return nil;}
+  NBTexture *view=[NBTexture new];view.handle=handle;NmbTextureDescriptor descriptor;nmb_texture_describe(handle,&descriptor);view.descriptor=descriptor;
+  view.parent=(id<MTLTexture>)self;view.buffer=_buffer;view.offset=_offset;view.rowBytes=_rowBytes;
+- if(_surface){view.surface=(IOSurfaceRef)CFRetain(_surface);[view countUse];}
++ if(_surface){view.surface=(IOSurfaceRef)CFRetain(_surface);view.surfacePlane=_surfacePlane;[view countUse];}
+  return (id<MTLTexture>)view;
+ }
+ - (id<MTLTexture>)newTextureViewWithPixelFormat:(MTLPixelFormat)format {
+@@ -4216,7 +4216,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+  NBTexture *texture=planes>=2?textureOnSurface(buffer,d,surface,plane,start-(uintptr_t)base,row):textureOnBuffer(buffer,d,start-(uintptr_t)base,row,true);
+  if(!texture){refuseSurface(5,surface,d,plane,start-(uintptr_t)base,row);return nil;}
+  if(gLogTextures)logTexture("iosurface",d,surface,plane,base,start-(uintptr_t)base,row,texture!=nil);
+- gSurfaceTextures++;texture.surface=(IOSurfaceRef)CFRetain(surface);[texture countUse];return (id<MTLTexture>)texture;
++ gSurfaceTextures++;texture.surface=(IOSurfaceRef)CFRetain(surface);texture.surfacePlane=plane;[texture countUse];return (id<MTLTexture>)texture;
+ }
+ - (id<MTLLibrary>)newLibraryWithData:(dispatch_data_t)data error:(NSError **)error {
+  const void *bytes=nullptr;size_t size=0;dispatch_data_t mapped=dispatch_data_create_map(data,&bytes,&size);
 @@ -4227,7 +4227,14 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
   if(error)*error=nil;return (id<MTLLibrary>)library;
  }
@@ -90,10 +164,26 @@ index b56848c..f0a8eb2 100644
   NmbLibrary *handle=nmb_library_new(gDevice,bytes.bytes,bytes.length,false);gTimeLibrary.add(libraryBegan);
   if(!handle)return failWith<id<MTLLibrary>>(error,@"library",nil);
 diff --git a/README.md b/README.md
-index dc090ab..7f8b6f7 100644
+index dc090ab..f9963b7 100644
 --- a/README.md
 +++ b/README.md
-@@ -21,3 +21,7 @@ With `sheng-gpu-trace=1`, the render server writes command phases, encoding batc
+@@ -4,13 +4,13 @@ Metal frontend through metal2vulkan and Turnip.
+ 
+ The frontend uses metal2vulkan and Turnip with the kernel GPU interface and selected OS ABI. GPU composition has been verified on sheng with A740.
+ 
+-All clients use single-sample rendering by default. `NATIVE_METAL_SINGLE_SAMPLE=0` preserves a process's requested sample counts; `1` forces single-sample rendering. Texture types, pipeline sample counts and resolve outputs follow the selected policy. Same-user clients share writable shader caches. Resource aliasing, swizzles, range copies, function constants, specialized link names and allocation queries reach the runtime. Queue priorities aggregate current live requests without a process-name policy.
++Clients preserve requested sample counts by default. `NATIVE_METAL_SINGLE_SAMPLE=0` preserves a process's requested sample counts; `1` forces single-sample rendering. Texture types, pipeline sample counts and resolve outputs follow the selected policy. Same-user clients share writable shader caches. Resource aliasing, swizzles, range copies, function constants, specialized link names and allocation queries reach the runtime. Queue priorities aggregate current live requests without a process-name policy.
+ 
+ Build and interface details: [documentation](https://unixnu.com/drivers/adreno-metal). Component sources and dependencies: [catalog](https://unixnu.com/reference/components).
+ 
+ ## Memory reuse
+ 
+-Unused owned image backing can serve later pooled or dedicated images. Extra image spares share a 256 MiB device budget and expire after ten seconds. Plain unused backing of at least 256 KiB can be released by the existing room worker, with at most 128 MiB queued. Allocation failure reclaims queued backing before retrying. Imported memory and owner callbacks retain their release ordering.
++Unused owned image backing can serve later pooled or dedicated images. Image spares expire after ten seconds and are reclaimed on allocation failure or memory pressure. Plain unused backing of at least 256 KiB can be released by the existing room worker, with at most 512 MiB queued. Allocation failure reclaims queued backing before retrying. Imported memory and owner callbacks retain their release ordering.
+ 
+ ## Frame diagnostics
+ 
+@@ -21,3 +21,9 @@ With `sheng-gpu-trace=1`, the render server writes command phases, encoding batc
  Slow encoding operations retain source lines and enqueue times. Completion handlers and resource destructors carry individual timing and identities. Kernel sampling of the render, encode and completion threads and blocked-thread waits provide the cross-thread wait record.
  
  `python3 scripts/check-wallpaper-freeze-host.py` in the resolved tree checks real pixels, callbacks, concurrent parked submissions and process selection.
@@ -101,3 +191,5 @@ index dc090ab..7f8b6f7 100644
 +## Marble iOS 18 integration
 +
 +The device profile builds arm64e objects for iOS 18. The framebuffer policy selects SDR headroom and plain BGRA rows. Private QuartzCore addresses for 24A446 are compiled for the iOS 27 target. The iOS 18 bundle carries its original QuartzCore Metal library for sandboxed callers and shader priming.
++
++The iOS 18 runtime uses the upstream development translator with retained in-place imports, room-worker reuse and diagnostics. Texture views retain their IOSurface plane. Turnip compilation uses up to six CPU turns; M2V_PIPELINE_TURNS selects a budget within the available CPU count.

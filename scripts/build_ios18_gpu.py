@@ -38,6 +38,11 @@ def source_tree(root):
         if fresh or current != revision:
             subprocess.run(['git', '-C', path, 'checkout', '--detach', revision], check=True)
     tree = gpu / 'UniXNU'
+    host_patch = DEVICE / 'patches/UniXNU/ios18-gpu-host.patch'
+    applied = subprocess.run(['git', '-C', tree, 'apply', '--reverse', '--check', host_patch],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if applied.returncode:
+        subprocess.run(['git', '-C', tree, 'apply', host_patch], check=True)
     for component, filename in [('Adreno740', 'a725.patch'), ('AdrenoMetal', 'ios18.patch')]:
         patch = DEVICE / 'patches' / component / filename
         for name in re.findall(r'^\+\+\+ b/(.+)$', patch.read_text(), re.M):
@@ -71,12 +76,18 @@ def source_tree(root):
             target.symlink_to(path.resolve(), target_is_directory=path.is_dir())
     reference = cache / 'gpu-reference'
     reference.mkdir(exist_ok=True)
-    pin = json.loads((tree / 'scripts/data/gpu-metal-vulkan-inputs.json').read_text())['translator']
+    pin = PROFILE['translator']
     translator = reference / 'metal2vulkan'
     if not translator.exists():
         subprocess.run(['git', 'clone', '--quiet', '--filter=blob:none', '--no-checkout',
                         pin['repository'], translator], check=True)
         subprocess.run(['git', '-C', translator, 'checkout', '--quiet', '--detach', pin['commit']], check=True)
+    if subprocess.check_output(['git', '-C', translator, 'rev-parse', 'HEAD'], text=True).strip() != pin['commit']:
+        raise RuntimeError('Translator source differs from the iOS 18 profile')
+    inputs = tree / 'scripts/data/gpu-metal-vulkan-inputs.json'
+    pins = json.loads(inputs.read_text())
+    pins['translator'] = {key: pin[key] for key in ('repository', 'commit')}
+    inputs.write_text(json.dumps(pins, indent=2) + '\n')
     (gpu / 'sources.json').write_text(json.dumps(SOURCES, indent=2) + '\n')
     return tree
 
@@ -264,10 +275,15 @@ def userspace(root):
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if applied.returncode:
         subprocess.run(['git', '-C', mesa, 'apply', mesa_patch], check=True)
+    task_patch = DEVICE / 'patches/mesa/ios18-task-cpu-map.patch'
+    applied = subprocess.run(['git', '-C', mesa, 'apply', '--reverse', '--check', task_patch],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if applied.returncode:
+        subprocess.run(['git', '-C', mesa, 'apply', task_patch], check=True)
     manifest = tree / 'scripts/data/adreno-compiler-inputs.json'
     pins = json.loads(subprocess.check_output(['git', '-C', tree, 'show',
                       'HEAD:scripts/data/adreno-compiler-inputs.json'], text=True))
-    pins['patches'].append(str(mesa_patch))
+    pins['patches'] += [str(mesa_patch), str(task_patch)]
     manifest.write_text(json.dumps(pins, indent=2) + '\n')
     turnip_out = tree / 'build/mesa-tu-ios18'
     info = turnip_out / 'meson-info/meson-info.json'
@@ -280,6 +296,10 @@ def userspace(root):
         translated = (original.replace('ios27', 'ios18').replace('ios27.0', 'ios18.0')
                                            .replace("'27.0'", "'18.0'").replace('iOS 27', 'iOS 18')
                                            .replace('plugin27', 'plugin18'))
+        if name == 'build-adreno-metal-bridge.py':
+            start = translated.index('PATCHES = ')
+            end = translated.index('\ndef git_tree', start)
+            translated = translated[:start] + 'PATCHES = [Path(' + repr(str(DEVICE / PROFILE['translator']['patch'])) + ')]\n\n' + translated[end:]
         if name == 'build-adreno-metal-plugin.py':
             translated = translated.replace('bundle.mkdir(parents=True)',
                 'bundle.mkdir(parents=True)\nshutil.copyfile(ROOT / "build/QuartzCore.metallib", bundle / "QuartzCore.metallib")')
@@ -329,7 +349,8 @@ def userspace(root):
     (root / 'gpu/userspace.json').write_text(json.dumps(dict(
         sources=SOURCES, target='arm64e-apple-ios18.0', addon=str(addon), addon_sha256=sha(addon),
         trust_cache=str(owner), trust_cache_sha256=sha(owner), cdhashes=trust,
-        primelist_entries=len(libraries), translator='624bab3918de5b978e1101517abca2b4fa426565',
+        primelist_entries=len(libraries), translator=PROFILE['translator']['commit'],
+        translator_patch_sha256=sha(DEVICE / PROFILE['translator']['patch']),
         quartzcore_metallib_sha256=sha(quartzcore),
         turnip_sha256=sha(build / 'mesa-tu-ios18/src/freedreno/vulkan/libvulkan_freedreno.dylib')),
         indent=2) + '\n')
