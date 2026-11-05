@@ -630,10 +630,10 @@ index e0d03b9..ad4de43 100755
                    no_auto_dim=no_auto_dim, build=BUILD, source='github.com/dipa-studio/ios-sweet tools/sweet-root-tweaks.py')
 diff --git a/package/UniXNUPkg/Include/Protocol/RootStage.h b/package/UniXNUPkg/Include/Protocol/RootStage.h
 new file mode 100644
-index 0000000..65d5a8c
+index 0000000..b68c368
 --- /dev/null
 +++ b/package/UniXNUPkg/Include/Protocol/RootStage.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,46 @@
 +#ifndef UNIXNU_ROOT_STAGE_H
 +#define UNIXNU_ROOT_STAGE_H
 +
@@ -642,6 +642,16 @@ index 0000000..65d5a8c
 +#define ROOT_STAGE_EXTENTS 64
 +#define ROOT_STAGE_GUID {0x7db6a499,0x1639,0x46e7,{0xb2,0xca,0x28,0x5b,0x91,0xd0,0x6f,0x21}}
 +#define ROOT_STAGE_FAULT_GUID {0x1d7d3ce9,0x52a6,0x49c1,{0xb8,0x6e,0x35,0xb6,0x82,0x72,0x98,0xa4}}
++#define ROOT_STAGE_SERVICE_GUID {0x773d7f84,0x6185,0x4b98,{0xa3,0x16,0xec,0xb1,0xd8,0x2f,0x50,0x69}}
++#define ROOT_STAGE_SERVICE_MAGIC 0x3156534255535452ULL
++
++// Resident transport hooks run after loader allocations and before firmware
++// services resume. The transport retains its controller and descriptors.
++typedef struct {
++  unsigned long long Magic;
++  unsigned long long Enter;
++  unsigned long long Resume;
++} ROOT_STAGE_SERVICE;
 +
 +typedef struct {
 +  unsigned long long Address;

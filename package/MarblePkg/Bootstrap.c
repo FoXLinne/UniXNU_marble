@@ -22,6 +22,8 @@ typedef struct { CHAR8 Name[16]; UINT32 Size, Reserved; } PAYLOAD_BLOB;
 STATIC UINT8 *mVolume;
 STATIC UINTN mVolumeSize;
 STATIC BOOLEAN mRootStage, mRootStorage;
+STATIC BOOLEAN mResidentUsb;
+EFI_STATUS MarbleRootUsbEnableResident(VOID);
 EFI_STATUS MarbleRootStorage(VOID);
 EFI_STATUS MarbleRootUsb(VOID);
 EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
@@ -213,6 +215,7 @@ FindVolume(VOID)
     PAYLOAD_BLOB *Blob = (VOID *)Cursor;
     if (!Blob->Name[0] || Blob->Size > (UINTN)(End - Cursor - sizeof(*Blob))) break;
     if (CompareMem(Blob->Name, "root.storage", sizeof("root.storage")) == 0) mRootStorage = TRUE;
+    if (CompareMem(Blob->Name, "root.usb", sizeof("root.usb")) == 0) mResidentUsb = TRUE;
     if (CompareMem(Blob->Name, "root.stage", sizeof("root.stage")) == 0) mRootStage = TRUE;
     if (CompareMem(Blob->Name, "volume.img", sizeof("volume.img")) == 0) {
       mVolume = (VOID *)(Blob + 1);
@@ -244,6 +247,10 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   // Dedicated panic log, inside marble's reserved 0xA8000000..0xB8000000 window.
   ZeroMem((VOID *)(UINTN)0xB7000000, 0x100000);
   if (mRootStorage) {
+    if (mResidentUsb) {
+      Status=MarbleRootUsbEnableResident();
+      if (EFI_ERROR(Status)) return BootReturn(Status,9);
+    }
     Status=MarbleRootUsbPrepare(NULL);
     if (EFI_ERROR(Status)) Print(L"RootStage USB: %r\r\n",Status);
     Status=MarbleRootStorage();

@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-05",
+  "device": "marble",
+  "profile": "ios-18.7.11-22H384",
+  "transport": {
+    "protocol": "RootStage2",
+    "vid": "18d1",
+    "pid": "d00d",
+    "serial": "marble",
+    "owner_affinity": "0x700",
+    "os_cpu_affinities": [
+      "0x0"
+    ],
+    "kernel_argument": "rootstage-runtime-usb=3",
+    "entry": "ROOT_STAGE_SERVICE_GUID",
+    "interrupt_command": "oem interrupt",
+    "controller_resets_on_kernel_entry": 0,
+    "controller_stops_on_panic_return": 0
+  },
+  "hardware_observations": [
+    {
+      "version": "RootStage2",
+      "phase": "kernel",
+      "kernel-ready": "pending",
+      "returns": "0000000000000000"
+    },
+    {
+      "version": "RootStage2",
+      "phase": "firmware",
+      "kernel-ready": "pending",
+      "returns": "0000000000000001"
+    }
+  ],
+  "usb_event_evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs-usb-resident-events.jsonl",
+  "resident_capture": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs-usb-resident-capture/capture.json",
+  "resident_capture_completed": true,
+  "resident_replacement": {
+    "previous_returns": 1,
+    "expected_returns": 2,
+    "bytes": 72814592,
+    "sha256": "809e49edda0aa7ed8b36f12488b0560ad01a922f4fc9d5bc5aad1e6f705587e4"
+  },
+  "boot_progress": {
+    "root_mount_completed": true,
+    "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs-usb-rw-capture/kernel.log",
+    "desktop_visible": false
+  },
+  "shared_control_mapping": {
+    "direction": "kIODirectionInOut",
+    "cache": "kIOMapCopybackCache",
+    "early_interrupt_request": "preserved by compare-exchange"
+  },
+  "commands": [
+    "RootStage firmware capture",
+    "resident UFS kernel replacement"
+  ],
+  "remaining": "Resolve post-mount boot failure and enter SpringBoard"
+}

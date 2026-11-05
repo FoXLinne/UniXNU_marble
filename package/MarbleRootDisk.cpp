@@ -40,6 +40,8 @@ uint64_t marble_data_bytes;
 volatile uint64_t marble_ufs_reads, marble_ufs_writes;
 }
 extern "C" void marble_runtime18_start(void);
+extern "C" void native_resident_configure(uint64_t);
+extern "C" void native_resident_usb_control(volatile uint64_t *);
 extern "C" bool native_root_block_has_data(void);
 extern "C" bool native_root_block_has_data(void) { return marble_data_bytes != 0; }
 extern "C" { char *native_root_block_boot_args; }
@@ -325,14 +327,16 @@ extern "C" void native_marble_root_start(void)
     map->release();
     if (!location[0] || location[1] != sizeof(ROOT_STAGE_TABLE)) panic("MarbleStorage: RootDisks handoff invalid");
     IOMemoryDescriptor *memory = IOMemoryDescriptor::withAddressRange(
-        location[0], location[1], kIODirectionIn | kIOMemoryMapperNone, nullptr);
-    IOMemoryMap *mapping = memory ? memory->map(kIOMapAnywhere | kIOMapReadOnly) : nullptr;
+        location[0], location[1], kIODirectionInOut | kIOMemoryMapperNone, nullptr);
+    IOMemoryMap *mapping = memory ? memory->map(kIOMapAnywhere | kIOMapCopybackCache) : nullptr;
     OSSafeReleaseNULL(memory);
     if (!mapping) panic("MarbleStorage: RootDisks table mapping failed");
     const ROOT_STAGE_TABLE *table = reinterpret_cast<const ROOT_STAGE_TABLE *>(mapping->getVirtualAddress());
     if (table->Magic != ROOT_STAGE_MAGIC || table->Version != 2 || table->DiskCount > 2)
         panic("MarbleStorage: RootDisks header invalid");
     uint64_t dataBytes = prepareDataHandoff(table->Disks[2]);
+    native_resident_configure(table->ReturnStub);
+    native_resident_usb_control(const_cast<volatile uint64_t *>(&table->ReturnTest));
     if (!marble_ufs_start()) panic("MarbleStorage: UFS initialization failed");
     IOService *provider = IOService::getPlatform();
     for (unsigned i = 0; i < table->DiskCount; ++i) {

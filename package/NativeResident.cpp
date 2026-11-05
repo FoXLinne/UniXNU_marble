@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <kern/cpu_number.h>
 #include <IOKit/IOLib.h>
+#include <kern/thread.h>
 
 extern "C" void native_resident_configure(uint64_t);
 extern "C" void native_resident_return(void);
@@ -13,8 +14,34 @@ extern "C" void armcpu_complete_active_interrupt(void);
 extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_root_block_export_data(void);
 extern "C" volatile uint32_t armcpu_smp_step[8], armcpu_smp_mpidr[8];
+extern "C" void native_resident_usb_control(volatile uint64_t *);
 
 static uint64_t return_stub;
+static volatile uint64_t *usb_interrupt;
+
+static void usbControlWorker(void *, wait_result_t)
+{
+  for (;;) {
+    if (__atomic_load_n(usb_interrupt,__ATOMIC_ACQUIRE)==1) {
+      native_root_block_capture_log();
+      panic("RootStage USB host interrupt");
+    }
+    IOSleep(1);
+  }
+}
+
+extern "C" void native_resident_usb_control(volatile uint64_t *request)
+{
+  unsigned mode=0;
+  if (!PE_parse_boot_argn("rootstage-runtime-usb",&mode,sizeof(mode)) || mode!=3) return;
+  usb_interrupt=request;
+  uint64_t pending=0;
+  __atomic_compare_exchange_n(usb_interrupt,&pending,2,false,__ATOMIC_RELEASE,__ATOMIC_RELAXED);
+  thread_t worker;
+  if (kernel_thread_start(usbControlWorker,nullptr,&worker)!=KERN_SUCCESS)
+    panic("RootStage USB interrupt worker start failed");
+  thread_deallocate(worker);
+}
 static uint64_t level1[512] __attribute__((aligned(4096)));
 static uint64_t level2[512] __attribute__((aligned(4096)));
 

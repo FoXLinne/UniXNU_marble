@@ -358,6 +358,22 @@ index a7a55c2..59f212d 100644
    mrs x4, sctlr_el1
    bic x4, x4, #1
    bic x4, x4, #4
+diff --git a/README.md b/README.md
+index 3645a7e..176f92a 100644
+--- a/README.md
++++ b/README.md
+@@ -17,6 +17,11 @@ and [green-bar diagnosis](https://unixnu.com/guide/debugging#green-bar).
+ Build and interface details: [documentation](https://unixnu.com/reference/components).
+ Sources and dependencies: [catalog](https://unixnu.com/reference/components).
+ 
++`ROOT_STAGE_SERVICE_GUID` supplies resident transport enter and resume hooks.
++DarwinBoot invokes enter after firmware memory writeback and invokes resume
++before firmware services resume. The board reserves the service CPU outside
++the OS CPU topology and retains controller ownership and USB descriptors.
++
+ The optional `kernel.macho.vroot` sidecar carries up to 128 MiB of signed root
+ policies. The loader checks its envelope and supplies its physical range as
+ `/chosen/memory-map/RootPolicies`. XNU authenticates the policies using an owner
 diff --git a/Test/packed_ramdisk.py b/Test/packed_ramdisk.py
 index 87501ab..495dc15 100644
 --- a/Test/packed_ramdisk.py
@@ -412,10 +428,10 @@ index bb21e23..406b697 100644
          print('PASS: actual kernel', filename)
 diff --git a/DarwinBootPkg/Driver/Resident.c b/DarwinBootPkg/Driver/Resident.c
 new file mode 100644
-index 0000000..87558f0
+index 0000000..61b585d
 --- /dev/null
 +++ b/DarwinBootPkg/Driver/Resident.c
-@@ -0,0 +1,298 @@
+@@ -0,0 +1,313 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +#include <Uefi.h>
 +#include <Library/BaseLib.h>
@@ -660,6 +676,16 @@ index 0000000..87558f0
 +    UINT64 Base, UINT64 Size, UINT64 Video, UINT64 VideoBytes,
 +    EFI_MEMORY_DESCRIPTOR *Map, UINTN MapSize, UINTN Stride)
 +{
++  ROOT_STAGE_SERVICE *Service=NULL;
++  EFI_GUID ServiceGuid=ROOT_STAGE_SERVICE_GUID;
++  for (UINTN Index=0;Index<gST->NumberOfTableEntries;Index++) {
++    if (CompareGuid(&ServiceGuid,&gST->ConfigurationTable[Index].VendorGuid)) {
++      Service=gST->ConfigurationTable[Index].VendorTable;
++      if (!Service || Service->Magic!=ROOT_STAGE_SERVICE_MAGIC || !Service->Enter || !Service->Resume)
++        return EFI_COMPROMISED_DATA;
++      break;
++    }
++  }
 +  EFI_STATUS Status=ArmVmWatchdog();
 +  if (EFI_ERROR(Status)) return Status;
 +  Stage->ReturnStub=(UINTN)&DarwinResidentReturn;
@@ -700,8 +726,13 @@ index 0000000..87558f0
 +    }
 +    __asm__ volatile("dsb sy" ::: "memory");
 +    VmWatchdogCall(VM_WDT_PET,0,0,NULL);
++    if (Service) {
++      Status=((EFI_STATUS (*)(VOID))(UINTN)Service->Enter)();
++      if (EFI_ERROR(Status)) { DisarmVmWatchdog(); return Status; }
++    }
 +    DarwinEnter(Args,Stage->ReturnTest ? Stage->ReturnStub : Entry,Base,LoadedEnd-Base,Video,VideoBytes);
 +  }
++  if (Service) ((VOID (*)(VOID))(UINTN)Service->Resume)();
 +  DisarmVmWatchdog();
 +  if (DarwinResidentFaultInfo[1]) {
 +    Print(L"Resident fault ESR=%lx PC=%lx FAR=%lx\r\n",

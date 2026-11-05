@@ -44,7 +44,7 @@ def main():
     boot_args = ('offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 '
                  'offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 '
                  'offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 '
-                 'offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=2 marble-ufs=1')
+                 'offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1')
     mailbox[128:128 + len(boot_args)] = boot_args.encode()
     data += mailbox
     window = out / 'KernelSeed.bin'
@@ -87,6 +87,7 @@ def main():
     subprocess.run(['mformat', '-i', volume, '-v', 'MARBLEESP', '::'], check=True)
     subprocess.run(['mcopy', '-i', volume, '-s', '-Q', stage.parent, '::/'], check=True)
     blobs = [('loader.efi', (binaries / 'MarbleBootstrap.efi').read_bytes()),
+             ('root.usb', b'1'),
              ('root.storage', b'1'), ('volume.img', volume.read_bytes())]
     body = b''.join(struct.pack('<16sII', name.encode(), len(blob), 0) + blob + bytes(-len(blob) % 16)
                     for name, blob in blobs) + bytes(24)
