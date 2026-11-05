@@ -1,0 +1,91 @@
+{
+  "date": "2026-11-05",
+  "device": "marble",
+  "serial": "556fdfe",
+  "profile": "iOS 18.7.11 22H384",
+  "failure": {
+    "panic": "MarbleStorage: SystemOS preparation failed 2 @kern_exec.c:7279",
+    "ufs_log": "usb-events/002-d00e/kernel.log",
+    "apfs_error": "disk2 failed to scan checkpoint descriptor area for largest xid: 2",
+    "return_detach_seconds": 0.1
+  },
+  "repair": {
+    "operation": "flash original SystemOS bytes into its existing UFS window",
+    "offset": 7546601472,
+    "bytes": 4282384384,
+    "source_sha256": "7c4d91816b44f404a1ce9c3d90a80052e00584037af92c47070b01c3db2552c8",
+    "sparse_image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs-usb-recovery-watchdog/systemos-repair.sparse",
+    "fastboot_chunks_passed": 6,
+    "fastboot_seconds": 111.884
+  },
+  "boot": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/usb-repair-return-text/marble_temporary_boot.img",
+    "kernel_sha256": "79b39d3bde68f97655c82148b66174b66f343c35b81d2ac847802f37e7b339a3",
+    "native_sha256": "c7d2d1ec51559ff784c5de84600103e098edeb1f969a4f86ccacd13a954df553",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1"
+  },
+  "validation": {
+    "hardware_only": true,
+    "SystemOS_checkpoint_xid": 15,
+    "SystemOS_mount_errno": 0,
+    "preboot_bind_errno": 0,
+    "cryptex_bind_errno": 0,
+    "userspace_boot": true,
+    "SpringBoard_pid": 27,
+    "backboardd_pid": 60,
+    "launchd_pid": 1,
+    "communication": {
+      "version": "RootStage2",
+      "phase": "kernel",
+      "returns": "0000000000000000",
+      "kernel-ready": "ready",
+      "seconds_since_attach": 247.49199949996546
+    },
+    "observations": [
+      {
+        "seconds": 20.00439570902381,
+        "version": "RootStage2",
+        "phase": "kernel",
+        "returns": "0000000000000000",
+        "kernel-ready": "ready",
+        "panic": "",
+        "data_uuid": ""
+      },
+      {
+        "seconds": 35.00472500000615,
+        "version": "RootStage2",
+        "phase": "kernel",
+        "returns": "0000000000000000",
+        "kernel-ready": "ready",
+        "panic": "",
+        "data_uuid": ""
+      },
+      {
+        "seconds": 60.00342958397232,
+        "version": "RootStage2",
+        "phase": "kernel",
+        "returns": "0000000000000000",
+        "kernel-ready": "ready",
+        "panic": "",
+        "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55"
+      },
+      {
+        "seconds": 100.00324125005864,
+        "version": "RootStage2",
+        "phase": "kernel",
+        "returns": "0000000000000000",
+        "kernel-ready": "ready",
+        "panic": "",
+        "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55"
+      }
+    ],
+    "panic_return_acceptance": "pending",
+    "screen_acceptance": "pending"
+  },
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/systemos-window-restored"
+}
