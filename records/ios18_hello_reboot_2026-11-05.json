@@ -1,0 +1,376 @@
+{
+  "date": "2026-11-05",
+  "device": "marble / SM7475",
+  "os": "iOS 18.7.11 22H384",
+  "revision": "af974a9cfa9e729d0f4ea09bd75297c01d888db1",
+  "test": "Same-image resident kernel restart with persistent UFS Data",
+  "result": "Passed: user confirms Hello or Setup after restart without the long migration progress bar",
+  "scope": "Resident kernel restart; full power-cycle boot remains a separate test",
+  "restart": {
+    "phase": "firmware",
+    "returns": "0000000000000003",
+    "handoff-fault": "0000000000000000:0000000000000000:0000000000000000",
+    "restart_monotonic": 776498.614392208,
+    "image": {
+      "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/location-cycle-cpufreq/marble_temporary_boot.img",
+      "kernel_sha256": "bb7faf243df89ba1ca24f05fbd64f0d57187df4151346119d9eb526d7afd8d8b",
+      "native_sha256": "7146a5d07e86647350ee4f6d5ade8639aa7a16c2b91e9d81594ea3c2a24faf40",
+      "kernel_source": "boot-image",
+      "system_source": "ufs",
+      "exit_boot_services": false,
+      "resident_usb": true,
+      "runtime_usb_mode": 3,
+      "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=10 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd"
+    }
+  },
+  "observations": {
+    "screen_at_about_120_seconds": "User reported Apple logo without progress bar",
+    "Setup_first_sample_seconds": 240.0185060420772,
+    "final_screen": "User confirmed Hello or Setup",
+    "migration_processes_at_360_seconds": "absent from sampled process list",
+    "ui_exit_count_at_360_seconds": 1,
+    "panic_at_360_seconds": "",
+    "USB_at_360_seconds": "RootStage2 command succeeded"
+  },
+  "samples": [
+    {
+      "elapsed": 9.804207365959883e-05,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 0,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 0,
+        "_marble_ufs_writes": 0,
+        "_marble_watchdog_checkins": 0,
+        "_marble_ui_exit_count": 0,
+        "_sheng_watchdog_policy_status": 4294967295
+      },
+      "focus": [],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 60.01708050002344,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 0,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 6771,
+        "_marble_ufs_writes": 2,
+        "_marble_watchdog_checkins": 0,
+        "_marble_ui_exit_count": 0,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 120.00902666698676,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 0,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 129510,
+        "_marble_ufs_writes": 495,
+        "_marble_watchdog_checkins": 3,
+        "_marble_ui_exit_count": 0,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [
+        {
+          "address": "0xfffffff816af2660",
+          "pid": 60,
+          "state": 2,
+          "name": "backboardd"
+        },
+        {
+          "address": "0xfffffff818584660",
+          "pid": 27,
+          "state": 2,
+          "name": "SpringBoard"
+        }
+      ],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 180.0076959580183,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 4,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 244188,
+        "_marble_ufs_writes": 2101,
+        "_marble_watchdog_checkins": 9,
+        "_marble_ui_exit_count": 0,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [
+        {
+          "address": "0xfffffff8159e0aa0",
+          "pid": 226,
+          "state": 2,
+          "name": "com.apple.datamigrator"
+        },
+        {
+          "address": "0xfffffff816af2660",
+          "pid": 60,
+          "state": 2,
+          "name": "backboardd"
+        },
+        {
+          "address": "0xfffffff818584660",
+          "pid": 27,
+          "state": 2,
+          "name": "SpringBoard"
+        }
+      ],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 240.0185060420772,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 4,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 280932,
+        "_marble_ufs_writes": 5198,
+        "_marble_watchdog_checkins": 15,
+        "_marble_ui_exit_count": 1,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [
+        {
+          "address": "0xfffffff816b78220",
+          "pid": 269,
+          "state": 2,
+          "name": "SpringBoard"
+        },
+        {
+          "address": "0xfffffff8159d6220",
+          "pid": 246,
+          "state": 2,
+          "name": "Setup"
+        },
+        {
+          "address": "0xfffffff816af2660",
+          "pid": 60,
+          "state": 2,
+          "name": "backboardd"
+        }
+      ],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 300.01914583309554,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 1380,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 281890,
+        "_marble_ufs_writes": 5377,
+        "_marble_watchdog_checkins": 21,
+        "_marble_ui_exit_count": 1,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [
+        {
+          "address": "0xfffffff816b78220",
+          "pid": 269,
+          "state": 2,
+          "name": "SpringBoard"
+        },
+        {
+          "address": "0xfffffff8159d6220",
+          "pid": 246,
+          "state": 2,
+          "name": "Setup"
+        },
+        {
+          "address": "0xfffffff816af2660",
+          "pid": 60,
+          "state": 2,
+          "name": "backboardd"
+        }
+      ],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 360.00728295801673,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 1381,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 296890,
+        "_marble_ufs_writes": 7342,
+        "_marble_watchdog_checkins": 27,
+        "_marble_ui_exit_count": 1,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [
+        {
+          "address": "0xfffffff816b78220",
+          "pid": 269,
+          "state": 2,
+          "name": "SpringBoard"
+        },
+        {
+          "address": "0xfffffff8159d6220",
+          "pid": 246,
+          "state": 2,
+          "name": "Setup"
+        },
+        {
+          "address": "0xfffffff816af2660",
+          "pid": 60,
+          "state": 2,
+          "name": "backboardd"
+        }
+      ],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 420.0184953750577,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 1382,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 304938,
+        "_marble_ufs_writes": 9991,
+        "_marble_watchdog_checkins": 33,
+        "_marble_ui_exit_count": 1,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [
+        {
+          "address": "0xfffffff816b78220",
+          "pid": 269,
+          "state": 2,
+          "name": "SpringBoard"
+        },
+        {
+          "address": "0xfffffff8159d6220",
+          "pid": 246,
+          "state": 2,
+          "name": "Setup"
+        },
+        {
+          "address": "0xfffffff816af2660",
+          "pid": 60,
+          "state": 2,
+          "name": "backboardd"
+        }
+      ],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 480.0166202080436,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 1383,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 308243,
+        "_marble_ufs_writes": 10472,
+        "_marble_watchdog_checkins": 39,
+        "_marble_ui_exit_count": 1,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [
+        {
+          "address": "0xfffffff816b78220",
+          "pid": 269,
+          "state": 2,
+          "name": "SpringBoard"
+        },
+        {
+          "address": "0xfffffff8159d6220",
+          "pid": 246,
+          "state": 2,
+          "name": "Setup"
+        },
+        {
+          "address": "0xfffffff816af2660",
+          "pid": 60,
+          "state": 2,
+          "name": "backboardd"
+        }
+      ],
+      "communication_end": "RootStage2",
+      "error": null
+    },
+    {
+      "elapsed": 540.0082675830927,
+      "phase": "kernel",
+      "returns": "0000000000000003",
+      "panic": "",
+      "globals": {
+        "_marble_display_transfers": 1384,
+        "_marble_display_frames": 0,
+        "_marble_ufs_reads": 325403,
+        "_marble_ufs_writes": 12698,
+        "_marble_watchdog_checkins": 45,
+        "_marble_ui_exit_count": 1,
+        "_sheng_watchdog_policy_status": 0
+      },
+      "focus": [
+        {
+          "address": "0xfffffff814c55660",
+          "pid": 416,
+          "state": 2,
+          "name": "com.apple.datamigrator"
+        },
+        {
+          "address": "0xfffffff816b78220",
+          "pid": 269,
+          "state": 2,
+          "name": "SpringBoard"
+        },
+        {
+          "address": "0xfffffff8159d6220",
+          "pid": 246,
+          "state": 2,
+          "name": "Setup"
+        },
+        {
+          "address": "0xfffffff816af2660",
+          "pid": 60,
+          "state": 2,
+          "name": "backboardd"
+        }
+      ],
+      "communication_end": "RootStage2",
+      "error": null
+    }
+  ],
+  "remaining": [
+    "Setup interaction latency",
+    "SpringBoard restart loop",
+    "Full power-cycle boot persistence verification"
+  ],
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/hello-persistence-reboot",
+  "observation": "Stopped after user confirmed Hello or Setup"
+}
