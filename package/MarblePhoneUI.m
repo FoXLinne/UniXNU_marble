@@ -3,19 +3,22 @@
 #import <Foundation/Foundation.h>
 #include <CoreGraphics/CGGeometry.h>
 #include <dispatch/dispatch.h>
+#include <dlfcn.h>
 #include <mach-o/dyld.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <stdbool.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/sysctl.h>
 
 static IMP originalBatteryUpdate;
 static IMP originalDictationAvailability;
 static IMP originalResourceValue;
 static IMP originalDisplayComposition;
 static IMP originalAddDisplay;
+static IMP originalAssertion;
 static bool queued, installed;
 static bool signature(Method method, char result, unsigned count, const char *arguments)
 {
@@ -29,6 +32,34 @@ static bool signature(Method method, char result, unsigned count, const char *ar
         free(type);
     }
     return valid;
+}
+
+static void assertionFailure(id self, SEL selector, NSString *function, NSString *file,
+                             NSInteger line, NSString *format, ...)
+{
+    va_list arguments;
+    va_start(arguments, format);
+    NSString *message = [[[NSString alloc] initWithFormat:format arguments:arguments] autorelease];
+    va_end(arguments);
+    NSArray<NSNumber *> *frames = [NSThread callStackReturnAddresses];
+    char text[64];
+    unsigned long long callers[3] = {};
+    for (NSUInteger i = 0; i < 3 && i + 3 < frames.count; ++i)
+        callers[i] = frames[i + 3].unsignedLongLongValue;
+    snprintf(text, sizeof(text), "assert %llx %llx %llx", callers[0], callers[1], callers[2]);
+    void (*note)(const char *) = (void (*)(const char *))dlsym(RTLD_DEFAULT, "native_bridge_metal_note");
+    if (note) note(text);
+    ((void (*)(id, SEL, id, id, NSInteger, id, ...))originalAssertion)(self, selector,
+        function, file, line, @"%@", message);
+}
+
+static void installAssertionCapture(void)
+{
+    if (originalAssertion) return;
+    Method method = class_getInstanceMethod([NSAssertionHandler class],
+        @selector(handleFailureInFunction:file:lineNumber:description:));
+    if (signature(method, 'v', 4, "@@q@"))
+        originalAssertion = method_setImplementation(method, (IMP)assertionFailure);
 }
 
 static IMP originalVisualProvider;
@@ -260,13 +291,11 @@ static void imageAdded(const struct mach_header *header, intptr_t slide)
 
 __attribute__((constructor)) static void initialize(void)
 {
+    installAssertionCapture();
     installComposition();
     installPhotoRendering();
     if (!strcmp(getprogname(), "PosterBoard")) installFileProtection();
-    char product[64] = {};
-    size_t bytes = sizeof(product);
-    int result = sysctlbyname("hw.product", product, &bytes, NULL, 0);
-    if (result || strcmp(product, "iPhone10,3")) return;
+    // The provider selects the board's native bounds across OS product identities.
     installNativeScreen();
     _dyld_register_func_for_add_image(imageAdded);
 }

@@ -11,6 +11,7 @@
 #include <libkern/c++/OSString.h>
 #include <mach/kmod.h>
 #include <pexpert/pexpert.h>
+#include <kern/thread.h>
 
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" kmod_info_t g_kernel_kmod_info;
@@ -38,6 +39,8 @@ volatile uint64_t marble_display_mapping, marble_display_bytes, marble_display_c
 uint32_t *marble_display_pixels;
 uint32_t marble_display_geometry[3];
 uint32_t marble_display_snapshot_ready;
+uint64_t marble_display_timing[17];
+volatile uint32_t marble_display_timing_state, marble_display_timing_error;
 char marble_touch_status[256];
 volatile uint64_t marble_display_frame[6], marble_display_surface[7];
 volatile uint32_t marble_display_pm[3], marble_display_vsync[2];
@@ -89,6 +92,53 @@ void native_marble_display_snapshot(void)
     const volatile uint32_t *source = reinterpret_cast<const volatile uint32_t *>(marble_display_mapping);
     for (uint64_t i = 0; i < marble_display_bytes / 4; ++i) marble_display_pixels[i] = source[i];
     marble_display_snapshot_ready = 1;
+}
+
+static void displayTimingWorker(void *, wait_result_t)
+{
+    // Marble's DT places the two DSI interfaces at MDSS+0x36000/0x37000.
+    // A live frame transfer establishes the display path before this request.
+    auto *memory = IODeviceMemory::withRange(0xae00000, 0x38000);
+    auto *mapping = memory ? memory->map(kIOMapAnywhere | kIOMapInhibitCache) : nullptr;
+    OSSafeReleaseNULL(memory);
+    if (!mapping) {
+        marble_display_timing_error = kIOReturnNoMemory;
+        __atomic_store_n(&marble_display_timing_state, 3U, __ATOMIC_RELEASE);
+        thread_terminate(current_thread());
+        return;
+    }
+    static constexpr uint32_t offsets[] = {0x26c, 0, 0xa8, 0xac, 0xb0, 8, 0xc};
+    const auto *registers = reinterpret_cast<const volatile uint32_t *>(mapping->getVirtualAddress());
+    uint64_t result[17] = {};
+    __asm__ volatile("isb\n\tmrs %0, cntpct_el0\n\tmrs %1, cntfrq_el0" : "=r"(result[0]), "=r"(result[1]));
+    for (unsigned interface = 0; interface < 2; ++interface)
+        for (unsigned index = 0; index < 7; ++index)
+            result[2 + interface * 7 + index] = registers[(0x36000 + interface * 0x1000 + offsets[index]) / 4];
+    __asm__ volatile("dsb sy\n\tisb\n\tmrs %0, cntpct_el0" : "=r"(result[16]) :: "memory");
+    memcpy(marble_display_timing, result, sizeof(result));
+    mapping->release();
+    __atomic_store_n(&marble_display_timing_state, 2U, __ATOMIC_RELEASE);
+    thread_terminate(current_thread());
+}
+
+void native_marble_display_timing_request(void)
+{
+    if (!marble_display_transfers) {
+        marble_display_timing_error = kIOReturnNotReady;
+        __atomic_store_n(&marble_display_timing_state, 3U, __ATOMIC_RELEASE);
+        return;
+    }
+    uint32_t previous = __atomic_load_n(&marble_display_timing_state, __ATOMIC_ACQUIRE);
+    if (previous == 1 || !__atomic_compare_exchange_n(&marble_display_timing_state, &previous, 1U,
+        false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) return;
+    marble_display_timing_error = 0;
+    thread_t worker;
+    kern_return_t status = kernel_thread_start(displayTimingWorker, nullptr, &worker);
+    if (!status) thread_deallocate(worker);
+    else {
+        marble_display_timing_error = status;
+        __atomic_store_n(&marble_display_timing_state, 3U, __ATOMIC_RELEASE);
+    }
 }
 
 void native_legacy_registration_observed(IOService *display)

@@ -15,6 +15,7 @@
 #include "MarbleCpuOwnership.h"
 
 BOOLEAN MarbleRootReadMemory(VOID *Destination, CONST VOID *Source, UINTN Bytes, UINT64 *Fault);
+BOOLEAN MarbleRootReadRegister(UINT32 *Destination, CONST VOID *Source, UINTN Reserved, UINT64 *Fault);
 
 #define TRANSFER_BYTES 0x400000
 #define EP_OUT 0x01
@@ -571,6 +572,9 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       __asm__ volatile("mrs %0, mpidr_el1" : "=r"(Affinity));
       CHAR8 Text[17]; Hex(Text,Affinity & 0xff00ffffffULL,16); Reply("OKAY",Text);
     }
+    else if (!AsciiStrCmp(Command,"getvar:display-timing")) {
+      Reply("OKAY","kernel");
+    }
     else if (!AsciiStrCmp(Command,"getvar:kernel-ready")) {
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
       Reply("OKAY",mKernelRunning && (mStage->ReturnTest==2 || (mStage->ReturnTest>>32)==1) ? "ready" : "pending");
@@ -584,7 +588,7 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
         Reply("FAIL","invalid input request"); continue;
       }
       UINT32 Operation=AsciiStrHexToUintn(Command+10), X=AsciiStrHexToUintn(Command+13), Y=AsciiStrHexToUintn(Command+18);
-      if (Operation<1 || Operation>4 || X>=1080 || Y>=2400) { Reply("FAIL","input outside display"); continue; }
+      if (Operation<1 || Operation>5 || X>=1080 || Y>=2400) { Reply("FAIL","input outside display"); continue; }
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
       if (*(volatile UINT32 *)&mStage->ReturnTest) { Reply("FAIL","control request pending"); continue; }
       *(volatile UINT32 *)&mStage->ReturnTest=0x80000000U|(Operation<<24)|(X<<12)|Y;

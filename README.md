@@ -50,4 +50,8 @@ CPU 归属定义位于 `package/MarblePkg/MarbleCpuOwnership.h`。驻留 USB 服
 
 `scripts/observe_ios18_boot.py --once --skip-threads` 保存进程列表、异常退出、GPU 状态与内核日志。`scripts/capture_ios18_gpu_trace.py --swipes 6` 记录滑动窗口、提交到退役时序与交换间隔，输出 `events.json` 和 `summary.json`。交换退役时序与面板刷新时序分别记录。
 
+iOS 18 用户态构建携带 arm64e `MarblePhoneUI.dylib` 和配套 owner trust cache。`build_ios18_gpu.py ui` 为用户态产物构建屏幕适配器。Metal 的 2D 纹理能力查询填充 22H384 的内嵌 `limits` 表，供 Tungsten 与 PhotosUICore 读取。
+
+`scripts/measure_marble_display.py --kernel PATH --output PATH` 通过输入操作 5 请求内核显示工作线程采样 DSI 接口。活动帧传输作为采样前提，输出接口帧计数、行计数、时钟及区间刷新率。USB 服务传递请求并读取 RAM 结果，寄存器访问使用内核 IOKit 映射。
+
 iOS 18 UFS 打包使用 `profiles/marble-storage-22H384.json` 校验 Data 容量、UUID 和 OS build。设备 Data 容量为 64 GiB，元数据输入为 `outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs/Data.rdisk` 旁的 `seed.json`。

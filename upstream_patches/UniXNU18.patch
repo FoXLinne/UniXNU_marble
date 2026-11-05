@@ -1,13 +1,15 @@
 diff --git a/docs/drivers/adreno-metal.md b/docs/drivers/adreno-metal.md
-index e90eb8f..0b908c8 100644
+index e90eb8f..3caeadd 100644
 --- a/docs/drivers/adreno-metal.md
 +++ b/docs/drivers/adreno-metal.md
-@@ -48,3 +48,5 @@ With `sheng-gpu-trace=1`, kernel event 65 identifies the Metal device and comman
+@@ -48,3 +48,7 @@ With `sheng-gpu-trace=1`, kernel event 65 identifies the Metal device and comman
  `sheng-wallpaper-freeze=1` isolates wallpaper rendering. A Poster renderer retains its first successfully drawn and stored IOSurface output of at least two million pixels, then parks later command buffers before runtime submission. Parked buffers remain committed and unscheduled; their owners and queue leases stay retained. Previously submitted work completes normally. PosterBoard, backboardd and other clients continue submitting. The mode defaults to off.
  
  Detailed latency records identify slow encoder calls, callback invoke addresses and resource destruction. Kernel sampling of the render, encode and completion threads correlates upstream waits.
 +
 +Metal clients preserve requested sample counts. The iOS 18 integration retains IOSurface plane identity in texture views, uses the development translator and exposes a bounded per-process compilation budget through `M2V_PIPELINE_TURNS`. Unused owned backing can be released by the room worker with up to 512 MiB queued.
++
++For 22H384, `initLimits` fills the embedded Metal table's 2D texture dimensions from runtime capability queries. Tungsten's image importer and PhotosUICore consume that table through `limits`. The initializer validates the base object size and table address before writing the fields.
 diff --git a/docs/drivers/adreno740.md b/docs/drivers/adreno740.md
 index b4028dd..cd6fc40 100644
 --- a/docs/drivers/adreno740.md
@@ -19,15 +21,17 @@ index b4028dd..cd6fc40 100644
 +
 +`NativeAdrenoParamsTaskCpuMap` advertises connection-scoped BO CPU mapping. The driver checks the owning task, BO handle, token and mapped address, and removes task mappings before releasing their backing on connection close.
 diff --git a/docs/zh/drivers/adreno-metal.md b/docs/zh/drivers/adreno-metal.md
-index d81769e..ae29c84 100644
+index d81769e..cdc9d35 100644
 --- a/docs/zh/drivers/adreno-metal.md
 +++ b/docs/zh/drivers/adreno-metal.md
-@@ -48,3 +48,5 @@ python3 scripts/check-native-metal-frontend-host.py
+@@ -48,3 +48,7 @@ python3 scripts/check-native-metal-frontend-host.py
  `sheng-wallpaper-freeze=1` 用于隔离壁纸渲染。名字包含 Poster 的渲染进程首次成功绘制并保存至少 200 万像素的 IOSurface 后，保留该输出，拦下后续 command buffer 的 runtime 提交。被拦下的缓冲保持已 commit、未调度状态，继续持有资源和队列名额；此前已提交的工作正常完成。PosterBoard、backboardd 和其他客户端继续提交。此模式默认关闭。
  
  细分延迟记录标出慢编码调用、回调入口地址和资源析构耗时。内核对渲染、编码和完成线程的采样关联上游等待。
 +
 +iOS 18 集成保留调用方采样数及纹理视图的 IOSurface plane，采用 development 转译器。`M2V_PIPELINE_TURNS` 配置进程编译并发；后台回收队列容纳 512 MiB 自有 backing。
++
++22H384 的 `initLimits` 从运行时能力查询取得 2D 纹理宽高，填入 Metal 内嵌能力表。Tungsten 图像导入器与 PhotosUICore 通过 `limits` 读取该表。写入前检查基类对象尺寸及能力表地址。
 diff --git a/docs/zh/drivers/adreno740.md b/docs/zh/drivers/adreno740.md
 index 5da2f5c..b91a168 100644
 --- a/docs/zh/drivers/adreno740.md

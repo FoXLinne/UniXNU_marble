@@ -25,6 +25,19 @@ MarbleRootReadDone:
   msr daif, x9
   mov x0, x8
   ret
+.balign 64
+ASM_FUNC(MarbleRootReadRegister)
+  mrs x9, daif
+  msr daifset, #15
+  mrs x10, vbar_el1
+  adrp x11, MarbleRootReadVectors
+  add x11, x11, :lo12:MarbleRootReadVectors
+  msr vbar_el1, x11
+  isb
+  mov x8, #1
+  ldr w4, [x1]
+  str w4, [x0]
+  b MarbleRootReadDone
 .balign 2048
 MarbleRootReadVectors:
 .rept 16

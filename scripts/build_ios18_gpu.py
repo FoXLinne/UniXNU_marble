@@ -10,6 +10,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 
 DEVICE = Path(__file__).resolve().parents[1]
 LLVM = Path('/opt/homebrew/opt/llvm/bin')
@@ -19,6 +20,34 @@ SOURCES = PROFILE['sources']
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def phone_ui(root):
+    gpu = root / 'gpu'
+    manifest = json.loads((gpu / 'userspace.json').read_text())
+    addon, owner = gpu / 'metal.gpuaddon', gpu / 'owner.trustcache'
+    if sha(addon) != manifest['addon_sha256'] or sha(owner) != manifest['trust_cache_sha256']:
+        raise RuntimeError('Phone UI input differs from its signed userspace manifest')
+    with tempfile.TemporaryDirectory(prefix='phone-ui-', dir=gpu) as temporary:
+        stage = Path(temporary) / 'stage'
+        subprocess.run([sys.executable, DEVICE / 'scripts/build_phone_ui.py', '--addon', addon,
+                        '--output', stage, '--target', 'ios18'], check=True)
+        report = json.loads((stage / 'phone-ui.json').read_text())
+        if report['turnip_sha256'] != manifest.get('turnip_bundle_sha256', report['turnip_sha256']):
+            raise RuntimeError('Phone UI bundle changed the signed Turnip library')
+        shutil.copyfile(stage / 'phone-ui.gpuaddon', addon)
+    trust = manifest['cdhashes']
+    trust['cdhash'], trust['phone_ui_cdhash'] = report['cdhashes'][1], report['cdhashes'][0]
+    entries = sorted(bytes.fromhex(trust[key]) for key in
+                     ('cdhash', 'turnip_cdhash', 'daemon_cdhash', 'phone_ui_cdhash'))
+    identity = hashlib.sha256(b''.join(entries)).digest()[:16]
+    owner.write_bytes(struct.pack('<I16sI', 2, identity, len(entries)) + b''.join(
+        entry + bytes([2, 0, 0, 0]) for entry in entries))
+    manifest.update(addon_sha256=sha(addon), trust_cache_sha256=sha(owner),
+                    turnip_bundle_sha256=report['turnip_sha256'],
+                    phone_ui_target=report['target'], phone_ui_source_sha256=sha(DEVICE / 'package/MarblePhoneUI.m'))
+    (gpu / 'userspace.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    print(addon)
 
 
 def source_tree(root):
@@ -354,12 +383,12 @@ def userspace(root):
         quartzcore_metallib_sha256=sha(quartzcore),
         turnip_sha256=sha(build / 'mesa-tu-ios18/src/freedreno/vulkan/libvulkan_freedreno.dylib')),
         indent=2) + '\n')
-    print(addon)
+    phone_ui(root)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('kernel', 'userspace', 'all'))
+    parser.add_argument('command', choices=('kernel', 'userspace', 'ui', 'all'))
     parser.add_argument('--root', required=True, type=Path)
     parser.add_argument('--assets', type=Path)
     parser.add_argument('--images', type=Path)
@@ -368,7 +397,7 @@ def main():
     args = parser.parse_args()
     root = args.root.resolve()
     if args.command != 'all':
-        {'kernel': kernel, 'userspace': userspace}[args.command](root)
+        {'kernel': kernel, 'userspace': userspace, 'ui': phone_ui}[args.command](root)
         return
     if not args.images or not args.data_seed:
         parser.error('all requires --images and --data-seed from the retained iOS 18 installation')

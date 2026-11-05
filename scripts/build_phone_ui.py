@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--addon', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--metal-bundle', type=Path)
+    parser.add_argument('--target', choices=('ios17', 'ios18'), default='ios17')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     blob = args.addon.read_bytes()
@@ -55,7 +56,8 @@ def main():
     turnip_hash = hashlib.sha256(turnip.read_bytes()).hexdigest()
     library = bundle / 'MarblePhoneUI.dylib'
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
-    run('xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-isysroot', sdk,
+    compiler_target = 'arm64e-apple-ios18.0' if args.target == 'ios18' else 'arm64-apple-ios17.0'
+    run('xcrun', 'clang', '-target', compiler_target, '-isysroot', sdk,
         '-O2', '-Wall', '-Wextra', '-Werror', '-fno-objc-arc', '-dynamiclib',
         ROOT / 'package/MarblePhoneUI.m', '-lobjc', '-framework', 'CoreFoundation',
         '-Wl,-reexport_framework,Foundation', '-install_name', '@loader_path/MarblePhoneUI.dylib',
@@ -88,7 +90,7 @@ def main():
         body += encoded + bytes(-len(encoded) % 8) + packed + bytes(-len(packed) % 8)
     addon = args.output / 'phone-ui.gpuaddon'
     addon.write_bytes(b'NGPUADD2' + struct.pack('<IIQ', len(entries), 0, len(body) + 24) + body)
-    report = dict(cdhashes=hashes, addon=str(addon), turnip_sha256=turnip_hash,
+    report = dict(cdhashes=hashes, addon=str(addon), target=compiler_target, turnip_sha256=turnip_hash,
                   metal_bundle=str(args.metal_bundle) if args.metal_bundle else str(args.addon))
     (args.output / 'phone-ui.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))

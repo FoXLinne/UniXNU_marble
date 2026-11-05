@@ -1,0 +1,141 @@
+{
+  "device": "marble",
+  "os": "iOS 18.7.11",
+  "build": "22H384",
+  "xnu": "11417.140.69",
+  "Photos_exit": {
+    "pid": 421,
+    "namespace": 2,
+    "code": "0x6",
+    "name": "Photos",
+    "pc": "0x1e348c1dc",
+    "far": "0x0",
+    "esr": "0x56000080",
+    "description": "slide=f014000 199bfc160 21cb405a0 21cb2ef10 18f14fbf8 21cb3f8b4 21cb430d0 18f14d568 191bab93c 1df445454 1945d11a4 19459ca28 100565ec4",
+    "exception_reason": "*** Terminating app due to uncaught exception 'NSInternalInconsistencyException', reason: 'Invalid parameter not satisfying: !PXPixelSizeAreaIsZero(roundedSize)'"
+  },
+  "Photos_metal_text": {
+    "name": "Photos",
+    "text": "problem assert 1b9ce1920 1b9cfe340 1b9cfe24c"
+  },
+  "assertion_symbols": {
+    "cache_slide": "0xf014000",
+    "local_symbols_uuid_matches": true,
+    "frames": [
+      {
+        "address": "0x1b9ce191c",
+        "unslid_address": "0x1aaccd91c",
+        "image": "/System/Library/PrivateFrameworks/PhotosUICore.framework/PhotosUICore",
+        "symbol": "-[PXGMetalTextureConverter createTextureFromCGImage:transform:alpha:options:error:]",
+        "offset": 564
+      },
+      {
+        "address": "0x1b9cfe33c",
+        "unslid_address": "0x1aacea33c",
+        "image": "/System/Library/PrivateFrameworks/PhotosUICore.framework/PhotosUICore",
+        "symbol": "-[PXGMetalTextureConverter _createTransparentTexture]",
+        "offset": 84
+      },
+      {
+        "address": "0x1b9cfe248",
+        "unslid_address": "0x1aacea248",
+        "image": "/System/Library/PrivateFrameworks/PhotosUICore.framework/PhotosUICore",
+        "symbol": "-[PXGMetalTextureConverter initWithContext:presentationType:destinationColorspaceName:layoutQueue:]",
+        "offset": 264
+      }
+    ]
+  },
+  "cause": {
+    "table": "_MTLDevice.limits",
+    "object_offset": 8,
+    "width_offset": 132,
+    "height_offset": 136,
+    "readers": [
+      "Tungsten PXGMaxTextureSize",
+      "Tungsten PXGCreateMetalTextureFromBytesInCGImage"
+    ],
+    "initializer": "runtime maxTextureWidth2D/maxTextureHeight2D"
+  },
+  "candidate": {
+    "userspace": {
+      "sources": {
+        "UniXNU": "e2fdae4312d0acc3d8a52bc457101e7918095e6a",
+        "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+        "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+        "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+      },
+      "target": "arm64e-apple-ios18.0",
+      "addon": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/gpu/metal.gpuaddon",
+      "addon_sha256": "5f588c26154653cf48ac13efbea0b50f3bf0a01af4d3a9ad952061cb9e97b330",
+      "trust_cache": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/gpu/owner.trustcache",
+      "trust_cache_sha256": "3ee9f7d34491b2bb6277e12b40f974fee8f05d23ec4f615e6b2e5ed9c4bc2604",
+      "cdhashes": {
+        "cdhash": "a1a8718752b872f5de2953efc11d09c7c44ec137",
+        "daemon_cdhash": "fa7497653032d970708bf03b8894a58ff0afa828",
+        "turnip_cdhash": "9d28fff858c94c676f429ad54076c95db4e56ba8",
+        "bundle": "NativeAdrenoMetal.bundle",
+        "executable_bytes": 18726752,
+        "purpose": "owner-built plugin and probe daemon; trusted only through an extra owner trust module",
+        "phone_ui_cdhash": "f83601fbc29184f08c4834e2642e531cd49e23df"
+      },
+      "primelist_entries": 209,
+      "translator": "bf3ce3813c029c96d02594f8568f2ee8343c0ed8",
+      "translator_patch_sha256": "49238ccafcf591f2c0501f9c51dfe8ba16c24bfe9d3c9b5cdae1dc5c8c5e7d7c",
+      "quartzcore_metallib_sha256": "e55ea3087accf9b80ef1fe0ea9106d271744e71448b4ae4a310126da4f0ba72e",
+      "turnip_sha256": "11ea9f11ae8d6c90e88507bbdd405ec0e0b9ef13e88ce1a43eabef792bc07648",
+      "turnip_bundle_sha256": "ed0d342d3beca887638b215a52e9058c59818c8cfa2205a94d82594719261311",
+      "phone_ui_target": "arm64e-apple-ios18.0",
+      "phone_ui_source_sha256": "184b0fc544f748ced97c2d68514e3985fa0da52213f215ff2f29b3b15e8c17d2"
+    },
+    "hardware_qualification": "pending",
+    "boot": {
+      "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/image-limits-worker/marble_temporary_boot.img",
+      "kernel_sha256": "68b03c03d7ea06b16ba95ad27638869bf2103fe23e048a23f9474c0573fac0bb",
+      "native_sha256": "cf6a67fd5249ed7aa7cb8d17065f7bd8aac786a684e455ff676b046ed88d9a82",
+      "kernel_source": "boot-image",
+      "system_source": "ufs",
+      "exit_boot_services": false,
+      "resident_usb": true,
+      "runtime_usb_mode": 3,
+      "enabled_cpu_affinities": [
+        0,
+        512,
+        768,
+        1024,
+        1280,
+        1536,
+        1792
+      ],
+      "firmware_usb_affinity": 256,
+      "display_scale": 3,
+      "data_logical_bytes": 68719476736,
+      "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+      "storage_profile_sha256": "2f439c20ac2a30cd6f3b979ff2f590fb3c0e1b04b55b8edfb7806be238b08f56",
+      "logical_size": [
+        360,
+        800
+      ],
+      "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-preempt=2 sheng-gpu-ttbr=2 sheng-diag=1 sheng-gpu-trace=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1",
+      "gpu_addon_sha256": "5f588c26154653cf48ac13efbea0b50f3bf0a01af4d3a9ad952061cb9e97b330",
+      "gpu_sources": {
+        "UniXNU": "e2fdae4312d0acc3d8a52bc457101e7918095e6a",
+        "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+        "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+        "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+      },
+      "owner_trust_cache_sha256": "3ee9f7d34491b2bb6277e12b40f974fee8f05d23ec4f615e6b2e5ed9c4bc2604"
+    },
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/image-limits-worker",
+    "build": "passed",
+    "prelink": "passed",
+    "packaging": "passed"
+  },
+  "transport": {
+    "observation": "USB display-timing request timed out; subsequent USB enumeration, fastboot and ADB lists empty",
+    "firmware_forward_change": "kernel observation worker selected through input operation 5",
+    "panel_measurement": "pending",
+    "user_state_request": "pending"
+  },
+  "acceptance": "in_progress",
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106"
+}

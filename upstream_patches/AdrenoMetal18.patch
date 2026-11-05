@@ -81,7 +81,7 @@ index 415e9c8..38ba378 100644
          }
          gpu->mark(0x6802);
 diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
-index b56848c..0595578 100644
+index b56848c..5bbe5e1 100644
 --- a/NativeBridgeMetalFrontend.mm
 +++ b/NativeBridgeMetalFrontend.mm
 @@ -911,6 +911,7 @@ - (void)replacePvrtcRegion:(MTLRegion)r mipmapLevel:(NSUInteger)level slice:(NSU
@@ -138,7 +138,42 @@ index b56848c..0595578 100644
   return (id<MTLTexture>)view;
  }
  - (id<MTLTexture>)newTextureViewWithPixelFormat:(MTLPixelFormat)format {
-@@ -4216,7 +4216,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -4062,9 +4062,31 @@ - (BOOL)supportsFeatureSet:(MTLFeatureSet)set {
+ }
+ // The original discovery (_MTLAddDevice) runs these four on every device it registers. The target's own versions fill the base class's limits
+ // and feature tables from a hardware profile (`featureProfile`, `indirectArgumentBufferCapabilities`, a table of Apple GPUs) that this device
+-// has not got: running them would claim an Apple GPU's capabilities. They are empty here, so a limit or feature the runtime measured is answered
+-// by this file's own answers (installAnswers) and any other stays the base class's neutral 0/NO. Nothing is claimed that nothing measured.
+-- (void)initLimits {}
++// has not got. Scalar queries use installAnswers. The iOS 18 embedded table's
++// texture dimensions use the same measured answers; other table fields retain their base values.
++- (void)initLimits {
++#if defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180000 && __IPHONE_OS_VERSION_MIN_REQUIRED < 190000
++ // 22H384 _MTLDevice.limits returns the embedded table at self+8. Tungsten's
++ // PXGMaxTextureSize reads its 32-bit width and height at 0x84 and 0x88.
++ // Populate those fields from the runtime's measured texture limits.
++ Class base=objc_getClass("_MTLDevice");
++ SEL selector=sel_registerName("limits");
++ Method method=base?class_getInstanceMethod(base,selector):nullptr;
++ if(!method || class_getInstanceSize(base)<8+0x8c)return;
++ auto *table=((uint8_t *(*)(id,SEL))method_getImplementation(method))(self,selector);
++ if(table!=reinterpret_cast<uint8_t *>((__bridge void *)self)+8) {
++  NBLOG(@"native-metal: unexpected iOS 18 limits layout");return;
++ }
++ uint64_t width=0,height=0;
++ if(!nmb_device_answer(gDevice,"maxTextureWidth2D",0,&width) ||
++    !nmb_device_answer(gDevice,"maxTextureHeight2D",0,&height) ||
++    !width || !height || width>UINT32_MAX || height>UINT32_MAX) {
++  NBLOG(@"native-metal: iOS 18 texture limits unavailable");return;
++ }
++ const uint32_t values[]={uint32_t(width),uint32_t(height)};
++ memcpy(table+0x84,values,sizeof(values));
++#endif
++}
+ - (void)initFeatureQueries {}
+ - (void)initGPUFamilySupport {}
+ - (void)initWorkarounds {}
+@@ -4216,7 +4238,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
   NBTexture *texture=planes>=2?textureOnSurface(buffer,d,surface,plane,start-(uintptr_t)base,row):textureOnBuffer(buffer,d,start-(uintptr_t)base,row,true);
   if(!texture){refuseSurface(5,surface,d,plane,start-(uintptr_t)base,row);return nil;}
   if(gLogTextures)logTexture("iosurface",d,surface,plane,base,start-(uintptr_t)base,row,texture!=nil);
@@ -147,7 +182,7 @@ index b56848c..0595578 100644
  }
  - (id<MTLLibrary>)newLibraryWithData:(dispatch_data_t)data error:(NSError **)error {
   const void *bytes=nullptr;size_t size=0;dispatch_data_t mapped=dispatch_data_create_map(data,&bytes,&size);
-@@ -4227,7 +4227,14 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -4227,7 +4249,14 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
   if(error)*error=nil;return (id<MTLLibrary>)library;
  }
  - (id<MTLLibrary>)newLibraryWithFile:(NSString *)path error:(NSError **)error {
@@ -163,8 +198,16 @@ index b56848c..0595578 100644
   const uint64_t libraryBegan=nowUs();
   NmbLibrary *handle=nmb_library_new(gDevice,bytes.bytes,bytes.length,false);gTimeLibrary.add(libraryBegan);
   if(!handle)return failWith<id<MTLLibrary>>(error,@"library",nil);
+@@ -4597,6 +4626,7 @@ static void installAnswers(Class cls) {
+   for(const auto &c:conformances){Class k=objc_getClass(c[0]);Protocol *pr=objc_getProtocol(c[1]);if(k&&pr)class_addProtocol(k,pr);}}
+  objc_registerClassPair(cls);
+  gDeviceObject=[cls new];
++ ((void (*)(id,SEL))objc_msgSend)(gDeviceObject,sel_registerName("initLimits"));
+  if(gDeviceObject && iconMetalTrace()) {
+   char text[88];
+   snprintf(text,sizeof(text),"metal-device %s reg=%llx %.42s",class_getName(cls),(unsigned long long)registryID,name);
 diff --git a/README.md b/README.md
-index dc090ab..f9963b7 100644
+index dc090ab..9459dab 100644
 --- a/README.md
 +++ b/README.md
 @@ -4,13 +4,13 @@ Metal frontend through metal2vulkan and Turnip.
@@ -183,7 +226,7 @@ index dc090ab..f9963b7 100644
  
  ## Frame diagnostics
  
-@@ -21,3 +21,9 @@ With `sheng-gpu-trace=1`, the render server writes command phases, encoding batc
+@@ -21,3 +21,11 @@ With `sheng-gpu-trace=1`, the render server writes command phases, encoding batc
  Slow encoding operations retain source lines and enqueue times. Completion handlers and resource destructors carry individual timing and identities. Kernel sampling of the render, encode and completion threads and blocked-thread waits provide the cross-thread wait record.
  
  `python3 scripts/check-wallpaper-freeze-host.py` in the resolved tree checks real pixels, callbacks, concurrent parked submissions and process selection.
@@ -193,3 +236,5 @@ index dc090ab..f9963b7 100644
 +The device profile builds arm64e objects for iOS 18. The framebuffer policy selects SDR headroom and plain BGRA rows. Private QuartzCore addresses for 24A446 are compiled for the iOS 27 target. The iOS 18 bundle carries its original QuartzCore Metal library for sandboxed callers and shader priming.
 +
 +The iOS 18 runtime uses the upstream development translator with retained in-place imports, room-worker reuse and diagnostics. Texture views retain their IOSurface plane. Turnip compilation uses up to six CPU turns; M2V_PIPELINE_TURNS selects a budget within the available CPU count.
++
++The 22H384 device initializes the embedded Metal limits table's 2D texture width and height from runtime queries. Tungsten and PhotosUICore read these fields through `limits` when importing and redrawing images. The initializer checks the base object size and table address before writing.

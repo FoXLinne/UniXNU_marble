@@ -26,6 +26,7 @@ extern "C" void native_marble_buttons_restore(void);
 #ifdef MARBLE_IOS18_GPU
 extern "C" int native_marble_adreno_stop(void);
 extern "C" void native_marble_gmu_stop(void);
+extern "C" void native_marble_display_timing_request(void);
 #endif
 extern "C" volatile uint32_t armcpu_smp_step[8], armcpu_smp_mpidr[8];
 extern "C" void native_resident_usb_control(volatile uint64_t *);
@@ -85,6 +86,9 @@ static void usbControlWorker(void *, wait_result_t)
         if (operation==2 || operation==3) native_hid_request_contact(x,y,operation==2);
       }
       if (operation==4) native_marble_display_snapshot();
+#ifdef MARBLE_IOS18_GPU
+      if (operation==5) native_marble_display_timing_request();
+#endif
       usb_interrupt[0]=0;
       __asm__ volatile("dsb sy" ::: "memory");
     }
