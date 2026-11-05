@@ -354,18 +354,21 @@ bool initialize() {
     bytes = reinterpret_cast<uint8_t *>(dmaMap->getVirtualAddress());
     physical = dmaMap->getPhysicalAddress();
     for (unsigned i=0; i<dmaBytes/4; i++) reinterpret_cast<volatile uint32_t *>(bytes)[i]=0;
-    write(DWC3_DCTL,read(DWC3_DCTL)&~DWC3_DCTL_RUN_STOP);
-    unsigned stopped = 0;
-    for (; stopped < 10000 && !(read(DWC3_DSTS) & DWC3_DSTS_DEVCTRLHLT); ++stopped) IODelay(1);
-    if (stopped == 10000) return false;
+    // Reset the inherited device queues while clearing RUN_STOP. Firmware can
+    // leave a bulk OUT request pending, so waiting for halt before reset stalls
+    // takeover. DWC_usb31 also needs time for its clock domains to synchronize.
+    write(DWC3_DEVTEN,0);
+    write(DWC3_DCTL,(read(DWC3_DCTL)&~(DWC3_DCTL_RUN_STOP|DWC3_DCTL_ULSTCHNGREQ_MASK))|DWC3_DCTL_CSFTRST);
+    unsigned wait=0;
+    for (; wait<40 && (read(DWC3_DCTL)&DWC3_DCTL_CSFTRST); wait++) IOSleep(5);
+    if (wait==40) { IOLog("RuntimeUSB: inherited device reset timeout\n"); return false; }
+    if ((id&DWC3_GSNPSID_MASK)==DWC3_GSNPSID_USB31) IOSleep(50);
+    unsigned stopped=0;
+    for (; stopped<100 && !(read(DWC3_DSTS)&DWC3_DSTS_DEVCTRLHLT); stopped++) IOSleep(1);
+    if (stopped==100) { IOLog("RuntimeUSB: reset device halt timeout\n"); return false; }
     // RootStage and RuntimeRoot have distinct descriptors. Give the host a disconnect interval.
     IOSleep(300);
     write(DWC3_GCTL,(read(DWC3_GCTL)&~DWC3_GCTL_PRTCAPDIR(3))|DWC3_GCTL_PRTCAPDIR(2)|DWC3_GCTL_DSBLCLKGTNG);
-    write(DWC3_DCTL,read(DWC3_DCTL)|DWC3_DCTL_CSFTRST);
-    unsigned wait=0;
-    for (; wait<10000 && (read(DWC3_DCTL)&DWC3_DCTL_CSFTRST); wait++) IODelay(1);
-    if (wait==10000) return false;
-    if ((id&DWC3_GSNPSID_MASK)==DWC3_GSNPSID_USB31) IOSleep(50);
     write(DWC3_GUSB2PHYCFG(0),read(DWC3_GUSB2PHYCFG(0))&~(DWC3_GUSB2PHYCFG_SUSPHY|DWC3_GUSB2PHYCFG_ENBLSLPM));
     write(DWC3_DCFG,(read(DWC3_DCFG)&~(DWC3_DCFG_SPEED_MASK|DWC3_DCFG_DEVADDR_MASK))|DWC3_DCFG_HIGHSPEED);
     write(DWC3_GEVNTADRLO(0),(uint32_t)physical);

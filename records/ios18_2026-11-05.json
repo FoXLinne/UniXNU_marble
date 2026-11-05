@@ -319,17 +319,17 @@
       "logical_bytes": 68719476736
     },
     "data_volume_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
-    "installed_boot_image": "ufs-usb-gic-return/marble_persistent_boot.img",
+    "installed_boot_image": "ufs-usb-native-return/marble_persistent_boot.img",
     "installed_boot_slot": "b",
-    "recovery_image": "ufs-usb-gic-return/marble_persistent_boot.img",
-    "recovery_kernel": "ufs-usb-gic-return/KernelSeed.bin",
-    "recovery_build": "ufs-usb-gic-return-build.log",
+    "recovery_image": "ufs-usb-native-return/marble_persistent_boot.img",
+    "recovery_kernel": "ufs-usb-native-return/KernelSeed.bin",
+    "recovery_build": "ufs-usb-native-return-build.log",
     "boot_deadline": false,
     "runtime_usb_mode": 2,
     "kernel_installation": "fastboot sparse update of manifest and KernelSeed, boot_b flash, B-slot reboot",
     "screen_acceptance": false,
     "hardware_connection": "USB event capture observed RuntimeRoot, then RootStage, then device detach after recovery read I/O error",
-    "next_action": "真机采集 panic 后 RootStage 的固件日志与内核现场，修复 USB 恢复链。",
+    "next_action": "部署物理内存读取异常返回修复，验证失败请求后 RootStage 通信。",
     "runtime_evidence": {
       "path": "usb-events/002-d00e/kernel.log",
       "usb_failures": 0,
@@ -350,9 +350,19 @@
       "panic_stops_controller_dma": true,
       "hardware_acceptance": false,
       "complete_active_interrupt_before_return": true,
-      "restore_firmware_icc_ctlr": true
+      "restore_firmware_icc_ctlr": true,
+      "native_resident_return": true
     },
-    "recovery_capture": "usb-events/gic-return",
-    "installation_log": "ufs-usb-gic-return-install.log"
+    "recovery_capture": "usb-events/native-return",
+    "installation_log": "ufs-usb-native-return-install.log",
+    "memory_read_failure": {
+      "physical": "0x98eeae000",
+      "bytes": 4096,
+      "phase": "request",
+      "error": "Input/Output Error",
+      "device_detached": true
+    },
+    "pending_boot_image": "ufs-usb-guarded-read/marble_persistent_boot.img",
+    "pending_build": "ufs-usb-guarded-read-build.log"
   }
 }
