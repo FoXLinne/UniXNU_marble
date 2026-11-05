@@ -75,7 +75,18 @@
       "prelink": "passed",
       "firmware": "passed"
     },
-    "hardware": "in progress",
+    "hardware": {
+      "user_screen": "desktop or lock screen",
+      "Setup_process": "absent from sample",
+      "SpringBoard_pid": 27,
+      "backboardd_pid": 60,
+      "ui_exits": 2,
+      "panic": "",
+      "real_ncpus": 7,
+      "USB": "RootStage2",
+      "elapsed": 240.00220474996604,
+      "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-skip-setup-return"
+    },
     "image": "outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-skip-setup/marble_temporary_boot.img",
     "previous_exit": [
       {
@@ -108,7 +119,24 @@
     "source": "Normal uncached image buffers requested as VM_WIMG_RT used the BCM2837 Device memory attribute",
     "repair": "Use Normal Non-Cacheable for VM_WIMG_RT on DRAM; retain Device mapping for MMIO",
     "kernel_build": "passed",
-    "prelink": "in progress",
-    "hardware": "pending"
+    "prelink": "passed",
+    "hardware": "awaiting bootloader device",
+    "firmware": "passed",
+    "candidate": "session-20261105/interaction-normal-dram/marble_temporary_boot.img"
+  },
+  "settings_freeze": {
+    "user_action": "Opening Settings froze the interface and SpringBoard restarted",
+    "latest_complete_sample": {
+      "elapsed": 240,
+      "ui_exit_count": 2,
+      "real_ncpus": 7,
+      "panic": ""
+    },
+    "USB_interruption": {
+      "observer_error": "Pipe error during live thread read",
+      "user_cause": "USB lost after unplug/replug",
+      "recovery": "user reports fastboot"
+    },
+    "candidate_status": "fastboot boot waiting for target serial 556fdfe"
   }
 }
