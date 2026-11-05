@@ -14,7 +14,9 @@ EFI_STATUS MarbleRootUsbPoll(VOID);
 EFI_STATUS MarbleRootStorageReturn(ROOT_STAGE_TABLE *Stage);
 STATIC EFI_STATUS StorageReturn(VOID) { return MarbleRootStorageReturn(mStorage); }
 
-EFI_STATUS MarbleRootStorage(VOID) {
+EFI_STATUS MarbleRootStorage(VOID *TemporaryKernel, UINTN TemporaryKernelBytes) {
+  if (TemporaryKernel && (TemporaryKernelBytes<0x100000 || TemporaryKernelBytes%4096))
+    return EFI_INVALID_PARAMETER;
   EFI_HANDLE *Handles=NULL; UINTN Count=0;
   EFI_STATUS Status=gBS->LocateHandleBuffer(ByProtocol,&gEfiBlockIoProtocolGuid,NULL,&Count,&Handles);
   if (EFI_ERROR(Status)) return Status;
@@ -76,6 +78,7 @@ EFI_STATUS MarbleRootStorage(VOID) {
     UINT64 Offset=ReadUnaligned64((UINT64 *)(Entry+32)), Bytes=ReadUnaligned64((UINT64 *)(Entry+40));
     if (CompareMem(Entry,Names[I],AsciiStrLen(Names[I])+1) || !Bytes || Bytes%512 || Offset%4096 ||
         Offset<4096 || Offset>ImageBytes || Bytes>ImageBytes-Offset) { Status=EFI_COMPROMISED_DATA; goto Done; }
+    if (I==2 && TemporaryKernel) Bytes=TemporaryKernelBytes;
     ROOT_STAGE_DISK *Disk=&mStorage->Disks[I]; Disk->Bytes=Bytes; Disk->Received=Bytes;
     for (UINTN J=0;J<16;J++) {
       Disk->Identity[J*2]="0123456789abcdef"[Entry[56+J]>>4];
@@ -86,6 +89,11 @@ EFI_STATUS MarbleRootStorage(VOID) {
     UINT8 *Data=AllocateAlignedPages(EFI_SIZE_TO_PAGES(Bytes),MAX((UINTN)4096,(UINTN)Block->Media->IoAlign));
     if (!Data) { Status=EFI_OUT_OF_RESOURCES; goto Done; }
     Disk->Count=1; Disk->Extents[0]=(ROOT_STAGE_EXTENT){(UINTN)Data,Bytes};
+    if (TemporaryKernel) {
+      CopyMem(Data,TemporaryKernel,Bytes);
+      Print(L"UniXNU temporary kernel: %lu bytes\r\n",Bytes);
+      continue;
+    }
     for (UINT64 At=0;At<Bytes;At+=0x100000) {
       UINTN Size=(UINTN)MIN((UINT64)0x100000,Bytes-At);
       Status=Block->ReadBlocks(Block,Block->Media->MediaId,First+(Offset+At)/Sector,Size,Data+At);

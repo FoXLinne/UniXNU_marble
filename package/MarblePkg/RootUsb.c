@@ -46,8 +46,9 @@ VOID MarbleRootUsbCore(VOID);
 
 STATIC VOID ServiceUpdatePoint(VOID)
 {
-  ROOT_STAGE_TABLE *Stage=__atomic_exchange_n(&mReturnedStage,NULL,__ATOMIC_ACQUIRE);
+  ROOT_STAGE_TABLE *Stage=__atomic_load_n(&mReturnedStage,__ATOMIC_ACQUIRE);
   if (!Stage) return;
+  __atomic_store_n(&mReturnedStage,NULL,__ATOMIC_RELEASE);
   mStage=Stage;
   mDisk=2;
   mLastOffset=Stage->Disks[2].Bytes-0x100000;
@@ -308,9 +309,9 @@ STATIC EFI_STATUS InitializeUsb(VOID)
   EFI_GUID InitGuid = {0x1c0cffce,0xfc8d,0x4e44,{0x8c,0x78,0x9c,0x9e,0x5b,0x53,0x0d,0x36}};
   EFI_GUID TableGuid = ROOT_STAGE_GUID;
   EFI_GUID UsbGuid = {0xd9d9ce48,0x44b8,0x4f49,{0x8e,0x3e,0x2a,0x3b,0x92,0x7d,0xc6,0xc1}};
-  VOID *Configs[] = {mConfig}, *SsConfigs[] = {mSsConfig};
-  VOID *Strings[] = {mLanguage,mManufacturer,mProduct,mSerial,mInterface};
-  ROOT_USB_DESCRIPTOR_SET Set = {mDevice,Configs,mSsDevice,SsConfigs,mQualifier,mBos,5,Strings};
+  STATIC VOID *Configs[] = {mConfig}, *SsConfigs[] = {mSsConfig};
+  STATIC VOID *Strings[] = {mLanguage,mManufacturer,mProduct,mSerial,mInterface};
+  STATIC ROOT_USB_DESCRIPTOR_SET Set = {mDevice,Configs,mSsDevice,SsConfigs,mQualifier,mBos,5,Strings};
   gBS->SetWatchdogTimer(0, 0, 0, NULL);
   RetainUsbWatchdog();
   Status = gBS->CreateEventEx(EVT_NOTIFY_SIGNAL,TPL_CALLBACK,UsbNotify,NULL,&InitGuid,&Event);

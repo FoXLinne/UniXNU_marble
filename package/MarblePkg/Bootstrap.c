@@ -23,9 +23,11 @@ STATIC UINT8 *mVolume;
 STATIC UINTN mVolumeSize;
 STATIC BOOLEAN mRootStage, mRootStorage;
 STATIC BOOLEAN mResidentUsb;
+STATIC VOID *mTemporaryKernel;
+STATIC UINTN mTemporaryKernelBytes;
 EFI_STATUS MarbleRootUsbEnableResident(VOID);
 EFI_STATUS MarbleRootUsbStartResident(VOID);
-EFI_STATUS MarbleRootStorage(VOID);
+EFI_STATUS MarbleRootStorage(VOID *TemporaryKernel, UINTN TemporaryKernelBytes);
 EFI_STATUS MarbleRootUsb(VOID);
 EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsbContinue(VOID);
@@ -218,6 +220,10 @@ FindVolume(VOID)
     if (CompareMem(Blob->Name, "root.storage", sizeof("root.storage")) == 0) mRootStorage = TRUE;
     if (CompareMem(Blob->Name, "root.usb", sizeof("root.usb")) == 0) mResidentUsb = TRUE;
     if (CompareMem(Blob->Name, "root.stage", sizeof("root.stage")) == 0) mRootStage = TRUE;
+    if (CompareMem(Blob->Name, "kernel.seed", sizeof("kernel.seed")) == 0) {
+      mTemporaryKernel = Blob + 1;
+      mTemporaryKernelBytes = Blob->Size;
+    }
     if (CompareMem(Blob->Name, "volume.img", sizeof("volume.img")) == 0) {
       mVolume = (VOID *)(Blob + 1);
       mVolumeSize = Blob->Size;
@@ -254,7 +260,7 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     }
     Status=MarbleRootUsbPrepare(NULL);
     if (EFI_ERROR(Status)) Print(L"RootStage USB: %r\r\n",Status);
-    Status=MarbleRootStorage();
+    Status=MarbleRootStorage(mTemporaryKernel,mTemporaryKernelBytes);
     if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
     Status=MarbleRootUsbStartResident();
     if (EFI_ERROR(Status)) return BootReturn(Status,10);
@@ -286,8 +292,8 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     Status = gBS->LoadImage(FALSE, ImageHandle, Path, NULL, 0, &Application);
     FreePool(Path);
     if (!EFI_ERROR(Status)) {
-      Status = MarbleWatchdogStart(32000);
-      Print(L"Marble watchdog: %r, timeout 32000 ms\r\n", Status);
+      Status = mResidentUsb ? EFI_SUCCESS : MarbleWatchdogStart(32000);
+      if (!mResidentUsb) Print(L"Marble watchdog: %r, timeout 32000 ms\r\n", Status);
       if (!EFI_ERROR(Status)) Status = gBS->StartImage(Application, NULL, NULL);
     }
     break;

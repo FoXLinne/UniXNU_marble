@@ -25,6 +25,8 @@ volatile uint32_t marble_watchdog_opens;
 volatile uint32_t marble_watchdog_monitoring;
 }
 static IOWatchdog *activeWatchdog;
+extern "C" bool native_resident_prepare(void);
+static bool residentWatchdog;
 static uint64_t watchdogCall(uint64_t, uint64_t * = nullptr, uint64_t = 0);
 
 class MarbleWatchdog : public IOWatchdog {
@@ -42,12 +44,14 @@ public:
 OSDefineMetaClassAndStructors(MarbleWatchdog, IOWatchdog)
 
 bool MarbleWatchdog::start(IOService *provider) {
+    residentWatchdog=native_resident_prepare();
     if (!marble_original_watchdog_start(this, provider, nullptr, 0)) return false;
     activeWatchdog = this;
     IOLog("MarbleWatchdog: original IOWatchdog lifecycle; Gunyah backend\n");
     return true;
 }
 void MarbleWatchdog::enable3234(void) {
+    if (residentWatchdog) return;
     uint64_t control = 0;
     uint64_t status = watchdogCall(0x86000006, &control);
     if (!status && (control & 1)) return;
@@ -56,6 +60,7 @@ void MarbleWatchdog::enable3234(void) {
         panic("MarbleWatchdog: enable failed: %llx", status);
 }
 void MarbleWatchdog::disable13331(void) {
+    if (residentWatchdog) return;
     uint64_t control = 0;
     uint64_t status = watchdogCall(0x86000006, &control);
     if (!status && !(control & 1)) return;
@@ -64,6 +69,7 @@ void MarbleWatchdog::disable13331(void) {
         panic("MarbleWatchdog: disable failed: %llx", status);
 }
 void MarbleWatchdog::pet65562(void) {
+    if (residentWatchdog) return;
     uint64_t status = watchdogCall(0x86000007);
     if (status) panic("MarbleWatchdog: checkin failed: %llx", status);
 }
@@ -121,22 +127,19 @@ static uint64_t watchdogCall(uint64_t function, uint64_t *control, uint64_t argu
     return x0;
 }
 
-static void watchdogWorker(void *, wait_result_t) {
+[[noreturn]] static void watchdogWorker(void *, wait_result_t) {
     uint64_t control = 0;
     uint64_t status = watchdogCall(0x86000006, &control);
     IOLog("MarbleWatchdog: startup active=%u status=%llx\n", !status && (control & 1), status);
-    if (!status && (control & 1)) {
-        for (;;) {
-            if (activeWatchdog) {
-                const char *state = reinterpret_cast<const char *>(activeWatchdog);
-                memcpy(const_cast<uint64_t *>(&marble_watchdog_checkins), state + 0xb8, 8);
-                marble_watchdog_monitoring = static_cast<unsigned char>(state[0xa8]);
-            }
-            watchdogCall(0x86000007);
-            IOSleep(1000);
+    for (;;) {
+        if (activeWatchdog) {
+            const char *state = reinterpret_cast<const char *>(activeWatchdog);
+            memcpy(const_cast<uint64_t *>(&marble_watchdog_checkins), state + 0xb8, 8);
+            marble_watchdog_monitoring = static_cast<unsigned char>(state[0xa8]);
         }
+        watchdogCall(0x86000007);
+        IOSleep(1000);
     }
-    thread_terminate(current_thread());
 }
 
 extern "C" void native_marble_watchdog_start(void) {

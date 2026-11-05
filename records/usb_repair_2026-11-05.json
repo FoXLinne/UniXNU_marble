@@ -1,0 +1,58 @@
+{
+  "target": "iOS 18.7.11 22H384 SpringBoard from UFS",
+  "evidence": "outputs/UniXNU_marble/ios18_arm64e/session-20261105/usb-repair*",
+  "hardware": {
+    "serial": "556fdfe",
+    "resident_serial": "marble",
+    "last_communication": {
+      "version": "RootStage2",
+      "phase": "kernel",
+      "returns": "0000000000000000",
+      "monotonic": 765872.200825708
+    },
+    "panic": "MarbleWatchdog: enable failed: 0 @MarbleBootWatchdog.cpp:56",
+    "usb_attach_monotonic": 765295.787228916,
+    "runs": [
+      {
+        "image": "usb-repair-watchdog",
+        "usb_communication_seconds": 576,
+        "panic": "MarbleWatchdog: enable failed: 0",
+        "recovery": "manual bootloader entry after kernel debugger halt"
+      },
+      {
+        "image": "usb-repair-early",
+        "usb_detach_after_attach_seconds": 33.46,
+        "last_log": "AppleImage4 magazine write",
+        "panic_text": ""
+      },
+      {
+        "image": "usb-repair-worker",
+        "usb_detach_after_attach_seconds": 33.71,
+        "cpu_registered": 1,
+        "timer_interrupts": 25,
+        "ipi_interrupts": 1,
+        "panic_text": ""
+      }
+    ]
+  },
+  "changes": [
+    "Keep temporary kernel boot resident with RootStage USB mode 3",
+    "Use prelinked kernel without exception-vector rewriting",
+    "Retain descriptor arrays in static storage",
+    "Use load/store publication for the single-producer return mailbox",
+    "Leave hardware watchdog disabled during resident firmware handoff",
+    "Register panic return before platform power initialization",
+    "Keep original userspace watchdog monitoring with resident hardware reset disabled"
+  ],
+  "validation": {
+    "current_source_kernel_build": "passed",
+    "prelink": "passed",
+    "firmware_application_build": "passed",
+    "springboard": "pending",
+    "panic_return_after_early_registration": "pending",
+    "continuous_usb_acceptance": "failed on early and worker images",
+    "next_image": "usb-repair-control/marble_temporary_boot.img",
+    "early_control_build": "passed",
+    "early_control_hardware": "waiting for fastboot"
+  }
+}

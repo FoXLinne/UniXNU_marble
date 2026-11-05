@@ -287,6 +287,7 @@ def build_board(tree, env):
             command += ['-I', str(out), '-Wno-unused-parameter', '-Wno-deprecated-enum-enum-conversion']
             command += ['-I', str(tree / '.cache/xnu-work/osfmk')]
             command += ['-I', str(DEVICE / 'package')]
+            command += ['-I', str(DEVICE.parent / 'UniXNU/package/UniXNUPkg/Include')]
             command += ['-I', str(DEVICE.parent / 'UniXNU/drivers/NativeGeniSpi')]
             if filename == 'RuntimeUsb.cpp':
                 command += ['-DMARBLE_IOS18=1']

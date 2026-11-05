@@ -1,5 +1,5 @@
 diff --git a/DarwinBootPkg/Driver/DarwinBoot.c b/DarwinBootPkg/Driver/DarwinBoot.c
-index 3b6cafc..806618c 100644
+index 3b6cafc..1c3e9e8 100644
 --- a/DarwinBootPkg/Driver/DarwinBoot.c
 +++ b/DarwinBootPkg/Driver/DarwinBoot.c
 @@ -12,6 +12,9 @@
@@ -250,7 +250,7 @@ index 3b6cafc..806618c 100644
            READ_SYSREG (id_aa64mmfr0_el1) & 0xF, (((READ_SYSREG (id_aa64mmfr0_el1) >> 28) & 0xF) == 0xF) ? "NOT supported" : "supported"));
    DEBUG ((DEBUG_ERROR, "ID_AA64PFR0_EL1  0x%lx\n", READ_SYSREG (id_aa64pfr0_el1)));
    DEBUG ((DEBUG_ERROR, "\nExiting boot services. A green bar across the top\nmarks the loader handoff before the kernel branch.\n"));
-+  if (RootStage) {
++  if (RootStage && RootStage->WaitForHost) {
 +    Status=DarwinResidentRun(RootStage,ArgsAddress,KernelAddress+Kernel.Entry-Kernel.Base,
 +        Address,WindowSize,Video[0],Video[2]*Video[4],Map,MapSize,Stride);
 +    FreePool(Map); Map=NULL;
@@ -359,10 +359,10 @@ index a7a55c2..59f212d 100644
    bic x4, x4, #1
    bic x4, x4, #4
 diff --git a/README.md b/README.md
-index 3645a7e..176f92a 100644
+index 3645a7e..9e8a418 100644
 --- a/README.md
 +++ b/README.md
-@@ -17,6 +17,11 @@ and [green-bar diagnosis](https://unixnu.com/guide/debugging#green-bar).
+@@ -17,6 +17,15 @@ and [green-bar diagnosis](https://unixnu.com/guide/debugging#green-bar).
  Build and interface details: [documentation](https://unixnu.com/reference/components).
  Sources and dependencies: [catalog](https://unixnu.com/reference/components).
  
@@ -370,6 +370,10 @@ index 3645a7e..176f92a 100644
 +DarwinBoot invokes enter after firmware memory writeback and invokes resume
 +before firmware services resume. The board reserves the service CPU outside
 +the OS CPU topology and retains controller ownership and USB descriptors.
++
++A RootStage table with `WaitForHost == 0` supplies disk and kernel memory
++handoff data for a normal boot. DarwinBoot exits boot services and enters
++the kernel; resident return hooks are used when `WaitForHost` is populated.
 +
  The optional `kernel.macho.vroot` sidecar carries up to 128 MiB of signed root
  policies. The loader checks its envelope and supplies its physical range as
@@ -428,10 +432,10 @@ index bb21e23..406b697 100644
          print('PASS: actual kernel', filename)
 diff --git a/DarwinBootPkg/Driver/Resident.c b/DarwinBootPkg/Driver/Resident.c
 new file mode 100644
-index 0000000..61b585d
+index 0000000..78ae9ec
 --- /dev/null
 +++ b/DarwinBootPkg/Driver/Resident.c
-@@ -0,0 +1,313 @@
+@@ -0,0 +1,319 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +#include <Uefi.h>
 +#include <Library/BaseLib.h>
@@ -686,8 +690,14 @@ index 0000000..61b585d
 +      break;
 +    }
 +  }
-+  EFI_STATUS Status=ArmVmWatchdog();
-+  if (EFI_ERROR(Status)) return Status;
++  EFI_STATUS Status=EFI_SUCCESS;
++  if (Service) {
++    VmWatchdogCall(VM_WDT_CONTROL,2,0,NULL);
++    mWatchdogArmed=FALSE;
++  } else {
++    Status=ArmVmWatchdog();
++    if (EFI_ERROR(Status)) return Status;
++  }
 +  Stage->ReturnStub=(UINTN)&DarwinResidentReturn;
 +  UINT64 LoadedEnd=*(UINT64 *)(UINTN)(Args+0x20);
 +  Status=PrepareProbeControl(Base,LoadedEnd,Args);

@@ -8,11 +8,13 @@
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" void native_marble_pmgr_start(void);
 extern "C" void native_marble_watchdog_publish(void);
+extern "C" bool native_resident_prepare(void);
 extern "C" void native_marble_aes_init(void) __asm__("__GLOBAL__sub_I_NativeAES.cpp");
 extern "C" kmod_info_t g_kernel_kmod_info;
 
 extern "C" void native_marble_pmgr_start(void)
 {
+    native_resident_prepare();
     kern_return_t status = OSKextLoadKextWithIdentifier("com.apple.driver.ApplePMGR");
     if (status) panic("MarblePMGR: module load failed: %d", status);
     OSObject *object = OSMetaClass::allocClassWithName("ApplePMGRNub");

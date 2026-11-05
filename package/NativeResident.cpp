@@ -5,6 +5,10 @@
 #include <kern/cpu_number.h>
 #include <IOKit/IOLib.h>
 #include <kern/thread.h>
+#include <IOKit/IODeviceTreeSupport.h>
+#include <IOKit/IOMemoryDescriptor.h>
+#include <libkern/c++/OSData.h>
+#include <Protocol/RootStage.h>
 
 extern "C" void native_resident_configure(uint64_t);
 extern "C" void native_resident_return(void);
@@ -31,6 +35,28 @@ extern "C" void native_resident_record_panic(const char *message)
 
 static uint64_t return_stub;
 static volatile uint32_t *usb_interrupt;
+static IOMemoryMap *earlyResidentMapping;
+
+extern "C" bool native_resident_prepare(void)
+{
+  if (return_stub) return true;
+  IORegistryEntry *map=IORegistryEntry::fromPath("/chosen/memory-map",gIODTPlane);
+  OSData *range=map ? OSDynamicCast(OSData,map->getProperty("RootDisks")) : nullptr;
+  uint64_t location[2]={};
+  if (range && range->getLength()==sizeof(location))
+    memcpy(location,range->getBytesNoCopy(),sizeof(location));
+  OSSafeReleaseNULL(map);
+  if (!location[0]) return false;
+  IOMemoryDescriptor *memory=IOMemoryDescriptor::withAddressRange(
+      location[0],location[1],kIODirectionInOut|kIOMemoryMapperNone,nullptr);
+  earlyResidentMapping=memory ? memory->map(kIOMapAnywhere|kIOMapCopybackCache) : nullptr;
+  OSSafeReleaseNULL(memory);
+  if (!earlyResidentMapping) return false;
+  const auto *table=reinterpret_cast<const ROOT_STAGE_TABLE *>(earlyResidentMapping->getVirtualAddress());
+  return_stub=table->ReturnStub;
+  native_resident_usb_control(const_cast<volatile uint64_t *>(&table->ReturnTest));
+  return return_stub!=0;
+}
 
 static void usbControlWorker(void *, wait_result_t)
 {
@@ -49,6 +75,7 @@ extern "C" void native_resident_usb_control(volatile uint64_t *request)
 {
   unsigned mode=0;
   if (!PE_parse_boot_argn("rootstage-runtime-usb",&mode,sizeof(mode)) || mode!=3) return;
+  if (usb_interrupt) return;
   usb_interrupt=reinterpret_cast<volatile uint32_t *>(request);
   // The firmware request and kernel readiness occupy separate words. Ordinary
   // accesses support both RAM and device mappings without RCpc instructions.
@@ -109,7 +136,7 @@ void native_resident_configure(uint64_t address)
 
 extern "C" __attribute__((used)) void native_resident_panic_return(void)
 {
-  if (!return_stub) return;
+  if (!return_stub && !native_resident_prepare()) return;
   native_root_block_capture_log();
   native_runtime_usb_stop();
   native_root_block_export_data();

@@ -10,8 +10,7 @@ import subprocess
 import sys
 import zlib
 
-from build_ios18_arm64e import DEVICE, ADSP_FIRMWARE, read_adt, write_adt
-from build_ios18_probe import patch_kernel
+from build_ios18_arm64e import DEVICE, ADSP_FIRMWARE, read_adt, write_adt, validate_prelink
 from build_pac_uefi import build_applications, pack_boot_image
 
 
@@ -21,6 +20,8 @@ def main():
     parser.add_argument('--assets', required=True, type=Path)
     parser.add_argument('--images', required=True, type=Path)
     parser.add_argument('--data-seed', required=True, type=Path)
+    parser.add_argument('--temporary', action='store_true',
+                        help='Embed the kernel and retain the RootStage USB service')
     args = parser.parse_args()
     root, out = args.root.resolve(), args.assets.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -28,7 +29,9 @@ def main():
     binaries = build_applications(out, platform, DEVICE.parent / 'UniXNU')
     kernel = out / 'kernel.macho'
     shutil.copyfile(root / 'kernel.fileset.macho', kernel)
-    patch_kernel(root, kernel, out, platform, 'early')
+    baseline = validate_prelink(root)
+    if hashlib.sha256(kernel.read_bytes()).hexdigest() != baseline['candidate_sha256']:
+        raise ValueError('Kernel differs from the current prelink report')
     metadata = json.loads(args.data_seed.with_name('seed.json').read_text())
     data = kernel.read_bytes()
     data += bytes(-len(data) % 4096)
@@ -44,7 +47,8 @@ def main():
     boot_args = ('offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 '
                  'offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 '
                  'offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 '
-                 'offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1')
+                 'offline-key-events=1 sheng-aks=1 '
+                 'rootstage-runtime-usb=3 marble-ufs=1')
     mailbox[128:128 + len(boot_args)] = boot_args.encode()
     data += mailbox
     window = out / 'KernelSeed.bin'
@@ -80,19 +84,29 @@ def main():
     memory = next(node for node in chosen[1] if node[0].get('name') == b'memory-map\0')
     memory[0]['RootDisks'] = bytes(16)
     adt.write_bytes(write_adt(tree))
-    shutil.copyfile(root / 'boot/stage/EFI/UniXNU/unixnu.toml', stage / 'unixnu.toml')
+    config = (root / 'boot/stage/EFI/UniXNU/unixnu.toml').read_text()
+    config = config.replace('args = "', 'args = "rootstage-runtime-usb=3 ', 1)
+    (stage / 'unixnu.toml').write_text(config)
     volume = out / 'volume.img'
     with volume.open('wb') as stream:
         stream.truncate(4 * 1048576)
     subprocess.run(['mformat', '-i', volume, '-v', 'MARBLEESP', '::'], check=True)
     subprocess.run(['mcopy', '-i', volume, '-s', '-Q', stage.parent, '::/'], check=True)
-    blobs = [('loader.efi', (binaries / 'MarbleBootstrap.efi').read_bytes()),
-             ('root.usb', b'1'),
-             ('root.storage', b'1'), ('volume.img', volume.read_bytes())]
+    blobs = [('loader.efi', (binaries / 'MarbleBootstrap.efi').read_bytes())]
+    if args.temporary:
+        blobs.append(('kernel.seed', data))
+    blobs.append(('root.usb', b'1'))
+    blobs += [('root.storage', b'1'), ('volume.img', volume.read_bytes())]
     body = b''.join(struct.pack('<16sII', name.encode(), len(blob), 0) + blob + bytes(-len(blob) % 16)
                     for name, blob in blobs) + bytes(24)
     boot = pack_boot_image(out, platform, struct.pack('<II', 0x50554e58, len(body)) + body,
-                           'marble_persistent_boot.img')
+                           'marble_temporary_boot.img' if args.temporary else 'marble_persistent_boot.img')
+    if args.temporary:
+        (out / 'temporary-boot.json').write_text(json.dumps(dict(
+            image=str(boot), kernel_sha256=hashlib.sha256(kernel.read_bytes()).hexdigest(),
+            native_sha256=baseline['inputs']['native_sha256'],
+            kernel_source='boot-image', system_source='ufs', exit_boot_services=False,
+            resident_usb=True, runtime_usb_mode=3, boot_args=boot_args), indent=2) + '\n')
     print(boot)
 
 
