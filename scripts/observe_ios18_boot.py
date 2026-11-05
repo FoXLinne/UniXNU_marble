@@ -56,7 +56,9 @@ def observe(kernel, layout_path, output, interval, duration):
                           ('_sheng_watchdog_policy_status', 4), ('_marble_setup_policy_status', 4),
                           ('_native_staged_apps_stage', 4), ('_native_staged_apps_files', 4),
                           ('_native_staged_apps_mib', 4), ('_native_staged_apps_failed', 4),
-                          ('_native_staged_apps_error', 4))
+                          ('_native_staged_apps_error', 4),
+                          ('_marble_app_union_status', 4), ('_marble_app_union_visible', 4),
+                          ('_marble_ls_store_status', 4), ('_marble_ls_store_error', 4))
                 report['globals'] = {name: int.from_bytes(memory.read(symbols[name], size), 'little')
                                      for name, size in fields if name in symbols}
                 exit_count = report['globals'].get('_marble_ui_exit_count', 0)
@@ -98,10 +100,10 @@ def observe(kernel, layout_path, output, interval, duration):
                         except (ValueError, IOError) as error:
                             threads.append({'name': process['name'], 'error': str(error)})
                     (destination / 'threads.json').write_text(json.dumps(threads, indent=2) + '\n')
-                    pointer = int.from_bytes(memory.read(symbols['_msgbufp'], 8), 'little')
-                    _, size, cursor, _, address = struct.unpack('<4IQ', memory.read(pointer, 24))
-                    data = memory.read(address, size)
-                    (destination / 'kernel.log').write_bytes((data[cursor:] + data[:cursor]).replace(b'\0', b''))
+                pointer = int.from_bytes(memory.read(symbols['_msgbufp'], 8), 'little')
+                _, size, cursor, _, address = struct.unpack('<4IQ', memory.read(pointer, 24))
+                data = memory.read(address, size)
+                (destination / 'kernel.log').write_bytes((data[cursor:] + data[:cursor]).replace(b'\0', b''))
                 report['communication_end'] = channel.command('getvar:version')
             except Exception as error:
                 report['error'] = f'{type(error).__name__}: {error}'

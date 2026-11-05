@@ -111,11 +111,20 @@
     ],
     "current_source_integration": "MarbleSystemOS mounts Data over the OS staging directory; upstream staged-app copy hook absent",
     "upstream_solution": "UniXNU patches/xnu-12377/zzy-staged-system-apps.patch: copy covered OS staging into persistent Data before launchd, mobile ownership, per-file fsync, install by SystemAppMigrator",
-    "status": "Upstream copy integrated into prepareData before launchd; candidate compiled and packaged",
+    "status": "Staged copy completed; OS installation registration pending",
     "source_files": 4803,
     "source_uncompressed_bytes": 824185951,
     "source_symlinks": 0,
-    "marker": "/private/var/db/.marble-staged-apps-22H384"
+    "marker": "/private/var/db/.marble-staged-apps-22H384",
+    "hardware_copy": {
+      "files": 4803,
+      "MiB": 786,
+      "failed": 0,
+      "error": 0,
+      "stage": 2
+    },
+    "registration_repair": "Supply the original SystemAppMigrator NSString-array request for 40 stock bundle IDs at /private/var/preferences/com.apple.demo.SADForceInstall.plist; back up DataMigration preferences and icon cache inputs to request one OS migration pass",
+    "request_format_evidence": "22H384 SystemAppMigrator init at 0x4678..0x4704 loads NSArray from file URL, validates NSString members, converts to NSSet"
   },
   "managed_memory_followup": {
     "firmware_dram_base": "0x80000000",
@@ -155,6 +164,104 @@
       "prelink": "passed",
       "pack": "passed"
     },
-    "deployment": "RootStage USB unavailable before transfer; physical fastboot recovery requested"
+    "deployment": "fastboot boot OKAY; hardware observation active",
+    "hardware": {
+      "elapsed": 360,
+      "ui_exits": 0,
+      "panic": "",
+      "USB": "RootStage2",
+      "feedback": "Opening and closing animations improved; app availability and icons remain unresolved",
+      "interaction_acceptance": {
+        "dark_appearance": "passed by user",
+        "open_Settings": "passed by user",
+        "exit_Settings": "passed by user",
+        "desktop": "remained running"
+      },
+      "USB_detach_sample_elapsed": 480
+    }
+  },
+  "registration_candidate": {
+    "artifact": {
+      "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-system-app-register/marble_temporary_boot.img",
+      "kernel_sha256": "a148997edaa424f43949b0e896174807ef064ddfb2d11d06a9e8404566f8067e",
+      "native_sha256": "229b60f406c001d3c520f74db586533ed740773364e24c28a9ccc22faa21003e",
+      "kernel_source": "boot-image",
+      "system_source": "ufs",
+      "exit_boot_services": false,
+      "resident_usb": true,
+      "runtime_usb_mode": 3,
+      "enabled_cpu_affinities": [
+        0,
+        256,
+        512,
+        768,
+        1024,
+        1280,
+        1536
+      ],
+      "firmware_usb_affinity": 1792,
+      "display_scale": 3,
+      "logical_size": [
+        360,
+        800
+      ],
+      "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 marble-staged-apps=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1"
+    },
+    "build": {
+      "kernel": "passed",
+      "prelink": "passed",
+      "pack": "passed"
+    },
+    "deployment": "fastboot boot OKAY",
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-system-app-register",
+    "status": "User reports download placeholders and missing icons; acceptance failed",
+    "late_UI_exit": {
+      "process": "SpringBoard",
+      "signal": "SIGTRAP",
+      "pc": "0x1d5ce4acc",
+      "known_location": "PaperBoardUI fetchWallpaperProminentColor",
+      "observer_elapsed": 540
+    }
+  },
+  "upstream_app_publication": {
+    "source_repo": "UniXNU/UniXNU-sheng",
+    "source_revision": "460179565a018c741b93e0b1efa07c55d4de497a",
+    "fix_commit": "5ef48217d479bdf3adaf909032bc3d56d410b7de",
+    "fix_date": "2026-10-29",
+    "problem": "A forced fastboot can retain a LaunchServices database listing Settings alone",
+    "implementation": [
+      "Publish sealed staged apps as a read-only union over /Applications before mounting Data",
+      "Enable bindfs vfs_vget, persistent file IDs and MNTK_PATH_FROM_ID",
+      "Discover lsd data-container UUIDs and drop com.apple.LaunchServices-* database files before lsd starts on every boot"
+    ],
+    "source_path": "patches/xnu-12377/zzzz-sheng-ipados27-bringup.patch",
+    "candidate_status": "kernel, prelink and pack passed; deploying through resident return",
+    "candidate": {
+      "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-upstream-app-publication/marble_temporary_boot.img",
+      "kernel_sha256": "3819657f0ed3798e27e93274bed0e84ecfa9306fcf6256269da4d9232997869f",
+      "native_sha256": "29e896e9781bae5f44bd8de7b5f26088873ec7c50abb0cae1be8749833fdf843",
+      "kernel_source": "boot-image",
+      "system_source": "ufs",
+      "exit_boot_services": false,
+      "resident_usb": true,
+      "runtime_usb_mode": 3,
+      "enabled_cpu_affinities": [
+        0,
+        256,
+        512,
+        768,
+        1024,
+        1280,
+        1536
+      ],
+      "firmware_usb_affinity": 1792,
+      "display_scale": 3,
+      "logical_size": [
+        360,
+        800
+      ],
+      "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1"
+    },
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-upstream-app-publication"
   }
 }

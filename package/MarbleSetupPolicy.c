@@ -98,8 +98,21 @@ static int refreshDisplayCache(proc_t process, user_addr_t scratch)
     return 0;
 }
 
+static int retireSystemAppRequest(proc_t process, user_addr_t scratch)
+{
+    const char *path = "/private/var/preferences/com.apple.demo.SADForceInstall.plist";
+    const char *retired = "/private/var/preferences/com.apple.demo.SADForceInstall.plist.marble-union-retired";
+    const char *backup = "/private/var/preferences/com.apple.demo.SADForceInstall.plist.marble-before-app-restore";
+    int error = 0;
+    if (exists(retired) == ENOENT && !exists(path)) error = move(process, scratch, path, retired);
+    if (!error && exists(path) == ENOENT && !exists(backup)) error = move(process, scratch, backup, path);
+    return error;
+}
+
 int native_marble_setup_policy(proc_t process, user_addr_t scratch)
 {
+    int app_error = retireSystemAppRequest(process, scratch);
+    if (app_error) return app_error;
     int display_error = refreshDisplayCache(process, scratch);
     if (display_error) return display_error;
     unsigned enabled = 0;

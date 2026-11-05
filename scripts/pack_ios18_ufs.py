@@ -62,7 +62,7 @@ def main():
                  'offline-legacy-cpu-present=1 offline-legacy-validate=1 '
                  f'sheng-vsync={args.vsync} '
                  'offline-key-events=1 sheng-aks=1 '
-                 'rootstage-runtime-usb=3 marble-ufs=1 marble-staged-apps=1')
+                 'rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1')
     cpu_args = f'cpus={len(cpu_regs)} sheng-smp={int(len(cpu_regs) > 1)} armcpu-self-ipi=1'
     boot_args += ' ' + cpu_args + f' marble-display-scale={args.display_scale}'
     if args.disabled_jobs:

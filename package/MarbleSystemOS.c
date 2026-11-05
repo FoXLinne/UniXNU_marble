@@ -7,6 +7,7 @@
 #include <sys/systm.h>
 #include <sys/errno.h>
 #include <kern/thread.h>
+#include <pexpert/pexpert.h>
 #include <arm/thread.h>
 
 extern int native_root_block_authorized(dev_t);
@@ -17,7 +18,7 @@ extern void commpage_update_dyld_flags(uint64_t);
 extern uint64_t dyld_flags;
 extern int sheng_boot_watchdog_policy(void *, uint64_t);
 extern int native_marble_setup_policy(proc_t, user_addr_t);
-extern void native_marble_staged_apps_prepare(proc_t, user_addr_t, mount_t);
+extern void native_marble_ls_store_rebuild(proc_t, user_addr_t);
 /* CoreEntitlements retains its 16 KiB allocation and stack-window ABI. */
 __attribute__((used)) const unsigned int native_ios18_ce_page_shift = 14;
 int native_marble_prepare_systemos(proc_t, user_addr_t, user_addr_t *);
@@ -102,8 +103,42 @@ static int bindCryptex(proc_t process, user_addr_t scratch, const char *source, 
     return error;
 }
 
+volatile int marble_app_union_status = -1;
+volatile unsigned marble_app_union_visible;
+
+static void publishSystemApps(proc_t process, user_addr_t scratch)
+{
+    unsigned enabled = 0;
+    if (!PE_parse_boot_argn("owner-staged-apps", &enabled, sizeof(enabled)) || enabled != 1) return;
+    struct mount_args request = {.type = scratch + 0x100, .path = scratch + 0x120,
+                                .flags = MNT_RDONLY | MNT_UNION, .data = scratch + 0x200};
+    int error = copyout("bindfs", request.type, sizeof("bindfs"));
+    if (!error) error = copyout("/Applications", request.path, sizeof("/Applications"));
+    if (!error) error = copyout("/private/var/staged_system_apps", request.data, sizeof("/private/var/staged_system_apps"));
+    int32_t result = 0;
+    if (!error) {
+        bootBindMount = 1;
+        error = mount(process, &request, &result);
+        bootBindMount = 0;
+    }
+    marble_app_union_status = error;
+    if (!error) {
+        static const char *paths[] = {"/Applications/Preferences.app/Info.plist", "/Applications/Weather.app/Info.plist",
+                                     "/Applications/MobileSafari.app/Info.plist", "/Applications/Calculator.app/Info.plist"};
+        for (unsigned i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
+            vnode_t node = NULLVP;
+            if (!vnode_lookup(paths[i], 0, &node, vfs_context_current())) {
+                marble_app_union_visible |= 1U << i;
+                vnode_put(node);
+            }
+        }
+    }
+    printf("MarbleApps: sealed Applications union status=%d visible=%x\n", error, marble_app_union_visible);
+}
+
 static int prepareData(proc_t process, user_addr_t scratch)
 {
+    publishSystemApps(process, scratch);
     dev_t selected = NODEV;
     char path[64] = {0};
     if (!native_marble_data_volume(&selected, path, sizeof(path))) return ENOENT;
@@ -136,7 +171,6 @@ static int prepareData(proc_t process, user_addr_t scratch)
     int accepted = actual == selected && !(vfs_flags(mounted) & MNT_RDONLY) &&
         !strcmp(vfs_statfs(mounted)->f_fstypename, "apfs");
     vnode_put(data_root);
-    if (accepted) native_marble_staged_apps_prepare(process, scratch, mounted);
     return accepted ? 0 : EAUTH;
 }
 
@@ -198,6 +232,7 @@ int native_marble_prepare_systemos(proc_t process, user_addr_t scratch, user_add
     int cache_visible = vnode_mount(cache) == mounted;
     vnode_put(cache);
     if (!cache_visible) return EAUTH;
+    if (!marble_app_union_status) native_marble_ls_store_rebuild(process, scratch);
     error = sheng_boot_watchdog_policy(process, scratch);
     if (error) return error;
     error = native_marble_setup_policy(process, scratch);
