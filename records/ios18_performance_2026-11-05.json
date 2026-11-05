@@ -60,5 +60,34 @@
     "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd"
   },
   "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-smp60",
-  "GPU_next": "Port accelerator ABI and Metal discovery/plugin installation to arm64e 22H384; keep hardware ownership tied to the existing A725 board driver"
+  "GPU_next": "Port accelerator ABI and Metal discovery/plugin installation to arm64e 22H384; keep hardware ownership tied to the existing A725 board driver",
+  "setup": {
+    "request": "Skip the unstable setup assistant and enter SpringBoard",
+    "implementation": "marble-skip-setup=1 applies persistent Setup completion before launchd; original preference files saved as .marble-before-skip",
+    "preferences": [
+      "com.apple.purplebuddy",
+      "com.apple.purplebuddy.notbackedup",
+      "com.apple.managedconfiguration.notbackedup"
+    ],
+    "source": "UniXNU scripts/seed-data-skip-setup.py and docs/zh/guide/skip-setup.md",
+    "build": {
+      "kernel": "passed",
+      "prelink": "passed",
+      "firmware": "passed"
+    },
+    "hardware": "in progress",
+    "image": "outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-skip-setup/marble_temporary_boot.img",
+    "previous_exit": [
+      {
+        "process": "backboardd",
+        "namespace": 2,
+        "code": 10,
+        "signal": "SIGBUS"
+      },
+      {
+        "process": "SpringBoard",
+        "reason": "backboardd respawn"
+      }
+    ]
+  }
 }
