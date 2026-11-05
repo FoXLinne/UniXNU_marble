@@ -1,0 +1,119 @@
+{
+  "date": "2026-11-04",
+  "upstream": "82b847c4ac3f68a57024b3082ffa3a03442defd9",
+  "data": {
+    "volume_uuid": "CA5D2194-1A17-43EF-96D8-9B4B4534E3A9",
+    "bytes": 1069184,
+    "sha256": "2980033e2a5cd065d6b368536422804306d8b1960c0054061c419347f051eb17",
+    "format": "DBRDISK1",
+    "logical_bytes": 68719476736,
+    "logical_sha256": "a5058b80c8758be36523a9692005accd45bd18b9760754176ffd72d67e2a6044",
+    "first_install": true,
+    "skip_setup": false
+  },
+  "kernel": "outputs/UniXNU_marble/persistent_boot/kernel.restore64.macho",
+  "assets": "outputs/UniXNU_marble/persistent_boot/restore64",
+  "system": {
+    "source": "iPad7,1 / 17.7.11 / 21H461",
+    "readonly_windows": [
+      "OS",
+      "SystemOS"
+    ],
+    "staged_app_count": 29,
+    "app_restore_boot_argument": "sheng-staged-apps=1",
+    "installer": "SystemAppMigrator",
+    "oobe": "Setup reached phone country selection; completion flags applied to persisted Data at user request",
+    "wallpaper": "original 7570 Flat animation with J120/J120-Dark PNG layers",
+    "gpu": "cptable120 kernel configuration and addon executables retained"
+  },
+  "partition_plan": {
+    "source": "saved marble GPT and F2FS geometry; device preparation reads live state before applying",
+    "partition_gib_requested": 80,
+    "data_gib": 64,
+    "userdata_first": 3107328,
+    "userdata_old_last": 240939007,
+    "userdata_new_last": 228355583,
+    "unixnu_first": 228355584,
+    "unixnu_last": 249327610,
+    "unixnu_bytes": 85901422592,
+    "f2fs_old_blocks": 237831671,
+    "f2fs_request_blocks": 225247744,
+    "f2fs_new_blocks": 225248247,
+    "store_bytes": 68721577984,
+    "root_image_bytes": 9434038272,
+    "remaining_bytes": 7745806336
+  },
+  "completed": [
+    "64 GiB APFS packed seed generated",
+    "upstream SeedDisk/DirectDisk integration compiled and prelinked",
+    "upstream 64 GiB sparse-oracle case passed",
+    "native seedIdentity equals host seed identity",
+    "GPU addon executable bytes preserved",
+    "persistent and command-handoff images packed"
+  ],
+  "device": {
+    "written": true,
+    "usb": "phone absent from host USB inventory after persistent desktop session",
+    "pending": [
+      "phone wallpaper candidate installation and visible wallpaper"
+    ],
+    "partition_bytes": 85901422592,
+    "partition_expanded": true,
+    "android_slot_a_booted_after_resize": true,
+    "boot_b_updated": true,
+    "persistent_boot_reached_desktop": true,
+    "setup": "skipped at user request",
+    "installed_first_party_apps": 28
+  },
+  "documents": [
+    "docs/zh/guide/userdata.md",
+    "docs/zh/concepts/userdata.md",
+    "docs/zh/guide/skip-setup.md",
+    "docs/zh/porting/dual-system-partition.md",
+    "docs/zh/guide/mobilegestalt.md"
+  ],
+  "ui_options": {
+    "phone_layout": {
+      "entry": "scripts/make-marble-adt.py --iphone-identity",
+      "properties": [
+        "root model=iPhone10,3",
+        "target-type=D22",
+        "artwork-device-idiom=phone",
+        "artwork-scale-factor=3",
+        "home-button-type=2"
+      ],
+      "status": "phone OOBE, four-column desktop and iPhone Storage Settings observed"
+    },
+    "ios_root": {
+      "target": "iPhone10,3 / iOS 16.7.16 / 20H392",
+      "architecture": "arm64",
+      "status": "documented IPSW; separate OS profile and prelink inputs required"
+    }
+  },
+  "phone_candidate": {
+    "assets": "outputs/UniXNU_marble/persistent_boot/phone64",
+    "root_model": "iPhone10,3",
+    "target": "D22",
+    "artwork_idiom": "phone",
+    "artwork_scale": 3,
+    "display_scale": 3,
+    "home_button_type": 2,
+    "system_source": "iPad7,1 21H461 retained",
+    "gpu_source": "kernel.restore64 with current cptable120 GPU integration",
+    "app_idiom_support": {
+      "Setup": [
+        1,
+        2
+      ],
+      "Preferences": [
+        1,
+        2
+      ],
+      "AppStore": [
+        1,
+        2
+      ]
+    },
+    "source_document": "cache/persistent_boot/mobilegestalt_82b847c.md"
+  }
+}

@@ -19,6 +19,7 @@
 #include <libkern/zlib.h>
 #include "SparseDisk.h"
 #include "PersistOverlay.h"
+#include "DirectDisk.h"
 #include "MarbleUfs.h"
 #include "NativeMetalOwnerTrust.h"
 
@@ -214,8 +215,9 @@ struct PersistOps {
   bool sync() { return marble_ufs_store_sync(); }
 };
 static RamSparseDisk dataSeed = {};
+static SeedDisk largeDataSeed = {};
 static IOBufferMemoryDescriptor *dataExportIndex;
-extern "C" bool native_root_block_has_data(void) { return dataSeed.pages != nullptr; }
+extern "C" bool native_root_block_has_data(void) { return dataSeed.pages || largeDataSeed.page; }
 static uint64_t dataSeedBytes;
 static uint8_t dataSeedHash[32];
 static char dataSeedUUID[37];
@@ -549,10 +551,18 @@ public:
         uint64_t read(uint64_t at, void *p, uint64_t n) { return buffer->readBytes(at, p, n); }
         uint64_t copy(uint64_t at, const void *p, uint64_t n) { return buffer->writeBytes(at, p, n); }
       } ops = {buffer};
-      bool noMemory;
+      bool noMemory = false;
       IOLockLock(dataGate);
-      done = ramSparseIO(*writableData, write, offset, bytes, ops, noMemory);
-      if (write && ufsRoot && done) {
+      if (largeDataSeed.page) {
+        PersistOps store;
+        bool storeError = false;
+        done = directDiskIO(largeDataSeed, dataOverlay, store, persistScratch, 32,
+            write, offset, bytes, ops, &storeError);
+        if (storeError) dataOverlay.active = false;
+      } else {
+        done = ramSparseIO(*writableData, write, offset, bytes, ops, noMemory);
+      }
+      if (!largeDataSeed.page && write && ufsRoot && done) {
         PersistOps store;
         uint64_t first=offset/4096, end=(offset+done+4095)/4096;
         bool saved=dataOverlay.active;
@@ -670,6 +680,7 @@ extern "C" void native_root_block_start(void)
       const char *extraArgs = mailbox + 128;
       size_t extraLength = strnlen(extraArgs, BOOT_LINE_LENGTH);
       if (extraLength) {
+        native_root_block_boot_args = nullptr;
         strlcpy(residentBootArgs, PE_boot_args(), sizeof(residentBootArgs));
         char *commandLine = residentBootArgs;
         if (extraLength >= BOOT_LINE_LENGTH || strlen(commandLine) + extraLength + 2 > BOOT_LINE_LENGTH)
@@ -707,20 +718,37 @@ extern "C" void native_root_block_start(void)
         IOFree(packed, copyBytes);
         if (result != Z_STREAM_END || stream.total_out != logical || stream.avail_in)
           panic("RootStage: Data seed decompression failed: %d", result);
-        if (!ramPackedLayout((const uint8_t *)data, logical, &dataSeedBytes) || dataSeedBytes > 0x80000000ULL)
+        if (!ramPackedLayout((const uint8_t *)data, logical, &dataSeedBytes))
           panic("RootStage: packed Data layout invalid");
         dataSeed.bytes = dataSeedBytes;
-        dataSeed.pages = (uint8_t **)IOMallocZero((dataSeedBytes / 4096) * sizeof(uint8_t *));
         struct ImportOps { uint8_t *allocate() { return (uint8_t *)IOMallocZero(4096); } } ops;
-        if (!ramSparseImport(dataSeed, (const uint8_t *)data, logical, ops))
-          panic("RootStage: sparse Data import failed");
-        IOFree(data, logical);
-        static const uint8_t zero[4096] = {};
         SHA256_CTX context;
-        SHA256_Init(&context);
-        for (uint64_t i = 0; i < dataSeedBytes / 4096; i++)
-          SHA256_Update(&context, dataSeed.pages[i] ? dataSeed.pages[i] : zero, 4096);
-        SHA256_Final(dataSeedHash, &context);
+        if (dataSeedBytes > 0x80000000ULL) {
+          uint64_t count = 0;
+          if (!seedCountNonzero((const uint8_t *)data, logical, &count))
+            panic("RootStage: large Data page count invalid");
+          largeDataSeed.bytes = dataSeedBytes;
+          largeDataSeed.capacity = MAX(count, uint64_t(1));
+          largeDataSeed.index = (uint64_t *)IOMallocZero(largeDataSeed.capacity * sizeof(uint64_t));
+          largeDataSeed.page = (uint8_t **)IOMallocZero(largeDataSeed.capacity * sizeof(uint8_t *));
+          if (!seedImportSparse(largeDataSeed, (const uint8_t *)data, logical, ops))
+            panic("RootStage: large Data import failed");
+          dataSeed.resident = largeDataSeed.resident;
+          seedIdentity(largeDataSeed, context,
+              [](SHA256_CTX &c) { SHA256_Init(&c); },
+              [](SHA256_CTX &c, const void *p, size_t n) { SHA256_Update(&c, p, n); },
+              [](SHA256_CTX &c, uint8_t *out) { SHA256_Final(out, &c); }, dataSeedHash);
+        } else {
+          dataSeed.pages = (uint8_t **)IOMallocZero((dataSeedBytes / 4096) * sizeof(uint8_t *));
+          if (!ramSparseImport(dataSeed, (const uint8_t *)data, logical, ops))
+            panic("RootStage: sparse Data import failed");
+          static const uint8_t zero[4096] = {};
+          SHA256_Init(&context);
+          for (uint64_t i = 0; i < dataSeedBytes / 4096; i++)
+            SHA256_Update(&context, dataSeed.pages[i] ? dataSeed.pages[i] : zero, 4096);
+          SHA256_Final(dataSeedHash, &context);
+        }
+        IOFree(data, logical);
       }
     } else log->release();
   }
@@ -736,10 +764,11 @@ extern "C" void native_root_block_start(void)
   unsigned storage=0;
   PE_parse_boot_argn("marble-ufs",&storage,sizeof(storage));
   ufsRoot=storage==1;
+  if (largeDataSeed.page && !ufsRoot) panic("MarbleUfs: large Data requires persistent storage");
   if (ufsRoot) {
     native_runtime_usb_start();
     if (!marble_ufs_start()) panic("MarbleUfs: storage initialization failed");
-    if (!dataSeed.pages) panic("MarbleUfs: Data seed missing");
+    if (!native_root_block_has_data()) panic("MarbleUfs: Data seed missing");
     auto pages=dataSeed.bytes/4096;
     auto bitmapBytes=persist::bitmapBlocks(pages)*4096;
     auto *bits=(uint8_t *)IOMallocZero(bitmapBytes);
@@ -758,7 +787,7 @@ extern "C" void native_root_block_start(void)
       }
       memcpy(dataSeed.pages[index],page,4096); return true;
     };
-    if (!dataOverlay.forEachPresent(store,restore,persistScratch,32))
+    if (!largeDataSeed.page && !dataOverlay.forEachPresent(store,restore,persistScratch,32))
       panic("MarbleUfs: Data restoration failed");
     IOLog("MarbleUfs: Data persistent pages=%llu generation=%llu\n",dataOverlay.present,dataOverlay.generation);
   }
@@ -777,9 +806,9 @@ extern "C" void native_root_block_start(void)
     disk->registerService(kIOServiceSynchronous);
     IOLog("RootStage: disk %u published, %llu bytes\n",i,table->Disks[i].Bytes);
   }
-  if (dataSeed.pages) {
+  if (native_root_block_has_data()) {
     unsigned exportData=0;
-    if (PE_parse_boot_argn("rootstage-export-data",&exportData,sizeof(exportData)) && exportData==1) {
+    if (!largeDataSeed.page && PE_parse_boot_argn("rootstage-export-data",&exportData,sizeof(exportData)) && exportData==1) {
       dataExportIndex=IOBufferMemoryDescriptor::withOptions(kIODirectionInOut|kIOMemoryPhysicallyContiguous,
           dataSeed.bytes/4096*8,4096);
       if (!dataExportIndex) panic("RootStage: Data export index allocation failed");

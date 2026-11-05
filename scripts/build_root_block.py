@@ -266,7 +266,7 @@ subprocess.run(ufs_command, cwd=record['directory'], check=True)
 gpu_objects = [gmu, cpu, ufs]
 for source_path in [ROOT / 'kits/marble/MarbleAdreno.cpp', ROOT / 'kits/marble/MarbleZap.cpp', *[
     ROOT / 'drivers/NativeAdreno' / ('NativeAdreno' + name + '.cpp')
-    for name in ('Memory', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit', 'Pwrup', 'Submit', 'UserClient', 'Publish', 'Timer', 'KernelTime')
+    for name in ('Memory', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit', 'Pwrup', 'Preempt', 'Submit', 'UserClient', 'Publish', 'Timer', 'KernelTime')
 ]]:
     target = out / (source_path.stem + '.o')
     recipe = [str(source_path) if v == str(source) else str(target) if v == str(obj_path) else v for v in command]

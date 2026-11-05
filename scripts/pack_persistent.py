@@ -74,7 +74,9 @@ def main():
         shutil.copyfile(base/'stage/EFI/UniXNU/Payloads'/name,payload/name)
     shutil.copyfile(base/'stage/EFI/UniXNU/unixnu.toml',stage/'unixnu.toml')
     volume=out/'volume.img'
-    with volume.open('wb') as stream:stream.truncate(16*1024*1024)
+    payload_bytes=sum(path.stat().st_size for path in stage.rglob('*') if path.is_file())
+    volume_bytes=max(16*1024*1024,((payload_bytes+2*1024*1024-1)//(1024*1024))*1024*1024)
+    with volume.open('wb') as stream:stream.truncate(volume_bytes)
     subprocess.run(['mformat','-i',volume,'-v','MARBLEESP','::'],check=True)
     subprocess.run(['mcopy','-i',volume,'-s','-Q',stage.parent,'::/'],check=True)
     blobs=[('loader.efi',(binary/'MarbleBootstrap.efi').read_bytes()),('root.storage',b'1'),('volume.img',volume.read_bytes())]
