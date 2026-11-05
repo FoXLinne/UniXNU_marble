@@ -1,0 +1,9 @@
+schema_version = 2
+
+[soc]
+name = "SM7475"
+description = "Snapdragon 7+ Gen 2 resources used by the marble port"
+
+[kernel]
+config_fragments = ["arch:configs/common.config", "soc:configs/sm7475.config"]
+patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches/xnu/series", "device:patches/xnu/series"]
