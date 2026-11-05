@@ -50,7 +50,14 @@ def main():
             'commit': git(repo, 'rev-parse', 'HEAD').decode().strip(),
             'remote': git(repo, 'remote', 'get-url', 'origin').decode().strip(),
         }
-        patch = git(repo, 'diff', '--binary', '--ignore-submodules=all', 'HEAD')
+        # Keep firmware and generated binary inputs in their source checkout.
+        # A binary deletion patch also contains the original input bytes.
+        changes = git(repo, 'diff', '--numstat', '-z', '--no-renames',
+                      '--ignore-submodules=all', 'HEAD').decode().split('\0')
+        paths = [row.split('\t', 2)[2] for row in filter(None, changes)
+                 if row.split('\t', 2)[0] != '-']
+        patch = git(repo, 'diff', '--no-renames', '--ignore-submodules=all',
+                    'HEAD', '--', *paths) if paths else b''
         if extra is None:
             extra = git(repo, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')
         for name_in_repo in filter(None, extra):
