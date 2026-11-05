@@ -53,7 +53,7 @@ def observe(kernel, layout_path, output, interval, duration):
                           ('_real_ncpus', 4), ('_armcpu_registered', 4),
                           ('_armcpu_smp_requested', 4), ('_armcpu_smp_running', 4),
                           ('_armcpu_ipi_sent', 8), ('_armcpu_ipi_interrupts', 8),
-                          ('_sheng_watchdog_policy_status', 4))
+                          ('_sheng_watchdog_policy_status', 4), ('_marble_setup_policy_status', 4))
                 report['globals'] = {name: int.from_bytes(memory.read(symbols[name], size), 'little')
                                      for name, size in fields if name in symbols}
                 if '__ZL15domainFrequency' in symbols:

@@ -89,5 +89,26 @@
         "reason": "backboardd respawn"
       }
     ]
+  },
+  "resident_restart": {
+    "cause": "Stage 3 can overwrite secondary initCPU stage 7; the old return path skipped a running CPU",
+    "repair": "Use PSCI AFFINITY_INFO on registered MPIDR values to select CPUs for shutdown",
+    "build": "passed",
+    "hardware": "full firmware boot succeeded; next resident return pending"
+  },
+  "alignment": {
+    "process": "backboardd",
+    "signal": "SIGBUS",
+    "esr": "0x92000021",
+    "pc_unslid": "0x188e44bf0",
+    "instruction": "LDP Q4, Q5, [X5]",
+    "address": "0x1050cc278",
+    "function": "vAlpha_Blend_Premultiplied_BGRA_8888_CV_vec",
+    "caller": "CA::OGL::SW::Blend::Mode<Sover,true>::blend",
+    "source": "Normal uncached image buffers requested as VM_WIMG_RT used the BCM2837 Device memory attribute",
+    "repair": "Use Normal Non-Cacheable for VM_WIMG_RT on DRAM; retain Device mapping for MMIO",
+    "kernel_build": "passed",
+    "prelink": "in progress",
+    "hardware": "pending"
   }
 }

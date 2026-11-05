@@ -111,7 +111,9 @@ static void returnOnBootCpu(void *)
 {
   unsigned requested = 0;
   for (unsigned core = 1; core < 8; ++core) {
-    if (armcpu_smp_step[core] != 7) continue;
+    // The startup worker and initCPU publish separate milestones. A running
+    // CPU can retain the worker's step 3; query PSCI ownership before reuse.
+    if (!armcpu_smp_mpidr[core] || psci(0xc4000004, armcpu_smp_mpidr[core]) != 0) continue;
     requested |= 1U << core;
     if (cpu_immediate_xcall(core, powerOffSecondary, &return_stub) != KERN_SUCCESS)
       psci(0x84000009); // PSCI SYSTEM_RESET
