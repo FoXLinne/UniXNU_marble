@@ -1,0 +1,75 @@
+{
+  "date": "2026-11-05T20:29:39.477242+08:00",
+  "device": "marble / Redmi Note 12 Turbo / SM7475",
+  "os": "iOS 18.7.11 22H384",
+  "revision": "0f0951bf33a294687144c6ae393941c983d23f92",
+  "result": "Hello screen reached; user reports severe interaction latency",
+  "acceptance": {
+    "hello_screen": "user observed",
+    "Setup_pid": 371,
+    "SpringBoard_pid": 27,
+    "backboardd_pid": 60,
+    "usable_interaction": "pending; severe lag reported",
+    "desktop": "pending",
+    "panic_at_last_sample": "",
+    "usb_last_sample": "RootStage2 command succeeded"
+  },
+  "active_image": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/location-cycle-cpufreq/marble_temporary_boot.img",
+    "kernel_sha256": "bb7faf243df89ba1ca24f05fbd64f0d57187df4151346119d9eb526d7afd8d8b",
+    "native_sha256": "7146a5d07e86647350ee4f6d5ade8639aa7a16c2b91e9d81594ea3c2a24faf40",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=10 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd"
+  },
+  "resident_update": {
+    "monotonic": 775452.9919905,
+    "bytes": 72814592,
+    "sha256": "034efed19cb2b8b93426bbe40cf7b5d33b3163af0e7baafde988d06675d4bfb9"
+  },
+  "retained_Data": {
+    "uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+    "checkpoint_xid": 1331
+  },
+  "changes": [
+    "Restore original SystemOS UFS window",
+    "Run board launch overrides before launchd: CommCenter and locationd excluded for this configuration",
+    "Initialize existing SM7475 EPSS performance domains",
+    "Select software presentation refresh sheng-vsync=10"
+  ],
+  "performance": {
+    "enabled_XNU_CPUs": 1,
+    "firmware_USB_CPU_affinity": "0x700",
+    "refresh_argument_Hz": 10,
+    "CPU_domains_kHz": [
+      1804800,
+      2496000,
+      2918400
+    ],
+    "user_observation": "Severe lag on Hello; distinguish refresh cadence, CPU contention and input latency in the next hardware session"
+  },
+  "evidence": {
+    "last_state": "records/ios18_hello_state_2026-11-05.json",
+    "kernel_log": "records/ios18_hello_kernel_2026-11-05.log.gz",
+    "full_observation": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/location-cycle-cpufreq/observation",
+    "elapsed_from_observer_seconds": 600.0088678330649,
+    "elapsed_from_resident_retry_seconds": 656.1032854160294
+  },
+  "observation_control": {
+    "stop": "user requested",
+    "stopped_processes": [
+      "observe_ios18_boot.py",
+      "watch_root_usb_events.py (two instances)"
+    ],
+    "device_state": "active session retained"
+  },
+  "next_action": [
+    "Measure actual presentation cadence and input-to-frame latency",
+    "Use the verified Hello image as the startup baseline",
+    "Keep migration completion and persistent Data intact while optimizing interaction"
+  ],
+  "repository_organization": "paused in working tree at user priority change"
+}
