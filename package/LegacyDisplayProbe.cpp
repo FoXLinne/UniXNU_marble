@@ -233,12 +233,15 @@ extern "C" unsigned native_legacy_performance_report(char *out,unsigned cap) {
     }
     uint32_t canvas[2]={};
     if(activeLegacyDisplay)memcpy(canvas,reinterpret_cast<const uint8_t *>(activeLegacyDisplay)+5808,sizeof(canvas));
-    return snprintf(out,cap,"Display copies=%llu last_us=%llu max_us=%llu total_us=%llu accepted=%u rejected=%u reason=%u retirements=%u gpu_offers=%u gpu_fallbacks=%u gpu_status=%x PAR=%llx MAIR=%llx canvas=%ux%u scanout=%ux%u",
+    unsigned surfaceMask=0;
+    for(unsigned i=0;i<4;++i)if(native_legacy_rej_surfaces[i])surfaceMask|=1u<<i;
+    return snprintf(out,cap,"Display copies=%llu last_us=%llu max_us=%llu total_us=%llu accepted=%u rejected=%u reason=%u retirements=%u gpu_offers=%u gpu_fallbacks=%u gpu_status=%x PAR=%llx MAIR=%llx canvas=%ux%u scanout=%ux%u layers=%x/%x/%x surfaces=%x",
         native_legacy_copy_n,native_legacy_copy_last*1000000/frequency,
         native_legacy_copy_max*1000000/frequency,native_legacy_copy_sum*1000000/frequency,
         native_legacy_swap_accepted_count,native_legacy_swap_rejected_count,
         native_legacy_rej_reason,native_legacy_retirement_calls,native_legacy_gpu_offers,native_legacy_gpu_fallbacks,native_legacy_gpu_last_status,translation,mair,
-        canvas[0],canvas[1],native_legacy_gop_width,native_legacy_gop_height);
+        canvas[0],canvas[1],native_legacy_gop_width,native_legacy_gop_height,
+        native_legacy_rej_state[0],native_legacy_rej_state[1],native_legacy_rej_state[2],surfaceMask);
 }
 void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes) {
     native_legacy_copy_bytes_last=bytes;native_legacy_copy_bytes_sum=native_legacy_copy_bytes_sum+bytes;

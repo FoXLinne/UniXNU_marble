@@ -207,7 +207,7 @@ while i<len(args):
     elif not value.startswith('-W'):cmd.append(value)
     i+=1
 cmd+=['-Wall','-Wextra','-Werror','-Wno-unused-parameter', '-Wno-incompatible-sysroot','-Wno-unnecessary-virtual-specifier','-Wno-c99-designator','-Wno-reorder-init-list',
-      '-Wno-deprecated-enum-enum-conversion','-I',str(ROOT/'.cache/xnu-work/osfmk')]
+      '-Wno-deprecated-enum-enum-conversion','-I',str(ROOT/'.cache/xnu-work/osfmk'),'-I',str(ROOT/'drivers/NativeMobileDisplay')]
 run(cmd,cwd=r['directory'])
 snapshot_source=ROOT/'kits/marble/RootUiSnapshot.cpp'
 snapshot_object=OUT/'RootUiSnapshot.o'

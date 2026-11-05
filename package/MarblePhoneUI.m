@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Phone UI integration for the marble display and battery services.
 #import <Foundation/Foundation.h>
+#include <CoreGraphics/CGGeometry.h>
 #include <dispatch/dispatch.h>
 #include <mach-o/dyld.h>
 #include <objc/message.h>
@@ -11,6 +12,7 @@
 #include <sys/sysctl.h>
 
 static IMP originalBatteryUpdate;
+static IMP originalDictationAvailability;
 static IMP originalResourceValue;
 static IMP originalDisplayComposition;
 static IMP originalAddDisplay;
@@ -27,6 +29,64 @@ static bool signature(Method method, char result, unsigned count, const char *ar
         free(type);
     }
     return valid;
+}
+
+static IMP originalVisualProvider;
+static Class nativeVisualProvider;
+
+static double nativeDisplayWidth(id self, SEL selector)
+{
+    (void)self; (void)selector;
+    return 1080;
+}
+
+static Class visualProvider(id self, SEL selector, id screen, id info)
+{
+    CGRect bounds = ((CGRect (*)(id, SEL))objc_msgSend)(screen, sel_registerName("nativeBounds"));
+    if (nativeVisualProvider &&
+        ((bounds.size.width == 1080 && bounds.size.height == 2400) ||
+         (bounds.size.width == 2400 && bounds.size.height == 1080))) return nativeVisualProvider;
+    return ((Class (*)(id, SEL, id, id))originalVisualProvider)(self, selector, screen, info);
+}
+
+static void installNativeScreen(void)
+{
+    if (originalVisualProvider) return;
+    Class split = objc_lookUpClass("_UIStatusBarVisualProvider_Split");
+    Class base = objc_lookUpClass("_UIStatusBarVisualProvider_Split1125");
+    Method method = class_getClassMethod(split,
+        sel_registerName("visualProviderSubclassForScreen:visualProviderInfo:"));
+    if (!base || !signature(method, '#', 2, "@@")) return;
+    Class provider = objc_allocateClassPair(base, "MarbleStatusBarVisualProvider", 0);
+    if (!provider) return;
+    if (!class_addMethod(object_getClass(provider), sel_registerName("nativeDisplayWidth"),
+                         (IMP)nativeDisplayWidth, "d@:")) {
+        objc_disposeClassPair(provider);
+        return;
+    }
+    objc_registerClassPair(provider);
+    nativeVisualProvider = provider;
+    originalVisualProvider = method_setImplementation(method, (IMP)visualProvider);
+}
+
+static BOOL dictationAvailable(id self, SEL selector)
+{
+    CFPropertyListRef enabled = CFPreferencesCopyAppValue(CFSTR("Dictation Enabled"),
+        CFSTR("com.apple.assistant.support"));
+    bool disabled = enabled && CFEqual(enabled, kCFBooleanFalse);
+    if (enabled) CFRelease(enabled);
+    if (disabled) return NO;
+    return ((BOOL (*)(id, SEL))originalDictationAvailability)(self, selector);
+}
+
+static void installDictation(void)
+{
+    if (originalDictationAvailability) return;
+    Method method = class_getClassMethod(objc_lookUpClass("UIDictationController"),
+        sel_registerName("dictationIsFunctional"));
+    // Respect the opt-out before UIKit refreshes unavailable speech languages for the keyboard dock.
+    if (signature(method, 'B', 0, ""))
+        originalDictationAvailability = method_setImplementation(method, (IMP)dictationAvailable);
 }
 
 static BOOL resourceValue(id self, SEL selector, id *value, NSString *key, NSError **error)
@@ -177,6 +237,8 @@ static void install(void *context)
     (void)context;
     installPhotoRendering();
     __atomic_store_n(&queued, false, __ATOMIC_RELEASE);
+    installNativeScreen();
+    installDictation();
     if (installed) return;
     Class item = objc_lookUpClass("_UIStatusBarBatteryItem"), view = objc_lookUpClass("_UIBatteryView");
     Method update = class_getInstanceMethod(item, sel_registerName("applyUpdate:toDisplayItem:"));
@@ -205,5 +267,6 @@ __attribute__((constructor)) static void initialize(void)
     size_t bytes = sizeof(product);
     int result = sysctlbyname("hw.product", product, &bytes, NULL, 0);
     if (result || strcmp(product, "iPhone10,3")) return;
+    installNativeScreen();
     _dyld_register_func_for_add_image(imageAdded);
 }

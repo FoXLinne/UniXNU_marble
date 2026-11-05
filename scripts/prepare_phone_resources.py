@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import plistlib
 import struct
+import subprocess
+import tempfile
 import zlib
 
 
@@ -36,7 +38,10 @@ def pack_addon(entries, path):
             raise ValueError('addon path exceeds loader limit: ' + name)
         body += struct.pack('<IIQQ', len(encoded), mode, len(data), len(packed))
         body += encoded + bytes(-len(encoded) % 8) + packed + bytes(-len(packed) % 8)
-    path.write_bytes(b'NGPUADD2' + struct.pack('<IIQ', len(entries), 0, len(body) + 24) + body)
+    size = len(body) + 24
+    if size > 64 * 1024 * 1024:
+        raise ValueError('addon exceeds DarwinBoot’s 64 MiB limit')
+    path.write_bytes(b'NGPUADD2' + struct.pack('<IIQ', len(entries), 0, size) + body)
 
 
 def add_wallpaper(entries, ios_root):
@@ -49,20 +54,41 @@ def add_wallpaper(entries, ios_root):
         entries[f'{prefix}/{name}'] = (0o644, (collection / name).read_bytes())
 
     source = collection / 'Wallpapers/7565.iOS_17-375w-812h@3x~iphone.wallpaper'
+    animation_names = {'backgroundAnimationFileName': 'Background.ca',
+                       'floatingAnimationFileNameKey': 'Floating.ca'}
+    native = plistlib.loads((source / 'Wallpaper.plist').read_bytes())
+    native_assets = native['assets']['lockAndHome']['default']
+    animation_files = {}
+    with tempfile.TemporaryDirectory() as temp:
+        converted = Path(temp) / 'layer.png'
+        for key, short in animation_names.items():
+            animation = source / native_assets[key]
+            for path in animation.rglob('*'):
+                if not path.is_file():
+                    continue
+                name = path.relative_to(animation)
+                if path.suffix == '.HEIC':
+                    # ImageIO on the port cannot decode these HEVC layers.
+                    subprocess.run(['sips', '-Z', '1440', '-s', 'format', 'png',
+                                    path, '--out', converted], check=True,
+                                   stdout=subprocess.DEVNULL)
+                    data = converted.read_bytes()
+                    name = name.with_suffix('.png')
+                else:
+                    data = path.read_bytes()
+                    if path.suffix in ('.caml', '.xml'):
+                        data = data.replace(b'.HEIC', b'.png')
+                animation_files[f'{short}/{name.as_posix()}'] = (0o644, data)
+
     for screen in ('375w-812h@3x~iphone', '360w-800h@3x~iphone'):
         target = f'{prefix}/Wallpapers/7565.iOS_17-{screen}.wallpaper'
         wallpaper = plistlib.loads((source / 'Wallpaper.plist').read_bytes())
         wallpaper['logicalScreenClass'] = screen
         assets = wallpaper['assets']['lockAndHome']['default']
         # Keep the animation paths within the addon's 160-byte entry limit.
-        for key, short in (('backgroundAnimationFileName', 'Background.ca'),
-                           ('floatingAnimationFileNameKey', 'Floating.ca')):
-            animation = source / assets[key]
-            assets[key] = short
-            for path in animation.rglob('*'):
-                if path.is_file():
-                    name = path.relative_to(animation).as_posix()
-                    entries[f'{target}/{short}/{name}'] = (0o644, path.read_bytes())
+        assets.update(animation_names)
+        entries.update((f'{target}/{name}', entry)
+                       for name, entry in animation_files.items())
         entries[f'{target}/Wallpaper.plist'] = (
             0o644, plistlib.dumps(wallpaper, fmt=plistlib.FMT_BINARY))
 

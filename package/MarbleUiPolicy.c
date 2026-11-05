@@ -10,7 +10,10 @@ int native_marble_ui_dyld_policy(proc_t, int, user_addr_t, int);
 
 static bool phone_ui_executable(const char *path)
 {
-    return !strcmp(path, "/System/Library/CoreServices/SpringBoard.app/SpringBoard") ||
+    return !strcmp(path, "/Applications/Spotlight.app/Spotlight") ||
+           !strcmp(path, "/Applications/InputUI.app/InputUI") ||
+           !strcmp(path, "/Applications/Preferences.app/Preferences") ||
+           !strcmp(path, "/System/Library/CoreServices/SpringBoard.app/SpringBoard") ||
            !strcmp(path, "/Applications/PosterBoard.app/PosterBoard") ||
            !strcmp(path, "/Applications/MobileSlideShow.app/MobileSlideShow");
 }

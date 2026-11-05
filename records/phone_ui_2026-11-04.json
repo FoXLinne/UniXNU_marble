@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-04",
+  "system": "iPadOS 17.7.11 / 21H461",
+  "ui": "phone",
+  "model": "iPhone10,3",
+  "target": "D22",
+  "scale": 3,
+  "gesture": "home-button-type=2",
+  "data_seed": "../restore64/Data.rdisk",
+  "partition_bytes": 85901422592,
+  "artifacts": {
+    "kernel.macho": {
+      "bytes": 48918528,
+      "sha256": "00930f961bfbce2b7fbe9f0b4c6085cdd3bbcde429706e06b4280c8b141df62e"
+    },
+    "KernelSeed.bin": {
+      "bytes": 51380224,
+      "sha256": "6623d5ae310ac28babadc1376fd42064d2d4935f41281a4ec4b33a8d9cdaa3c9"
+    },
+    "marble_usb_handoff.img": {
+      "bytes": 24764416,
+      "sha256": "e53886ac0f7bb68f955e64d293227983c49ac336072f7494d4d7207d2dd9dee2"
+    },
+    "marble_persistent_boot.img": {
+      "bytes": 24764416,
+      "sha256": "677df30788e812b722af6f9067eec3ea6849efdd4072639525dfc804fb757787"
+    },
+    "stage/EFI/UniXNU/Payloads/kernel.macho.adt": {
+      "bytes": 13628,
+      "sha256": "51143229b505901cfd22f31a6ba6af51ccf990875d2989cbc4e443410ed31fa2"
+    }
+  },
+  "hardware": {
+    "stage": "phone wallpaper boot_b launch; USB responding",
+    "android_a_boot_after_resize": true,
+    "phone_ui_visible": true,
+    "oobe_country_screen": "cache/persistent_boot/phone64_setup4.png",
+    "oobe": "skipped at user request after language-selection crash report",
+    "installed_first_party_apps": 28,
+    "installed_apps_inventory": "cache/persistent_boot/phone64/installed_apps.json",
+    "data_skip_result": "cache/persistent_boot/phone64/skip_setup_result.json",
+    "persistent_usb_responding": true,
+    "setup_skipped": true,
+    "desktop_screen": "cache/persistent_boot/phone64_desktop.png",
+    "settings_screen": "cache/persistent_boot/phone64_home.png",
+    "background": "black; phone wallpaper resource candidate packaged"
+  },
+  "wallpaper_candidate": {
+    "assets": "outputs/UniXNU_marble/persistent_boot/phonewallpaper",
+    "source": "original 21H461 iPadOS17 Flat wallpaper with PNG layers",
+    "phone_screen_classes": [
+      "360w-800h@3x~iphone",
+      "375w-812h@3x~iphone"
+    ],
+    "collection_index": "Collections~iphone.plist",
+    "kernel_change": "reuse bindfs collection union mount",
+    "gpu_changed": false,
+    "installed": true,
+    "persistent_usb_responding": true
+  }
+}

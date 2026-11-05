@@ -70,5 +70,17 @@
     ],
     "pkd_error": "plug-ins outside containing apps must be in /System.",
     "next": "Trace why parent applications and widget extensions are not registered or are treated as restricted."
+  },
+  "product_id_investigation": {
+    "binary": "21H461 /usr/lib/libMobileGestalt.dylib",
+    "query_node": "IODeviceTree:/product",
+    "query_property": "product-id",
+    "required_bytes": 20,
+    "missing_property_message": "invalid product id '(null)'",
+    "original_device_tree": "work/UniXNU/out/ipsw/21H461/DeviceTree.j120ap.im4p",
+    "original_property": "e9fefef6e6f9d12a5ba1a2551866cbbd749f0ec3",
+    "original_properties": "outputs/UniXNU_marble/gpu_diagnostics/ipad_product_properties.json",
+    "candidate": "outputs/UniXNU_marble/kernel_product_id1.macho",
+    "hardware": "pending"
   }
 }
