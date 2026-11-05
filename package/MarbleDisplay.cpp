@@ -133,7 +133,8 @@ bool native_legacy_prepare_scanout(void)
 void native_legacy_transfer_observed(IOReturn status, const void *, uint64_t bytes)
 {
     ++marble_display_transfers; marble_display_transfer_status = status;
-    IOLog("MarbleDisplay: transfer %u status %x bytes %llu\n", marble_display_transfers, status, bytes);
+    if (status || marble_display_transfers == 1)
+        IOLog("MarbleDisplay: transfer %u status %x bytes %llu\n", marble_display_transfers, status, bytes);
 }
 void native_legacy_copy_timing_observed(uint64_t ticks, uint64_t) { marble_display_copy_ticks += ticks; }
 void native_legacy_retirement_observed(IOService *) { ++marble_display_retirements; }

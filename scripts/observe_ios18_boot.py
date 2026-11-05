@@ -50,11 +50,17 @@ def observe(kernel, layout_path, output, interval, duration):
                 fields = (('_marble_display_transfers', 4), ('_marble_display_frames', 4),
                           ('_marble_ufs_reads', 8), ('_marble_ufs_writes', 8),
                           ('_marble_watchdog_checkins', 8), ('_marble_ui_exit_count', 4),
+                          ('_real_ncpus', 4), ('_armcpu_registered', 4),
+                          ('_armcpu_smp_requested', 4), ('_armcpu_smp_running', 4),
+                          ('_armcpu_ipi_sent', 8), ('_armcpu_ipi_interrupts', 8),
                           ('_sheng_watchdog_policy_status', 4))
                 report['globals'] = {name: int.from_bytes(memory.read(symbols[name], size), 'little')
                                      for name, size in fields if name in symbols}
                 if '__ZL15domainFrequency' in symbols:
                     report['cpu_khz'] = struct.unpack('<3I', memory.read(symbols['__ZL15domainFrequency'], 12))
+                report['cpu_state'] = {name: struct.unpack('<8I', memory.read(symbols[name], 32))
+                                       for name in ('_armcpu_smp_step', '_armcpu_smp_fail',
+                                                    '_armcpu_core_timer', '_armcpu_core_sgi') if name in symbols}
                 processes = capture_processes(memory, symbols, layout['proc'])
                 (destination / 'processes.json').write_text(json.dumps(processes, indent=2) + '\n')
                 focus = {'CommCenter', 'locationd', 'com.apple.datamigrator',

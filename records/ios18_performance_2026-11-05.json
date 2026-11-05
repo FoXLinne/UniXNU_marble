@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-05",
+  "device": "marble / SM7475",
+  "os": "iOS 18.7.11 22H384",
+  "baseline": {
+    "XNU_CPUs": 1,
+    "cpu_khz": [
+      1804800,
+      2496000,
+      2918400
+    ],
+    "refresh_Hz": 10,
+    "GPU": "Adreno GPU backend absent from iOS 18 archive; software rendering"
+  },
+  "changes": [
+    "Select CPU affinities 0x000..0x600 in ADT, keep 0x700 for resident USB",
+    "Set cpus=7 sheng-smp=1 in early loader arguments",
+    "Match Affinity1 in XNU secondary reset handler",
+    "Restore software display refresh default to 60 Hz",
+    "Log first frame and transfer failures instead of every successful frame"
+  ],
+  "hardware": {
+    "real_ncpus": 7,
+    "secondary_running": 6,
+    "all_CPU_timer_and_IPI_counters": "advanced on CPU0..6",
+    "CPU_failure_counters": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "user_feedback": "Response clearly improved",
+    "panic": "",
+    "USB": "RootStage2",
+    "SpringBoard_restarts": "reported during Setup; skip-setup candidate in progress"
+  },
+  "image": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-smp60/marble_temporary_boot.img",
+    "kernel_sha256": "2dd9ebeccbf1b352cf38312657579a5185b9c41d46b600b8c0edefc3a354d454",
+    "native_sha256": "79c76ecb1a0ef7813eb81fbd4ac8c22dae71e925c11eb9094829f96c71133437",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "enabled_cpu_affinities": [
+      0,
+      256,
+      512,
+      768,
+      1024,
+      1280,
+      1536
+    ],
+    "firmware_usb_affinity": 1792,
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd"
+  },
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-smp60",
+  "GPU_next": "Port accelerator ABI and Metal discovery/plugin installation to arm64e 22H384; keep hardware ownership tied to the existing A725 board driver"
+}
