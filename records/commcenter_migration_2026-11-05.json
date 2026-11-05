@@ -87,5 +87,16 @@
       "runtime_usb_mode": 3,
       "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=10 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 sheng-disable-jobs=com.apple.CommCenter"
     }
+  },
+  "location_cycle": {
+    "observations": [
+      "Migration plugin thread waits for a synchronous CoreLocation reply",
+      "locationd waits in BLSXPCBacklightProxy isAlwaysOnEnabled",
+      "backboardd waits for DataClassMigrator completion"
+    ],
+    "evidence": "outputs/UniXNU_marble/ios18_arm64e/session-20261105/commcenter-policy-10hz/location-dependency/state.json",
+    "policy": "Reuse the iPadOS 17 board launch exclusion for com.apple.locationd alongside com.apple.CommCenter",
+    "image": "session-20261105/location-cycle-cpufreq/marble_temporary_boot.img",
+    "hardware": "in progress"
   }
 }

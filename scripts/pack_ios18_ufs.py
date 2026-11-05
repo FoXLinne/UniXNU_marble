@@ -24,7 +24,7 @@ def main():
                         help='Embed the kernel and retain the RootStage USB service')
     parser.add_argument('--vsync', type=int, default=10,
                         help='Display refresh during software-rendered startup')
-    parser.add_argument('--disabled-jobs', default='com.apple.CommCenter',
+    parser.add_argument('--disabled-jobs', default='com.apple.CommCenter,com.apple.locationd',
                         help='Board services excluded until their hardware backend is available')
     args = parser.parse_args()
     root, out = args.root.resolve(), args.assets.resolve()
