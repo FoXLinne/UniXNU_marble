@@ -122,6 +122,19 @@ BootReturn(EFI_STATUS Status, UINTN Checkpoint)
   return Status;
 }
 
+EFI_STATUS
+MarbleRootStorageReturn(ROOT_STAGE_TABLE *Stage)
+{
+  ROOT_STAGE_DISK *Kernel = &Stage->Disks[2];
+  if (Kernel->Count == 1 && Kernel->Bytes >= 0x100000) {
+    UINT8 *Log = (VOID *)(UINTN)(Kernel->Extents[0].Address + Kernel->Bytes - 0x100000);
+    ZeroMem(Log, 0x100000);
+    CopyMem(Log, mBootText, mBootTextUsed * sizeof(CHAR16));
+    CaptureBootScreen(Log + 65536, 0x100000 - 65536);
+  }
+  return MarbleRootUsbResume(Stage);
+}
+
 STATIC EFI_STATUS EFIAPI
 BootLoader(UNIXNU_LOADER_PROTOCOL *This, CONST UNIXNU_LOADER_BOOT_REQUEST *Request)
 {

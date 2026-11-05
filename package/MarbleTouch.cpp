@@ -12,12 +12,24 @@ extern "C" {
 #include "SmmuBypass.h"
 void native_touch_publish(unsigned count, const uint8_t *points);
 void native_marble_touch_start(void);
+IOReturn armcpu_spi_attach(uint32_t, bool, void (*)(void *), void *, uint32_t *, uint64_t *);
 }
 
 namespace {
 unsigned touchStage, touchEvents, touchFrames, touchInvalid, touchIrq;
 uint32_t touchHeader;
 int touchResult;
+volatile uint32_t touchInterrupts;
+volatile uint32_t *touchPin;
+bool touchInterruptDriven;
+void touchInterrupt(void *) {
+    auto *pin = touchPin;
+    if (!pin || !(pin[3] & 1)) return;
+    pin[3] = 0;
+    __asm__ volatile("dsb sy" ::: "memory");
+    __atomic_fetch_add(&touchInterrupts, 1, __ATOMIC_RELEASE);
+    thread_wakeup((event_t)&touchInterrupts);
+}
 struct Region {
     IOMemoryMap *mapping = nullptr;
     uintptr_t address = 0;
@@ -210,7 +222,8 @@ struct Touch {
         if (result) return result;
         // GENI selects an existing DFS performance level; its source rate comes from GCC.
         unsigned level = 0;
-        uint64_t rate = 0;
+        uint64_t rate = 0, bestHz = 0, bestDivider = 0;
+        constexpr unsigned targetHz = 15000000;
         for (unsigned i = 0; i < 8; ++i) {
             uint32_t cfg = read32(g, 0x274e4 + 0x1c + 4 * i);
             unsigned source = (cfg >> 8) & 7, divider = cfg & 31;
@@ -221,10 +234,34 @@ struct Touch {
                 uint32_t n = ((~read32(g, 0x274e4 + 0x9c + 4 * i)) & 65535) + m;
                 hz = n ? hz * m / n : 0;
             }
-            if (hz && (!rate || hz < rate)) { level = i; rate = hz; }
+            if (!hz) continue;
+            uint64_t spiDivider = (hz + uint64_t(spi.oversampling) * targetHz - 1) /
+                (uint64_t(spi.oversampling) * targetHz);
+            if (!spiDivider) spiDivider = 1;
+            if (spiDivider > 0xfff) continue;
+            uint64_t actual = hz / (spi.oversampling * spiDivider);
+            if (!bestHz || actual > bestHz || (actual == bestHz && spiDivider < bestDivider)) {
+                level = i; rate = hz; bestHz = actual; bestDivider = spiDivider;
+            }
         }
         if (!rate) return GENI_ERR_IO;
-        return geni_spi_set_clock(&spi, 1000000, static_cast<unsigned>(rate), level);
+        return geni_spi_set_clock(&spi, targetHz, static_cast<unsigned>(rate), level);
+    }
+    bool armInterrupt() {
+        touchPin = reinterpret_cast<volatile uint32_t *>(pins.address + 0x5000);
+        uint32_t cfg = touchPin[2] & ~((7u << 5) | (3u << 2) | (1u << 1) | 1u);
+        // pinctrl-msm: two-bit detection 2 selects falling edge; target 3 is the AP.
+        cfg |= (3u << 5) | (2u << 2) | (1u << 1) | (1u << 4);
+        touchPin[2] = cfg;
+        touchPin[3] = 0;
+        __asm__ volatile("dsb sy" ::: "memory");
+        IOReturn status = armcpu_spi_attach(32 + 208, false, touchInterrupt, nullptr, nullptr, nullptr);
+        if (!status) {
+            touchPin[2] = cfg | 1u;
+            __asm__ volatile("dsb sy" ::: "memory");
+        }
+        IOLog("MarbleTouch: interrupt=%x SPI=%u Hz\n", status, spi.cur_speed_hz);
+        return status == kIOReturnSuccess;
     }
     int run() {
         int result = initialize();
@@ -269,9 +306,24 @@ struct Touch {
         if (!events || little16(info + at + 48) != 8 || little16(info + at + 50) != 8) return GENI_ERR_PROTO;
         touchStage = 3;
         uint8_t frame[90];
+        touchInterruptDriven = armInterrupt();
+        uint32_t seen = __atomic_load_n(&touchInterrupts, __ATOMIC_ACQUIRE);
+        if (!(touchPin[1] & 1)) --seen;
+        bool retry = false;
         for (;;) {
+            if (touchInterruptDriven && !retry) {
+                assert_wait((event_t)&touchInterrupts, THREAD_UNINT);
+                if (__atomic_load_n(&touchInterrupts, __ATOMIC_ACQUIRE) != seen)
+                    clear_wait(current_thread(), THREAD_AWAKENED);
+                else thread_block(THREAD_CONTINUE_NULL);
+                seen = __atomic_load_n(&touchInterrupts, __ATOMIC_ACQUIRE);
+            }
             touchIrq = read32(reinterpret_cast<void *>(pins.address), 0x5004) & 1;
-            if (touchIrq) { IOSleep(8); continue; }
+            if (touchIrq) {
+                retry = false;
+                if (!touchInterruptDriven) IOSleep(1);
+                continue;
+            }
             // Match the controller driver's two-contact pre-read; extend for additional contacts.
             result = read(events, frame, 26);
             if (result) return result;
@@ -279,9 +331,11 @@ struct Touch {
             touchHeader = little32(frame);
             if (!checksum(frame, 8)) {
                 touchInvalid++;
+                retry = true;
                 IOSleep(1);
                 continue; // Preserve the pending event while its header is being updated.
             }
+            retry = false;
             unsigned count = frame[2] & 15;
             bool touchEvent = (frame[0] & 0x80) && count <= 10;
             if (touchEvent && count > 2) {
@@ -293,24 +347,22 @@ struct Touch {
             result = acknowledge(events);
             if (result) return result;
             if (valid) {
-                // Raw frame trail for the coordinate mapping: one line per contact-count change and every eighth frame.
-                static unsigned framesLogged, lastCount = ~0u;
-                if (count != lastCount || (++framesLogged & 7) == 0) {
-                    IOLog("MarbleTouch: frame n=%u id=%u x=%u y=%u\n", count,
-                        count ? frame[8] >> 4 : 0xff, count ? little16(frame + 10) : 0,
-                        count ? little16(frame + 12) : 0);
-                    lastCount = count;
-                }
                 touchFrames++;
                 native_touch_publish(count, frame + 8);
             } else touchInvalid++;
-            IOSleep(1);
         }
     }
 };
 void worker(void *, wait_result_t) {
     auto *touch = new Touch;
     int result = touch ? touch->run() : GENI_ERR_IO;
+    if (touchPin) {
+        touchPin[2] &= ~1u;
+        touchPin[3] = 0;
+        __asm__ volatile("dsb sy" ::: "memory");
+        touchPin = nullptr;
+    }
+    touchInterruptDriven = false;
     touchResult = result;
     touchStage = 4;
     IOLog("MarbleTouch: stopped status=%d\n", result);
@@ -327,6 +379,6 @@ extern "C" void native_marble_touch_start(void) {
     else IOLog("MarbleTouch: thread start=%d\n", result);
 }
 extern "C" void native_marble_touch_report(char *out, unsigned size) {
-    snprintf(out, size, "MarbleTouch stage=%u result=%d irq=%u events=%u frames=%u invalid=%u header=%08x",
-        touchStage, touchResult, touchIrq, touchEvents, touchFrames, touchInvalid, touchHeader);
+    snprintf(out, size, "MarbleTouch stage=%u result=%d irq=%u events=%u frames=%u invalid=%u header=%08x interrupts=%u driven=%u",
+        touchStage, touchResult, touchIrq, touchEvents, touchFrames, touchInvalid, touchHeader, touchInterrupts, touchInterruptDriven);
 }

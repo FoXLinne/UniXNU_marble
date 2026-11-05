@@ -1,3 +1,32 @@
+diff --git a/docs/drivers/xnu-prelink.md b/docs/drivers/xnu-prelink.md
+index a74c102..e8cd7da 100644
+--- a/docs/drivers/xnu-prelink.md
++++ b/docs/drivers/xnu-prelink.md
+@@ -12,6 +12,9 @@ For arm64e fileset kernel collections, `emit_prelink.py` selects the fileset
+ emitter and generates a function/data map. `--fileset-map FILE` supplies an
+ existing map with matching input hashes and matcher version. The selected roots
+ and their dependency closure are retained.
++Linkedit table space is bounded by mapped page counts and native function starts.
++Each chain page uses one 16-bit start offset; chain words remain in their segments.
++The prelink metadata segment is page-aligned to the selected XML size.
+ Code comparison accounts for complete compiler-inserted PAC failure checks;
+ the emitted native code retains them. Both emitter entry points validate the
+ matching code signature before reusing a map.
+diff --git a/docs/zh/drivers/xnu-prelink.md b/docs/zh/drivers/xnu-prelink.md
+index 473c3dd..359ddc4 100644
+--- a/docs/zh/drivers/xnu-prelink.md
++++ b/docs/zh/drivers/xnu-prelink.md
+@@ -35,6 +35,10 @@ LTO 模式从生成的 LTO 对象和非 LTO 文件列表检查导出符号。对
+ HMAC。集合根头使用原生内核的链接地址，普通预链接的 `--slide` 不用于 fileset。
+ 原生内核输入文件保持不变。
+ 
++链式修正起点表按映射页数预留空间，每页占用一个 16 位起点；链式指针保留在所属段中。
++函数起点表按原生函数数量预留空间。
++预链接元数据段按筛选后的 XML 长度页对齐。
++
+ 原生适配器通过 `BTI c; B` 跳板调用保留的 kext 函数，固定目标由 `N_ABS`
+ 符号 `<stub>.original` 声明。这类跳转没有链接器分段重定位记录，因此输出工具
+ 在布局完成后重新计算跳转，并核验目标位于保留组件的可执行范围内。报告中的
 diff --git a/scripts/make-data-seed.py b/scripts/make-data-seed.py
 index eeaf3cb..8899fdd 100644
 --- a/scripts/make-data-seed.py

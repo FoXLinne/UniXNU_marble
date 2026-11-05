@@ -16,6 +16,10 @@ extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" kmod_info_t g_kernel_kmod_info;
 extern "C" void native_marble_display_init(void) __asm__("__GLOBAL__sub_I_NativeLegacyDisplay.cpp");
 extern "C" IOService *native_legacy_display_allocate(void);
+extern "C" void native_marble_charging_start(void);
+extern "C" void native_marble_hid_start(void);
+extern "C" void native_keyevents_start(void);
+extern "C" void native_marble_touch_report(char *, unsigned);
 
 extern "C" {
 volatile uint32_t marble_display_stage, marble_display_registered, marble_display_clients;
@@ -23,6 +27,10 @@ volatile uint32_t marble_display_transfers, marble_display_retirements, marble_d
 volatile uint32_t marble_display_swap_stage, marble_display_validation, marble_display_rejections;
 extern volatile uint32_t native_legacy_surfaces[14], native_legacy_direct[14];
 volatile uint64_t marble_display_mapping, marble_display_bytes, marble_display_copy_ticks;
+uint32_t *marble_display_pixels;
+uint32_t marble_display_geometry[3];
+uint32_t marble_display_snapshot_ready;
+char marble_touch_status[256];
 volatile uint64_t marble_display_frame[6], marble_display_surface[7];
 volatile uint32_t marble_display_pm[3], marble_display_vsync[2];
 volatile int marble_display_client_status, marble_display_transfer_status;
@@ -52,9 +60,25 @@ bool native_legacy_gop_mapping_observed(IOService *, IOMemoryMap *mapping, uint3
 {
     marble_display_mapping = mapping->getVirtualAddress();
     marble_display_bytes = mapping->getLength();
+    PE_Video video = {};
+    if (PE_current_console(&video)) return false;
+    marble_display_pixels = static_cast<uint32_t *>(IOMalloc(mapping->getLength()));
+    if (!marble_display_pixels) return false;
+    marble_display_geometry[0] = width;
+    marble_display_geometry[1] = height;
+    marble_display_geometry[2] = static_cast<uint32_t>(video.v_rowBytes);
     IOLog("MarbleDisplay: GOP %ux%u physical %llx bytes %llu\n", width, height,
           mapping->getPhysicalAddress(), mapping->getLength());
     return true;
+}
+
+void native_marble_display_snapshot(void)
+{
+    native_marble_touch_report(marble_touch_status, sizeof(marble_touch_status));
+    if (!marble_display_mapping || !marble_display_pixels) return;
+    const volatile uint32_t *source = reinterpret_cast<const volatile uint32_t *>(marble_display_mapping);
+    for (uint64_t i = 0; i < marble_display_bytes / 4; ++i) marble_display_pixels[i] = source[i];
+    marble_display_snapshot_ready = 1;
 }
 
 void native_legacy_registration_observed(IOService *display)
@@ -172,5 +196,8 @@ void native_marble_display_start(void)
     if (!display->start(nub)) panic("MarbleDisplay: start");
     marble_display_stage = 5;
     IOLog("MarbleDisplay: display started\n");
+    native_keyevents_start();
+    native_marble_charging_start();
+    native_marble_hid_start();
 }
 }

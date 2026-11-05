@@ -3,6 +3,7 @@
 #include <IOKit/IODeviceTreeSupport.h>
 #include <IOKit/IOPlatformExpert.h>
 #include <IOKit/IOMemoryDescriptor.h>
+#include <IOKit/IODeviceMemory.h>
 #include <IOKit/IOBSD.h>
 #include <IOKit/storage/IOBlockStorageDevice.h>
 #include <libkern/c++/OSData.h>
@@ -15,6 +16,7 @@
 #include <sys/param.h>
 #include <libkern/zlib.h>
 #include <SparseDisk.h>
+#include "MarbleUfs.h"
 #include <pexpert/pexpert.h>
 #include <pexpert/boot.h>
 
@@ -29,7 +31,17 @@ extern "C" void marble_storage_base_init(void) __asm__("__GLOBAL__sub_I_IOBlockS
 extern "C" void marble_root_disk_init(void) __asm__("__GLOBAL__sub_I_MarbleRootDisk.cpp");
 extern "C" kmod_info_t g_kernel_kmod_info;
 static const OSMetaClass *storageParent;
-static char dataSeedUUID[37];
+extern "C" {
+char marble_data_uuid[37];
+RamSparseDisk *marble_data_sparse;
+const uint8_t *marble_adsp_firmware;
+extern const uint64_t marble_adsp_firmware_size;
+uint64_t marble_data_bytes;
+volatile uint64_t marble_ufs_reads, marble_ufs_writes;
+}
+extern "C" void marble_runtime18_start(void);
+extern "C" bool native_root_block_has_data(void);
+extern "C" bool native_root_block_has_data(void) { return marble_data_bytes != 0; }
 extern "C" { char *native_root_block_boot_args; }
 static char residentBootArgs[BOOT_LINE_LENGTH * 2];
 
@@ -43,36 +55,26 @@ class MarbleRootDisk : public IOBlockStorageDevice {
     OSDeclareDefaultStructors(MarbleRootDisk)
     ROOT_STAGE_DISK disk = {};
     unsigned diskIndex = 0;
-    RamSparseDisk sparse = {};
+    uint8_t *dataScratch = nullptr;
     IOLock *dataGate = nullptr;
 public:
     unsigned sourceIndex() const { return diskIndex; }
     void configure(const ROOT_STAGE_DISK &source, unsigned index) {
-        if (!source.Bytes || source.Bytes % 512 || source.Received != source.Bytes ||
-            source.Count != (source.Bytes + ROOT_STAGE_CHUNK - 1) / ROOT_STAGE_CHUNK ||
-            source.Count > ROOT_STAGE_EXTENTS) panic("MarbleStorage: incomplete root image");
-        uint64_t total = 0;
-        for (unsigned i = 0; i < source.Count; ++i) {
-            uint64_t size = MIN(ROOT_STAGE_CHUNK, source.Bytes - total);
-            if (!source.Extents[i].Address || source.Extents[i].Bytes != size)
-                panic("MarbleStorage: invalid root extent %u", i);
-            total += size;
-        }
-        disk = source;
+        (void)source;
+        disk.Bytes = marble_ufs_root_bytes(index);
+        if (!disk.Bytes) panic("MarbleStorage: UFS root window %u absent", index);
         diskIndex = index;
     }
-    void configureData(const uint8_t *packed, size_t bytes) {
-        uint64_t logical = 0;
-        if (!ramPackedLayout(packed, bytes, &logical) || logical > 0x100000000ULL)
-            panic("MarbleStorage: packed Data layout invalid");
-        sparse.bytes = logical;
-        sparse.pages = static_cast<uint8_t **>(IOMallocZero(logical / 4096 * sizeof(uint8_t *)));
-        struct ImportOps { uint8_t *allocate() { return static_cast<uint8_t *>(IOMallocZero(4096)); } } ops;
-        if (!sparse.pages || !ramSparseImport(sparse, packed, bytes, ops) || !(dataGate = IOLockAlloc()))
-            panic("MarbleStorage: sparse Data import failed");
-        disk.Bytes = logical;
+    void configureData(uint64_t bytes) {
+        if (!bytes || (bytes & 4095) || !marble_ufs_store_open(bytes / 4096))
+            panic("MarbleStorage: UFS Data window invalid");
+        dataScratch = static_cast<uint8_t *>(IOMalloc(128 * 1024));
+        dataGate = IOLockAlloc();
+        if (!dataScratch || !dataGate) panic("MarbleStorage: Data I/O allocation failed");
+        disk.Bytes = bytes;
         diskIndex = 2;
-        IOLog("MarbleStorage: Data logical bytes %llu, resident bytes %llu\n", logical, sparse.resident);
+        marble_data_bytes = bytes;
+        IOLog("MarbleStorage: UFS Data bytes %llu\n", bytes);
     }
     IOReturn doEjectMedia() override { return kIOReturnUnsupported; }
     IOReturn doFormatMedia(UInt64) override { return kIOReturnUnsupported; }
@@ -89,8 +91,10 @@ public:
     }
     IOReturn reportRemovability(bool *value) override { *value = false; return kIOReturnSuccess; }
     IOReturn reportWriteProtection(bool *value) override { *value = diskIndex != 2; return kIOReturnSuccess; }
-    IOReturn doSynchronizeCache() override { return kIOReturnSuccess; }
-    IOReturn doSynchronize(UInt64, UInt64, IOOptionBits) override { return kIOReturnSuccess; }
+    IOReturn doSynchronizeCache() override {
+        return diskIndex != 2 || marble_ufs_store_sync() ? kIOReturnSuccess : kIOReturnIOError;
+    }
+    IOReturn doSynchronize(UInt64, UInt64, IOOptionBits) override { return doSynchronizeCache(); }
     IOReturn getWriteCacheState(bool *value) override { *value = false; return kIOReturnSuccess; }
     IOReturn setWriteCacheState(bool) override { return kIOReturnUnsupported; }
     IOReturn doAsyncReadWrite(IOMemoryDescriptor *buffer, UInt64 block, UInt64 count,
@@ -102,30 +106,28 @@ public:
             return kIOReturnBadArgument;
         uint64_t offset = block * 512, bytes = count * 512, done = 0;
         if (diskIndex == 2) {
-            struct Operations {
-                IOMemoryDescriptor *buffer;
-                uint8_t *allocate() { return static_cast<uint8_t *>(IOMallocZero(4096)); }
-                uint64_t read(uint64_t at, void *target, uint64_t length) { return buffer->readBytes(at, target, length); }
-                uint64_t copy(uint64_t at, const void *source, uint64_t length) { return buffer->writeBytes(at, source, length); }
-            } ops = {buffer};
-            bool noMemory = false;
             IOLockLock(dataGate);
-            done = ramSparseIO(sparse, write, offset, bytes, ops, noMemory);
+            while (done < bytes) {
+                uint64_t at = offset + done;
+                unsigned within = static_cast<unsigned>(at & 4095);
+                uint64_t length = MIN(bytes - done, uint64_t(128 * 1024 - within));
+                uint32_t blocks = static_cast<uint32_t>((within + length + 4095) / 4096);
+                if ((!write || within || (length & 4095)) &&
+                    !marble_ufs_store_read(at / 4096, blocks, dataScratch)) break;
+                if (write) {
+                    if (buffer->readBytes(done, dataScratch + within, length) != length ||
+                        !marble_ufs_store_write(at / 4096, blocks, dataScratch)) break;
+                    ++marble_ufs_writes;
+                } else {
+                    if (buffer->writeBytes(done, dataScratch + within, length) != length) break;
+                    ++marble_ufs_reads;
+                }
+                done += length;
+            }
             IOLockUnlock(dataGate);
-            completion->action(completion->target, completion->parameter,
-                done == bytes ? kIOReturnSuccess : noMemory ? kIOReturnNoMemory : kIOReturnIOError, done);
-            return kIOReturnSuccess;
-        }
-        while (done < bytes) {
-            uint64_t position = offset + done, within = position % ROOT_STAGE_CHUNK;
-            const ROOT_STAGE_EXTENT &extent = disk.Extents[position / ROOT_STAGE_CHUNK];
-            IOByteCount available;
-            addr64_t destination = buffer->getPhysicalSegment(done, &available, kIOMemoryMapperNone);
-            if (!destination || !available) break;
-            uint64_t size = MIN(bytes - done, MIN(extent.Bytes - within, available));
-            if (copypv(extent.Address + within, destination, static_cast<unsigned int>(size),
-                cppvPsrc | cppvPsnk | cppvNoRefSrc) != KERN_SUCCESS) break;
-            done += size;
+        } else {
+            done = marble_ufs_root_read(diskIndex, buffer, offset, bytes);
+            ++marble_ufs_reads;
         }
         completion->action(completion->target, completion->parameter,
             done == bytes ? kIOReturnSuccess : kIOReturnIOError, done);
@@ -194,7 +196,7 @@ extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, 
 
 extern "C" int native_marble_data_volume(dev_t *device, char *path, size_t size)
 {
-    return dataSeedUUID[0] && rootBlockVolume(dataSeedUUID, 2, device, path, size);
+    return marble_data_uuid[0] && rootBlockVolume(marble_data_uuid, 2, device, path, size);
 }
 
 static voidpf dataInflateAllocate(voidpf, uInt items, uInt size)
@@ -214,15 +216,54 @@ static void dataInflateFree(voidpf, voidpf address)
     IOFree(block, bytes);
 }
 
-static void publishData(const ROOT_STAGE_DISK &kernel, IOService *provider)
+static uint8_t *inflatePayload(const void *input, uint64_t compressed, uint64_t encoded)
+{
+    uint8_t *output = static_cast<uint8_t *>(IOMalloc(encoded));
+    if (!output) panic("MarbleStorage: payload decompression allocation failed");
+    z_stream stream = {};
+    stream.zalloc = dataInflateAllocate;
+    stream.zfree = dataInflateFree;
+    stream.next_in = reinterpret_cast<Bytef *>(const_cast<void *>(input));
+    stream.avail_in = static_cast<uInt>(compressed);
+    stream.next_out = output;
+    stream.avail_out = static_cast<uInt>(encoded);
+    if (inflateInit(&stream) != Z_OK) panic("MarbleStorage: payload inflater initialization failed");
+    int status = inflate(&stream, Z_FINISH);
+    inflateEnd(&stream);
+    if (status != Z_STREAM_END || stream.total_out != encoded || stream.avail_in)
+        panic("MarbleStorage: payload decompression failed %d", status);
+    return output;
+}
+
+static uint8_t *inflateHandoff(const ROOT_STAGE_DISK &kernel, uint64_t tableOffset,
+                               uint64_t compressed, uint64_t encoded)
+{
+    uint64_t limit = kernel.Bytes - 1024 * 1024;
+    if (tableOffset > limit || 272 > limit - tableOffset)
+        panic("MarbleStorage: payload descriptor range invalid");
+    if (!compressed || tableOffset > limit || compressed > limit - tableOffset)
+        panic("MarbleStorage: firmware range invalid");
+    uint64_t copyBytes = (compressed + 4095) & ~uint64_t(4095);
+    uint8_t *input = static_cast<uint8_t *>(IOMalloc(copyBytes));
+    if (!input) panic("MarbleStorage: firmware copy allocation failed");
+    if (copypv(kernel.Extents[0].Address + tableOffset, reinterpret_cast<addr64_t>(input),
+        static_cast<unsigned int>(copyBytes), cppvPsrc | cppvKmap | cppvNoRefSrc) != KERN_SUCCESS)
+        panic("MarbleStorage: firmware copy failed");
+    uint8_t *output = inflatePayload(input, compressed, encoded);
+    IOFree(input, copyBytes);
+    return output;
+}
+
+static uint64_t prepareDataHandoff(const ROOT_STAGE_DISK &kernel)
 {
     constexpr uint64_t mailboxBytes = 1024 * 1024;
-    if (kernel.Count != 1 || kernel.Bytes < mailboxBytes || kernel.Bytes > kernel.Extents[0].Bytes) return;
+    if (kernel.Count != 1 || kernel.Bytes < mailboxBytes || kernel.Bytes > kernel.Extents[0].Bytes)
+        panic("MarbleStorage: kernel handoff invalid");
     uint8_t header[128 + BOOT_LINE_LENGTH];
     uint64_t mailbox = kernel.Extents[0].Address + kernel.Bytes - mailboxBytes;
-    if (copypv(mailbox, reinterpret_cast<addr64_t>(header), sizeof(header), cppvPsrc | cppvNoRefSrc) != KERN_SUCCESS)
+    if (copypv(mailbox, reinterpret_cast<addr64_t>(header), sizeof(header), cppvPsrc | cppvKmap | cppvNoRefSrc) != KERN_SUCCESS)
         panic("MarbleStorage: Data handoff copy failed");
-    if (memcmp(header, "ROOTLOG1", 8)) return;
+    if (memcmp(header, "ROOTLOG1", 8)) panic("MarbleStorage: mailbox header invalid");
     const char *extra = reinterpret_cast<const char *>(header + 128);
     size_t extraLength = strnlen(extra, BOOT_LINE_LENGTH);
     if (extraLength) {
@@ -234,35 +275,25 @@ static void publishData(const ROOT_STAGE_DISK &kernel, IOService *provider)
         native_root_block_boot_args = residentBootArgs;
         IOLog("MarbleStorage: extra boot arguments %s\n", extra);
     }
-    uint64_t offset = ramU64(header + 40), compressed = ramU64(header + 48), encoded = ramU64(header + 56);
-    if (!compressed) return;
-    if (!encoded || encoded > 0x10000000 || compressed > 0x10000000 ||
-        offset > kernel.Bytes - mailboxBytes || compressed > kernel.Bytes - mailboxBytes - offset)
-        panic("MarbleStorage: Data seed range invalid");
-    memcpy(dataSeedUUID, header + 64, sizeof(dataSeedUUID));
-    if (strnlen(dataSeedUUID, sizeof(dataSeedUUID)) != 36) panic("MarbleStorage: Data UUID invalid");
-    void *input = IOMalloc(compressed), *output = IOMalloc(encoded);
-    if (!input || !output) panic("MarbleStorage: Data decompression allocation failed");
-    if (copypv(kernel.Extents[0].Address + offset, reinterpret_cast<addr64_t>(input),
-        static_cast<unsigned>(compressed), cppvPsrc | cppvNoRefSrc) != KERN_SUCCESS)
-        panic("MarbleStorage: Data seed copy failed");
-    z_stream stream = {};
-    stream.zalloc = dataInflateAllocate;
-    stream.zfree = dataInflateFree;
-    stream.next_in = static_cast<Bytef *>(input);
-    stream.avail_in = static_cast<uInt>(compressed);
-    stream.next_out = static_cast<Bytef *>(output);
-    stream.avail_out = static_cast<uInt>(encoded);
-    if (inflateInit(&stream) != Z_OK) panic("MarbleStorage: Data inflater initialization failed");
-    int status = inflate(&stream, Z_FINISH);
-    inflateEnd(&stream);
-    IOFree(input, compressed);
-    if (status != Z_STREAM_END || stream.total_out != encoded || stream.avail_in)
-        panic("MarbleStorage: Data seed decompression failed %d", status);
+    marble_runtime18_start();
+    uint64_t firmwareOffset = ramU64(header + 104), firmwareBytes = ramU64(header + 112);
+    if (firmwareBytes) {
+        uint64_t firmwareRawBytes = ramU64(header + 120);
+        if (firmwareRawBytes != marble_adsp_firmware_size || firmwareBytes > firmwareRawBytes)
+            panic("MarbleStorage: ADSP firmware range invalid");
+        marble_adsp_firmware = inflateHandoff(kernel, firmwareOffset, firmwareBytes, firmwareRawBytes);
+    }
+    uint64_t logical = ramU64(header + 56);
+    memcpy(marble_data_uuid, header + 64, sizeof(marble_data_uuid));
+    if (strnlen(marble_data_uuid, sizeof(marble_data_uuid)) != 36) panic("MarbleStorage: Data UUID invalid");
+    return logical;
+}
+
+static void publishData(uint64_t logical, IOService *provider)
+{
     MarbleRootDisk *data = new MarbleRootDisk;
     if (!data) panic("MarbleStorage: Data disk allocation failed");
-    data->configureData(static_cast<const uint8_t *>(output), encoded);
-    IOFree(output, encoded);
+    data->configureData(logical);
     if (!data->init(nullptr) || !data->attach(provider) || !data->start(provider))
         panic("MarbleStorage: Data disk start failed");
     data->setName("Data");
@@ -301,6 +332,8 @@ extern "C" void native_marble_root_start(void)
     const ROOT_STAGE_TABLE *table = reinterpret_cast<const ROOT_STAGE_TABLE *>(mapping->getVirtualAddress());
     if (table->Magic != ROOT_STAGE_MAGIC || table->Version != 2 || table->DiskCount > 2)
         panic("MarbleStorage: RootDisks header invalid");
+    uint64_t dataBytes = prepareDataHandoff(table->Disks[2]);
+    if (!marble_ufs_start()) panic("MarbleStorage: UFS initialization failed");
     IOService *provider = IOService::getPlatform();
     for (unsigned i = 0; i < table->DiskCount; ++i) {
         MarbleRootDisk *disk = new MarbleRootDisk;
@@ -311,6 +344,6 @@ extern "C" void native_marble_root_start(void)
         disk->registerService(kIOServiceSynchronous);
         IOLog("MarbleStorage: root disk %u published, bytes %llu\n", i, table->Disks[i].Bytes);
     }
-    publishData(table->Disks[2], provider);
+    publishData(dataBytes, provider);
     mapping->release();
 }

@@ -11,7 +11,8 @@
 STATIC ROOT_STAGE_TABLE *mStorage;
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsbPoll(VOID);
-STATIC EFI_STATUS StorageReturn(VOID) { return MarbleRootUsbResume(mStorage); }
+EFI_STATUS MarbleRootStorageReturn(ROOT_STAGE_TABLE *Stage);
+STATIC EFI_STATUS StorageReturn(VOID) { return MarbleRootStorageReturn(mStorage); }
 
 EFI_STATUS MarbleRootStorage(VOID) {
   EFI_HANDLE *Handles=NULL; UINTN Count=0;
@@ -63,7 +64,7 @@ EFI_STATUS MarbleRootStorage(VOID) {
     if (!mStorage) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }
     ZeroMem(mStorage,sizeof(*mStorage));
     mStorage->Magic=ROOT_STAGE_MAGIC; mStorage->Version=2;
-    mStorage->KernelBytes=0x100000000ULL;
+    mStorage->KernelBytes=0x200000000ULL;
     mStorage->KernelBase=(UINTN)AllocateAlignedPages(EFI_SIZE_TO_PAGES(mStorage->KernelBytes+0x200000),0x200000);
     if (!mStorage->KernelBase) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }
   }
@@ -81,7 +82,7 @@ EFI_STATUS MarbleRootStorage(VOID) {
       Disk->Identity[J*2+1]="0123456789abcdef"[Entry[56+J]&15];
     }
     if (I<2) continue;
-    if (Bytes>0xc000000 || Bytes%4096) { Status=EFI_BAD_BUFFER_SIZE; goto Done; }
+    if (Bytes%4096) { Status=EFI_BAD_BUFFER_SIZE; goto Done; }
     UINT8 *Data=AllocateAlignedPages(EFI_SIZE_TO_PAGES(Bytes),MAX((UINTN)4096,(UINTN)Block->Media->IoAlign));
     if (!Data) { Status=EFI_OUT_OF_RESOURCES; goto Done; }
     Disk->Count=1; Disk->Extents[0]=(ROOT_STAGE_EXTENT){(UINTN)Data,Bytes};

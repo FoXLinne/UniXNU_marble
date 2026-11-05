@@ -29,9 +29,11 @@ class RootUsb:
         library = Path('/opt/homebrew/lib/libusb-1.0.dylib')
         backend = usb.backend.libusb1.get_backend(find_library=lambda _: str(library))
         self.device = usb.core.find(idVendor=0x18d1, idProduct=0xd00d, backend=backend)
-        if self.device is None or self.device.serial_number != 'marble':
+        if self.device is None:
             raise RuntimeError('Marble RootStage USB is unavailable')
         self.device.default_timeout = 120000
+        if self.command('getvar:version') != 'RootStage2':
+            raise RuntimeError('Unexpected RootStage USB protocol')
 
     def close(self):
         usb.util.dispose_resources(self.device)
@@ -102,7 +104,7 @@ def image_stream(image):
         subprocess.run(['hdiutil', 'detach', disk], check=True, capture_output=True)
 
 
-def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_args=""):
+def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_args="", adsp_firmware=None):
     if channel.command('getvar:version') != 'RootStage2':
         raise RuntimeError('Load the RootStage2 boot image to use resident disks')
     transfer_bytes = int(channel.command('getvar:max-download-size'), 16)
@@ -113,8 +115,7 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
     if kernel:
         data = kernel.read_bytes()
         source_digest = hashlib.sha256(data).hexdigest()
-        # The raw Data seed and output mailbox follow the Mach-O segments.
-        data += bytes(-len(data) % CHUNK)
+        seed = firmware = b''
         seed_offset, seed_bytes, seed_raw_bytes = 0, 0, 0
         seed_uuid = bytes(37)
         if data_seed:
@@ -126,22 +127,33 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
                 raise ValueError('Data seed checksum differs from seed.json')
             seed_uuid = str(uuid.UUID(metadata['volume_uuid'])).upper().encode() + b'\0'
             seed_raw_bytes = len(seed)
-            seed = zlib.compress(seed, level=6)
-            seed_offset, seed_bytes = len(data), len(seed)
-            data += seed
-            data += bytes(-len(data) % CHUNK)
+            seed = zlib.compress(seed, level=9)
+            seed_bytes = len(seed)
+        firmware_offset = firmware_bytes = firmware_raw_bytes = firmware_segments = 0
+        if adsp_firmware:
+            firmware = adsp_firmware.read_bytes()
+            firmware_raw_bytes = len(firmware)
+            firmware = zlib.compress(firmware, level=9)
+            firmware_bytes = len(firmware)
+        data += bytes(-len(data) % 4096)
+        seed_offset, seed_segments = (len(data), 1) if seed else (0, 0)
+        data += seed
+        data += bytes(-len(data) % 4096)
+        firmware_offset, firmware_segments = (len(data), 1) if firmware else (0, 0)
+        data += firmware
+        data += bytes(-len(data) % 4096)
         extra_args = boot_args.encode()
         if len(extra_args) >= 1024 or b'\0' in extra_args:
             raise ValueError('Extra boot arguments exceed the command line limit')
         data += (struct.pack('<8sII', LOG_MAGIC, 1, 0) + os.urandom(16) +
-                 struct.pack('<I4xQQQ', observe_seconds, seed_offset, seed_bytes, seed_raw_bytes) + seed_uuid + bytes(27) +
+                 struct.pack('<I4xQQQ', observe_seconds, seed_offset, seed_bytes, seed_raw_bytes) + seed_uuid + bytes(3) +
+                 struct.pack('<QQQ', firmware_offset, firmware_bytes, firmware_raw_bytes) +
                  extra_args + bytes(OUTPUT_BYTES - 128 - len(extra_args)))
-        if len(data) > 192 * CHUNK:
-            raise ValueError('RootStage kernel update exceeds the 192 MiB slot')
         digest = hashlib.sha256(data).hexdigest()
         entries.append((2, dict(name='kernel', source=str(kernel), format='raw',
                                 raw_bytes=len(data), sha256=digest, payload=data,
-                                source_sha256=source_digest)))
+                                source_sha256=source_digest, firmware_segments=firmware_segments,
+                                data_segments=seed_segments)))
     reports = []
     for index, image in entries:
         chunk_bytes = CHUNK if index == 2 else transfer_bytes
@@ -184,6 +196,8 @@ def load(channel, images, kernel=None, observe_seconds=0, data_seed=None, boot_a
                       elapsed_seconds=time.monotonic() - began)
         if 'source_sha256' in image:
             report['source_sha256'] = image['source_sha256']
+            report['firmware_segments'] = image['firmware_segments']
+            report['data_segments'] = image['data_segments']
         reports.append(report)
     channel.command(f'oem disks:{len(images)}')
     return reports

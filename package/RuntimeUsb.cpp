@@ -54,7 +54,7 @@ uint64_t watchdogCall(uint64_t function, uint64_t *control = nullptr) {
     return x0;
 }
 IOMemoryMap *rebootMap(uint64_t address, unsigned length) {
-    auto *memory=IOMemoryDescriptor::withPhysicalAddress(address,length,kIODirectionInOut);
+    auto *memory=IOMemoryDescriptor::withAddressRange(address,length,kIODirectionInOut | kIOMemoryMapperNone,nullptr);
     auto *mapping=memory ? memory->map(kIOMapInhibitCache) : nullptr;
     OSSafeReleaseNULL(memory);
     return mapping;
@@ -177,14 +177,16 @@ bool transfer(unsigned ep, unsigned offset, unsigned length, uint32_t type) {
     uint64_t trbAddress = physical + trbOffset + ep * 32;
     return command(ep, DWC3_DEPCMD_STARTTRANSFER, trbAddress >> 32, (uint32_t)trbAddress);
 }
-void receiveSetup() {
+bool receiveSetup() {
     end(1); end(0);
     controlState = 0;
     controlTicks = 0;
     if (!transfer(0, setupOffset, 8, DWC3_TRBCTL_CONTROL_SETUP)) {
         if (panicOnFailure) panic("RuntimeUSB: setup transfer failed events=%u requests=%u",events,requests);
         active=false;
+        return false;
     }
+    return true;
 }
 void stall() {
     command(0, DWC3_DEPCMD_SETSTALL);
@@ -206,6 +208,7 @@ unsigned descriptor(unsigned type, unsigned index, uint8_t *out) {
     for (unsigned i=0; i<length; i++) { out[2+i*2]=value[i]; out[3+i*2]=0; }
     return out[0];
 }
+#ifndef MARBLE_IOS18
 volatile bool adrenoStarting;
 void startAdreno(void *, wait_result_t) {
     IOLog("MarbleGPU: command processor worker entered\n");
@@ -225,6 +228,7 @@ void requestAdreno() {
         IOLog("MarbleGPU: command processor worker start=%d\n", status);
     }
 }
+#endif
 void handleSetup() {
     for (unsigned i=0; i<8; i++) setup[i]=reinterpret_cast<volatile uint8_t *>(bytes)[setupOffset+i];
     unsigned value = setup[2] | setup[3]<<8, index = setup[4] | setup[5]<<8;
@@ -251,19 +255,27 @@ void handleSetup() {
     } else if (setup[0] == 0xc0 && (setup[1] == 1 || setup[1] == 2 || setup[1] == 5 || setup[1] == 6 || setup[1] == 7 || setup[1] == 8 || setup[1] == 16)) {
         count = native_root_runtime_read(setup[1], value | index<<16, out, MIN(length,responseBytes));
     } else if (setup[0] == 0x40 && !length && setup[1] == 3) {
+#ifdef MARBLE_IOS18
+        stall(); return;
+#else
         native_hid_request_home(); return;
+#endif
     } else if (setup[0] == 0x40 && !length && setup[1] == 4) {
         returnTicks = 50; return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 17) {
         rebootTicks = 50; return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 8) {
         native_marble_touch_start(); return;
+
+#ifndef MARBLE_IOS18
     } else if (setup[0] == 0x40 && !length && setup[1] == 9) {
         native_marble_gpu_start(); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 15) {
         __atomic_store_n(&native_legacy_output_blank, value, __ATOMIC_RELEASE); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 14) {
         requestAdreno(); return;
+
+#endif
     } else if (setup[0] == 0x40 && !length && setup[1] == 10) {
         native_hid_request_tap(value, index); return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 11) {
@@ -326,7 +338,7 @@ void handleEvent(uint32_t event) {
     }
 }
 bool initialize() {
-    auto *memory = IOMemoryDescriptor::withPhysicalAddress(controllerAddress,0x10000,kIODirectionInOut);
+    auto *memory = IOMemoryDescriptor::withAddressRange(controllerAddress,0x10000,kIODirectionInOut | kIOMemoryMapperNone,nullptr);
     registerMap = memory ? memory->map(kIOMapInhibitCache) : nullptr;
     OSSafeReleaseNULL(memory);
     if (!registerMap) return false;
@@ -365,7 +377,7 @@ bool initialize() {
     if (!startConfiguration()) return false;
     if (!configure(0,false) || !configure(1,false)) return false;
     write(DWC3_DALEPENA,3);
-    receiveSetup();
+    if (!receiveSetup()) return false;
     active=true;
     write(DWC3_DCTL,read(DWC3_DCTL)|DWC3_DCTL_RUN_STOP);
     IOLog("RuntimeUSB: ready dma=%llx\n",physical);
@@ -384,19 +396,18 @@ void startupWatchdog(void *, wait_result_t) {
     thread_terminate(current_thread());
 }
 void worker(void *, wait_result_t) {
-    bool initialized=initialize();
-    if (!initialized && panicOnFailure) {
-        char report[256]; native_runtime_usb_report(report,sizeof(report));
-        panic("%s",report);
-    }
+    bool initialized=active;
     if (initialized) {
+        unsigned maintenanceTicks = 0;
         uint64_t control = 0;
         uint64_t status = watchdogCall(0x86000006, &control);
         watchdogActive = !status && (control & 1);
         IOLog("MarbleWatchdog: active=%u status=%llx\n", watchdogActive, status);
         __atomic_store_n(&watchdogRuntimeOwned, true, __ATOMIC_RELEASE);
         while (active) {
-            if (watchdogActive && ++watchdogTicks >= 100) {
+            const bool maintenance = ++maintenanceTicks == 10;
+            if (maintenance) maintenanceTicks = 0;
+            if (maintenance && watchdogActive && ++watchdogTicks >= 100) {
                 watchdogCall(0x86000007);
                 watchdogTicks = 0;
             }
@@ -411,23 +422,23 @@ void worker(void *, wait_result_t) {
                 write(DWC3_GEVNTCOUNT(0),4);
                 handleEvent(event);
             }
-            if (panicOnFailure && controlState && ++controlTicks >= 500) {
+            if (maintenance && panicOnFailure && controlState && ++controlTicks >= 500) {
                 native_root_block_capture_log();
                 panic("RuntimeUSB: control transfer timeout state=%u events=%u requests=%u failures=%u",
                     controlState, events, requests, failures);
             }
             if (configuration) enumerationTicks=0;
-            else if (panicOnFailure && ++enumerationTicks >= 1000) {
+            else if (maintenance && panicOnFailure && ++enumerationTicks >= 1000) {
                 native_root_block_capture_log();
                 panic("RuntimeUSB: enumeration timeout state=%u events=%u requests=%u failures=%u",
                     controlState, events, requests, failures);
             }
-            if (returnTicks && !--returnTicks) {
+            if (maintenance && returnTicks && !--returnTicks) {
                 native_root_block_capture_log();
                 panic("RootStage runtime return requested");
             }
-            if (rebootTicks && !--rebootTicks) rebootBootloader();
-            IOSleep(10);
+            if (maintenance && rebootTicks && !--rebootTicks) rebootBootloader();
+            IOSleep(1);
         }
     }
     IOLog("RuntimeUSB: stopped events=%u requests=%u failures=%u\n",events,requests,failures);
@@ -447,7 +458,9 @@ extern "C" void native_runtime_usb_report(char *out,unsigned length) {
         active,controllerId,initialControl,initialStatus,initialPhy,control,state,events,requests,failures,lastCommand,physical);
 }
 extern "C" void native_runtime_usb_stop(void) {
+#ifndef MARBLE_IOS18
     native_marble_gmu_stop();
+#endif
     active=false;
     if (!controllerOwned) return;
     write(DWC3_DEVTEN,0);
@@ -458,13 +471,25 @@ extern "C" void native_runtime_usb_start(void) {
     unsigned enabled=0;
     if (!PE_parse_boot_argn("rootstage-runtime-usb",&enabled,sizeof(enabled)) || (enabled!=1 && enabled!=2)) return;
     panicOnFailure=enabled==2;
+    if (!initialize()) {
+        if (panicOnFailure) {
+            char report[256]; native_runtime_usb_report(report,sizeof(report));
+            panic("%s",report);
+        }
+        native_runtime_usb_stop();
+        return;
+    }
     thread_t thread;
-    if (kernel_thread_start(worker,nullptr,&thread)==KERN_SUCCESS) thread_deallocate(thread);
+    kern_return_t status=kernel_thread_start(worker,nullptr,&thread);
+    if (status!=KERN_SUCCESS) panic("RuntimeUSB: event worker start failed %x",status);
+    thread_deallocate(thread);
 }
 
+#ifndef MARBLE_IOS18
 extern "C" void native_marble_watchdog_start(void) {
     thread_t thread;
     if (kernel_thread_start(startupWatchdog, nullptr, &thread) == KERN_SUCCESS) thread_deallocate(thread);
 }
 
+#endif
 extern "C" bool native_runtime_usb_configured(void) {return __atomic_load_n(&configuration, __ATOMIC_ACQUIRE) != 0;}

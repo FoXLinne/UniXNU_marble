@@ -69,13 +69,15 @@ def place_exception(code, address, control):
 
 def exception_filter(out, platform):
     source, obj, binary = (out / name for name in ('filter.S', 'filter.o', 'filter.bin'))
+    # DBOP_STACKSHOT (1) enters XNU through the same undefined-instruction trap as panic.
     source.write_text('.text\n stp x16,x17,[sp,#-16]!\n mrs x16,esr_el1\n'
-                      ' lsr x16,x16,#26\n cbz x16,1f\n cmp x16,#60\n b.eq 1f\n'
-                      ' ldp x16,x17,[sp],#16\n b .\n1: ldp x16,x17,[sp],#16\n')
+                      ' lsr x16,x16,#26\n cbnz x16,2f\n cmp w0,#1\n b.ne 1f\n b 3f\n'
+                      '2: cmp x16,#60\n b.eq 1f\n'
+                      '3: ldp x16,x17,[sp],#16\n b .\n1: ldp x16,x17,[sp],#16\n')
     subprocess.run([platform / 'bin/clang', '--target=aarch64-none-elf', '-c', source, '-o', obj], check=True)
     subprocess.run([platform / 'bin/llvm-objcopy', '-O', 'binary', '--only-section=.text', obj, binary], check=True)
     code = binary.read_bytes()
-    if len(code) != 36 or struct.unpack_from('<I', code, 28)[0] != 0x14000000:
+    if len(code) != 48 or struct.unpack_from('<I', code, 40)[0] != 0x14000000:
         raise RuntimeError('Unexpected synchronous exception filter')
     return code
 
@@ -120,7 +122,7 @@ def patch_kernel(root, kernel, out, platform, mode):
             delta -= 0x4000000
         target = address + 4 * delta
         code = bytearray(filter_code)
-        struct.pack_into('<I', code, 28, 0x14000000 | (((target - address - 28) >> 2) & 0x3ffffff))
+        struct.pack_into('<I', code, 40, 0x14000000 | (((target - address - 40) >> 2) & 0x3ffffff))
         code += place_exception(handler, address + len(code), control)
         if len(code) > 128:
             raise RuntimeError('Synchronous probe exceeds its vector slot')

@@ -36,7 +36,7 @@ OSDefineOperatorMethods(IOBlockStorageDevice)
     record = json.loads((tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json').read_text().strip().rstrip(','))
     objects = []
     with (out / 'compile.log').open('w') as log:
-        for source in (base, DEVICE / 'package/MarbleRootDisk.cpp'):
+        for source in (base, DEVICE / 'package/MarbleRootDisk.cpp', DEVICE / 'package/MarbleUfs.cpp'):
             obj = out / (source.stem + '.o')
             command = []
             arguments = iter(record['arguments'])
@@ -51,13 +51,18 @@ OSDefineOperatorMethods(IOBlockStorageDevice)
                     command.append(value)
             command += ['-isystem', str(out / 'include'), '-I', str(tree / '.cache/xnu-work/osfmk'),
                         '-I', str(tree / 'package/UniXNUPkg/Include'),
+                        '-I', str(DEVICE / 'package'),
+                        '-I', str(DEVICE.parent / 'UniXNU/drivers/NativeUfs'),
                         '-Wno-missing-include-dirs', '-Wno-unnecessary-virtual-specifier']
             if source != base:
-                command += ['-Werror', '-Wno-c99-designator']
+                command += ['-Werror', '-Wno-c99-designator', '-Wno-nrvo', '-Wno-unused-function']
             subprocess.run(command, cwd=record['directory'], stdout=log, stderr=subprocess.STDOUT, check=True)
             magic, cpu, subtype, kind = struct.unpack_from('<4I', obj.read_bytes())
             if (magic, cpu, subtype & 0xffffff, kind) != (0xfeedfacf, 0x100000c, 2, 1):
                 raise RuntimeError('Storage archive requires arm64e objects')
+            if source.name == 'MarbleUfs.cpp':
+                objects.append(obj)
+                continue
             late = obj.with_suffix('.late.o')
             subprocess.run(['/opt/homebrew/opt/llvm/bin/llvm-objcopy', '--remove-section=__DATA,__mod_init_func',
                             f'--globalize-symbol=__GLOBAL__sub_I_{source.name}', obj, late], check=True)

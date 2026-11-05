@@ -2820,3 +2820,20 @@ index c6b87b0..fb859e5 100644
 +	if (native_root_block_boot_args) return native_root_block_boot_args;
  	return (char *)((boot_args *)PE_state.bootArgs)->CommandLine;
  }
+diff --git a/pexpert/arm/hwtrace/hwtrace.c b/pexpert/arm/hwtrace/hwtrace.c
+index 0afc913..435eb67 100644
+--- a/pexpert/arm/hwtrace/hwtrace.c
++++ b/pexpert/arm/hwtrace/hwtrace.c
+@@ -486,6 +486,12 @@ PE_singlestep_hook(void)
+ void
+ PE_panic_hook(const char *str __unused)
+ {
++#if XNU_ARM_DT_PLATFORM
++	extern void native_runtime_usb_stop(void);
++	extern void armcpu_complete_active_interrupt(void);
++	native_runtime_usb_stop();
++	armcpu_complete_active_interrupt();
++#endif
+ 	if (PE_arm_debug_panic_hook != NULL) {
+ 		PE_arm_debug_panic_hook(str);
+ 	}

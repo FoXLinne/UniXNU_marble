@@ -1,0 +1,37 @@
+diff --git a/RootLayout.h b/RootLayout.h
+index 4a596c8..d968577 100644
+--- a/RootLayout.h
++++ b/RootLayout.h
+@@ -103,7 +103,10 @@ static bool findRootLayout (RootLayout *layout, const char **why)
+     *why = "GPT entries CRC";
+     return false;
+   }
+-  static const char wanted[] = "userdata";
++#ifndef NATIVE_UFS_ROOT_PARTITION
++#define NATIVE_UFS_ROOT_PARTITION "userdata"
++#endif
++  static const char wanted[] = NATIVE_UFS_ROOT_PARTITION;
+   bool found = false;
+   for (uint32_t index = 0; index < count; index++) {
+     const uint8_t *entry = gScratch + index * 128;
+diff --git a/tests/RootLayout.cpp b/tests/RootLayout.cpp
+index fde4ba0..5d02bb9 100644
+--- a/tests/RootLayout.cpp
++++ b/tests/RootLayout.cpp
+@@ -39,7 +39,7 @@ static void fixture() {
+   put64(header+24,1);put64(header+32,511);put64(header+40,6);put64(header+48,506);
+   put64(header+72,2);put32(header+80,32);put32(header+84,128);
+   entries[0]=1; entries[16]=2;put64(entries+32,8);put64(entries+40,506);
+-  for(unsigned i=0;i<8;++i)entries[56+2*i]="userdata"[i];
++  for(unsigned i=0;i<strlen(NATIVE_UFS_ROOT_PARTITION);++i)entries[56+2*i]=NATIVE_UFS_ROOT_PARTITION[i];
+   memcpy(manifest,"SHNGROOT",8);put32(manifest+8,1);put32(manifest+12,2);put64(manifest+16,65536);
+   for(unsigned i=0;i<2;++i) {
+     uint8_t *e=manifest+24+i*128;strcpy(reinterpret_cast<char *>(e),i?"SystemOS":"OS");
+@@ -56,6 +56,7 @@ static void expect(const std::function<void()> &change,bool gpt,uint32_t status,
+ int main(int argc,char **argv) {
+   assert(rootCrc32(reinterpret_cast<const uint8_t *>("123456789"),9)==0xcbf43926);
+   expect([]{},true,0);
++  expect([]{entries[56]^=1;},false,0);
+   expect([]{header[16]^=1;},false,0,false);
+   expect([]{entries[16]^=1;},false,0,false);
+   expect([]{put32(header+12,4097);},false,0);

@@ -7,12 +7,12 @@ from pathlib import Path
 import subprocess
 import time
 
-from build_ios18_arm64e import validate_prelink
+from build_ios18_arm64e import validate_prelink, ADSP_FIRMWARE
 from capture_ios18_resident import capture
 from root_control import CHUNK, RootUsb, load
 
 
-def retry(previous, replacement, output, images=None, data_seed=None, boot_args=''):
+def retry(previous, replacement, output, images=None, data_seed=None, boot_args='', observe_seconds=300):
     checkpoint = json.loads(replacement.with_name('checkpoint.json').read_text())
     baseline = validate_prelink(Path(checkpoint['source_kernel']).parent)
     data = replacement.read_bytes()
@@ -25,13 +25,12 @@ def retry(previous, replacement, output, images=None, data_seed=None, boot_args=
         capture(channel, previous, output / 'before')
         if images:
             report = load(channel, json.loads(images.read_text()), kernel=replacement,
-                          data_seed=data_seed, boot_args=boot_args)
+                          data_seed=data_seed, boot_args=boot_args, observe_seconds=observe_seconds,
+                          adsp_firmware=ADSP_FIRMWARE)
             (output / 'transfer.json').write_text(json.dumps(report, indent=2) + '\n')
         else:
             if data_seed or boot_args:
                 raise ValueError('Data seed and boot arguments require the resident image manifest')
-            if len(data) > 192 * CHUNK:
-                raise ValueError('Replacement exceeds the firmware kernel slot')
             identity = hashlib.sha256(data).hexdigest()[:32]
             channel.command(f'oem begin:2:{len(data):016x}:{identity}')
             for offset in range(0, len(data), CHUNK):
@@ -45,12 +44,12 @@ def retry(previous, replacement, output, images=None, data_seed=None, boot_args=
     time.sleep(5)
     fastboot = '/opt/homebrew/share/android-commandlinetools/platform-tools/fastboot'
     completed = subprocess.run([fastboot, '-s', 'marble', 'getvar', 'returns'],
-                               capture_output=True, text=True, timeout=360)
+                               capture_output=True, text=True, timeout=observe_seconds + 120)
     (output / 'usb-return.log').write_text(completed.stdout + completed.stderr)
     completed.check_returncode()
     channel = RootUsb()
     try:
-        return capture(channel, replacement, output / 'after')
+        return capture(channel, replacement, output / 'after', data_snapshot=True)
     finally:
         channel.close()
 
@@ -63,6 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--images', type=Path)
     parser.add_argument('--data-seed', type=Path)
     parser.add_argument('--boot-args', default='')
+    parser.add_argument('--observe-seconds', type=int, default=300)
     args = parser.parse_args()
     print(json.dumps(retry(args.previous_kernel.resolve(), args.kernel.resolve(), args.output.resolve(),
-                           args.images, args.data_seed, args.boot_args), indent=2))
+                           args.images, args.data_seed, args.boot_args, args.observe_seconds), indent=2))

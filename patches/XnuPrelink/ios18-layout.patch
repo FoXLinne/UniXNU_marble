@@ -1,8 +1,8 @@
 diff --git a/README.md b/README.md
-index 86e2510..de45ca3 100644
+index 86e2510..40addaf 100644
 --- a/README.md
 +++ b/README.md
-@@ -18,8 +18,9 @@ The legacy `--slide` value does not apply to filesets. Rebuilt chains use
+@@ -18,8 +18,12 @@ The legacy `--slide` value does not apply to filesets. Rebuilt chains use
  virtual offsets, including across native BSS gaps.
  
  `fileset_layout.py` places native segments in space freed by the replaced
@@ -11,10 +11,13 @@ index 86e2510..de45ca3 100644
 +kernel and omitted entries. Code preserves the original kernel's position
 +before or after retained kext code. Constants and data precede their kext
 +ranges as required by XNU's `arm_vm_init`.
++Linkedit table space is bounded by mapped page counts and native function starts.
++Each chain page uses one 16-bit start offset; chain words remain in their segments.
++The prelink metadata segment is page-aligned to the selected XML size.
  `fileset_segmented.py` applies native split-segment v2 records, rebuilds root
  fixups and function starts, and recomputes corecrypto's HMAC over relocated
  code. Segment collisions and unsupported relocation kinds stop emission.
-@@ -79,3 +80,12 @@ The 24A446 fixture also pins `IOCircularDataQueueCopyLatest` and `get_aiotask`.
+@@ -79,3 +83,12 @@ The 24A446 fixture also pins `IOCircularDataQueueCopyLatest` and `get_aiotask`.
  A complete rebuild of the native adapter archives changed the RELEASE reference
  layout and lost these two order-based matches. Their original function digests,
  source consumers and accessor/copy semantics are recorded in the fixture.
@@ -27,8 +30,26 @@ index 86e2510..de45ca3 100644
 +Typed-allocation descriptors in `__kalloc_type` match only when their site names, type signatures and element sizes agree uniquely in both kernels.
 +
 +Authenticated-call matching recognizes x16 discriminator reuse and the equivalent x16/x9/x17 copy form at the call boundary.
+diff --git a/fileset_emit.py b/fileset_emit.py
+index fcd8b42..cbfa4b3 100755
+--- a/fileset_emit.py
++++ b/fileset_emit.py
+@@ -155,6 +155,13 @@ def rebase_collection(cache, base, closure=None, early_security_init=None, roots
+         raise ValueError('Rebased prelink metadata exceeds its segment')
+     begin, size = segment['fileoff'], segment['filesize']
+     data[begin:begin + size] = xml + bytes(size - len(xml))
++    command = segment['command_offset']
++    count, = struct.unpack_from('<I', data, command + 64)
++    if count == 1 and data[command + 72:command + 88].rstrip(b'\0') == b'__info':
++        size = (len(xml) + PAGE - 1) & -PAGE
++        struct.pack_into('<Q', data, command + 32, size)
++        struct.pack_into('<Q', data, command + 48, size)
++        struct.pack_into('<Q', data, command + 72 + 40, len(xml))
+     return Image(bytes(data)), delta, dropped_personalities
+ 
+ 
 diff --git a/fileset_layout.py b/fileset_layout.py
-index 28b899d..cc8cd95 100644
+index 28b899d..d132f27 100644
 --- a/fileset_layout.py
 +++ b/fileset_layout.py
 @@ -92,15 +92,24 @@ class Layout:
@@ -60,6 +81,28 @@ index 28b899d..cc8cd95 100644
          # The old kernel boot segment and prelink XML are replaceable, provided
          # no retained kext uses them. Move XML into its own mapping below.
          if code_end > self.roots['__DATA']['va']:
+@@ -112,11 +121,17 @@ class Layout:
+         for name in ('__LINKINFO', '__LINKEDIT'):
+             self.reserve(name, self.allocate(self.segment(name)['size']))
+         link['size'] = link['filesize'] = self.cursor - link['fileoff']
+-        # Reserve enough root-linkedit space for new starts/fixups tables. This
+-        # is derived from site counts, not a bound tied to one release.
+-        fixup_count = len(cache.fixups()) + len(native.fixups())
++        # Starts tables contain one 16-bit offset per mapped page. Chain words
++        # stay in their segments, including when a page contains many fixups.
++        segments = list(self.roots.values()) + [self.segment(name) for name in ('__KLDDATA', '__BOOTDATA')]
++        chains = 28 + 4 + 4 * len(segments)
++        chains += sum(22 + 2 * ((s['size'] + PAGE - 1) // PAGE) for s in segments)
++        previous, starts = self.placements['__TEXT'], 1
++        for address in sorted(self.translate(a) for a in native.function_starts()):
++            starts += len(encode_uleb(address - previous))
++            previous = address
+         self.table_begin = self.cursor
+-        self.allocate(align(fixup_count * 2 + len(native.function_starts()) * 10 + 0x10000))
++        self.allocate(align(chains + 15 * len(segments) + starts + 0x10000))
+         self.table_end = self.cursor
+         link['size'] = link['filesize'] = self.cursor - link['fileoff']
+         info = self.roots['__PRELINK_INFO']
 diff --git a/fileset_match.py b/fileset_match.py
 index c3e4206..465f60c 100755
 --- a/fileset_match.py

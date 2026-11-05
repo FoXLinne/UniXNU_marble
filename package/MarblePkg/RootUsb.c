@@ -145,10 +145,10 @@ STATIC VOID DataReply(UINTN Size)
 STATIC EFI_STATUS AllocateDisk(UINTN Index, UINT64 Bytes)
 {
   ROOT_STAGE_DISK *Disk = &mStage->Disks[Index];
-  if (!Bytes || (Index < 2 && Bytes % 512) || Bytes > (Index == 2 ? 0xc000000ULL : ROOT_STAGE_CHUNK * ROOT_STAGE_EXTENTS)) return EFI_INVALID_PARAMETER;
+  if (!Bytes || (Index < 2 && Bytes % 512) || (Index < 2 && Bytes > ROOT_STAGE_CHUNK * ROOT_STAGE_EXTENTS)) return EFI_INVALID_PARAMETER;
   if (Disk->Count) return EFI_ALREADY_STARTED;
   for (UINT64 Offset = 0; Offset < Bytes;) {
-    UINTN Size = (UINTN)MIN(ROOT_STAGE_CHUNK, Bytes - Offset);
+    UINTN Size = (UINTN)MIN(Index == 2 ? Bytes : ROOT_STAGE_CHUNK, Bytes - Offset);
     EFI_PHYSICAL_ADDRESS Address = 0;
     EFI_STATUS Status = gBS->AllocatePages(AllocateAnyPages, EfiLoaderData, EFI_SIZE_TO_PAGES(Size), &Address);
     if (EFI_ERROR(Status)) {
@@ -165,6 +165,7 @@ STATIC EFI_STATUS AllocateDisk(UINTN Index, UINT64 Bytes)
 
 STATIC UINT8 *DiskAddress(ROOT_STAGE_DISK *Disk, UINT64 Offset)
 {
+  if (Disk->Count == 1) return (UINT8 *)(UINTN)(Disk->Extents[0].Address + Offset);
   return (UINT8 *)(UINTN)(Disk->Extents[Offset / ROOT_STAGE_CHUNK].Address + Offset % ROOT_STAGE_CHUNK);
 }
 

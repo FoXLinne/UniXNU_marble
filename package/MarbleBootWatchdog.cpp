@@ -126,8 +126,7 @@ static void watchdogWorker(void *, wait_result_t) {
     uint64_t status = watchdogCall(0x86000006, &control);
     IOLog("MarbleWatchdog: startup active=%u status=%llx\n", !status && (control & 1), status);
     if (!status && (control & 1)) {
-        unsigned bootSeconds = 0;
-        while (bootSeconds < 90 || (rootvnode && bootSeconds < 300)) {
+        for (;;) {
             if (activeWatchdog) {
                 const char *state = reinterpret_cast<const char *>(activeWatchdog);
                 memcpy(const_cast<uint64_t *>(&marble_watchdog_checkins), state + 0xb8, 8);
@@ -135,10 +134,7 @@ static void watchdogWorker(void *, wait_result_t) {
             }
             watchdogCall(0x86000007);
             IOSleep(1000);
-            ++bootSeconds;
         }
-        if (rootvnode) panic("MarbleWatchdog: resident root observation complete");
-        panic("MarbleWatchdog: root mount timeout");
     }
     thread_terminate(current_thread());
 }

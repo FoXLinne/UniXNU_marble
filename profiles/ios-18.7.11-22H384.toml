@@ -25,7 +25,7 @@ fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustC
 
 [kernel]
 patch = "patches/xnu-11417/arm64e.patch"
-roots = ["com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMPlatform", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.kec.pthread"]
+roots = ["com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMPlatform", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.iokit.IOHIDEventDriver", "com.apple.kec.pthread"]
 
 [kernel.prelink]
 kernelcache_sha256 = "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70"
@@ -39,6 +39,6 @@ prelink_commit = "2b39ff73dc4d49ad64e349c711ca4aa8d1dd64ea"
 prelink_patch = "patches/XnuPrelink/ios18-layout.patch"
 
 [payload]
-owned_memory_size = "0x80000000"
+owned_memory_size = "0x200000000"
 root_volume_uuid = "D38FFE6A-C933-4C2C-BDE0-CCCDC3889156"
 kernel_args = ["-v", "serial=0", "keepsyms=1", "debug=0x14e", "msgbuf=1048576"]

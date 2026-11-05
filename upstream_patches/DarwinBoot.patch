@@ -1,5 +1,5 @@
 diff --git a/DarwinBootPkg/Driver/DarwinBoot.c b/DarwinBootPkg/Driver/DarwinBoot.c
-index 3b6cafc..560d751 100644
+index 3b6cafc..806618c 100644
 --- a/DarwinBootPkg/Driver/DarwinBoot.c
 +++ b/DarwinBootPkg/Driver/DarwinBoot.c
 @@ -12,6 +12,9 @@
@@ -257,7 +257,7 @@ index 3b6cafc..560d751 100644
 +    if (EFI_ERROR(Status)) goto Fail;
 +    Print(L"DARWINBOOT: kernel returned; system disks retained\r\n");
 +    Status=((EFI_STATUS (*)(VOID))(UINTN)RootStage->WaitForHost)();
-+    if (EFI_ERROR(Status)) goto Fail;
++    if (EFI_ERROR(Status) && Status!=EFI_NOT_READY) goto Fail;
 +    goto Reload;
 +  }
    for (Attempt = 0; Attempt < 3; Attempt++) {
@@ -710,10 +710,10 @@ index 0000000..b77575d
 +}
 diff --git a/DarwinBootPkg/Driver/ResidentContext.S b/DarwinBootPkg/Driver/ResidentContext.S
 new file mode 100644
-index 0000000..f258665
+index 0000000..7d1311b
 --- /dev/null
 +++ b/DarwinBootPkg/Driver/ResidentContext.S
-@@ -0,0 +1,210 @@
+@@ -0,0 +1,217 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +#include <AsmMacroLib.h>
 +.text
@@ -765,6 +765,8 @@ index 0000000..f258665
 +  str x9, [x10, #160]
 +  mrs x9, icc_bpr1_el1
 +  str x9, [x10, #168]
++  mrs x9, icc_ctlr_el1
++  str x9, [x10, #368]
 +  mov x9, sp
 +  str x9, [x10, #176]
 +  mrs x9, spsel
@@ -853,6 +855,11 @@ index 0000000..f258665
 +  msr fpcr, x9
 +  ldr x9, [x10, #144]
 +  msr fpsr, x9
++  msr icc_igrpen1_el1, xzr
++  isb
++  ldr x9, [x10, #368]
++  msr icc_ctlr_el1, x9
++  isb
 +  ldr x9, [x10, #152]
 +  msr icc_pmr_el1, x9
 +  ldr x9, [x10, #168]

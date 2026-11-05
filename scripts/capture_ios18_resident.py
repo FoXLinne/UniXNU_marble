@@ -2,6 +2,7 @@
 """Read retained firmware output and XNU memory through RootStage USB."""
 import argparse
 from bisect import bisect_right
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -10,6 +11,10 @@ import sys
 import zlib
 
 from root_control import RootUsb
+
+
+def png_chunk(kind, payload):
+    return struct.pack('>I', len(payload)) + kind + payload + struct.pack('>I', zlib.crc32(kind + payload))
 
 
 class RetainedKernel:
@@ -54,8 +59,62 @@ class RetainedKernel:
         while len(data) < count:
             current = address + len(data)
             size = min(count - len(data), 4096 - (current & 4095))
-            data.extend(self.physical(self.translate(current, root, bits), size))
+            physical = self.translate(current, root, bits)
+            while size < min(count - len(data), 1024 * 1024):
+                next_size = min(count - len(data) - size, 4096)
+                if self.translate(current + size, root, bits) != physical + size:
+                    break
+                size += next_size
+            data.extend(self.physical(physical, size))
         return bytes(data)
+
+
+def capture_data(memory, symbols, output):
+    address = int.from_bytes(memory.read(symbols['_marble_data_sparse'], 8), 'little')
+    if not address:
+        return None
+    pages, logical, resident = struct.unpack('<3Q', memory.read(address, 24))
+    if not pages or not 0 < logical <= 0x100000000 or logical % 4096:
+        raise ValueError('Invalid retained Data disk geometry')
+    pointers = list(struct.unpack('<' + 'Q' * (logical // 4096), memory.read(pages, logical // 4096 * 8)))
+    ranges = []
+    for index, pointer in enumerate(pointers):
+        if not pointer:
+            continue
+        if ranges and sum(ranges[-1]) == index * 4096:
+            ranges[-1][1] += 4096
+        else:
+            ranges.append([index * 4096, 4096])
+    header = struct.pack('<8sIIQQ', b'DBRDISK1', 1, 4096, logical, len(ranges))
+    path = output / 'Data.rdisk'
+    physical_pages = sorted((memory.translate(pointer), index)
+                            for index, pointer in enumerate(pointer for pointer in pointers if pointer))
+    with path.open('w+b') as stream:
+        stream.write(header)
+        for offset, size in ranges:
+            stream.write(struct.pack('<QQ', offset, size))
+        payload = stream.tell()
+        index = 0
+        while index < len(physical_pages):
+            physical = physical_pages[index][0]
+            end = index + 1
+            while end < min(len(physical_pages), index + 256) and physical_pages[end][0] == physical + (end - index) * 4096:
+                end += 1
+            data = memory.physical(physical, (end - index) * 4096)
+            for page in range(index, end):
+                stream.seek(payload + physical_pages[page][1] * 4096)
+                at = (page - index) * 4096
+                stream.write(data[at:at + 4096])
+            index = end
+        stream.flush()
+        stream.seek(0)
+        digest = hashlib.file_digest(stream, 'sha256')
+    metadata = dict(format='DBRDISK1', logical_bytes=logical, encoded_bytes=path.stat().st_size,
+                    resident_bytes=resident, first_install=False, source_build='22H384',
+                    volume_uuid=memory.read(symbols['_marble_data_uuid'], 37).split(b'\0', 1)[0].decode(),
+                    sha256=digest.hexdigest())
+    (output / 'seed.json').write_text(json.dumps(metadata, indent=2) + '\n')
+    return dict(path=str(path), **metadata)
 
 
 def kernel_symbols(kernel):
@@ -181,7 +240,7 @@ def capture_processes(memory, symbols, layout):
     return result
 
 
-def capture(channel, kernel, output):
+def capture(channel, kernel, output, data_snapshot=False):
     output.mkdir(parents=True, exist_ok=True)
     result = {'kernel': str(kernel.resolve()), 'completed': False}
     report = output / 'capture.json'
@@ -197,8 +256,6 @@ def capture(channel, kernel, output):
             width, height, stride, count = struct.unpack_from('<4I', screen, 8)
             if not width or not height or stride != width * 3 or count != stride * height or count > len(screen) - 32:
                 raise ValueError('Invalid retained firmware screen geometry')
-            def png_chunk(kind, payload):
-                return struct.pack('>I', len(payload)) + kind + payload + struct.pack('>I', zlib.crc32(kind + payload))
             rows = b''.join(b'\0' + screen[32 + row * stride:32 + (row + 1) * stride] for row in range(height))
             png = b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('>2I5B', width, height, 8, 2, 0, 0, 0))
             png += png_chunk(b'IDAT', zlib.compress(rows)) + png_chunk(b'IEND', b'')
@@ -263,6 +320,7 @@ def capture(channel, kernel, output):
                            ('_marble_display_transfer_status', 4), ('_marble_display_retirements', 4),
                            ('_marble_display_swap_stage', 4), ('_marble_display_validation', 4),
                            ('_marble_display_rejections', 4), ('_marble_display_mapping', 8),
+                           ('_marble_hid_stage', 4), ('_marble_hid_ticks', 4),
                            ('_num_static_trust_caches', 4), ('_num_engineering_trust_caches', 4),
                            ('_cs_native4k_ready_blobs', 8), ('_cs_native4k_bytes', 8),
                            ('_cs_native4k_full_blocks', 8), ('_cs_native4k_page_checks', 8),
@@ -318,7 +376,8 @@ def capture(channel, kernel, output):
                     for process in result['processes']:
                         if process['name'] in ('SpringBoard', 'backboardd', 'watchdogd', 'lsd',
                                                'runningboardd', 'installd', 'containermanagerd',
-                                               'com.apple.datamigrator'):
+                                               'com.apple.datamigrator', 'com.apple.migrationpluginwrapper',
+                                               'installcoordinationd', 'PreBoard', 'keybagd'):
                             result['ui_processes'].append(capture_init(
                                 memory, symbols, fields, symbolicate, output,
                                 int(process['address'], 16), process['name'] + '-' + str(process['pid'])))
@@ -332,6 +391,42 @@ def capture(channel, kernel, output):
                                                                    int(process['address'], 16), 'fault')
             except (ValueError, IOError) as error:
                 result['process_capture_error'] = str(error)
+        if '_marble_display_snapshot_ready' in symbols and int.from_bytes(memory.read(symbols['_marble_display_snapshot_ready'], 4), 'little'):
+            width, height, stride = struct.unpack('<3I', memory.read(symbols['_marble_display_geometry'], 12))
+            pixels = int.from_bytes(memory.read(symbols['_marble_display_pixels'], 8), 'little')
+            raw = memory.read(pixels, stride * height)
+            rgb = bytearray(width * height * 3)
+            for row in range(height):
+                source = raw[row * stride:row * stride + width * 4]
+                line = bytearray(width * 3)
+                line[0::3], line[1::3], line[2::3] = source[2::4], source[1::4], source[0::4]
+                rgb[row * width * 3:(row + 1) * width * 3] = line
+            rows = b''.join(b'\0' + rgb[row * width * 3:(row + 1) * width * 3] for row in range(height))
+            png = b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('>2I5B', width, height, 8, 2, 0, 0, 0))
+            png += png_chunk(b'IDAT', zlib.compress(rows)) + png_chunk(b'IEND', b'')
+            (output / 'display.png').write_bytes(png)
+            result['display'] = str(output / 'display.png')
+        for name in ('_native_adsp_stats', '_native_battery_stats', '_native_charger_stats', '_native_qrtr_stats'):
+            if name in symbols:
+                result[name[1:]] = list(struct.unpack('<16i', memory.read(symbols[name], 64)))
+        keystore = (('refused_opens', '__ZL12refusedOpens'), ('opened_clients', '__ZL13openedClients'),
+                    ('calls', '__ZL11clientCalls'))
+        if all(symbol in symbols for _, symbol in keystore):
+            result['keystore'] = {key: int.from_bytes(memory.read(symbols[symbol], 4), 'little')
+                                  for key, symbol in keystore}
+        if '_marble_touch_status' in symbols:
+            result['touch'] = memory.read(symbols['_marble_touch_status'], 256).split(b'\0', 1)[0].decode()
+        for name, count in (('_marble_hid_events', 8), ('_marble_hid_results', 8),
+                            ('_native_touch_edge_install', 3), ('_native_touch_edge_stats', 4)):
+            if name in symbols:
+                result[name[1:]] = list(struct.unpack('<' + 'i' * count, memory.read(symbols[name], count * 4)))
+        for name, count, kind, width in (('_marble_display_pm', 3, 'I', 4),
+                                         ('_marble_display_vsync', 2, 'I', 4),
+                                         ('_marble_display_frame', 6, 'Q', 8)):
+            if name in symbols:
+                result[name[1:]] = list(struct.unpack('<' + kind * count, memory.read(symbols[name], count * width)))
+        if data_snapshot and '_marble_data_sparse' in symbols:
+            result['data_snapshot'] = capture_data(memory, symbols, output)
         result['completed'] = True
         return result
     except Exception as error:
@@ -345,9 +440,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--kernel', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--data-snapshot', action='store_true')
     args = parser.parse_args()
     channel = RootUsb()
     try:
-        print(json.dumps(capture(channel, args.kernel.resolve(), args.output.resolve()), indent=2))
+        print(json.dumps(capture(channel, args.kernel.resolve(), args.output.resolve(), args.data_snapshot), indent=2))
     finally:
         channel.close()

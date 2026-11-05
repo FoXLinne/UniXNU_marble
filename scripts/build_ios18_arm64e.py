@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 DEVICE = Path(__file__).resolve().parents[1]
 PROFILE = DEVICE / 'profiles/ios-18.7.11-22H384.toml'
+ADSP_FIRMWARE = DEVICE.parent / 'UniXNU/.cache/firmware/marble/adsp2.mbn'
 NATIVE_CFLAGS = ('-Wno-reserved-identifier -Wno-pre-c11-compat '
                  '-Wno-missing-designated-field-initializers -Wno-suggest-override '
                  '-Wno-unnecessary-virtual-specifier -Wno-suggest-destructor-override '
@@ -123,7 +124,7 @@ def release(tree, out, env, profile):
     subprocess.run([sys.executable, tree / 'scripts/seal-source-crypto-kernel.py', native],
                    cwd=tree, env=env, check=True)
     output = out / 'kernel.native.macho'
-    shutil.copyfile(native, output)
+    subprocess.run(['xcrun', 'strip', '-S', '-o', output, native], check=True)
     build_capture_layout(tree, out)
     return output
 
@@ -227,18 +228,34 @@ def qualify_pmgr(out, profile):
 
 def build_board(tree, env):
     from build_ios18_display import generate, bindings as display_bindings
+    from build_ios18_hid import prepare as prepare_hid, bindings as hid_bindings
     records = tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837'
     out = tree / 'build/marble-boot'
     out.mkdir(parents=True, exist_ok=True)
     generate(out)
+    hid_flags = prepare_hid(tree)
+    adsp = out / 'MarbleAdsp.cpp'
+    original = (DEVICE / 'package/MarbleAdsp.cpp').read_text()
+    declaration = 'extern const uint8_t marble_adsp_firmware[];'
+    if original.count(declaration) != 1:
+        raise RuntimeError('ADSP firmware declaration changed')
+    adsp.write_text(original.replace(declaration, 'extern const uint8_t *marble_adsp_firmware;'))
     objects = []
     with (out / 'compile.log').open('w') as log:
         sources = [DEVICE / 'package' / filename for filename in
-                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleSystemOS.c', 'MarbleDisplay.cpp')]
+                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleSystemOS.c', 'MarbleDisplay.cpp',
+                    'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
+                    'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
+                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp',
+                    'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'KeyStoreEvents.cpp')]
         sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
+        sources.append(tree.parent / 'AppleKeyStoreState/NativeKeyStoreEvents.cpp')
         sources.append(tree.parent / 'GopFramebuffer/NativeLegacyDisplay.cpp')
+        sources.append(DEVICE.parent / 'UniXNU/drivers/NativeGeniSpi/GeniSpi.c')
         for source in sources:
             filename = source.name
+            if filename == 'MarbleAdsp.cpp':
+                source = adsp
             record_path = records / ('bsd/DEVELOPMENT/kern_exec.o.json' if source.suffix == '.c'
                                      else 'iokit/DEVELOPMENT/IOPlatformExpert.cpo.json')
             record = json.loads(record_path.read_text().strip().rstrip(','))
@@ -254,9 +271,20 @@ def build_board(tree, env):
                         command += ['-o', str(obj)]
                 else:
                     command.append(argument)
-            command += ['-Werror', '-Wno-c99-designator', '-Wno-missing-include-dirs']
+            strict = filename in ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleSystemOS.c',
+                                  'MarbleDisplay.cpp', 'MarblePower18.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp')
+            command += ['-Werror' if strict else '-Wno-error', '-Wno-c99-designator', '-Wno-missing-include-dirs']
             command += ['-fno-sanitize=signed-integer-overflow']
             command += ['-I', str(out), '-Wno-unused-parameter', '-Wno-deprecated-enum-enum-conversion']
+            command += ['-I', str(tree / '.cache/xnu-work/osfmk')]
+            command += ['-I', str(DEVICE / 'package')]
+            command += ['-I', str(DEVICE.parent / 'UniXNU/drivers/NativeGeniSpi')]
+            if filename == 'RuntimeUsb.cpp':
+                command += ['-DMARBLE_IOS18=1']
+            if filename == 'NativeHomeInput.cpp':
+                command += hid_flags
+            if source.suffix == '.c':
+                command += ['-Wno-comma', '-Wno-implicit-fallthrough']
             if filename in ('MarbleDisplay.cpp', 'NativeLegacyDisplay.cpp'):
                 command += ['-Wno-missing-prototypes', '-Wno-cast-align', '-Wno-atomic-implicit-seq-cst']
             subprocess.run(command, cwd=record['directory'], env=env,
@@ -264,13 +292,19 @@ def build_board(tree, env):
             magic, cpu, subtype, kind = struct.unpack_from('<4I', obj.read_bytes())
             if (magic, cpu, subtype & 0xffffff, kind) != (0xfeedfacf, 0x100000c, 2, 1):
                 raise RuntimeError('Marble boot archive must contain arm64e objects')
-            if filename in ('MarbleBootWatchdog.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp'):
+            if filename in ('MarbleBootWatchdog.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp', 'MarbleBattery.cpp', 'NativeHomeInput.cpp', 'NativeKeyStoreEvents.cpp'):
                 late = obj.with_suffix('.late.o')
                 subprocess.run(['/opt/homebrew/opt/llvm/bin/llvm-objcopy',
                                 '--remove-section=__DATA,__mod_init_func',
                                 '--globalize-symbol=__GLOBAL__sub_I_' + filename, obj, late], check=True)
                 obj = late
             objects.append(obj)
+    assembly, obj = out / 'adsp-firmware.S', out / 'adsp-firmware.o'
+    assembly.write_text('.section __DATA_CONST,__const\n.p2align 3\n'
+                        '.globl _marble_adsp_firmware_size\n_marble_adsp_firmware_size:\n.quad ' +
+                        str(ADSP_FIRMWARE.stat().st_size) + '\n')
+    subprocess.run(['xcrun', 'clang', '--target=arm64e-apple-ios18.0', '-c', assembly, '-o', obj], check=True)
+    objects.append(obj)
     bindings = {
         '__ZN10IOWatchdogC2EPK11OSMetaClass': 0xfffffff0087f1ce4,
         '__ZN10IOWatchdogD2Ev': 0xfffffff0087f1d18,
@@ -281,7 +315,15 @@ def build_board(tree, env):
     }
     bindings.update(aes_bindings(tree.parent, out / 'NativeAES.o'))
     bindings.update(display_bindings(out / 'NativeLegacyDisplay.o', out))
+    bindings.update(hid_bindings(tree.parent, out / 'NativeHomeInput.o'))
+    native_aliases = {
+        '__ZN11IOHIDDevice12didTerminateEP9IOServicejPb': '__ZN9IOService12didTerminateEPS_jPb',
+    }
+    for name in native_aliases:
+        bindings.pop(name)
     text, addresses = '.text\n.p2align 2\n', ''
+    for name, target in native_aliases.items():
+        text += f'.globl {name}\n{name}:\n bti c\n b {target}\n'
     for name, address in bindings.items():
         addresses += f'.globl {name}.original\n.set {name}.original, {address:#x}\n'
         text += f'.globl {name}\n{name}:\n bti c\n b {name}.original\n'
@@ -291,6 +333,8 @@ def build_board(tree, env):
     addresses += '.globl __ZTV16IOAESAccelerator\n.set __ZTV16IOAESAccelerator, 0xfffffff007d18c88\n'
     addresses += '.globl __ZN25IOMobileFramebufferLegacy10gMetaClassE\n.set __ZN25IOMobileFramebufferLegacy10gMetaClassE, 0xfffffff00a518d80\n'
     addresses += '.globl __ZTV25IOMobileFramebufferLegacy\n.set __ZTV25IOMobileFramebufferLegacy, 0xfffffff007d4ac30\n'
+    addresses += '.globl __ZN11IOHIDDevice10gMetaClassE\n.set __ZN11IOHIDDevice10gMetaClassE, 0xfffffff00a510e68\n'
+    addresses += '.globl __ZTV11IOHIDDevice\n.set __ZTV11IOHIDDevice, 0xfffffff007d37368\n'
     for name, source in (('watchdog-bindings', text), ('watchdog-addresses', addresses)):
         assembly, obj = out / (name + '.S'), out / (name + '.o')
         assembly.write_text(source)
@@ -517,9 +561,13 @@ def main():
                                         f'-Wl,-force_load,{tree}/build/marble-storage/libMarbleStorage.a')
         checkout(out / 'SoftwareAES', 'https://github.com/UniXNU/SoftwareAES.git',
                  '4a45326da5c2cd6fe6813d79ee43db20805628af')
+        checkout(out / 'AppleKeyStoreState', 'https://github.com/UniXNU/AppleKeyStoreState.git',
+                 '42ff83e08b2265fe741d4adaf084bebe003452ba')
         apply_patch(out / 'SoftwareAES', DEVICE / 'patches/SoftwareAES/arm64e-base.patch')
         checkout(out / 'GopFramebuffer', 'https://github.com/UniXNU/GopFramebuffer.git',
                  'e47c1b8de169cd2bd0b885c7d85e433010e3cdf2')
+        checkout(out / 'IOHIDFamily', 'https://github.com/apple-oss-distributions/IOHIDFamily.git',
+                 'e31e90a24c27ad6cbe981650d12a1a4124065b03', 'IOHIDFamily-2238.120.5')
         build_board(tree, env)
         storage = out / 'IOStorageFamily-323'
         checkout(storage, 'https://github.com/apple-oss-distributions/IOStorageFamily.git',
@@ -527,6 +575,7 @@ def main():
         ram = out / 'NativeRamBlock'
         checkout(ram, 'https://github.com/UniXNU/NativeRamBlock.git',
                  '4be2d7eb05ef5a98126c91e0302c149140c0e3e1')
+        apply_patch(ram, DEVICE / 'patches/NativeRamBlock/data-snapshot.patch')
         from build_ios18_storage import build as build_storage
         build_storage(tree, storage, ram)
         with (out / 'kernel-build.log').open('w') as log:
