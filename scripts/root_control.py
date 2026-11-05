@@ -25,13 +25,13 @@ LOG_MAGIC = b'ROOTLOG1'
 
 
 class RootUsb:
-    def __init__(self):
+    def __init__(self, device=None, timeout_ms=120000):
         library = Path('/opt/homebrew/lib/libusb-1.0.dylib')
         backend = usb.backend.libusb1.get_backend(find_library=lambda _: str(library))
-        self.device = usb.core.find(idVendor=0x18d1, idProduct=0xd00d, backend=backend)
+        self.device = device if device is not None else usb.core.find(idVendor=0x18d1, idProduct=0xd00d, backend=backend)
         if self.device is None:
             raise RuntimeError('Marble RootStage USB is unavailable')
-        self.device.default_timeout = 120000
+        self.device.default_timeout = timeout_ms
         if self.command('getvar:version') != 'RootStage2':
             raise RuntimeError('Unexpected RootStage USB protocol')
 

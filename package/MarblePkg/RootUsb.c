@@ -9,6 +9,9 @@
 #include <Protocol/RootStage.h>
 #include <Protocol/Cpu.h>
 #include "../MarblePac.h"
+#include "GunyahWatchdog.h"
+
+BOOLEAN MarbleRootReadMemory(VOID *Destination, CONST VOID *Source, UINTN Bytes, UINT64 *Fault);
 
 #define TRANSFER_BYTES 0x400000
 #define EP_OUT 0x01
@@ -30,6 +33,43 @@ STATIC BOOLEAN mDirty[3];
 STATIC BOOLEAN mRuntimeUsb;
 STATIC UINT8 *mExport;
 STATIC UINTN mExportBytes;
+STATIC UINT64 mWatchdogControl, mWatchdogStatus, mWatchdogPetStatus;
+STATIC UINT64 mWatchdogLastPet, mWatchdogFrequency;
+STATIC BOOLEAN mWatchdogService;
+
+STATIC UINT64 RootCounter(VOID)
+{
+  UINT64 Counter;
+  __asm__ volatile("mrs %0, cntpct_el0" : "=r"(Counter));
+  return Counter;
+}
+
+STATIC VOID ServiceWatchdog(VOID)
+{
+  if (!mWatchdogService) return;
+  UINT64 Counter=RootCounter();
+  if (Counter-mWatchdogLastPet<mWatchdogFrequency) return;
+  mWatchdogPetStatus=MarbleWatchdogCall(0x86000007,0,0,NULL);
+  mWatchdogLastPet=Counter;
+}
+
+STATIC VOID RetainUsbWatchdog(VOID)
+{
+  // The resident kernel can change the watchdog independently of the loader.
+  // Read back control after disabling it; service an active timer while waiting
+  // for the host, including periods with no USB transfers.
+  mWatchdogService=FALSE;
+  mWatchdogControl=0;
+  mWatchdogStatus=MarbleWatchdogCall(0x86000006,0,0,&mWatchdogControl);
+  if (mWatchdogStatus || !(mWatchdogControl&1)) return;
+  MarbleWatchdogCall(0x86000005,2,0,NULL);
+  mWatchdogStatus=MarbleWatchdogCall(0x86000006,0,0,&mWatchdogControl);
+  if (!mWatchdogStatus && !(mWatchdogControl&1)) return;
+  mWatchdogPetStatus=MarbleWatchdogCall(0x86000007,0,0,NULL);
+  __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(mWatchdogFrequency));
+  mWatchdogLastPet=RootCounter();
+  mWatchdogService=TRUE;
+}
 
 typedef struct {
   CHAR8 Magic[8];
@@ -97,6 +137,7 @@ STATIC VOID EFIAPI UsbNotify(EFI_EVENT Event, VOID *Context) {}
 STATIC INTN WaitTransfer(UINT8 Endpoint)
 {
   for (;;) {
+    ServiceWatchdog();
     USB_DEVICE_EVENT Event = UsbDeviceEventNoEvent;
     USB_DEVICE_EVENT_DATA Data;
     UINTN Size = 0;
@@ -182,6 +223,7 @@ STATIC EFI_STATUS InitializeUsb(VOID)
   VOID *Strings[] = {mLanguage,mManufacturer,mProduct,mSerial,mInterface};
   ROOT_USB_DESCRIPTOR_SET Set = {mDevice,Configs,mSsDevice,SsConfigs,mQualifier,mBos,5,Strings};
   gBS->SetWatchdogTimer(0, 0, 0, NULL);
+  RetainUsbWatchdog();
   Status = gBS->CreateEventEx(EVT_NOTIFY_SIGNAL,TPL_CALLBACK,UsbNotify,NULL,&InitGuid,&Event);
   if (!EFI_ERROR(Status)) { gBS->SignalEvent(Event); gBS->CloseEvent(Event); }
   Status = gBS->LocateProtocol(&UsbGuid,NULL,(VOID **)&mUsb);
@@ -257,6 +299,7 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
 EFI_STATUS MarbleRootUsbPoll(VOID)
 {
   if (!mUsb) return EFI_NOT_READY;
+  ServiceWatchdog();
   for (UINTN Tick=0;Tick<64;Tick++) {
     USB_DEVICE_EVENT Event=UsbDeviceEventNoEvent;
     USB_DEVICE_EVENT_DATA Data;
@@ -300,6 +343,12 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     ROOT_STAGE_DISK *Disk = &mStage->Disks[mDisk];
     if (AsciiStrCmp(Command,"upload")) mExportBytes=0;
     if (!AsciiStrCmp(Command,"getvar:version")) Reply("OKAY","RootStage2");
+    else if (!AsciiStrCmp(Command,"getvar:watchdog")) {
+      CHAR8 Text[51];
+      Hex(Text,mWatchdogStatus,16); Text[16]=':';
+      Hex(Text+17,mWatchdogControl,16); Text[33]=':';
+      Hex(Text+34,mWatchdogPetStatus,16); Reply("OKAY",Text);
+    }
     else if (!AsciiStrCmp(Command,"getvar:cpu-features")) {
       UINT64 Isar1, Isar2, Level;
       __asm__ volatile("mrs %0, ID_AA64ISAR1_EL1" : "=r"(Isar1));
@@ -330,7 +379,14 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       if (!mExport) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mExport);
       else Status=EFI_SUCCESS;
       if (EFI_ERROR(Status)) { Reply("FAIL","memory export allocation failed"); continue; }
-      CopyMem(mExport,(VOID *)(UINTN)Address,Bytes);
+      UINT64 Fault[2]={0};
+      if (!MarbleRootReadMemory(mExport,(VOID *)(UINTN)Address,Bytes,Fault)) {
+        CHAR8 Text[48];
+        CopyMem(Text,"memory fault ",13);
+        Hex(Text+13,Fault[0],16); Text[29]=':';
+        Hex(Text+30,Fault[1],16);
+        Reply("FAIL",Text); continue;
+      }
       mExportBytes=Bytes;
       Reply("OKAY","");
     }

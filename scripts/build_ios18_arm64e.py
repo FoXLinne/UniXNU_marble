@@ -240,13 +240,20 @@ def build_board(tree, env):
     if original.count(declaration) != 1:
         raise RuntimeError('ADSP firmware declaration changed')
     adsp.write_text(original.replace(declaration, 'extern const uint8_t *marble_adsp_firmware;'))
+    resident = out / 'NativeResident.cpp'
+    original_resident = (DEVICE / 'package/NativeResident.cpp').read_text()
+    resident_source = original_resident.replace('  native_root_block_export_data();\n', '')
+    delay_start = resident_source.index('  uint64_t start, now, frequency;')
+    delay_end = resident_source.index('  // The resident firmware resumes', delay_start)
+    resident_source = resident_source[:delay_start] + resident_source[delay_end:]
+    resident.write_text(resident_source)
     objects = []
     with (out / 'compile.log').open('w') as log:
         sources = [DEVICE / 'package' / filename for filename in
                    ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleSystemOS.c', 'MarbleDisplay.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
-                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp',
+                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'NativeResident.cpp',
                     'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'KeyStoreEvents.cpp')]
         sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
         sources.append(tree.parent / 'AppleKeyStoreState/NativeKeyStoreEvents.cpp')
@@ -256,6 +263,8 @@ def build_board(tree, env):
             filename = source.name
             if filename == 'MarbleAdsp.cpp':
                 source = adsp
+            elif filename == 'NativeResident.cpp':
+                source = resident
             record_path = records / ('bsd/DEVELOPMENT/kern_exec.o.json' if source.suffix == '.c'
                                      else 'iokit/DEVELOPMENT/IOPlatformExpert.cpo.json')
             record = json.loads(record_path.read_text().strip().rstrip(','))

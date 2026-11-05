@@ -18,7 +18,7 @@ MarbleWatchdogCall(UINT64 Function, UINT64 Argument1, UINT64 Argument2, UINT64 *
   return X0;
 }
 
-STATIC EFI_STATUS
+STATIC inline EFI_STATUS
 MarbleWatchdogStart(UINT32 TimeoutMs)
 {
   UINT64 Control = 0;

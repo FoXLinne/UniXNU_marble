@@ -412,10 +412,10 @@ index bb21e23..406b697 100644
          print('PASS: actual kernel', filename)
 diff --git a/DarwinBootPkg/Driver/Resident.c b/DarwinBootPkg/Driver/Resident.c
 new file mode 100644
-index 0000000..b77575d
+index 0000000..87558f0
 --- /dev/null
 +++ b/DarwinBootPkg/Driver/Resident.c
-@@ -0,0 +1,292 @@
+@@ -0,0 +1,298 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +#include <Uefi.h>
 +#include <Library/BaseLib.h>
@@ -579,7 +579,7 @@ index 0000000..b77575d
 +STATIC UINT32 mControl, mEnabled[32], mConfig[64];
 +STATIC UINT8 mPriority[1024], mLocalPriority[32];
 +STATIC UINT64 mRoutes[1024];
-+STATIC UINT32 mLocalEnabled, mLocalConfig, mBanks;
++STATIC UINT32 mLocalEnabled, mLocalConfig, mLocalGroup, mLocalGroupModifier, mBanks;
 +// Use base-only MMIO instructions; firmware traps on post-indexed accesses.
 +STATIC UINT32 Read32(UINTN Address) {
 +  UINT32 Value;
@@ -621,6 +621,8 @@ index 0000000..b77575d
 +    mRoutes[i]=Read64(DIST+0x6000+8*i);
 +  }
 +  mLocalEnabled=Read32(REDIST+0x100);
++  mLocalGroup=Read32(REDIST+0x80);
++  mLocalGroupModifier=Read32(REDIST+0xd00);
 +  for (UINTN i=0;i<32;i++)
 +    if (mLocalEnabled & (1U << i)) mLocalPriority[i]=Read8(REDIST+0x400+i);
 +  mLocalConfig=Read32(REDIST+0xc04);
@@ -629,10 +631,12 @@ index 0000000..b77575d
 +STATIC VOID RestoreInterrupts(VOID)
 +{
 +  for (UINTN i=1;i<mBanks;i++) {
-+    if (!mEnabled[i]) continue;
-+    Write32(DIST+0x180+4*i,mEnabled[i]);
-+    Write32(DIST+0x280+4*i,mEnabled[i]);
-+    Write32(DIST+0x380+4*i,mEnabled[i]);
++    // Retire kernel sources before restoring the firmware's interrupt handlers.
++    UINT32 Enabled=Read32(DIST+0x100+4*i)|mEnabled[i];
++    if (!Enabled) continue;
++    Write32(DIST+0x180+4*i,Enabled);
++    Write32(DIST+0x280+4*i,Enabled);
++    Write32(DIST+0x380+4*i,Enabled);
 +  }
 +  for (UINTN i=32;i<MIN(mBanks*32,1020);i++) {
 +    if ((mEnabled[i/32] & (1U << (i%32))) == 0) continue;
@@ -642,7 +646,9 @@ index 0000000..b77575d
 +  }
 +  for (UINTN i=1;i<mBanks;i++)
 +    if (mEnabled[i]) Write32(DIST+0x100+4*i,mEnabled[i]);
-+  Write32(REDIST+0x180,mLocalEnabled); Write32(REDIST+0x280,mLocalEnabled); Write32(REDIST+0x380,mLocalEnabled);
++  UINT32 LocalEnabled=Read32(REDIST+0x100)|mLocalEnabled;
++  Write32(REDIST+0x180,LocalEnabled); Write32(REDIST+0x280,LocalEnabled); Write32(REDIST+0x380,LocalEnabled);
++  Write32(REDIST+0x80,mLocalGroup); Write32(REDIST+0xd00,mLocalGroupModifier);
 +  for (UINTN i=0;i<32;i++)
 +    if (mLocalEnabled & (1U << i)) Write8(REDIST+0x400+i,mLocalPriority[i]);
 +  Write32(REDIST+0xc04,mLocalConfig); Write32(REDIST+0x100,mLocalEnabled);
@@ -710,10 +716,10 @@ index 0000000..b77575d
 +}
 diff --git a/DarwinBootPkg/Driver/ResidentContext.S b/DarwinBootPkg/Driver/ResidentContext.S
 new file mode 100644
-index 0000000..7d1311b
+index 0000000..8c4f835
 --- /dev/null
 +++ b/DarwinBootPkg/Driver/ResidentContext.S
-@@ -0,0 +1,217 @@
+@@ -0,0 +1,227 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +#include <AsmMacroLib.h>
 +.text
@@ -800,6 +806,16 @@ index 0000000..7d1311b
 +.balign 64
 +ASM_FUNC(DarwinResidentReturn)
 +  msr daifset, #15
++  adrp x16, DarwinResidentFaultInfo
++  add x16, x16, :lo12:DarwinResidentFaultInfo
++  mrs x17, ttbr1_el1
++  str x17, [x16, #112]
++  mrs x17, tcr_el1
++  str x17, [x16, #120]
++  dc cvac, x16
++  add x16, x16, #64
++  dc cvac, x16
++  dsb sy
 +  .inst 0xd500409f // PAN=0
 +  .inst 0xd500407f // UAO=0
 +  mrs x9, sctlr_el1

@@ -1,0 +1,89 @@
+{
+  "date": "2026-11-05",
+  "device": "marble",
+  "profile": "ios-18.7.11-22H384",
+  "result": "panic returned to RootStage; USB log export and 90-second idle communication passed",
+  "usb": {
+    "vid": "18d1",
+    "pid": "d00d",
+    "serial": "marble",
+    "return_count": 1,
+    "verification": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs-usb-service-post-capture/usb-verification.json",
+    "communication": [
+      {
+        "seconds": 1.1042109690606594e-05,
+        "version": "RootStage2",
+        "returns": "0000000000000001",
+        "watchdog": "0000000000000000:0000000000000000:0000000000000000",
+        "kernel-memory": "000000097fc00000:0000000200000000"
+      },
+      {
+        "seconds": 15.002853500074707,
+        "version": "RootStage2",
+        "returns": "0000000000000001",
+        "watchdog": "0000000000000000:0000000000000000:0000000000000000",
+        "kernel-memory": "000000097fc00000:0000000200000000"
+      },
+      {
+        "seconds": 45.00331612501759,
+        "version": "RootStage2",
+        "returns": "0000000000000001",
+        "watchdog": "0000000000000000:0000000000000000:0000000000000000",
+        "kernel-memory": "000000097fc00000:0000000200000000"
+      },
+      {
+        "seconds": 90.00505500007421,
+        "version": "RootStage2",
+        "returns": "0000000000000001",
+        "watchdog": "0000000000000000:0000000000000000:0000000000000000",
+        "kernel-memory": "000000097fc00000:0000000200000000"
+      }
+    ]
+  },
+  "panic": "RuntimeUSB active=0 id=33313130 initial=90f00000/38748/102400 current=10f00000/1216ac events=0 requests=0 failures=0 last_command=0 dma=98b531000",
+  "fault": "0000000002000000:fffffff007e4b800:fffffff46511d000",
+  "build": {
+    "native_sha256": "834e0a185a93340f8f87e31d20ee26c0a5f227bce1d31f7c5f865dfe3bd1a73b",
+    "prelink_sha256": "81f116f6f8c61fd00f739fd794f6282aa71bbe8b2991ef8e43c5d3fac952cdfe",
+    "checkpoint": {
+      "vectors": 18,
+      "vector_base": "0xfffffff007e0e000",
+      "control": "0xfffffff007e0e800",
+      "mode": "early",
+      "source_kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/kernel.fileset.macho",
+      "native_sha256": "834e0a185a93340f8f87e31d20ee26c0a5f227bce1d31f7c5f865dfe3bd1a73b",
+      "source_sha256": "81f116f6f8c61fd00f739fd794f6282aa71bbe8b2991ef8e43c5d3fac952cdfe",
+      "kernel_sha256": "7ab7c0f729544cbfcbcc2021c4f313ba8ebc6986e91acf5b5c339b85d8a07ffa"
+    },
+    "boot_sha256": "db543b63ea71c4261289be604807c6b88337ee7a5c9c8573929985a50657f03b"
+  },
+  "checks": [
+    "current-source kernel build passed",
+    "complete prelink with zero unresolved references and zero stubs",
+    "firmware build passed",
+    "watchdog disabled, active, disable failure, idle service, counter wrap, status failure passed",
+    "USB enumeration transient string descriptor errors handled",
+    "panic log export followed by 0/15/45/90-second commands on one USB handle passed"
+  ],
+  "changes": [
+    "watchdog control readback and polling-loop maintenance",
+    "guarded retained-memory export and firmware build inputs",
+    "device-specific USB selection and bounded command timeout",
+    "capture-first resident-return verifier"
+  ],
+  "next": "RuntimeUSB inherited-controller halt timeout during takeover",
+  "upstream_latest_fetched": {
+    "UniXNU": "32446c8f15722e583f9353d4f22bcfcb0f9ad695",
+    "DarwinBoot": "3c75734014cdab0acd9541e88057b7606ee7ae08",
+    "Mu_Silicium": "6b3d90b79e191e08171bfedd3980234a7e49d340",
+    "Mu_Basecore": "6f805f26a4366fe56790130dc2f8f3e1b4c2fe28",
+    "MarbleBinaries": "9f4dbfd7d61acdae69fd5bb48720ce7e53711e25"
+  },
+  "documentation": [
+    "https://unixnu.com/zh/porting/ufs",
+    "https://unixnu.com/zh/porting/platform",
+    "https://unixnu.com/zh/porting/log-capture",
+    "https://unixnu.com/zh/porting/uefi-firmware",
+    "https://unixnu.com/zh/concepts/payload"
+  ]
+}
