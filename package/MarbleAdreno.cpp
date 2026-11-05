@@ -16,7 +16,8 @@
 #include "MarbleGpu.h"
 
 extern "C" volatile uint32_t native_adreno_io_coherent;
-extern "C" volatile uint32_t native_adreno_wc_enabled;
+extern "C" volatile uint32_t native_adreno_cp_aperture[4];
+extern "C" volatile uint32_t native_adreno_wc_enabled,native_adreno_owned_coherent;
 extern "C" vm_offset_t ml_io_map_unmappable(vm_offset_t, vm_size_t, unsigned int);
 extern "C" void ml_io_unmap(vm_offset_t, vm_size_t);
 extern "C" int native_marble_zap_load(void);
@@ -34,7 +35,7 @@ class CommandProcessor {
     IOMemoryMap *gpuMap = nullptr, *smmuMap = nullptr, *bufferMaps[5] = {};
     volatile uint32_t *registers = nullptr;
     volatile uint8_t *cpu[5] = {};
-    NativeAdrenoGpuBuffer buffers[5] = {};
+    NativeAdrenoGpuBuffer buffers[GpuBufferCount] = {};
     NativeAdrenoRing ring;
     NativeAdrenoCpInit initializer;
     NativeAdrenoSubmit submit;
@@ -180,6 +181,7 @@ class CommandProcessor {
         native_marble_gpu_checkpoint(MarbleGpuCpRing);
         const NativeAdrenoRingIo io{this, writeRegister, readRegister, barrier};
         const NativeAdrenoRingCache cache{this, publish, acquire};
+        ring.setTableUpdateWords(3);
         IOReturn status = ring.attach(&io, &cache, const_cast<uint8_t *>(cpu[1]), buffers[1].bytes,
             buffers[1].iova, const_cast<uint8_t *>(cpu[2]), buffers[2].bytes, buffers[2].iova);
         if (status) return -5;
@@ -225,6 +227,29 @@ class CommandProcessor {
         waited = status ? NativeAdrenoRingFenceTimeout : ring.wait(fence, &clock, 200000, &seen);
         IOLog("MarbleGPU: secure mode exit status=%x fence=%u seen=%u wait=%u\n", status, fence, seen, waited);
         return status || waited ? -5 : 0;
+    }
+    static void openCpAperture() {
+        auto call = [](uint64_t function, uint64_t arguments, uint64_t p0, uint64_t p1, uint64_t p2, uint64_t p3) {
+            struct Result {int64_t status; uint64_t value;};
+            uint64_t next = function, resumeState = 0;
+            for (unsigned resumes = 0, busy = 0; resumes < 10000;) {
+                register uint64_t x0 __asm__("x0") = next, x1 __asm__("x1") = arguments;
+                register uint64_t x2 __asm__("x2") = p0, x3 __asm__("x3") = p1, x4 __asm__("x4") = p2;
+                register uint64_t x5 __asm__("x5") = p3, x6 __asm__("x6") = resumeState, x7 __asm__("x7") = 0;
+                __asm__ volatile("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3), "+r"(x4), "+r"(x5), "+r"(x6), "+r"(x7) ::
+                    "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "memory");
+                if (x0 == 1) {next = 1; resumeState = x6; ++resumes; continue;}
+                if (int64_t(x0) == -12 && busy++ < 20) {next = function; resumeState = 0; IOSleep(30); continue;}
+                return Result{int64_t(x0), x1};
+            }
+            return Result{-110, 0};
+        };
+        const auto available = call(0x42000601u, 1, 0x02000c1bu, 0, 0, 0);
+        native_adreno_cp_aperture[0] = available.status ? 0x80000000u | uint32_t(available.status) : uint32_t(available.value);
+        if (available.status || !available.value) {native_adreno_cp_aperture[1] = 0xffffffffu; return;}
+        // KGSL sets the aperture to the GPU context bank selected by the board.
+        const auto opened = call(0x42000c1bu, 4, 0xffff0000u | 20u, 0xffffffffu, 0xffffffffu, 0xffffffffu);
+        native_adreno_cp_aperture[1] = uint32_t(opened.status);
     }
     static bool dramPage(uint64_t pa, uint32_t *out) {
         const vm_offset_t page = ml_io_map_unmappable(vm_offset_t(pa), 0x1000, 0x7 /* VM_WIMG_IO */);
@@ -322,14 +347,18 @@ class CommandProcessor {
     int publishService() {
         NativeAdrenoVm *vm = NativeAdrenoGpuContextVm();
         native_adreno_dram_read32=dramWord;
-        // System BO user mappings are cached and require submission/completion maintenance.
+        // Cacheable system BOs use the GPU's board-qualified coherent mapping.
         native_adreno_wc_enabled=0;
+        native_adreno_owned_coherent=1;
         coherenceProbe(vm);
+        openCpAperture();
         IOReturn status = submit.attach(vm, &ring);
         const NativeAdrenoTimeIo timeIo{this, readRegister};
         if (!status) status = timer.attach(&timeIo, NativeAdrenoTimeCp);
         const NativeAdrenoRingClock clock{nullptr, now, idle};
-        if (!status) status = native_adreno_publish(vm, &submit, &ring, &clock, &timer, &deviceInfo, 32, outputBits);
+        static NativeAdrenoAbiDeviceInfo publishedInfo = deviceInfo;
+        if (native_adreno_io_coherent) publishedInfo.flags |= NativeAdrenoDeviceCachedCoherent;
+        if (!status) status = native_adreno_publish(vm, &submit, &ring, &clock, &timer, &publishedInfo, NativeAdrenoGpuContextInputBits(), outputBits);
         if (status) return status;
         native_marble_gpu_checkpoint(MarbleGpuFamily);
         status = OSKextLoadKextWithIdentifier("com.apple.iokit.IOGPUFamily");

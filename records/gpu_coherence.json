@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-26",
+  "change": "Initialize Adreno 725 CPU/GPU IO coherence before publishing Metal clients",
+  "reference": {
+    "docs": [
+      "work/UniXNU-docs/docs/zh/porting/gpu.md",
+      "work/UniXNU-docs/docs/zh/drivers/adreno740.md",
+      "work/UniXNU-docs/docs/zh/drivers/adreno-metal.md"
+    ],
+    "implementation": "work/UniXNU-sheng/package/GpuPowerProbe.cpp: coherenceProbe",
+    "hardware": "work/qualcomm_kgsl/adreno-gpulist.h: gen7_4_0 ADRENO_IOCOHERENT"
+  },
+  "cause": "Marble did not invoke the upstream coherence qualification, leaving native_adreno_io_coherent at zero. NativeAdrenoVm maintained all imported IOSurface pages around every submission.",
+  "kernel": "outputs/UniXNU_marble/kernel_coherent1.macho",
+  "kernel_sha256": "bc959eafa9ea2a339bdaff3974c5038d3e174d7e750eacf0c2cd5abfb635fd0c",
+  "data_snapshot": "outputs/UniXNU_marble/gpu_diagnostics/coherent_preserved_Data.cdr",
+  "data_snapshot_bytes": 1073741824,
+  "validation_seed": "outputs/UniXNU_marble/iPadOS17/gmem_seed1/Data.rdisk",
+  "baseline_frame_rates": [
+    16.56081973987589,
+    18.985336515206722,
+    17.366324525953786
+  ],
+  "hardware_result": "pending"
+}

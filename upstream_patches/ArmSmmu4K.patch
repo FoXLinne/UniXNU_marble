@@ -1,8 +1,127 @@
+diff --git a/ArmSmmu4KContext.c b/ArmSmmu4KContext.c
+index 2cc334e..7dfc7e2 100644
+--- a/ArmSmmu4KContext.c
++++ b/ArmSmmu4KContext.c
+@@ -16,10 +16,11 @@ static int region_valid(const ArmSmmu4KConfig *c,const ArmSmmu4KResult *r,unsign
+     if(c->input_bits<32 || c->input_bits>48 || width_code(c->output_bits)<0 ||
+         (c->table_physical&4095) || r->root_physical!=c->table_physical ||
+         r->mair!=0xff44 || r->upper_region!=upper || !r->table_pages ||
+-        r->leaf_pages>c->leaf_budget || r->table_pages>UINT64_MAX/4096 ||
++        r->leaf_pages>c->leaf_budget ||
+         r->start_level!=4-(c->input_bits-12+8)/9)return 0;
++    /* The root is one page; the other tables are wherever their region allocated them (ArmSmmu4KLive). */
+     uint64_t limit=UINT64_C(1)<<c->output_bits;
+-    return r->root_physical<limit && (uint64_t)r->table_pages*4096<=limit-r->root_physical;
++    return r->root_physical<limit;
+ }
+ ArmSmmu4KStatus ArmSmmu4KEncodeContext(const ArmSmmu4KContextConfig *c,
+     ArmSmmu4KContextImage *out)
+@@ -38,8 +39,7 @@ ArmSmmu4KStatus ArmSmmu4KEncodeContext(const ArmSmmu4KContextConfig *c,
+         (c->upper && (c->upper->input_bits>va || c->upper->output_bits!=basis->output_bits)))return ArmSmmu4KUnsupported;
+     if(c->lower && c->upper) {
+         const ArmSmmu4KResult *a=c->lower_tables,*b=c->upper_tables;
+-        if(a->root_physical<b->root_physical+(uint64_t)b->table_pages*4096 &&
+-           b->root_physical<a->root_physical+(uint64_t)a->table_pages*4096)return ArmSmmu4KOverlap;
++        if(a->root_physical==b->root_physical)return ArmSmmu4KOverlap;
+     }
+     ArmSmmu4KContextImage v;
+     v.cbar=0x1f300; /* Stage1 translation, stage2 bypass; weakest bypass attrs. */
+@@ -75,10 +75,15 @@ ArmSmmu4KStatus ArmSmmu4KValidateContextReadback(const ArmSmmu4KContextConfig *c
+      * writes it and never reads it back. A shared ASID namespace is safe because every bank's ASID is the
+      * caller's exclusive lease. Only 1 -> 0 is accepted. */
+     const uint32_t asidpne_clear=expected.sctlr&~observed->sctlr&UINT32_C(0x1000);
++    /* TCR.EPD1 (bit 23) is written 1 without an upper region but reads 0 once the Adreno CP switched TTBR0 itself (CP_SMMU_TABLE_UPDATE:
++     * the firmware enables both walks, as for Linux's split tables with the kernel in TTBR1). The device's addresses all lie in the
++     * lower region, so an upper walk is never asked for. Only 1 -> 0, only for a switched TTBR0 without an upper region. */
++    const uint32_t epd1_clear=c->ttbr0_switched && !c->upper?expected.tcr&~observed->tcr&UINT32_C(0x800000):0;
+     if(expected.cbar!=observed->cbar || expected.cba2r!=observed->cba2r ||
+-        expected.tcr!=observed->tcr || ((expected.tcr2^observed->tcr2)&~tbi_set) ||
++        ((expected.tcr^observed->tcr)&~epd1_clear) || ((expected.tcr2^observed->tcr2)&~tbi_set) ||
+         expected.mair0!=observed->mair0 || expected.mair1!=observed->mair1 ||
+-        ((expected.sctlr^observed->sctlr)&~asidpne_clear) || observed->reserved_zero || expected.ttbr0!=observed->ttbr0 ||
+-        expected.ttbr1!=observed->ttbr1)return ArmSmmu4KStateMismatch;
++        ((expected.sctlr^observed->sctlr)&~asidpne_clear) || observed->reserved_zero ||
++        (!c->ttbr0_switched && expected.ttbr0!=observed->ttbr0) ||
++        ((!c->ttbr0_switched || c->upper) && expected.ttbr1!=observed->ttbr1))return ArmSmmu4KStateMismatch;
+     return ArmSmmu4KSuccess;
+ }
+diff --git a/ArmSmmu4KContext.h b/ArmSmmu4KContext.h
+index 3c2faa4..1b1eba2 100644
+--- a/ArmSmmu4KContext.h
++++ b/ArmSmmu4KContext.h
+@@ -16,6 +16,10 @@ typedef struct {
+     unsigned asid;          /* 0..65535, ownership managed by the caller. */
+     unsigned coherent_walk; /* Explicit: 1=inner WBWA, 0=outer NC. */
+     unsigned stall_on_fault, continue_after_fault; /* Each 0 or 1. */
++    /* 1: the bank's TTBR0 is switched among several lower-region tables, each with its own ASID (one table per GPU process, set by
++     * ArmSmmu4KWriteContextTtbr0 or by the device itself): a readback then holds whichever table is installed, so TTBR0 and, with no
++     * upper region, TTBR1 (the ASID alone) are not compared; every other register still is. 0 keeps the exact comparison. */
++    unsigned ttbr0_switched;
+ } ArmSmmu4KContextConfig;
+ typedef struct {
+     uint32_t cbar, cba2r, tcr, tcr2, mair0, mair1, sctlr, reserved_zero;
 diff --git a/ArmSmmu4KLive.c b/ArmSmmu4KLive.c
-index a400d3f..5a3137e 100644
+index a400d3f..f8df540 100644
 --- a/ArmSmmu4KLive.c
 +++ b/ArmSmmu4KLive.c
-@@ -122,11 +122,10 @@ static void sift(const ArmSmmu4KRange *r,uint32_t *h,size_t root,size_t n)
+@@ -5,32 +5,24 @@
+ 
+ static int output_width(unsigned bits)
+ {return bits==32 || bits==36 || bits==40 || bits==42 || bits==44 || bits==48;}
++static int pages_valid(const ArmSmmu4KTablePages *p)
++{return p && p->allocate && p->find && p->overlaps;}
++/* The arena's shape: its root, MAIR and start level. table_pages is the state's own count (the tables a walk allocated). */
+ static ArmSmmu4KStatus layout(const ArmSmmu4KLiveArena *a,ArmSmmu4KResult *out)
+ {
+-    if(!a || !a->mapping || ((uintptr_t)a->mapping&4095) || a->upper_region>1 ||
++    if(!a || !pages_valid(a->pages) || a->upper_region>1 ||
+         a->config.input_bits<32 || a->config.input_bits>48 ||
+-        !output_width(a->config.output_bits) || !a->config.leaf_budget ||
+-        !a->capacity_pages || a->capacity_pages>SIZE_MAX/4096 ||
+-        a->capacity_pages*4096>UINTPTR_MAX-(uintptr_t)a->mapping)return ArmSmmu4KArgument;
++        !output_width(a->config.output_bits) || !a->config.leaf_budget)return ArmSmmu4KArgument;
+     uint64_t limit=UINT64_C(1)<<a->config.input_bits;
+     uint64_t physical_limit=UINT64_C(1)<<a->config.output_bits;
+     if(!a->bytes || ((a->iova|a->bytes|a->config.table_physical)&4095) ||
+         (a->upper_region ? a->iova<UINT64_MAX-limit+1 : a->iova>=limit) ||
+         a->bytes>limit-(a->iova&(limit-1)) ||
+-        a->config.table_physical>=physical_limit ||
+-        a->capacity_pages*PAGE>physical_limit-a->config.table_physical)return ArmSmmu4KBadRange;
++        a->config.table_physical>=physical_limit)return ArmSmmu4KBadRange;
+     if(a->bytes/PAGE>a->config.leaf_budget)return ArmSmmu4KBudget;
++    if(!a->pages->find(a->pages->cookie,a->config.table_physical))return ArmSmmu4KArgument;
+     unsigned start=4-(a->config.input_bits-12+8)/9;
+-    uint64_t low=a->iova&(limit-1),high=low+a->bytes-1;
+-    size_t pages=1;
+-    for(unsigned level=start;level<3;++level) {
+-        unsigned shift=39-9*level;
+-        uint64_t extra=(high>>shift)-(low>>shift)+1;
+-        if(extra>SIZE_MAX-pages)return ArmSmmu4KCapacity;
+-        pages+=(size_t)extra;
+-    }
+-    if(pages>a->capacity_pages)return ArmSmmu4KCapacity;
+-    *out=(ArmSmmu4KResult){a->config.table_physical,0xff44,pages,0,start,a->upper_region};
++    *out=(ArmSmmu4KResult){a->config.table_physical,0xff44,0,0,start,a->upper_region};
+     return ArmSmmu4KSuccess;
+ }
+ static uint64_t descriptor(const ArmSmmu4KRange *r,uint64_t iova)
+@@ -81,14 +73,13 @@ static uint64_t expected(const ArmSmmu4KRange *ranges,size_t count,uint64_t iova
+ static ArmSmmu4KStatus validate_range(const ArmSmmu4KLiveArena *a,const ArmSmmu4KRange *r)
+ {
+     uint64_t physical_limit=UINT64_C(1)<<a->config.output_bits;
+-    uint64_t pool=a->config.table_physical,pool_bytes=a->capacity_pages*PAGE;
+     if(!r || !r->bytes || ((r->iova|r->physical|r->bytes)&4095) ||
+         !(r->permissions&ArmSmmu4KRead) || (r->permissions&~15u) ||
+         r->writeback>1 || (r->shareability!=2 && r->shareability!=3) ||
+         r->physical>=physical_limit || r->bytes>physical_limit-r->physical ||
+         r->iova<a->iova || r->iova-a->iova>=a->bytes ||
+         r->bytes>a->bytes-(r->iova-a->iova))return ArmSmmu4KBadRange;
+-    if(r->physical<pool+pool_bytes && pool<r->physical+r->bytes)return ArmSmmu4KOverlap;
++    if(a->pages->overlaps(a->pages->cookie,r->physical,r->bytes))return ArmSmmu4KOverlap;
+     return ArmSmmu4KSuccess;
+ }
+ static int conflicting_alias(const ArmSmmu4KRange *a,const ArmSmmu4KRange *b)
+@@ -122,11 +113,10 @@ static void sift(const ArmSmmu4KRange *r,uint32_t *h,size_t root,size_t n)
          uint32_t t=h[root];h[root]=h[child];h[child]=t;root=child;
      }
  }
@@ -17,7 +136,7 @@ index a400d3f..5a3137e 100644
      if(!np || !nq)return 0;
      const AliasSide *sorted=np<=nq?p:q,*probe=np<=nq?q:p;
      const size_t n=np<=nq?np:nq;
-@@ -165,19 +164,20 @@ static int any_conflicting_alias(const ArmSmmu4KLiveArena *arena,const ArmSmmu4K
+@@ -165,19 +155,20 @@ static int any_conflicting_alias(const ArmSmmu4KLiveArena *arena,const ArmSmmu4K
      const ArmSmmu4KRange *b,size_t nb)
  {
      if(!na || !nb)return 0;
@@ -44,10 +163,227 @@ index a400d3f..5a3137e 100644
      }
      return 0;
  }
-@@ -324,6 +324,10 @@ static int overlaps(uint64_t a,uint64_t abytes,uint64_t b,uint64_t bbytes)
- {return a<b+bbytes && b<a+abytes;}
+@@ -202,63 +193,127 @@ static ArmSmmu4KStatus validate_ranges_checked(const ArmSmmu4KLiveArena *a,
+     }
+     return aliases && any_conflicting_alias(a,ranges,count,ranges,count)?ArmSmmu4KOverlap:ArmSmmu4KSuccess;
+ }
+-/* Traverse the actual fixed topology, never generate/copy a reference table.
+- * A fixed owned aperture reserves empty intermediate tables; every other slot
+- * must be zero. Resource expectations are metadata, not translated page tables. */
++/* Whether a range of the list (and, mapping, a change) lies in [first, last]: what an absent table there must not have to hold. */
++static int any_in(const ArmSmmu4KRange *ranges,size_t count,const ArmSmmu4KRange *changes,size_t changed,unsigned map,
++    uint64_t first,uint64_t last)
++{
++    size_t i=first_not_behind(ranges,count,first);
++    if(i<count && ranges[i].iova<=last)return 1;
++    if(map && changed) {size_t j=first_not_behind(changes,changed,first);if(j<changed && changes[j].iova<=last)return 1;}
++    return 0;
++}
++/* The tables as they are, against the ranges (and the changes, with map telling what they leave): every table descriptor names a page
++ * of the arena's own; an absent table covers nothing mapped; a leaf holds its range's descriptor, or zero. Entries outside the
++ * aperture are zero. Tables are kept once made, so a present table may cover nothing. *seen counts the tables visited. */
+ static ArmSmmu4KStatus walk(const ArmSmmu4KLiveArena *a,const ArmSmmu4KResult *shape,
+-    unsigned level,size_t page,uint64_t prefix,size_t *next,unsigned build,
++    unsigned level,const volatile uint64_t *table,uint64_t prefix,size_t *seen,
+     const ArmSmmu4KRange *ranges,size_t count,const ArmSmmu4KRange *changes,size_t changed,
+     unsigned map,ArmSmmu4KLiveResult *r)
+ {
+     uint64_t limit=UINT64_C(1)<<a->config.input_bits;
+     uint64_t low=a->iova&(limit-1),high=low+a->bytes-1;
++    uint64_t physical_limit=UINT64_C(1)<<a->config.output_bits;
+     unsigned shift=39-9*level;
+     unsigned width=level==shape->start_level?a->config.input_bits-shift:9;
+     size_t range_cursor=0,change_cursor=0;
++    ++*seen;
+     if(level==3) {
+         uint64_t first=a->upper_region ? prefix|~(limit-1) : prefix;
+         range_cursor=first_not_behind(ranges,count,first);change_cursor=first_not_behind(changes,changed,first);
+     }
+     for(unsigned slot=0;slot<512;++slot) {
+-        uint64_t begin=prefix+((uint64_t)slot<<shift),value=0;
+-        int reserved=slot<(1u<<width) && begin<=high && low<begin+(UINT64_C(1)<<shift);
+-        size_t child=0;
+-        if(level<3 && reserved) {
+-            child=(*next)++;
+-            if(child>=shape->table_pages)return ArmSmmu4KStateMismatch;
+-            value=(a->config.table_physical+child*PAGE)|3u;
+-        } else if(level==3 && reserved && !build) {
+-            uint64_t va=a->upper_region ? begin|~(limit-1) : begin;
+-            const ArmSmmu4KRange *c=scan(changes,changed,&change_cursor,va);
+-            if(c)value=map?descriptor(c,va):0;
+-            else {
+-                const ArmSmmu4KRange *r0=scan(ranges,count,&range_cursor,va);
+-                value=r0?descriptor(r0,va):0;
++        uint64_t begin=prefix+((uint64_t)slot<<shift),span=UINT64_C(1)<<shift;
++        int inside=slot<(1u<<width) && begin<=high && low<begin+span;
++        uint64_t value=table[slot];++r->descriptor_reads;
++        uint64_t va=a->upper_region ? begin|~(limit-1) : begin;
++        if(!inside) {if(value)return ArmSmmu4KStateMismatch;continue;}
++        if(level<3) {
++            if(!value) {
++                if(any_in(ranges,count,changes,changed,map,va,va+(span-1)))return ArmSmmu4KStateMismatch;
++                continue;
+             }
+-        }
+-        size_t index=page*512+slot;
+-        if(build)a->mapping[index]=value;
+-        else {++r->descriptor_reads;if(a->mapping[index]!=value)return ArmSmmu4KStateMismatch;}
+-        if(level<3 && reserved) {
+-            ArmSmmu4KStatus status=walk(a,shape,level+1,child,begin,next,build,ranges,count,changes,changed,map,r);
++            uint64_t physical=value&PA_MASK;
++            if(value!=(physical|3u) || physical>=physical_limit || physical==shape->root_physical)return ArmSmmu4KStateMismatch;
++            const volatile uint64_t *child=a->pages->find(a->pages->cookie,physical);
++            if(!child)return ArmSmmu4KStateMismatch;
++            ArmSmmu4KStatus status=walk(a,shape,level+1,child,begin,seen,ranges,count,changes,changed,map,r);
+             if(status!=ArmSmmu4KSuccess)return status;
++            continue;
+         }
++        uint64_t want=0;
++        const ArmSmmu4KRange *c=scan(changes,changed,&change_cursor,va);
++        if(c)want=map?descriptor(c,va):0;
++        else {
++            const ArmSmmu4KRange *r0=scan(ranges,count,&range_cursor,va);
++            want=r0?descriptor(r0,va):0;
++        }
++        if(value!=want)return ArmSmmu4KStateMismatch;
+     }
+     return ArmSmmu4KSuccess;
+ }
+-static ArmSmmu4KStatus leaf_index(const ArmSmmu4KLiveArena *a,
+-    const ArmSmmu4KResult *shape,uint64_t va,size_t *index,ArmSmmu4KLiveResult *r);
++/* The level-3 descriptor of va: *entry its CPU address and *leaf its table, both NULL when a table on the path is absent and create
++ * is 0. With create an absent table is allocated, checked zero, published, linked and its parent published, so the walker never meets
++ * a table it cannot read: a linked empty table translates nothing, as the absent one did. */
++static ArmSmmu4KStatus leaf_entry(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *state,const ArmSmmu4KLiveVisibility *visibility,
++    uint64_t va,int create,volatile uint64_t **entry,volatile uint64_t **leaf,ArmSmmu4KLiveResult *r)
++{
++    const ArmSmmu4KResult *shape=&state->tables;
++    uint64_t physical_limit=UINT64_C(1)<<a->config.output_bits;
++    *entry=*leaf=0;
++    volatile uint64_t *table=a->pages->find(a->pages->cookie,shape->root_physical);
++    if(!table)return ArmSmmu4KStateMismatch;
++    for(unsigned level=shape->start_level;level<3;++level) {
++        unsigned shift=39-9*level,width=level==shape->start_level?a->config.input_bits-shift:9;
++        size_t slot=(size_t)((va>>shift)&((UINT64_C(1)<<width)-1));
++        uint64_t value=table[slot];++r->descriptor_reads;
++        if(!value) {
++            if(!create)return ArmSmmu4KSuccess;
++            uint64_t physical=0;volatile uint64_t *page=0;
++            if(a->pages->allocate(a->pages->cookie,&physical,&page))return ArmSmmu4KCapacity;
++            if(!page || (physical&4095) || physical>=physical_limit || a->pages->find(a->pages->cookie,physical)!=page)
++                return ArmSmmu4KStateMismatch;
++            ++state->tables.table_pages;
++            for(size_t i=0;i<512;++i) {++r->descriptor_reads;if(page[i])return ArmSmmu4KStateMismatch;}
++            if(visibility->publish_table_page(visibility->cookie,page,4096))return ArmSmmu4KIoError;
++            ++r->published_pages;
++            value=physical|3u;table[slot]=value;++r->descriptor_writes;
++            if(visibility->publish_table_page(visibility->cookie,table,4096))return ArmSmmu4KIoError;
++            ++r->published_pages;
++        }
++        uint64_t physical=value&PA_MASK;
++        if(value!=(physical|3u))return ArmSmmu4KStateMismatch;
++        table=a->pages->find(a->pages->cookie,physical);
++        if(!table)return ArmSmmu4KStateMismatch;
++    }
++    *leaf=table;*entry=&table[(va>>12)&511];
++    return ArmSmmu4KSuccess;
++}
++/* One pass's last leaf table: the 512 pages of a 2 MiB block share it, so a pass over a change walks from the root once per block, not
++ * once per page (i14aef633e: 2.2 million spans, each walked five times through a binary search of the table pages per level, 4.8 s
++ * of batch maps under the driver's lock). Only a found table is kept; the walk counts its reads as before. */
++struct leaf_cache {uint64_t block;volatile uint64_t *leaf;};
++static ArmSmmu4KStatus leaf_entry_cached(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *state,const ArmSmmu4KLiveVisibility *visibility,
++    uint64_t va,struct leaf_cache *cache,volatile uint64_t **entry,volatile uint64_t **leaf,ArmSmmu4KLiveResult *r)
++{
++    const uint64_t block=(va>>21)+1;
++    if(cache->leaf && cache->block==block) {*leaf=cache->leaf;*entry=&cache->leaf[(va>>12)&511];return ArmSmmu4KSuccess;}
++    ArmSmmu4KStatus status=leaf_entry(a,state,visibility,va,0,entry,leaf,r);
++    if(status==ArmSmmu4KSuccess && *leaf) {cache->block=block;cache->leaf=*leaf;}
++    return status;
++}
+ /* The changed leaves alone, through the table path each one's address takes: before the store (after=0) each holds what the
+- * operation replaces (nothing for a map, its range's descriptor for an unmap), after it what the operation wrote. */
+-static ArmSmmu4KStatus verify_changed(const ArmSmmu4KLiveArena *a,const ArmSmmu4KResult *shape,
++ * operation replaces (nothing for a map, its range's descriptor for an unmap; an absent table holds nothing), after it what the
++ * operation wrote. */
++static ArmSmmu4KStatus verify_changed(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *state,const ArmSmmu4KLiveVisibility *visibility,
+     const ArmSmmu4KRange *changes,size_t changed,unsigned map,unsigned after,ArmSmmu4KLiveResult *r)
+ {
++    struct leaf_cache cache={0,0};
+     for(size_t i=0;i<changed;++i)for(uint64_t offset=0;offset<changes[i].bytes;offset+=PAGE) {
+-        const uint64_t va=changes[i].iova+offset;size_t index;
+-        ArmSmmu4KStatus status=leaf_index(a,shape,va,&index,r);if(status!=ArmSmmu4KSuccess)return status;
++        const uint64_t va=changes[i].iova+offset;volatile uint64_t *entry,*leaf;
++        ArmSmmu4KStatus status=leaf_entry_cached(a,state,visibility,va,&cache,&entry,&leaf,r);if(status!=ArmSmmu4KSuccess)return status;
+         const uint64_t want=(map==after)?descriptor(&changes[i],va):0;
+         ++r->descriptor_reads;
+-        if(a->mapping[index]!=want)return ArmSmmu4KStateMismatch;
++        if((entry?*entry:0)!=want)return ArmSmmu4KStateMismatch;
+     }
+     return ArmSmmu4KSuccess;
+ }
+@@ -266,9 +321,11 @@ static ArmSmmu4KStatus verify(const ArmSmmu4KLiveArena *a,const ArmSmmu4KResult
+     const ArmSmmu4KRange *ranges,size_t count,const ArmSmmu4KRange *changes,size_t changed,
+     unsigned map,ArmSmmu4KLiveResult *r)
+ {
+-    size_t next=1;
+-    ArmSmmu4KStatus status=walk(a,shape,shape->start_level,0,0,&next,0,ranges,count,changes,changed,map,r);
+-    return status==ArmSmmu4KSuccess && next!=shape->table_pages?ArmSmmu4KStateMismatch:status;
++    const volatile uint64_t *root=a->pages->find(a->pages->cookie,shape->root_physical);
++    if(!root)return ArmSmmu4KStateMismatch;
++    size_t seen=0;
++    ArmSmmu4KStatus status=walk(a,shape,shape->start_level,root,0,&seen,ranges,count,changes,changed,map,r);
++    return status==ArmSmmu4KSuccess && seen!=shape->table_pages?ArmSmmu4KStateMismatch:status;
+ }
+ ArmSmmu4KStatus ArmSmmu4KLivePrepare(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *state)
+ {
+@@ -276,9 +333,9 @@ ArmSmmu4KStatus ArmSmmu4KLivePrepare(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveSt
+     ArmSmmu4KResult shape;
+     ArmSmmu4KStatus status=layout(a,&shape);
+     if(status!=ArmSmmu4KSuccess)return status;
+-    size_t next=1;
+-    status=walk(a,&shape,shape.start_level,0,0,&next,1,0,0,0,0,0,0);
+-    if(status!=ArmSmmu4KSuccess || next!=shape.table_pages) {state->poisoned=1;return ArmSmmu4KStateMismatch;}
++    const volatile uint64_t *root=a->pages->find(a->pages->cookie,shape.root_physical);
++    for(size_t i=0;i<512;++i)if(root[i])return ArmSmmu4KStateMismatch;
++    shape.table_pages=1;
+     state->tables=shape;state->generation=0;state->prepared=1;state->context_offset=0;
+     return ArmSmmu4KSuccess;
+ }
+@@ -297,33 +354,20 @@ ArmSmmu4KStatus ArmSmmu4KLiveAudit(const ArmSmmu4KLiveArena *a,const ArmSmmu4KLi
+     ArmSmmu4KStatus status=layout(a,&shape);
+     if(status!=ArmSmmu4KSuccess)return status;
+     if(state->tables.root_physical!=shape.root_physical || state->tables.mair!=shape.mair ||
+-        state->tables.table_pages!=shape.table_pages || state->tables.start_level!=shape.start_level ||
++        state->tables.start_level!=shape.start_level ||
+         state->tables.upper_region!=shape.upper_region)return ArmSmmu4KArgument;
+     size_t leaves=0;
+     status=validate_ranges(a,ranges,count,&leaves);if(status!=ArmSmmu4KSuccess)return status;
+     if(leaves!=state->tables.leaf_pages)return ArmSmmu4KArgument;
+-    status=verify(a,&shape,ranges,count,0,0,0,r);
++    status=verify(a,&state->tables,ranges,count,0,0,0,r);
+     r->complete=status==ArmSmmu4KSuccess;return status;
+ }
+-static ArmSmmu4KStatus leaf_index(const ArmSmmu4KLiveArena *a,
+-    const ArmSmmu4KResult *shape,uint64_t va,size_t *index,ArmSmmu4KLiveResult *r)
+-{
+-    size_t page=0;
+-    for(unsigned level=shape->start_level;level<3;++level) {
+-        unsigned shift=39-9*level,width=level==shape->start_level?a->config.input_bits-shift:9;
+-        uint64_t entry=a->mapping[page*512+((va>>shift)&((1u<<width)-1))];++r->descriptor_reads;
+-        uint64_t physical=entry&PA_MASK;
+-        if(entry!=(physical|3u) || physical<a->config.table_physical ||
+-            physical-a->config.table_physical>=shape->table_pages*PAGE)return ArmSmmu4KStateMismatch;
+-        page=(size_t)((physical-a->config.table_physical)/PAGE);
+-    }
+-    *index=page*512+((va>>12)&511);
+-    return ArmSmmu4KSuccess;
+-}
+-static int overlaps(uint64_t a,uint64_t abytes,uint64_t b,uint64_t bbytes)
+-{return a<b+bbytes && b<a+abytes;}
  static int touches_pool(const ArmSmmu4KRange *r,const ArmSmmu4KLiveArena *a)
- {return overlaps(r->physical,r->bytes,a->config.table_physical,a->capacity_pages*PAGE);}
+-{return overlaps(r->physical,r->bytes,a->config.table_physical,a->capacity_pages*PAGE);}
++{return a->pages->overlaps(a->pages->cookie,r->physical,r->bytes)!=0;}
 +/* aliases=0 (an update that is not its region's whole-verification one) trusts the existing ranges: each was checked as a change when it
 + * was added (valid, disjoint from the others by the empty leaves it replaced, clear of both pools, in budget) and only those updates
 + * modified the list. Scanning every range in each of the update's five metadata passes cost about 1 ms per buffer map at 52609 ranges
@@ -55,9 +391,12 @@ index a400d3f..5a3137e 100644
  static ArmSmmu4KStatus region_metadata(const ArmSmmu4KLiveRegion *region,
      const ArmSmmu4KConfig *config,const ArmSmmu4KResult *root,unsigned upper,int aliases)
  {
-@@ -336,12 +340,13 @@ static ArmSmmu4KStatus region_metadata(const ArmSmmu4KLiveRegion *region,
+@@ -334,14 +378,15 @@ static ArmSmmu4KStatus region_metadata(const ArmSmmu4KLiveRegion *region,
+     ArmSmmu4KResult shape;
+     ArmSmmu4KStatus status=layout(region->arena,&shape);if(status)return status;
      const ArmSmmu4KResult *r=&region->state->tables;
-     if(r->root_physical!=shape.root_physical || r->mair!=shape.mair || r->table_pages!=shape.table_pages ||
+-    if(r->root_physical!=shape.root_physical || r->mair!=shape.mair || r->table_pages!=shape.table_pages ||
++    if(r->root_physical!=shape.root_physical || r->mair!=shape.mair ||
          r->start_level!=shape.start_level || r->upper_region!=shape.upper_region)return ArmSmmu4KArgument;
 +    if(!aliases)return (region->count && !region->ranges) || region->count>r->leaf_pages?ArmSmmu4KArgument:ArmSmmu4KSuccess;
      size_t leaves=0;
@@ -71,9 +410,18 @@ index a400d3f..5a3137e 100644
  static ArmSmmu4KStatus context_metadata(const ArmSmmu4KContextConfig *context,
      const ArmSmmu4KLiveRegion *lower,const ArmSmmu4KLiveRegion *upper,int aliases)
  {
-@@ -354,9 +359,10 @@ static ArmSmmu4KStatus context_metadata(const ArmSmmu4KContextConfig *context,
-             overlaps(a->config.table_physical,a->capacity_pages*PAGE,b->config.table_physical,b->capacity_pages*PAGE) ||
-             overlaps((uintptr_t)a->mapping,a->capacity_pages*PAGE,(uintptr_t)b->mapping,b->capacity_pages*PAGE))
+@@ -350,13 +395,16 @@ static ArmSmmu4KStatus context_metadata(const ArmSmmu4KContextConfig *context,
+     status=region_metadata(upper,context->upper,context->upper_tables,1,aliases);if(status)return status;
+     if(lower && upper) {
+         const ArmSmmu4KLiveArena *a=lower->arena,*b=upper->arena;
+-        if(lower->state==upper->state || a->config.output_bits!=b->config.output_bits ||
+-            overlaps(a->config.table_physical,a->capacity_pages*PAGE,b->config.table_physical,b->capacity_pages*PAGE) ||
+-            overlaps((uintptr_t)a->mapping,a->capacity_pages*PAGE,(uintptr_t)b->mapping,b->capacity_pages*PAGE))
++        /* Each region's tables are its own pages: neither root may be a table of the other. */
++        if(lower->state==upper->state || a->config.output_bits!=b->config.output_bits || a->pages==b->pages ||
++            a->config.table_physical==b->config.table_physical ||
++            a->pages->overlaps(a->pages->cookie,b->config.table_physical,PAGE) ||
++            b->pages->overlaps(b->pages->cookie,a->config.table_physical,PAGE))
              return ArmSmmu4KOverlap;
 +        if(!aliases)return ArmSmmu4KSuccess;
          for(size_t i=0;i<lower->count;++i)if(touches_pool(&lower->ranges[i],b))return ArmSmmu4KOverlap;
@@ -83,7 +431,7 @@ index a400d3f..5a3137e 100644
      }
      return ArmSmmu4KSuccess;
  }
-@@ -376,13 +382,13 @@ ArmSmmu4KStatus ArmSmmu4KLiveAuditContext(const ArmSmmu4KContextConfig *context,
+@@ -376,34 +424,41 @@ ArmSmmu4KStatus ArmSmmu4KLiveAuditContext(const ArmSmmu4KContextConfig *context,
  static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *state,
      const ArmSmmu4KIo *io,unsigned bank,const ArmSmmu4KContextConfig *context,
      const ArmSmmu4KLiveVisibility *visibility,const ArmSmmu4KRange *before,size_t count,
@@ -93,15 +441,25 @@ index a400d3f..5a3137e 100644
  {
      if(!r)return ArmSmmu4KArgument;
      *r=(ArmSmmu4KLiveResult){0};r->must_retain_resources=1;
-     if(!state || !state->prepared || state->poisoned || !context ||
+-    if(!state || !state->prepared || state->poisoned || !context ||
 -        !visibility || !visibility->publish_table_page || map>1 || !change_count ||
++    if(!state || !state->prepared || state->poisoned || !context || (state->detached && (!state->context_offset || !context->ttbr0_switched)) ||
 +        !visibility || !visibility->publish_table_page || map>1 || exclusive>map || !change_count ||
          !budget || budget>1048576 || state->generation==UINT64_MAX)return ArmSmmu4KArgument;
-     ArmSmmu4KResult shape;
-     ArmSmmu4KStatus status=layout(a,&shape);
-@@ -394,16 +400,21 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
-         state->tables.mair!=shape.mair || state->tables.table_pages!=shape.table_pages ||
-         state->tables.start_level!=shape.start_level || state->tables.upper_region!=shape.upper_region)
+-    ArmSmmu4KResult shape;
+-    ArmSmmu4KStatus status=layout(a,&shape);
++    ArmSmmu4KResult layout_shape;
++    ArmSmmu4KStatus status=layout(a,&layout_shape);
+     if(status!=ArmSmmu4KSuccess)return status;
+     const ArmSmmu4KResult *root=a->upper_region?context->upper_tables:context->lower_tables;
+     if((!peer && (a->upper_region?(context->lower || context->lower_tables):(context->upper || context->upper_tables))) ||
+         !same_config(a->upper_region?context->upper:context->lower,&a->config) ||
+-        root!=&state->tables || state->tables.root_physical!=shape.root_physical ||
+-        state->tables.mair!=shape.mair || state->tables.table_pages!=shape.table_pages ||
+-        state->tables.start_level!=shape.start_level || state->tables.upper_region!=shape.upper_region)
++        root!=&state->tables || state->tables.root_physical!=layout_shape.root_physical ||
++        state->tables.mair!=layout_shape.mair || !state->tables.table_pages ||
++        state->tables.start_level!=layout_shape.start_level || state->tables.upper_region!=layout_shape.upper_region)
          return ArmSmmu4KArgument;
 -    /* Every 64th update of a region (its first included) re-proves the whole region: the existing ranges against each other and every
 -     * table descriptor before and after. The others prove what they change: each changed leaf holds its old descriptor before the store
@@ -109,6 +467,8 @@ index a400d3f..5a3137e 100644
 -     * them. The ranges were each checked as changes when they were added, and the tables were last proved whole at most 63 updates ago.
 -     * A whole-region walk read every descriptor of a 2 GiB aperture four times per update (int-143: 10 ms per buffer map). */
 -    const int whole=(state->generation&63)==0;
++    /* The state's own tables: the walks below count what this update allocates. */
++    const ArmSmmu4KResult *shape=&state->tables;
 +    /* A region's first update proves the whole region: the existing ranges against each other and every table descriptor before and
 +     * after. The others prove what they change: each changed leaf holds its old descriptor before the store and its new one after it,
 +     * the existing ranges are still sorted, disjoint and in budget, and the changes conflict with none of them. The ranges were each
@@ -130,7 +490,7 @@ index a400d3f..5a3137e 100644
      /* The changes: sorted, disjoint, each valid; together within the leaf budget. */
      size_t changed=0;
      if(!changes)return ArmSmmu4KBadRange;
-@@ -420,18 +431,18 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
+@@ -420,31 +475,31 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
          status=context_metadata(context,a->upper_region?peer:&target,a->upper_region?&target:peer,whole);
          if(status)return status;
          for(size_t i=0;i<change_count;++i)if(touches_pool(&changes[i],peer->arena))return ArmSmmu4KOverlap;
@@ -148,13 +508,80 @@ index a400d3f..5a3137e 100644
 -    /* The context image and faults are observed around the stores of the whole-verification updates only (every 64th, the first
 -     * included), and remembered there. Between them the bank stays the caller's exclusively owned one; each of these reads is a
 -     * device register access, and an update observed it five times (int-159: 1.1 ms of a 1.7 ms buffer map). */
+-    const int observed=whole || !state->context_offset;
 +    /* The context image and faults are observed around the stores of the whole-verification update only, and remembered there; the
 +     * caller observes its routes on its own schedule. After it the bank stays the caller's exclusively owned one; each of these
 +     * reads is a device register access, and an update observed it five times (int-159: 1.1 ms of a 1.7 ms buffer map). */
-     const int observed=whole || !state->context_offset;
++    const int observed=!state->detached && (whole || !state->context_offset);
      if(observed) {
          status=ArmSmmu4KObserveOwnedContext(io,bank,context,&r->synchronization);
-@@ -478,7 +489,11 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
+         if(status!=ArmSmmu4KSuccess)goto poisoned;
+     }
+     if(whole) {
+-        status=verify(a,&shape,before,count,0,0,0,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
++        status=verify(a,shape,before,count,0,0,0,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
+         if(peer) {
+             status=verify(peer->arena,&peer->state->tables,peer->ranges,peer->count,0,0,0,r);
+             if(status)goto poisoned;
+         }
+     } else {
+-        status=verify_changed(a,&shape,changes,change_count,map,0,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
++        status=verify_changed(a,state,visibility,changes,change_count,map,0,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
+     }
+     if(observed) {
+         ArmSmmu4KProgramResult initial=r->synchronization;
+@@ -454,22 +509,38 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
+             initial.id2!=r->synchronization.id2 || initial.context_offset!=r->synchronization.context_offset)
+             {status=ArmSmmu4KStateMismatch;goto poisoned;}
+     }
+-    /* All validation precedes the first store. Caller keeps every master
++    /* A map first links every table its leaves need: empty tables, published before they are linked, change no translation. One that
++     * cannot be had ends the update here, with no leaf written and the tables made so far kept (they are the state's, counted). The
++     * whole-verification update proves them with the rest below. */
++    if(map) {
++        for(size_t i=0;i<change_count;++i)for(uint64_t offset=0;offset<changes[i].bytes;offset+=PAGE) {
++            volatile uint64_t *entry,*leaf;
++            status=leaf_entry(a,state,visibility,changes[i].iova+offset,1,&entry,&leaf,r);
++            if(status==ArmSmmu4KCapacity)return status;
++            if(status!=ArmSmmu4KSuccess)goto poisoned;
++            /* Each leaf table holds 512 pages: skip to the next one. */
++            const uint64_t next=((changes[i].iova+offset)|(UINT64_C(512)*PAGE-1))+1-changes[i].iova;
++            if(next>offset+PAGE)offset=next-PAGE;
++        }
++    }
++    /* All validation precedes the first leaf store. Caller keeps every master
+      * quiesced and retains both old/new object references through this call. */
++    struct leaf_cache stores={0,0},publishes={0,0};
+     for(size_t i=0;i<change_count;++i)for(uint64_t offset=0;offset<changes[i].bytes;offset+=PAGE) {
+-        uint64_t va=changes[i].iova+offset;size_t index;
+-        status=leaf_index(a,&shape,va,&index,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
+-        a->mapping[index]=map?descriptor(&changes[i],va):0;++r->descriptor_writes;
++        uint64_t va=changes[i].iova+offset;volatile uint64_t *entry,*leaf;
++        status=leaf_entry_cached(a,state,visibility,va,&stores,&entry,&leaf,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
++        if(!entry) {status=ArmSmmu4KStateMismatch;goto poisoned;}
++        *entry=map?descriptor(&changes[i],va):0;++r->descriptor_writes;
+     }
+-    /* Sorted changes reach leaf pages in order, so each changed page is published once. */
+-    size_t last_page=SIZE_MAX;
++    /* Sorted changes reach leaf tables in order, so each changed table is published once. */
++    const volatile uint64_t *last_leaf=0;
+     for(size_t i=0;i<change_count;++i)for(uint64_t offset=0;offset<changes[i].bytes;offset+=PAGE) {
+-        size_t index;
+-        status=leaf_index(a,&shape,changes[i].iova+offset,&index,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
+-        size_t page=index/512;
+-        if(page!=last_page) {
+-            if(visibility->publish_table_page(visibility->cookie,a->mapping+page*512,4096)) {status=ArmSmmu4KIoError;goto poisoned;}
+-            ++r->published_pages;last_page=page;
++        volatile uint64_t *entry,*leaf;
++        status=leaf_entry_cached(a,state,visibility,changes[i].iova+offset,&publishes,&entry,&leaf,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
++        if(!leaf) {status=ArmSmmu4KStateMismatch;goto poisoned;}
++        if(leaf!=last_leaf) {
++            if(visibility->publish_table_page(visibility->cookie,leaf,4096)) {status=ArmSmmu4KIoError;goto poisoned;}
++            ++r->published_pages;last_leaf=leaf;
+         }
+     }
+     /* A map of leaves that were invalid needs no TLB invalidation: the TLBs hold no translation of an invalid descriptor (as Linux's
+@@ -478,17 +549,21 @@ static ArmSmmu4KStatus update(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveState *st
          status=ArmSmmu4KSynchronizeOwnedContext(io,bank,context,budget,&r->synchronization);
          if(status!=ArmSmmu4KSuccess)goto poisoned;
      } else if(!map) {
@@ -167,7 +594,19 @@ index a400d3f..5a3137e 100644
          if(status!=ArmSmmu4KSuccess)goto poisoned;
      }
      if(whole) {
-@@ -508,21 +523,31 @@ ArmSmmu4KStatus ArmSmmu4KLiveUpdate(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveSta
+-        status=verify(a,&shape,before,count,changes,change_count,map,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
++        status=verify(a,shape,before,count,changes,change_count,map,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
+         if(peer) {
+             status=verify(peer->arena,&peer->state->tables,peer->ranges,peer->count,0,0,0,r);
+             if(status)goto poisoned;
+         }
+     } else {
+-        status=verify_changed(a,&shape,changes,change_count,map,1,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
++        status=verify_changed(a,state,visibility,changes,change_count,map,1,r);if(status!=ArmSmmu4KSuccess)goto poisoned;
+     }
+     if(observed) {
+         ArmSmmu4KProgramResult after;
+@@ -508,21 +583,31 @@ ArmSmmu4KStatus ArmSmmu4KLiveUpdate(const ArmSmmu4KLiveArena *a,ArmSmmu4KLiveSta
      const ArmSmmu4KIo *io,unsigned bank,const ArmSmmu4KContextConfig *context,
      const ArmSmmu4KLiveVisibility *visibility,const ArmSmmu4KRange *before,size_t count,
      const ArmSmmu4KRange *change,unsigned map,unsigned budget,ArmSmmu4KLiveResult *r)
@@ -205,10 +644,49 @@ index a400d3f..5a3137e 100644
      const ArmSmmu4KContextConfig *context,const ArmSmmu4KLiveRegion *lower,
      const ArmSmmu4KLiveRegion *upper,unsigned change_upper,const ArmSmmu4KLiveVisibility *visibility,
 diff --git a/ArmSmmu4KLive.h b/ArmSmmu4KLive.h
-index d796657..8229a89 100644
+index d796657..240ddb7 100644
 --- a/ArmSmmu4KLive.h
 +++ b/ArmSmmu4KLive.h
-@@ -39,7 +39,7 @@ typedef struct {
+@@ -5,12 +5,23 @@
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
++/* Where an arena's table pages come from: one 4 KiB page at a time, as a walk first needs it (Linux io-pgtable-arm allocates its
++ * tables so, and Apple's pmap its page-table pages): no table of the aperture exists before a mapping needs it. */
+ typedef struct {
+-    ArmSmmu4KConfig config;
++    void *cookie;
++    /* A zeroed 4 KiB table page the caller owns for this arena, cacheable as every table page of it: its physical address and a
++     * writable CPU mapping of it. Nonzero: none could be had (nothing is changed). */
++    int (*allocate)(void *cookie,uint64_t *physical,volatile uint64_t **mapping);
++    /* The CPU mapping of a page allocate() gave this arena; NULL for any other physical address. */
++    volatile uint64_t *(*find)(void *cookie,uint64_t physical);
++    /* Nonzero when [physical, physical+bytes) overlaps a page allocate() gave this arena. */
++    int (*overlaps)(void *cookie,uint64_t physical,uint64_t bytes);
++} ArmSmmu4KTablePages;
++typedef struct {
++    ArmSmmu4KConfig config;           /* table_physical: the root table, a page of pages */
+     uint64_t iova,bytes;              /* Bounded native VA aperture, no conversion. */
+     unsigned upper_region;
+-    volatile uint64_t *mapping;       /* Real writable CPU mapping of owned pool. */
+-    size_t capacity_pages;
++    const ArmSmmu4KTablePages *pages;
+     /* Optional caller-owned scratch for the physical-alias checks (one entry per range of the smaller compared side), used by one
+      * call at a time; absent or too small, those checks compare pairwise. Never read as state. */
+     uint32_t *alias_scratch;
+@@ -22,6 +33,11 @@ typedef struct {
+     unsigned prepared,poisoned;
+     /* The context bank's register offset the last whole-verification update observed its image at; 0 before the first. */
+     uint64_t context_offset;
++    /* 1: a table the bank does not run while it is updated (one of several switched into TTBR0, ArmSmmu4KContextConfig.ttbr0_switched).
++     * Its updates never observe the bank's image, which shows another table: the caller sets context_offset from the bank's owned
++     * table (whose updates observed it) before the first update. The table graphs are still proved as for an installed table, and an
++     * unmap still invalidates the table's own ASID, which also drops what it left cached while it ran. */
++    unsigned detached;
+ } ArmSmmu4KLiveState;
+ typedef struct {
+     void *cookie;
+@@ -39,16 +55,14 @@ typedef struct {
  typedef struct {
      size_t descriptor_reads,descriptor_writes,published_pages;
      unsigned complete,translation_removed,must_retain_resources;
@@ -216,14 +694,39 @@ index d796657..8229a89 100644
 +    unsigned whole_verification;   /* this update proved the whole region (a region's first) */
      ArmSmmu4KProgramResult synchronization;
  } ArmSmmu4KLiveResult;
- /* Prepare an INACTIVE empty native4K arena. Preallocate only real intermediate
-@@ -108,6 +108,14 @@ ArmSmmu4KStatus ArmSmmu4KLiveUpdateContextBatch(const ArmSmmu4KIo *,unsigned ban
+-/* Prepare an INACTIVE empty native4K arena. Preallocate only real intermediate
+- * table pages; all leaf slots remain invalid. No MMIO, TLB, allocator or cache
+- * operations. The explicit leaf budget bounds aperture size and traversal.
+- * state must be zero initialized and never reset while a context can access
+- * the pool. Capacity errors do not write tables. Caller must publish all used
+- * pages before enabling a context with &state->tables. This is not activation.
+- * The pool uses a fixed owned topology; no shadow/rebuilt translation exists. */
++/* Prepare an INACTIVE empty native4K arena over its root table (config.table_physical, a zeroed page of arena->pages). No other
++ * table exists yet: a map allocates the tables its walk needs, publishes each before linking it and keeps it for the arena's life
++ * (an unmap clears leaves only, as Linux's io-pgtable does for a page unmap). No MMIO, TLB or cache operation here; the caller
++ * publishes the root before enabling a context with &state->tables. state must be zero initialized and never reset while a context
++ * can walk the tables. The leaf budget bounds the aperture's pages. This is not activation. */
+ ArmSmmu4KStatus ArmSmmu4KLivePrepare(const ArmSmmu4KLiveArena *,ArmSmmu4KLiveState *);
+ /* Read-only exact graph check, including reserved empty intermediate tables.
+  * Use before context activation and while masters are quiesced. This neither
+@@ -60,7 +74,8 @@ ArmSmmu4KStatus ArmSmmu4KLiveAudit(const ArmSmmu4KLiveArena *,const ArmSmmu4KLiv
+  * descriptors are never overwritten with different valid descriptors.
+  * before describes ALL currently mapped resources, sorted by native IOVA.
+  * Exact physical graph checks precede/follow changes to the actual pool.
+- * No copies/reference table graphs, block mappings or table retirement.
++ * A map first links the tables its leaves need (empty tables: no translation changes); a table that cannot be had refuses with
++ * ArmSmmu4KCapacity before any leaf is written, with the arena still consistent. No block mappings or table retirement.
+  *
+  * Requires a SINGLE enabled region rooted in this arena, an exclusive powered
+  * bank/ASID/stream lease, installed fault handling, and ALL masters quiesced
+@@ -108,6 +123,15 @@ ArmSmmu4KStatus ArmSmmu4KLiveUpdateContextBatch(const ArmSmmu4KIo *,unsigned ban
      const ArmSmmu4KLiveRegion *upper,unsigned change_upper,
      const ArmSmmu4KLiveVisibility *,const ArmSmmu4KRange *changes,size_t change_count,
      unsigned map,unsigned poll_budget,ArmSmmu4KLiveResult *);
-+/* UpdateContextBatch for a map whose physical pages the caller owns exclusively: no other range of either region can name them, so
-+ * the changes are not checked for cache-attribute aliases against the existing ranges (they still are against each other). Every
-+ * other check stays. Those alias passes walked every existing range per class on each map (i568: 52609 ranges, 0.4 ms a map). */
++/* UpdateContextBatch for a map whose pages the caller has cleared of cache-attribute aliases with every existing range of both
++ * regions: it owns them exclusively, or it checked them against those ranges itself. The changes are not checked against the
++ * existing ranges again (they still are against each other). Every other check stays. Those alias passes walked every existing
++ * range per class on each map (i568: 52609 ranges, 0.4 ms a map). */
 +ArmSmmu4KStatus ArmSmmu4KLiveMapContextBatchExclusive(const ArmSmmu4KIo *,unsigned bank,
 +    const ArmSmmu4KContextConfig *,const ArmSmmu4KLiveRegion *lower,
 +    const ArmSmmu4KLiveRegion *upper,unsigned change_upper,
@@ -233,10 +736,30 @@ index d796657..8229a89 100644
  }
  #endif
 diff --git a/ArmSmmu4KProgram.c b/ArmSmmu4KProgram.c
-index 2cb6695..92b142a 100644
+index 2cb6695..91b41af 100644
 --- a/ArmSmmu4KProgram.c
 +++ b/ArmSmmu4KProgram.c
-@@ -187,6 +187,38 @@ ArmSmmu4KStatus ArmSmmu4KSyncContextTlb(const ArmSmmu4KIo *io,uint64_t context_o
+@@ -175,6 +175,19 @@ static ArmSmmu4KStatus synchronize(const ArmSmmu4KIo *io,unsigned bank,
+         r->context_offset!=after.context_offset)return ArmSmmu4KStateMismatch;
+     r->phase=9;return ArmSmmu4KSuccess;
+ }
++ArmSmmu4KStatus ArmSmmu4KWriteContextTtbr0(const ArmSmmu4KIo *io,uint64_t context_offset,uint64_t ttbr0,ArmSmmu4KProgramResult *r)
++{
++    if(!r)return ArmSmmu4KArgument;
++    *r=(ArmSmmu4KProgramResult){0};r->must_retain_tables=1;
++    if(!io || !io->write64 || !io->read64 || !io->barrier || !context_offset || (ttbr0&0xfffu) ||
++        context_offset>io->register_bytes || io->register_bytes-context_offset<0x7f8)return ArmSmmu4KArgument;
++    r->context_offset=context_offset;
++    uint64_t readback=0;
++    if(io->barrier(io->cookie) || write64(io,(size_t)context_offset+0x20,ttbr0,r) || io->barrier(io->cookie) ||
++        io->read64(io->cookie,(size_t)context_offset+0x20,&readback))return ArmSmmu4KIoError;
++    if(readback!=ttbr0)return ArmSmmu4KStateMismatch;
++    r->phase=9;return ArmSmmu4KSuccess;
++}
+ ArmSmmu4KStatus ArmSmmu4KSyncContextTlb(const ArmSmmu4KIo *io,uint64_t context_offset,unsigned asid,unsigned all,
+     unsigned budget,ArmSmmu4KProgramResult *r)
+ {
+@@ -187,6 +200,38 @@ ArmSmmu4KStatus ArmSmmu4KSyncContextTlb(const ArmSmmu4KIo *io,uint64_t context_o
      if(status==ArmSmmu4KSuccess)r->phase=9;
      return status;
  }
@@ -276,10 +799,10 @@ index 2cb6695..92b142a 100644
      const ArmSmmu4KContextConfig *config,unsigned budget,ArmSmmu4KProgramResult *r)
  {return synchronize(io,bank,config,0,budget,r);}
 diff --git a/ArmSmmu4KProgram.h b/ArmSmmu4KProgram.h
-index 25ccf6d..a8b165e 100644
+index 25ccf6d..023a172 100644
 --- a/ArmSmmu4KProgram.h
 +++ b/ArmSmmu4KProgram.h
-@@ -58,6 +58,12 @@ ArmSmmu4KStatus ArmSmmu4KSynchronizeOwnedContext(const ArmSmmu4KIo *,unsigned ba
+@@ -58,10 +58,20 @@ ArmSmmu4KStatus ArmSmmu4KSynchronizeOwnedContext(const ArmSmmu4KIo *,unsigned ba
   * between its whole-verification updates). */
  ArmSmmu4KStatus ArmSmmu4KSyncContextTlb(const ArmSmmu4KIo *,uint64_t context_offset,unsigned asid,unsigned all,
      unsigned poll_budget,ArmSmmu4KProgramResult *);
@@ -292,12 +815,74 @@ index 25ccf6d..a8b165e 100644
  /* As ArmSmmu4KSynchronizeOwnedContext, but with TLBIALL for the bank instead of TLBIASID: every cached translation of the bank goes,
   * whatever ASID it was tagged with. */
  ArmSmmu4KStatus ArmSmmu4KInvalidateAllOwnedContext(const ArmSmmu4KIo *,unsigned bank,
+     const ArmSmmu4KContextConfig *,unsigned poll_budget,ArmSmmu4KProgramResult *);
++/* Installs ttbr0 (a lower-region table root with its ASID in bits 63:48) in the context bank at context_offset, for a bank whose
++ * config has ttbr0_switched: barrier, the 64-bit write, barrier, readback. The caller keeps every master that uses the bank quiesced
++ * (no translation in flight) and owns the table; no TLB operation is needed for a table whose ASID is its own. */
++ArmSmmu4KStatus ArmSmmu4KWriteContextTtbr0(const ArmSmmu4KIo *,uint64_t context_offset,uint64_t ttbr0,ArmSmmu4KProgramResult *);
+ /* Disable only if actual stage/format/roots/ASID/attributes still match the
+  * expected owned context. Retain bank, mappings and tables on any uncertainty.
+  * Does not release the caller's lease or power/stream/interrupt resources. */
+diff --git a/test_context.c b/test_context.c
+index 2fa8f37..c5231f5 100644
+--- a/test_context.c
++++ b/test_context.c
+@@ -87,7 +87,7 @@ int main(void)
+         for(unsigned fault=0;fault<4;++fault)for(unsigned ai=0;ai<3;++ai) {
+             unsigned asids[]={0,1,65535};
+             ArmSmmu4KContextConfig c={mode&1?&a:NULL,mode&2?&b:NULL,
+-                mode&1?&ar:NULL,mode&2?&br:NULL,1u<<30,0x1555,asids[ai],coherent,fault&1,fault>>1};
++                mode&1?&ar:NULL,mode&2?&br:NULL,1u<<30,0x1555,asids[ai],coherent,fault&1,fault>>1,0};
+             ArmSmmu4KContextImage v;
+             CHECK(ArmSmmu4KEncodeContext(&c,&v)==ArmSmmu4KSuccess);
+             uint32_t expected=UINT32_C(2)<<30;
+@@ -127,7 +127,7 @@ int main(void)
+             bad=c;bad.coherent_walk=2;refusal(bad,ArmSmmu4KArgument);
+             bad=c;bad.stall_on_fault=2;refusal(bad,ArmSmmu4KArgument);
+         }
+-        ArmSmmu4KContextConfig c={&a,&b,&ar,&br,1u<<30,0x1555,7,1,1,1};
++        ArmSmmu4KContextConfig c={&a,&b,&ar,&br,1u<<30,0x1555,7,1,1,1,0};
+         ArmSmmu4KContextConfig bad=c;bad.upper=NULL;refusal(bad,ArmSmmu4KArgument);
+         bad=c;bad.lower_tables=NULL;refusal(bad,ArmSmmu4KArgument);
+         bad=c;bad.continue_after_fault=2;refusal(bad,ArmSmmu4KArgument);
 diff --git a/test_live.c b/test_live.c
-index a36b817..27d7127 100644
+index a36b817..a17a9cc 100644
 --- a/test_live.c
 +++ b/test_live.c
-@@ -15,7 +15,7 @@ static ArmSmmu4KLiveState peer_state;
+@@ -13,9 +13,39 @@ static _Alignas(4096) uint64_t peer_tables[POOL_PAGES*512];
+ static ArmSmmu4KLiveArena peer_arena;
+ static ArmSmmu4KLiveState peer_state;
  static unsigned pair_mode;
++/* Table pages handed out one at a time from a fixture pool, as a driver allocates them: zeroed when given, found by their physical
++ * address, untouched (0xa5) until then. refuse_after: allocations left before the provider refuses (SIZE_MAX: never). */
++typedef struct {uint64_t *pool;uint64_t physical;size_t used,refuse_after;} Pages;
++static Pages main_pages,peer_pages;
++static int page_allocate(void *cookie,uint64_t *physical,volatile uint64_t **mapping)
++{
++    Pages *p=cookie;
++    if(p->used>=POOL_PAGES || !p->refuse_after)return 1;
++    if(p->refuse_after!=SIZE_MAX)--p->refuse_after;
++    memset(p->pool+p->used*512,0,4096);
++    *physical=p->physical+p->used*4096;*mapping=p->pool+p->used*512;++p->used;return 0;
++}
++static volatile uint64_t *page_find(void *cookie,uint64_t physical)
++{
++    Pages *p=cookie;
++    if(physical<p->physical || (physical&4095) || (physical-p->physical)/4096>=p->used)return 0;
++    return p->pool+(physical-p->physical)/8;
++}
++static int page_overlaps(void *cookie,uint64_t physical,uint64_t bytes)
++{Pages *p=cookie;return physical<p->physical+p->used*4096 && p->physical<physical+bytes;}
++static const ArmSmmu4KTablePages main_provider={&main_pages,page_allocate,page_find,page_overlaps};
++static const ArmSmmu4KTablePages peer_provider={&peer_pages,page_allocate,page_find,page_overlaps};
++/* A fresh provider over pool at physical, its root allocated. */
++static uint64_t pages_reset(Pages *p,uint64_t *pool,uint64_t physical)
++{
++    *p=(Pages){pool,physical,0,SIZE_MAX};
++    uint64_t root;volatile uint64_t *mapping;
++    CHECK(!page_allocate(p,&root,&mapping) && root==physical);
++    return root;
++}
  typedef struct {
      uint64_t registers[MMIO_BYTES/8];
 -    size_t calls,fail_call,publication_calls,fail_publication,tlbi_calls,sync_calls;
@@ -305,7 +890,7 @@ index a36b817..27d7127 100644
      size_t writes,barriers,cb;
      unsigned after_write,timeout,dirty,require_published,mutate_on_publish;
      unsigned synced,clean_observed;
-@@ -56,7 +56,7 @@ static int write32(void *cookie,size_t at,uint32_t value)
+@@ -56,7 +86,7 @@ static int write32(void *cookie,size_t at,uint32_t value)
          CHECK(f.publication_calls && f.clean_observed && !f.dirty);
      }
      if(at==f.cb+0x610) {CHECK(value==context.asid);++f.tlbi_calls;f.synced=0;}
@@ -314,7 +899,7 @@ index a36b817..27d7127 100644
      if(at==f.cb+0x58)put32(at,get32(at)&~value);
      else put32(at,value);
      return fail;
-@@ -64,7 +64,9 @@ static int write32(void *cookie,size_t at,uint32_t value)
+@@ -64,7 +94,9 @@ static int write32(void *cookie,size_t at,uint32_t value)
  static int write64(void *cookie,size_t at,uint64_t value)
  {
      int fail=call(cookie,at,8);++f.writes;
@@ -325,7 +910,26 @@ index a36b817..27d7127 100644
      if(fail && !f.after_write)return 1;put64(at,value);return fail;
  }
  static int barrier(void *cookie)
-@@ -89,7 +91,7 @@ static int publish(void *cookie,volatile uint64_t *page,size_t bytes)
+@@ -73,14 +105,15 @@ static int publish(void *cookie,volatile uint64_t *page,size_t bytes)
+ {
+     CHECK(cookie==&f && bytes==4096 && !((uintptr_t)page&4095));
+     uintptr_t at=(uintptr_t)page;
+-    CHECK((at>=(uintptr_t)tables && at-(uintptr_t)tables<state.tables.table_pages*4096) ||
+-        (pair_mode && at>=(uintptr_t)peer_tables && at-(uintptr_t)peer_tables<peer_state.tables.table_pages*4096));
++    CHECK((at>=(uintptr_t)tables && at-(uintptr_t)tables<main_pages.used*4096) ||
++        (pair_mode && at>=(uintptr_t)peer_tables && at-(uintptr_t)peer_tables<peer_pages.used*4096));
+     ++f.publication_calls;
+     CHECK(!f.tlbi_calls && !f.sync_calls);
+     if(f.publication_calls==f.fail_publication)return 1;
+     if(f.publication_calls==1) {
+         if(f.mutate_on_publish==1)put64(f.cb+0x28,get64(f.cb+0x28)^4096);
+-        if(f.mutate_on_publish==2)tables[0]^=1;
++        /* A root slot no update writes (the first publication is of a table about to be linked into slot 0). */
++        if(f.mutate_on_publish==2)tables[1]^=1;
+         if(f.mutate_on_publish==3)put32(f.cb+0x58,2);
+         if(f.mutate_on_publish==4)peer_tables[0]^=1;
+     }
+@@ -89,7 +122,7 @@ static int publish(void *cookie,volatile uint64_t *page,size_t bytes)
  static void reset_counters(void)
  {
      f.calls=f.fail_call=f.publication_calls=f.fail_publication=0;
@@ -334,19 +938,145 @@ index a36b817..27d7127 100644
      f.after_write=f.timeout=f.mutate_on_publish=f.synced=f.clean_observed=0;
      f.require_published=f.dirty=1;
  }
-@@ -143,8 +145,9 @@ static void complete(unsigned removed,size_t pages)
+@@ -97,16 +130,18 @@ static void setup(unsigned bits,unsigned upper,unsigned output,unsigned spacing,
+ {
+     memset(&state,0,sizeof(state));memset(&f,0,sizeof(f));memset(tables,0xa5,sizeof(tables));
+     pair_mode=0;
+-    arena=(ArmSmmu4KLiveArena){{bits,output,0x10000000,16},
+-        (upper?UINT64_MAX-(UINT64_C(1)<<bits)+1:0)+low,4*4096,upper,tables,POOL_PAGES,alias_scratch,64};
++    const uint64_t root=pages_reset(&main_pages,tables,0x10000000);
++    arena=(ArmSmmu4KLiveArena){{bits,output,root,16},
++        (upper?UINT64_MAX-(UINT64_C(1)<<bits)+1:0)+low,4*4096,upper,&main_provider,alias_scratch,64};
+     CHECK(ArmSmmu4KLivePrepare(&arena,&state)==ArmSmmu4KSuccess);
+-    CHECK(state.prepared && !state.poisoned && !state.tables.leaf_pages && state.tables.table_pages<=POOL_PAGES);
++    /* Only the root exists: every other table is made by the first map that needs it. */
++    CHECK(state.prepared && !state.poisoned && !state.tables.leaf_pages && state.tables.table_pages==1 && main_pages.used==1);
+     ArmSmmu4KLiveResult audit;
+     CHECK(ArmSmmu4KLiveAudit(&arena,&state,0,0,&audit)==ArmSmmu4KSuccess);
+-    CHECK(audit.complete && audit.must_retain_resources && audit.descriptor_reads==state.tables.table_pages*512);
+-    for(size_t i=state.tables.table_pages*512;i<POOL_PAGES*512;++i)CHECK(tables[i]==UINT64_C(0xa5a5a5a5a5a5a5a5));
++    CHECK(audit.complete && audit.must_retain_resources && audit.descriptor_reads==512);
++    for(size_t i=512;i<POOL_PAGES*512;++i)CHECK(tables[i]==UINT64_C(0xa5a5a5a5a5a5a5a5));
+     context=(ArmSmmu4KContextConfig){upper?0:&arena.config,upper?&arena.config:0,
+-        upper?0:&state.tables,upper?&state.tables:0,0,0,0x1234,1,1,1};
++        upper?0:&state.tables,upper?&state.tables:0,0,0,0x1234,1,1,1,0};
+     put32(0x20,1u<<30);put32(0x24,spacing?0x80000002:0x40000010);put32(0x28,0x1555);
+     f.cb=0x20000;
+     io=(ArmSmmu4KIo){&f,MMIO_BYTES,read32,read64,write32,write64,barrier};
+@@ -143,10 +178,12 @@ static void complete(unsigned removed,size_t pages)
      /* A whole-verification update observes the context and synchronizes its ASID; between them an unmap synchronizes it alone and a
       * map of invalid leaves needs neither. */
      if(result.whole_verification)CHECK(result.synchronization.tlb_synchronized && f.tlbi_calls==1 && f.sync_calls==1 && f.synced && f.barriers>=4);
 -    else if(removed)CHECK(result.synchronization.tlb_synchronized && f.tlbi_calls==1 && f.sync_calls==1 && f.synced && f.barriers>=3);
 -    else CHECK(!result.synchronization.tlb_synchronized && !f.tlbi_calls && !f.sync_calls);
+-    /* A whole-region update reads every descriptor; the others read each changed leaf's path before and after the store. */
+-    CHECK(result.whole_verification?result.descriptor_reads>=state.tables.table_pages*1024:result.descriptor_reads>=2);
 +    else if(removed)CHECK(result.synchronization.tlb_synchronized && (f.page_tlbi_calls?!f.tlbi_calls:f.tlbi_calls==1) &&
 +        f.sync_calls==1 && f.synced && f.barriers>=2);
 +    else CHECK(!result.synchronization.tlb_synchronized && !f.tlbi_calls && !f.page_tlbi_calls && !f.sync_calls);
-     /* A whole-region update reads every descriptor; the others read each changed leaf's path before and after the store. */
-     CHECK(result.whole_verification?result.descriptor_reads>=state.tables.table_pages*1024:result.descriptor_reads>=2);
++    /* A whole-region update reads every descriptor of every table; the others read each changed leaf's path before and after the store. */
++    CHECK(result.whole_verification?result.descriptor_reads>=state.tables.table_pages*512:result.descriptor_reads>=2);
++    CHECK(state.tables.table_pages==main_pages.used);
  }
-@@ -409,10 +412,28 @@ static unsigned batches(void)
+ static unsigned profiles(void)
+ {
+@@ -158,14 +195,20 @@ static unsigned profiles(void)
+         setup(bits,upper,outputs[output],cache,boundary-4096);
+         ArmSmmu4KRange r=resource(2,permissions,cache);
+         CHECK(update(0,0,&r,1)==ArmSmmu4KSuccess);complete(0,2);
+-        CHECK(result.descriptor_writes==2 && result.published_pages==2 && state.generation==1);
++        /* The two pages straddle a table boundary: two leaf tables. Each table made took one link write and two publications (itself
++         * and its parent); each leaf table is published once more after its leaves. */
++        const size_t made=state.tables.table_pages-1;
++        CHECK(result.descriptor_writes==2+made && result.published_pages==2*made+2 && state.generation==1);
+         for(unsigned i=0;i<2;++i)CHECK(pte(r.iova+4096*i)==((r.physical+4096*i)|source_permission_pte(permissions,cache)|3));
+         CHECK(!pte(r.iova+8192));
+         reset_counters();CHECK(update(&r,1,&r,0)==ArmSmmu4KSuccess);complete(1,0);
+         CHECK(!pte(r.iova) && !pte(r.iova+4096) && state.generation==2);
+         /* Reuse after a completed native invalidation, with different PA. */
+         r.physical+=0x10000;reset_counters();
++        /* The unmap kept the tables: the map again makes none and writes the two leaves alone. */
++        const size_t tables_before=state.tables.table_pages;
+         CHECK(update(0,0,&r,1)==ArmSmmu4KSuccess);complete(0,2);
++        CHECK(state.tables.table_pages==tables_before && result.descriptor_writes==2 && result.published_pages==2);
+         CHECK(pte(r.iova)==(r.physical|source_permission_pte(permissions,cache)|3));
+         ++count;
+     }
+@@ -221,7 +264,7 @@ static unsigned mutations(void)
+     memcpy(snapshot,tables,sizeof(tables));ArmSmmu4KRange r=resource(2,3,1);
+     unsigned count=0;
+     for(size_t index=0;index<slots;++index)for(unsigned bit=0;bit<2;++bit) {
+-        memset(&state,0,sizeof(state));
++        memset(&state,0,sizeof(state));main_pages.used=slots/512;
+         state.tables=(ArmSmmu4KResult){arena.config.table_physical,0xff44,slots/512,0,0,1};state.prepared=1;
+         memcpy(tables,snapshot,sizeof(tables));tables[index]^=UINT64_C(1)<<(bit?53:0);reset_counters();
+         CHECK(update(0,0,&r,1)==ArmSmmu4KStateMismatch);
+@@ -259,13 +302,13 @@ static void refusals_and_partial(void)
+     r=resource(1,3,1);r.iova=UINT64_MAX-4095;
+     CHECK(update(0,0,&r,1)==ArmSmmu4KSuccess);complete(0,1);CHECK(pte(r.iova));
+     reset_counters();CHECK(update(&r,1,&r,0)==ArmSmmu4KSuccess);complete(1,0);
+-    /* Explicit preparation bounds and no writes on malformed/capacity input. */
++    /* Explicit preparation bounds and no writes on malformed input: no provider, a root it never gave, a root that is not empty. */
+     setup(48,0,48,0,0x1ff000);memcpy(snapshot,tables,sizeof(tables));
+-    ArmSmmu4KLiveState s={0};ArmSmmu4KLiveArena a=arena;a.capacity_pages=1;
+-    CHECK(ArmSmmu4KLivePrepare(&a,&s)==ArmSmmu4KCapacity && !s.prepared);
+-    a=arena;a.config.leaf_budget=1;CHECK(ArmSmmu4KLivePrepare(&a,&s)==ArmSmmu4KBudget);
+-    a=arena;a.mapping=(volatile uint64_t *)(UINTPTR_MAX-4095);
+-    CHECK(ArmSmmu4KLivePrepare(&a,&s)==ArmSmmu4KArgument);
++    ArmSmmu4KLiveState s={0};ArmSmmu4KLiveArena a=arena;
++    a.config.leaf_budget=1;CHECK(ArmSmmu4KLivePrepare(&a,&s)==ArmSmmu4KBudget);
++    a=arena;a.pages=0;CHECK(ArmSmmu4KLivePrepare(&a,&s)==ArmSmmu4KArgument);
++    a=arena;a.config.table_physical+=4096;CHECK(ArmSmmu4KLivePrepare(&a,&s)==ArmSmmu4KArgument);
++    tables[3]=1;CHECK(ArmSmmu4KLivePrepare(&arena,&s)==ArmSmmu4KStateMismatch && !s.prepared);tables[3]=snapshot[3];
+     CHECK(!memcmp(snapshot,tables,sizeof(tables)));
+ }
+ static void setup_pair(unsigned bits,unsigned output,unsigned spacing)
+@@ -273,8 +316,9 @@ static void setup_pair(unsigned bits,unsigned output,unsigned spacing)
+     setup(bits,0,output,spacing,0x1ff000);pair_mode=1;
+     memset(&peer_state,0,sizeof(peer_state));
+     unsigned peer_bits=80-bits;
+-    peer_arena=(ArmSmmu4KLiveArena){{peer_bits,output,0x11000000,16},
+-        UINT64_MAX-(UINT64_C(1)<<peer_bits)+1+0x1ff000,4*4096,1,peer_tables,POOL_PAGES,0,0};   /* pairwise alias checks */
++    const uint64_t peer_root=pages_reset(&peer_pages,peer_tables,0x11000000);
++    peer_arena=(ArmSmmu4KLiveArena){{peer_bits,output,peer_root,16},
++        UINT64_MAX-(UINT64_C(1)<<peer_bits)+1+0x1ff000,4*4096,1,&peer_provider,0,0};   /* pairwise alias checks */
+     CHECK(!ArmSmmu4KLivePrepare(&peer_arena,&peer_state));
+     context.upper=&peer_arena.config;context.upper_tables=&peer_state.tables;
+     /* Explicitly reset the HOST REGISTER fixture, never a live hardware bank. */
+@@ -357,15 +401,14 @@ static unsigned pair_failures(void)
+         CHECK(state.poisoned && peer_state.poisoned && result.must_retain_resources && !result.complete);++controls;
+     }
+     setup_pair(48,48,0);lo=(ArmSmmu4KLiveRegion){&arena,&state,0,0};hi=(ArmSmmu4KLiveRegion){&peer_arena,&peer_state,0,0};
+-    l=resource(2,3,1);ArmSmmu4KRange bad=l;bad.physical=peer_arena.config.table_physical+(POOL_PAGES-1)*4096;
++    /* A range over the other region's table page, and two regions sharing their tables, refuse before any access. */
++    l=resource(2,3,1);ArmSmmu4KRange bad=l;bad.physical=peer_arena.config.table_physical;
+     CHECK(pair_update(&lo,&hi,&bad,0,1)==ArmSmmu4KOverlap && !f.calls);++controls;
+-    uint64_t old=peer_arena.config.table_physical;peer_arena.config.table_physical=arena.config.table_physical+8*4096;
+-    peer_state.tables.root_physical=peer_arena.config.table_physical;
+-    CHECK(pair_update(&lo,&hi,&l,0,1)==ArmSmmu4KOverlap && !f.calls);++controls;
+-    peer_arena.config.table_physical=old;peer_state.tables.root_physical=old;
+-    peer_arena.mapping=tables+8*512;
++    const ArmSmmu4KTablePages *own=peer_arena.pages;uint64_t old=peer_arena.config.table_physical;
++    peer_arena.pages=&main_provider;peer_arena.config.table_physical=arena.config.table_physical;
++    peer_state.tables.root_physical=arena.config.table_physical;
+     CHECK(pair_update(&lo,&hi,&l,0,1)==ArmSmmu4KOverlap && !f.calls);++controls;
+-    peer_arena.mapping=peer_tables;
++    peer_arena.pages=own;peer_arena.config.table_physical=old;peer_state.tables.root_physical=old;
+     CHECK(!pair_update(&lo,&hi,&l,0,1));lo.ranges=&l;lo.count=1;reset_counters();
+     bad=l;bad.iova=peer_arena.iova;bad.shareability=2;
+     CHECK(pair_update(&lo,&hi,&bad,1,1)==ArmSmmu4KOverlap && !f.calls);++controls;
+@@ -401,7 +444,9 @@ static unsigned batches(void)
+     CHECK(!f.calls && !state.poisoned && !memcmp(snapshot,tables,sizeof(tables)));
+     /* One transaction: four leaves written, two leaf pages published once each, one TLB synchronization. */
+     CHECK(batch(0,0,pages,4,1)==ArmSmmu4KSuccess);complete(0,4);
+-    CHECK(result.descriptor_writes==4 && result.published_pages==2 && state.generation==1);
++    /* The four leaves span two leaf tables; every table on their paths was made by this map. */
++    {const size_t made=state.tables.table_pages-1;
++    CHECK(result.descriptor_writes==4+made && result.published_pages==2*made+2 && state.generation==1);}
+     for(unsigned i=0;i<4;++i)CHECK(pte(pages[i].iova)==(pages[i].physical|source_permission_pte(3,0)|3));
+     ++controls;
+     /* Any already mapped page refuses the whole batch before MMIO or a store. */
+@@ -409,10 +454,28 @@ static unsigned batches(void)
      CHECK(batch(pages,4,pages+2,2,1)==ArmSmmu4KStateMismatch && !f.calls && !memcmp(snapshot,tables,sizeof(tables)));++controls;
      /* Unmap a sub-batch given as part of the region's own ranges. */
      reset_counters();CHECK(batch(pages,4,pages+1,2,0)==ArmSmmu4KSuccess);complete(1,2);
@@ -375,7 +1105,7 @@ index a36b817..27d7127 100644
      /* Every register access of a batch failing, before or after its write, poisons and retains. */
      for(unsigned unmap=0;unmap<2;++unmap)for(unsigned after=0;after<2;++after) {
      /* The accesses without a failure: the first map's (whole verification) or the unmap's after it (not). */
-@@ -442,8 +463,8 @@ static uint64_t *leaf_of(uint64_t va)
+@@ -442,13 +505,15 @@ static uint64_t *leaf_of(uint64_t va)
          at=(size_t)(((*entry&UINT64_C(0x0000fffffffff000))-arena.config.table_physical)/8);++level;
      }
  }
@@ -386,19 +1116,71 @@ index a36b817..27d7127 100644
  static unsigned incremental(void)
  {
      unsigned count=0;
-@@ -464,7 +485,7 @@ static unsigned incremental(void)
+     setup(48,1,48,0,0x1ff000);
+-    ArmSmmu4KRange r=resource(1,3,1),r2=r;r2.iova+=4096;r2.physical+=0x10000;
++    /* Both pages in one leaf table (the aperture's first page is the last of the 2 MiB below), which r's map makes. */
++    ArmSmmu4KRange r=resource(1,3,1);r.iova+=4096;r.physical+=4096;
++    ArmSmmu4KRange r2=r;r2.iova+=4096;r2.physical+=0x10000;
+     CHECK(update(0,0,&r,1)==ArmSmmu4KSuccess && result.whole_verification);
+     *leaf_of(r2.iova)=(r2.physical|0x703);reset_counters();
+     CHECK(update(&r,1,&r2,1)==ArmSmmu4KStateMismatch && !result.whole_verification);
+@@ -464,7 +529,37 @@ static unsigned incremental(void)
      }
      reset_counters();CHECK(update(&r,1,&r2,1)==ArmSmmu4KSuccess && !result.whole_verification && state.generation==64);
      *leaf_of(r.iova+8*4096)=UINT64_C(0x40000703);reset_counters();
 -    CHECK(update(both,2,&r2,0)==ArmSmmu4KStateMismatch && result.whole_verification && state.poisoned && !f.writes);++count;
 +    CHECK(update(both,2,&r2,0)==ArmSmmu4KSuccess && !result.whole_verification && !state.poisoned);++count;
++    return count;
++}
++/* Tables on demand: a sparse map far apart makes only the tables of its two paths; a provider that refuses ends a map before any leaf
++ * is written, with the region consistent and usable; an unmap keeps the tables and a map again reuses them. */
++static unsigned on_demand(void)
++{
++    unsigned count=0;
++    setup(48,0,48,0,0x1ff000);
++    arena.bytes=(UINT64_C(1)<<47)-0x1ff000;arena.config.leaf_budget=(size_t)(arena.bytes/4096);
++    ArmSmmu4KRange low=resource(1,3,1),high=low;high.iova=(UINT64_C(1)<<46)+0x40000000;high.physical+=0x100000;
++    CHECK(update(0,0,&low,1)==ArmSmmu4KSuccess);complete(0,1);
++    CHECK(state.tables.table_pages==4);++count;   /* root, then one table per level on the path */
++    reset_counters();CHECK(update(&low,1,&high,1)==ArmSmmu4KSuccess);complete(0,2);
++    CHECK(state.tables.table_pages==7 && pte(high.iova) && pte(low.iova));++count;   /* the far path shares only the root */
++    const ArmSmmu4KRange both[2]={low,high};ArmSmmu4KLiveResult audit;
++    CHECK(ArmSmmu4KLiveAudit(&arena,&state,both,2,&audit)==ArmSmmu4KSuccess && audit.descriptor_reads==7*512);++count;
++    /* Refused allocation: no leaf is written, nothing is poisoned, and the map succeeds once tables can be had. */
++    ArmSmmu4KRange third=low;third.iova=(UINT64_C(1)<<45)+0x200000;third.physical+=0x200000;
++    main_pages.refuse_after=1;reset_counters();memcpy(snapshot,tables,sizeof(tables));
++    CHECK(update(both,2,&third,1)==ArmSmmu4KCapacity && !state.poisoned && !result.complete);
++    CHECK(state.tables.table_pages==8 && main_pages.used==8 && !pte(third.iova));
++    CHECK(ArmSmmu4KLiveAudit(&arena,&state,both,2,&audit)==ArmSmmu4KSuccess);++count;
++    main_pages.refuse_after=SIZE_MAX;reset_counters();
++    CHECK(update(both,2,&third,1)==ArmSmmu4KSuccess);complete(0,3);CHECK(pte(third.iova));++count;
++    /* An unmap keeps the tables; the next map over them makes none. */
++    const ArmSmmu4KRange all[3]={low,third,high};
++    reset_counters();CHECK(update(all,3,&third,0)==ArmSmmu4KSuccess);complete(1,2);
++    const size_t kept=state.tables.table_pages;
++    reset_counters();CHECK(update(both,2,&third,1)==ArmSmmu4KSuccess);complete(0,3);
++    CHECK(state.tables.table_pages==kept && result.descriptor_writes==1 && result.published_pages==1);++count;
      return count;
  }
  int main(void)
-@@ -475,5 +496,5 @@ int main(void)
+@@ -475,5 +570,6 @@ int main(void)
      unsigned pairs=pair_profiles(),pair_faults=pair_failures();
      printf("PASS: %u dual-region native4K profiles and %u dual-region failure/alias/isolation controls, both graphs audited and retained on uncertainty\n",pairs,pair_faults);
      printf("PASS: %u batched scattered-page map/unmap transactions and refusals: one publication per leaf page, a TLB synchronization for each unmap and whole verification\n",batches());
 -    printf("PASS: %u incremental-verification controls: a changed leaf is proved before and after its store, the whole region every 64th update\n",incremental());
 +    printf("PASS: %u incremental-verification controls: a changed leaf is proved before and after its store, the whole region on the first update\n",incremental());
++    printf("PASS: %u on-demand table controls: sparse paths across a 48-bit range, refused allocation without a leaf store, tables kept by unmap\n",on_demand());
  }
+diff --git a/test_program.c b/test_program.c
+index 6e11130..9563446 100644
+--- a/test_program.c
++++ b/test_program.c
+@@ -71,7 +71,7 @@ static ArmSmmu4KIo reset(unsigned register_64k)
+     size_t pages=register_64k?2:32;f.cb=(pages+f.bank)*f.gr1;
+     put32(0x20,1u<<30);put32(0x24,register_64k?0x80000002:0x40020010);put32(0x28,0x1555);
+     /* Deliberately wrong supplied IDs: only the real I/O reads may authorize. */
+-    config=(ArmSmmu4KContextConfig){&lower,&upper,&lr,&ur,0,0,0xabcd,1,1,1};
++    config=(ArmSmmu4KContextConfig){&lower,&upper,&lr,&ur,0,0,0xabcd,1,1,1,0};
+     ArmSmmu4KIo io={&f,BYTES,read32,read64,write32,write64,barrier};return io;
+ }
+ static size_t first(unsigned kind,size_t at)

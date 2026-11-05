@@ -1,0 +1,100 @@
+{
+  "date": "2026-11-04",
+  "device": {
+    "candidate_deployed": true,
+    "ufs_updated": false,
+    "boot_b_updated": false,
+    "user_activity": "USB absent at handoff inspection",
+    "fps": 52.37241441770597,
+    "target_fps": 120,
+    "acceptance": "GPU optimization paused at user request",
+    "gpu_user_observation": "User reports clear performance improvement in most scenes; touch still affects interaction",
+    "fps_scene": "Settings continuous scrolling"
+  },
+  "os": "iOS 17 / 21H461",
+  "upstream": {
+    "UniXNU": "82b847c4ac3f68a57024b3082ffa3a03442defd9",
+    "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+    "AdrenoMetal": "243d63cf43305a85c8119b66b49cb7df4b30b019",
+    "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17",
+    "metal2vulkan": "624bab3918de5b978e1101517abca2b4fa426565"
+  },
+  "integration": {
+    "kernel_abi": 2,
+    "mesa_patch_series": "origin/main selected at 82b847c",
+    "runtime_patch_series": "0001 through 0030 from AdrenoMetal 243d63c",
+    "preserved": [
+      "A725 firmware and CP_ME_INIT disable_dms",
+      "marble four SMMU stream routes and context bank 20",
+      "580 MHz / BW11 GMU vote",
+      "8 GiB bootstrap tables",
+      "iOS 17 display and scanout ABI",
+      "persistent Data identity"
+    ],
+    "os_policy": "iOS 17 effective task role and Darwin background policy",
+    "table_switching": "CP_SMMU_TABLE_UPDATE, 3 payload words, context bank 20; mode=2 aperture=1/0 check=0",
+    "diagnostics_enabled": false
+  },
+  "cache": {
+    "preferred_directory": "account Library/Caches/org.unixnu.metal",
+    "turnip_disk_cache": true,
+    "runtime_disk_cache": true,
+    "priming": "on demand; explicit primelist enables background priming"
+  },
+  "build": {
+    "kernel": "outputs/UniXNU_marble/persistent_boot/kernel.cptable120.macho",
+    "assets": "outputs/UniXNU_marble/persistent_boot/cptable120",
+    "kernel_link": "completed",
+    "turnip_ios": "completed",
+    "runtime_ios": "completed",
+    "plugin_ios": "completed",
+    "packaging": "completed",
+    "scheduler_check": "preempt, ring and submit cases passed with address and undefined behavior sanitizers"
+  },
+  "touch": {
+    "source": "UniXNU input documentation, ShengHidInput, TouchProbe and Goodix 9916R driver",
+    "spi_hz": 15000000,
+    "irq_gpio": 21,
+    "irq_intid": 240,
+    "trigger": "falling edge",
+    "publication": "complete contact snapshot, original identifiers and subpixel coordinates",
+    "active_polling_removed": true,
+    "observed_irq_frames": 1618,
+    "observed_valid_frames": 1618,
+    "observed_checksum_failures": 0
+  },
+  "display": {
+    "GopFramebuffer": "e47c1b8de169cd2bd0b885c7d85e433010e3cdf2",
+    "surface_mapping_reuse": true,
+    "source": "AdrenoMetal 243d63c GpuScanoutClient and GpuScanoutPresenter",
+    "OS_ABI": "iOS 17 display provider retained"
+  },
+  "performance_sample": {
+    "first": {
+      "host_seconds": 625589.5840960625,
+      "device_seconds": 730.964816666,
+      "frames": 6073
+    },
+    "last": {
+      "host_seconds": 625609.6519125205,
+      "device_seconds": 751.032774635,
+      "frames": 7124
+    },
+    "gestures": 30,
+    "contact_updates": 2400,
+    "target_input_hz": 120,
+    "elapsed_seconds": 20.067816458060406,
+    "display_frames": 1051,
+    "fps": 52.37241441770597
+  },
+  "last_runtime_status": {
+    "gpu_submitted": 5506,
+    "gpu_completed": 5506,
+    "display_accepted": 2722,
+    "display_retirements": 2722,
+    "gpu_fallbacks": 0,
+    "touch_events": 2698,
+    "touch_invalid": 0,
+    "touch_interrupts": 2698
+  }
+}
