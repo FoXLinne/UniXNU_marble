@@ -235,7 +235,7 @@
       "Discover lsd data-container UUIDs and drop com.apple.LaunchServices-* database files before lsd starts on every boot"
     ],
     "source_path": "patches/xnu-12377/zzzz-sheng-ipados27-bringup.patch",
-    "candidate_status": "kernel, prelink and pack passed; deploying through resident return",
+    "candidate_status": "User confirmed applications open",
     "candidate": {
       "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-upstream-app-publication/marble_temporary_boot.img",
       "kernel_sha256": "3819657f0ed3798e27e93274bed0e84ecfa9306fcf6256269da4d9232997869f",
@@ -262,6 +262,42 @@
       ],
       "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1"
     },
-    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-upstream-app-publication"
-  }
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-upstream-app-publication",
+    "resident_return": "USB detached after oem interrupt; used physical fastboot recovery",
+    "hardware": {
+      "union_mount_status": 0,
+      "visible_app_path_mask": 15,
+      "visible_apps": [
+        "Preferences",
+        "Weather",
+        "MobileSafari",
+        "Calculator"
+      ],
+      "LaunchServices_databases_dropped": 1,
+      "data_containers_scanned": 24,
+      "LaunchServices_error": 0,
+      "user_acceptance": "Applications can open",
+      "icon_work": "GPU port and icon repair are proceeding in another user-owned thread",
+      "observer": "stopped to release the USB bulk command channel",
+      "latest_sample": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-upstream-app-publication/observation/sample-006/state.json",
+      "ui_exits": [
+        {
+          "pid": 27,
+          "namespace": 2,
+          "code": "0x6",
+          "name": "SpringBoard",
+          "pc": "0x1f23081dc",
+          "far": "0x0",
+          "esr": "0x56000080",
+          "description": ""
+        }
+      ]
+    }
+  },
+  "remaining": [
+    "GPU and icon rendering assigned by user to another thread",
+    "rdar45025538 status-bar provider for 360x800 logical screen",
+    "SpringBoard startup SIGABRT recorded in publication candidate",
+    "Resident return USB detach requires follow-up"
+  ]
 }
