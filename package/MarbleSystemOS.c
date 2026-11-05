@@ -17,6 +17,7 @@ extern void commpage_update_dyld_flags(uint64_t);
 extern uint64_t dyld_flags;
 extern int sheng_boot_watchdog_policy(void *, uint64_t);
 extern int native_marble_setup_policy(proc_t, user_addr_t);
+extern void native_marble_staged_apps_prepare(proc_t, user_addr_t, mount_t);
 /* CoreEntitlements retains its 16 KiB allocation and stack-window ABI. */
 __attribute__((used)) const unsigned int native_ios18_ce_page_shift = 14;
 int native_marble_prepare_systemos(proc_t, user_addr_t, user_addr_t *);
@@ -135,6 +136,7 @@ static int prepareData(proc_t process, user_addr_t scratch)
     int accepted = actual == selected && !(vfs_flags(mounted) & MNT_RDONLY) &&
         !strcmp(vfs_statfs(mounted)->f_fstypename, "apfs");
     vnode_put(data_root);
+    if (accepted) native_marble_staged_apps_prepare(process, scratch, mounted);
     return accepted ? 0 : EAUTH;
 }
 

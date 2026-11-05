@@ -64,7 +64,13 @@
     "panic": "",
     "ui_exits": 0,
     "real_ncpus": 7,
-    "USB": "RootStage2"
+    "USB": "RootStage2",
+    "screen_feedback": "SpringBoard appeared; text size accepted; rdar45025538 shown at top; icons remain missing",
+    "alignment_fault_after_first_candidate": {
+      "pc": "0x21db75100",
+      "esr": "0x92000061",
+      "far": "0x10a0a5040"
+    }
   },
   "candidate": {
     "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-scale3-normal-dram/marble_temporary_boot.img",
@@ -105,6 +111,50 @@
     ],
     "current_source_integration": "MarbleSystemOS mounts Data over the OS staging directory; upstream staged-app copy hook absent",
     "upstream_solution": "UniXNU patches/xnu-12377/zzy-staged-system-apps.patch: copy covered OS staging into persistent Data before launchd, mobile ownership, per-file fsync, install by SystemAppMigrator",
-    "status": "source confirmed; integration follows scale acceptance"
+    "status": "Upstream copy integrated into prepareData before launchd; candidate compiled and packaged",
+    "source_files": 4803,
+    "source_uncompressed_bytes": 824185951,
+    "source_symlinks": 0,
+    "marker": "/private/var/db/.marble-staged-apps-22H384"
+  },
+  "managed_memory_followup": {
+    "firmware_dram_base": "0x80000000",
+    "firmware_dram_size": "0x400000000",
+    "managed_physical_base": "0x97fc04000",
+    "managed_physical_size": "0x200000000",
+    "repair": "Include pa_valid(pa) in native Normal Non-Cacheable selection",
+    "evidence": "interaction-scale3-normal-dram/dram-range.json",
+    "candidate": {
+      "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-managed-dram-apps/marble_temporary_boot.img",
+      "kernel_sha256": "32d810b97734a003ac32b7310aed8b8993e3c490519af144ef96c4827f236f19",
+      "native_sha256": "667ebff471ecd046589dd6c7637b448af684a3b68e79f1a874cf7d3e95981c18",
+      "kernel_source": "boot-image",
+      "system_source": "ufs",
+      "exit_boot_services": false,
+      "resident_usb": true,
+      "runtime_usb_mode": 3,
+      "enabled_cpu_affinities": [
+        0,
+        256,
+        512,
+        768,
+        1024,
+        1280,
+        1536
+      ],
+      "firmware_usb_affinity": 1792,
+      "display_scale": 3,
+      "logical_size": [
+        360,
+        800
+      ],
+      "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 marble-staged-apps=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1"
+    },
+    "build": {
+      "kernel": "passed",
+      "prelink": "passed",
+      "pack": "passed"
+    },
+    "deployment": "RootStage USB unavailable before transfer; physical fastboot recovery requested"
   }
 }

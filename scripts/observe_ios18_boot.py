@@ -53,7 +53,10 @@ def observe(kernel, layout_path, output, interval, duration):
                           ('_real_ncpus', 4), ('_armcpu_registered', 4),
                           ('_armcpu_smp_requested', 4), ('_armcpu_smp_running', 4),
                           ('_armcpu_ipi_sent', 8), ('_armcpu_ipi_interrupts', 8),
-                          ('_sheng_watchdog_policy_status', 4), ('_marble_setup_policy_status', 4))
+                          ('_sheng_watchdog_policy_status', 4), ('_marble_setup_policy_status', 4),
+                          ('_native_staged_apps_stage', 4), ('_native_staged_apps_files', 4),
+                          ('_native_staged_apps_mib', 4), ('_native_staged_apps_failed', 4),
+                          ('_native_staged_apps_error', 4))
                 report['globals'] = {name: int.from_bytes(memory.read(symbols[name], size), 'little')
                                      for name, size in fields if name in symbols}
                 exit_count = report['globals'].get('_marble_ui_exit_count', 0)
@@ -82,7 +85,8 @@ def observe(kernel, layout_path, output, interval, duration):
                 focus = {'CommCenter', 'locationd', 'com.apple.datamigrator',
                          'com.apple.migrationpluginwrapper', 'installcoordinationd',
                          'backboardd', 'SpringBoard', 'Setup', 'Preferences',
-                         'runningboardd', 'cfprefsd'}
+                         'runningboardd', 'cfprefsd', 'iconservicesagent',
+                         'PosterBoard', 'launchd'}
                 report['process_count'] = len(processes)
                 report['focus'] = [p for p in processes if p['name'] in focus]
                 if index % 5 == 0 or report['panic']:

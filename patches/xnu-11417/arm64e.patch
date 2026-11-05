@@ -1354,7 +1354,7 @@ index b279420..a692c8e 100644
 +}
 +#endif /* !defined(APPLE_ARM64_ARCH_FAMILY) */
 diff --git a/osfmk/arm/pmap/pmap.c b/osfmk/arm/pmap/pmap.c
-index a5de704..7626f54 100644
+index a5de704..c54dd9d 100644
 --- a/osfmk/arm/pmap/pmap.c
 +++ b/osfmk/arm/pmap/pmap.c
 @@ -84,8 +84,12 @@
@@ -1403,15 +1403,16 @@ index a5de704..7626f54 100644
  			}
  			goto protect_skip_pve_pass1;
  		}
-@@ -5918,6 +5926,22 @@ wimg_to_pte(unsigned int wimg, pmap_paddr_t pa)
+@@ -5918,6 +5926,23 @@ wimg_to_pte(unsigned int wimg, pmap_paddr_t pa)
  {
  	pt_entry_t pte;
  
 +#if defined(BCM2837)
 +	/* Cortex-A Device mappings reject unaligned SIMD and DC ZVA accesses.
 +	 * IOSurface and I/O buffers backed by DRAM need Normal Non-Cacheable
-+	 * attributes; peripheral MMIO retains the requested Device ordering. */
-+	if (is_dram_addr(pa)) {
++	 * attributes. Managed pages may reside above the firmware DRAM window;
++	 * peripheral MMIO retains the requested Device ordering. */
++	if (pa_valid(pa) || is_dram_addr(pa)) {
 +		switch (wimg & VM_WIMG_MASK) {
 +		case VM_WIMG_IO:
 +		case VM_WIMG_RT:
@@ -1426,7 +1427,7 @@ index a5de704..7626f54 100644
  	switch (wimg & (VM_WIMG_MASK)) {
  	case VM_WIMG_IO:
  		// Map DRAM addresses with VM_WIMG_IO as Device-GRE instead of
-@@ -6102,6 +6126,8 @@ pmap_construct_pte(
+@@ -6102,6 +6127,8 @@ pmap_construct_pte(
  	return pte;
  }
  
@@ -1435,7 +1436,7 @@ index a5de704..7626f54 100644
  MARK_AS_PMAP_TEXT kern_return_t
  pmap_enter_options_internal(
  	pmap_t pmap,
-@@ -7163,7 +7189,9 @@ void
+@@ -7163,7 +7190,9 @@ void
  pmap_sync_page_attributes_phys(
  	ppnum_t pp)
  {
@@ -1446,7 +1447,7 @@ index a5de704..7626f54 100644
  }
  
  #if CONFIG_COREDUMP
-@@ -12186,13 +12214,15 @@ pmap_unpin_kernel_pages(vm_offset_t kva __unused, size_t nbytes __unused)
+@@ -12186,13 +12215,15 @@ pmap_unpin_kernel_pages(vm_offset_t kva __unused, size_t nbytes __unused)
  #endif /* !XNU_MONITOR */
  
  
@@ -1463,7 +1464,7 @@ index a5de704..7626f54 100644
  #endif
  }
  
-@@ -12202,10 +12232,13 @@ pmap_cs_unlockdown_pages(vm_address_t kva, vm_size_t size, bool ppl_writable)
+@@ -12202,10 +12233,13 @@ pmap_cs_unlockdown_pages(vm_address_t kva, vm_size_t size, bool ppl_writable)
  #if XNU_MONITOR
  	pmap_ppl_unlockdown_pages(kva, size, PVH_FLAG_LOCKDOWN_CS, ppl_writable);
  #else
@@ -1478,7 +1479,7 @@ index a5de704..7626f54 100644
  /**
   * Perform basic validation checks on the destination only and
   * corresponding offset/sizes prior to writing to a read only allocation.
-@@ -15099,3 +15132,11 @@ pmap_test_text_corruption_internal(pmap_paddr_t pa)
+@@ -15099,3 +15133,11 @@ pmap_test_text_corruption_internal(pmap_paddr_t pa)
  }
  
  #endif /* DEVELOPMENT || DEBUG */
