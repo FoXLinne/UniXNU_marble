@@ -33,7 +33,19 @@
         "ipi_interrupts": 1,
         "panic_text": ""
       }
-    ]
+    ],
+    "resident_retries": {
+      "same_usb_attach_monotonic": 767889.34911,
+      "return_counts": [
+        1,
+        2,
+        3
+      ],
+      "replacement_bytes": 72814592,
+      "system_source": "ufs",
+      "interrupt_return": "passed before storage initialization",
+      "natural_return": "firmware reply at 32 seconds, detach at 32.618 seconds after retry"
+    }
   },
   "changes": [
     "Keep temporary kernel boot resident with RootStage USB mode 3",
@@ -42,7 +54,8 @@
     "Use load/store publication for the single-producer return mailbox",
     "Leave hardware watchdog disabled during resident firmware handoff",
     "Register panic return before platform power initialization",
-    "Keep original userspace watchdog monitoring with resident hardware reset disabled"
+    "Keep original userspace watchdog monitoring with resident hardware reset disabled",
+    "Store firmware return logs outside the kernel input mailbox"
   ],
   "validation": {
     "current_source_kernel_build": "passed",
@@ -51,8 +64,16 @@
     "springboard": "pending",
     "panic_return_after_early_registration": "pending",
     "continuous_usb_acceptance": "failed on early and worker images",
-    "next_image": "usb-repair-control/marble_temporary_boot.img",
+    "next_image": "usb-repair-preserve/marble_temporary_boot.img",
     "early_control_build": "passed",
     "early_control_hardware": "waiting for fastboot"
+  },
+  "sample_analysis": {
+    "ios17_capture": "e92a564 NativeRootBlock.cpp checks rootLogMapping before capture",
+    "ios18_capture": "MarbleRuntime18.cpp dereferences runtimeLog before storage initializes it",
+    "introduced_call": "50d9a33 panic_trap_to_debugger invokes native_resident_panic_return, which invokes capture",
+    "repair": "Static RuntimeLog storage exists before storage initialization",
+    "hardware_result": "pending",
+    "build": "kernel and prelink passed"
   }
 }

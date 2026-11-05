@@ -33,6 +33,12 @@ STATIC BOOLEAN mDirty[3];
 STATIC BOOLEAN mRuntimeUsb;
 STATIC UINT8 *mExport;
 STATIC UINTN mExportBytes;
+STATIC CONST VOID *mFirmwareLog;
+
+VOID MarbleRootUsbSetFirmwareLog(CONST VOID *Log)
+{
+  mFirmwareLog=Log;
+}
 STATIC UINT64 mWatchdogControl, mWatchdogStatus, mWatchdogPetStatus;
 STATIC UINT64 mWatchdogLastPet, mWatchdogFrequency;
 STATIC BOOLEAN mWatchdogService;
@@ -545,6 +551,7 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     } else if (!AsciiStrnCmp(Command,"oem select:",11) && Command[11]>='0' && Command[11]<='2' && !Command[12]) {
       mDisk=Command[11]-'0'; Reply("OKAY", "");
     } else if (!AsciiStrnCmp(Command,"oem begin:",10) && Command[10]>='0' && Command[10]<='2' && Command[11]==':' && AsciiStrLen(Command)==61 && Command[28]==':') {
+      mFirmwareLog=NULL;
       UINTN Index = Command[10]-'0'; UINT64 Bytes = AsciiStrHexToUint64(Command+12);
       ROOT_STAGE_DISK *Selected = &mStage->Disks[Index];
       if (Selected->Bytes != Bytes || AsciiStrCmp(Selected->Identity,Command+29)) {
@@ -590,6 +597,11 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       if (mExportBytes) {
         DataReply(mExportBytes); Transfer(EP_IN,mExport,mExportBytes); Reply("OKAY","");
         mExportBytes=0; continue;
+      }
+      if (mFirmwareLog && !mKernelRunning) {
+        CopyMem(mTx,mFirmwareLog,0x100000);
+        DataReply(0x100000); Transfer(EP_IN,mTx,0x100000); Reply("OKAY","");
+        continue;
       }
       if (!mLastBytes) { Reply("FAIL","no staged data"); continue; }
       DataReply(mLastBytes);

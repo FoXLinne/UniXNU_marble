@@ -33,6 +33,8 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsbContinue(VOID);
 EFI_STATUS MarbleRootUsbPoll(VOID);
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage);
+VOID MarbleRootUsbSetFirmwareLog(CONST VOID *Log);
+STATIC UINT8 mFirmwareLog[0x100000];
 STATIC EFI_TEXT_STRING mOutputString;
 STATIC CHAR16 mBootText[32768];
 STATIC UINTN mBootTextUsed;
@@ -130,13 +132,10 @@ BootReturn(EFI_STATUS Status, UINTN Checkpoint)
 EFI_STATUS
 MarbleRootStorageReturn(ROOT_STAGE_TABLE *Stage)
 {
-  ROOT_STAGE_DISK *Kernel = &Stage->Disks[2];
-  if (Kernel->Count == 1 && Kernel->Bytes >= 0x100000) {
-    UINT8 *Log = (VOID *)(UINTN)(Kernel->Extents[0].Address + Kernel->Bytes - 0x100000);
-    ZeroMem(Log, 0x100000);
-    CopyMem(Log, mBootText, mBootTextUsed * sizeof(CHAR16));
-    CaptureBootScreen(Log + 65536, 0x100000 - 65536);
-  }
+  ZeroMem(mFirmwareLog,sizeof(mFirmwareLog));
+  CopyMem(mFirmwareLog,mBootText,mBootTextUsed*sizeof(CHAR16));
+  CaptureBootScreen(mFirmwareLog+65536,sizeof(mFirmwareLog)-65536);
+  MarbleRootUsbSetFirmwareLog(mFirmwareLog);
   return MarbleRootUsbResume(Stage);
 }
 

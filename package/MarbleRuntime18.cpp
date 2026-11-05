@@ -26,7 +26,8 @@ struct RuntimeLog {
     uint32_t version, length;
     char text[65520];
 };
-static RuntimeLog *runtimeLog;
+static RuntimeLog residentLog;
+static RuntimeLog *const runtimeLog = &residentLog;
 struct RuntimeScreen {
     char magic[8];
     uint32_t width, height, stride, bytes;
@@ -129,8 +130,7 @@ extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, voi
 
 extern "C" void marble_runtime18_start(void)
 {
-    runtimeLog = static_cast<RuntimeLog *>(IOMallocZero(sizeof(RuntimeLog)));
     runtimeScreen = static_cast<RuntimeScreen *>(IOMallocZero(sizeof(RuntimeScreen)));
-    if (!runtimeLog || !runtimeScreen) panic("MarbleRuntime: USB buffer allocation failed");
+    if (!runtimeScreen) panic("MarbleRuntime: USB screen allocation failed");
     native_runtime_usb_start();
 }
