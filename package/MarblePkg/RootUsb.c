@@ -37,22 +37,22 @@ STATIC UINT64 mWatchdogControl, mWatchdogStatus, mWatchdogPetStatus;
 STATIC UINT64 mWatchdogLastPet, mWatchdogFrequency;
 STATIC BOOLEAN mWatchdogService;
 STATIC BOOLEAN mResidentService, mServiceStarted;
-STATIC volatile UINT32 mServicePause, mServicePaused, mHostAction, mKernelRunning;
+STATIC volatile UINT32 mServiceReady, mHostAction, mKernelRunning;
+STATIC ROOT_STAGE_TABLE *mReturnedStage;
 UINT64 MarbleRootUsbContext[16] __attribute__((aligned(64)));
 #define mServiceContext MarbleRootUsbContext
 STATIC VOID *mServiceStack;
 VOID MarbleRootUsbCore(VOID);
 
-STATIC VOID ServicePausePoint(VOID)
+STATIC VOID ServiceUpdatePoint(VOID)
 {
-  if (!mServiceStarted) return;
-  if (__atomic_load_n(&mServicePause,__ATOMIC_ACQUIRE)) {
-    __atomic_store_n(&mServicePaused,1,__ATOMIC_RELEASE);
-    __asm__ volatile("sev" ::: "memory");
-    while (__atomic_load_n(&mServicePause,__ATOMIC_ACQUIRE)) __asm__ volatile("wfe");
-    __atomic_store_n(&mServicePaused,0,__ATOMIC_RELEASE);
-    __asm__ volatile("sev" ::: "memory");
-  }
+  ROOT_STAGE_TABLE *Stage=__atomic_exchange_n(&mReturnedStage,NULL,__ATOMIC_ACQUIRE);
+  if (!Stage) return;
+  mStage=Stage;
+  mDisk=2;
+  mLastOffset=Stage->Disks[2].Bytes-0x100000;
+  mLastBytes=0x100000;
+  __atomic_store_n(&mKernelRunning,0,__ATOMIC_RELEASE);
 }
 
 STATIC UINT64 RootCounter(VOID)
@@ -155,7 +155,7 @@ STATIC VOID EFIAPI UsbNotify(EFI_EVENT Event, VOID *Context) {}
 STATIC INTN WaitTransfer(UINT8 Endpoint)
 {
   for (;;) {
-    ServicePausePoint();
+    ServiceUpdatePoint();
     ServiceWatchdog();
     USB_DEVICE_EVENT Event = UsbDeviceEventNoEvent;
     USB_DEVICE_EVENT_DATA Data;
@@ -234,15 +234,9 @@ EFI_STATUS MarbleRootUsbContinue(VOID);
 
 STATIC VOID UsbServiceLoop(VOID)
 {
-  __atomic_store_n(&mServicePaused,1,__ATOMIC_RELEASE);
+  __atomic_store_n(&mServiceReady,1,__ATOMIC_RELEASE);
   __asm__ volatile("sev" ::: "memory");
-  for (;;) {
-    ServicePausePoint();
-    EFI_STATUS Status=MarbleRootUsbContinue();
-    __atomic_store_n(&mServicePause,1,__ATOMIC_RELEASE);
-    __atomic_store_n(&mHostAction,Status==EFI_NOT_READY ? 1 : 2,__ATOMIC_RELEASE);
-    __asm__ volatile("sev" ::: "memory");
-  }
+  for (;;) MarbleRootUsbContinue();
 }
 
 STATIC EFI_STATUS UsbServiceEnter(VOID)
@@ -266,7 +260,7 @@ STATIC EFI_STATUS UsbServiceEnter(VOID)
     mServiceContext[7]=(UINTN)mServiceStack+65536;
     mServiceContext[8]=(UINTN)&UsbServiceLoop;
     __asm__ volatile("mov %0, x18" : "=r"(Value)); mServiceContext[9]=Value;
-    mServicePause=1; mServicePaused=0; mServiceStarted=TRUE;
+    mServiceReady=0; mKernelRunning=1; mServiceStarted=TRUE;
     for (UINTN Offset=0;Offset<sizeof(mServiceContext);Offset+=64)
       __asm__ volatile("dc cvac, %0" :: "r"((UINTN)mServiceContext+Offset) : "memory");
     __asm__ volatile("dsb sy" ::: "memory");
@@ -274,24 +268,20 @@ STATIC EFI_STATUS UsbServiceEnter(VOID)
     if (Result) { mServiceStarted=FALSE; return EFI_DEVICE_ERROR; }
     UINT64 Began=RootCounter(), Frequency;
     __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(Frequency));
-    while (!__atomic_load_n(&mServicePaused,__ATOMIC_ACQUIRE)) {
+    while (!__atomic_load_n(&mServiceReady,__ATOMIC_ACQUIRE)) {
       if (RootCounter()-Began>Frequency) { mServiceStarted=FALSE; return EFI_TIMEOUT; }
       __asm__ volatile("yield");
     }
   }
-  mKernelRunning=1;
-  __atomic_store_n(&mServicePause,0,__ATOMIC_RELEASE);
-  __asm__ volatile("sev" ::: "memory");
-  while (__atomic_load_n(&mServicePaused,__ATOMIC_ACQUIRE)) __asm__ volatile("wfe");
+  __atomic_store_n(&mKernelRunning,1,__ATOMIC_RELEASE);
   return EFI_SUCCESS;
 }
 
 STATIC VOID UsbServiceResume(VOID)
 {
-  __atomic_store_n(&mServicePause,1,__ATOMIC_RELEASE);
-  __asm__ volatile("sev" ::: "memory");
-  while (!__atomic_load_n(&mServicePaused,__ATOMIC_ACQUIRE)) __asm__ volatile("wfe");
-  mKernelRunning=0;
+  // Keep servicing the controller while the boot CPU restores firmware state.
+  // Kernel-mode command restrictions also protect firmware return allocations.
+  __asm__ volatile("dmb ish" ::: "memory");
 }
 
 EFI_STATUS MarbleRootUsbEnableResident(VOID)
@@ -423,6 +413,7 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
   EFI_STATUS Status;
   if (!mServiceStarted) Print(L"UniXNU RootStage USB\r\n");
   for (;;) {
+    ServiceUpdatePoint();
     if (!mConnected) { WaitTransfer(0xff); continue; }
     INTN Size;
     if (mReceivePending) {
@@ -439,11 +430,11 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     else if (!AsciiStrCmp(Command,"getvar:phase")) Reply("OKAY",mKernelRunning ? "kernel" : "firmware");
     else if (!AsciiStrCmp(Command,"getvar:kernel-ready")) {
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
-      Reply("OKAY",mKernelRunning && mStage->ReturnTest==2 ? "ready" : "pending");
+      Reply("OKAY",mKernelRunning && (mStage->ReturnTest==2 || (mStage->ReturnTest>>32)==1) ? "ready" : "pending");
     }
     else if (!AsciiStrCmp(Command,"oem interrupt")) {
       if (!mKernelRunning) { Reply("OKAY","firmware"); continue; }
-      mStage->ReturnTest=1;
+      *(volatile UINT32 *)&mStage->ReturnTest=1;
       __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
       Reply("OKAY","interrupt requested");
     }
@@ -618,7 +609,15 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       if (!EFI_ERROR(Status)) ZeroMem(mDirty,sizeof(mDirty));
       if (!EFI_ERROR(Status)) Status=mCpu->FlushDataCache(mCpu,(UINTN)mStage,sizeof(*mStage),EfiCpuFlushTypeWriteBack);
       if (EFI_ERROR(Status)) { Reply("FAIL","root cache writeback failed"); continue; }
-      Reply("OKAY",""); if (!mRuntimeUsb) mUsb->Stop(); return Retry ? EFI_NOT_READY : EFI_SUCCESS;
+      Reply("OKAY","");
+      if (mServiceStarted) {
+        __atomic_store_n(&mKernelRunning,1,__ATOMIC_RELEASE);
+        __atomic_store_n(&mHostAction,Retry ? 1 : 2,__ATOMIC_RELEASE);
+        __asm__ volatile("sev" ::: "memory");
+        continue;
+      }
+      if (!mRuntimeUsb) mUsb->Stop();
+      return Retry ? EFI_NOT_READY : EFI_SUCCESS;
     } else if (!AsciiStrCmp(Command,"reboot")) {
       Reply("OKAY",""); mUsb->Stop(); gRT->ResetSystem(EfiResetCold,EFI_SUCCESS,0,NULL);
     } else Reply("FAIL","unknown command");
@@ -633,17 +632,16 @@ EFI_STATUS MarbleRootUsb(VOID)
 
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage)
 {
+  if (mServiceStarted) {
+    RetainUsbWatchdog();
+    __atomic_store_n(&mHostAction,0,__ATOMIC_RELEASE);
+    __atomic_store_n(&mReturnedStage,Stage,__ATOMIC_RELEASE);
+    while (!__atomic_load_n(&mHostAction,__ATOMIC_ACQUIRE)) __asm__ volatile("wfe");
+    return mHostAction==1 ? EFI_NOT_READY : EFI_SUCCESS;
+  }
   mStage=Stage;
   mDisk=2;
   mLastOffset=Stage->Disks[2].Bytes-0x100000;
   mLastBytes=0x100000;
-  if (mServiceStarted) {
-    RetainUsbWatchdog();
-    __atomic_store_n(&mHostAction,0,__ATOMIC_RELEASE);
-    __atomic_store_n(&mServicePause,0,__ATOMIC_RELEASE);
-    __asm__ volatile("sev" ::: "memory");
-    while (!__atomic_load_n(&mHostAction,__ATOMIC_ACQUIRE)) __asm__ volatile("wfe");
-    return mHostAction==1 ? EFI_NOT_READY : EFI_SUCCESS;
-  }
   return MarbleRootUsb();
 }

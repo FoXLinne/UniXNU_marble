@@ -1,0 +1,22 @@
+{
+  "image": "outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs-continuous-service/marble_persistent_boot.img",
+  "changes": [
+    "Retain kernel mapping for USB interrupt control through kernel lifetime",
+    "Record formatted panic before firmware return",
+    "Keep USB event loop running across kernel entry, host retry, and firmware return",
+    "Publish returned stage to USB core without pausing its event loop"
+  ],
+  "hardware": {
+    "device": "556fdfe",
+    "flash_unixnu": "OKAY",
+    "flash_boot_b": "OKAY",
+    "set_active_b": "OKAY",
+    "reboot": "OKAY",
+    "post_boot_rootstage": "unavailable",
+    "hub_power_recovery": "completed",
+    "hub_port_status_before_recovery": "0x100",
+    "fastboot_after_recovery": "absent"
+  },
+  "result": "FAILED: USB enumeration lost; Apple logo and SpringBoard not observed",
+  "next_required_hardware_state": "fastboot connection"
+}

@@ -30,8 +30,13 @@ class RetainedKernel:
     def physical(self, address, count):
         if count < 1 or address < self.base or address + count > self.base + self.size:
             raise ValueError(f'Read outside retained kernel memory: {address:#x}+{count:#x}')
-        self.channel.command(f'oem memory-read:{address:016x}:{count:08x}')
-        data = self.channel.read_back()
+        phase = 'request'
+        try:
+            self.channel.command(f'oem memory-read:{address:016x}:{count:08x}')
+            phase = 'upload'
+            data = self.channel.read_back()
+        except (OSError, RuntimeError) as error:
+            raise IOError(f'Retained kernel read {address:#x}+{count:#x} {phase}: {error}') from error
         if len(data) != count:
             raise IOError(f'Short kernel memory read: {len(data)} of {count}')
         return data
@@ -268,6 +273,11 @@ def capture(channel, kernel, output, data_snapshot=False):
         result['translation'] = {'ttbr1': hex(memory.ttbr1), 'tcr': hex(memory.tcr),
                                  'base': hex(memory.base), 'size': memory.size}
         symbols = kernel_symbols(kernel)
+        if '_native_resident_panic_message' in symbols:
+            message = memory.read(symbols['_native_resident_panic_message'], 512).split(b'\0', 1)[0].decode(errors='replace')
+            if message:
+                result['panic_detail'] = message
+                (output / 'panic.txt').write_text(message + '\n')
         if '_marble_ui_exit_count' in symbols:
             count = int.from_bytes(memory.read(symbols['_marble_ui_exit_count'], 4), 'little')
             size = (int.from_bytes(memory.read(symbols['_marble_ui_exit_bytes'], 4), 'little')

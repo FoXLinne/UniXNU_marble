@@ -1804,10 +1804,31 @@ index 4806f20..8ebf4e1 100644
  osfmk/arm64/bzero.s standard
  osfmk/arm/caches.c		standard
 diff --git a/osfmk/kern/debug.c b/osfmk/kern/debug.c
-index 331291b..85879ee 100644
+index 331291b..3f472a7 100644
 --- a/osfmk/kern/debug.c
 +++ b/osfmk/kern/debug.c
-@@ -2459,3 +2459,11 @@ debug_fatal_panic_begin(void)
+@@ -1263,6 +1263,20 @@ panic_trap_to_debugger(const char *panic_format_str, va_list *panic_args, unsign
+ 	INJECT_NESTED_PANIC_IF_REQUESTED(PANIC_TEST_CASE_RECURPANIC_ENTRY);
+ #endif
+ 
++#if XNU_ARM_DT_PLATFORM
++	extern int vsnprintf(char *, size_t, const char *, va_list);
++	char resident_panic[512];
++	va_list resident_arguments;
++	va_copy(resident_arguments, *panic_args);
++	vsnprintf(resident_panic, sizeof(resident_panic), panic_format_str, resident_arguments);
++	va_end(resident_arguments);
++	extern void native_resident_record_panic(const char *);
++	native_resident_record_panic(resident_panic);
++	printf("RootStage panic: %s\n", resident_panic);
++	extern void native_resident_panic_return(void);
++	native_resident_panic_return();
++#endif
++
+ 	PE_panic_hook(panic_format_str);
+ 
+ #if defined (__x86_64__)
+@@ -2459,3 +2473,11 @@ debug_fatal_panic_begin(void)
  	sptm_xnu_panic_begin();
  #endif /* CONFIG_SPTM */
  }
@@ -2820,20 +2841,3 @@ index c6b87b0..fb859e5 100644
 +	if (native_root_block_boot_args) return native_root_block_boot_args;
  	return (char *)((boot_args *)PE_state.bootArgs)->CommandLine;
  }
-diff --git a/pexpert/arm/hwtrace/hwtrace.c b/pexpert/arm/hwtrace/hwtrace.c
-index 0afc913..435eb67 100644
---- a/pexpert/arm/hwtrace/hwtrace.c
-+++ b/pexpert/arm/hwtrace/hwtrace.c
-@@ -486,6 +486,12 @@ PE_singlestep_hook(void)
- void
- PE_panic_hook(const char *str __unused)
- {
-+#if XNU_ARM_DT_PLATFORM
-+	extern void native_runtime_usb_stop(void);
-+	extern void armcpu_complete_active_interrupt(void);
-+	native_runtime_usb_stop();
-+	armcpu_complete_active_interrupt();
-+#endif
- 	if (PE_arm_debug_panic_hook != NULL) {
- 		PE_arm_debug_panic_hook(str);
- 	}

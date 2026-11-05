@@ -15,14 +15,29 @@ extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_root_block_export_data(void);
 extern "C" volatile uint32_t armcpu_smp_step[8], armcpu_smp_mpidr[8];
 extern "C" void native_resident_usb_control(volatile uint64_t *);
+extern "C" {
+char native_resident_panic_message[512] __attribute__((aligned(64), used));
+void native_resident_record_panic(const char *message);
+}
+
+extern "C" void native_resident_record_panic(const char *message)
+{
+  strlcpy(native_resident_panic_message,message,sizeof(native_resident_panic_message));
+  for (uintptr_t line=reinterpret_cast<uintptr_t>(native_resident_panic_message);
+       line<reinterpret_cast<uintptr_t>(native_resident_panic_message)+sizeof(native_resident_panic_message);line+=64)
+    __asm__ volatile("dc civac, %0" :: "r"(line) : "memory");
+  __asm__ volatile("dsb sy" ::: "memory");
+}
 
 static uint64_t return_stub;
-static volatile uint64_t *usb_interrupt;
+static volatile uint32_t *usb_interrupt;
 
 static void usbControlWorker(void *, wait_result_t)
 {
   for (;;) {
-    if (__atomic_load_n(usb_interrupt,__ATOMIC_ACQUIRE)==1) {
+    uint32_t request=usb_interrupt[0];
+    __asm__ volatile("dmb oshld" ::: "memory");
+    if (request==1) {
       native_root_block_capture_log();
       panic("RootStage USB host interrupt");
     }
@@ -34,9 +49,11 @@ extern "C" void native_resident_usb_control(volatile uint64_t *request)
 {
   unsigned mode=0;
   if (!PE_parse_boot_argn("rootstage-runtime-usb",&mode,sizeof(mode)) || mode!=3) return;
-  usb_interrupt=request;
-  uint64_t pending=0;
-  __atomic_compare_exchange_n(usb_interrupt,&pending,2,false,__ATOMIC_RELEASE,__ATOMIC_RELAXED);
+  usb_interrupt=reinterpret_cast<volatile uint32_t *>(request);
+  // The firmware request and kernel readiness occupy separate words. Ordinary
+  // accesses support both RAM and device mappings without RCpc instructions.
+  usb_interrupt[1]=1;
+  __asm__ volatile("dsb sy" ::: "memory");
   thread_t worker;
   if (kernel_thread_start(usbControlWorker,nullptr,&worker)!=KERN_SUCCESS)
     panic("RootStage USB interrupt worker start failed");

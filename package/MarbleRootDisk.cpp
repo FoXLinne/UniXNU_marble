@@ -45,6 +45,8 @@ extern "C" void native_resident_usb_control(volatile uint64_t *);
 extern "C" bool native_root_block_has_data(void);
 extern "C" bool native_root_block_has_data(void) { return marble_data_bytes != 0; }
 extern "C" { char *native_root_block_boot_args; }
+// The resident interrupt worker owns its shared table for the kernel lifetime.
+static IOMemoryMap *residentControlMapping;
 static char residentBootArgs[BOOT_LINE_LENGTH * 2];
 
 extern "C" const OSMetaClass *native_source_storage_parent(void)
@@ -335,6 +337,7 @@ extern "C" void native_marble_root_start(void)
     if (table->Magic != ROOT_STAGE_MAGIC || table->Version != 2 || table->DiskCount > 2)
         panic("MarbleStorage: RootDisks header invalid");
     uint64_t dataBytes = prepareDataHandoff(table->Disks[2]);
+    residentControlMapping=mapping;
     native_resident_configure(table->ReturnStub);
     native_resident_usb_control(const_cast<volatile uint64_t *>(&table->ReturnTest));
     if (!marble_ufs_start()) panic("MarbleStorage: UFS initialization failed");
@@ -349,5 +352,4 @@ extern "C" void native_marble_root_start(void)
         IOLog("MarbleStorage: root disk %u published, bytes %llu\n", i, table->Disks[i].Bytes);
     }
     publishData(dataBytes, provider);
-    mapping->release();
 }

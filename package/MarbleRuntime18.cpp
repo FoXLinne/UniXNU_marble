@@ -56,6 +56,21 @@ extern "C" void native_root_block_capture_log(void)
     used += snprintf(runtimeLog->text + used, sizeof(runtimeLog->text) - used, "%s\nUFS reads=%llu writes=%llu Data=%llu\n",
         status, marble_ufs_reads, marble_ufs_writes, marble_data_bytes);
     runtimeLog->length = used;
+    // The firmware transport runs on a reserved core after the kernel returns.
+    // Publish the diagnostic bytes to the point of coherency before cache/MMU handoff.
+    auto publish = [](const void *address, size_t length) {
+        uintptr_t first = reinterpret_cast<uintptr_t>(address) & ~uintptr_t(63);
+        uintptr_t end = reinterpret_cast<uintptr_t>(address) + length;
+        for (uintptr_t line = first; line < end; line += 64)
+            __asm__ volatile("dc civac, %0" :: "r"(line) : "memory");
+    };
+    if (msgbufp && msgbufp->msg_size) {
+        publish(msgbufp->msg_bufc, msgbufp->msg_size);
+        publish(msgbufp, sizeof(*msgbufp));
+    }
+    publish(&msgbufp, sizeof(msgbufp));
+    publish(runtimeLog, sizeof(*runtimeLog));
+    __asm__ volatile("dsb sy" ::: "memory");
 }
 
 extern "C" void native_root_block_request_snapshot(void)
