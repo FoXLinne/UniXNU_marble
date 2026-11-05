@@ -40,7 +40,52 @@
     "same_session_retry": "passed",
     "policy_status": 0,
     "desktop": "pending",
-    "long_run": "in progress"
+    "long_run": "in progress",
+    "policy_log": "RootStage launch policy status=0 watchdog=0 jobs=com.apple.CommCenter",
+    "sample_570_seconds": {
+      "panic": "",
+      "watchdog_checkins": 46,
+      "ufs_writes": 11442,
+      "ui_exit_count": 0
+    },
+    "Data_retained": {
+      "uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+      "checkpoint_xids": [
+        286,
+        827,
+        1084
+      ]
+    },
+    "migration_images": [
+      "MKBMigrator",
+      "MobileActivationMigrator",
+      "MobileGestaltMigrator"
+    ]
   },
-  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/commcenter-policy-10hz"
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/commcenter-policy-10hz",
+  "cpufreq_candidate": {
+    "change": "Include existing MarbleCpu.cpp in iOS 18 boot archive and invoke its board EPSS initialization from MarblePmgr",
+    "source": "package/MarbleCpu.cpp",
+    "previous_hardware_log": "outputs/UniXNU_marble/gpu_worker_panic.log",
+    "previous_domain_khz": [
+      1804800,
+      2496000,
+      2918400
+    ],
+    "kernel_build": "passed",
+    "prelink": "passed",
+    "firmware": "passed",
+    "hardware": "pending; active migration retained",
+    "image": {
+      "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/commcenter-cpufreq-10hz/marble_temporary_boot.img",
+      "kernel_sha256": "bb7faf243df89ba1ca24f05fbd64f0d57187df4151346119d9eb526d7afd8d8b",
+      "native_sha256": "7146a5d07e86647350ee4f6d5ade8639aa7a16c2b91e9d81594ea3c2a24faf40",
+      "kernel_source": "boot-image",
+      "system_source": "ufs",
+      "exit_boot_services": false,
+      "resident_usb": true,
+      "runtime_usb_mode": 3,
+      "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=10 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 sheng-disable-jobs=com.apple.CommCenter"
+    }
+  }
 }
