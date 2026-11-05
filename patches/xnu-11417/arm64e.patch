@@ -2886,7 +2886,7 @@ index d5d5b16..04ecb2a 100644
 +	extern void native_marble_ui_exit(proc_t, const char *, uint32_t, uint64_t, const char *);
 +	native_marble_ui_exit(p, proc_best_name(p),
 +	    p->p_exit_reason ? p->p_exit_reason->osr_namespace : 0,
-+	    p->p_exit_reason ? p->p_exit_reason->osr_code : 0,
++	    p->p_exit_reason ? p->p_exit_reason->osr_code : (uint64_t)(uint32_t)rv,
 +	    p->p_exit_reason ? exit_reason_get_string_desc(p->p_exit_reason) : NULL);
  
  	if (p->p_crash_behavior != 0 || p == initproc) {

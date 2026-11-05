@@ -7,8 +7,15 @@
 #include <sys/systm.h>
 #include <sys/errno.h>
 #include <kern/thread.h>
+#include <kern/task.h>
+#include <mach/task_info.h>
 #include <pexpert/pexpert.h>
 #include <arm/thread.h>
+#include <vm/vm_map.h>
+
+extern vm_map_t current_map(void);
+extern kern_return_t vm_map_region_recurse_64(vm_map_t, vm_map_offset_t *, vm_map_size_t *,
+    natural_t *, vm_region_submap_info_64_t, mach_msg_type_number_t *);
 
 extern int native_root_block_authorized(dev_t);
 extern int native_root_block_cache_authorized(dev_t);
@@ -35,24 +42,99 @@ struct marble_ui_exit {
     char description[512];
 };
 struct marble_ui_exit marble_ui_exits[16];
+char marble_ui_exit_reasons[16][1024];
 unsigned marble_ui_exit_count;
 __attribute__((used)) const unsigned marble_ui_exit_bytes = sizeof(struct marble_ui_exit);
 void native_marble_ui_exit(proc_t, const char *, uint32_t, uint64_t, const char *);
 
+static void captureAbortReason(char *out, size_t capacity)
+{
+    static char chunk[65537];
+    static unsigned busy;
+    unsigned expected = 0;
+    if (!__atomic_compare_exchange_n(&busy, &expected, 1, 0, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) return;
+    vm_map_offset_t address = 0;
+    uint64_t examined = 0;
+    int best = 0;
+    while (examined < (160ULL << 20) && best < 2) {
+        vm_map_size_t size = 0;
+        natural_t depth = 0;
+        vm_region_submap_info_data_64_t info;
+        mach_msg_type_number_t count = VM_REGION_SUBMAP_INFO_V2_COUNT_64;
+        if (vm_map_region_recurse_64(current_map(), &address, &size, &depth,
+            (vm_region_submap_info_64_t)&info, &count) != KERN_SUCCESS || !size) break;
+        vm_map_offset_t base = address;
+        if (address + size <= address) break;
+        address += size;
+        if (info.is_submap || (info.protection & (VM_PROT_READ | VM_PROT_WRITE)) !=
+            (VM_PROT_READ | VM_PROT_WRITE) || info.user_tag < 1 || info.user_tag > 11) continue;
+        for (uint64_t offset = 0; offset < size && examined < (160ULL << 20) && best < 2; offset += 65536) {
+            size_t length = MIN(size - offset, 65536);
+            examined += length;
+            if (copyin(base + offset, chunk, length)) continue;
+            size_t start = 0;
+            for (size_t i = 0; i <= length; ++i) {
+                if (i < length && (unsigned char)chunk[i] >= 32 && (unsigned char)chunk[i] < 127) continue;
+                size_t run = i - start;
+                if (run >= 24) {
+                    char saved = chunk[i];
+                    chunk[i] = 0;
+                    int rank = strnstr(chunk + start, "uncaught exception", run) ? 2 :
+                        strnstr(chunk + start, "reason: ", run) ? 1 : 0;
+                    if (rank > best) {
+                        strlcpy(out, chunk + start, capacity);
+                        best = rank;
+                    }
+                    chunk[i] = saved;
+                }
+                start = i + 1;
+            }
+        }
+    }
+    __atomic_store_n(&busy, 0, __ATOMIC_RELEASE);
+}
+
 void native_marble_ui_exit(proc_t process, const char *name, uint32_t reason_namespace,
                           uint64_t reason_code, const char *description)
 {
-    if (strcmp(name, "SpringBoard") && strcmp(name, "backboardd")) return;
+    int primary_ui = !strcmp(name, "SpringBoard") || !strcmp(name, "backboardd");
+    if (!primary_ui && ((!reason_namespace && !reason_code) ||
+        (reason_namespace == 2 && (reason_code == 9 || reason_code == 15)))) return;
     unsigned index = __atomic_fetch_add(&marble_ui_exit_count, 1, __ATOMIC_RELAXED) % 16;
     struct marble_ui_exit *record = &marble_ui_exits[index];
     bzero(record, sizeof(*record));
+    bzero(marble_ui_exit_reasons[index], sizeof(marble_ui_exit_reasons[index]));
     record->pid = (uint32_t)proc_getpid(process);
     strlcpy(record->name, name, sizeof(record->name));
     record->reason_namespace = reason_namespace;
     record->reason_code = reason_code;
-    if (description) strlcpy(record->description, description, sizeof(record->description));
     struct arm_saved_state *state = get_user_regs(current_thread());
     if (state) memcpy(record->state, state, sizeof(record->state));
+    task_dyld_info_data_t dyld_info = {0};
+    mach_msg_type_number_t info_count = TASK_DYLD_INFO_COUNT;
+    uint64_t cache_slide = 0;
+    if (current_proc() == process && task_info(proc_task(process), TASK_DYLD_INFO,
+        (task_info_t)&dyld_info, &info_count) == KERN_SUCCESS && dyld_info.all_image_info_size >= 160)
+        (void)copyin(dyld_info.all_image_info_addr + 152, &cache_slide, sizeof(cache_slide));
+    size_t used = (size_t)snprintf(record->description, sizeof(record->description), "slide=%llx", cache_slide);
+    uint64_t frame = 0;
+    if (state && current_proc() == process) memcpy(&frame, record->state + 240, sizeof(frame));
+    const uint64_t user_mask = (UINT64_C(1) << 39) - 1;
+    frame &= user_mask;
+    for (unsigned depth = 0; depth < 12 && frame && !(frame & 15) &&
+         used + 20 < sizeof(record->description); ++depth) {
+        uint64_t links[2];
+        if (copyin(frame, links, sizeof(links))) break;
+        used += (size_t)snprintf(record->description + used, sizeof(record->description) - used,
+                                 " %llx", links[1] & user_mask);
+        uint64_t next = links[0] & user_mask;
+        if (next <= frame || next - frame > UINT64_C(1048576)) break;
+        frame = next;
+    }
+    if (description && used + 2 < sizeof(record->description))
+        snprintf(record->description + used, sizeof(record->description) - used, " %s", description);
+    if (reason_namespace == 2 && reason_code == 6 && current_proc() == process)
+        captureAbortReason(marble_ui_exit_reasons[index], sizeof(marble_ui_exit_reasons[index]));
     uint64_t pc;
     memcpy(&pc, record->state + 264, sizeof(pc));
     printf("MarbleUI: %s[%u] exit namespace=%u code=%llx pc=%llx\n", record->name,

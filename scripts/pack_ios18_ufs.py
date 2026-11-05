@@ -45,6 +45,7 @@ def main():
                         help='XNU CPU affinities; affinity 0x700 owns the resident USB service')
     parser.add_argument('--disabled-jobs', default='com.apple.CommCenter,com.apple.locationd',
                         help='Board services excluded until their hardware backend is available')
+    parser.add_argument('--kernel-arg', action='append', default=[], help='Additional NAME=VALUE runtime setting')
     parser.add_argument('--skip-setup', action='store_true', help='Persist Setup completion before launchd starts')
     args = parser.parse_args()
     cpu_regs = [int(value, 0) for value in args.cpu_regs.split(',')]
@@ -84,6 +85,10 @@ def main():
                  'rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 '
                  'marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 '
                  'sheng-gpu-preempt=2 sheng-gpu-ttbr=2')
+    for value in args.kernel_arg:
+        if not value or any(ch.isspace() for ch in value) or '\0' in value:
+            parser.error('--kernel-arg requires one NAME=VALUE token')
+        boot_args += ' ' + value
     cpu_args = f'cpus={len(cpu_regs)} sheng-smp={int(len(cpu_regs) > 1)} armcpu-self-ipi=1'
     boot_args += ' ' + cpu_args + f' marble-display-scale={args.display_scale}'
     if args.disabled_jobs:

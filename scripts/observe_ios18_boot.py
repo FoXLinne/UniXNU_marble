@@ -14,7 +14,7 @@ from root_control import RootUsb
 from capture_ios18_resident import RetainedKernel, kernel_symbols, capture_processes, capture_init
 
 
-def observe(kernel, layout_path, output, interval, duration):
+def observe(kernel, layout_path, output, interval, duration, once=False, skip_threads=False):
     symbols = kernel_symbols(kernel)
     layout = json.loads(layout_path.read_text())
     stop = threading.Event()
@@ -27,7 +27,7 @@ def observe(kernel, layout_path, output, interval, duration):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         began = time.monotonic()
         index = 0
-        while not stop.is_set() and time.monotonic() - began <= duration:
+        while not stop.is_set() and (once or time.monotonic() - began <= duration):
             destination = output / f'sample-{index:03d}'
             destination.mkdir(exist_ok=True)
             report = {'monotonic': time.monotonic(), 'elapsed': time.monotonic() - began}
@@ -109,6 +109,9 @@ def observe(kernel, layout_path, output, interval, duration):
                             'far': hex(struct.unpack_from('<Q', saved, 280)[0]),
                             'esr': hex(struct.unpack_from('<Q', saved, 288)[0]),
                             'description': entry[368:].split(b'\0')[0].decode(errors='replace')})
+                        if '_marble_ui_exit_reasons' in symbols:
+                            reason = memory.read(symbols['_marble_ui_exit_reasons'] + sequence % 16 * 1024, 1024)
+                            report['ui_exits'][-1]['exception_reason'] = reason.split(b'\0')[0].decode(errors='replace')
                 if '__ZL15domainFrequency' in symbols:
                     report['cpu_khz'] = struct.unpack('<3I', memory.read(symbols['__ZL15domainFrequency'], 12))
                 report['cpu_state'] = {name: struct.unpack('<8I', memory.read(symbols[name], 32))
@@ -120,10 +123,10 @@ def observe(kernel, layout_path, output, interval, duration):
                          'com.apple.migrationpluginwrapper', 'installcoordinationd',
                          'backboardd', 'SpringBoard', 'Setup', 'Preferences',
                          'runningboardd', 'cfprefsd', 'iconservicesagent',
-                         'PosterBoard', 'launchd'}
+                         'PosterBoard', 'launchd', 'MobileSlideShow', 'Photos'}
                 report['process_count'] = len(processes)
                 report['focus'] = [p for p in processes if p['name'] in focus]
-                if index % 5 == 0 or report['panic']:
+                if not skip_threads and (index % 5 == 0 or report['panic']):
                     threads = []
                     for process in report['focus']:
                         try:
@@ -144,7 +147,7 @@ def observe(kernel, layout_path, output, interval, duration):
                     channel.close()
             (destination / 'state.json').write_text(json.dumps(report, indent=2) + '\n')
             print(json.dumps(report), flush=True)
-            if report.get('error') or report.get('panic'):
+            if once or report.get('error') or report.get('panic'):
                 break
             index += 1
             stop.wait(max(0, began + index * interval - time.monotonic()))
@@ -157,7 +160,10 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--interval', default=60, type=float)
     parser.add_argument('--duration', default=7200, type=float)
+    parser.add_argument('--once', action='store_true', help='Capture one sample and finish')
+    parser.add_argument('--skip-threads', action='store_true', help='Capture state without per-thread stacks')
     args = parser.parse_args()
     if args.interval < 30:
         parser.error('--interval must be at least 30 seconds')
-    observe(args.kernel.resolve(), args.layout.resolve(), args.output.resolve(), args.interval, args.duration)
+    observe(args.kernel.resolve(), args.layout.resolve(), args.output.resolve(), args.interval, args.duration,
+            args.once, args.skip_threads)
