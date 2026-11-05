@@ -75,7 +75,7 @@
     "kernel_build": "passed",
     "prelink": "passed",
     "firmware": "passed",
-    "hardware": "pending; active migration retained",
+    "hardware": "readback 1804800/2496000/2918400 kHz on marble",
     "image": {
       "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/commcenter-cpufreq-10hz/marble_temporary_boot.img",
       "kernel_sha256": "bb7faf243df89ba1ca24f05fbd64f0d57187df4151346119d9eb526d7afd8d8b",
@@ -97,6 +97,23 @@
     "evidence": "outputs/UniXNU_marble/ios18_arm64e/session-20261105/commcenter-policy-10hz/location-dependency/state.json",
     "policy": "Reuse the iPadOS 17 board launch exclusion for com.apple.locationd alongside com.apple.CommCenter",
     "image": "session-20261105/location-cycle-cpufreq/marble_temporary_boot.img",
-    "hardware": "in progress"
+    "hardware": {
+      "policy_status": 0,
+      "Data_checkpoint_xid": 1331,
+      "cpu_domain_khz": [
+        1804800,
+        2496000,
+        2918400
+      ],
+      "usb": "RootStage2",
+      "panic": "",
+      "processes": [
+        "com.apple.migrationpluginwrapper",
+        "com.apple.datamigrator",
+        "backboardd",
+        "SpringBoard"
+      ],
+      "desktop": "pending"
+    }
   }
 }

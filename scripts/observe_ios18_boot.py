@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Observe one RootStage session and save boot state at a bounded interval."""
+import argparse
+import fcntl
+import json
+from pathlib import Path
+import signal
+import struct
+import tempfile
+import threading
+import time
+
+from root_control import RootUsb
+from capture_ios18_resident import RetainedKernel, kernel_symbols, capture_processes, capture_init
+
+
+def observe(kernel, layout_path, output, interval, duration):
+    symbols = kernel_symbols(kernel)
+    layout = json.loads(layout_path.read_text())
+    stop = threading.Event()
+    for number in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(number, lambda *_: stop.set())
+    output.mkdir(parents=True, exist_ok=True)
+    # One observer owns the bulk command/reply stream. Finish the active
+    # transaction before honoring a stop signal so the next client can connect.
+    with open(Path(tempfile.gettempdir()) / 'marble-rootstage-observer.lock', 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        began = time.monotonic()
+        index = 0
+        while not stop.is_set() and time.monotonic() - began <= duration:
+            destination = output / f'sample-{index:03d}'
+            destination.mkdir(exist_ok=True)
+            report = {'monotonic': time.monotonic(), 'elapsed': time.monotonic() - began}
+            channel = None
+            try:
+                channel = RootUsb(timeout_ms=5000)
+                for key in ('version', 'phase', 'returns'):
+                    report[key] = channel.command('getvar:' + key)
+                if report['phase'] == 'firmware':
+                    memory = RetainedKernel(channel)
+                else:
+                    base, size = (int(v, 16) for v in channel.command('getvar:kernel-memory').split(':'))
+                    address = base + 0x4000 + symbols['_cpu_ttep'] - 0xfffffff006e04000
+                    channel.command(f'oem memory-read:{address:016x}:00000008')
+                    memory = object.__new__(RetainedKernel)
+                    memory.channel, memory.base, memory.size = channel, base, size
+                    memory.ttbr1 = int.from_bytes(channel.read_back(), 'little')
+                    memory.bits, memory.tcr, memory.tables = 39, 25 | (25 << 16), {}
+                report['panic'] = memory.read(symbols['_native_resident_panic_message'], 512).split(b'\0')[0].decode(errors='replace')
+                fields = (('_marble_display_transfers', 4), ('_marble_display_frames', 4),
+                          ('_marble_ufs_reads', 8), ('_marble_ufs_writes', 8),
+                          ('_marble_watchdog_checkins', 8), ('_marble_ui_exit_count', 4),
+                          ('_sheng_watchdog_policy_status', 4))
+                report['globals'] = {name: int.from_bytes(memory.read(symbols[name], size), 'little')
+                                     for name, size in fields if name in symbols}
+                if '__ZL15domainFrequency' in symbols:
+                    report['cpu_khz'] = struct.unpack('<3I', memory.read(symbols['__ZL15domainFrequency'], 12))
+                processes = capture_processes(memory, symbols, layout['proc'])
+                (destination / 'processes.json').write_text(json.dumps(processes, indent=2) + '\n')
+                focus = {'CommCenter', 'locationd', 'com.apple.datamigrator',
+                         'com.apple.migrationpluginwrapper', 'installcoordinationd',
+                         'backboardd', 'SpringBoard', 'Setup'}
+                report['process_count'] = len(processes)
+                report['focus'] = [p for p in processes if p['name'] in focus]
+                if index % 5 == 0 or report['panic']:
+                    threads = []
+                    for process in report['focus']:
+                        try:
+                            threads.append(capture_init(memory, symbols, layout, hex, destination,
+                                                        int(process['address'], 16), process['name'], 32))
+                        except (ValueError, IOError) as error:
+                            threads.append({'name': process['name'], 'error': str(error)})
+                    (destination / 'threads.json').write_text(json.dumps(threads, indent=2) + '\n')
+                    pointer = int.from_bytes(memory.read(symbols['_msgbufp'], 8), 'little')
+                    _, size, cursor, _, address = struct.unpack('<4IQ', memory.read(pointer, 24))
+                    data = memory.read(address, size)
+                    (destination / 'kernel.log').write_bytes((data[cursor:] + data[:cursor]).replace(b'\0', b''))
+                report['communication_end'] = channel.command('getvar:version')
+            except Exception as error:
+                report['error'] = f'{type(error).__name__}: {error}'
+            finally:
+                if channel is not None:
+                    channel.close()
+            (destination / 'state.json').write_text(json.dumps(report, indent=2) + '\n')
+            print(json.dumps(report), flush=True)
+            if report.get('error') or report.get('panic'):
+                break
+            index += 1
+            stop.wait(max(0, began + index * interval - time.monotonic()))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--kernel', required=True, type=Path)
+    parser.add_argument('--layout', required=True, type=Path)
+    parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--interval', default=60, type=float)
+    parser.add_argument('--duration', default=7200, type=float)
+    args = parser.parse_args()
+    if args.interval < 30:
+        parser.error('--interval must be at least 30 seconds')
+    observe(args.kernel.resolve(), args.layout.resolve(), args.output.resolve(), args.interval, args.duration)
