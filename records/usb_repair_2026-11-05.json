@@ -56,7 +56,8 @@
     "Register panic return before platform power initialization",
     "Keep original userspace watchdog monitoring with resident hardware reset disabled",
     "Store firmware return logs outside the kernel input mailbox",
-    "Send DATA response before copying firmware log into the shared transmit buffer"
+    "Send DATA response before copying firmware log into the shared transmit buffer",
+    "Pass formatted panic text to firmware return for screen and USB log output"
   ],
   "validation": {
     "current_source_kernel_build": "passed",
@@ -65,10 +66,14 @@
     "springboard": "pending",
     "panic_return_after_early_registration": "pending",
     "continuous_usb_acceptance": "failed on early and worker images",
-    "next_image": "usb-repair-preserve-v2/marble_temporary_boot.img",
+    "next_image": "usb-repair-return-text/marble_temporary_boot.img",
     "early_control_build": "passed",
     "early_control_hardware": "waiting for fastboot",
-    "firmware_log_upload_build": "passed"
+    "firmware_log_upload_build": "passed",
+    "panic_text_kernel_build": "passed",
+    "panic_text_prelink": "passed",
+    "panic_text_firmware_build": "passed",
+    "panic_text_hardware": "pending"
   },
   "sample_analysis": {
     "ios17_capture": "e92a564 NativeRootBlock.cpp checks rootLogMapping before capture",
@@ -76,6 +81,8 @@
     "introduced_call": "50d9a33 panic_trap_to_debugger invokes native_resident_panic_return, which invokes capture",
     "repair": "Static RuntimeLog storage exists before storage initialization",
     "hardware_result": "pending",
-    "build": "kernel and prelink passed"
+    "build": "kernel and prelink passed",
+    "apple_logo": "records/ios18_boot_progress_2026-11-05.png: Apple logo and progress bar; stackshot-compact-retry/after records 300-second run",
+    "ufs_restore_attempt": "Firmware queue restoration did not remove 33-second disconnect; change removed"
   }
 }

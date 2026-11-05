@@ -432,10 +432,10 @@ index bb21e23..406b697 100644
          print('PASS: actual kernel', filename)
 diff --git a/DarwinBootPkg/Driver/Resident.c b/DarwinBootPkg/Driver/Resident.c
 new file mode 100644
-index 0000000..78ae9ec
+index 0000000..529d1c1
 --- /dev/null
 +++ b/DarwinBootPkg/Driver/Resident.c
-@@ -0,0 +1,319 @@
+@@ -0,0 +1,321 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +#include <Uefi.h>
 +#include <Library/BaseLib.h>
@@ -706,7 +706,7 @@ index 0000000..78ae9ec
 +  *(UINT64 *)(UINTN)(Args+0x808)=Stage->ReturnStub;
 +  Print(L"Resident run=%p save=%p return=%p\r\n", (VOID *)(UINTN)&DarwinResidentRun,
 +      (VOID *)(UINTN)&DarwinResidentSave, (VOID *)(UINTN)&DarwinResidentReturn);
-+  DarwinResidentFaultInfo[1]=0;
++  ZeroMem(DarwinResidentFaultInfo,sizeof(DarwinResidentFaultInfo));
 +  mInterruptsSaved=FALSE;
 +  if (DarwinResidentSave()==0) {
 +    __asm__ volatile("msr daifset, #15" ::: "memory");
@@ -744,6 +744,8 @@ index 0000000..78ae9ec
 +  }
 +  if (Service) ((VOID (*)(VOID))(UINTN)Service->Resume)();
 +  DisarmVmWatchdog();
++  if (!DarwinResidentFaultInfo[1] && DarwinResidentFaultInfo[3])
++    DumpKernelString(L"panic",DarwinResidentFaultInfo[3],Base,Size,*(UINT64 *)(UINTN)(Args+8));
 +  if (DarwinResidentFaultInfo[1]) {
 +    Print(L"Resident fault ESR=%lx PC=%lx FAR=%lx\r\n",
 +        DarwinResidentFaultInfo[0],DarwinResidentFaultInfo[1],DarwinResidentFaultInfo[2]);
@@ -757,10 +759,10 @@ index 0000000..78ae9ec
 +}
 diff --git a/DarwinBootPkg/Driver/ResidentContext.S b/DarwinBootPkg/Driver/ResidentContext.S
 new file mode 100644
-index 0000000..8c4f835
+index 0000000..be95ff2
 --- /dev/null
 +++ b/DarwinBootPkg/Driver/ResidentContext.S
-@@ -0,0 +1,227 @@
+@@ -0,0 +1,228 @@
 +// SPDX-License-Identifier: BSD-2-Clause-Patent
 +#include <AsmMacroLib.h>
 +.text
@@ -849,6 +851,7 @@ index 0000000..8c4f835
 +  msr daifset, #15
 +  adrp x16, DarwinResidentFaultInfo
 +  add x16, x16, :lo12:DarwinResidentFaultInfo
++  str x0, [x16, #24]
 +  mrs x17, ttbr1_el1
 +  str x17, [x16, #112]
 +  mrs x17, tcr_el1

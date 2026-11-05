@@ -179,6 +179,8 @@ extern "C" void native_resident_return(void)
       "tlbi vmalle1\n"
       "dsb sy\n"
       "isb\n"
-      "br %2\n" :: "r"(tcr), "r"(table), "r"(return_stub) : "memory");
+      "mov x0, %3\n"
+      "br %2\n" :: "r"(tcr), "r"(table), "r"(return_stub),
+      "r"(native_resident_panic_message) : "x0", "memory");
   __builtin_unreachable();
 }
