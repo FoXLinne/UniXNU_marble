@@ -165,6 +165,8 @@ def capture_init(memory, symbols, layout, symbolicate, output, proc=None, label=
     if 'task_cache_slide' in thread_layout:
         result['cache_slide'] = hex(int.from_bytes(memory.read(task + thread_layout['task_cache_slide'], 4), 'little'))
         result['image_info'] = hex(read64(task + thread_layout['task_image_info']))
+    context_path = output / f'{label}-context.json'
+    context_path.write_text(json.dumps(result, indent=2) + '\n')
     seen = set()
     while thread and thread != head and thread not in seen and len(seen) < max_threads:
         seen.add(thread)
@@ -224,6 +226,7 @@ def capture_init(memory, symbols, layout, symbolicate, output, proc=None, label=
                     frames.append(symbolicate(lr))
             item['kernel_frames'] = frames
         result['threads'].append(item)
+        context_path.write_text(json.dumps(result, indent=2) + '\n')
         thread = pointer(field('task_threads'))
     return result
 

@@ -56,6 +56,22 @@ def observe(kernel, layout_path, output, interval, duration):
                           ('_sheng_watchdog_policy_status', 4), ('_marble_setup_policy_status', 4))
                 report['globals'] = {name: int.from_bytes(memory.read(symbols[name], size), 'little')
                                      for name, size in fields if name in symbols}
+                exit_count = report['globals'].get('_marble_ui_exit_count', 0)
+                if exit_count:
+                    exit_size = int.from_bytes(memory.read(symbols['_marble_ui_exit_bytes'], 4), 'little')
+                    exits = memory.read(symbols['_marble_ui_exits'], 16 * exit_size)
+                    report['ui_exits'] = []
+                    for sequence in range(max(0, exit_count - 16), exit_count):
+                        entry = exits[sequence % 16 * exit_size:(sequence % 16 + 1) * exit_size]
+                        pid, namespace, code = struct.unpack_from('<IIQ', entry)
+                        saved = entry[48:368]
+                        report['ui_exits'].append({
+                            'pid': pid, 'namespace': namespace, 'code': hex(code),
+                            'name': entry[16:48].split(b'\0')[0].decode(errors='replace'),
+                            'pc': hex(struct.unpack_from('<Q', saved, 264)[0]),
+                            'far': hex(struct.unpack_from('<Q', saved, 280)[0]),
+                            'esr': hex(struct.unpack_from('<Q', saved, 288)[0]),
+                            'description': entry[368:].split(b'\0')[0].decode(errors='replace')})
                 if '__ZL15domainFrequency' in symbols:
                     report['cpu_khz'] = struct.unpack('<3I', memory.read(symbols['__ZL15domainFrequency'], 12))
                 report['cpu_state'] = {name: struct.unpack('<8I', memory.read(symbols[name], 32))
@@ -65,7 +81,8 @@ def observe(kernel, layout_path, output, interval, duration):
                 (destination / 'processes.json').write_text(json.dumps(processes, indent=2) + '\n')
                 focus = {'CommCenter', 'locationd', 'com.apple.datamigrator',
                          'com.apple.migrationpluginwrapper', 'installcoordinationd',
-                         'backboardd', 'SpringBoard', 'Setup'}
+                         'backboardd', 'SpringBoard', 'Setup', 'Preferences',
+                         'runningboardd', 'cfprefsd'}
                 report['process_count'] = len(processes)
                 report['focus'] = [p for p in processes if p['name'] in focus]
                 if index % 5 == 0 or report['panic']:
