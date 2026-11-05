@@ -1,0 +1,110 @@
+{
+  "date": "2026-11-05",
+  "device": "marble / SM7475",
+  "os": "iOS 18.7.11 22H384",
+  "user_observations": [
+    "Missing Home Screen icons",
+    "Settings changes cause UI restarts",
+    "Exiting an app triggers SpringBoard restart",
+    "Dark appearance loses most icons",
+    "UI text and controls too small"
+  ],
+  "before": {
+    "backboardd_fault": {
+      "pc": "0x22c5ad100",
+      "unslid_pc": "0x20db51100",
+      "instruction": "dc zva, x3",
+      "far": "0x108400040",
+      "esr": "0x92000061",
+      "signal": "SIGBUS"
+    },
+    "earlier_fault": "vImage LDP Q4,Q5,[X5], ESR 0x92000021",
+    "SpringBoard_trap": "PaperBoardUI -[PBUIPosterViewController fetchWallpaperProminentColor:] +204",
+    "ui_exit_count": 7,
+    "evidence": "interaction-normal-dram/before-all-dram/sample-000"
+  },
+  "changes": {
+    "DRAM": "VM_WIMG_IO, RT, POSTED, POSTED_REORDERED and POSTED_COMBINED_REORDERED use Normal Non-Cacheable on BCM2837; peripheral MMIO retains its Device mapping",
+    "display_scale": {
+      "before": 2,
+      "candidate": 3,
+      "panel_pixels": [
+        1080,
+        2400
+      ],
+      "candidate_logical_points": [
+        360,
+        800
+      ]
+    },
+    "cache_refresh": "Back up MobileGestalt cache files once before launchd for scale 3"
+  },
+  "upstream_reference": {
+    "UniXNU": "13e5973748a8447cbb90520c9a2dd5e65e272435",
+    "UniXNU-sheng": "460179565a018c741b93e0b1efa07c55d4de497a",
+    "reviewed": [
+      "arm64e native PAC keys",
+      "4 KiB user ABI",
+      "non-Apple CPU tunables",
+      "MobileGestalt display-scale and artwork-scale-factor",
+      "iconservicesagent environment and icon transparency hardware reports"
+    ]
+  },
+  "build": {
+    "kernel": "passed",
+    "prelink": "passed",
+    "pack": "passed",
+    "fastboot_boot": "OKAY"
+  },
+  "hardware": {
+    "status": "60-second boot sample collected; awaiting screen scale and interaction feedback",
+    "cold_boot_required_reason": "Resident return succeeded; firmware ResetSystem raised synchronous exception at 0xfe89f208. Physical fastboot recovery used.",
+    "elapsed": 60.01814620906953,
+    "phase": "kernel",
+    "panic": "",
+    "ui_exits": 0,
+    "real_ncpus": 7,
+    "USB": "RootStage2"
+  },
+  "candidate": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-scale3-normal-dram/marble_temporary_boot.img",
+    "kernel_sha256": "bbed1044b4f674dafb5bdb4fe9182d2074bf941a995da86c57bc710fdbd02898",
+    "native_sha256": "d8fdcaede801b52ff2cd741385b1319746167669f8146c0053fe7315678c6178",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "enabled_cpu_affinities": [
+      0,
+      256,
+      512,
+      768,
+      1024,
+      1280,
+      1536
+    ],
+    "firmware_usb_affinity": 1792,
+    "display_scale": 3,
+    "logical_size": [
+      360,
+      800
+    ],
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=60 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1"
+  },
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-scale3-normal-dram",
+  "system_app_installation": {
+    "OS_staged_directory": "/private/var/staged_system_apps",
+    "bundles_in_source": 40,
+    "source_examples": [
+      "Calculator.app",
+      "MobileSafari.app",
+      "AppStore.app",
+      "Camera.app",
+      "Photos.app"
+    ],
+    "current_source_integration": "MarbleSystemOS mounts Data over the OS staging directory; upstream staged-app copy hook absent",
+    "upstream_solution": "UniXNU patches/xnu-12377/zzy-staged-system-apps.patch: copy covered OS staging into persistent Data before launchd, mobile ownership, per-file fsync, install by SystemAppMigrator",
+    "status": "source confirmed; integration follows scale acceptance"
+  }
+}

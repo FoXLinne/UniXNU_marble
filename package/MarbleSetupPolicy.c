@@ -74,8 +74,34 @@ static int writePreference(proc_t process, user_addr_t scratch, const char *name
     return move(process, scratch, temporary, path);
 }
 
+static int refreshDisplayCache(proc_t process, user_addr_t scratch)
+{
+    unsigned scale = 0;
+    if (!PE_parse_boot_argn("marble-display-scale", &scale, sizeof(scale)) || scale != 3) return 0;
+    static const char *paths[] = {
+        "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist",
+        "/private/var/mobile/Library/Preferences/com.apple.MobileGestalt.plist",
+        "/private/var/mobile/Library/Preferences/com.apple.mobilegestalt.plist"
+    };
+    for (unsigned i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
+        char backup[256];
+        snprintf(backup, sizeof(backup), "%s.marble-before-scale3", paths[i]);
+        int error = exists(backup);
+        if (!error) continue;
+        if (error != ENOENT) return error;
+        error = exists(paths[i]);
+        if (error == ENOENT) continue;
+        if (!error) error = move(process, scratch, paths[i], backup);
+        printf("MarbleDisplay: scale=%u cache=%s status=%d\n", scale, paths[i], error);
+        if (error) return error;
+    }
+    return 0;
+}
+
 int native_marble_setup_policy(proc_t process, user_addr_t scratch)
 {
+    int display_error = refreshDisplayCache(process, scratch);
+    if (display_error) return display_error;
     unsigned enabled = 0;
     if (!PE_parse_boot_argn("marble-skip-setup", &enabled, sizeof(enabled)) || enabled != 1) return 0;
     const char *marker = "/private/var/db/marble-setup-complete";

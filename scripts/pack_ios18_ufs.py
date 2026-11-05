@@ -24,6 +24,8 @@ def main():
                         help='Embed the kernel and retain the RootStage USB service')
     parser.add_argument('--vsync', type=int, default=60,
                         help='Display refresh during software-rendered startup')
+    parser.add_argument('--display-scale', type=int, choices=(2, 3), default=3,
+                        help='Pixels per UI point on the 1080x2400 panel')
     parser.add_argument('--cpu-regs', default='0,0x100,0x200,0x300,0x400,0x500,0x600',
                         help='XNU CPU affinities; affinity 0x700 owns the resident USB service')
     parser.add_argument('--disabled-jobs', default='com.apple.CommCenter,com.apple.locationd',
@@ -62,7 +64,7 @@ def main():
                  'offline-key-events=1 sheng-aks=1 '
                  'rootstage-runtime-usb=3 marble-ufs=1')
     cpu_args = f'cpus={len(cpu_regs)} sheng-smp={int(len(cpu_regs) > 1)} armcpu-self-ipi=1'
-    boot_args += ' ' + cpu_args
+    boot_args += ' ' + cpu_args + f' marble-display-scale={args.display_scale}'
     if args.disabled_jobs:
         boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
     if args.skip_setup:
@@ -106,6 +108,10 @@ def main():
     if not any(node[0].get('name') == b'psci\0' for node in tree[1]):
         tree[1].append(({'name': b'psci\0', 'compatible': b'arm,psci-1.0\0', 'method': b'smc\0'}, []))
     chosen = next(node for node in tree[1] if node[0].get('name') == b'chosen\0')
+    # Keep display geometry and artwork density in agreement on the phone panel.
+    chosen[0]['display-scale'] = struct.pack('<I', args.display_scale)
+    product = next(node for node in tree[1] if node[0].get('name') == b'product\0')
+    product[0]['artwork-scale-factor'] = struct.pack('<I', args.display_scale)
     chosen[0]['darwinboot-memory-size'] = struct.pack('<Q', 0x200000000)
     memory = next(node for node in chosen[1] if node[0].get('name') == b'memory-map\0')
     memory[0]['RootDisks'] = bytes(16)
@@ -133,7 +139,8 @@ def main():
             native_sha256=baseline['inputs']['native_sha256'],
             kernel_source='boot-image', system_source='ufs', exit_boot_services=False,
             resident_usb=True, runtime_usb_mode=3, enabled_cpu_affinities=cpu_regs,
-            firmware_usb_affinity=0x700, boot_args=boot_args), indent=2) + '\n')
+            firmware_usb_affinity=0x700, display_scale=args.display_scale,
+            logical_size=[1080 // args.display_scale, 2400 // args.display_scale], boot_args=boot_args), indent=2) + '\n')
     print(boot)
 
 
