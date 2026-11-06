@@ -2,6 +2,8 @@
 
 marble 的 UniXNU 适配代码。板级默认目标为 iOS 18.7.11（22H384）；iPadOS 17.7.11（21H461）提供 GPU 真机验收基线。
 
+GPU 修复范围、逐项状态与总验收条件见 [GPU_REPAIR_GOAL.md](GPU_REPAIR_GOAL.md)。
+
 | 目录或文件 | 内容 |
 | --- | --- |
 | package | RAM 块设备、驻留返回和 USB 加载器 |
