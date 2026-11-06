@@ -1,0 +1,234 @@
+{
+  "date": "2026-11-06",
+  "os": "iOS 18.7.11 22H384",
+  "device": "marble / SM7475 / Adreno 725",
+  "source_commits": {
+    "boot": "94ac38bc0c5f7ab58ccae9c3faa03fd4ee9e4b49",
+    "runtime": "46be13d60f7b6367a9b3485f8874faaeaa521f1d"
+  },
+  "image": {
+    "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/promax-wallpaper-cache/marble_temporary_boot.img",
+    "sha256": "3a03e8aa9900ebff007bc480ceff67bd5785c27cb00d012a04686d36148479a7",
+    "native_sha256": "3e72d23fb4ffe1170632d5f431d3ec1041d73afd85682733de88e0da6526d72d",
+    "kernel_sha256": "d6dce41e39116c28b6f3d1ec96e248f7e418a8165bc2feafe99b190449f63b77",
+    "gpu_addon_sha256": "2680d5ae481fe8534e114a7064becd536d1e19994604cca86b3b8854b25c3be7",
+    "boot_shim_sha256": "64d5950d6d0ee6120e3768b8e73204de44dbd10b7a0c16563d21312e2ba5526f"
+  },
+  "boot": {
+    "change": "Relocate the appended payload before the firmware when the firmware destination overlaps the payload input",
+    "instruction_execution": "Unicorn ARM64 execution of generated BootShim bytes with the selected firmware and packaged payload",
+    "small_payload_cases": {
+      "firmware_sha256": "5e2deb307c81a08bd064914791bd812fa4f244a31a4e2a2b4a5a411477297698",
+      "payload_bytes": 4112,
+      "cases": [
+        {
+          "version": "prior",
+          "source": "0xa7000000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": false
+        },
+        {
+          "version": "prior",
+          "source": "0xa7080000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": false
+        },
+        {
+          "version": "prior",
+          "source": "0xa7100000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "prior",
+          "source": "0xa7200000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "prior",
+          "source": "0xa7f00000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "prior",
+          "source": "0xa9000000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "candidate",
+          "source": "0xa7000000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "candidate",
+          "source": "0xa7080000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "candidate",
+          "source": "0xa7100000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "candidate",
+          "source": "0xa7200000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "candidate",
+          "source": "0xa7f00000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        },
+        {
+          "version": "candidate",
+          "source": "0xa9000000",
+          "entry": "0xa7100000",
+          "firmware": true,
+          "payload": true
+        }
+      ]
+    },
+    "packaged_payload": {
+      "image_sha256": "3a03e8aa9900ebff007bc480ceff67bd5785c27cb00d012a04686d36148479a7",
+      "raw_bytes": 129532968,
+      "payload_bytes": 126386872,
+      "expected_payload_sha256": "9629741df4f55f9d318852056a335d59d2c6cb2978b3e71b28f32bc86420b925",
+      "cases": [
+        {
+          "version": "prior",
+          "source": "0xa7000000",
+          "firmware": true,
+          "payload": false,
+          "payload_sha256": "cadc445186171a1b31b91d9324afa6ef0a2c1d5549bee4df31c8e160590836eb"
+        },
+        {
+          "version": "candidate",
+          "source": "0xa7000000",
+          "firmware": true,
+          "payload": true,
+          "payload_sha256": "9629741df4f55f9d318852056a335d59d2c6cb2978b3e71b28f32bc86420b925"
+        },
+        {
+          "version": "candidate",
+          "source": "0xa9000000",
+          "firmware": true,
+          "payload": true,
+          "payload_sha256": "9629741df4f55f9d318852056a335d59d2c6cb2978b3e71b28f32bc86420b925"
+        }
+      ]
+    },
+    "device_load_address": null
+  },
+  "surface_cache": {
+    "original_symbol": "_sys_dcache_flush",
+    "original_address": "0x20db53dd8",
+    "original_instructions": [
+      "dsb ish",
+      "ret"
+    ],
+    "implementation": "DC CIVAC over unique retained IOSurface ranges before command submission and after completion",
+    "cache_line_bytes": 64,
+    "kernel_requirement": "SCTLR_EL1_REQUIRED includes SCTLR_UCI_ENABLED",
+    "compiled_instruction_address": "0x3fe40",
+    "real_device_pixels": "pending",
+    "real_device_frame_times": "pending"
+  },
+  "wallpaper": {
+    "source": "/Volumes/CrystalUpdate22H384.N841OS/Library/Wallpaper",
+    "screen": "360w-800h@3x~iphone",
+    "product": "iPhone16,2",
+    "collections": [
+      "62879BFA-F700-4384-83E1-7AD1CC0D0817",
+      "56828A29-097E-40D6-9118-8C49C9FFE4A3",
+      "2939274C-F444-4AA8-806E-6E3FAFBA79B1",
+      "D4894D14-DB0F-4D04-AB02-07C39C5E5466"
+    ],
+    "native_variants": 2,
+    "converted_layers": 24,
+    "files": 103,
+    "resource_bytes": 35992329,
+    "default": {
+      "wallpaperIdentifier": 7565,
+      "collectionIdentifier": "62879BFA-F700-4384-83E1-7AD1CC0D0817"
+    }
+  },
+  "ui_identity": {
+    "product": "iPhone16,2",
+    "name": "iPhone 15 Pro Max",
+    "target_type": "D84",
+    "artwork_device_subtype": 2796,
+    "compatible_device_fallback": "iPhone15,3",
+    "generation": 1602
+  },
+  "build": {
+    "kernel": "passed",
+    "prelink": "passed",
+    "plugin": "passed",
+    "resources": "passed",
+    "packaging": "passed"
+  },
+  "hardware": {
+    "candidate_boot": "pending device connection",
+    "previous_candidate": "promax-ui startup failure",
+    "fastboot_devices": [],
+    "adb_devices": [],
+    "hub_get_status": "successful",
+    "hub_port_status": {
+      "0x02100000:2": "0x00000100",
+      "0x02110000:1": "0x00000100",
+      "0x02110000:2": "0x00000100",
+      "0x02110000:3": "0x00000103",
+      "0x02110000:4": "0x00000100"
+    },
+    "screen": null
+  },
+  "acceptance": {
+    "scope": "GPU_REPAIR_GOAL.md",
+    "target_scene_pass_percent": 99,
+    "status": "pending real-device startup, rendering, stability and frame-time measurements"
+  },
+  "upstream": {
+    "observed_at": "2026-11-06T10:34:08.588150+00:00",
+    "repositories": {
+      "UniXNU": {
+        "returncode": 0,
+        "remote_head": "e2fdae4312d0acc3d8a52bc457101e7918095e6a\tHEAD",
+        "source_head": "e2fdae4312d0acc3d8a52bc457101e7918095e6a"
+      },
+      "Adreno740": {
+        "returncode": 0,
+        "remote_head": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d\tHEAD",
+        "source_head": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d"
+      },
+      "AdrenoMetal": {
+        "returncode": 0,
+        "remote_head": "e82788dd367753802ec2e00476ab27addfb46834\tHEAD",
+        "source_head": "e82788dd367753802ec2e00476ab27addfb46834"
+      },
+      "ArmSmmu4K": {
+        "returncode": 0,
+        "remote_head": "83969cd874503e65997ff7639f7dcf3d0a92cd17\tHEAD",
+        "source_head": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+      }
+    }
+  }
+}
