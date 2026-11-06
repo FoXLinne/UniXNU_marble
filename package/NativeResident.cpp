@@ -9,6 +9,8 @@
 #include <IOKit/IOMemoryDescriptor.h>
 #include <libkern/c++/OSData.h>
 #include <Protocol/RootStage.h>
+#include <kern/clock.h>
+#include "MarbleUsbHealth.h"
 
 extern "C" void native_resident_configure(uint64_t);
 extern "C" void native_resident_return(void);
@@ -46,7 +48,28 @@ extern "C" void native_resident_record_panic(const char *message)
 
 static uint64_t return_stub;
 static volatile uint32_t *usb_interrupt;
+static MarbleUsbHealth usbHealth;
+extern "C" {
+volatile uint32_t marble_usb_heartbeat, marble_usb_stalls;
+void native_marble_usb_health_check(void);
+}
 static IOMemoryMap *earlyResidentMapping;
+
+extern "C" void native_marble_usb_health_check(void)
+{
+  if (!usb_interrupt) return;
+  __asm__ volatile("dmb oshld" ::: "memory");
+  uint32_t heartbeat=usb_interrupt[1];
+  marble_usb_heartbeat=heartbeat;
+  uint64_t ns=0;
+  absolutetime_to_nanoseconds(mach_absolute_time(),&ns);
+  if (marble_usb_health_tick(&usbHealth,heartbeat,ns/1000000000ULL)) {
+    ++marble_usb_stalls;
+    IOLog("MarbleUSB: resident heartbeat stalled value=%x; requesting bootloader\n",heartbeat);
+    native_marble_reboot_bootloader();
+    usbHealth.changed=ns/1000000000ULL;
+  }
+}
 
 extern "C" bool native_resident_prepare(void)
 {

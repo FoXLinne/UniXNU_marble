@@ -52,6 +52,7 @@ def observe(kernel, layout_path, output, interval, duration, once=False, skip_th
                 fields = (('_marble_display_transfers', 4), ('_marble_display_frames', 4),
                           ('_marble_ufs_reads', 8), ('_marble_ufs_writes', 8),
                           ('_marble_watchdog_checkins', 8), ('_marble_ui_exit_count', 4),
+                          ('_marble_usb_heartbeat', 4), ('_marble_usb_stalls', 4),
                           ('_real_ncpus', 4), ('_armcpu_registered', 4),
                           ('_armcpu_smp_requested', 4), ('_armcpu_smp_running', 4),
                           ('_armcpu_ipi_sent', 8), ('_armcpu_ipi_interrupts', 8),

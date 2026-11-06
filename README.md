@@ -48,6 +48,8 @@ GPU 真机交互使用 `scripts/root_ui.py`，命令包含 `tap`、`swipe`、`lo
 
 CPU 归属定义位于 `package/MarblePkg/MarbleCpuOwnership.h`。驻留 USB 服务使用 MPIDR `0x100` 效率核心，XNU 使用 `0x000`、`0x200` 至 `0x700`，覆盖 2.9184 GHz 核心。`getvar:usb-affinity` 读取 USB 命令处理核心的 MPIDR；打包清单记录双方归属。
 
+驻留 USB 在 `ReturnTest` 高字发布带标记的秒级心跳，低字传递输入和复位请求。内核 watchdog 工作线程检测心跳变化，停滞 30 秒时请求 bootloader 复位。`reboot-bootloader` 在 USB 应答传输完成后发布复位请求。观测记录包含 `_marble_usb_heartbeat` 与 `_marble_usb_stalls`；主机测试入口为 `test_root_usb_watchdog.py` 和 `test_root_usb_reboot.py`。
+
 `scripts/observe_ios18_boot.py --once --skip-threads` 保存进程列表、异常退出、GPU 状态与内核日志。`scripts/capture_ios18_gpu_trace.py --swipes 6` 记录滑动窗口、提交到退役时序与交换间隔，输出 `events.json` 和 `summary.json`。交换退役时序与面板刷新时序分别记录。
 
 iOS 18 用户态构建携带 arm64e `MarblePhoneUI.dylib` 和配套 owner trust cache。`build_ios18_gpu.py ui` 为用户态产物构建屏幕适配器。Metal 的 2D 纹理能力查询填充 22H384 的内嵌 `limits` 表，供 Tungsten 与 PhotosUICore 读取。

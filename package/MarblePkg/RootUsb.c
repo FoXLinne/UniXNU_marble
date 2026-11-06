@@ -13,6 +13,7 @@
 #include "../MarblePac.h"
 #include "GunyahWatchdog.h"
 #include "MarbleCpuOwnership.h"
+#include "../MarbleUsbHealth.h"
 
 BOOLEAN MarbleRootReadMemory(VOID *Destination, CONST VOID *Source, UINTN Bytes, UINT64 *Fault);
 BOOLEAN MarbleRootReadRegister(UINT32 *Destination, CONST VOID *Source, UINTN Reserved, UINT64 *Fault);
@@ -181,6 +182,14 @@ STATIC VOID ServiceWatchdog(VOID)
   if (Counter-mWatchdogLastPet<mWatchdogFrequency) return;
   mWatchdogPetStatus=MarbleWatchdogCall(0x86000007,0,0,NULL);
   mWatchdogLastPet=Counter;
+  if (mStage && mKernelRunning) {
+    volatile UINT32 *Heartbeat=(volatile UINT32 *)&mStage->ReturnTest+1;
+    UINT32 Previous=*Heartbeat;
+    if (Previous&1) {
+      *Heartbeat=MARBLE_USB_HEARTBEAT_TAG|((Previous+2)&0x7ffffffeU);
+      __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)Heartbeat) : "memory");
+    }
+  }
 }
 
 STATIC VOID RetainUsbWatchdog(VOID)
@@ -293,13 +302,13 @@ STATIC INTN Transfer(UINT8 Endpoint, VOID *Buffer, UINTN Bytes)
   return WaitTransfer(Endpoint);
 }
 
-STATIC VOID Reply(CONST CHAR8 *Code, CONST CHAR8 *Text)
+STATIC BOOLEAN Reply(CONST CHAR8 *Code, CONST CHAR8 *Text)
 {
   UINTN Prefix = AsciiStrLen(Code), Length = AsciiStrLen(Text);
   CopyMem(mTx,Code,Prefix);
   CopyMem(mTx+Prefix,Text,Length);
   UINTN Size = Prefix+Length;
-  Transfer(EP_IN, mTx, Size);
+  return Transfer(EP_IN, mTx, Size)==(INTN)Size;
 }
 
 STATIC VOID Hex(CHAR8 *Text, UINT64 Value, UINTN Digits)
@@ -577,7 +586,7 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     }
     else if (!AsciiStrCmp(Command,"getvar:kernel-ready")) {
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
-      Reply("OKAY",mKernelRunning && (mStage->ReturnTest==2 || (mStage->ReturnTest>>32)==1) ? "ready" : "pending");
+      Reply("OKAY",mKernelRunning && (mStage->ReturnTest==2 || ((mStage->ReturnTest>>32)&1)) ? "ready" : "pending");
     }
     else if (!AsciiStrCmp(Command,"getvar:control")) {
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
@@ -597,9 +606,9 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     }
     else if (!AsciiStrCmp(Command,"reboot-bootloader")) {
       if (!mKernelRunning) { Reply("FAIL","bootloader reset requires the kernel reboot service"); continue; }
+      if (!Reply("OKAY","bootloader reset requested")) continue;
       *(volatile UINT32 *)&mStage->ReturnTest=2;
       __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
-      Reply("OKAY","bootloader reset requested");
     }
     else if (!AsciiStrCmp(Command,"oem interrupt")) {
       if (!mKernelRunning) { Reply("OKAY","firmware"); continue; }
