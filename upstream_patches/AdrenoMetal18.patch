@@ -81,7 +81,7 @@ index 415e9c8..38ba378 100644
          }
          gpu->mark(0x6802);
 diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
-index b56848c..5bbe5e1 100644
+index b56848c..65b14d0 100644
 --- a/NativeBridgeMetalFrontend.mm
 +++ b/NativeBridgeMetalFrontend.mm
 @@ -911,6 +911,7 @@ - (void)replacePvrtcRegion:(MTLRegion)r mipmapLevel:(NSUInteger)level slice:(NSU
@@ -138,7 +138,29 @@ index b56848c..5bbe5e1 100644
   return (id<MTLTexture>)view;
  }
  - (id<MTLTexture>)newTextureViewWithPixelFormat:(MTLPixelFormat)format {
-@@ -4062,9 +4062,31 @@ - (BOOL)supportsFeatureSet:(MTLFeatureSet)set {
+@@ -1269,7 +1269,21 @@ static uint64_t flushSurfaces(NSMutableSet *surfaces) {
+  uint64_t flushed=0;
+  for(auto it=ranges.begin();it!=last;++it) {
+   const uint64_t began=nowUs();
++#if defined(__aarch64__) && defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180000 && __IPHONE_OS_VERSION_MIN_REQUIRED < 190000
++  // SM7475 cores use 64-byte data cache lines. XNU enables SCTLR_EL1.UCI,
++  // allowing EL0 CIVAC. The 22H384 libSystem flush is only DSB ISH.
++  // Before submission, publish CPU pixels and remove their cached aliases.
++  // After the GPU fence, remove clean speculative reads before CPU callbacks.
++  // The command retains these IOSurface allocations through both phases.
++  constexpr uintptr_t line=64;
++  const uintptr_t first=it->first&~(line-1),end=it->first+it->second;
++  __asm__ volatile("dsb sy":::"memory");
++  for(uintptr_t address=first;address<end;address+=line)
++   __asm__ volatile("dc civac, %0"::"r"(address):"memory");
++  __asm__ volatile("dsb sy":::"memory");
++#else
+   sys_dcache_flush(reinterpret_cast<void *>(it->first),it->second);
++#endif
+   gSurfaceFlushBytes+=it->second;gTimeSurfaceFlush.add(began);flushed+=it->second;
+  }
+  return flushed;
+@@ -4062,9 +4076,31 @@ - (BOOL)supportsFeatureSet:(MTLFeatureSet)set {
  }
  // The original discovery (_MTLAddDevice) runs these four on every device it registers. The target's own versions fill the base class's limits
  // and feature tables from a hardware profile (`featureProfile`, `indirectArgumentBufferCapabilities`, a table of Apple GPUs) that this device
@@ -173,7 +195,7 @@ index b56848c..5bbe5e1 100644
  - (void)initFeatureQueries {}
  - (void)initGPUFamilySupport {}
  - (void)initWorkarounds {}
-@@ -4216,7 +4238,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -4216,7 +4252,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
   NBTexture *texture=planes>=2?textureOnSurface(buffer,d,surface,plane,start-(uintptr_t)base,row):textureOnBuffer(buffer,d,start-(uintptr_t)base,row,true);
   if(!texture){refuseSurface(5,surface,d,plane,start-(uintptr_t)base,row);return nil;}
   if(gLogTextures)logTexture("iosurface",d,surface,plane,base,start-(uintptr_t)base,row,texture!=nil);
@@ -182,7 +204,7 @@ index b56848c..5bbe5e1 100644
  }
  - (id<MTLLibrary>)newLibraryWithData:(dispatch_data_t)data error:(NSError **)error {
   const void *bytes=nullptr;size_t size=0;dispatch_data_t mapped=dispatch_data_create_map(data,&bytes,&size);
-@@ -4227,7 +4249,14 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -4227,7 +4263,14 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
   if(error)*error=nil;return (id<MTLLibrary>)library;
  }
  - (id<MTLLibrary>)newLibraryWithFile:(NSString *)path error:(NSError **)error {
@@ -198,7 +220,7 @@ index b56848c..5bbe5e1 100644
   const uint64_t libraryBegan=nowUs();
   NmbLibrary *handle=nmb_library_new(gDevice,bytes.bytes,bytes.length,false);gTimeLibrary.add(libraryBegan);
   if(!handle)return failWith<id<MTLLibrary>>(error,@"library",nil);
-@@ -4597,6 +4626,7 @@ static void installAnswers(Class cls) {
+@@ -4597,6 +4640,7 @@ static void installAnswers(Class cls) {
    for(const auto &c:conformances){Class k=objc_getClass(c[0]);Protocol *pr=objc_getProtocol(c[1]);if(k&&pr)class_addProtocol(k,pr);}}
   objc_registerClassPair(cls);
   gDeviceObject=[cls new];

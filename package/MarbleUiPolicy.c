@@ -15,6 +15,8 @@ static bool phone_ui_executable(const char *path)
            !strcmp(path, "/Applications/Preferences.app/Preferences") ||
            !strcmp(path, "/System/Library/CoreServices/SpringBoard.app/SpringBoard") ||
            !strcmp(path, "/Applications/PosterBoard.app/PosterBoard") ||
+           !strcmp(path, "/Applications/Photos.app/Photos") ||
+           !strcmp(path, "/private/var/staged_system_apps/Photos.app/Photos") ||
            !strcmp(path, "/Applications/MobileSlideShow.app/MobileSlideShow");
 }
 

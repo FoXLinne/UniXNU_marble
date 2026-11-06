@@ -78,6 +78,8 @@ static int refreshDisplayCache(proc_t process, user_addr_t scratch)
 {
     unsigned scale = 0;
     if (!PE_parse_boot_argn("marble-display-scale", &scale, sizeof(scale)) || scale != 3) return 0;
+    unsigned identity = 0;
+    PE_parse_boot_argn("marble-ui-identity", &identity, sizeof(identity));
     static const char *paths[] = {
         "/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist",
         "/private/var/mobile/Library/Preferences/com.apple.MobileGestalt.plist",
@@ -85,7 +87,7 @@ static int refreshDisplayCache(proc_t process, user_addr_t scratch)
     };
     for (unsigned i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
         char backup[256];
-        snprintf(backup, sizeof(backup), "%s.marble-before-scale3", paths[i]);
+        snprintf(backup, sizeof(backup), "%s.marble-before-ui-%u-scale%u", paths[i], identity, scale);
         int error = exists(backup);
         if (!error) continue;
         if (error != ENOENT) return error;

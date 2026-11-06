@@ -1,0 +1,25 @@
+diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
+--- a/NativeBridgeMetalFrontend.mm
++++ b/NativeBridgeMetalFrontend.mm
+@@ -1269,7 +1269,21 @@ static uint64_t flushSurfaces(NSMutableSet *surfaces) {
+  uint64_t flushed=0;
+  for(auto it=ranges.begin();it!=last;++it) {
+   const uint64_t began=nowUs();
++#if defined(__aarch64__) && defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180000 && __IPHONE_OS_VERSION_MIN_REQUIRED < 190000
++  // SM7475 cores use 64-byte data cache lines. XNU enables SCTLR_EL1.UCI,
++  // allowing EL0 CIVAC. The 22H384 libSystem flush is only DSB ISH.
++  // Before submission, publish CPU pixels and remove their cached aliases.
++  // After the GPU fence, remove clean speculative reads before CPU callbacks.
++  // The command retains these IOSurface allocations through both phases.
++  constexpr uintptr_t line=64;
++  const uintptr_t first=it->first&~(line-1),end=it->first+it->second;
++  __asm__ volatile("dsb sy":::"memory");
++  for(uintptr_t address=first;address<end;address+=line)
++   __asm__ volatile("dc civac, %0"::"r"(address):"memory");
++  __asm__ volatile("dsb sy":::"memory");
++#else
+   sys_dcache_flush(reinterpret_cast<void *>(it->first),it->second);
++#endif
+   gSurfaceFlushBytes+=it->second;gTimeSurfaceFlush.add(began);flushed+=it->second;
+  }
+  return flushed;

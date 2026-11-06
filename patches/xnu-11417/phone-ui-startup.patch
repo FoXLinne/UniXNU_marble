@@ -1,0 +1,51 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -5837,6 +5837,8 @@
+  *		to arrays of user space pointers.
+  */
++extern const char *native_marble_ui_environment(vnode_t) __attribute__((weak_import));
++
+ __attribute__((noinline))
+ static int
+ exec_extract_strings(struct image_params *imgp)
+ {
+@@ -5980,6 +5982,18 @@
+ 	/* Note where the args ends and env begins. */
+ 	imgp->ip_endargv = imgp->ip_strendp;
+ 	imgp->ip_envc = 0;
++
++	/* Board-signed UIKit layout adapter for the phone SpringBoard. */
++	if (native_marble_ui_environment) {
++		const char *layout_env = native_marble_ui_environment(imgp->ip_vp);
++		if (layout_env) {
++			error = exec_add_user_string(imgp, CAST_USER_ADDR_T(layout_env), UIO_SYSSPACE, TRUE);
++			if (error) goto bad;
++			if (imgp->ip_argspace < new_ptr_size) {error = E2BIG; goto bad;}
++			imgp->ip_argspace -= new_ptr_size;
++			imgp->ip_envc++;
++		}
++	}
+ 
+ 	/* Now, get the environment */
+ 	while (envv != 0LL) {
+--- a/security/mac_base.c
++++ b/security/mac_base.c
+@@ -1560,6 +1560,8 @@
+  *                !0                      Not success
+  *
+  */
++extern int native_marble_ui_dyld_policy(proc_t, int, user_addr_t, int) __attribute__((weak_import));
++
+ int
+ __mac_syscall(proc_t p, struct __mac_syscall_args *uap, int *retv __unused)
+ {
+@@ -1614,6 +1616,9 @@
+ 	}
+ 
+ done:
++	if (native_marble_ui_dyld_policy && strcmp(target, "AMFI") == 0) {
++		error = native_marble_ui_dyld_policy(p, uap->call, uap->arg, error);
++	}
+ 	return error;
+ }
+ 

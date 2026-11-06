@@ -9,9 +9,10 @@ import shutil
 import struct
 import subprocess
 import sys
+import tomllib
 import zlib
 
-from build_ios18_arm64e import DEVICE, ADSP_FIRMWARE, read_adt, write_adt, validate_prelink
+from build_ios18_arm64e import DEVICE, ADSP_FIRMWARE, PROFILE as OS_PROFILE, read_adt, write_adt, validate_prelink
 from build_pac_uefi import build_applications, pack_boot_image
 
 USB_AFFINITY = int(re.search(r'^#define MARBLE_USB_AFFINITY (0x[0-9a-fA-F]+)$',
@@ -53,6 +54,7 @@ def main():
     parser.add_argument('--kernel-arg', action='append', default=[], help='Additional NAME=VALUE runtime setting')
     parser.add_argument('--skip-setup', action='store_true', help='Persist Setup completion before launchd starts')
     args = parser.parse_args()
+    identity = tomllib.loads(OS_PROFILE.read_text())['ui_identity']
     cpu_regs = [int(value, 0) for value in args.cpu_regs.split(',')]
     if not cpu_regs or cpu_regs[0] != 0 or len(set(cpu_regs)) != len(cpu_regs) or any(
             value not in XNU_AFFINITIES for value in cpu_regs):
@@ -96,6 +98,7 @@ def main():
         boot_args += ' ' + value
     cpu_args = f'cpus={len(cpu_regs)} sheng-smp={int(len(cpu_regs) > 1)} armcpu-self-ipi=1'
     boot_args += ' ' + cpu_args + f' marble-display-scale={args.display_scale}'
+    boot_args += f' marble-ui-identity={identity["generation"]}'
     if args.disabled_jobs:
         boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
     if args.skip_setup:
@@ -162,6 +165,13 @@ def main():
     chosen[0]['display-scale'] = struct.pack('<I', args.display_scale)
     product = next(node for node in tree[1] if node[0].get('name') == b'product\0')
     product[0]['artwork-scale-factor'] = struct.pack('<I', args.display_scale)
+    tree[0]['model'] = identity['product'].encode() + b'\0'
+    tree[0]['target-type'] = identity['target_type'].encode() + b'\0'
+    for key in ('product-name', 'product-description'):
+        product[0][key] = identity['name'].encode() + b'\0'
+    product[0]['model'] = identity['product'].encode() + b'\0'
+    product[0]['artwork-device-subtype'] = struct.pack('<I', identity['artwork_device_subtype'])
+    product[0]['compatible-device-fallback'] = identity['compatible_device_fallback'].encode() + b'\0'
     chosen[0]['darwinboot-memory-size'] = struct.pack('<Q', 0x200000000)
     memory = next(node for node in chosen[1] if node[0].get('name') == b'memory-map\0')
     memory[0]['RootDisks'] = bytes(16)
@@ -192,7 +202,7 @@ def main():
             native_sha256=baseline['inputs']['native_sha256'],
             kernel_source='boot-image', system_source='ufs', exit_boot_services=False,
             resident_usb=True, runtime_usb_mode=3, enabled_cpu_affinities=cpu_regs,
-            firmware_usb_affinity=USB_AFFINITY, display_scale=args.display_scale,
+            firmware_usb_affinity=USB_AFFINITY, display_scale=args.display_scale, ui_identity=identity,
             data_logical_bytes=metadata['logical_bytes'], data_uuid=metadata['volume_uuid'],
             storage_profile_sha256=hashlib.sha256(args.storage_profile.read_bytes()).hexdigest(),
             logical_size=[1080 // args.display_scale, 2400 // args.display_scale], boot_args=boot_args,

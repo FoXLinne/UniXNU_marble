@@ -310,5 +310,14 @@ int native_marble_metal_prepare(proc_t process, user_addr_t scratch)
     printf("MarbleMetal: addon files=%d written=%d reused=%d failed=%d mount=%d/%d\n",
         native_gpu_addon_files, native_gpu_addon_written, native_gpu_addon_same,
         native_gpu_addon_failed, native_gpu_addon_stage, native_gpu_addon_status);
-    return native_gpu_addon_status;
+    if (native_gpu_addon_status) return native_gpu_addon_status;
+    static const char wallpaper_source[] = "/private/var/ngpu/wallpaper";
+    static const char wallpaper_target[] = "/Library/Wallpaper";
+    native_gpu_addon_mount(process, scratch, 0x400, wallpaper_source, sizeof(wallpaper_source),
+        wallpaper_target, sizeof(wallpaper_target),
+        "/Library/Wallpaper/Collections/Stripe.wallpaperCollection/WallpaperCollection.plist",
+        "/Library/Wallpaper/Collections/iOS_17~iphone.wallpaperCollection/Wallpapers/7565.iOS_17-360w-800h@3x~iphone.wallpaper/Wallpaper.plist",
+        &native_gpu_addon2_stage, &native_gpu_addon2_status);
+    printf("MarbleMetal: wallpaper mount=%d/%d\n", native_gpu_addon2_stage, native_gpu_addon2_status);
+    return native_gpu_addon2_status;
 }

@@ -19,6 +19,8 @@ static IMP originalResourceValue;
 static IMP originalDisplayComposition;
 static IMP originalAddDisplay;
 static IMP originalAssertion;
+static IMP originalWallpaperColor;
+static Ivar wallpaperHomeController, wallpaperLockController;
 static bool queued, installed;
 static bool signature(Method method, char result, unsigned count, const char *arguments)
 {
@@ -60,6 +62,39 @@ static void installAssertionCapture(void)
         @selector(handleFailureInFunction:file:lineNumber:description:));
     if (signature(method, 'v', 4, "@@q@"))
         originalAssertion = method_setImplementation(method, (IMP)assertionFailure);
+}
+
+static void wallpaperProminentColor(id self, SEL selector, void (^completion)(id))
+{
+    id home = object_getIvar(self, wallpaperHomeController);
+    id lock = object_getIvar(self, wallpaperLockController);
+    if (home || lock) {
+        ((void (*)(id, SEL, id))originalWallpaperColor)(self, selector, completion);
+        return;
+    }
+    if (!completion) return;
+    id colorClass = (id)objc_lookUpClass("UIColor");
+    id color = ((id (*)(id, SEL))objc_msgSend)(colorClass, sel_registerName("blackColor"));
+    if (((BOOL (*)(id, SEL))objc_msgSend)(self, sel_registerName("isViewLoaded"))) {
+        id view = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("view"));
+        id background = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("backgroundColor"));
+        if (background) color = background;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{ completion(color); });
+}
+
+static void installWallpaperColor(void)
+{
+    if (originalWallpaperColor || strcmp(getprogname(), "SpringBoard")) return;
+    Class cls = objc_lookUpClass("PBUIPosterViewController");
+    Method method = class_getInstanceMethod(cls, sel_registerName("fetchWallpaperProminentColor:"));
+    Ivar home = class_getInstanceVariable(cls, "_homeViewController");
+    Ivar lock = class_getInstanceVariable(cls, "_lockViewController");
+    if (!home || !lock || !signature(method, 'v', 1, "@") ||
+        !signature(class_getInstanceMethod(cls, sel_registerName("isViewLoaded")), 'B', 0, "")) return;
+    wallpaperHomeController = home;
+    wallpaperLockController = lock;
+    originalWallpaperColor = method_setImplementation(method, (IMP)wallpaperProminentColor);
 }
 
 static IMP originalVisualProvider;
@@ -266,6 +301,7 @@ static void installPhotoRendering(void)
 static void install(void *context)
 {
     (void)context;
+    installWallpaperColor();
     installPhotoRendering();
     __atomic_store_n(&queued, false, __ATOMIC_RELEASE);
     installNativeScreen();
@@ -283,6 +319,7 @@ static void install(void *context)
 static void imageAdded(const struct mach_header *header, intptr_t slide)
 {
     (void)header; (void)slide;
+    installWallpaperColor();
     installPhotoRendering();
     bool expected = false;
     if (__atomic_compare_exchange_n(&queued, &expected, true, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
@@ -292,6 +329,7 @@ static void imageAdded(const struct mach_header *header, intptr_t slide)
 __attribute__((constructor)) static void initialize(void)
 {
     installAssertionCapture();
+    installWallpaperColor();
     installComposition();
     installPhotoRendering();
     if (!strcmp(getprogname(), "PosterBoard")) installFileProtection();

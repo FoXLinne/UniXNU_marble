@@ -11,6 +11,9 @@ import struct
 import subprocess
 import sys
 import tempfile
+import tomllib
+
+from prepare_ios18_wallpaper import prepare_wallpaper
 
 DEVICE = Path(__file__).resolve().parents[1]
 LLVM = Path('/opt/homebrew/opt/llvm/bin')
@@ -36,6 +39,9 @@ def phone_ui(root):
         if report['turnip_sha256'] != manifest.get('turnip_bundle_sha256', report['turnip_sha256']):
             raise RuntimeError('Phone UI bundle changed the signed Turnip library')
         shutil.copyfile(stage / 'phone-ui.gpuaddon', addon)
+    identity = tomllib.loads((DEVICE / 'profiles/ios-18.7.11-22H384.toml').read_text())['ui_identity']
+    wallpaper = prepare_wallpaper(addon, Path('/Volumes/CrystalUpdate22H384.N841OS'),
+                                  identity, gpu / 'wallpaper-assets')
     trust = manifest['cdhashes']
     trust['cdhash'], trust['phone_ui_cdhash'] = report['cdhashes'][1], report['cdhashes'][0]
     entries = sorted(bytes.fromhex(trust[key]) for key in
@@ -45,7 +51,8 @@ def phone_ui(root):
         entry + bytes([2, 0, 0, 0]) for entry in entries))
     manifest.update(addon_sha256=sha(addon), trust_cache_sha256=sha(owner),
                     turnip_bundle_sha256=report['turnip_sha256'],
-                    phone_ui_target=report['target'], phone_ui_source_sha256=sha(DEVICE / 'package/MarblePhoneUI.m'))
+                    phone_ui_target=report['target'], phone_ui_source_sha256=sha(DEVICE / 'package/MarblePhoneUI.m'),
+                    wallpaper=wallpaper)
     (gpu / 'userspace.json').write_text(json.dumps(manifest, indent=2) + '\n')
     print(addon)
 
@@ -80,6 +87,12 @@ def source_tree(root):
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if applied.returncode:
                 subprocess.run(command + [patch], check=True)
+    surface_patch = DEVICE / 'patches/AdrenoMetal/ios18-surface-cache.patch'
+    surface_tree = gpu / 'AdrenoMetal'
+    applied = subprocess.run(['git', '-C', surface_tree, 'apply', '--reverse', '--check', surface_patch],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if applied.returncode:
+        subprocess.run(['git', '-C', surface_tree, 'apply', surface_patch], check=True)
     links = {
         gpu / 'GopFramebuffer': root / 'GopFramebuffer',
         tree / 'drivers/Adreno740': gpu / 'Adreno740',
