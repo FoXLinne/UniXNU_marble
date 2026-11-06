@@ -65,8 +65,7 @@ extern "C" void native_marble_usb_health_check(void)
   absolutetime_to_nanoseconds(mach_absolute_time(),&ns);
   if (marble_usb_health_tick(&usbHealth,heartbeat,ns/1000000000ULL)) {
     ++marble_usb_stalls;
-    IOLog("MarbleUSB: resident heartbeat stalled value=%x; requesting bootloader\n",heartbeat);
-    native_marble_reboot_bootloader();
+    IOLog("MarbleUSB: resident heartbeat stalled value=%x\n",heartbeat);
     usbHealth.changed=ns/1000000000ULL;
   }
 }

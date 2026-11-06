@@ -1,0 +1,66 @@
+{
+  "date": "2026-11-06",
+  "device": "marble",
+  "os_build": "22H384",
+  "failure_observation": {
+    "command": "getvar:display-timing",
+    "result": "USB request timeout followed by missing device enumeration",
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/native-limits/panel-timing-boot.log",
+    "root_cause_status": "Battery depletion reported by the device owner; USB timeout is a transport observation",
+    "user_report": "Device powered off after battery depletion"
+  },
+  "repairs": [
+    "Require explicit marble-display-mmio=1 for diagnostic display register access",
+    "Return kIOReturnNotPermitted before worker creation under release defaults",
+    "Record USB heartbeat stalls as telemetry; bootloader reset follows the host reboot command"
+  ],
+  "hardware_qualification": "pending device enumeration",
+  "goal_acceptance": "in_progress",
+  "release_policy": {
+    "frame_trace": "disabled by default",
+    "diagnostic_display_mmio": "disabled by default",
+    "heartbeat_stall": "telemetry only",
+    "cpu_frequency_policy": "existing performance configuration; power measurement pending"
+  },
+  "build": "passed",
+  "prelink": "passed",
+  "packaging": "passed",
+  "artifact": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/release-defaults/marble_temporary_boot.img",
+    "kernel_sha256": "002ff6bd58f8768b20c465e08aa3f3e4aa4c4d0a531cc5a5bfd6044216f6ad45",
+    "native_sha256": "a997af4b177432a2a95e5d311e4e486fd1977a2f2378c94623a847205895d916",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "enabled_cpu_affinities": [
+      0,
+      512,
+      768,
+      1024,
+      1280,
+      1536,
+      1792
+    ],
+    "firmware_usb_affinity": 256,
+    "display_scale": 3,
+    "data_logical_bytes": 68719476736,
+    "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+    "storage_profile_sha256": "2f439c20ac2a30cd6f3b979ff2f590fb3c0e1b04b55b8edfb7806be238b08f56",
+    "logical_size": [
+      360,
+      800
+    ],
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-preempt=2 sheng-gpu-ttbr=2 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1",
+    "gpu_addon_sha256": "5f588c26154653cf48ac13efbea0b50f3bf0a01af4d3a9ad952061cb9e97b330",
+    "gpu_sources": {
+      "UniXNU": "e2fdae4312d0acc3d8a52bc457101e7918095e6a",
+      "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+      "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+      "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+    },
+    "owner_trust_cache_sha256": "3ee9f7d34491b2bb6277e12b40f974fee8f05d23ec4f615e6b2e5ed9c4bc2604"
+  },
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-06/hardware-20261106/release-defaults"
+}

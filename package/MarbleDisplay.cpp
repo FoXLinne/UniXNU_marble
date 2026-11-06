@@ -123,6 +123,12 @@ static void displayTimingWorker(void *, wait_result_t)
 
 void native_marble_display_timing_request(void)
 {
+    unsigned authorized = 0;
+    if (!PE_parse_boot_argn("marble-display-mmio", &authorized, sizeof(authorized)) || authorized != 1) {
+        marble_display_timing_error = kIOReturnNotPermitted;
+        __atomic_store_n(&marble_display_timing_state, 3U, __ATOMIC_RELEASE);
+        return;
+    }
     if (!marble_display_transfers) {
         marble_display_timing_error = kIOReturnNotReady;
         __atomic_store_n(&marble_display_timing_state, 3U, __ATOMIC_RELEASE);
