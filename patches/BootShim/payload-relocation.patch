@@ -1,0 +1,45 @@
+--- a/BootShim.S
++++ b/BootShim.S
+@@ -62,6 +62,34 @@
+   ldr   x5, =FD_BASE
+   ldr   x6,  =FD_SIZE
+   add   x8, x4, x6
++  mov   x9, x4
++  mov   x10, #0
++#ifdef PAYLOAD_BASE
++  /* Preserve appended input before the FD destination can cover it. */
++  ldr   w2, [x8]
++  movz  w3, #0x4E58
++  movk  w3, #0x5055, lsl #16
++  cmp   w2, w3
++  b.ne  _CopyFirmware
++  ldr   w12, [x8, #4]
++  add   x12, x12, #23
++  and   x12, x12, #~15
++  add   x7, x5, x6
++  cmp   x8, x7
++  b.hs  _CopyFirmware
++  add   x7, x8, x12
++  cmp   x7, x5
++  b.ls  _CopyFirmware
++  mov   x4, x8
++  movz  x5, #(PAYLOAD_BASE >> 16), lsl #16
++  mov   x6, x12
++  bl    _Move
++  mov   x10, #1
++_CopyFirmware:
++  mov   x4, x9
++  ldr   x5, =FD_BASE
++  ldr   x6, =FD_SIZE
++#endif
+   bl    _Move
+   mov   x4, x8
+ 
+@@ -69,6 +97,7 @@
+ #ifdef PAYLOAD_BASE
+   /* x4 now points just past the FD: an optional "XNUP" payload may follow */
++  cbnz  x10, _NoPayload
+   ldr   w2, [x4]
+   movz  w3, #0x4E58
+   movk  w3, #0x5055, lsl #16
+   cmp   w2, w3

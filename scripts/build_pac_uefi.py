@@ -48,8 +48,12 @@ def pack_boot_image(out, platform, payload, name):
     if fd.stat().st_size != spec['uefi_fd']['size']:
         raise RuntimeError('Firmware size differs from the marble board configuration')
     shim_object, shim = out / 'BootShim.elf', out / 'BootShim.bin'
+    shim_source = out / 'BootShim.S'
+    shutil.copyfile(firmware / 'BootShim/BootShim.S', shim_source)
+    subprocess.run(['patch', '--silent', shim_source,
+                    DEVICE / 'patches/BootShim/payload-relocation.patch'], check=True)
     subprocess.run([platform / 'bin/clang', '--target=aarch64-linux-gnu', '-c',
-                    firmware / 'BootShim/BootShim.S', '-o', shim_object,
+                    shim_source, '-o', shim_object,
                     '-DREQUIRES_KERNEL_HEADER=1', f'-DFD_BASE={spec["uefi_fd"]["base"]:#x}',
                     '-DSHIM_BASE=0xa7000000', f'-DFD_SIZE={fd.stat().st_size:#x}',
                     '-DPAYLOAD_BASE=0xa8000000'], check=True)
