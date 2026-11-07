@@ -1,0 +1,24 @@
+diff --git a/iokit/Kernel/IOPlatformExpert.cpp b/iokit/Kernel/IOPlatformExpert.cpp
+--- a/iokit/Kernel/IOPlatformExpert.cpp
++++ b/iokit/Kernel/IOPlatformExpert.cpp
+@@ -1393,6 +1393,11 @@
++extern "C" int native_marble_rtc_get(clock_sec_t *, clock_usec_t *);
++extern "C" int native_marble_rtc_set(clock_sec_t, clock_usec_t);
++
+ void
+ PEGetUTCTimeOfDay(clock_sec_t * secs, clock_usec_t * usecs)
+ {
++	if (native_marble_rtc_get(secs, usecs)) return;
++
+ 	clock_nsec_t    nsecs = 0;
+ 
+ 	*secs = 0;
+@@ -1407,6 +1413,8 @@
+ void
+ PESetUTCTimeOfDay(clock_sec_t secs, clock_usec_t usecs)
+ {
++	if (native_marble_rtc_set(secs, usecs)) return;
++
+ 	assert(usecs < USEC_PER_SEC);
+ 	if (gIOPlatform) {
+ 		gIOPlatform->setUTCTimeOfDay(secs, usecs * NSEC_PER_USEC);

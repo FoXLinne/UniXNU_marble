@@ -14,6 +14,8 @@
 #include "TransferPoll.h"
 #include "SmmuTakeover.h"
 #include "MarbleUfs.h"
+#include "MarbleRtc.h"
+extern "C" { uint8_t marble_rtc_header_before[4096]; }
 namespace {
 UfsRootDiagnostics gRootDiagnostic;
 bool gRootDiagnosticEnabled = true;
@@ -273,6 +275,8 @@ extern "C" bool marble_ufs_start(void) {
   }
   if (layout.windows!=3 || strcmp(layout.window[0].name,"OS") ||
       strcmp(layout.window[1].name,"SystemOS") || strcmp(layout.window[2].name,"KernelSeed")) return false;
+  // The bounded metadata-write slot covers the manifest sector for RTC calibration.
+  if (!hostLogOpen(layout.userdataFirst,1)) return false;
   readLock=IOLockAlloc(); readScratch=(uint8_t *)IOMalloc(kDataMax);
   return readLock && readScratch;
 }
@@ -314,3 +318,27 @@ extern "C" bool marble_ufs_store_write(uint64_t block, uint32_t count, const voi
     hostWrite4k(0,storeFirst+block,count,data,true)==kIOReturnSuccess;
 }
 extern "C" bool marble_ufs_store_sync(void) { return hostSyncCache()==kIOReturnSuccess; }
+
+extern "C" bool marble_ufs_rtc_store(int64_t offset) {
+  if (!gHost.ready || !readLock || layout.manifestStatus) return false;
+  IOLockLock(readLock);
+  bool result=false;
+  if (hostRead4k(0,layout.userdataFirst,1,readScratch)==kIOReturnSuccess &&
+      !memcmp(readScratch,"SHNGROOT",8) && le32(readScratch+8)==1 && le32(readScratch+12)==3) {
+    SHA256_CTX context; uint8_t digest[32];
+    SHA256_Init(&context); SHA256_Update(&context,readScratch,4064); SHA256_Final(digest,&context);
+    if (!memcmp(digest,readScratch+4064,32)) {
+      uint64_t calibration[3]={MARBLE_RTC_CAL_MAGIC,uint64_t(offset),~uint64_t(offset)};
+      if (!memcmp(readScratch+MARBLE_RTC_CAL_OFFSET,calibration,sizeof(calibration))) result=true;
+      else {
+        memcpy(marble_rtc_header_before,readScratch,4096);
+        memcpy(readScratch+MARBLE_RTC_CAL_OFFSET,calibration,sizeof(calibration));
+        SHA256_Init(&context); SHA256_Update(&context,readScratch,4064); SHA256_Final(readScratch+4064,&context);
+        result=hostWrite4k(0,layout.userdataFirst,1,readScratch,true)==kIOReturnSuccess &&
+               hostSyncCache()==kIOReturnSuccess;
+      }
+    }
+  }
+  IOLockUnlock(readLock);
+  return result;
+}

@@ -183,6 +183,8 @@ STATIC UINT64 RootCounter(VOID)
 
 STATIC VOID ServiceWatchdog(VOID)
 {
+  extern VOID MarbleRtcService(VOID);
+  MarbleRtcService();
   if (!mWatchdogService) return;
   UINT64 Counter=RootCounter();
   if (Counter-mWatchdogLastPet<mWatchdogFrequency) return;
@@ -593,6 +595,32 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       Reply("OKAY",Text);
     }
     else if (!AsciiStrCmp(Command,"getvar:phase")) Reply("OKAY",mKernelRunning ? "kernel" : "firmware");
+    else if (!AsciiStrCmp(Command,"getvar:rtc")) {
+      extern EFI_STATUS MarbleRtcRead(UINT64 *,UINT32 *);
+      UINT64 Seconds=0; UINT32 Nanoseconds=0;
+      EFI_STATUS RtcStatus=MarbleRtcRead(&Seconds,&Nanoseconds);
+      CHAR8 Text[34]; Hex(Text,Seconds,16); Text[16]=':';
+      Hex(Text+17,RtcStatus,16); Reply("OKAY",Text);
+    }
+    else if (!AsciiStrnCmp(Command,"oem rtc-set:",12) && AsciiStrLen(Command)==28) {
+      extern EFI_STATUS MarbleRtcSet(UINT64,UINT32);
+      EFI_STATUS RtcStatus=MarbleRtcSet(AsciiStrHexToUint64(Command+12),0);
+      Reply(EFI_ERROR(RtcStatus)?"FAIL":"OKAY",EFI_ERROR(RtcStatus)?"firmware clock update failed":"");
+    }
+    else if (!AsciiStrCmp(Command,"oem rtc-sample") ||
+             (!AsciiStrnCmp(Command,"oem rtc-sync:",13) && AsciiStrLen(Command)==29)) {
+      extern EFI_STATUS MarbleRtcRequest(UINT64);
+      if (!mKernelRunning) { Reply("FAIL","clock request requires the kernel"); continue; }
+      __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
+      if (*(volatile UINT32 *)&mStage->ReturnTest) { Reply("FAIL","control request pending"); continue; }
+      BOOLEAN Sync=AsciiStrLen(Command)==29;
+      if (Sync && EFI_ERROR(MarbleRtcRequest(AsciiStrHexToUint64(Command+13)))) {
+        Reply("FAIL","invalid clock request"); continue;
+      }
+      *(volatile UINT32 *)&mStage->ReturnTest=Sync ? 0x87000000U : 0x86000000U;
+      __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
+      Reply("OKAY","");
+    }
     else if (!AsciiStrCmp(Command,"getvar:usb-affinity")) {
       UINT64 Affinity;
       __asm__ volatile("mrs %0, mpidr_el1" : "=r"(Affinity));

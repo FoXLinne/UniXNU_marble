@@ -81,8 +81,10 @@ def prepare(out, upstream, stack, profile):
     apply_patch(work, DEVICE / profile['kernel']['gpu_patch'])
     ui_patch = DEVICE / profile['kernel']['ui_patch']
     apply_patch(work, ui_patch)
+    rtc_patch = DEVICE / 'patches/xnu-11417/native-rtc.patch'
+    apply_patch(work, rtc_patch)
     patch_list = out / 'xnu-patches.list'
-    patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n')
+    patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n' + str(rtc_patch) + '\n')
     env = dict(os.environ, UNIXNU_XNU_TAG='xnu-' + os_spec['xnu_version'],
                UNIXNU_XNU_COMMIT=os_spec['xnu_revision'], UNIXNU_XNU_DARWIN=os_spec['darwin'],
                UNIXNU_XNU_VERSION=os_spec['xnu_version'], UNIXNU_XNU_ARCH=os_spec['arch'],
@@ -254,7 +256,7 @@ def build_board(tree, env):
     objects = []
     with (out / 'compile.log').open('w') as log:
         sources = [DEVICE / 'package' / filename for filename in
-                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp',
+                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
                     'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'NativeResident.cpp',

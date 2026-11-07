@@ -10,4 +10,5 @@ bool marble_ufs_store_open(uint64_t);
 bool marble_ufs_store_read(uint64_t, uint32_t, void *);
 bool marble_ufs_store_write(uint64_t, uint32_t, const void *);
 bool marble_ufs_store_sync(void);
+bool marble_ufs_rtc_store(int64_t);
 }

@@ -9,6 +9,8 @@
 #include <Protocol/RootStage.h>
 
 STATIC ROOT_STAGE_TABLE *mStorage;
+VOID MarbleRtcPrepare(ROOT_STAGE_TABLE *Stage);
+VOID MarbleRtcLoadOffset(CONST VOID *Header);
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsbPoll(VOID);
 EFI_STATUS MarbleRootStorageReturn(ROOT_STAGE_TABLE *Stage);
@@ -107,6 +109,10 @@ EFI_STATUS MarbleRootStorage(VOID *TemporaryKernel, UINTN TemporaryKernelBytes) 
   {
     EFI_GUID Guid=ROOT_STAGE_GUID;
     Status=gBS->InstallConfigurationTable(&Guid,mStorage);
+    if (!EFI_ERROR(Status)) {
+      MarbleRtcLoadOffset(Header);
+      MarbleRtcPrepare(mStorage);
+    }
     Print(L"UniXNU UFS boot\r\n");
   }
 Done:

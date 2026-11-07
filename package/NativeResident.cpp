@@ -32,6 +32,9 @@ extern "C" void native_marble_display_timing_request(void);
 #endif
 extern "C" volatile uint32_t armcpu_smp_step[8], armcpu_smp_mpidr[8];
 extern "C" void native_resident_usb_control(volatile uint64_t *);
+extern "C" void native_marble_rtc_start(const ROOT_STAGE_TABLE *);
+extern "C" void native_marble_rtc_observe(void);
+extern "C" void native_marble_rtc_sync(void);
 extern "C" {
 char native_resident_panic_message[512] __attribute__((aligned(64), used));
 void native_resident_record_panic(const char *message);
@@ -87,6 +90,7 @@ extern "C" bool native_resident_prepare(void)
   if (!earlyResidentMapping) return false;
   const auto *table=reinterpret_cast<const ROOT_STAGE_TABLE *>(earlyResidentMapping->getVirtualAddress());
   return_stub=table->ReturnStub;
+  native_marble_rtc_start(table);
   native_resident_usb_control(const_cast<volatile uint64_t *>(&table->ReturnTest));
   return return_stub!=0;
 }
@@ -108,6 +112,8 @@ static void usbControlWorker(void *, wait_result_t)
         if (operation==2 || operation==3) native_hid_request_contact(x,y,operation==2);
       }
       if (operation==4) native_marble_display_snapshot();
+      if (operation==6) native_marble_rtc_observe();
+      if (operation==7) native_marble_rtc_sync();
 #ifdef MARBLE_IOS18_GPU
       if (operation==5) native_marble_display_timing_request();
 #endif
