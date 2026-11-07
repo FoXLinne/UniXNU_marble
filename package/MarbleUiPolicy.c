@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <sys/param.h>
-#include <sys/proc_internal.h>
+#include <sys/proc.h>
 #include <sys/vnode_internal.h>
 #include <sys/codesign.h>
 #include <sys/systm.h>
@@ -22,11 +22,14 @@ static bool phone_ui_executable(const char *path)
 
 int native_marble_ui_dyld_policy(proc_t process, int call, user_addr_t argument, int error)
 {
-    if (error || call != 0x5a || !csproc_get_platform_binary(process) || !process->p_textvp) return error;
+    if (error || call != 0x5a || !csproc_get_platform_binary(process)) return error;
+    vnode_t executable = proc_getexecutablevnode(process);
+    if (!executable) return error;
     char path[MAXPATHLEN];
     int length = sizeof(path);
-    if (vn_getpath(process->p_textvp, path, &length) ||
-        !phone_ui_executable(path)) return error;
+    int path_error = vn_getpath(executable, path, &length);
+    vnode_put(executable);
+    if (path_error || !phone_ui_executable(path)) return error;
     struct {uint64_t input; user_addr_t output;} request;
     uint64_t flags = 0;
     if (copyin(argument, &request, sizeof(request)) || copyin(request.output, &flags, sizeof(flags))) return error;

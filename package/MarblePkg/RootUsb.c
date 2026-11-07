@@ -154,18 +154,24 @@ UINT64 MarbleRootUsbContext[16] __attribute__((aligned(64)));
 #define mServiceContext MarbleRootUsbContext
 STATIC VOID *mServiceStack;
 VOID MarbleRootUsbCore(VOID);
+STATIC EFI_STATUS RestartUsb(VOID);
+STATIC EFI_STATUS mReturnUsbStatus=EFI_NOT_STARTED;
 
-STATIC VOID ServiceUpdatePoint(VOID)
+STATIC BOOLEAN ServiceUpdatePoint(VOID)
 {
   ROOT_STAGE_TABLE *Stage=__atomic_load_n(&mReturnedStage,__ATOMIC_ACQUIRE);
-  if (!Stage) return;
+  if (!Stage) return FALSE;
   __atomic_store_n(&mReturnedStage,NULL,__ATOMIC_RELEASE);
   mStage=Stage;
   mDisk=2;
   mLastOffset=Stage->Disks[2].Bytes-0x100000;
   mLastBytes=0x100000;
   __atomic_store_n(&mKernelRunning,0,__ATOMIC_RELEASE);
+  // The returning kernel ends the controller's previous session. Its owner
+  // drains that session and publishes the retained disks through fresh EP0.
+  mReturnUsbStatus=RestartUsb();
   ResumeFirmwareButtons();
+  return TRUE;
 }
 
 STATIC UINT64 RootCounter(VOID)
@@ -274,10 +280,31 @@ STATIC UINT8 mInterface[] = {18,3,'f',0,'a',0,'s',0,'t',0,'b',0,'o',0,'o',0,'t',
 
 STATIC VOID EFIAPI UsbNotify(EFI_EVENT Event, VOID *Context) {}
 
+STATIC EFI_STATUS RestartUsb(VOID)
+{
+  STATIC VOID *Configs[] = {mConfig}, *SsConfigs[] = {mSsConfig};
+  STATIC VOID *Strings[] = {mLanguage,mManufacturer,mProduct,mSerial,mInterface};
+  STATIC ROOT_USB_DESCRIPTOR_SET Set = {mDevice,Configs,mSsDevice,SsConfigs,mQualifier,mBos,5,Strings};
+  if (mRuntimeUsb) {
+    EFI_STATUS Status=mUsb->Stop();
+    if (EFI_ERROR(Status)) return Status;
+  }
+  mConnected=FALSE;
+  mReceivePending=FALSE;
+  mReceiveReady=FALSE;
+  mReceiveBytes=0;
+  EFI_STATUS Status=mUsb->StartEx(&Set);
+  if (EFI_ERROR(Status)) return Status;
+  if (!mRx) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mRx);
+  if (EFI_ERROR(Status)) return Status;
+  if (!mTx) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mTx);
+  return Status;
+}
+
 STATIC INTN WaitTransfer(UINT8 Endpoint)
 {
   for (;;) {
-    ServiceUpdatePoint();
+    if (ServiceUpdatePoint()) return -1;
     ServiceWatchdog();
     USB_DEVICE_EVENT Event = UsbDeviceEventNoEvent;
     USB_DEVICE_EVENT_DATA Data;
@@ -440,9 +467,6 @@ STATIC EFI_STATUS InitializeUsb(VOID)
   EFI_GUID InitGuid = {0x1c0cffce,0xfc8d,0x4e44,{0x8c,0x78,0x9c,0x9e,0x5b,0x53,0x0d,0x36}};
   EFI_GUID TableGuid = ROOT_STAGE_GUID;
   EFI_GUID UsbGuid = {0xd9d9ce48,0x44b8,0x4f49,{0x8e,0x3e,0x2a,0x3b,0x92,0x7d,0xc6,0xc1}};
-  STATIC VOID *Configs[] = {mConfig}, *SsConfigs[] = {mSsConfig};
-  STATIC VOID *Strings[] = {mLanguage,mManufacturer,mProduct,mSerial,mInterface};
-  STATIC ROOT_USB_DESCRIPTOR_SET Set = {mDevice,Configs,mSsDevice,SsConfigs,mQualifier,mBos,5,Strings};
   gBS->SetWatchdogTimer(0, 0, 0, NULL);
   RetainUsbWatchdog();
   Status = gBS->CreateEventEx(EVT_NOTIFY_SIGNAL,TPL_CALLBACK,UsbNotify,NULL,&InitGuid,&Event);
@@ -476,17 +500,7 @@ STATIC EFI_STATUS InitializeUsb(VOID)
   Status = gBS->InstallConfigurationTable(&TableGuid,mStage);
   if (EFI_ERROR(Status)) return Status;
 StartUsb:
-  mConnected = FALSE;
-  mReceivePending = FALSE;
-  mReceiveReady = FALSE;
-  if (mRuntimeUsb) mUsb->Stop();
-  Status = mUsb->StartEx(&Set);
-  if (EFI_ERROR(Status)) return Status;
-  if (!mRx) Status = mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mRx);
-  if (EFI_ERROR(Status)) return Status;
-  if (!mTx) Status = mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mTx);
-  if (EFI_ERROR(Status)) return Status;
-  return EFI_SUCCESS;
+  return RestartUsb();
 }
 
 EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
@@ -567,6 +581,9 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     ROOT_STAGE_DISK *Disk = &mStage->Disks[mDisk];
     if (AsciiStrCmp(Command,"upload")) mExportBytes=0;
     if (!AsciiStrCmp(Command,"getvar:version")) Reply("OKAY","RootStage2");
+    else if (!AsciiStrCmp(Command,"getvar:return-usb-status")) {
+      CHAR8 Text[17]; Hex(Text,mReturnUsbStatus,16); Reply("OKAY",Text);
+    }
     else if (!AsciiStrCmp(Command,"getvar:buttons-firmware")) {
       CHAR8 Text[53];
       Hex(Text,mKeypadStatus,16); Text[16]=':';

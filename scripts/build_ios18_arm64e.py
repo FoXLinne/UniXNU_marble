@@ -271,7 +271,7 @@ def build_board(tree, env):
                 source = resident
             record_path = records / ('bsd/DEVELOPMENT/kern_exec.o.json' if source.suffix == '.c'
                                      else 'iokit/DEVELOPMENT/IOPlatformExpert.cpo.json')
-            if filename == 'MarbleMetal.c':
+            if filename in ('MarbleMetal.c', 'MarbleUiPolicy.c'):
                 release_record = tree / 'build/xnu/ios-release-obj/RELEASE_ARM64_BCM2837/bsd/RELEASE/kern_exec.o.json'
                 if release_record.is_file():
                     record_path = release_record
@@ -292,7 +292,7 @@ def build_board(tree, env):
                                   'MarbleDisplay.cpp', 'MarblePower18.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp')
             command += ['-Werror' if strict else '-Wno-error', '-Wno-c99-designator', '-Wno-missing-include-dirs']
             command += ['-fno-sanitize=signed-integer-overflow', '-DMARBLE_IOS18_GPU=1']
-            if filename == 'MarbleMetal.c':
+            if filename in ('MarbleMetal.c', 'MarbleUiPolicy.c'):
                 command += ['-UDEVELOPMENT', '-DDEVELOPMENT=0', '-UDEBUG', '-DDEBUG=0', '-fno-lto']
             command += ['-I', str(out), '-Wno-unused-parameter', '-Wno-deprecated-enum-enum-conversion']
             command += ['-I', str(tree / '.cache/xnu-work/osfmk')]
