@@ -90,10 +90,19 @@ def prepare_wallpaper(addon, ios_root, identity, cache):
     order['order'] = [item for item in order['order'] if item in collections]
     resources['wallpaper/Collections/Collections~iphone.plist'] = (
         0o644, plistlib.dumps(order, fmt=plistlib.FMT_BINARY))
+    timing_source = ios_root / 'System/Library/EventTimingProfiles'
+    timing = {}
+    for kind in ('Default', 'Touch'):
+        original = timing_source / f'N841.{kind}.plist'
+        name = f'event-timing/{identity["target_type"]}.{kind}.plist'
+        payload = original.read_bytes()
+        entries[name] = (0o644, payload)
+        timing[kind] = dict(source=str(original), sha256=hashlib.sha256(payload).hexdigest(),
+                            profile=plistlib.loads(payload))
     entries.update(resources)
     pack_addon(entries, addon)
     return dict(source=str(source), screen=screen, product=identity['product'],
                 collections=order['order'], native_variants=native,
                 converted_layers=converted, files=len(resources),
                 resource_bytes=sum(len(data) for _, data in resources.values()),
-                default=default)
+                default=default, event_timing=timing)

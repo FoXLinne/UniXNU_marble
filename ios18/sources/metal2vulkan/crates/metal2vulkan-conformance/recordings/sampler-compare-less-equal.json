@@ -1,0 +1,669 @@
+{
+  "format": 1,
+  "case": "sampler-compare-less-equal",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rrp_mirror_clamp.ll",
+      "entry": "rrp_mc_compare",
+      "source_sha256": "88cd5f22a2669ab78de33ccf8c7b32c1dd8348a74968c62f3733873775f84cdd"
+    },
+    {
+      "fixture": "rrp_mirror_clamp.air.ll",
+      "entry": "rrp_mc_compare",
+      "source_sha256": "3897423b5d7993195a744728db7c1853e6a0fb41a9d16157cb46f3e98957c9bf"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "88cd5f22a2669ab78de33ccf8c7b32c1dd8348a74968c62f3733873775f84cdd"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3897423b5d7993195a744728db7c1853e6a0fb41a9d16157cb46f3e98957c9bf"
+                        }
+                      }
+                    },
+                    {
+                      "name": "entry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b1cd5738288ba40a1fd2b9f8e523347888bd72d3a1584e4cbf0653ec789c8742"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:coords",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b35d6113675f9b38e899256d0e67652f3c7d7b73e3c7472974bece2812b06d6a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:out",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "dac671216b927ce0d687d8b93bd8530cd7e957d16871d46142544eb461845503"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:depth",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d32cb0629a57b9fc2fc78a6252d1944b2289d1b19adec1ba33c410f5bb58876f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "sampler:compare",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b9a60b17e5af113498048480d29e9327b282803f3383f2f6b22984b5b5c1452a"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/coords",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "compare/sampler",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "compare/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "compare/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "compare/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "compare/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "compare",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "sampled",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 3840
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 20,
+                            "row_pitch": 80,
+                            "rows": 48,
+                            "image_pitch": 3840,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 4,
+        "argument_tables_retained": 1,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 1,
+        "command_buffers_begun": 6,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 1,
+        "command_buffers_submitted": 6,
+        "commands_recorded.begin_command_buffer": 2,
+        "commands_recorded.cmd_bind_descriptor_sets": 1,
+        "commands_recorded.cmd_bind_pipeline": 1,
+        "commands_recorded.cmd_clear_depth_stencil_image": 2,
+        "commands_recorded.cmd_copy_buffer_to_image": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_pipeline_barrier": 5,
+        "commands_recorded.cmd_push_constants": 1,
+        "commands_recorded.end_command_buffer": 5,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 201326720,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 3,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 1,
+        "functions_translated": 1,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "heap_tables_worked_out": 1,
+        "host_steps_recorded": 1,
+        "new_buffer_bytes_cleared": 4672,
+        "object_churn.buffers_parked": 3,
+        "object_churn.buffers_recycled": 3,
+        "object_churn.images_own_memory": 1,
+        "object_churn.images_parked": 1,
+        "object_churn.images_recycled": 1,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_image_views_made": 1,
+        "object_churn.vk_images_destroyed": 1,
+        "object_churn.vk_images_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "shader_modules_made": 1,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 2,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0
+      },
+      "composed": {
+        "batches_submitted_by_waiters": 0,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 5,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_clear_depth_stencil_image": 0,
+        "commands_recorded.cmd_copy_buffer_to_image": 0,
+        "commands_recorded.cmd_dispatch": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 201326720,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 3,
+        "functions_translated": 1,
+        "host_steps_recorded": 1,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "variant_pipelines_made": 1
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "creation_pipelines_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 1,
+        "variant_pipelines_made": 2
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "sampler-compare-less-equal",
+        "calls": 9,
+        "in_calls": 26446042,
+        "on_cpu": 873708,
+        "blocked": 25619627,
+        "elsewhere": 3130375,
+        "spend": 29577960,
+        "spend_least": 29372416,
+        "spend_most": 50711501,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2167,
+            "on_cpu": 2334,
+            "blocked": 0,
+            "wall_least": 2083,
+            "wall_most": 6041,
+            "wall_total": 5833,
+            "on_cpu_total": 6084,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 64875,
+            "on_cpu": 65125,
+            "blocked": 0,
+            "wall_least": 57042,
+            "wall_most": 160583,
+            "wall_total": 64875,
+            "on_cpu_total": 65125,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 107583,
+            "on_cpu": 107750,
+            "blocked": 0,
+            "wall_least": 96500,
+            "wall_most": 264542,
+            "wall_total": 107583,
+            "on_cpu_total": 107750,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22619917,
+            "on_cpu": 641208,
+            "blocked": 21990750,
+            "wall_least": 22306750,
+            "wall_most": 40530417,
+            "wall_total": 22619917,
+            "on_cpu_total": 641208,
+            "blocked_total": 21990750
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 917,
+            "on_cpu": 1042,
+            "blocked": 0,
+            "wall_least": 667,
+            "wall_most": 2083,
+            "wall_total": 917,
+            "on_cpu_total": 1042,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3375,
+            "on_cpu": 3500,
+            "blocked": 0,
+            "wall_least": 3000,
+            "wall_most": 9584,
+            "wall_total": 3375,
+            "on_cpu_total": 3500,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 31417,
+            "on_cpu": 31542,
+            "blocked": 0,
+            "wall_least": 25667,
+            "wall_most": 61375,
+            "wall_total": 31417,
+            "on_cpu_total": 31542,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3674667,
+            "on_cpu": 11375,
+            "blocked": 3663292,
+            "wall_least": 3441334,
+            "wall_most": 5997417,
+            "wall_total": 3674667,
+            "on_cpu_total": 11375,
+            "blocked_total": 3663292
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "sampler-compare-less-equal",
+        "calls": 9,
+        "in_calls": 1223499,
+        "on_cpu": 252167,
+        "blocked": 984416,
+        "elsewhere": 264667,
+        "spend": 1486041,
+        "spend_least": 1375748,
+        "spend_most": 1631000,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 792,
+            "on_cpu": 916,
+            "blocked": 0,
+            "wall_least": 708,
+            "wall_most": 958,
+            "wall_total": 1749,
+            "on_cpu_total": 1959,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 24042,
+            "on_cpu": 24292,
+            "blocked": 0,
+            "wall_least": 18000,
+            "wall_most": 27541,
+            "wall_total": 24042,
+            "on_cpu_total": 24292,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 41750,
+            "on_cpu": 41875,
+            "blocked": 0,
+            "wall_least": 33916,
+            "wall_most": 46500,
+            "wall_total": 41750,
+            "on_cpu_total": 41875,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 151875,
+            "on_cpu": 152375,
+            "blocked": 0,
+            "wall_least": 130084,
+            "wall_most": 167334,
+            "wall_total": 151875,
+            "on_cpu_total": 152375,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 500,
+            "on_cpu": 625,
+            "blocked": 0,
+            "wall_least": 167,
+            "wall_most": 1375,
+            "wall_total": 500,
+            "on_cpu_total": 625,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1417,
+            "on_cpu": 1542,
+            "blocked": 0,
+            "wall_least": 1000,
+            "wall_most": 1708,
+            "wall_total": 1417,
+            "on_cpu_total": 1542,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 20584,
+            "on_cpu": 20791,
+            "blocked": 0,
+            "wall_least": 13917,
+            "wall_most": 24208,
+            "wall_total": 20584,
+            "on_cpu_total": 20791,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 988375,
+            "on_cpu": 3959,
+            "blocked": 984416,
+            "wall_least": 883333,
+            "wall_most": 1078625,
+            "wall_total": 988375,
+            "on_cpu_total": 3959,
+            "blocked_total": 984416
+          }
+        ]
+      }
+    }
+  ]
+}

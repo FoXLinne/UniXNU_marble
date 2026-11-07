@@ -1,0 +1,64 @@
+
+["os"]
+"name" = "ios-18.7.11-22H384"
+"arch" = "arm64e"
+"darwin" = "24.6.0"
+"ios_version" = "18.0"
+"xnu_version" = "11417.140.69"
+"xnu_revision" = "43a90889846e00bfb5cf1d255cdc0a701a1e05a4"
+"driverkit_tag" = "xnu-11417.140.69"
+
+["ipsw"]
+"url" = "https://updates.cdn-apple.com/2026WinterFCS/226d78bb-5511-4c5e-acb2-afd14875b940/iPhone11,8_18.7.11_22H384_Restore.ipsw"
+"product" = "iPhone11,8"
+"version" = "18.7.11"
+"build" = "22H384"
+"device_class" = "n841ap"
+"chip_id" = 32800
+"board_id" = 12
+"fetch" = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
+
+["ipsw"."sha256"]
+"kernelcache.release.iphone11b" = "0aaecb5791ffcc20f62358ae05829ed03ff8157bd956d1f9140de2bfe694bb19"
+"DeviceTree.n841ap.im4p" = "f9aef993e1896526ee5f21b8986c8331930068249fd0168efc49961bc702400c"
+"094-31934-044.dmg.aea.trustcache" = "aa144dad088e904076f28a8727f25dcf5151768dc7ddd9a4de3c8782c3a22e2f"
+"094-32062-044.dmg.aea.trustcache" = "c56582b7c5b5cbfbe83ce467a1bbd59acaffb1871e367b1076e2ee1815479485"
+
+["kernel"]
+
+["kernel"."prelink"]
+"kernelcache_sha256" = "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70"
+"early_security_init" = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff009083bcc"
+"tool" = "kits/XnuPrelink/emit_prelink.py"
+"kernel" = "build/xnu/ios-release-obj/RELEASE_ARM64_BCM2837/mach.release.bcm2837.unstripped.noctf"
+"slide" = "-0x1000000"
+"roots" = ["com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMPlatform", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.iokit.IOHIDEventDriver", "com.apple.kec.pthread"]
+
+["payload"]
+"kernel_args" = ["-v", "serial=0", "keepsyms=1", "debug=0x14e", "msgbuf=1048576"]
+
+["adt"]
+
+["adt"."root"]
+
+["adt"."root"."string"]
+"model" = "iPhone11,8"
+"target-type" = "N841"
+"compatible" = "N841AP"
+
+["adt"."product"]
+
+["adt"."product"."string"]
+"product-name" = "iPhone XR"
+"product-description" = "iPhone XR"
+"artwork-device-idiom" = "phone"
+
+["adt"."product"."u32"]
+"artwork-device-subtype" = 1792
+"artwork-scale-factor" = 2
+
+["adt"."chosen"]
+
+["adt"."chosen"."string"]
+"osenvironment" = "main"
+"crypto-hash-method" = "sha2-384"

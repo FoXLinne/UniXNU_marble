@@ -444,8 +444,72 @@ index bf67901..ec31bae 100644
      ~NativeAdrenoRing()=default;
      NativeAdrenoRing(const NativeAdrenoRing &)=delete;
      NativeAdrenoRing &operator=(const NativeAdrenoRing &)=delete;
+diff --git a/NativeAdrenoSubmit.cpp b/NativeAdrenoSubmit.cpp
+index cb9ebe7..a34f727 100644
+--- a/NativeAdrenoSubmit.cpp
++++ b/NativeAdrenoSubmit.cpp
+@@ -746,6 +746,9 @@ IOReturn NativeAdrenoSubmit::hangCheck(bool *hung)
+ {
+     if(!hung)return kIOReturnBadArgument;*hung=false;
+     if(!attached_ || poisoned_)return kIOReturnNotReady;
++    // A fence interrupt can finish the loaded ring after the last submit or
++    // waiter pass. Give the waiting ring its CP before judging it stranded.
++    driveSwitch(nullptr);
+     /* The newest submission of either ring: each ring's fence numbers rise, so the later of the two is the device's newest. */
+     const uint32_t last0=ring(0)->lastSubmitted(),last1=preemption()?ring(1)->lastSubmitted():0;
+     const uint32_t last=(int32_t)(last1-last0)>0?last1:last0;
+@@ -836,10 +839,13 @@ IOReturn NativeAdrenoSubmit::recover(NativeAdrenoRestart restart,void *cookie,co
+     /* A hang inside a second-ring job is blamed on the second ring: it is given up (reason 4), the replay and everything after run on the first. */
+     if(guilty && guilty->ring==1)markPreemptDead(4);
+     recovery_info_[0]=guilty?uint32_t(guilty->ring):9;recovery_info_[1]=last0;recovery_info_[2]=last1;recovery_info_[3]=preemption()?preempt_.loaded():0;
+-    IOReturn status=restart(cookie,ring(0),hung);
++    // A stranded queue has no guilty job: its first pending job must execute.
++    // Only a job identified as guilty is skipped by advancing past its fence.
++    const uint32_t restart_fence=guilty?hung:fence;
++    IOReturn status=restart(cookie,ring(0),restart_fence);
+     out->status=status;
+     if(status) {native_adreno_recover_trace[0]=2;native_adreno_recover_trace[1]=uint32_t(status);return poison();}
+-    poisoned_=false;hang_fence_=hung;progress_retries_=0;
++    poisoned_=false;hang_fence_=restart_fence;progress_retries_=0;
+     if(guilty) {status=release(*guilty);if(status)return status;}
+     /* The GPU is idle after the restart's CP init: the CPU installs the kernel table, and each replayed job switches to its own. */
+     if(table_mode_) {
+@@ -854,7 +860,7 @@ IOReturn NativeAdrenoSubmit::recover(NativeAdrenoRestart restart,void *cookie,co
+     if(preemption()) {
+         preempt_.restart(0);low_service_us_=low_slice_until_=0;aging_grant_=false;
+         ring(0)->setCurrent(true);
+-        (void)ring(1)->restartSecondary(hung);
++        (void)ring(1)->restartSecondary(restart_fence);
+         ring(1)->setCurrent(false);
+         for(unsigned i=0;i<ring_count_;++i) {
+             ring(i)->tableInstalled(vm_->ttbr0());
+@@ -863,7 +869,7 @@ IOReturn NativeAdrenoSubmit::recover(NativeAdrenoRestart restart,void *cookie,co
+     }
+     uint32_t nop=0;
+     if(AdrenoPM4Type7(0x10,0,&nop)!=AdrenoPM4Success) {native_adreno_recover_trace[0]=4;return poison();}   /* CP_NOP */
+-    for(uint32_t next=hung+1;next && next<=last;++next) {
++    for(uint32_t next=restart_fence+1;next && next<=last;++next) {
+         Job *job=find(next);
+         NativeAdrenoVm *vm=job && job->vm?job->vm:vm_;
+         const bool run=job && !vm->unusable() && job->word_count;
+@@ -873,6 +879,15 @@ IOReturn NativeAdrenoSubmit::recover(NativeAdrenoRestart restart,void *cookie,co
+         uint32_t value=0;
+         status=preemption()?ring(0)->submitFramed(run?job->words:&nop,run?job->word_count:1,next,&value):
+             ring(0)->submitFramed(run?job->words:&nop,run?job->word_count:1,&value);
++        if(status==kIOReturnNoResources && !value && ring(0)->lastSubmitted()>restart_fence) {
++            // Replay can contain both rings' queues and exceed one ring's
++            // capacity. Drain the work already replayed, then reuse its space.
++            const NativeAdrenoRingFence drained=ring(0)->wait(ring(0)->lastSubmitted(),clock,2000000,nullptr);
++            if(drained==NativeAdrenoRingFenceComplete)
++                status=preemption()?ring(0)->submitFramed(run?job->words:&nop,run?job->word_count:1,next,&value):
++                    ring(0)->submitFramed(run?job->words:&nop,run?job->word_count:1,&value);
++            else status=drained==NativeAdrenoRingFenceTimeout?kIOReturnTimeout:kIOReturnIOError;
++        }
+         if(status || value!=next) {native_adreno_recover_trace[0]=6;native_adreno_recover_trace[1]=status?uint32_t(status):value;return poison();}
+         if(job) {
+             if(job->replays<255)++job->replays;
 diff --git a/NativeAdrenoUserClient.cpp b/NativeAdrenoUserClient.cpp
-index 28d4af2..27d37df 100644
+index 28d4af2..47c14f9 100644
 --- a/NativeAdrenoUserClient.cpp
 +++ b/NativeAdrenoUserClient.cpp
 @@ -3,7 +3,12 @@
@@ -462,7 +526,25 @@ index 28d4af2..27d37df 100644
  extern "C" volatile uint32_t native_adreno_trace_stage;
  /* 0 keeps user BOs cacheable and maintained before every submission (int-070..097); the board sets it from the sheng-gpu-wc boot argument. */
  /* sheng-gpu-owned-coherent=1: the GPU's own BOs use the IO-coherent path (CPU write-back view, GPU write-back inner-shareable mapping) instead of
-@@ -386,8 +391,8 @@ extern "C" uint64_t native_adreno_now_us(void) __attribute__((weak));
+@@ -326,12 +331,11 @@ IOReturn NativeAdrenoUserClient::mapBo(const NativeAdrenoAbiBoMap *request,
+     uint64_t handle=0;
+     /* Memory the owner maps read-only could only be pinned for reading: the GPU gets the read half of what was asked. */
+     const unsigned permissions=entry->memory.readOnly()?(request->permissions&~2u):request->permissions;
+-    /* Imported memory is the owner's cacheable memory (IOSurfaces, no-copy buffers): once the board proved IO coherence, the GPU maps it
+-     * write-back inner-shareable (Linux's IOMMU_CACHE PTE) and the CPU caches over it need no maintenance. The GPU's own BOs stay
+-     * non-cacheable: their CPU view is write-combined, and a snoop could find a stale line of the kernel's cacheable alias. */
+-    /* Only memory the GPU never writes is mapped coherent: sysmem passes written through write-back inner-shareable mappings stopped
+-     * the GPU inside its end-of-pass cache clean (BR and BV idle at the clean events), while non-coherent mappings never did. */
+-    const bool coherent=(entry->memory.imported() && native_adreno_io_coherent && !(permissions&2u)) || (!entry->memory.imported() && ownedCoherent());
++    /* Read coherence and render-target cache clean are separate capabilities.
++     * Keep the caller cache attributes for writable imports so shared-page aliases agree. */
++    const bool importedWrite=entry->memory.imported() && (permissions&2u);
++    const bool coherent=(entry->memory.imported() && native_adreno_io_coherent && !importedWrite) ||
++                        (!entry->memory.imported() && ownedCoherent());
+     const IOReturn status=vm_->map(&entry->memory,0,request->iova,permissions,
+         coherent?1u:request->writeback,coherent?3u:request->shareability,&handle);
+     if(status)return status;
+@@ -386,8 +390,8 @@ extern "C" uint64_t native_adreno_now_us(void) __attribute__((weak));
  int32_t NativeAdrenoUserClient::submitPriority() const
  {
      if(priority_foreground_<0 && priority_background_<0)return -1;
@@ -473,7 +555,7 @@ index 28d4af2..27d37df 100644
      return background?(priority_background_>=0?priority_background_:priority_foreground_)
                       :(priority_foreground_>=0?priority_foreground_:priority_background_);
  }
-@@ -400,7 +405,7 @@ IOReturn NativeAdrenoUserClient::setPriority(uint32_t foreground,uint32_t backgr
+@@ -400,7 +404,7 @@ IOReturn NativeAdrenoUserClient::setPriority(uint32_t foreground,uint32_t backgr
      {
          const uint32_t n=native_adreno_prio_count;
          volatile uint32_t *row=native_adreno_prio_log[n&31];
@@ -482,7 +564,7 @@ index 28d4af2..27d37df 100644
          row[4]=&native_adreno_now_us?uint32_t(native_adreno_now_us()/1000):0;row[5]=priority_told_;
          native_adreno_prio_count=n+1;
          if(priority_told_<0xffffffffu)++priority_told_;
-@@ -437,7 +442,7 @@ IOReturn NativeAdrenoUserClient::submit(const NativeAdrenoAbiSubmit *request,
+@@ -437,7 +441,7 @@ IOReturn NativeAdrenoUserClient::submit(const NativeAdrenoAbiSubmit *request,
      ring_->useContext(context_);
      submit_->nextOwner(proc_selfpid());
      submit_->nextPriority(submitPriority());
@@ -629,3 +711,66 @@ index a8b6ec2..ba7607f 100644
      return getenv("HOSTSIM_FAIL_USER_UNMAP") ? kIOReturnIOError : KERN_SUCCESS;
  }
  /* HOSTSIM_PAGE_SIZE=4096: Turnip sizes and places BOs with the page size (os_get_page_size, getpagesize), 16 KiB on this Mac and 4 KiB on the
+diff --git a/tests/test_submit.cpp b/tests/test_submit.cpp
+index 40d1832..7d95c6f 100644
+--- a/tests/test_submit.cpp
++++ b/tests/test_submit.cpp
+@@ -45,6 +45,7 @@ struct CpPeer {
+ };
+ static CpPeer cp;
+ static uint64_t clock_us=0;
++static void (*idle_hook)()=nullptr;
+ static int cwrite(void *c,uint32_t reg,uint32_t v)
+ {CHECK(c==&cp && reg<cp.regs.size());cp.regs[reg]=v;cp.writes.push_back(reg);return 0;}
+ static int cread(void *c,uint32_t reg,uint32_t *v)
+@@ -55,7 +56,7 @@ static int cpublish(void *c,const volatile uint32_t *w,size_t bytes)
+ static int cacquire(void *c,volatile uint32_t *w,size_t bytes)
+ {CHECK(c==&cp && w && bytes==4096);++cp.acquire;return cp.acquire==cp.fail_acquire;}
+ static uint64_t cnow(void *c){CHECK(c==&cp);return clock_us;}
+-static int cidle(void *c){CHECK(c==&cp);clock_us+=1000;return 0;}
++static int cidle(void *c){CHECK(c==&cp);clock_us+=1000;if(idle_hook)idle_hook();return 0;}
+ struct Path {
+     NativeAdrenoTablePages tables;
+     NativeAdrenoMemory object;
+@@ -284,6 +285,32 @@ int main()
+         CHECK(p.submit.recover([](void *,NativeAdrenoRing *,uint32_t)->IOReturn {return kIOReturnIOError;},nullptr,&ringclock,&result)==kIOReturnIOError);
+         CHECK(p.submit.poisoned());
+     }
++    // Recovery of accumulated work exceeds one ring's capacity. The CP peer
++    // drains only when recovery waits for the replayed prefix to complete.
++    {
++        Path p;CHECK(exposed(p)==kIOReturnSuccess);
++        NativeAdrenoSubmitBuffer buffer{p.handle,0x800000,4096};uint32_t fence=0;
++        for(unsigned n=1;n<=400;++n) {
++            CHECK(p.submit.submit(&buffer,1,0,&fence)==kIOReturnSuccess && fence==n);
++            cp.regs[0x0806]=p.ring.writePointer();
++        }
++        static NativeAdrenoRing *replaying;static unsigned drained;
++        replaying=&p.ring;drained=0;
++        idle_hook=[]() {
++            cp.regs[0x0806]=replaying->writePointer();
++            fencemem[1]=replaying->lastSubmitted();++drained;
++        };
++        auto restart=[](void *,NativeAdrenoRing *ring,uint32_t completed)->IOReturn {
++            cp.regs[0x0806]=0;return ring->restart(completed);
++        };
++        NativeAdrenoRecovery result{};
++        CHECK(p.submit.recover(restart,nullptr,&ringclock,&result)==kIOReturnSuccess);
++        CHECK(result.replayed==399 && drained>0 && !p.submit.poisoned());
++        fencemem[1]=400;
++        CHECK(p.submit.wait(400,&ringclock,1000)==kIOReturnSuccess);
++        CHECK(p.submit.waitAll(&ringclock,1000)==kIOReturnSuccess && p.submit.outstanding()==0);
++        idle_hook=nullptr;
++    }
+     {
+         Path p;CHECK(exposed(p)==kIOReturnSuccess);NativeAdrenoRing low;
+         uint32_t lowmem[8192]{},lowfence[1024]{};uint8_t rec[2][64]{},info[2][32]{};
+@@ -338,7 +365,7 @@ int main()
+         fencemem[1]=second;CHECK(p.submit.retireCompleted()==0);
+         std::puts("PASS two-ring priorities, per-ring table/context, queue FIFO, fence-history rollover and CPU-table fallback");
+     }
+-    std::printf("PASS: 1 execbuf submission with exact IB packet and fence, 8 pre-reference refusals, 1 duplicate-buffer reference case and 1 poisoned-commit retention case over software SMMU/CP peers; 2 write-combine audit cases (trusted, dirty and failed); 1 hangcheck and 1 recovery with replay, 1 usable VM after recovery and 1 failed restart\n");
++    std::printf("PASS: 1 execbuf submission with exact IB packet and fence, 8 pre-reference refusals, 1 duplicate-buffer reference case and 1 poisoned-commit retention case over software SMMU/CP peers; 2 write-combine audit cases (trusted, dirty and failed); 1 hangcheck and 1 recovery with replay, 1 usable VM after recovery, 1 failed restart and 400-job replay with ring backpressure\n");
+ }
+ /* Physical-page maintenance (imported BOs): record it; no host page is touched. */
+ /* Host double: the page attribute change of user BOs has no host equivalent (no host page is touched). */

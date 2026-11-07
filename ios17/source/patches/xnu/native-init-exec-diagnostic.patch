@@ -1,0 +1,83 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -1365,6 +1365,16 @@
+ 			}
+ 		}
+ 
++		if (proc_getpid(p) == 1) {
++			extern char native_init_load_failure[192];
++			char description[384];
++			snprintf(description, sizeof(description),
++			    "init load_machfile result=%d errno=%d cpu=%x subtype=%x %s",
++			    lret, error, mach_header->cputype, mach_header->cpusubtype,
++			    native_init_load_failure);
++			os_reason_set_description_data(exec_failure_reason,
++			    EXIT_REASON_USER_DESC, description, strlen(description) + 1);
++		}
+ 		exec_failure_reason->osr_flags |= OS_REASON_FLAG_CONSISTENT_FAILURE;
+ 
+ 		goto badtoolate;
+--- a/bsd/kern/mach_loader.c
++++ b/bsd/kern/mach_loader.c
+@@ -1528,6 +1528,10 @@
+ 		ret = LOAD_BADMACHO_UPX;
+ 	}
+ 
++	if (ret != LOAD_SUCCESS) {
++		printf("Mach-O parse failed: depth=%d result=%d platform=%u csflags=%x\n",
++		    depth, ret, result->ip_platform, result->csflags);
++	}
+ 	kfree_data(addr, alloc_size);
+ 
+ 	return ret;
+@@ -3751,6 +3755,8 @@
+  * This routine has its own, separate, understanding of the FAT file format,
+  * which is terrifically unfortunate.
+  */
++char native_init_load_failure[192];
++
+ static
+ load_return_t
+ get_macho_vnode(
+@@ -3802,6 +3808,10 @@
+ 
+ 	/* check for regular file */
+ 	if (vp->v_type != VREG) {
++		if (proc_getpid(p) == 1) {
++			snprintf(native_init_load_failure, sizeof(native_init_load_failure),
++			    "dyld %s type=%d", path, vp->v_type);
++		}
+ 		error = LOAD_PROTECT;
+ 		goto bad1;
+ 	}
+@@ -3814,18 +3824,30 @@
+ 
+ 	/* Check mount point */
+ 	if (vp->v_mount->mnt_flag & MNT_NOEXEC) {
++		if (proc_getpid(p) == 1) {
++			snprintf(native_init_load_failure, sizeof(native_init_load_failure),
++			    "dyld %s mount flags=%x", path, vp->v_mount->mnt_flag);
++		}
+ 		error = LOAD_PROTECT;
+ 		goto bad1;
+ 	}
+ 
+ 	/* check access */
+ 	if ((error = vnode_authorize(vp, NULL, KAUTH_VNODE_EXECUTE | KAUTH_VNODE_READ_DATA, ctx)) != 0) {
++		if (proc_getpid(p) == 1) {
++			snprintf(native_init_load_failure, sizeof(native_init_load_failure),
++			    "dyld %s authorize errno=%d", path, error);
++		}
+ 		error = LOAD_PROTECT;
+ 		goto bad1;
+ 	}
+ 
+ 	/* try to open it */
+ 	if ((error = VNOP_OPEN(vp, FREAD, ctx)) != 0) {
++		if (proc_getpid(p) == 1) {
++			snprintf(native_init_load_failure, sizeof(native_init_load_failure),
++			    "dyld %s open errno=%d", path, error);
++		}
+ 		error = LOAD_PROTECT;
+ 		goto bad1;
+ 	}

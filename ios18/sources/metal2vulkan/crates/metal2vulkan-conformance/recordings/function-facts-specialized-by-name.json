@@ -1,0 +1,638 @@
+{
+  "format": 1,
+  "case": "function-facts-specialized-by-name",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "function_constant_interface.ll",
+      "entry": "fc_vertex_input_to_output",
+      "source_sha256": "5b11a08f3a82f7b6d2eba8a4b7721635ff7ebb5eb602957c8ebf57992321d13b"
+    },
+    {
+      "fixture": "function_constant_interface.air.ll",
+      "entry": "fc_vertex_input_to_output",
+      "source_sha256": "39087c31da0a65052f1c252df7bd6d395fed63f7153ea735993f1daa05bd6d53"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5b11a08f3a82f7b6d2eba8a4b7721635ff7ebb5eb602957c8ebf57992321d13b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "39087c31da0a65052f1c252df7bd6d395fed63f7153ea735993f1daa05bd6d53"
+                        }
+                      }
+                    },
+                    {
+                      "name": "entry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "95cf133f4e40bbafb8d63444a8cfdc8d70cebfbec29d7c5cce53e39009faed08"
+                        }
+                      }
+                    },
+                    {
+                      "name": "constants",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6e301c963f0e4fb5f809d3f7c32207f61b63b151af4f8069baa9f30960c4e956"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "name",
+                      "observed": {
+                        "value": {
+                          "lines": [
+                            "fc_vertex_input_to_output"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "name": "function_type",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLFunctionTypeVertex"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 1
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "patch_type",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLPatchTypeNone"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "patch_control_point_count",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "None",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "options",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "names": {
+                              "set": []
+                            },
+                            "raw": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    },
+                    {
+                      "name": "vertex_attributes",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 2
+                            }
+                          }
+                        },
+                        {
+                          "name": "attribute/0",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "position"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 0
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeFloat4"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 6
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "name": "attribute/1",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "uv"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 1
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeFloat2"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 4
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "stage_input_attributes",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 2
+                            }
+                          }
+                        },
+                        {
+                          "name": "attribute/0",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "position"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 0
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeFloat4"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 6
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "name": "attribute/1",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "uv"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 1
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeFloat2"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 4
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "function_constants",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {}
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "function-facts-specialized-by-name",
+        "calls": 2,
+        "in_calls": 23894208,
+        "on_cpu": 638167,
+        "blocked": 23294166,
+        "elsewhere": 4000,
+        "spend": 23898958,
+        "spend_least": 23264501,
+        "spend_most": 26812707,
+        "per_call": [
+          {
+            "call": "function_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 35792,
+            "on_cpu": 36042,
+            "blocked": 0,
+            "wall_least": 33791,
+            "wall_most": 50791,
+            "wall_total": 35792,
+            "on_cpu_total": 36042,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23858416,
+            "on_cpu": 604125,
+            "blocked": 23294166,
+            "wall_least": 23225917,
+            "wall_most": 26756958,
+            "wall_total": 23858416,
+            "on_cpu_total": 604125,
+            "blocked_total": 23294166
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "function-facts-specialized-by-name",
+        "calls": 2,
+        "in_calls": 1987583,
+        "on_cpu": 1991375,
+        "blocked": 0,
+        "elsewhere": 667,
+        "spend": 1988250,
+        "spend_least": 1759208,
+        "spend_most": 2076500,
+        "per_call": [
+          {
+            "call": "function_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1751625,
+            "on_cpu": 1751958,
+            "blocked": 0,
+            "wall_least": 1583750,
+            "wall_most": 1822250,
+            "wall_total": 1751625,
+            "on_cpu_total": 1751958,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 235958,
+            "on_cpu": 239417,
+            "blocked": 0,
+            "wall_least": 173667,
+            "wall_most": 263292,
+            "wall_total": 235958,
+            "on_cpu_total": 239417,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

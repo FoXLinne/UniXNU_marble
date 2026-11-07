@@ -14,6 +14,8 @@ import tempfile
 import tomllib
 from types import SimpleNamespace
 
+from marble_sources import build_source_revision, stage_ios17, stage_ios18
+
 DEVICE = Path(__file__).resolve().parents[1]
 PROFILE = DEVICE / 'profiles/ios-18.7.11-22H384.toml'
 ADSP_FIRMWARE = DEVICE.parent / 'UniXNU/.cache/firmware/marble/adsp2.mbn'
@@ -28,6 +30,11 @@ def git(path, *args):
 
 
 def checkout(path, url, revision, tag=None):
+    name = url.rsplit('/', 1)[-1].removesuffix('.git')
+    name = {'NativeRamBlock': 'RamBlock'}.get(name, name)
+    if (DEVICE / 'ios18/sources' / name).is_dir():
+        stage_ios18(name, path)
+        return
     if not (path / '.git').exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         if tag:
@@ -42,6 +49,8 @@ def checkout(path, url, revision, tag=None):
 
 
 def apply_patch(work, patch):
+    if Path(work).name in ('SoftwareAES', 'NativeRamBlock', 'XnuPrelink'):
+        return
     applied = subprocess.run(['git', '-C', work, 'apply', '--reverse', '--check', patch],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if applied.returncode:
@@ -50,8 +59,9 @@ def apply_patch(work, patch):
 
 
 def prepare(out, upstream, stack, profile):
-    if git(upstream, 'rev-parse', 'HEAD') != profile['upstream']['commit']:
+    if build_source_revision() != profile['upstream']['commit']:
         raise RuntimeError('UniXNU build scripts differ from the OS profile revision')
+    stage_ios17(stack)
     os_spec = profile['os']
     reference = out / 'xnu'
     checkout(reference, 'https://github.com/apple-oss-distributions/xnu.git',
@@ -81,10 +91,12 @@ def prepare(out, upstream, stack, profile):
     apply_patch(work, DEVICE / profile['kernel']['gpu_patch'])
     ui_patch = DEVICE / profile['kernel']['ui_patch']
     apply_patch(work, ui_patch)
+    filesystem_patch = DEVICE / profile['kernel']['filesystem_patch']
+    apply_patch(work, filesystem_patch)
     rtc_patch = DEVICE / 'patches/xnu-11417/native-rtc.patch'
     apply_patch(work, rtc_patch)
     patch_list = out / 'xnu-patches.list'
-    patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n' + str(rtc_patch) + '\n')
+    patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n' + str(filesystem_patch) + '\n' + str(rtc_patch) + '\n')
     env = dict(os.environ, UNIXNU_XNU_TAG='xnu-' + os_spec['xnu_version'],
                UNIXNU_XNU_COMMIT=os_spec['xnu_revision'], UNIXNU_XNU_DARWIN=os_spec['darwin'],
                UNIXNU_XNU_VERSION=os_spec['xnu_version'], UNIXNU_XNU_ARCH=os_spec['arch'],
@@ -264,7 +276,7 @@ def build_board(tree, env):
         sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
         sources.append(tree.parent / 'AppleKeyStoreState/NativeKeyStoreEvents.cpp')
         sources.append(tree.parent / 'GopFramebuffer/NativeLegacyDisplay.cpp')
-        sources.append(DEVICE.parent / 'UniXNU/drivers/NativeGeniSpi/GeniSpi.c')
+        sources.append(DEVICE / 'ios17/source/drivers/NativeGeniSpi/GeniSpi.c')
         for source in sources:
             filename = source.name
             if filename == 'MarbleAdsp.cpp':
@@ -299,8 +311,8 @@ def build_board(tree, env):
             command += ['-I', str(out), '-Wno-unused-parameter', '-Wno-deprecated-enum-enum-conversion']
             command += ['-I', str(tree / '.cache/xnu-work/osfmk')]
             command += ['-I', str(DEVICE / 'package')]
-            command += ['-I', str(DEVICE.parent / 'UniXNU/package/UniXNUPkg/Include')]
-            command += ['-I', str(DEVICE.parent / 'UniXNU/drivers/NativeGeniSpi')]
+            command += ['-I', str(DEVICE / 'ios17/source/package/UniXNUPkg/Include')]
+            command += ['-I', str(DEVICE / 'ios17/source/drivers/NativeGeniSpi')]
             if filename == 'RuntimeUsb.cpp':
                 command += ['-DMARBLE_IOS18=1']
             if filename == 'NativeHomeInput.cpp':
@@ -462,7 +474,7 @@ def boot_image(out, upstream, stack, profile, unique_chip_id):
         raise RuntimeError('Kernel collection differs from the iOS 18 profile')
     if not unique_chip_id or not 0 < int(unique_chip_id, 16) < 1 << 64:
         raise RuntimeError('bootimg requires --unique-chip-id HEX or UNIXNU_UNIQUE_CHIP_ID')
-    platform = DEVICE.parent / 'marble_hackios'
+    platform = DEVICE / 'firmware'
     boot = out / 'boot'
     boot.mkdir(exist_ok=True)
     sys.path.insert(0, str(upstream / 'scripts'))
@@ -551,7 +563,8 @@ def main():
     parser.add_argument('command', choices=['fetch', 'kernel', 'prelink', 'bootimg'])
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--unique-chip-id', default=os.environ.get('UNIXNU_UNIQUE_CHIP_ID'))
-    parser.add_argument('--upstream', type=Path, default=DEVICE.parent / 'upstream/UniXNU')
+    parser.add_argument('--source', '--upstream', dest='upstream', type=Path,
+                        default=DEVICE / 'ios18/source')
     parser.add_argument('--stack', type=Path, default=DEVICE.parent / 'UniXNU')
     args = parser.parse_args()
     out, upstream, stack = args.output.resolve(), args.upstream.resolve(), args.stack.resolve()

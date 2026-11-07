@@ -1,0 +1,25 @@
+--- a/osfmk/kern/startup.c
++++ b/osfmk/kern/startup.c
+@@ -751,14 +751,17 @@
+ 	csm_initialize_provisioning_profiles();
+ #endif
+ 
+-#ifndef BCM2837
++#if !defined(BCM2837) || (defined(XNU_NATIVE_TRUST_CACHE) && XNU_NATIVE_TRUST_CACHE)
+ 	kernel_bootstrap_log("trust_cache_init");
+ 
+ 	/* Initialize the runtime for the trust cache interface */
+-	trust_cache_runtime_init();
+-
+-	/* Load the static and engineering trust caches */
+-	load_static_trust_cache();
++	extern bool native_prelink_trust_cache_ready __attribute__((weak_import));
++	if (!&native_prelink_trust_cache_ready || !native_prelink_trust_cache_ready) {
++		trust_cache_runtime_init();
++
++		/* Load the static and engineering trust caches */
++		load_static_trust_cache();
++	}
+ #endif
+ 
+ 	kernel_startup_initialize_upto(STARTUP_SUB_LOCKDOWN);

@@ -97,9 +97,11 @@ extern "C" bool native_resident_prepare(void)
 
 static void usbControlWorker(void *, wait_result_t)
 {
+  uint64_t activeUntil=0;
   for (;;) {
     uint32_t request=usb_interrupt[0];
     __asm__ volatile("dmb oshld" ::: "memory");
+    if (request) clock_interval_to_deadline(500,kMillisecondScale,&activeUntil);
     if (request==1) {
       native_marble_buttons_stop();
       native_root_block_capture_log();
@@ -125,7 +127,7 @@ static void usbControlWorker(void *, wait_result_t)
       __asm__ volatile("dsb sy" ::: "memory");
       native_marble_reboot_bootloader();
     }
-    IOSleep(1);
+    IOSleep(mach_absolute_time()<activeUntil ? 1 : 16);
   }
 }
 

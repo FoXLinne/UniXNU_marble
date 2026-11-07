@@ -1,0 +1,281 @@
+{
+  "format": 1,
+  "case": "texture-fills-240",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": {
+        "carried": {
+          "from": "runtime_lane::texture_fills, from the probes tfl.swift, tfl3.swift and tfl4.swift (an Apple M4, macOS 27.0.1) -- another chip than this round's oracle",
+          "measured_on": "apple-m4"
+        }
+      },
+      "device": "apple-m3-max",
+      "runs": 1,
+      "outcomes": [
+        {
+          "runs": 1,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "case-geometry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "122e0abd08a3666a8a32b06d2746ae8b39112a5c6c98797086047a98992d88ad"
+                        }
+                      }
+                    },
+                    {
+                      "name": "fill-patterns",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e3c1219aa7fbb6d702a74e37d028556c6f655a2cc59deb4af6dcc165f81a3dcf"
+                        }
+                      }
+                    },
+                    {
+                      "name": "before",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "94455e3ed9f716bea425ef99b51fae47128769a1a0cd04244221e4e14631ab83"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "work",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "format/240",
+                  "observed": {
+                    "value": "absent",
+                    "digest": {
+                      "kind": "sha256_prefix16",
+                      "hex": "76db2674be6f822f"
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "not_run"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-carried-decoded-twin",
+        "metal2vulkan-degrade-unpacked-fill-color"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "bare_starts": 22,
+        "batches_submitted_by_waiters": 22,
+        "batches_with_none_pending": 22,
+        "block_decode_passes": 44,
+        "chroma_device_decodes": 44,
+        "chroma_device_twins": 22,
+        "command_barriers": 88,
+        "command_buffers_begun": 44,
+        "command_buffers_begun_batch_work": 22,
+        "command_buffers_begun_encoders": 22,
+        "command_buffers_submitted": 44,
+        "commands_recorded.begin_command_buffer": 44,
+        "commands_recorded.cmd_bind_descriptor_sets": 44,
+        "commands_recorded.cmd_bind_pipeline": 44,
+        "commands_recorded.cmd_clear_color_image": 44,
+        "commands_recorded.cmd_copy_buffer": 44,
+        "commands_recorded.cmd_copy_buffer_to_image": 132,
+        "commands_recorded.cmd_copy_image_to_buffer": 66,
+        "commands_recorded.cmd_dispatch": 44,
+        "commands_recorded.cmd_pipeline_barrier": 440,
+        "commands_recorded.end_command_buffer": 44,
+        "commits_handed_off": 22,
+        "commits_taken_in": 22,
+        "completed_waits": 25,
+        "completed_where_seen": 22,
+        "completion_arms": 22,
+        "completion_arms_after_a_wake": 22,
+        "completion_waiter_parks": 22,
+        "device_memory_allocated": 201326592,
+        "encoder_command_buffers_begun": 22,
+        "fence_waits": 22,
+        "finales_folded": 22,
+        "gate_waits": 22,
+        "gate_waits_slept": 22,
+        "new_buffer_bytes_cleared": 4288,
+        "object_churn.buffers_evicted": 8,
+        "object_churn.buffers_parked": 154,
+        "object_churn.buffers_recycled": 146,
+        "object_churn.images_evicted": 4,
+        "object_churn.images_own_memory": 44,
+        "object_churn.images_parked": 44,
+        "object_churn.images_recycled": 40,
+        "object_churn.making_sites_dropped": 66,
+        "object_churn.textures_image": 22,
+        "object_churn.vk_buffer_bindings": 8,
+        "object_churn.vk_buffers_destroyed": 8,
+        "object_churn.vk_buffers_made": 8,
+        "object_churn.vk_image_bindings": 26,
+        "object_churn.vk_image_views_made": 22,
+        "object_churn.vk_images_destroyed": 26,
+        "object_churn.vk_images_made": 26,
+        "owned_descriptor_pools": 44,
+        "owned_kernel_spirv_bytes": 1968,
+        "owned_kernels_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 22,
+        "queues_sharing_a_vk_queue": 1,
+        "scheduled_where_submitted": 22,
+        "scheduler_passes": 1,
+        "scheduler_passes_by_waiters": 22,
+        "scheduler_sleeps": 22,
+        "scheduler_wakes_commit": 22,
+        "slot_returns": 22,
+        "spare_command_pools_taken": 22,
+        "submit_infos": 22,
+        "submit_stalls_on_work": 1,
+        "trail_waits": 22,
+        "wakes_completion_waiters": 22,
+        "wakes_spared": 154
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 9,
+        "gate_waits_slept": 19
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "device_memory_allocated": 201326592,
+        "pooled_memory_blocks_made": 3,
+        "queues_sharing_a_vk_queue": 0
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "texture-fills-240",
+        "calls": 0,
+        "in_calls": 0,
+        "on_cpu": 0,
+        "blocked": 0,
+        "elsewhere": 0,
+        "spend": 0,
+        "spend_least": 0,
+        "spend_most": 0,
+        "stopped": "the case forbids running its Metal leg here: Metal fills a texture through private API alone, so no public call exists to record it from",
+        "per_call": []
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "texture-fills-240",
+        "calls": 22,
+        "in_calls": 16678082,
+        "on_cpu": 1232959,
+        "blocked": 15445123,
+        "elsewhere": 5493292,
+        "spend": 22217542,
+        "spend_least": 20388208,
+        "spend_most": 30318040,
+        "degraded": [
+          "metal2vulkan-degrade-carried-decoded-twin",
+          "metal2vulkan-degrade-unpacked-fill-color"
+        ],
+        "per_call": [
+          {
+            "call": "work",
+            "least_calls": 22,
+            "most_calls": 22,
+            "wall": 714833,
+            "on_cpu": 21708,
+            "blocked": 692291,
+            "wall_least": 643583,
+            "wall_most": 987666,
+            "wall_total": 16678082,
+            "on_cpu_total": 1232959,
+            "blocked_total": 15445123
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,836 @@
+{
+  "format": 1,
+  "case": "render-state-texture-accesses",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "reflection/texture_accesses.ll",
+      "entry": "texture_accesses_vertex",
+      "source_sha256": "081bf6dfe075bb2171d010f4720eb3bd1fce1d77b5cf5b7cf6cb07afaec9bfc8"
+    },
+    {
+      "fixture": "reflection/texture_accesses.air.ll",
+      "entry": "texture_accesses_vertex",
+      "source_sha256": "954c6d7119e9d0bc9526de28fbbea84424cb9619dc05a1e9ee7b8659f60e0dd3"
+    },
+    {
+      "fixture": "reflection/texture_accesses.ll",
+      "entry": "texture_accesses_fragment",
+      "source_sha256": "081bf6dfe075bb2171d010f4720eb3bd1fce1d77b5cf5b7cf6cb07afaec9bfc8"
+    },
+    {
+      "fixture": "reflection/texture_accesses.air.ll",
+      "entry": "texture_accesses_fragment",
+      "source_sha256": "954c6d7119e9d0bc9526de28fbbea84424cb9619dc05a1e9ee7b8659f60e0dd3"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "081bf6dfe075bb2171d010f4720eb3bd1fce1d77b5cf5b7cf6cb07afaec9bfc8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "954c6d7119e9d0bc9526de28fbbea84424cb9619dc05a1e9ee7b8659f60e0dd3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "attachment",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ba8c9eac092a503e4fb70771c34a00c5bb651043de24db4d3525ebbb3ee7ff08"
+                        }
+                      }
+                    },
+                    {
+                      "name": "stages-and-slots",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "15f94adc4529bc046bc6aa059e654c380a2149dc8114447f60fd25a5163c5984"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture_access",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "vertex",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Some",
+                                "payload": {
+                                  "variant": {
+                                    "name": "MTLBindingAccessReadOnly",
+                                    "payload": "absent"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "5",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "6",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "7",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "fragment",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Some",
+                                "payload": {
+                                  "variant": {
+                                    "name": "MTLBindingAccessReadOnly",
+                                    "payload": "absent"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Some",
+                                "payload": {
+                                  "variant": {
+                                    "name": "MTLBindingAccessWriteOnly",
+                                    "payload": "absent"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Some",
+                                "payload": {
+                                  "variant": {
+                                    "name": "MTLBindingAccessReadWrite",
+                                    "payload": "absent"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Some",
+                                "payload": {
+                                  "variant": {
+                                    "name": "MTLBindingAccessWriteOnly",
+                                    "payload": "absent"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Some",
+                                "payload": {
+                                  "variant": {
+                                    "name": "MTLBindingAccessWriteOnly",
+                                    "payload": "absent"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "5",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "6",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Some",
+                                "payload": {
+                                  "variant": {
+                                    "name": "MTLBindingAccessReadOnly",
+                                    "payload": "absent"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "7",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "tile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "5",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "6",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "7",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "object",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "5",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "6",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "7",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "mesh",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "5",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "6",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "7",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326976,
+        "driver_diagnostics_withheld": 1,
+        "functions_translated": 2,
+        "linked_use_questions_asked": 2,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "render_passes_made": 1,
+        "shader_modules_made": 2,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2,
+        "variant_pipelines_made": 1
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "device_memory_allocated": 201326848,
+        "functions_translated": 2,
+        "linked_use_questions_asked": 2,
+        "pooled_memory_blocks_made": 3,
+        "render_passes_made": 1,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2
+      },
+      "per_state": {
+        "pipelines": 2,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "render-state-texture-accesses",
+        "calls": 7,
+        "in_calls": 28358584,
+        "on_cpu": 1045457,
+        "blocked": 27311667,
+        "elsewhere": 2417,
+        "spend": 28362959,
+        "spend_least": 25771292,
+        "spend_most": 29872543,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 28142542,
+            "on_cpu": 802375,
+            "blocked": 27311667,
+            "wall_least": 25575667,
+            "wall_most": 29629750,
+            "wall_total": 28142542,
+            "on_cpu_total": 802375,
+            "blocked_total": 27311667
+          },
+          {
+            "call": "render_pipeline_with_reflection",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 212959,
+            "on_cpu": 213292,
+            "blocked": 0,
+            "wall_least": 192000,
+            "wall_most": 252125,
+            "wall_total": 212959,
+            "on_cpu_total": 213292,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_accesses",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 250,
+            "on_cpu": 375,
+            "blocked": 0,
+            "wall_least": 167,
+            "wall_most": 334,
+            "wall_total": 2125,
+            "on_cpu_total": 2875,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "render-state-texture-accesses",
+        "calls": 7,
+        "in_calls": 1729001,
+        "on_cpu": 1293414,
+        "blocked": 437458,
+        "elsewhere": 544000,
+        "spend": 2273001,
+        "spend_least": 1662501,
+        "spend_most": 3469249,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 264125,
+            "on_cpu": 264791,
+            "blocked": 0,
+            "wall_least": 171917,
+            "wall_most": 387000,
+            "wall_total": 264125,
+            "on_cpu_total": 264791,
+            "blocked_total": 0
+          },
+          {
+            "call": "render_pipeline_with_reflection",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1128083,
+            "on_cpu": 690625,
+            "blocked": 437458,
+            "wall_least": 790167,
+            "wall_most": 1865000,
+            "wall_total": 1128083,
+            "on_cpu_total": 690625,
+            "blocked_total": 437458
+          },
+          {
+            "call": "texture_accesses",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 375,
+            "on_cpu": 542,
+            "blocked": 0,
+            "wall_least": 291,
+            "wall_most": 417,
+            "wall_total": 336793,
+            "on_cpu_total": 337998,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

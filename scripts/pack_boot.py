@@ -10,9 +10,12 @@ import subprocess
 import sys
 import tomllib
 
+from prepare_firmware import prepare as prepare_firmware
+
 DEVICE = Path(__file__).resolve().parents[1]
 STACK = DEVICE.parent / 'UniXNU'
-PLATFORM = DEVICE.parent / 'marble_hackios'
+PLATFORM = DEVICE / 'firmware'
+prepare_firmware()
 BIN = STACK / 'out/marble/bootstrap/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64'
 OUT = STACK / 'out/marble/boot'
 

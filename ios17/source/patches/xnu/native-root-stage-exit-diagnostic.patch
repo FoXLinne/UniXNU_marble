@@ -1,0 +1,16 @@
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -1965,6 +1965,13 @@
+ 			}
+ 		}
+ #endif
++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
++		extern void native_root_block_process_exit(const char *, int, int, uint64_t, uint64_t, uint32_t, uint64_t, const char *);
++		native_root_block_process_exit(p->p_comm, WTERMSIG(rv), ut->uu_exception, ut->uu_code, ut->uu_subcode,
++		    PROC_HAS_EXITREASON(p) ? p->p_exit_reason->osr_namespace : 0,
++		    PROC_HAS_EXITREASON(p) ? p->p_exit_reason->osr_code : 0,
++		    PROC_HAS_EXITREASON(p) ? exit_reason_get_string_desc(p->p_exit_reason) : NULL);
++#endif
+ 		const bool fatal = false;
+ 		kr = task_exception_notify(EXC_CRASH, code, subcode, fatal);
+ 		/* Nobody handled EXC_CRASH?? remember to make corpse */

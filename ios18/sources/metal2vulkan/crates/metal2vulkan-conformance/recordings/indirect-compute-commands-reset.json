@@ -1,0 +1,927 @@
+{
+  "format": 1,
+  "case": "indirect-compute-commands-reset",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "icb_replay_template.ll",
+      "entry": "icb_replay_template",
+      "source_sha256": "fee2985635a8e466a450ee0fe473abdc5faa0694ddcc5b5bdc15d67c10842479"
+    },
+    {
+      "fixture": "icb_replay_template.air.ll",
+      "entry": "icb_replay_template",
+      "source_sha256": "dcfcf642972c3bc8d9d7a93a304adf8aecf78a19cd03e9468a8b3f90dee453c9"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fee2985635a8e466a450ee0fe473abdc5faa0694ddcc5b5bdc15d67c10842479"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "dcfcf642972c3bc8d9d7a93a304adf8aecf78a19cd03e9468a8b3f90dee453c9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "icb-descriptor",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "edbd93db29456cc090e30fa7ee1e53d034bd0d74dd8f0a4d17cc9a68992d62be"
+                        }
+                      }
+                    },
+                    {
+                      "name": "commands",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f332014d6bbc2642af66222b272d57c7844f496631c82938978f723a2b16322b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:params",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b9c747836e2eb1e439310c47919daf8f387a8882cc54fad97829b6c910f35214"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:out",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f2eaacf85101341c5933f3b734b3d021b1da74f0513917b2d29613b3925f8dbb"
+                        }
+                      }
+                    },
+                    {
+                      "name": "reset-range",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7f92df0cd1d1a5707b928a835a7228f1eb4eab04585dc6e16dd2c61ba72a9b1f"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:params",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "command-buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "encoded",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "command/0",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0-setComputePipelineState",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1-setKernelBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2-setKernelBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3-setThreadgroupMemoryLength",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4-concurrentDispatchThreadgroups",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "command/1",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0-setComputePipelineState",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1-setKernelBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2-setKernelBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3-setThreadgroupMemoryLength",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4-setBarrier",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "5-concurrentDispatchThreads",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "6-reset",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "command/2",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0-setComputePipelineState",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1-setKernelBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2-setKernelBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3-setThreadgroupMemoryLength",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4-setBarrier",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "5-clearBarrier",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "6-concurrentDispatchThreadgroups",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "size",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 3
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "reset-with-range",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "calls",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0-executeCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": {
+                              "variant": {
+                                "name": "Completed",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "command-buffer-error",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "None",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "out",
+                  "observed": {
+                    "value": {
+                      "bytes": "ZwAAAGoAAABtAAAAcAAAAHMAAAB2AAAAeQAAAHwAAADu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u4="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 128
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 128,
+                        "rows": 1,
+                        "image_pitch": 128,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 2,
+        "argument_tables_retained": 1,
+        "bare_starts": 1,
+        "batches_with_none_pending": 1,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_submitted": 5,
+        "commands_recorded.begin_command_buffer": 4,
+        "commands_recorded.cmd_bind_descriptor_sets": 1,
+        "commands_recorded.cmd_bind_pipeline": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_pipeline_barrier": 5,
+        "commands_recorded.cmd_push_constants": 1,
+        "commands_recorded.end_command_buffer": 5,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 201326592,
+        "encoder_command_buffers_begun": 3,
+        "fence_waits": 1,
+        "finales_apart": 1,
+        "functions_shared": 1,
+        "functions_translated": 1,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "heap_tables_worked_out": 1,
+        "indirect_record_bytes_copied": 8992,
+        "indirect_record_runs_read": 1,
+        "indirect_records_read": 3,
+        "live_tables_uploaded": 1,
+        "new_buffer_bytes_cleared": 7280,
+        "object_churn.buffers_parked": 5,
+        "object_churn.buffers_recycled": 5,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_address_indexes_made": 1,
+        "resident_resources_joined": 2,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 2,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 1,
+        "shader_modules_made": 1,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 2,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 8
+      },
+      "moving": {
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_submitted": 5,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 5,
+        "commands_recorded.end_command_buffer": 5,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 201326592,
+        "functions_translated": 1,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_specialized": 1,
+        "variant_pipelines_made": 1
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "creation_pipelines_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 1,
+        "variant_pipelines_made": 2
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "indirect-compute-commands-reset",
+        "calls": 9,
+        "in_calls": 25701958,
+        "on_cpu": 833791,
+        "blocked": 24859833,
+        "elsewhere": 3113000,
+        "spend": 28895583,
+        "spend_least": 27430208,
+        "spend_most": 31402001,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2375,
+            "on_cpu": 2500,
+            "blocked": 0,
+            "wall_least": 1833,
+            "wall_most": 2708,
+            "wall_total": 21874,
+            "on_cpu_total": 22166,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline_for_commands",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 73250,
+            "on_cpu": 73458,
+            "blocked": 0,
+            "wall_least": 68542,
+            "wall_most": 111542,
+            "wall_total": 73250,
+            "on_cpu_total": 73458,
+            "blocked_total": 0
+          },
+          {
+            "call": "indirect_command_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 30583,
+            "on_cpu": 30750,
+            "blocked": 0,
+            "wall_least": 24542,
+            "wall_most": 38708,
+            "wall_total": 30583,
+            "on_cpu_total": 30750,
+            "blocked_total": 0
+          },
+          {
+            "call": "indirect_commands_size",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 125,
+            "on_cpu": 291,
+            "blocked": 0,
+            "wall_least": 83,
+            "wall_most": 334,
+            "wall_total": 125,
+            "on_cpu_total": 291,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 21927458,
+            "on_cpu": 612417,
+            "blocked": 21340583,
+            "wall_least": 20840834,
+            "wall_most": 23927208,
+            "wall_total": 21927458,
+            "on_cpu_total": 612417,
+            "blocked_total": 21340583
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 625,
+            "on_cpu": 875,
+            "blocked": 0,
+            "wall_least": 500,
+            "wall_most": 1625,
+            "wall_total": 625,
+            "on_cpu_total": 875,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3598917,
+            "on_cpu": 94667,
+            "blocked": 3505500,
+            "wall_least": 3417167,
+            "wall_most": 3956917,
+            "wall_total": 3598917,
+            "on_cpu_total": 94667,
+            "blocked_total": 3505500
+          },
+          {
+            "call": "reset_indirect_commands",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 333,
+            "on_cpu": 417,
+            "blocked": 0,
+            "wall_least": 250,
+            "wall_most": 375,
+            "wall_total": 333,
+            "on_cpu_total": 417,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "indirect-compute-commands-reset",
+        "calls": 9,
+        "in_calls": 949374,
+        "on_cpu": 233248,
+        "blocked": 755749,
+        "elsewhere": 216792,
+        "spend": 1171584,
+        "spend_least": 1103414,
+        "spend_most": 1299167,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 750,
+            "on_cpu": 834,
+            "blocked": 0,
+            "wall_least": 666,
+            "wall_most": 959,
+            "wall_total": 2541,
+            "on_cpu_total": 2750,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline_for_commands",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 83541,
+            "on_cpu": 83791,
+            "blocked": 0,
+            "wall_least": 65792,
+            "wall_most": 96167,
+            "wall_total": 83541,
+            "on_cpu_total": 83791,
+            "blocked_total": 0
+          },
+          {
+            "call": "indirect_command_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 7333,
+            "on_cpu": 7500,
+            "blocked": 0,
+            "wall_least": 5958,
+            "wall_most": 8209,
+            "wall_total": 7333,
+            "on_cpu_total": 7500,
+            "blocked_total": 0
+          },
+          {
+            "call": "indirect_commands_size",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 42,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 84,
+            "wall_total": 42,
+            "on_cpu_total": 167,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 88541,
+            "on_cpu": 89083,
+            "blocked": 0,
+            "wall_least": 61333,
+            "wall_most": 99417,
+            "wall_total": 88541,
+            "on_cpu_total": 89083,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 333,
+            "on_cpu": 500,
+            "blocked": 0,
+            "wall_least": 292,
+            "wall_most": 833,
+            "wall_total": 333,
+            "on_cpu_total": 500,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 795583,
+            "on_cpu": 47375,
+            "blocked": 755749,
+            "wall_least": 723875,
+            "wall_most": 864792,
+            "wall_total": 795583,
+            "on_cpu_total": 47375,
+            "blocked_total": 755749
+          },
+          {
+            "call": "reset_indirect_commands",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 666,
+            "on_cpu": 833,
+            "blocked": 0,
+            "wall_least": 583,
+            "wall_most": 833,
+            "wall_total": 666,
+            "on_cpu_total": 833,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

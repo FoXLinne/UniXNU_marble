@@ -1,0 +1,361 @@
+{
+  "format": 1,
+  "case": "buffer-textures-cpu-access",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "buffer-bytes",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "4fe56f153fb9b66e941764b842a895134c4a67c27a8a9150ca9bd4b9e3cdff20"
+                        }
+                      }
+                    },
+                    {
+                      "name": "calls",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7142ac54a53bf22c3bd34c232c04e72abc4ff90ac12c672a355ee2003496b92b"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "work",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture-buffer-rgba8uint-16/get-bytes/0",
+                  "observed": {
+                    "value": {
+                      "bytes": "d5zB5hA1Wn+kye4YPWKHrNH2IEVqj7TZAyhNcpe84QswVXqfxOkTOF2Cp8zxG0Bliq/U+SNIbZK33AYrUHWavw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 64
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 64,
+                        "row_pitch": 64,
+                        "rows": 1,
+                        "image_pitch": 64,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture-buffer-rgba8uint-16/get-bytes/1",
+                  "observed": {
+                    "value": {
+                      "bytes": "0fYgRWqPtNkDKE1yl7zhCw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 16,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture-buffer-rgba8uint-16/buffer",
+                  "observed": {
+                    "value": {
+                      "bytes": "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"
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 4096
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 64,
+                        "row_pitch": 64,
+                        "rows": 64,
+                        "image_pitch": 4096,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture-2d-r32uint-3x2/get-bytes/0",
+                  "observed": {
+                    "value": {
+                      "bytes": "ud4ILVJ3nMHmEDVacpe84QswVXqfxOkT"
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 24
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 12,
+                        "row_pitch": 12,
+                        "rows": 2,
+                        "image_pitch": 24,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture-2d-r32uint-3x2/get-bytes/1",
+                  "observed": {
+                    "value": {
+                      "bytes": "ud4ILVJ3nMHmEDVa/f39/f39/f39/f39/f39/f39/f1yl7zhCzBVep/E6RM="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 44
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 12,
+                        "row_pitch": 32,
+                        "rows": 2,
+                        "image_pitch": 44,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture-2d-r32uint-3x2/buffer",
+                  "observed": {
+                    "value": {
+                      "bytes": "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"
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 4096
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 128,
+                        "image_pitch": 4096,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-shadowed-texture"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "device_memory_allocated": 201326592,
+        "new_buffer_bytes_cleared": 8192,
+        "object_churn.buffers_parked": 2,
+        "object_churn.buffers_recycled": 2,
+        "object_churn.images_own_memory": 1,
+        "object_churn.images_parked": 1,
+        "object_churn.images_recycled": 1,
+        "object_churn.textures_shadow": 1,
+        "object_churn.textures_texels": 1,
+        "pooled_memory_blocks_made": 3,
+        "queues_sharing_a_vk_queue": 1,
+        "shadowed_textures": 1
+      },
+      "composed": {
+        "device_memory_allocated": 201326592
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pooled_memory_blocks_made": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "buffer-textures-cpu-access",
+        "calls": 1,
+        "in_calls": 11916,
+        "on_cpu": 12083,
+        "blocked": 0,
+        "elsewhere": 1000,
+        "spend": 12916,
+        "spend_least": 10625,
+        "spend_most": 15167,
+        "per_call": [
+          {
+            "call": "work",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 11916,
+            "on_cpu": 12083,
+            "blocked": 0,
+            "wall_least": 10500,
+            "wall_most": 12625,
+            "wall_total": 11916,
+            "on_cpu_total": 12083,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "buffer-textures-cpu-access",
+        "calls": 1,
+        "in_calls": 10334,
+        "on_cpu": 10458,
+        "blocked": 0,
+        "elsewhere": 500,
+        "spend": 10833,
+        "spend_least": 10292,
+        "spend_most": 11584,
+        "degraded": [
+          "metal2vulkan-degrade-shadowed-texture"
+        ],
+        "per_call": [
+          {
+            "call": "work",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 10334,
+            "on_cpu": 10458,
+            "blocked": 0,
+            "wall_least": 9833,
+            "wall_most": 10666,
+            "wall_total": 10334,
+            "on_cpu_total": 10458,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

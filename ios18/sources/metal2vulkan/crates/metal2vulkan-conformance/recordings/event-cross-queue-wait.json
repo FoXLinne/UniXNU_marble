@@ -1,0 +1,302 @@
+{
+  "format": 1,
+  "case": "event-cross-queue-wait",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 5,
+      "outcomes": [
+        {
+          "runs": 5,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "scratch-bytes",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2e22fd435060cd5d3cf5e3ef39f79e198b35bd2c4af31974db36601b3a2f4c91"
+                        }
+                      }
+                    },
+                    {
+                      "name": "wait-bounds-millis",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "15974581de1a64a38d73ffa2754e6c85bcf978e607026240ebb64d1cbac16ca1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "fill-bytes",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a12871fee210fb8619291eaea194581cbd2531e4b23759d225f6806923f63222"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "order",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "waiting/status-after-its-own-commit",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Committed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "waiting/status-once-both-completed",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "signalling/status-once-both-completed",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "scratch",
+                      "observed": {
+                        "value": {
+                          "bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 256
+                              }
+                            },
+                            "element": "u8",
+                            "row_offset": 0,
+                            "row_elements": 256,
+                            "row_pitch": 256,
+                            "rows": 1,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "bare_starts": 2,
+        "batches_held_past_a_look": 1,
+        "batches_submitted_by_waiters": 2,
+        "batches_with_none_pending": 2,
+        "command_buffers_begun": 2,
+        "command_buffers_begun_encoders": 2,
+        "command_buffers_submitted": 2,
+        "commands_recorded.begin_command_buffer": 2,
+        "commands_recorded.cmd_pipeline_barrier": 2,
+        "commands_recorded.cmd_update_buffer": 2,
+        "commands_recorded.end_command_buffer": 2,
+        "commits_handed_off": 2,
+        "commits_taken_in": 2,
+        "completed_waits": 7,
+        "completed_where_seen": 2,
+        "completion_arms": 2,
+        "completion_arms_after_a_wake": 2,
+        "completion_waiter_parks": 2,
+        "device_memory_allocated": 201326592,
+        "encoder_command_buffers_begun": 2,
+        "fence_waits": 2,
+        "fills_by_transfers": 2,
+        "finales_folded": 2,
+        "gate_waits": 2,
+        "gate_waits_slept": 2,
+        "heads_held_for_event_values": 2,
+        "new_buffer_bytes_cleared": 256,
+        "object_churn.buffers_parked": 1,
+        "object_churn.vk_buffer_bindings": 1,
+        "object_churn.vk_buffers_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 2,
+        "queues_sharing_a_vk_queue": 2,
+        "scheduled_where_submitted": 2,
+        "scheduler_passes": 3,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 2,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 1,
+        "slot_returns": 2,
+        "spare_command_pools_taken": 2,
+        "submit_infos": 2,
+        "trail_waits": 2,
+        "wakes_completion_waiters": 2,
+        "wakes_spared": 16
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "batches_submitted_by_waiters": 0,
+        "device_memory_allocated": 201326592,
+        "pooled_memory_blocks_made": 3,
+        "queues_sharing_a_vk_queue": 0
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "event-cross-queue-wait",
+        "calls": 1,
+        "in_calls": 3822791,
+        "on_cpu": 300333,
+        "blocked": 3495958,
+        "elsewhere": 3209791,
+        "spend": 7066208,
+        "spend_least": 6780375,
+        "spend_most": 9026000,
+        "per_call": [
+          {
+            "call": "event_cross_queue_wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3822791,
+            "on_cpu": 300333,
+            "blocked": 3495958,
+            "wall_least": 3672625,
+            "wall_most": 5667666,
+            "wall_total": 3822791,
+            "on_cpu_total": 300333,
+            "blocked_total": 3495958
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "event-cross-queue-wait",
+        "calls": 1,
+        "in_calls": 934084,
+        "on_cpu": 41250,
+        "blocked": 881542,
+        "elsewhere": 320292,
+        "spend": 1253500,
+        "spend_least": 1178250,
+        "spend_most": 1412083,
+        "per_call": [
+          {
+            "call": "event_cross_queue_wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 934084,
+            "on_cpu": 41250,
+            "blocked": 881542,
+            "wall_least": 895250,
+            "wall_most": 1038125,
+            "wall_total": 934084,
+            "on_cpu_total": 41250,
+            "blocked_total": 881542
+          }
+        ]
+      }
+    }
+  ]
+}

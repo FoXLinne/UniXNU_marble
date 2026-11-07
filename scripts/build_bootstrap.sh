@@ -2,7 +2,8 @@
 set -euo pipefail
 base=$(cd "$(dirname "$0")/.." && pwd)
 stack="$base/../UniXNU"
-platform="$base/../marble_hackios"
+platform="$base/firmware"
+python3 "$base/scripts/prepare_firmware.py"
 edk2="$platform/Mu-Silicium/Mu_Basecore"
 export WORKSPACE="$stack/out/marble/bootstrap"
 export EDK_TOOLS_PATH="$edk2/BaseTools"

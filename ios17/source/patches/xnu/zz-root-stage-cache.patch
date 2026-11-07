@@ -1,0 +1,76 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -7030,7 +7030,34 @@
+ #if !DEVELOPMENT && !DEBUG
+ #error The offline owner cache mount is a development instrument
+ #endif
++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
++extern int native_root_block_authorized(dev_t);
++extern int native_root_block_cache_authorized(dev_t);
++extern int native_root_block_volume_device(const char *, dev_t *, char *, size_t);
++#else
+ extern int native_verified_block_volume_device(const char *, dev_t *, char *, size_t);
++extern int native_verified_block_root_authorized(dev_t);
++#endif
++
++static int
++native_owner_cache_device_authorized(dev_t device, bool root)
++{
++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
++	return root ? native_root_block_authorized(device) : native_root_block_cache_authorized(device);
++#else
++	return native_verified_block_root_authorized(device);
++#endif
++}
++
++static int
++native_owner_cache_find_volume(const char *uuid, dev_t *device, char *path, size_t size)
++{
++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
++	return native_root_block_volume_device(uuid, device, path, size);
++#else
++	return native_verified_block_volume_device(uuid, device, path, size);
++#endif
++}
+ #if defined(XNU_OWNER_BOOT_MANIFEST) && XNU_OWNER_BOOT_MANIFEST
+ extern int native_owner_publish_boot_manifest(dev_t, const char *, dev_t, const char *);
+ #endif
+@@ -7038,7 +7065,6 @@
+ extern void commpage_update_dyld_flags(uint64_t);
+ volatile uint64_t native_owner_cache_dyld_flags = 0;
+ #endif
+-extern int native_verified_block_root_authorized(dev_t);
+ volatile int native_owner_cache_stage = 0;
+ volatile int native_owner_cache_status = -1;
+ volatile int native_owner_cache_mount_status = -1;
+@@ -7108,10 +7134,10 @@
+ #endif
+ 	if (device_vnode) vnode_put(device_vnode);
+ 	root_authorized = (vfs_flags(root_mount) & MNT_RDONLY) && root_device != NODEV &&
+-	    native_verified_block_root_authorized(root_device);
++	    native_owner_cache_device_authorized(root_device, true);
+ 	if (!root_authorized) goto done;
+ 	native_owner_cache_stage = 1;
+-	if (!native_verified_block_volume_device(volume, &selected, device_path,
++	if (!native_owner_cache_find_volume(volume, &selected, device_path,
+ 	    sizeof(device_path))) goto done;
+ 	strlcpy(native_owner_cache_device_path, device_path, sizeof(native_owner_cache_device_path));
+ 	native_owner_cache_selected_device = selected;
+@@ -7146,7 +7172,7 @@
+ 	    vnode_mountedhere(original_os_root) == cache_mount && rootvnode == mounted_root;
+ 	native_owner_cache_native_union = native_union;
+ 	cache_authorized = readonly && actual == selected &&
+-	    !strcmp(vfs_statfs(cache_mount)->f_fstypename, "apfs") && native_verified_block_root_authorized(actual);
++	    !strcmp(vfs_statfs(cache_mount)->f_fstypename, "apfs") && native_owner_cache_device_authorized(actual, false);
+ #if defined(XNU_OWNER_UNION_SYSTEMOS) && XNU_OWNER_UNION_SYSTEMOS
+ 	cache_authorized = cache_authorized && native_union;
+ #endif
+@@ -7165,7 +7191,7 @@
+ 	native_owner_cache_stage = 6;
+ done:
+ 	if (mounted_root) vnode_put(mounted_root);
+-	int root_recheck = root_authorized && native_verified_block_root_authorized(root_device);
++	int root_recheck = root_authorized && native_owner_cache_device_authorized(root_device, true);
+ 	native_owner_cache_root_recheck = root_recheck;
+ 	if (!root_recheck) error = EAUTH;
+ #if defined(XNU_OWNER_BOOT_MANIFEST) && XNU_OWNER_BOOT_MANIFEST

@@ -1,0 +1,800 @@
+{
+  "format": 1,
+  "case": "rotated-planes-load-4-32x32",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "tob_renders.ll",
+      "entry": "tob_rect",
+      "source_sha256": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+    },
+    {
+      "fixture": "tob_renders.air.ll",
+      "entry": "tob_rect",
+      "source_sha256": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+    },
+    {
+      "fixture": "tob_renders.ll",
+      "entry": "tob_read",
+      "source_sha256": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+    },
+    {
+      "fixture": "tob_renders.air.ll",
+      "entry": "tob_read",
+      "source_sha256": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "renders:air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+                        }
+                      }
+                    },
+                    {
+                      "name": "renders:air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "rotation",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"
+                        }
+                      }
+                    },
+                    {
+                      "name": "frame",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "60b97a9d7717a5daff06a10f98accc2f972908017fa908490f1279b60f90e26d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "plane",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e79184b59e09d31d8fcb6b0c1037a10a29d3d8533af56a01218793dc5b71f8bd"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9e834b0234d68e98cac31ba2181d703023de8dea9adc0fb033175b1841675627"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pipeline",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ce7cc2bbf6a1f57ced2b1acd85440b1c5b1324b780c5be91992bf1d5830d83f3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "load-action",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "corners",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "df02ea55ed4d9d5e03b2c620a13b25f02e8153e5fb2b995398f0c5cbd09e08a2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:naming",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "cb5bb0578da1acf02229c4b865b1650fae89a9ddacfbe831e814bb02dc8a3709"
+                        }
+                      }
+                    },
+                    {
+                      "name": "plane:before",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "35ffadb36450818a7f426f3823a7efef9d595d965ab9808dfa1f963acf0a217a"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library/renders",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture/naming",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/corners",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "write-plane",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-plane",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "plane",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "rows-0",
+                      "observed": {
+                        "value": {
+                          "bytes": "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"
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 4608
+                              }
+                            },
+                            "element": "u8",
+                            "row_offset": 0,
+                            "row_elements": 128,
+                            "row_pitch": 144,
+                            "rows": 32,
+                            "image_pitch": 4608,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-rotated-load-tiles",
+        "metal2vulkan-degrade-shadowed-texture"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 2,
+        "argument_samplers_taken": 1,
+        "argument_tables_retained": 2,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bind_views_worked_out": 1,
+        "command_buffers_begun": 3,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_encoders": 1,
+        "command_buffers_begun_secondaries": 1,
+        "command_buffers_deferred": 2,
+        "command_buffers_submitted": 2,
+        "commands_recorded.begin_command_buffer": 3,
+        "commands_recorded.cmd_begin_render_pass": 1,
+        "commands_recorded.cmd_bind_descriptor_sets": 3,
+        "commands_recorded.cmd_bind_pipeline": 3,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer": 6,
+        "commands_recorded.cmd_copy_buffer_to_image": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 1,
+        "commands_recorded.cmd_dispatch": 2,
+        "commands_recorded.cmd_draw": 1,
+        "commands_recorded.cmd_end_render_pass": 1,
+        "commands_recorded.cmd_execute_commands": 1,
+        "commands_recorded.cmd_pipeline_barrier": 14,
+        "commands_recorded.cmd_push_constants": 2,
+        "commands_recorded.cmd_set_blend_constants": 1,
+        "commands_recorded.cmd_set_cull_mode": 1,
+        "commands_recorded.cmd_set_depth_bias": 1,
+        "commands_recorded.cmd_set_depth_compare_op": 1,
+        "commands_recorded.cmd_set_depth_test_enable": 1,
+        "commands_recorded.cmd_set_depth_write_enable": 1,
+        "commands_recorded.cmd_set_front_face": 1,
+        "commands_recorded.cmd_set_primitive_restart_enable": 1,
+        "commands_recorded.cmd_set_primitive_topology": 1,
+        "commands_recorded.cmd_set_scissor": 1,
+        "commands_recorded.cmd_set_stencil_compare_mask": 1,
+        "commands_recorded.cmd_set_stencil_op": 1,
+        "commands_recorded.cmd_set_stencil_reference": 1,
+        "commands_recorded.cmd_set_stencil_test_enable": 1,
+        "commands_recorded.cmd_set_stencil_write_mask": 1,
+        "commands_recorded.cmd_set_viewport": 1,
+        "commands_recorded.cmd_update_buffer": 2,
+        "commands_recorded.end_command_buffer": 3,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 1,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_drawn": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 268435712,
+        "draw_shapes_made": 1,
+        "draw_states_recorded": 19,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 1,
+        "encoder_command_buffers_begun": 2,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 1,
+        "heap_tables_worked_out": 2,
+        "host_texel_copies": 1,
+        "images_started_on_the_host": 1,
+        "linked_use_questions_asked": 2,
+        "new_buffer_bytes_cleared": 4624,
+        "object_churn.buffers_parked": 5,
+        "object_churn.buffers_recycled": 5,
+        "object_churn.images_own_memory": 3,
+        "object_churn.images_parked": 2,
+        "object_churn.images_recycled": 2,
+        "object_churn.textures_image": 1,
+        "object_churn.textures_shadow": 2,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_image_views_made": 2,
+        "object_churn.vk_images_destroyed": 1,
+        "object_churn.vk_images_made": 1,
+        "owned_descriptor_pools": 1,
+        "owned_kernel_spirv_bytes": 4688,
+        "owned_kernels_made": 1,
+        "passes_not_inline_buffer_textures": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 1,
+        "render_passes_begun_instances": 1,
+        "render_passes_made": 2,
+        "resident_textures_looked_at": 1,
+        "row_copies": 1,
+        "row_copy_regions": 32,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "shader_modules_made": 2,
+        "shadow_attachment_loads_within": 1,
+        "shadow_attachment_passes": 1,
+        "shadow_attachment_textures": 1,
+        "shadow_attachment_tiles_bounded": 1,
+        "shadow_attachment_tiles_covered": 1,
+        "shadow_copies": 2,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 4,
+        "submit_infos": 1,
+        "trail_waits": 1,
+        "variant_pipelines_made": 1,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "argument_samplers_taken": 1,
+        "command_buffers_deferred": 0,
+        "commands_recorded.cmd_begin_render_pass": 0,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_copy_buffer_to_image": 0,
+        "commands_recorded.cmd_copy_image_to_buffer": 0,
+        "commands_recorded.cmd_dispatch": 0,
+        "commands_recorded.cmd_draw": 0,
+        "commands_recorded.cmd_end_render_pass": 0,
+        "commands_recorded.cmd_execute_commands": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 1,
+        "commands_recorded.cmd_set_blend_constants": 0,
+        "commands_recorded.cmd_set_cull_mode": 0,
+        "commands_recorded.cmd_set_depth_bias": 0,
+        "commands_recorded.cmd_set_depth_compare_op": 0,
+        "commands_recorded.cmd_set_depth_test_enable": 0,
+        "commands_recorded.cmd_set_depth_write_enable": 0,
+        "commands_recorded.cmd_set_front_face": 0,
+        "commands_recorded.cmd_set_primitive_restart_enable": 0,
+        "commands_recorded.cmd_set_primitive_topology": 0,
+        "commands_recorded.cmd_set_scissor": 0,
+        "commands_recorded.cmd_set_stencil_compare_mask": 0,
+        "commands_recorded.cmd_set_stencil_op": 0,
+        "commands_recorded.cmd_set_stencil_reference": 0,
+        "commands_recorded.cmd_set_stencil_test_enable": 0,
+        "commands_recorded.cmd_set_stencil_write_mask": 0,
+        "commands_recorded.cmd_set_viewport": 0,
+        "commands_recorded.cmd_update_buffer": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "creation_pipelines_drawn": 1,
+        "creation_render_pipelines_drawn": 1,
+        "creation_render_pipelines_made": 1,
+        "device_memory_allocated": 268435584,
+        "draw_shapes_made": 1,
+        "driver_diagnostics_withheld": 1,
+        "functions_translated": 2,
+        "linked_use_questions_asked": 2,
+        "owned_kernel_spirv_bytes": 4688,
+        "owned_kernels_made": 1,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 2,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "creation_pipelines_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 4,
+        "shader_modules_made": 2,
+        "variant_pipelines_made": 1
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "rotated-planes-load-4-32x32",
+        "calls": 8,
+        "in_calls": 29204248,
+        "on_cpu": 1119666,
+        "blocked": 28083832,
+        "elsewhere": 4328625,
+        "spend": 33606207,
+        "spend_least": 32950332,
+        "spend_most": 60245124,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3584,
+            "on_cpu": 3708,
+            "blocked": 0,
+            "wall_least": 2959,
+            "wall_most": 8250,
+            "wall_total": 3584,
+            "on_cpu_total": 3708,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23641541,
+            "on_cpu": 635875,
+            "blocked": 22985499,
+            "wall_least": 23203666,
+            "wall_most": 47976500,
+            "wall_total": 23641541,
+            "on_cpu_total": 635875,
+            "blocked_total": 22985499
+          },
+          {
+            "call": "read_plane",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 5750,
+            "on_cpu": 5833,
+            "blocked": 0,
+            "wall_least": 3791,
+            "wall_most": 15417,
+            "wall_total": 5750,
+            "on_cpu_total": 5833,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 5264000,
+            "on_cpu": 177625,
+            "blocked": 5083458,
+            "wall_least": 5181084,
+            "wall_most": 6405459,
+            "wall_total": 5264000,
+            "on_cpu_total": 177625,
+            "blocked_total": 5083458
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 124500,
+            "on_cpu": 124791,
+            "blocked": 0,
+            "wall_least": 108083,
+            "wall_most": 262916,
+            "wall_total": 124500,
+            "on_cpu_total": 124791,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 133750,
+            "on_cpu": 133958,
+            "blocked": 0,
+            "wall_least": 116500,
+            "wall_most": 295291,
+            "wall_total": 133750,
+            "on_cpu_total": 133958,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 32917,
+            "on_cpu": 33042,
+            "blocked": 0,
+            "wall_least": 29208,
+            "wall_most": 61625,
+            "wall_total": 32917,
+            "on_cpu_total": 33042,
+            "blocked_total": 0
+          },
+          {
+            "call": "write_plane",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2042,
+            "on_cpu": 2208,
+            "blocked": 0,
+            "wall_least": 1791,
+            "wall_most": 4542,
+            "wall_total": 2042,
+            "on_cpu_total": 2208,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "rotated-planes-load-4-32x32",
+        "calls": 8,
+        "in_calls": 1513292,
+        "on_cpu": 369541,
+        "blocked": 1103082,
+        "elsewhere": 359375,
+        "spend": 1872667,
+        "spend_least": 1784583,
+        "spend_most": 1972710,
+        "degraded": [
+          "metal2vulkan-degrade-rotated-load-tiles",
+          "metal2vulkan-degrade-shadowed-texture"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1542,
+            "on_cpu": 1667,
+            "blocked": 0,
+            "wall_least": 1167,
+            "wall_most": 13292,
+            "wall_total": 1542,
+            "on_cpu_total": 1667,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 219917,
+            "on_cpu": 221500,
+            "blocked": 0,
+            "wall_least": 168292,
+            "wall_most": 249000,
+            "wall_total": 219917,
+            "on_cpu_total": 221500,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_plane",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 542,
+            "on_cpu": 666,
+            "blocked": 0,
+            "wall_least": 500,
+            "wall_most": 1333,
+            "wall_total": 542,
+            "on_cpu_total": 666,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1219291,
+            "on_cpu": 75583,
+            "blocked": 1103082,
+            "wall_least": 1141667,
+            "wall_most": 1331875,
+            "wall_total": 1219291,
+            "on_cpu_total": 75583,
+            "blocked_total": 1103082
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 32667,
+            "on_cpu": 32916,
+            "blocked": 0,
+            "wall_least": 22791,
+            "wall_most": 52875,
+            "wall_total": 32667,
+            "on_cpu_total": 32916,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8667,
+            "on_cpu": 8750,
+            "blocked": 0,
+            "wall_least": 6333,
+            "wall_most": 12166,
+            "wall_total": 8667,
+            "on_cpu_total": 8750,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 27000,
+            "on_cpu": 27167,
+            "blocked": 0,
+            "wall_least": 20416,
+            "wall_most": 41833,
+            "wall_total": 27000,
+            "on_cpu_total": 27167,
+            "blocked_total": 0
+          },
+          {
+            "call": "write_plane",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 166,
+            "on_cpu": 291,
+            "blocked": 0,
+            "wall_least": 125,
+            "wall_most": 250,
+            "wall_total": 166,
+            "on_cpu_total": 291,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

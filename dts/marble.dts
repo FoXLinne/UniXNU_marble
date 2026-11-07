@@ -1,0 +1,24 @@
+/dts-v1/;
+/include/ "sm7475.dtsi"
+
+/ {
+    model = "Xiaomi Redmi Note 12 Turbo (marble)";
+    compatible = "xiaomi,marble", "qcom,sm7475";
+    memory@80000000 {
+        device_type = "memory";
+        // Existing board handoff range; runtime allocations come from UEFI.
+        reg = <0 0x80000000 4 0>;
+    };
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+        payload@a8000000 { reg = <0 0xa8000000 0 0x0f000000>; no-map; };
+        panic@b7000000 { reg = <0 0xb7000000 0 0x100000>; no-map; };
+        framebuffer@b8000000 { reg = <0 0xb8000000 0 0x9e3400>; no-map; };
+    };
+};
+
+&cpu0 { status = "okay"; };
+&ufs { status = "okay"; };
+// CPU 7 owns the resident firmware USB service for the current iOS 18 image.

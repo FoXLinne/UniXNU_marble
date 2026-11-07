@@ -1,0 +1,1347 @@
+{
+  "format": 1,
+  "case": "pipeline-options-render-archive-miss",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "reflection/texture_accesses.ll",
+      "entry": "texture_accesses_vertex",
+      "source_sha256": "081bf6dfe075bb2171d010f4720eb3bd1fce1d77b5cf5b7cf6cb07afaec9bfc8"
+    },
+    {
+      "fixture": "reflection/texture_accesses.air.ll",
+      "entry": "texture_accesses_vertex",
+      "source_sha256": "954c6d7119e9d0bc9526de28fbbea84424cb9619dc05a1e9ee7b8659f60e0dd3"
+    },
+    {
+      "fixture": "reflection/texture_accesses.ll",
+      "entry": "texture_accesses_fragment",
+      "source_sha256": "081bf6dfe075bb2171d010f4720eb3bd1fce1d77b5cf5b7cf6cb07afaec9bfc8"
+    },
+    {
+      "fixture": "reflection/texture_accesses.air.ll",
+      "entry": "texture_accesses_fragment",
+      "source_sha256": "954c6d7119e9d0bc9526de28fbbea84424cb9619dc05a1e9ee7b8659f60e0dd3"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "081bf6dfe075bb2171d010f4720eb3bd1fce1d77b5cf5b7cf6cb07afaec9bfc8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "954c6d7119e9d0bc9526de28fbbea84424cb9619dc05a1e9ee7b8659f60e0dd3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "options",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2a9193c4b58505523fd99339578b445a4882b31844161f2006da2bb728da9f96"
+                        }
+                      }
+                    },
+                    {
+                      "name": "attachment",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ba8c9eac092a503e4fb70771c34a00c5bb651043de24db4d3525ebbb3ee7ff08"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "outcome",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "reflected",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    },
+                    {
+                      "name": "vertex_bindings",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 1
+                            }
+                          }
+                        },
+                        {
+                          "name": "MTLBindingTypeTexture/0/vt",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "vt"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingTypeTexture"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "access",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingAccessReadOnly"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 0
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 0
+                                }
+                              }
+                            },
+                            {
+                              "name": "used",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "argument",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "texture",
+                              "observed": {
+                                "value": "absent"
+                              },
+                              "children": [
+                                {
+                                  "name": "texture_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLTextureType2D"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 2
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "data_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLDataTypeFloat"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 3
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "depth",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "array_length",
+                                  "observed": {
+                                    "value": {
+                                      "uint": 1
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "fragment_bindings",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 7
+                            }
+                          }
+                        },
+                        {
+                          "name": "MTLBindingTypeTexture/0/r",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "r"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingTypeTexture"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "access",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingAccessReadOnly"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 0
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 0
+                                }
+                              }
+                            },
+                            {
+                              "name": "used",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "argument",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "texture",
+                              "observed": {
+                                "value": "absent"
+                              },
+                              "children": [
+                                {
+                                  "name": "texture_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLTextureType2D"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 2
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "data_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLDataTypeFloat"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 3
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "depth",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "array_length",
+                                  "observed": {
+                                    "value": {
+                                      "uint": 1
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "name": "MTLBindingTypeTexture/1/w",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "w"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingTypeTexture"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "access",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingAccessWriteOnly"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 1
+                                }
+                              }
+                            },
+                            {
+                              "name": "used",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "argument",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "texture",
+                              "observed": {
+                                "value": "absent"
+                              },
+                              "children": [
+                                {
+                                  "name": "texture_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLTextureType2D"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 2
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "data_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLDataTypeFloat"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 3
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "depth",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "array_length",
+                                  "observed": {
+                                    "value": {
+                                      "uint": 1
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "name": "MTLBindingTypeTexture/2/rw",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "rw"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingTypeTexture"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "access",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingAccessReadWrite"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 1
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 2
+                                }
+                              }
+                            },
+                            {
+                              "name": "used",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "argument",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "texture",
+                              "observed": {
+                                "value": "absent"
+                              },
+                              "children": [
+                                {
+                                  "name": "texture_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLTextureType2D"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 2
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "data_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLDataTypeFloat"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 3
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "depth",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "array_length",
+                                  "observed": {
+                                    "value": {
+                                      "uint": 1
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "name": "MTLBindingTypeTexture/3/wa",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "wa"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingTypeTexture"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "access",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingAccessWriteOnly"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 3
+                                }
+                              }
+                            },
+                            {
+                              "name": "used",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "argument",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "texture",
+                              "observed": {
+                                "value": "absent"
+                              },
+                              "children": [
+                                {
+                                  "name": "texture_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLTextureType2D"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 2
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "data_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLDataTypeFloat"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 3
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "depth",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "array_length",
+                                  "observed": {
+                                    "value": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "name": "MTLBindingTypeTexture/5/unused",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "unused"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingTypeTexture"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "access",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingAccessWriteOnly"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 5
+                                }
+                              }
+                            },
+                            {
+                              "name": "used",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "argument",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "texture",
+                              "observed": {
+                                "value": "absent"
+                              },
+                              "children": [
+                                {
+                                  "name": "texture_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLTextureType2D"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 2
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "data_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLDataTypeFloat"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 3
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "depth",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "array_length",
+                                  "observed": {
+                                    "value": {
+                                      "uint": 1
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "name": "MTLBindingTypeTexture/6/s",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "s"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingTypeTexture"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 2
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "access",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingAccessReadOnly"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 0
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 6
+                                }
+                              }
+                            },
+                            {
+                              "name": "used",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "argument",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "texture",
+                              "observed": {
+                                "value": "absent"
+                              },
+                              "children": [
+                                {
+                                  "name": "texture_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLTextureType2D"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 2
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "data_type",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "name": {
+                                          "lines": [
+                                            "MTLDataTypeFloat"
+                                          ]
+                                        },
+                                        "raw": {
+                                          "uint": 3
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "depth",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "array_length",
+                                  "observed": {
+                                    "value": {
+                                      "uint": 1
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "name": "MTLBindingTypeSampler/0/smp",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "smp"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingTypeSampler"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 3
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "access",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLBindingAccessReadOnly"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 0
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 0
+                                }
+                              }
+                            },
+                            {
+                              "name": "used",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "argument",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326976,
+        "driver_diagnostics_withheld": 1,
+        "functions_translated": 2,
+        "linked_use_questions_asked": 2,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "render_passes_made": 1,
+        "shader_modules_made": 2,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2,
+        "variant_pipelines_made": 1,
+        "variants_taken_back": 1
+      },
+      "composed": {
+        "creation_render_pipelines_made": 1,
+        "device_memory_allocated": 201326848,
+        "driver_diagnostics_withheld": 1,
+        "functions_translated": 2,
+        "linked_use_questions_asked": 2,
+        "render_passes_made": 1,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "creation_pipelines_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 2,
+        "variant_pipelines_made": 1
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "pipeline-options-render-archive-miss",
+        "calls": 2,
+        "in_calls": 22205417,
+        "on_cpu": 732125,
+        "blocked": 21392292,
+        "elsewhere": 3875,
+        "spend": 22209459,
+        "spend_least": 21889084,
+        "spend_most": 23970793,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22052375,
+            "on_cpu": 595875,
+            "blocked": 21392292,
+            "wall_least": 21750250,
+            "wall_most": 23793417,
+            "wall_total": 22052375,
+            "on_cpu_total": 595875,
+            "blocked_total": 21392292
+          },
+          {
+            "call": "render_pipeline_under_options",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 135875,
+            "on_cpu": 136250,
+            "blocked": 0,
+            "wall_least": 123083,
+            "wall_most": 173167,
+            "wall_total": 135875,
+            "on_cpu_total": 136250,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "pipeline-options-render-archive-miss",
+        "calls": 2,
+        "in_calls": 177000,
+        "on_cpu": 180667,
+        "blocked": 0,
+        "elsewhere": 500,
+        "spend": 178834,
+        "spend_least": 129333,
+        "spend_most": 222958,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 123875,
+            "on_cpu": 127292,
+            "blocked": 0,
+            "wall_least": 92458,
+            "wall_most": 143792,
+            "wall_total": 123875,
+            "on_cpu_total": 127292,
+            "blocked_total": 0
+          },
+          {
+            "call": "render_pipeline_under_options",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 53125,
+            "on_cpu": 53375,
+            "blocked": 0,
+            "wall_least": 36583,
+            "wall_most": 68791,
+            "wall_total": 53125,
+            "on_cpu_total": 53375,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -160,7 +160,7 @@ def patch_kernel(root, kernel, out, platform, mode):
 def build(root, mode):
     out = root / ('probe-' + mode)
     out.mkdir(exist_ok=True)
-    platform, stack = DEVICE.parent / 'marble_hackios', DEVICE.parent / 'UniXNU'
+    platform, stack = DEVICE / 'firmware', DEVICE.parent / 'UniXNU'
     binaries = build_applications(out, platform, stack)
     stage = out / 'stage/EFI/UniXNU'
     shutil.copytree(root / 'boot/stage/EFI/UniXNU', stage, dirs_exist_ok=True)

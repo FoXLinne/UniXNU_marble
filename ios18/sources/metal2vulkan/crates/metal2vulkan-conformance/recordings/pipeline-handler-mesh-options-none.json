@@ -1,0 +1,557 @@
+{
+  "format": 1,
+  "case": "pipeline-handler-mesh-options-none",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "mesh_draws.ll",
+      "entry": "mesh_draws_mesh",
+      "source_sha256": "3d3689026db57166984f585d018b63c37c47a9cd03915380bdd1453b6ad8b3fa"
+    },
+    {
+      "fixture": "mesh_draws.air.ll",
+      "entry": "mesh_draws_mesh",
+      "source_sha256": "fa449657f08460681d54420b735459f6c7fc6a5ee92dd56637e8f01a4c3d031c"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3d3689026db57166984f585d018b63c37c47a9cd03915380bdd1453b6ad8b3fa"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fa449657f08460681d54420b735459f6c7fc6a5ee92dd56637e8f01a4c3d031c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "entry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5a1b25aa5aef5c76a32c31262d0eb21b50a0476341f3ec17fb60f54eda224e1d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "form",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c9e140af2f1b80caefb78900bc4ee7ac07801396c6a90298c95df58907a3c7b2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "imageblock",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b0853f6af25f29697838d03f243c9bf1bf6e861fdcb1ec7eb2c51e3446fe4e3f"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipelines",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "through-the-handler",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "arrival",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Answered",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "delivery",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "delivered-a-state",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "delivered-an-error",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "delivered-a-reflection",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "facts",
+                              "observed": {
+                                "value": "absent"
+                              },
+                              "children": [
+                                {
+                                  "name": "label",
+                                  "observed": {
+                                    "value": {
+                                      "variant": {
+                                        "name": "None",
+                                        "payload": "absent"
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "device",
+                                  "observed": {
+                                    "value": {
+                                      "bool": true
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "max_total_threads_per_threadgroup",
+                                  "observed": {
+                                    "value": {
+                                      "uint": 0
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "threadgroup_size_matches_tile_size",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "imageblock_sample_length",
+                                  "observed": {
+                                    "value": {
+                                      "variant": {
+                                        "name": "Some",
+                                        "payload": {
+                                          "uint": 32
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "imageblock_memory_length",
+                                  "observed": {
+                                    "value": {
+                                      "variant": {
+                                        "name": "Some",
+                                        "payload": {
+                                          "uint": 1024
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "support_indirect_command_buffers",
+                                  "observed": {
+                                    "value": {
+                                      "bool": false
+                                    }
+                                  }
+                                },
+                                {
+                                  "name": "required_threads_per_tile_threadgroup",
+                                  "observed": {
+                                    "value": {
+                                      "fields": {
+                                        "depth": {
+                                          "uint": 0
+                                        },
+                                        "height": {
+                                          "uint": 0
+                                        },
+                                        "width": {
+                                          "uint": 0
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "synchronously",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "delivered-a-state",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        },
+                        {
+                          "name": "delivered-an-error",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        },
+                        {
+                          "name": "delivered-a-reflection",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        },
+                        {
+                          "name": "facts",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "label",
+                              "observed": {
+                                "value": {
+                                  "variant": {
+                                    "name": "None",
+                                    "payload": "absent"
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "device",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "max_total_threads_per_threadgroup",
+                              "observed": {
+                                "value": {
+                                  "uint": 0
+                                }
+                              }
+                            },
+                            {
+                              "name": "threadgroup_size_matches_tile_size",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "imageblock_sample_length",
+                              "observed": {
+                                "value": {
+                                  "variant": {
+                                    "name": "Some",
+                                    "payload": {
+                                      "uint": 32
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "imageblock_memory_length",
+                              "observed": {
+                                "value": {
+                                  "variant": {
+                                    "name": "Some",
+                                    "payload": {
+                                      "uint": 1024
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "support_indirect_command_buffers",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "required_threads_per_tile_threadgroup",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "depth": {
+                                      "uint": 0
+                                    },
+                                    "height": {
+                                      "uint": 0
+                                    },
+                                    "width": {
+                                      "uint": 0
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "the-two-paths-agree",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "device_memory_allocated": 201326592,
+        "linked_use_questions_asked": 4,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 4,
+        "stage_entries_shared": 4,
+        "stage_entries_specialized": 2,
+        "variants_taken_back": 1
+      },
+      "composed": {
+        "addressable_buffers_made": 0,
+        "device_memory_allocated": 201326592
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pooled_memory_blocks_made": 3
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 2
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "pipeline-handler-mesh-options-none",
+        "calls": 2,
+        "in_calls": 23384333,
+        "on_cpu": 689666,
+        "blocked": 22583583,
+        "elsewhere": 217750,
+        "spend": 23630875,
+        "spend_least": 22960959,
+        "spend_most": 24507292,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22632500,
+            "on_cpu": 606833,
+            "blocked": 22052541,
+            "wall_least": 22479417,
+            "wall_most": 24007292,
+            "wall_total": 22632500,
+            "on_cpu_total": 606833,
+            "blocked_total": 22052541
+          },
+          {
+            "call": "pipeline_both_paths",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 271666,
+            "on_cpu": 89417,
+            "blocked": 187208,
+            "wall_least": 263792,
+            "wall_most": 818708,
+            "wall_total": 271666,
+            "on_cpu_total": 89417,
+            "blocked_total": 187208
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "pipeline-handler-mesh-options-none",
+        "calls": 2,
+        "in_calls": 3779084,
+        "on_cpu": 3780084,
+        "blocked": 0,
+        "elsewhere": 5834,
+        "spend": 3784918,
+        "spend_least": 3628874,
+        "spend_most": 3832917,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 187375,
+            "on_cpu": 188167,
+            "blocked": 0,
+            "wall_least": 178916,
+            "wall_most": 199500,
+            "wall_total": 187375,
+            "on_cpu_total": 188167,
+            "blocked_total": 0
+          },
+          {
+            "call": "pipeline_both_paths",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3582084,
+            "on_cpu": 3585625,
+            "blocked": 0,
+            "wall_least": 3442500,
+            "wall_most": 3641000,
+            "wall_total": 3582084,
+            "on_cpu_total": 3585625,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,581 @@
+{
+  "format": 1,
+  "case": "attribute-format-class-crossings",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "kernel_stage_in.ll",
+      "entry": "stage_in_fetch_wide",
+      "source_sha256": "7e7482a0b2a896a40b42502585a32b25a7621ea24a8fe2f4a931f534df7900d2"
+    },
+    {
+      "fixture": "kernel_stage_in.air.ll",
+      "entry": "stage_in_fetch_wide",
+      "source_sha256": "68a480d877a187bd21e45a352579dd7f7e4e6183e0467a8aea4ad6475811966f"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7e7482a0b2a896a40b42502585a32b25a7621ea24a8fe2f4a931f534df7900d2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "68a480d877a187bd21e45a352579dd7f7e4e6183e0467a8aea4ad6475811966f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatUChar2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "893b1064ee172cd3096c4c0cbf5e516c42402f348f79a50469c5770ba4354dcf"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatUChar3",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d3f9a08bf75a46bb2ddde2e329061c16f9f4041313e0beef3e3631c73cd065ac"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatUChar4",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "cff86e93a2146036b59226bef0e093f383e429cbea539d23069ac18883460be9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatChar2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "27c158e388dccc3f3358b6e9470807cfc246f697bf3dfb186110d6311d0fd897"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatChar3",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b2ac95668a0be7ea794a39c9a9f57cdc67f6db9744596231894906ea26566a76"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatChar4",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b1be83557e36b1c81349dd1eb925a3c888e1e2e94fa404690789cc3dd5aea61e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatUShort2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "95ecf8078af5204c7f9e8965000a77282ece2937def5b3eaa5f27f016b680ece"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatUShort3",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6efaa54a2d5620f47c059eb94563e914936db9f99f5c9e160b7ca574ac595787"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatUShort4",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "11fc6e0482a7063e9658d31b78b94bb832d11c908a38bfe499465b8f381bcd91"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatShort2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d654b158ea99d5543a79a74d8bbb31dfebabefcf8fa5aade923867adac74149e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatShort3",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "47fc0742e950a7474b5f5a049f182b69bdc1bd048483a7dca2e4825455d16398"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatShort4",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b74ccc8501214c59bc4d09230d09504e142695ec9d794dbf9d70372e64b08147"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatUChar",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6ae60572cb6f0828099b8544c69ffbe1f05db33be38055f354f52ea715e8a80c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatChar",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c8e39d234b769943852f4ad28f33aeb8d28697cd2ad73afbec1b7bb70061f085"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatUShort",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9098cecc885a21aecda9fad406583c9697c67004537c2fb64025bbfb5660fbba"
+                        }
+                      }
+                    },
+                    {
+                      "name": "row:MTLAttributeFormatShort",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fe1cf89b62f70e548c5f1d409ffe725f937e2a6f2eab8de84c3a2c3aad136068"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatUChar2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatUChar3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatUChar4",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatChar2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatChar3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatChar4",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatUShort2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatUShort3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatUShort4",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatShort2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatShort3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatShort4",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatUChar",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatChar",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatUShort",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "MTLAttributeFormatShort",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "device_memory_allocated": 201326592,
+        "functions_translated": 16,
+        "pipeline_layouts_made": 1,
+        "pipeline_layouts_shared": 16,
+        "pooled_memory_blocks_made": 3,
+        "shader_cache_writes_on_thread": 8,
+        "shader_modules_made": 16,
+        "stage_entries_shared": 32,
+        "stage_entries_specialized": 1
+      },
+      "moving": {
+        "shader_cache_writes_on_thread": 0
+      },
+      "composed": {
+        "device_memory_allocated": 201326592,
+        "shader_cache_writes_on_thread": 0,
+        "stage_entries_shared": 31,
+        "stage_entries_specialized": 1
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 16
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "attribute-format-class-crossings",
+        "calls": 17,
+        "in_calls": 23839667,
+        "on_cpu": 1162125,
+        "blocked": 22747542,
+        "elsewhere": 1208,
+        "spend": 23842042,
+        "spend_least": 22794001,
+        "spend_most": 25861210,
+        "per_call": [
+          {
+            "call": "compute_pipeline_with_stage_input",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 24625,
+            "on_cpu": 24750,
+            "blocked": 0,
+            "wall_least": 23417,
+            "wall_most": 27167,
+            "wall_total": 475913,
+            "on_cpu_total": 478206,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23385000,
+            "on_cpu": 649834,
+            "blocked": 22747542,
+            "wall_least": 22339625,
+            "wall_most": 25351250,
+            "wall_total": 23385000,
+            "on_cpu_total": 649834,
+            "blocked_total": 22747542
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "attribute-format-class-crossings",
+        "calls": 17,
+        "in_calls": 12126458,
+        "on_cpu": 12137876,
+        "blocked": 0,
+        "elsewhere": 5000,
+        "spend": 12131333,
+        "spend_least": 11620170,
+        "spend_most": 13411789,
+        "per_call": [
+          {
+            "call": "compute_pipeline_with_stage_input",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 726291,
+            "on_cpu": 726542,
+            "blocked": 0,
+            "wall_least": 706041,
+            "wall_most": 795042,
+            "wall_total": 11988499,
+            "on_cpu_total": 11996001,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 135334,
+            "on_cpu": 135791,
+            "blocked": 0,
+            "wall_least": 105917,
+            "wall_most": 145375,
+            "wall_total": 135334,
+            "on_cpu_total": 135791,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Build the native Metal bridge (drivers/AdrenoMetal/bridge/NativeMetalBridge.rs): the pinned metal2vulkan runtime behind a C ABI, as a static library.
+
+--target ios (default) cross-builds for arm64-apple-ios17.0, --target ios27 for arm64e-apple-ios27.0 (nightly, std built from source), --target host for the macOS host simulation. The runtime's own example library
+(runtime_examples.ll) and its function-constant fixture are assembled to AIR with llvm-as and embedded for the self-tests. Only generated build files hold local paths; nothing here
+is committed. Output: build/adreno-metal-bridge/<target>/libadreno_metal_bridge.a"""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+PIN = json.loads((ROOT / 'scripts/data/gpu-metal-vulkan-inputs.json').read_text())['translator']['commit']
+SOURCE = ROOT / '.cache/gpu-reference/metal2vulkan'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--target', choices=['ios', 'ios27', 'host'], default='ios')
+parser.add_argument('--manifest-only', action='store_true',
+                    help='write build/adreno-metal-bridge/Cargo.toml (patched source, fixtures) and stop before cargo, for `cargo fetch`')
+args = parser.parse_args()
+source_hash = hashlib.sha256()
+for directory, directories, filenames in os.walk(SOURCE):
+    directories[:] = sorted(name for name in directories if name not in ('.git', 'target', '__pycache__'))
+    for name in sorted(filenames):
+        path = Path(directory) / name
+        source_hash.update(str(path.relative_to(SOURCE)).encode() + b'\0')
+        source_hash.update(path.read_bytes())
+source_id = source_hash.hexdigest()
+out = ROOT / 'build/adreno-metal-bridge'
+out.mkdir(parents=True, exist_ok=True)
+llvm_as = next((p for p in ['/opt/homebrew/opt/llvm/bin/llvm-as', shutil.which('llvm-as') or ''] if p and Path(p).exists()), None)
+if not llvm_as:
+    raise SystemExit('llvm-as (LLVM 21 or newer) is required to assemble the fixture')
+def assemble_fixture(source, target):
+    # Preserve an unchanged include_bytes input so a frontend relink keeps its Rust archive.
+    with tempfile.NamedTemporaryFile(dir=target.parent, suffix='.air', delete=False) as stream:
+        temporary = Path(stream.name)
+    try:
+        subprocess.run([llvm_as, '-o', temporary, source], check=True)
+        if not target.is_file() or temporary.read_bytes() != target.read_bytes():
+            os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+air = out / 'runtime_examples.air'
+assemble_fixture(SOURCE / 'crates/metal2vulkan-validation/fixtures/public/examples/runtime_examples.ll', air)
+fc_air = out / 'function_constant.air'
+assemble_fixture(SOURCE / 'crates/metal2vulkan-validation/fixtures/public/kernel_function_constant_gate_fold.ll', fc_air)
+# The GPU scanout's half-float conversion kernel (GpuScanoutPresenter.h), hand-written AIR.
+scanout_air = out / 'scanout_convert.air'
+assemble_fixture(ROOT / 'drivers/AdrenoMetal/shaders/scanout_convert.ll', scanout_air)
+manifest = out / 'Cargo.toml'
+manifest.write_text('\n'.join([
+    '[package]', 'name = "adreno-metal-bridge"', 'version = "0.1.0"', 'edition = "2024"', 'rust-version = "1.98"', '[workspace]',
+    '[lib]', 'crate-type = ["staticlib"]', 'path = ' + json.dumps(str(ROOT / 'drivers/AdrenoMetal/bridge/NativeMetalBridge.rs')),
+    '[dependencies]',
+    'metal2vulkan = { path = ' + json.dumps(str(SOURCE / 'crates/metal2vulkan')) + ', features = ["ash"] }',
+    'metal2vulkan-runtime = { path = ' + json.dumps(str(SOURCE / 'crates/metal2vulkan-runtime')) + ' }',
+    'libc = "0.2"',
+    # The runtime hashes every shader-cache key and entry; without asm, sha2 0.10 on aarch64 is the portable software rounds, not the
+    # ARMv8 SHA-256 instructions every target CPU has (cpufeatures answers sha2 true on Apple platforms).
+    'sha2 = { version = "0.10", features = ["asm"] }',
+    # The render server's display thread spends most of a frame in the runtime, much of it in small functions across the
+    # translator's crates: one optimisation unit with link-time optimisation lets them inline across crate boundaries.
+    '[profile.release]', 'panic = "unwind"', 'debug = 1', 'lto = "fat"', 'codegen-units = 1', '',
+]))
+if args.manifest_only:
+    print(manifest)
+    raise SystemExit(0)
+triple = {'ios': 'aarch64-apple-ios', 'ios27': 'arm64e-apple-ios', 'host': 'aarch64-apple-darwin'}[args.target]
+# arm64e has no prebuilt std: it is built from rust-src (RUSTC_BOOTSTRAP for -Z); the iPadOS 27 processes that load the plugin are arm64e.
+cargo = ['cargo', '+1.98.0'] + (['-Z', 'build-std=std,panic_unwind'] if args.target == 'ios27' else [])
+# The translator source the runtime is built from (its pin and recorded patches), which keys the shader cache: shader priming keeps what it
+# finished while this stays the same (PrimeShaders.h).
+runtime_id = hashlib.sha256((PIN + '\n' + source_id).encode()).hexdigest()[:32]
+env = dict(os.environ, NMB_RUNTIME_ID=runtime_id, NMB_FIXTURE_AIR=str(air), NMB_FC_AIR=str(fc_air), NMB_SCANOUT_AIR=str(scanout_air), IPHONEOS_DEPLOYMENT_TARGET='27.0' if args.target == 'ios27' else '17.0', MACOSX_DEPLOYMENT_TARGET='14.0')
+if args.target == 'ios27':
+    env['RUSTC_BOOTSTRAP'] = '1'
+target_dir = ROOT / 'build/m2v-target'
+log = out / ('build-%s.log' % args.target)
+with log.open('w') as stream:
+    result = subprocess.run(cargo + ['build', '--release', '--manifest-path', manifest, '--target', triple,
+                             '--target-dir', target_dir], env=env, stdout=stream, stderr=subprocess.STDOUT, timeout=1800)
+if result.returncode:
+    raise SystemExit(log.read_text()[-6000:])
+library = target_dir / triple / 'release/libadreno_metal_bridge.a'
+final = out / args.target / 'libadreno_metal_bridge.a'
+final.parent.mkdir(exist_ok=True)
+shutil.copyfile(library, final)
+print('PASS: native Metal bridge static library for %s (%d bytes); translator %s' % (args.target, final.stat().st_size, PIN[:12]))

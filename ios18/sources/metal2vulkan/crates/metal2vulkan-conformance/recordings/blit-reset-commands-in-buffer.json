@@ -1,0 +1,876 @@
+{
+  "format": 1,
+  "case": "blit-reset-commands-in-buffer",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "icb_replay_template.ll",
+      "entry": "icb_replay_template",
+      "source_sha256": "fee2985635a8e466a450ee0fe473abdc5faa0694ddcc5b5bdc15d67c10842479"
+    },
+    {
+      "fixture": "icb_replay_template.air.ll",
+      "entry": "icb_replay_template",
+      "source_sha256": "dcfcf642972c3bc8d9d7a93a304adf8aecf78a19cd03e9468a8b3f90dee453c9"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fee2985635a8e466a450ee0fe473abdc5faa0694ddcc5b5bdc15d67c10842479"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "dcfcf642972c3bc8d9d7a93a304adf8aecf78a19cd03e9468a8b3f90dee453c9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "icb-descriptor",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2eabc39eb6a932ff8294ff3e76704207a90169b9cf3d9962ea772370d5dc64f1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "commands",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fd0c14f69fb7d0ff44833c289bd703d209c10da8b6019c432d83ae75a4bf3f21"
+                        }
+                      }
+                    },
+                    {
+                      "name": "call",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "161494abd613de7cd2980dfdd7a1f80a89be0fa36abb9969ebb8fa855d8ba754"
+                        }
+                      }
+                    },
+                    {
+                      "name": "ranges",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "176604f90ed3c4af95f459d13249e2c912b91f8a1c78b09b150827c4dd611a2a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:params",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b9c747836e2eb1e439310c47919daf8f387a8882cc54fad97829b6c910f35214"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:out",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e32ff50f2220f543bcbc30f110bdc5e7f0bb3bc265390ecae964a7440c61f9d0"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/params",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-none/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-none/source",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-one-at-0/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-one-at-0/source",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-one-at-2/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-one-at-2/source",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-whole/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-whole/source",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program-calls",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "calls",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "0-resetCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "1-executeCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "2-resetCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "3-executeCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "4-resetCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "5-executeCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "6-resetCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "7-executeCommandsInBuffer",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back/range-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-none",
+                  "observed": {
+                    "value": {
+                      "bytes": "ZwAAAGoAAABtAAAAcAAAAO7u7u7u7u7u7u7u7u7u7u7NAAAA0gAAANcAAADcAAAA7u7u7u7u7u7u7u7u7u7u7jMBAAA6AQAAQQEAAEgBAADu7u7u7u7u7u7u7u7u7u7umwEAAKYBAACxAQAAvAEAAO7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7g=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 160
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 40,
+                        "row_pitch": 160,
+                        "rows": 1,
+                        "image_pitch": 160,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/range-one-at-0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-one-at-0",
+                  "observed": {
+                    "value": {
+                      "bytes": "7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7NAAAA0gAAANcAAADcAAAA7u7u7u7u7u7u7u7u7u7u7jMBAAA6AQAAQQEAAEgBAADu7u7u7u7u7u7u7u7u7u7umwEAAKYBAACxAQAAvAEAAO7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7g=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 160
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 40,
+                        "row_pitch": 160,
+                        "rows": 1,
+                        "image_pitch": 160,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/range-one-at-2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-one-at-2",
+                  "observed": {
+                    "value": {
+                      "bytes": "ZwAAAGoAAABtAAAAcAAAAO7u7u7u7u7u7u7u7u7u7u7NAAAA0gAAANcAAADcAAAA7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7umwEAAKYBAACxAQAAvAEAAO7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7g=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 160
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 40,
+                        "row_pitch": 160,
+                        "rows": 1,
+                        "image_pitch": 160,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/range-whole",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "range-whole",
+                  "observed": {
+                    "value": {
+                      "bytes": "7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7g=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 160
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 40,
+                        "row_pitch": 160,
+                        "rows": 1,
+                        "image_pitch": 160,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-host-replayed-indirect-commands"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 6,
+        "argument_tables_retained": 3,
+        "bare_starts": 4,
+        "batches_held_past_a_look": 3,
+        "batches_with_none_pending": 4,
+        "command_barriers": 7,
+        "command_buffers_begun": 21,
+        "command_buffers_begun_batch_barriers": 4,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 4,
+        "command_buffers_begun_encoders": 8,
+        "command_buffers_begun_segments": 4,
+        "command_buffers_submitted": 21,
+        "commands_recorded.begin_command_buffer": 20,
+        "commands_recorded.cmd_bind_descriptor_sets": 10,
+        "commands_recorded.cmd_bind_pipeline": 10,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_dispatch": 10,
+        "commands_recorded.cmd_fill_buffer": 6,
+        "commands_recorded.cmd_pipeline_barrier": 21,
+        "commands_recorded.cmd_push_constants": 10,
+        "commands_recorded.end_command_buffer": 21,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 7,
+        "completed_where_seen": 1,
+        "completion_arms": 4,
+        "completion_arms_after_a_wake": 4,
+        "completion_waiter_parks": 4,
+        "device_memory_allocated": 201326592,
+        "dispatches_planned_as_before": 8,
+        "encoder_command_buffers_begun": 16,
+        "fence_waits": 4,
+        "finales_apart": 4,
+        "functions_shared": 1,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "heads_held_for_host_steps": 9,
+        "heads_waiting_at_their_gate": 3,
+        "heap_tables_worked_out": 2,
+        "host_step_pipelines_made": 1,
+        "host_steps_recorded": 3,
+        "indirect_record_bytes_copied": 35968,
+        "indirect_record_runs_read": 1,
+        "indirect_records_read": 16,
+        "live_tables_uploaded": 1,
+        "new_buffer_bytes_cleared": 38560,
+        "object_churn.buffers_evicted": 13,
+        "object_churn.buffers_parked": 15,
+        "object_churn.buffers_recycled": 2,
+        "object_churn.vk_buffer_bindings": 13,
+        "object_churn.vk_buffers_destroyed": 13,
+        "object_churn.vk_buffers_made": 13,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 4,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_address_indexes_made": 3,
+        "resident_resources_joined": 8,
+        "resident_textures_looked_at": 4,
+        "root_table_ranges_noted": 12,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 10,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 7,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_completion": 3,
+        "scheduler_wakes_host": 3,
+        "set_zero_sets_reused": 7,
+        "shader_modules_made": 2,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 2,
+        "stage_entries_specialized": 1,
+        "submit_infos": 8,
+        "trail_waits": 1,
+        "variant_pipelines_made": 2,
+        "wakes_completion_waiters": 4,
+        "wakes_spared": 14
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 1,
+        "command_buffers_begun": 21,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_submitted": 21,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 21,
+        "commands_recorded.end_command_buffer": 21,
+        "device_memory_allocated": 201326592,
+        "functions_translated": 2,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_shared": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "pooled_memory_blocks_made": 3
+      },
+      "per_state": {
+        "pipelines": 2,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "blit-reset-commands-in-buffer",
+        "calls": 16,
+        "in_calls": 26246459,
+        "on_cpu": 1001836,
+        "blocked": 25229334,
+        "elsewhere": 3190250,
+        "spend": 29500623,
+        "spend_least": 28841165,
+        "spend_most": 29740877,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 2333,
+            "on_cpu": 2459,
+            "blocked": 0,
+            "wall_least": 2250,
+            "wall_most": 2750,
+            "wall_total": 29417,
+            "on_cpu_total": 30083,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline_for_commands",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 78709,
+            "on_cpu": 79042,
+            "blocked": 0,
+            "wall_least": 73250,
+            "wall_most": 101667,
+            "wall_total": 78709,
+            "on_cpu_total": 79042,
+            "blocked_total": 0
+          },
+          {
+            "call": "indirect_command_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 9125,
+            "on_cpu": 9250,
+            "blocked": 0,
+            "wall_least": 7375,
+            "wall_most": 12167,
+            "wall_total": 58084,
+            "on_cpu_total": 58625,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22083125,
+            "on_cpu": 625625,
+            "blocked": 21454792,
+            "wall_least": 21863709,
+            "wall_most": 22562542,
+            "wall_total": 22083125,
+            "on_cpu_total": 625625,
+            "blocked_total": 21454792
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 83,
+            "on_cpu": 291,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 208,
+            "wall_total": 790,
+            "on_cpu_total": 1500,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3913083,
+            "on_cpu": 212042,
+            "blocked": 3703541,
+            "wall_least": 3526666,
+            "wall_most": 4169208,
+            "wall_total": 3913083,
+            "on_cpu_total": 212042,
+            "blocked_total": 3703541
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "blit-reset-commands-in-buffer",
+        "calls": 16,
+        "in_calls": 4912085,
+        "on_cpu": 1632707,
+        "blocked": 3266917,
+        "elsewhere": 1819125,
+        "spend": 6707292,
+        "spend_least": 5376210,
+        "spend_most": 7731001,
+        "degraded": [
+          "metal2vulkan-degrade-host-replayed-indirect-commands"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 1291,
+            "on_cpu": 1375,
+            "blocked": 0,
+            "wall_least": 958,
+            "wall_most": 1459,
+            "wall_total": 8168,
+            "on_cpu_total": 8917,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline_for_commands",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 425000,
+            "on_cpu": 232917,
+            "blocked": 181542,
+            "wall_least": 373041,
+            "wall_most": 461084,
+            "wall_total": 425000,
+            "on_cpu_total": 232917,
+            "blocked_total": 181542
+          },
+          {
+            "call": "indirect_command_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 4708,
+            "on_cpu": 4875,
+            "blocked": 0,
+            "wall_least": 4459,
+            "wall_most": 5000,
+            "wall_total": 26375,
+            "on_cpu_total": 26958,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 93959,
+            "on_cpu": 94458,
+            "blocked": 0,
+            "wall_least": 75125,
+            "wall_most": 102625,
+            "wall_total": 93959,
+            "on_cpu_total": 94458,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 42,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 84,
+            "wall_total": 584,
+            "on_cpu_total": 1040,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4390500,
+            "on_cpu": 1284333,
+            "blocked": 3114459,
+            "wall_least": 3236084,
+            "wall_most": 5035250,
+            "wall_total": 4390500,
+            "on_cpu_total": 1284333,
+            "blocked_total": 3114459
+          }
+        ]
+      }
+    }
+  ]
+}

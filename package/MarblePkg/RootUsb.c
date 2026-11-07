@@ -323,7 +323,8 @@ STATIC INTN WaitTransfer(UINT8 Endpoint)
     if (Event == UsbDeviceEventTransferNotification && Data.TransferOutcome.EndpointIndex == Endpoint) {
       return Data.TransferOutcome.Status == UsbDeviceTransferStatusCompleteOK ? (INTN)Data.TransferOutcome.BytesCompleted : -1;
     }
-    gBS->Stall(1000);
+    if (mServiceStarted) __asm__ volatile("wfe" ::: "memory");
+    else gBS->Stall(1000);
   }
 }
 
@@ -388,6 +389,14 @@ EFI_STATUS MarbleRootUsbContinue(VOID);
 
 STATIC VOID UsbServiceLoop(VOID)
 {
+  // ARM generic timer event stream wakes WFE without an interrupt handler.
+  // Select the counter bit at or below a 1 kHz event rate for this controller poller.
+  UINT64 Frequency, Control;
+  __asm__ volatile("mrs %0, cntfrq_el0\n\tmrs %1, cntkctl_el1" : "=r"(Frequency), "=r"(Control));
+  UINTN Divider=0;
+  while (Divider<15 && (Frequency>>(Divider+1))>1000) ++Divider;
+  Control=(Control&~0xf8ULL)|(Divider<<4)|4;
+  __asm__ volatile("msr cntkctl_el1, %0\n\tisb" :: "r"(Control) : "memory");
   __atomic_store_n(&mServiceReady,1,__ATOMIC_RELEASE);
   __asm__ volatile("sev" ::: "memory");
   for (;;) MarbleRootUsbContinue();

@@ -20,6 +20,19 @@ USB_AFFINITY = int(re.search(r'^#define MARBLE_USB_AFFINITY (0x[0-9a-fA-F]+)$',
 XNU_AFFINITIES = [value for value in range(0, 0x800, 0x100) if value != USB_AFFINITY]
 
 
+def merge_kernel_args(base, additions):
+    tokens = base.split()
+    for value in additions:
+        if not value or any(ch.isspace() for ch in value) or '\0' in value:
+            raise ValueError('--kernel-arg requires one NAME=VALUE token')
+        name = value.split('=', 1)[0]
+        if not name:
+            raise ValueError('--kernel-arg requires a setting name')
+        tokens = [token for token in tokens if token.split('=', 1)[0] != name]
+        tokens.append(value)
+    return ' '.join(tokens)
+
+
 def persistent_data_metadata(seed, profile_path):
     metadata = json.loads(seed.with_name('seed.json').read_text())
     profile = json.loads(profile_path.read_text())
@@ -62,7 +75,7 @@ def main():
     metadata = persistent_data_metadata(args.data_seed.resolve(), args.storage_profile.resolve())
     root, out = args.root.resolve(), args.assets.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    platform = DEVICE.parent / 'marble_hackios'
+    platform = DEVICE / 'firmware'
     binaries = build_applications(out, platform, DEVICE.parent / 'UniXNU')
     kernel = out / 'kernel.macho'
     shutil.copyfile(root / 'kernel.fileset.macho', kernel)
@@ -92,11 +105,7 @@ def main():
                  'rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 '
                  'marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 '
                  'sheng-gpu-preempt=2 sheng-gpu-ttbr=2 '
-                 'sheng-early-retire=0 marble-display-flip=1')
-    for value in args.kernel_arg:
-        if not value or any(ch.isspace() for ch in value) or '\0' in value:
-            parser.error('--kernel-arg requires one NAME=VALUE token')
-        boot_args += ' ' + value
+                 'sheng-early-retire=0 marble-display-flip=0')
     cpu_args = f'cpus={len(cpu_regs)} sheng-smp={int(len(cpu_regs) > 1)} armcpu-self-ipi=1'
     boot_args += ' ' + cpu_args + f' marble-display-scale={args.display_scale}'
     boot_args += f' marble-ui-identity={identity["generation"]}'
@@ -104,6 +113,10 @@ def main():
         boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
     if args.skip_setup:
         boot_args += ' marble-skip-setup=1'
+    try:
+        boot_args = merge_kernel_args(boot_args, args.kernel_arg)
+    except ValueError as error:
+        parser.error(str(error))
     mailbox[128:128 + len(boot_args)] = boot_args.encode()
     data += mailbox
     window = out / 'KernelSeed.bin'

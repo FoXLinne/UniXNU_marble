@@ -100,12 +100,6 @@ static void installWallpaperColor(void)
 static IMP originalVisualProvider;
 static Class nativeVisualProvider;
 
-static double nativeDisplayWidth(id self, SEL selector)
-{
-    (void)self; (void)selector;
-    return 1080;
-}
-
 static Class visualProvider(id self, SEL selector, id screen, id info)
 {
     CGRect bounds = ((CGRect (*)(id, SEL))objc_msgSend)(screen, sel_registerName("nativeBounds"));
@@ -118,19 +112,11 @@ static Class visualProvider(id self, SEL selector, id screen, id info)
 static void installNativeScreen(void)
 {
     if (originalVisualProvider) return;
-    Class split = objc_lookUpClass("_UIStatusBarVisualProvider_Split");
-    Class base = objc_lookUpClass("_UIStatusBarVisualProvider_Split1125");
+    Class split = objc_lookUpClass("_UIStatusBarVisualProvider_iOS");
+    Class provider = objc_lookUpClass("_UIStatusBarVisualProvider_DynamicSplit");
     Method method = class_getClassMethod(split,
         sel_registerName("visualProviderSubclassForScreen:visualProviderInfo:"));
-    if (!base || !signature(method, '#', 2, "@@")) return;
-    Class provider = objc_allocateClassPair(base, "MarbleStatusBarVisualProvider", 0);
-    if (!provider) return;
-    if (!class_addMethod(object_getClass(provider), sel_registerName("nativeDisplayWidth"),
-                         (IMP)nativeDisplayWidth, "d@:")) {
-        objc_disposeClassPair(provider);
-        return;
-    }
-    objc_registerClassPair(provider);
+    if (!provider || !signature(method, '#', 2, "@@")) return;
     nativeVisualProvider = provider;
     originalVisualProvider = method_setImplementation(method, (IMP)visualProvider);
 }
@@ -319,6 +305,7 @@ static void install(void *context)
 static void imageAdded(const struct mach_header *header, intptr_t slide)
 {
     (void)header; (void)slide;
+    installNativeScreen();
     installWallpaperColor();
     installPhotoRendering();
     bool expected = false;
@@ -333,7 +320,7 @@ __attribute__((constructor)) static void initialize(void)
     installComposition();
     installPhotoRendering();
     if (!strcmp(getprogname(), "PosterBoard")) installFileProtection();
-    // The provider selects the board's native bounds across OS product identities.
+    // Use UIKit's official Dynamic Island provider at the panel's native bounds.
     installNativeScreen();
     _dyld_register_func_for_add_image(imageAdded);
 }

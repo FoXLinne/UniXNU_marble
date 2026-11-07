@@ -1,0 +1,408 @@
+{
+  "format": 1,
+  "case": "pipeline-facts-render-multisampled",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_resolves.ll",
+      "entry": "rt6_resolve_full",
+      "source_sha256": "826f30ea88e648ce64e04e26abdfaa51c2c81fdd933f41e0a5b621eb7c9d18e9"
+    },
+    {
+      "fixture": "rt6_resolves.air.ll",
+      "entry": "rt6_resolve_full",
+      "source_sha256": "deacd509ddf64f7fe146057f3097edfb6582b0033fd623a9d2ec49db7596aec9"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "826f30ea88e648ce64e04e26abdfaa51c2c81fdd933f41e0a5b621eb7c9d18e9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "deacd509ddf64f7fe146057f3097edfb6582b0033fd623a9d2ec49db7596aec9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "descriptor",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "737450ae02dde064bb54d08049b79f9f2600318273eddb6f27571e312e10a5a3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "imageblock",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b0853f6af25f29697838d03f243c9bf1bf6e861fdcb1ec7eb2c51e3446fe4e3f"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "state",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-render-state"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    },
+                    {
+                      "name": "max_total_threads_per_threadgroup",
+                      "observed": {
+                        "value": {
+                          "uint": 0
+                        }
+                      }
+                    },
+                    {
+                      "name": "threadgroup_size_matches_tile_size",
+                      "observed": {
+                        "value": {
+                          "bool": false
+                        }
+                      }
+                    },
+                    {
+                      "name": "imageblock_sample_length",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "uint": 12
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "imageblock_memory_length",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "uint": 1536
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "support_indirect_command_buffers",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    },
+                    {
+                      "name": "required_threads_per_tile_threadgroup",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "depth": {
+                              "uint": 0
+                            },
+                            "height": {
+                              "uint": 0
+                            },
+                            "width": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326592,
+        "driver_diagnostics_withheld": 1,
+        "functions_shared": 1,
+        "functions_translated": 2,
+        "linked_use_questions_asked": 3,
+        "pipeline_layouts_made": 1,
+        "pipeline_layouts_shared": 1,
+        "pooled_memory_blocks_made": 3,
+        "render_passes_made": 1,
+        "shader_modules_made": 2,
+        "shader_modules_shared": 2,
+        "stage_entries_shared": 6,
+        "stage_entries_specialized": 2,
+        "variant_pipelines_made": 1
+      },
+      "composed": {
+        "addressable_buffers_made": 0,
+        "device_memory_allocated": 201326592,
+        "functions_translated": 2,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 2
+      },
+      "per_state": {
+        "pipelines": 2,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "pipeline-facts-render-multisampled",
+        "calls": 3,
+        "in_calls": 22272417,
+        "on_cpu": 725918,
+        "blocked": 21530250,
+        "elsewhere": 3292,
+        "spend": 22287375,
+        "spend_least": 22013501,
+        "spend_most": 23317583,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22151917,
+            "on_cpu": 605250,
+            "blocked": 21530250,
+            "wall_least": 21890500,
+            "wall_most": 23190041,
+            "wall_total": 22151917,
+            "on_cpu_total": 605250,
+            "blocked_total": 21530250
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 117875,
+            "on_cpu": 118125,
+            "blocked": 0,
+            "wall_least": 107500,
+            "wall_most": 130625,
+            "wall_total": 117875,
+            "on_cpu_total": 118125,
+            "blocked_total": 0
+          },
+          {
+            "call": "render_pipeline_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1416,
+            "on_cpu": 1542,
+            "blocked": 0,
+            "wall_least": 1250,
+            "wall_most": 4500,
+            "wall_total": 1416,
+            "on_cpu_total": 1542,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "pipeline-facts-render-multisampled",
+        "calls": 3,
+        "in_calls": 2404750,
+        "on_cpu": 2209416,
+        "blocked": 200583,
+        "elsewhere": 222916,
+        "spend": 2621667,
+        "spend_least": 2505291,
+        "spend_most": 2856083,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 135125,
+            "on_cpu": 137250,
+            "blocked": 0,
+            "wall_least": 119417,
+            "wall_most": 140167,
+            "wall_total": 135125,
+            "on_cpu_total": 137250,
+            "blocked_total": 0
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2270292,
+            "on_cpu": 2070000,
+            "blocked": 200583,
+            "wall_least": 2179625,
+            "wall_most": 2469917,
+            "wall_total": 2270292,
+            "on_cpu_total": 2070000,
+            "blocked_total": 200583
+          },
+          {
+            "call": "render_pipeline_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 667,
+            "on_cpu": 875,
+            "blocked": 0,
+            "wall_least": 666,
+            "wall_most": 833,
+            "wall_total": 667,
+            "on_cpu_total": 875,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

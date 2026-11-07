@@ -10,6 +10,11 @@ int native_marble_ui_dyld_policy(proc_t, int, user_addr_t, int);
 
 static bool phone_ui_executable(const char *path)
 {
+    if (!strncmp(path, "/Applications/", sizeof("/Applications/") - 1) ||
+        !strncmp(path, "/private/var/staged_system_apps/", sizeof("/private/var/staged_system_apps/") - 1)) {
+        const char *executable = strnstr(path, ".app/", MAXPATHLEN);
+        if (executable && executable[5] && !strchr(executable + 5, '/')) return true;
+    }
     return !strcmp(path, "/Applications/Spotlight.app/Spotlight") ||
            !strcmp(path, "/Applications/InputUI.app/InputUI") ||
            !strcmp(path, "/Applications/Preferences.app/Preferences") ||

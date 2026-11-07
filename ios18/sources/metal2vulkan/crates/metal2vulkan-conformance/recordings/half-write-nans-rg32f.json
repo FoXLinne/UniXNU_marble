@@ -1,0 +1,623 @@
+{
+  "format": 1,
+  "case": "half-write-nans-rg32f",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "xr_two_planes.ll",
+      "entry": "xr2p_write_half",
+      "source_sha256": "305db9bdf0064ff785c347dd6208391a9c302c284cac61ecae4fbc7128877844"
+    },
+    {
+      "fixture": "xr_two_planes.air.ll",
+      "entry": "xr2p_write_half",
+      "source_sha256": "ae50a7261f3dc11bc2b8e6b9ccce82e0907b13e8183e3474239452f538d397a7"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "305db9bdf0064ff785c347dd6208391a9c302c284cac61ecae4fbc7128877844"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ae50a7261f3dc11bc2b8e6b9ccce82e0907b13e8183e3474239452f538d397a7"
+                        }
+                      }
+                    },
+                    {
+                      "name": "format",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "4a11c2997424cd7a381eca1948dd4c442cb4b2a8086b676ecf67eff032eaacec"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "90355e56d93316913e1c14d865ed1e41e49c6067385791e6e350e0a94bc143ed"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0623ccb9b1619bd388284a438034d8cb6431964ba727d8b1c450303105735488"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:blank",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f12bda299b22b57f431e70d83967358382982db262504c395bb5bbd6a13fe0b5"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAwH8AAMB/AADAfwAAgH8AAIB/AACA/wAAgP8AAAAAAAAAAAAAAIAAAACAAACAMwAAgDMAAICzAACAswDAfzgAwH84AACAPwAAgD8A4H9HAOB/RwAAwH8="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              25,
+                              1,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 50,
+                        "row_pitch": 200,
+                        "rows": 1,
+                        "image_pitch": 200,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 3,
+        "argument_tables_retained": 1,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 1,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 3,
+        "command_buffers_submitted": 5,
+        "commands_recorded.begin_command_buffer": 1,
+        "commands_recorded.cmd_bind_descriptor_sets": 1,
+        "commands_recorded.cmd_bind_pipeline": 1,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_pipeline_barrier": 4,
+        "commands_recorded.cmd_push_constants": 1,
+        "commands_recorded.end_command_buffer": 5,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 268435584,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 3,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 1,
+        "functions_translated": 1,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "heap_tables_worked_out": 1,
+        "host_steps_recorded": 1,
+        "host_texel_copies": 2,
+        "images_started_on_the_host": 1,
+        "new_buffer_bytes_cleared": 224,
+        "object_churn.buffers_evicted": 12,
+        "object_churn.buffers_parked": 2,
+        "object_churn.buffers_recycled": 2,
+        "object_churn.images_own_memory": 1,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_buffers_destroyed": 12,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_image_views_made": 1,
+        "object_churn.vk_images_destroyed": 1,
+        "object_churn.vk_images_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "shader_modules_made": 1,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 2,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 1,
+        "batches_submitted_by_waiters": 0,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 5,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 4,
+        "commands_recorded.end_command_buffer": 5,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 268435584,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 3,
+        "functions_translated": 1,
+        "host_steps_recorded": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 4,
+        "queues_sharing_a_vk_queue": 0,
+        "shader_modules_made": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "variant_pipelines_made": 1
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "half-write-nans-rg32f",
+        "calls": 8,
+        "in_calls": 26326376,
+        "on_cpu": 851043,
+        "blocked": 25513333,
+        "elsewhere": 3121416,
+        "spend": 29447792,
+        "spend_least": 28475375,
+        "spend_most": 31409832,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2292,
+            "on_cpu": 2375,
+            "blocked": 0,
+            "wall_least": 2083,
+            "wall_most": 2708,
+            "wall_total": 21916,
+            "on_cpu_total": 22166,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 69834,
+            "on_cpu": 70041,
+            "blocked": 0,
+            "wall_least": 66250,
+            "wall_most": 81000,
+            "wall_total": 69834,
+            "on_cpu_total": 70041,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 108459,
+            "on_cpu": 108667,
+            "blocked": 0,
+            "wall_least": 92291,
+            "wall_most": 121500,
+            "wall_total": 108459,
+            "on_cpu_total": 108667,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22486375,
+            "on_cpu": 614708,
+            "blocked": 21871667,
+            "wall_least": 21746959,
+            "wall_most": 24323416,
+            "wall_total": 22486375,
+            "on_cpu_total": 614708,
+            "blocked_total": 21871667
+          },
+          {
+            "call": "read_texture",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3208,
+            "on_cpu": 3750,
+            "blocked": 0,
+            "wall_least": 1625,
+            "wall_most": 4625,
+            "wall_total": 3208,
+            "on_cpu_total": 3750,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 12458,
+            "on_cpu": 12625,
+            "blocked": 0,
+            "wall_least": 10625,
+            "wall_most": 14792,
+            "wall_total": 12458,
+            "on_cpu_total": 12625,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3676583,
+            "on_cpu": 13750,
+            "blocked": 3660750,
+            "wall_least": 3551000,
+            "wall_most": 3792541,
+            "wall_total": 3676583,
+            "on_cpu_total": 13750,
+            "blocked_total": 3660750
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "half-write-nans-rg32f",
+        "calls": 8,
+        "in_calls": 1048082,
+        "on_cpu": 262876,
+        "blocked": 805291,
+        "elsewhere": 204333,
+        "spend": 1259165,
+        "spend_least": 1196002,
+        "spend_most": 1341706,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 708,
+            "on_cpu": 875,
+            "blocked": 0,
+            "wall_least": 625,
+            "wall_most": 875,
+            "wall_total": 2666,
+            "on_cpu_total": 2958,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 26500,
+            "on_cpu": 26792,
+            "blocked": 0,
+            "wall_least": 25375,
+            "wall_most": 45792,
+            "wall_total": 26500,
+            "on_cpu_total": 26792,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 36000,
+            "on_cpu": 36167,
+            "blocked": 0,
+            "wall_least": 32458,
+            "wall_most": 55375,
+            "wall_total": 36000,
+            "on_cpu_total": 36167,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 147208,
+            "on_cpu": 148833,
+            "blocked": 0,
+            "wall_least": 143500,
+            "wall_most": 178834,
+            "wall_total": 147208,
+            "on_cpu_total": 148833,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_texture",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2791,
+            "on_cpu": 3167,
+            "blocked": 0,
+            "wall_least": 1750,
+            "wall_most": 7750,
+            "wall_total": 2791,
+            "on_cpu_total": 3167,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 32916,
+            "on_cpu": 33125,
+            "blocked": 0,
+            "wall_least": 29333,
+            "wall_most": 49166,
+            "wall_total": 32916,
+            "on_cpu_total": 33125,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 811916,
+            "on_cpu": 6625,
+            "blocked": 805291,
+            "wall_least": 684625,
+            "wall_most": 839291,
+            "wall_total": 811916,
+            "on_cpu_total": 6625,
+            "blocked_total": 805291
+          }
+        ]
+      }
+    }
+  ]
+}

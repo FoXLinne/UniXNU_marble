@@ -1,0 +1,768 @@
+{
+  "format": 1,
+  "case": "attribute-stride-inline-bytes",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "stage_in_regions.ll",
+      "entry": "stage_in_region_word",
+      "source_sha256": "39727f278497417e6d6bbfdba5b99f87aa1e60c1e77248768fb6df13b043f9a2"
+    },
+    {
+      "fixture": "stage_in_regions.air.ll",
+      "entry": "stage_in_region_word",
+      "source_sha256": "3d135d2782f5f5e90d9ec2c9ad29fc155def90bef8781818c036e3390cadb22c"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "39727f278497417e6d6bbfdba5b99f87aa1e60c1e77248768fb6df13b043f9a2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3d135d2782f5f5e90d9ec2c9ad29fc155def90bef8781818c036e3390cadb22c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "stage-input",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ab7afd826a8d9b374dff9016f3e4d9d214dcc3ab1d78b016298abd09e5acd82f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "035819aa9bba0ec5d72e0a4e8064105efcccd25d016d8c6d604ddff15efc9e76"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6908bc3cabc6d8215e29d17580677f801ea36256d985bc7fdb7d2564332e32b9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "eac491f775706c72398476563b7f8f0b8093689081b95c11106a654f8ed52414"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pass",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "outcome",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "dispatch_type",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Serial",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "error",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "None",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/0/setComputePipelineState",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/1/setStageInRegion",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/2/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/3/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/4/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/5/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/6/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/7/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/8/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/9/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/10/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/11/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/12/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/13/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/14/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/15/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/16/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/17/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/18/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/19/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/20/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/21/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/22/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/23/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/24/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/25/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/26/setBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/27/setBytesWithAttributeStride",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/28/dispatchThreadgroups",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "nine-strides",
+                  "observed": {
+                    "value": {
+                      "bytes": "EAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAAAEAEQABEQAAEgAAEQEAAAABABIAARIAABMAABABAAARAQAAEgEAABMBAAAUAQAAFQEAABYBAAAXAQAAEAEAABIBAAAUAQAAFgEAABgBAAAaAQAAHAEAAB4BAAAQAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABIBAAAUAQAAFgEAABgBAAAaAQAAHAEAAB4BAAAQAQAAEQEAABIBAAATAQAAFAEAABUBAAAWAQAAFwEAABABAAASAQAAFAEAABYBAAAYAQAAGgEAABwBAAAeAQAAfn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fg=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 352
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 88,
+                        "row_pitch": 352,
+                        "rows": 1,
+                        "image_pitch": 352,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "compute_pass",
+          "message": "ComputeCommandEncoder Validation\nproviding MTLAttributeStrideStatic to `attributeStride` when stride at buffer-layout index 1 is dynamic."
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 0,
+      "measured": "no measurement: the run stopped before the case finished (a call did not answer, at outcome/step/16/dispatchThreadgroups)",
+      "bounds": {},
+      "unmeasurable": "a call did not answer, at outcome/step/16/dispatchThreadgroups"
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "attribute-stride-inline-bytes",
+        "calls": 6,
+        "in_calls": 26288792,
+        "on_cpu": 838250,
+        "blocked": 25461541,
+        "elsewhere": 3110542,
+        "spend": 29405501,
+        "spend_least": 29202833,
+        "spend_most": 29749585,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2375,
+            "on_cpu": 2500,
+            "blocked": 0,
+            "wall_least": 2250,
+            "wall_most": 6500,
+            "wall_total": 21584,
+            "on_cpu_total": 21833,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pass",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3758167,
+            "on_cpu": 119375,
+            "blocked": 3636584,
+            "wall_least": 3308292,
+            "wall_most": 3861917,
+            "wall_total": 3758167,
+            "on_cpu_total": 119375,
+            "blocked_total": 3636584
+          },
+          {
+            "call": "compute_pipeline_with_stage_input",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 79375,
+            "on_cpu": 79625,
+            "blocked": 0,
+            "wall_least": 72958,
+            "wall_most": 114500,
+            "wall_total": 79375,
+            "on_cpu_total": 79625,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22414167,
+            "on_cpu": 623208,
+            "blocked": 21797125,
+            "wall_least": 22211583,
+            "wall_most": 23242417,
+            "wall_total": 22414167,
+            "on_cpu_total": 623208,
+            "blocked_total": 21797125
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 500,
+            "on_cpu": 708,
+            "blocked": 0,
+            "wall_least": 334,
+            "wall_most": 1458,
+            "wall_total": 500,
+            "on_cpu_total": 708,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "attribute-stride-inline-bytes",
+        "calls": 5,
+        "in_calls": 1033667,
+        "on_cpu": 199710,
+        "blocked": 850125,
+        "elsewhere": 236833,
+        "spend": 1281876,
+        "spend_least": 1143792,
+        "spend_most": 1395833,
+        "stopped": "a call did not answer, at outcome/step/16/dispatchThreadgroups",
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 791,
+            "on_cpu": 916,
+            "blocked": 0,
+            "wall_least": 709,
+            "wall_most": 917,
+            "wall_total": 2667,
+            "on_cpu_total": 2875,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pass",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 918375,
+            "on_cpu": 82709,
+            "blocked": 850125,
+            "wall_least": 843666,
+            "wall_most": 1002959,
+            "wall_total": 918375,
+            "on_cpu_total": 82709,
+            "blocked_total": 850125
+          },
+          {
+            "call": "compute_pipeline_with_stage_input",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22750,
+            "on_cpu": 23000,
+            "blocked": 0,
+            "wall_least": 14291,
+            "wall_most": 30125,
+            "wall_total": 22750,
+            "on_cpu_total": 23000,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 88083,
+            "on_cpu": 90667,
+            "blocked": 0,
+            "wall_least": 61458,
+            "wall_most": 115667,
+            "wall_total": 88083,
+            "on_cpu_total": 90667,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

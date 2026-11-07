@@ -319,5 +319,14 @@ int native_marble_metal_prepare(proc_t process, user_addr_t scratch)
         "/Library/Wallpaper/Collections/iOS_17~iphone.wallpaperCollection/Wallpapers/7565.iOS_17-360w-800h@3x~iphone.wallpaper/Wallpaper.plist",
         &native_gpu_addon2_stage, &native_gpu_addon2_status);
     printf("MarbleMetal: wallpaper mount=%d/%d\n", native_gpu_addon2_stage, native_gpu_addon2_status);
-    return native_gpu_addon2_status;
+    if (native_gpu_addon2_status) return native_gpu_addon2_status;
+    static const char timing_source[] = "/private/var/ngpu/event-timing";
+    static const char timing_target[] = "/System/Library/EventTimingProfiles";
+    native_gpu_addon_mount(process, scratch, 0x400, timing_source, sizeof(timing_source),
+        timing_target, sizeof(timing_target),
+        "/System/Library/EventTimingProfiles/N841.Default.plist",
+        "/System/Library/EventTimingProfiles/D84.Default.plist",
+        &native_gpu_addon3_stage, &native_gpu_addon3_status);
+    printf("MarbleMetal: event timing mount=%d/%d\n", native_gpu_addon3_stage, native_gpu_addon3_status);
+    return native_gpu_addon3_status;
 }

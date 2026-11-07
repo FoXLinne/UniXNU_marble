@@ -1,0 +1,302 @@
+{
+  "format": 1,
+  "case": "pipeline-functions-tile-only",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "visible_table_functions.ll",
+      "entry": "visible_table_functions",
+      "source_sha256": "f8484e8c7fa3e0eeb3b812a22ffd727068cd811109a23e29363e0eff535470f0"
+    },
+    {
+      "fixture": "visible_table_functions.air.ll",
+      "entry": "visible_table_functions",
+      "source_sha256": "3f009dfc20260ffbd454841e8c4c5a1a3c6d4eb0bb317f9eecd5be1e25eb1483"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f8484e8c7fa3e0eeb3b812a22ffd727068cd811109a23e29363e0eff535470f0"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3f009dfc20260ffbd454841e8c4c5a1a3c6d4eb0bb317f9eecd5be1e25eb1483"
+                        }
+                      }
+                    },
+                    {
+                      "name": "writes",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "907214b793c3e0617e80a33cd5991d583cc5cbd378d59cf479e414113bb2ec60"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "vertex_additional_binary_functions",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "fragment_additional_binary_functions",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "tile_additional_binary_functions",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 2
+                            }
+                          }
+                        },
+                        {
+                          "name": "name/0",
+                          "observed": {
+                            "value": {
+                              "lines": [
+                                "table_mul"
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "name": "name/1",
+                          "observed": {
+                            "value": {
+                              "lines": [
+                                "table_add"
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {}
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "pipeline-functions-tile-only",
+        "calls": 2,
+        "in_calls": 22518751,
+        "on_cpu": 592501,
+        "blocked": 21926458,
+        "elsewhere": 3417,
+        "spend": 22548376,
+        "spend_least": 21449791,
+        "spend_most": 23242333,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22509167,
+            "on_cpu": 582709,
+            "blocked": 21926458,
+            "wall_least": 21438041,
+            "wall_most": 23230000,
+            "wall_total": 22509167,
+            "on_cpu_total": 582709,
+            "blocked_total": 21926458
+          },
+          {
+            "call": "render_pipeline_functions_descriptor_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 9375,
+            "on_cpu": 9500,
+            "blocked": 0,
+            "wall_least": 8125,
+            "wall_most": 11458,
+            "wall_total": 9375,
+            "on_cpu_total": 9500,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "pipeline-functions-tile-only",
+        "calls": 2,
+        "in_calls": 98875,
+        "on_cpu": 102458,
+        "blocked": 0,
+        "elsewhere": 5125,
+        "spend": 103041,
+        "spend_least": 75793,
+        "spend_most": 109209,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 96708,
+            "on_cpu": 100167,
+            "blocked": 0,
+            "wall_least": 68292,
+            "wall_most": 103333,
+            "wall_total": 96708,
+            "on_cpu_total": 100167,
+            "blocked_total": 0
+          },
+          {
+            "call": "render_pipeline_functions_descriptor_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2000,
+            "on_cpu": 2125,
+            "blocked": 0,
+            "wall_least": 1417,
+            "wall_most": 2458,
+            "wall_total": 2000,
+            "on_cpu_total": 2125,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

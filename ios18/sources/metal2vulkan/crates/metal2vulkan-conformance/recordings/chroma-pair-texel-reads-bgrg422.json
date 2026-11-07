@@ -1,0 +1,642 @@
+{
+  "format": 1,
+  "case": "chroma-pair-texel-reads-bgrg422",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "fpv_swizzled_reads.ll",
+      "entry": "fpv_swz_read",
+      "source_sha256": "b91fae6759b1cb6496c80a57c5628aef675497891efefe9f6cdd5a8a38a6703e"
+    },
+    {
+      "fixture": "fpv_swizzled_reads.air.ll",
+      "entry": "fpv_swz_read",
+      "source_sha256": "18992f6252c2fcdc827256266349a4efc8b5d5428dbb37a6f22218db7a9c8a54"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b91fae6759b1cb6496c80a57c5628aef675497891efefe9f6cdd5a8a38a6703e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "18992f6252c2fcdc827256266349a4efc8b5d5428dbb37a6f22218db7a9c8a54"
+                        }
+                      }
+                    },
+                    {
+                      "name": "entry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6223cfd35907de5c01e918a4737c1d1fd018ddb9832a151c1844a788af802195"
+                        }
+                      }
+                    },
+                    {
+                      "name": "format",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "946e5fffd5aeab455618b623ec6cbc5ec6f26e67320db4f4ea7f2c62bef85bcc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:bytes",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "positions",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fcfdf4487fce3c72f18c6b86c52cbc736aeb2a3c5a354e98e6a2e780d5b7b023"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:blank",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "087d80f7f182dd44f184aa86ca34488853ebcc04f0c60d5294919a466b463831"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "positions",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "output",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texels/bgrg422/reads",
+                  "observed": {
+                    "value": {
+                      "bytes": "gYAAPIGAgDsAAAAAAACAP8HAQDzBwEA8gYCAOwAAgD+hoKA8oaCgPMHAQDwAAIA/4eDgPOHg4DyhoKA8AACAP5GQED2RkBA94eDgPAAAgD+xsDA9sbAwPZGQED0AAIA/0dBQPdHQUD2xsDA9AACAP/HwcD3x8HA90dBQPQAAgD+JiIg9iYiIPfHwcD0AAIA/mZiYPZmYmD2JiIg9AACAP6moqD2pqKg9mZiYPQAAgD+5uLg9ubi4PamoqD0AAIA/ycjIPcnIyD25uLg9AACAP9nY2D3Z2Ng9ycjIPQAAgD/p6Og96ejoPdnY2D0AAIA/8fDwPfn4+D3h4OA9AACAP4mICD6FhAQ+gYAAPgAAgD+NjAw+jYwMPoWEBD4AAIA/lZQUPpWUFD6NjAw+AACAP52cHD6dnBw+lZQUPgAAgD+lpCQ+paQkPp2cHD4AAIA/rawsPq2sLD6lpCQ+AACAP7W0ND61tDQ+rawsPgAAgD+9vDw+vbw8PrW0ND4AAIA/xcREPsXERD69vDw+AACAP83MTD7NzEw+xcREPgAAgD/V1FQ+1dRUPs3MTD4AAIA/3dxcPt3cXD7V1FQ+AACAP+XkZD7l5GQ+3dxcPgAAgD/t7Gw+7exsPuXkZD4AAIA/9fR0PvX0dD7t7Gw+AACAP/n4eD79/Hw+8fBwPgAAgD+FhIQ+g4KCPoGAgD4AAIA/h4aGPoeGhj6DgoI+AACAP4uKij6Lioo+h4aGPgAAgD+Pjo4+j46OPouKij4AAIA/k5KSPpOSkj6Pjo4+AACAP5eWlj6XlpY+k5KSPgAAgD+bmpo+m5qaPpeWlj4AAIA/n56ePp+enj6bmpo+AACAP6Oioj6joqI+n56ePgAAgD+npqY+p6amPqOioj4AAIA/q6qqPquqqj6npqY+AACAP6+urj6vrq4+q6qqPgAAgD+zsrI+s7KyPq+urj4AAIA/t7a2Pre2tj6zsrI+AACAP7u6uj67uro+t7a2PgAAgD+9vLw+v76+Prm4uD4AAIA/xcTEPsPCwj7BwMA+AACAP8fGxj7HxsY+w8LCPgAAgD/Lyso+y8rKPsfGxj4AAIA/z87OPs/Ozj7Lyso+AACAP9PS0j7T0tI+z87OPgAAgD/X1tY+19bWPtPS0j4AAIA/29raPtva2j7X1tY+AACAP9/e3j7f3t4+29raPgAAgD/j4uI+4+LiPt/e3j4AAIA/5+bmPufm5j7j4uI+AACAP+vq6j7r6uo+5+bmPgAAgD/v7u4+7+7uPuvq6j4AAIA/8/LyPvPy8j7v7u4+AACAP/f29j739vY+8/LyPgAAgD/7+vo++/r6Pvf29j4AAIA//fz8Pv/+/j75+Pg+AACAP4OCAj+CgQE/gYAAPwAAgD+EgwM/hIMDP4KBAT8AAIA/hoUFP4aFBT+EgwM/AACAP4iHBz+Ihwc/hoUFPwAAgD+KiQk/iokJP4iHBz8AAIA/jIsLP4yLCz+KiQk/AACAP46NDT+OjQ0/jIsLPwAAgD+Qjw8/kI8PP46NDT8AAIA/kpERP5KRET+Qjw8/AACAP5STEz+UkxM/kpERPwAAgD+WlRU/lpUVP5STEz8AAIA/mJcXP5iXFz+WlRU/AACAP5qZGT+amRk/mJcXPwAAgD+cmxs/nJsbP5qZGT8AAIA/np0dP56dHT+cmxs/AACAP5+eHj+gnx8/nZwcPwAAgD+joiI/oqEhP6GgID8AAIA/pKMjP6SjIz+ioSE/AACAP6alJT+mpSU/pKMjPwAAgD+opyc/qKcnP6alJT8AAIA/qqkpP6qpKT+opyc/AACAP6yrKz+sqys/qqkpPwAAgD+urS0/rq0tP6yrKz8AAIA/sK8vP7CvLz+urS0/AACAP7KxMT+ysTE/sK8vPwAAgD+0szM/tLMzP7KxMT8AAIA/trU1P7a1NT+0szM/AACAP7i3Nz+4tzc/trU1PwAAgD+6uTk/urk5P7i3Nz8AAIA/vLs7P7y7Oz+6uTk/AACAP769PT++vT0/vLs7PwAAgD+/vj4/wL8/P728PD8AAIA/w8JCP8LBQT/BwEA/AACAP8TDQz/Ew0M/wsFBPwAAgD/GxUU/xsVFP8TDQz8AAIA/yMdHP8jHRz/GxUU/AACAP8rJST/KyUk/yMdHPwAAgD/My0s/zMtLP8rJST8AAIA/zs1NP87NTT/My0s/AACAP9DPTz/Qz08/zs1NPwAAgD/S0VE/0tFRP9DPTz8AAIA/1NNTP9TTUz/S0VE/AACAP9bVVT/W1VU/1NNTPwAAgD/Y11c/2NdXP9bVVT8AAIA/2tlZP9rZWT/Y11c/AACAP9zbWz/c21s/2tlZPwAAgD/e3V0/3t1dP9zbWz8AAIA/395eP+DfXz/d3Fw/AACAP+PiYj/i4WE/4eBgPwAAgD/k42M/5ONjP+LhYT8AAIA/5uVlP+blZT/k42M/AACAP+jnZz/o52c/5uVlPwAAgD/q6Wk/6ulpP+jnZz8AAIA/7OtrP+zraz/q6Wk/AACAP+7tbT/u7W0/7OtrPwAAgD/w728/8O9vP+7tbT8AAIA/8vFxP/LxcT/w728/AACAP/Tzcz/083M/8vFxPwAAgD/29XU/9vV1P/Tzcz8AAIA/+Pd3P/j3dz/29XU/AACAP/r5eT/6+Xk/+Pd3PwAAgD/8+3s//Pt7P/r5eT8AAIA//v19P/79fT/8+3s/AACAP//+fj8AAIA//fx8PwAAgD+BgAA8gYCAOwAAAAAAAIA/wcBAPMHAQDyBgIA7AACAP6GgoDyhoKA8wcBAPAAAgD/h4OA84eDgPKGgoDwAAIA/kZAQPZGQED3h4OA8AACAP7GwMD2xsDA9kZAQPQAAgD/R0FA90dBQPbGwMD0AAIA/8fBwPfHwcD3R0FA9AACAP4mIiD2JiIg98fBwPQAAgD+ZmJg9mZiYPYmIiD0AAIA/qaioPamoqD2ZmJg9AACAP7m4uD25uLg9qaioPQAAgD/JyMg9ycjIPbm4uD0AAIA/2djYPdnY2D3JyMg9AACAP+no6D3p6Og92djYPQAAgD/x8PA9+fj4PeHg4D0AAIA/iYgIPoWEBD6BgAA+AACAP42MDD6NjAw+hYQEPgAAgD+VlBQ+lZQUPo2MDD4AAIA/nZwcPp2cHD6VlBQ+AACAP6WkJD6lpCQ+nZwcPgAAgD+trCw+rawsPqWkJD4AAIA/tbQ0PrW0ND6trCw+AACAP728PD69vDw+tbQ0PgAAgD/FxEQ+xcREPr28PD4AAIA/zcxMPs3MTD7FxEQ+AACAP9XUVD7V1FQ+zcxMPgAAgD/d3Fw+3dxcPtXUVD4AAIA/5eRkPuXkZD7d3Fw+AACAP+3sbD7t7Gw+5eRkPgAAgD/19HQ+9fR0Pu3sbD4AAIA/+fh4Pv38fD7x8HA+AACAP4WEhD6DgoI+gYCAPgAAgD+HhoY+h4aGPoOCgj4AAIA/i4qKPouKij6HhoY+AACAP4+Ojj6Pjo4+i4qKPgAAgD+TkpI+k5KSPo+Ojj4AAIA/l5aWPpeWlj6TkpI+AACAP5uamj6bmpo+l5aWPgAAgD+fnp4+n56ePpuamj4AAIA/o6KiPqOioj6fnp4+AACAP6empj6npqY+o6KiPgAAgD+rqqo+q6qqPqempj4AAIA/r66uPq+urj6rqqo+AACAP7Oysj6zsrI+r66uPgAAgD+3trY+t7a2PrOysj4AAIA/u7q6Pru6uj63trY+AACAP728vD6/vr4+ubi4PgAAgD/FxMQ+w8LCPsHAwD4AAIA/x8bGPsfGxj7DwsI+AACAP8vKyj7Lyso+x8bGPgAAgD/Pzs4+z87OPsvKyj4AAIA/09LSPtPS0j7Pzs4+AACAP9fW1j7X1tY+09LSPgAAgD/b2to+29raPtfW1j4AAIA/397ePt/e3j7b2to+AACAP+Pi4j7j4uI+397ePgAAgD/n5uY+5+bmPuPi4j4AAIA/6+rqPuvq6j7n5uY+AACAP+/u7j7v7u4+6+rqPgAAgD/z8vI+8/LyPu/u7j4AAIA/9/b2Pvf29j7z8vI+AACAP/v6+j77+vo+9/b2PgAAgD/9/Pw+//7+Pvn4+D4AAIA/g4ICP4KBAT+BgAA/AACAP4SDAz+EgwM/goEBPwAAgD+GhQU/hoUFP4SDAz8AAIA/iIcHP4iHBz+GhQU/AACAP4qJCT+KiQk/iIcHPwAAgD+Miws/jIsLP4qJCT8AAIA/jo0NP46NDT+Miws/AACAP5CPDz+Qjw8/jo0NPwAAgD+SkRE/kpERP5CPDz8AAIA/lJMTP5STEz+SkRE/AACAP5aVFT+WlRU/lJMTPwAAgD+Ylxc/mJcXP5aVFT8AAIA/mpkZP5qZGT+Ylxc/AACAP5ybGz+cmxs/mpkZPwAAgD+enR0/np0dP5ybGz8AAIA/n54eP6CfHz+dnBw/AACAP6OiIj+ioSE/oaAgPwAAgD+koyM/pKMjP6KhIT8AAIA/pqUlP6alJT+koyM/AACAP6inJz+opyc/pqUlPwAAgD+qqSk/qqkpP6inJz8AAIA/rKsrP6yrKz+qqSk/AACAP66tLT+urS0/rKsrPwAAgD+wry8/sK8vP66tLT8AAIA/srExP7KxMT+wry8/AACAP7SzMz+0szM/srExPwAAgD+2tTU/trU1P7SzMz8AAIA/uLc3P7i3Nz+2tTU/AACAP7q5OT+6uTk/uLc3PwAAgD+8uzs/vLs7P7q5OT8AAIA/vr09P769PT+8uzs/AACAP7++Pj/Avz8/vbw8PwAAgD/DwkI/wsFBP8HAQD8AAIA/xMNDP8TDQz/CwUE/AACAP8bFRT/GxUU/xMNDPwAAgD/Ix0c/yMdHP8bFRT8AAIA/yslJP8rJST/Ix0c/AACAP8zLSz/My0s/yslJPwAAgD/OzU0/zs1NP8zLSz8AAIA/0M9PP9DPTz/OzU0/AACAP9LRUT/S0VE/0M9PPwAAgD/U01M/1NNTP9LRUT8AAIA/1tVVP9bVVT/U01M/AACAP9jXVz/Y11c/1tVVPwAAgD/a2Vk/2tlZP9jXVz8AAIA/3NtbP9zbWz/a2Vk/AACAP97dXT/e3V0/3NtbPwAAgD/f3l4/4N9fP93cXD8AAIA/4+JiP+LhYT/h4GA/AACAP+TjYz/k42M/4uFhPwAAgD/m5WU/5uVlP+TjYz8AAIA/6OdnP+jnZz/m5WU/AACAP+rpaT/q6Wk/6OdnPwAAgD/s62s/7OtrP+rpaT8AAIA/7u1tP+7tbT/s62s/AACAP/Dvbz/w728/7u1tPwAAgD/y8XE/8vFxP/Dvbz8AAIA/9PNzP/Tzcz/y8XE/AACAP/b1dT/29XU/9PNzPwAAgD/493c/+Pd3P/b1dT8AAIA/+vl5P/r5eT/493c/AACAP/z7ez/8+3s/+vl5PwAAgD/+/X0//v19P/z7ez8AAIA///5+PwAAgD/9/Hw/AACAPw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 4096
+                          }
+                        },
+                        "element": "f32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 256,
+                        "image_pitch": 4096,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    },
+                    "digest": {
+                      "kind": "sha256",
+                      "hex": "7e019b4198370bebd187d89eeb4d32e42de13051948285ad76bc23eba3c084e7"
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-carried-decoded-twin",
+        "metal2vulkan-degrade-decoded-texel-precision"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 3,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 3,
+        "argument_tables_retained": 1,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "block_decode_passes": 1,
+        "chroma_device_decodes": 1,
+        "chroma_device_twins": 1,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 3,
+        "command_buffers_submitted": 5,
+        "commands_recorded.begin_command_buffer": 2,
+        "commands_recorded.cmd_bind_descriptor_sets": 2,
+        "commands_recorded.cmd_bind_pipeline": 2,
+        "commands_recorded.cmd_clear_color_image": 2,
+        "commands_recorded.cmd_copy_buffer_to_image": 3,
+        "commands_recorded.cmd_copy_image_to_buffer": 1,
+        "commands_recorded.cmd_dispatch": 2,
+        "commands_recorded.cmd_pipeline_barrier": 11,
+        "commands_recorded.cmd_push_constants": 1,
+        "commands_recorded.end_command_buffer": 5,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 5,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 335544448,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 3,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 1,
+        "functions_translated": 1,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "heap_tables_worked_out": 1,
+        "host_steps_recorded": 1,
+        "host_texel_copies": 3,
+        "images_started_on_the_host": 1,
+        "new_buffer_bytes_cleared": 6688,
+        "object_churn.buffers_parked": 4,
+        "object_churn.buffers_recycled": 4,
+        "object_churn.images_own_memory": 2,
+        "object_churn.images_parked": 1,
+        "object_churn.images_recycled": 1,
+        "object_churn.making_sites_dropped": 3,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_image_bindings": 2,
+        "object_churn.vk_image_views_made": 2,
+        "object_churn.vk_images_destroyed": 2,
+        "object_churn.vk_images_made": 2,
+        "owned_descriptor_pools": 1,
+        "owned_kernel_spirv_bytes": 1968,
+        "owned_kernels_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 5,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "shader_modules_made": 1,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 2,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "host_texel_copies": 2
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "batches_submitted_by_waiters": 0,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 5,
+        "commands_recorded.cmd_clear_color_image": 2,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.end_command_buffer": 5,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 335544448,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 3,
+        "functions_translated": 1,
+        "host_steps_recorded": 1,
+        "host_texel_copies": 0,
+        "owned_kernel_spirv_bytes": 1968,
+        "owned_kernels_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 4,
+        "queues_sharing_a_vk_queue": 0,
+        "shader_modules_made": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "variant_pipelines_made": 1
+      },
+      "ceilings": {
+        "addressable_buffers_made": 3,
+        "arena_pools_made": 2,
+        "pooled_memory_blocks_made": 5
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "chroma-pair-texel-reads-bgrg422",
+        "calls": 8,
+        "in_calls": 26854417,
+        "on_cpu": 870291,
+        "blocked": 25983834,
+        "elsewhere": 3029000,
+        "spend": 29805084,
+        "spend_least": 28637082,
+        "spend_most": 30561416,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 1792,
+            "on_cpu": 1917,
+            "blocked": 0,
+            "wall_least": 1750,
+            "wall_most": 2083,
+            "wall_total": 5084,
+            "on_cpu_total": 5292,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 68042,
+            "on_cpu": 68250,
+            "blocked": 0,
+            "wall_least": 62292,
+            "wall_most": 77250,
+            "wall_total": 68042,
+            "on_cpu_total": 68250,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 109709,
+            "on_cpu": 109875,
+            "blocked": 0,
+            "wall_least": 89459,
+            "wall_most": 121750,
+            "wall_total": 109709,
+            "on_cpu_total": 109875,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23017542,
+            "on_cpu": 623750,
+            "blocked": 22369875,
+            "wall_least": 22137625,
+            "wall_most": 23433750,
+            "wall_total": 23017542,
+            "on_cpu_total": 623750,
+            "blocked_total": 22369875
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 708,
+            "on_cpu": 917,
+            "blocked": 0,
+            "wall_least": 500,
+            "wall_most": 2125,
+            "wall_total": 708,
+            "on_cpu_total": 917,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 25750,
+            "on_cpu": 25959,
+            "blocked": 0,
+            "wall_least": 21542,
+            "wall_most": 34250,
+            "wall_total": 25750,
+            "on_cpu_total": 25959,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3624375,
+            "on_cpu": 7792,
+            "blocked": 3610667,
+            "wall_least": 3103666,
+            "wall_most": 3766459,
+            "wall_total": 3624375,
+            "on_cpu_total": 7792,
+            "blocked_total": 3610667
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "chroma-pair-texel-reads-bgrg422",
+        "calls": 8,
+        "in_calls": 1087834,
+        "on_cpu": 329043,
+        "blocked": 788209,
+        "elsewhere": 204334,
+        "spend": 1291502,
+        "spend_least": 1170001,
+        "spend_most": 1492542,
+        "degraded": [
+          "metal2vulkan-degrade-carried-decoded-twin",
+          "metal2vulkan-degrade-cpu-block-decode"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 1125,
+            "on_cpu": 1292,
+            "blocked": 0,
+            "wall_least": 1042,
+            "wall_most": 1542,
+            "wall_total": 3666,
+            "on_cpu_total": 3959,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 47792,
+            "on_cpu": 48125,
+            "blocked": 0,
+            "wall_least": 38958,
+            "wall_most": 55208,
+            "wall_total": 47792,
+            "on_cpu_total": 48125,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 44208,
+            "on_cpu": 44417,
+            "blocked": 0,
+            "wall_least": 40541,
+            "wall_most": 50459,
+            "wall_total": 44208,
+            "on_cpu_total": 44417,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 176750,
+            "on_cpu": 178375,
+            "blocked": 0,
+            "wall_least": 160459,
+            "wall_most": 185625,
+            "wall_total": 176750,
+            "on_cpu_total": 178375,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 500,
+            "on_cpu": 667,
+            "blocked": 0,
+            "wall_least": 416,
+            "wall_most": 1625,
+            "wall_total": 500,
+            "on_cpu_total": 667,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 50125,
+            "on_cpu": 50375,
+            "blocked": 0,
+            "wall_least": 39875,
+            "wall_most": 59333,
+            "wall_total": 50125,
+            "on_cpu_total": 50375,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 796834,
+            "on_cpu": 6292,
+            "blocked": 788209,
+            "wall_least": 647583,
+            "wall_most": 896000,
+            "wall_total": 796834,
+            "on_cpu_total": 6292,
+            "blocked_total": 788209
+          }
+        ]
+      }
+    }
+  ]
+}

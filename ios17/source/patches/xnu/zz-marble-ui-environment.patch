@@ -1,0 +1,30 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -5837,6 +5837,8 @@
+  *		to arrays of user space pointers.
+  */
++extern const char *native_marble_ui_environment(vnode_t) __attribute__((weak_import));
++
+ __attribute__((noinline))
+ static int
+ exec_extract_strings(struct image_params *imgp)
+ {
+@@ -5980,6 +5982,18 @@
+ 	/* Note where the args ends and env begins. */
+ 	imgp->ip_endargv = imgp->ip_strendp;
+ 	imgp->ip_envc = 0;
++
++	/* Board-signed UIKit layout adapter for the phone SpringBoard. */
++	if (native_marble_ui_environment) {
++		const char *layout_env = native_marble_ui_environment(imgp->ip_vp);
++		if (layout_env) {
++			error = exec_add_user_string(imgp, CAST_USER_ADDR_T(layout_env), UIO_SYSSPACE, TRUE);
++			if (error) goto bad;
++			if (imgp->ip_argspace < new_ptr_size) {error = E2BIG; goto bad;}
++			imgp->ip_argspace -= new_ptr_size;
++			imgp->ip_envc++;
++		}
++	}
+ 
+ 	/* Now, get the environment */
+ 	while (envv != 0LL) {

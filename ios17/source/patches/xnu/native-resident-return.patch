@@ -1,0 +1,13 @@
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -800,6 +800,10 @@
+ void
+ halt_all_cpus(boolean_t reboot)
+ {
++	extern void native_resident_return(void) __attribute__((weak_import));
++	if (reboot && &native_resident_return) {
++		native_resident_return();
++	}
+ 	if (reboot) {
+ 		printf("MACH Reboot\n");
+ 		PEHaltRestart(kPERestartCPU);

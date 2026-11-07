@@ -1,0 +1,601 @@
+{
+  "format": 1,
+  "case": "shared-exponent-write-float",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "fpv_srgb_storage.ll",
+      "entry": "fpv_srgb_write",
+      "source_sha256": "1fd72038430e03760b7c9f3096b2babe5056900741128527111e4a801627d51a"
+    },
+    {
+      "fixture": "fpv_srgb_storage.air.ll",
+      "entry": "fpv_srgb_write",
+      "source_sha256": "61b9ec9c9f1a8c33f6f3735b399078d2c1b225f723323f1ced884a16b4524d75"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "1fd72038430e03760b7c9f3096b2babe5056900741128527111e4a801627d51a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "61b9ec9c9f1a8c33f6f3735b399078d2c1b225f723323f1ced884a16b4524d75"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "82381c7aa02634218969c670d7c42c5130ddcc5b8d8432872999065a940f5c39"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "bf5e8ffa51a9e748985800c1d3d7f1a2a6ae7435136593ca8d9637e3f87c699c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "1fe1cd999324addaf29c4a005e7f1fb22b4de113157c8b366f2ee365dc21b2c0"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/width",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "fpv_srgb_write/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "fpv_srgb_write/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "fpv_srgb_write/buffer/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "fpv_srgb_write/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "fpv_srgb_write/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "fpv_srgb_write/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "fpv_srgb_write/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "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"
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              256,
+                              5,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 256,
+                        "row_pitch": 1024,
+                        "rows": 5,
+                        "image_pitch": 5120,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 3,
+        "argument_tables_retained": 1,
+        "bare_starts": 1,
+        "batches_held_past_a_look": 1,
+        "batches_with_none_pending": 1,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 3,
+        "command_buffers_submitted": 5,
+        "commands_recorded.begin_command_buffer": 4,
+        "commands_recorded.cmd_bind_descriptor_sets": 1,
+        "commands_recorded.cmd_bind_pipeline": 1,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_pipeline_barrier": 4,
+        "commands_recorded.cmd_push_constants": 1,
+        "commands_recorded.end_command_buffer": 5,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "device_memory_allocated": 268435584,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 3,
+        "fence_waits": 1,
+        "finales_apart": 1,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "heads_held_for_host_steps": 3,
+        "heap_tables_worked_out": 1,
+        "host_steps_recorded": 1,
+        "host_texel_copies": 2,
+        "images_started_on_the_host": 1,
+        "new_buffer_bytes_cleared": 20496,
+        "object_churn.buffers_parked": 2,
+        "object_churn.images_own_memory": 1,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_buffer_bindings": 2,
+        "object_churn.vk_buffers_made": 2,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_image_views_made": 1,
+        "object_churn.vk_images_destroyed": 1,
+        "object_churn.vk_images_made": 1,
+        "pipeline_layouts_made": 1,
+        "pipeline_layouts_shared": 1,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 4,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 3,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 2,
+        "shader_modules_made": 2,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 8
+      },
+      "composed": {
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 5,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_dispatch": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "device_memory_allocated": 268435584,
+        "dispatch_used_resources_listed": 1,
+        "queues_sharing_a_vk_queue": 0
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "pooled_memory_blocks_made": 4
+      },
+      "per_state": {
+        "pipelines": 1,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "shared-exponent-write-float",
+        "calls": 8,
+        "in_calls": 26839417,
+        "on_cpu": 880207,
+        "blocked": 25936667,
+        "elsewhere": 3048792,
+        "spend": 29954083,
+        "spend_least": 28857206,
+        "spend_most": 34377000,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 18209,
+            "on_cpu": 18334,
+            "blocked": 0,
+            "wall_least": 16625,
+            "wall_most": 26458,
+            "wall_total": 45417,
+            "on_cpu_total": 45708,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 76625,
+            "on_cpu": 76792,
+            "blocked": 0,
+            "wall_least": 67333,
+            "wall_most": 108916,
+            "wall_total": 76625,
+            "on_cpu_total": 76792,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 94833,
+            "on_cpu": 95083,
+            "blocked": 0,
+            "wall_least": 78166,
+            "wall_most": 105875,
+            "wall_total": 94833,
+            "on_cpu_total": 95083,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22954417,
+            "on_cpu": 632417,
+            "blocked": 22342251,
+            "wall_least": 22269083,
+            "wall_most": 27845625,
+            "wall_total": 22954417,
+            "on_cpu_total": 632417,
+            "blocked_total": 22342251
+          },
+          {
+            "call": "read_texture",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3958,
+            "on_cpu": 4208,
+            "blocked": 0,
+            "wall_least": 3125,
+            "wall_most": 8542,
+            "wall_total": 3958,
+            "on_cpu_total": 4208,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 13750,
+            "on_cpu": 13875,
+            "blocked": 0,
+            "wall_least": 11875,
+            "wall_most": 19084,
+            "wall_total": 13750,
+            "on_cpu_total": 13875,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3602125,
+            "on_cpu": 6083,
+            "blocked": 3590500,
+            "wall_least": 3142167,
+            "wall_most": 3829667,
+            "wall_total": 3602125,
+            "on_cpu_total": 6083,
+            "blocked_total": 3590500
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "shared-exponent-write-float",
+        "calls": 8,
+        "in_calls": 3811668,
+        "on_cpu": 2348290,
+        "blocked": 1502667,
+        "elsewhere": 989291,
+        "spend": 4775416,
+        "spend_least": 4684873,
+        "spend_most": 5731583,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2792,
+            "on_cpu": 3000,
+            "blocked": 0,
+            "wall_least": 2709,
+            "wall_most": 3042,
+            "wall_total": 8126,
+            "on_cpu_total": 8459,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1366042,
+            "on_cpu": 1209250,
+            "blocked": 163959,
+            "wall_least": 1319708,
+            "wall_most": 2209084,
+            "wall_total": 1366042,
+            "on_cpu_total": 1209250,
+            "blocked_total": 163959
+          },
+          {
+            "call": "dispatch",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 906500,
+            "on_cpu": 906709,
+            "blocked": 0,
+            "wall_least": 824375,
+            "wall_most": 952250,
+            "wall_total": 906500,
+            "on_cpu_total": 906709,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 168708,
+            "on_cpu": 170250,
+            "blocked": 0,
+            "wall_least": 161500,
+            "wall_most": 218417,
+            "wall_total": 168708,
+            "on_cpu_total": 170250,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_texture",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4625,
+            "on_cpu": 4792,
+            "blocked": 0,
+            "wall_least": 4416,
+            "wall_most": 5000,
+            "wall_total": 4625,
+            "on_cpu_total": 4792,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 26792,
+            "on_cpu": 26958,
+            "blocked": 0,
+            "wall_least": 22417,
+            "wall_most": 44958,
+            "wall_total": 26792,
+            "on_cpu_total": 26958,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1327750,
+            "on_cpu": 3708,
+            "blocked": 1322084,
+            "wall_least": 1178833,
+            "wall_most": 1422542,
+            "wall_total": 1327750,
+            "on_cpu_total": 3708,
+            "blocked_total": 1322084
+          }
+        ]
+      }
+    }
+  ]
+}

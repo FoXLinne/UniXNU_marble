@@ -2,6 +2,19 @@
 
 marble 的 UniXNU 适配代码。板级默认目标为 iOS 18.7.11（22H384）；iPadOS 17.7.11（21H461）提供 GPU 真机验收基线。
 
+iOS 17 源码位于 `ios17/source/` 和 `ios17/sources/`；iOS 18 源码位于 `ios18/source/` 和 `ios18/sources/`。这些目录由本设备仓库管理，源码来源记录在 `source_origins.json`。上游检出位于工作区 `work/upstream/`，用于更新和对照。
+
+UEFI 固件源码位于 `firmware/source/`，硬件输入位于 `firmware/inputs/`。本机构建工具位于工作区 `tools/marble-build/`。
+
+构建入口从本仓库复制源码到 `outputs/UniXNU_marble/` 下的构建目录。
+
+```sh
+bash scripts/update_upstream.sh
+python3 scripts/prepare_firmware.py
+firmware/venv/bin/python scripts/prepare_sources.py --os 17
+firmware/venv/bin/python scripts/prepare_sources.py --os 18
+```
+
 GPU 修复范围、逐项状态与总验收条件见 [GPU_REPAIR_GOAL.md](GPU_REPAIR_GOAL.md)。
 
 | 目录或文件 | 内容 |
@@ -12,14 +25,14 @@ GPU 修复范围、逐项状态与总验收条件见 [GPU_REPAIR_GOAL.md](GPU_RE
 | upstream_revisions.json | 上游来源与提交版本 |
 | records | 阶段验证记录 |
 
-执行 `python3 scripts/snapshot_upstream.py` 导出工作目录中的集成补丁。补丁对应 `upstream_revisions.json` 中的提交。
+执行 `python3 scripts/snapshot_upstream.py` 生成本仓库源码摘要 `source_snapshot.json`。
 
 系统盘与内核产物位于工作区 `outputs/UniXNU_marble`。`scripts/build_compact_system.py` 使用仓库内的 `scripts/mkapfs.py` 生成紧凑系统盘。
 
 通过 `root_control.py start --kernel` 更新内核时，传输包附带 1 MiB 回传区，起始 64 KiB 保存日志。panic 返回 RootStage 后读取内核日志与 panic 文本：
 
 ```sh
-../marble_hackios/venv/bin/python scripts/root_control.py logs --output ../../outputs/UniXNU_marble/kernel.log
+firmware/venv/bin/python scripts/root_control.py logs --output ../../outputs/UniXNU_marble/kernel.log
 ```
 
 `start --kernel` 可附加 `--observe-seconds 180`，在 SystemOS 挂载阶段启动单次计时，期满通过 panic 保存日志并返回 RootStage。默认值为 0，由内核自身的退出路径返回。
@@ -35,7 +48,7 @@ GPU 修复范围、逐项状态与总验收条件见 [GPU_REPAIR_GOAL.md](GPU_RE
 iOS 18 GPU 构建使用 `scripts/build_ios18_gpu.py`。`userspace` 构建 arm64e Turnip、启用 LTO 的 Rust 桥接层、Metal 插件、owner trust cache 与 NGPUADD2 addon；`kernel` 构建 A725 内核归档及 22H384 accelerator PAC 绑定。系统卷与 Cryptex 卷挂载后，`all` 完成用户态、RELEASE 内核、预链接与临时启动镜像：
 
 ```sh
-../marble_hackios/venv/bin/python scripts/build_ios18_gpu.py all \
+firmware/venv/bin/python scripts/build_ios18_gpu.py all \
   --root ../../outputs/UniXNU_marble/ios18_arm64e \
   --images ../../outputs/UniXNU_marble/ios18_arm64e/session-20261105/interaction-upstream-app-publication/storage_images.json \
   --data-seed ../../outputs/UniXNU_marble/ios18_arm64e/session-20261105/ufs/Data.rdisk \

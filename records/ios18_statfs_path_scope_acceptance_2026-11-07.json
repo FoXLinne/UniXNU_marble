@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-07",
+  "device": "marble",
+  "candidate": "statfs-path-scope",
+  "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-07/hardware/statfs-path-scope/marble_temporary_boot.img",
+  "user_acceptance": {
+    "source": "本轮用户实机反馈",
+    "result": "最新候选内核下桌面正常启动",
+    "scope": "桌面启动"
+  },
+  "repair": [
+    "恢复 LaunchServices 启动数据库重建调用与 MarbleAppPublication.c 编译入口。",
+    "根联合挂载的文件系统标识别名限定于 statfs64 路径查询；挂载枚举与文件描述符查询使用实际文件系统标识。"
+  ],
+  "retained_candidate_changes": [
+    "型号与 misconfigure 修复",
+    "USB 空闲休眠",
+    "控制工作线程节流",
+    "GPU 表面缓存映射改动"
+  ],
+  "existing_observation": {
+    "source": "/tmp/marble-statfs-path-scope-status.json",
+    "elapsed_basis": "监测程序启动后的主机计时，单位秒",
+    "springboard_pid": 27,
+    "springboard_observed_elapsed": [
+      120.6,
+      290.6
+    ],
+    "ui_exit_records": [],
+    "last_sample": {
+      "elapsed": 290.6,
+      "phase": "kernel",
+      "frames": 1868,
+      "ls_status": 1025,
+      "wallpaper_mount": 0,
+      "ui_exits": [],
+      "process_count": 295,
+      "processes": [
+        [
+          "Preferences",
+          386
+        ],
+        [
+          "Spotlight",
+          354
+        ],
+        [
+          "PosterBoard",
+          287
+        ],
+        [
+          "lsd",
+          104
+        ],
+        [
+          "SpringBoard",
+          27
+        ]
+      ]
+    }
+  },
+  "closure": "按用户指令，记录后停止操作。"
+}

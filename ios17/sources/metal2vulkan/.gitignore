@@ -1,0 +1,46 @@
+# Cargo
+**/target/
+**/Cargo.lock
+
+# Local tool caches / script outputs
+.cache/
+
+# Local fixtures / private captures (not shipped)
+*.air
+!crates/metal2vulkan-validation/fixtures/public/**/*.air
+*.metallib
+*.mtlb
+*.spv
+*.spvasm
+# Our own synthetic SPIR-V assembly fixtures, like our own `.air` above.
+!crates/metal2vulkan-validation/fixtures/public/**/*.spvasm
+
+# Optional private metallib corpus (mined data). Everything under local/ is user-supplied and must
+# never be committed. Authored cases and hash-identified observations outside local/ are canonical.
+crates/metal2vulkan-validation/corpus/local/
+crates/metal2vulkan-validation/corpus/.index.sqlite
+crates/metal2vulkan-validation/corpus/.index.sqlite-*
+crates/metal2vulkan-validation/corpus/.index.sqlite.*
+crates/metal2vulkan-validation/corpus/.transactions/
+*.jsonl.tmp
+
+# OS / editor
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# Tool backups
+**/*.rs.bk
+*.orig
+*.rej
+
+# Python
+__pycache__/
+*.py[cod]

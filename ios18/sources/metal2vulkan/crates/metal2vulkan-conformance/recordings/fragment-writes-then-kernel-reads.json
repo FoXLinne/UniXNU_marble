@@ -1,0 +1,960 @@
+{
+  "format": 1,
+  "case": "fragment-writes-then-kernel-reads",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "tob_renders.ll",
+      "entry": "tob_rect+tob_write",
+      "source_sha256": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+    },
+    {
+      "fixture": "tob_renders.air.ll",
+      "entry": "tob_rect+tob_write",
+      "source_sha256": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+    },
+    {
+      "fixture": "format_scout.ll",
+      "entry": "scout_read_f",
+      "source_sha256": "3d6a9f693cb8eaa851e08e12bcce2afce2890bf3973e9b47312f5e18f2157cb9"
+    },
+    {
+      "fixture": "format_scout.air.ll",
+      "entry": "scout_read_f",
+      "source_sha256": "3631bf570501999cd192eacf86330e5c45cc74b914cdda669586ada3838dc110"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air:tob_renders",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:tob_renders",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air:format_scout",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3d6a9f693cb8eaa851e08e12bcce2afce2890bf3973e9b47312f5e18f2157cb9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:format_scout",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3631bf570501999cd192eacf86330e5c45cc74b914cdda669586ada3838dc110"
+                        }
+                      }
+                    },
+                    {
+                      "name": "render-pipeline",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "bef9dae775fb49f6193039ef7c048003c81046d41698efd041246d4d3bd47d6e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "kernel",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6f138a7dacebbf62f307f8ed31e2eeb270a9a7da239deff99c7be8a8ec64886c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:handed-over",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "01ce403a3875da199cadf8bbe7e91b4635c363639b51ee9d605ed72efd96e9f1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:attachment",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "aa0250e54ef44b2e08bb4963e1d4c0739a6d8d05dcef5c64196af733b23c8996"
+                        }
+                      }
+                    },
+                    {
+                      "name": "sampler",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "640e494dd31edb66b0748239aa90547d77e8ab37843b5bc8352a5f39e5296f06"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:colors",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ea8844d6ec5379a18151ccf6497eeda363cc1c7af9ff82abb9959297a566e72e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "rects",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "26757c4f6e12c7a12116bd9ce20d5b48d9e17228e71f4d073f66c1e1b5f402bb"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "355469d6f1a49ff8102fdfbaadd7eb51d4c52bd69a153bc178ab42c36de698a3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "grid",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "67f6e29b66fbf2707a705a7b0f515af11967d951daf158ee1b8c31c74474508e"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library:tob_renders",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "library:format_scout",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render-pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "compute-pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture:handed-over",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture:attachment",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sampler",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:colors",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:kernel",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pieces",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "pass",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dispatch",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read-handed-over",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-handed-over",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-other",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handed-over",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAEA/AACAPwAAAD4AAAAAAABAPwAAgD8AAIA+AAAAAAAAQD8AAIA/AADAPgAAAAAAAEA/AACAPwAAAD8AAAAAAABAPwAAgD8AACA/AAAAAAAAQD8AAIA/AABAPwAAAAAAAEA/AACAPwAAYD8AAAAAAABAPwAAgD8AAIA/AAAAAAAAQD8AAIA/AACQPwAAAAAAAEA/AACAPwAAoD8AAAAAAABAPwAAgD8AALA/AAAAAAAAQD8AAIA/AADAPwAAAAAAAEA/AACAPwAA0D8AAAAAAABAPwAAgD8AAOA/AAAAAAAAQD8AAIA/AADwPwAAAAAAAEA/AACAPwAAAAAAAAA+AABAPwAAgD8AAAA+AAAAPgAAQD8AAIA/AACAPgAAAD4AAEA/AACAPwAAwD4AAAA+AABAPwAAgD8AAAA/AAAAPgAAQD8AAIA/AAAgPwAAAD4AAEA/AACAPwAAQD8AAAA+AABAPwAAgD8AAGA/AAAAPgAAQD8AAIA/AACAPwAAAD4AAEA/AACAPwAAkD8AAAA+AABAPwAAgD8AAKA/AAAAPgAAQD8AAIA/AACwPwAAAD4AAEA/AACAPwAAwD8AAAA+AABAPwAAgD8AANA/AAAAPgAAQD8AAIA/AADgPwAAAD4AAEA/AACAPwAA8D8AAAA+AABAPwAAgD8AAAAAAACAPgAAQD8AAIA/AAAAPgAAgD4AAEA/AACAPwAAgD4AAIA+AABAPwAAgD8AAMA+AACAPgAAQD8AAIA/AAAAPwAAgD4AAEA/AACAPwAAID8AAIA+AABAPwAAgD8AAEA/AACAPgAAQD8AAIA/AABgPwAAgD4AAEA/AACAPwAAgD8AAIA+AABAPwAAgD8AAJA/AACAPgAAQD8AAIA/AACgPwAAgD4AAEA/AACAPwAAsD8AAIA+AABAPwAAgD8AAMA/AACAPgAAQD8AAIA/AADQPwAAgD4AAEA/AACAPwAA4D8AAIA+AABAPwAAgD8AAPA/AACAPgAAQD8AAIA/AAAAAAAAwD4AAEA/AACAPwAAAD4AAMA+AABAPwAAgD8AAIA+AADAPgAAQD8AAIA/AADAPgAAwD4AAEA/AACAPwAAAD8AAMA+AABAPwAAgD8AACA/AADAPgAAQD8AAIA/AABAPwAAwD4AAEA/AACAPwAAYD8AAMA+AABAPwAAgD8AAIA/AADAPgAAQD8AAIA/AACQPwAAwD4AAEA/AACAPwAAoD8AAMA+AABAPwAAgD8AALA/AADAPgAAQD8AAIA/AADAPwAAwD4AAEA/AACAPwAA0D8AAMA+AABAPwAAgD8AAOA/AADAPgAAQD8AAIA/AADwPwAAwD4AAEA/AACAPwAAAAAAAAA/AABAPwAAgD8AAAA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAwD4AAAA/AABAPwAAgD8AAAA/AAAAPwAAQD8AAIA/AAAgPwAAAD8AAEA/AACAPwAAQD8AAAA/AABAPwAAgD8AAGA/AAAAPwAAQD8AAIA/AACAPwAAAD8AAEA/AACAPwAAkD8AAAA/AABAPwAAgD8AAKA/AAAAPwAAQD8AAIA/AACwPwAAAD8AAEA/AACAPwAAwD8AAAA/AABAPwAAgD8AANA/AAAAPwAAQD8AAIA/AADgPwAAAD8AAEA/AACAPwAA8D8AAAA/AABAPwAAgD8AAAAAAAAgPwAAQD8AAIA/AAAAPgAAID8AAEA/AACAPwAAgD4AACA/AABAPwAAgD8AAMA+AAAgPwAAQD8AAIA/AAAAPwAAID8AAEA/AACAPwAAID8AACA/AABAPwAAgD8AAEA/AAAgPwAAQD8AAIA/AABgPwAAID8AAEA/AACAPwAAgD8AACA/AABAPwAAgD8AAJA/AAAgPwAAQD8AAIA/AACgPwAAID8AAEA/AACAPwAAsD8AACA/AABAPwAAgD8AAMA/AAAgPwAAQD8AAIA/AADQPwAAID8AAEA/AACAPwAA4D8AACA/AABAPwAAgD8AAPA/AAAgPwAAQD8AAIA/AAAAAAAAQD8AAEA/AACAPwAAAD4AAEA/AABAPwAAgD8AAIA+AABAPwAAQD8AAIA/AADAPgAAQD8AAEA/AACAPwAAAD8AAEA/AABAPwAAgD8AACA/AABAPwAAQD8AAIA/AABAPwAAQD8AAEA/AACAPwAAYD8AAEA/AABAPwAAgD8AAIA/AABAPwAAQD8AAIA/AACQPwAAQD8AAEA/AACAPwAAoD8AAEA/AABAPwAAgD8AALA/AABAPwAAQD8AAIA/AADAPwAAQD8AAEA/AACAPwAA0D8AAEA/AABAPwAAgD8AAOA/AABAPwAAQD8AAIA/AADwPwAAQD8AAEA/AACAPwAAAAAAAGA/AABAPwAAgD8AAAA+AABgPwAAQD8AAIA/AACAPgAAYD8AAEA/AACAPwAAwD4AAGA/AABAPwAAgD8AAAA/AABgPwAAQD8AAIA/AAAgPwAAYD8AAEA/AACAPwAAQD8AAGA/AABAPwAAgD8AAGA/AABgPwAAQD8AAIA/AACAPwAAYD8AAEA/AACAPwAAkD8AAGA/AABAPwAAgD8AAKA/AABgPwAAQD8AAIA/AACwPwAAYD8AAEA/AACAPwAAwD8AAGA/AABAPwAAgD8AANA/AABgPwAAQD8AAIA/AADgPwAAYD8AAEA/AACAPwAA8D8AAGA/AABAPwAAgD8AAAAAAACAPwAAQD8AAIA/AAAAPgAAgD8AAEA/AACAPwAAgD4AAIA/AABAPwAAgD8AAMA+AACAPwAAQD8AAIA/AAAAPwAAgD8AAEA/AACAPwAAID8AAIA/AABAPwAAgD8AAEA/AACAPwAAQD8AAIA/AABgPwAAgD8AAEA/AACAPwAAgD8AAIA/AABAPwAAgD8AAJA/AACAPwAAQD8AAIA/AACgPwAAgD8AAEA/AACAPwAAsD8AAIA/AABAPwAAgD8AAMA/AACAPwAAQD8AAIA/AADQPwAAgD8AAEA/AACAPwAA4D8AAIA/AABAPwAAgD8AAPA/AACAPwAAQD8AAIA/AAAAAAAAkD8AAEA/AACAPwAAAD4AAJA/AABAPwAAgD8AAIA+AACQPwAAQD8AAIA/AADAPgAAkD8AAEA/AACAPwAAAD8AAJA/AABAPwAAgD8AACA/AACQPwAAQD8AAIA/AABAPwAAkD8AAEA/AACAPwAAYD8AAJA/AABAPwAAgD8AAIA/AACQPwAAQD8AAIA/AACQPwAAkD8AAEA/AACAPwAAoD8AAJA/AABAPwAAgD8AALA/AACQPwAAQD8AAIA/AADAPwAAkD8AAEA/AACAPwAA0D8AAJA/AABAPwAAgD8AAOA/AACQPwAAQD8AAIA/AADwPwAAkD8AAEA/AACAPwAAAAAAAKA/AABAPwAAgD8AAAA+AACgPwAAQD8AAIA/AACAPgAAoD8AAEA/AACAPwAAwD4AAKA/AABAPwAAgD8AAAA/AACgPwAAQD8AAIA/AAAgPwAAoD8AAEA/AACAPwAAQD8AAKA/AABAPwAAgD8AAGA/AACgPwAAQD8AAIA/AACAPwAAoD8AAEA/AACAPwAAkD8AAKA/AABAPwAAgD8AAKA/AACgPwAAQD8AAIA/AACwPwAAoD8AAEA/AACAPwAAwD8AAKA/AABAPwAAgD8AANA/AACgPwAAQD8AAIA/AADgPwAAoD8AAEA/AACAPwAA8D8AAKA/AABAPwAAgD8AAAAAAACwPwAAQD8AAIA/AAAAPgAAsD8AAEA/AACAPwAAgD4AALA/AABAPwAAgD8AAMA+AACwPwAAQD8AAIA/AAAAPwAAsD8AAEA/AACAPwAAID8AALA/AABAPwAAgD8AAEA/AACwPwAAQD8AAIA/AABgPwAAsD8AAEA/AACAPwAAgD8AALA/AABAPwAAgD8AAJA/AACwPwAAQD8AAIA/AACgPwAAsD8AAEA/AACAPwAAsD8AALA/AABAPwAAgD8AAMA/AACwPwAAQD8AAIA/AADQPwAAsD8AAEA/AACAPwAA4D8AALA/AABAPwAAgD8AAPA/AACwPwAAQD8AAIA/AAAAAAAAwD8AAEA/AACAPwAAAD4AAMA/AABAPwAAgD8AAIA+AADAPwAAQD8AAIA/AADAPgAAwD8AAEA/AACAPwAAAD8AAMA/AABAPwAAgD8AACA/AADAPwAAQD8AAIA/AABAPwAAwD8AAEA/AACAPwAAYD8AAMA/AABAPwAAgD8AAIA/AADAPwAAQD8AAIA/AACQPwAAwD8AAEA/AACAPwAAoD8AAMA/AABAPwAAgD8AALA/AADAPwAAQD8AAIA/AADAPwAAwD8AAEA/AACAPwAA0D8AAMA/AABAPwAAgD8AAOA/AADAPwAAQD8AAIA/AADwPwAAwD8AAEA/AACAPwAAAAAAANA/AABAPwAAgD8AAAA+AADQPwAAQD8AAIA/AACAPgAA0D8AAEA/AACAPwAAwD4AANA/AABAPwAAgD8AAAA/AADQPwAAQD8AAIA/AAAgPwAA0D8AAEA/AACAPwAAQD8AANA/AABAPwAAgD8AAGA/AADQPwAAQD8AAIA/AACAPwAA0D8AAEA/AACAPwAAkD8AANA/AABAPwAAgD8AAKA/AADQPwAAQD8AAIA/AACwPwAA0D8AAEA/AACAPwAAwD8AANA/AABAPwAAgD8AANA/AADQPwAAQD8AAIA/AADgPwAA0D8AAEA/AACAPwAA8D8AANA/AABAPwAAgD8AAAAAAADgPwAAQD8AAIA/AAAAPgAA4D8AAEA/AACAPwAAgD4AAOA/AABAPwAAgD8AAMA+AADgPwAAQD8AAIA/AAAAPwAA4D8AAEA/AACAPwAAID8AAOA/AABAPwAAgD8AAEA/AADgPwAAQD8AAIA/AABgPwAA4D8AAEA/AACAPwAAgD8AAOA/AABAPwAAgD8AAJA/AADgPwAAQD8AAIA/AACgPwAA4D8AAEA/AACAPwAAsD8AAOA/AABAPwAAgD8AAMA/AADgPwAAQD8AAIA/AADQPwAA4D8AAEA/AACAPwAA4D8AAOA/AABAPwAAgD8AAPA/AADgPwAAQD8AAIA/AAAAAAAA8D8AAEA/AACAPwAAAD4AAPA/AABAPwAAgD8AAIA+AADwPwAAQD8AAIA/AADAPgAA8D8AAEA/AACAPwAAAD8AAPA/AABAPwAAgD8AACA/AADwPwAAQD8AAIA/AABAPwAA8D8AAEA/AACAPwAAYD8AAPA/AABAPwAAgD8AAIA/AADwPwAAQD8AAIA/AACQPwAA8D8AAEA/AACAPwAAoD8AAPA/AABAPwAAgD8AALA/AADwPwAAQD8AAIA/AADAPwAA8D8AAEA/AACAPwAA0D8AAPA/AABAPwAAgD8AAOA/AADwPwAAQD8AAIA/AADwPwAA8D8AAEA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-by-the-kernel",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "values",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAEA/AACAPwAAAD4AAAAAAABAPwAAgD8AAIA+AAAAAAAAQD8AAIA/AADAPgAAAAAAAEA/AACAPwAAAD8AAAAAAABAPwAAgD8AACA/AAAAAAAAQD8AAIA/AABAPwAAAAAAAEA/AACAPwAAYD8AAAAAAABAPwAAgD8AAIA/AAAAAAAAQD8AAIA/AACQPwAAAAAAAEA/AACAPwAAoD8AAAAAAABAPwAAgD8AALA/AAAAAAAAQD8AAIA/AADAPwAAAAAAAEA/AACAPwAA0D8AAAAAAABAPwAAgD8AAOA/AAAAAAAAQD8AAIA/AADwPwAAAAAAAEA/AACAPwAAAAAAAAA+AABAPwAAgD8AAAA+AAAAPgAAQD8AAIA/AACAPgAAAD4AAEA/AACAPwAAwD4AAAA+AABAPwAAgD8AAAA/AAAAPgAAQD8AAIA/AAAgPwAAAD4AAEA/AACAPwAAQD8AAAA+AABAPwAAgD8AAGA/AAAAPgAAQD8AAIA/AACAPwAAAD4AAEA/AACAPwAAkD8AAAA+AABAPwAAgD8AAKA/AAAAPgAAQD8AAIA/AACwPwAAAD4AAEA/AACAPwAAwD8AAAA+AABAPwAAgD8AANA/AAAAPgAAQD8AAIA/AADgPwAAAD4AAEA/AACAPwAA8D8AAAA+AABAPwAAgD8AAAAAAACAPgAAQD8AAIA/AAAAPgAAgD4AAEA/AACAPwAAgD4AAIA+AABAPwAAgD8AAMA+AACAPgAAQD8AAIA/AAAAPwAAgD4AAEA/AACAPwAAID8AAIA+AABAPwAAgD8AAEA/AACAPgAAQD8AAIA/AABgPwAAgD4AAEA/AACAPwAAgD8AAIA+AABAPwAAgD8AAJA/AACAPgAAQD8AAIA/AACgPwAAgD4AAEA/AACAPwAAsD8AAIA+AABAPwAAgD8AAMA/AACAPgAAQD8AAIA/AADQPwAAgD4AAEA/AACAPwAA4D8AAIA+AABAPwAAgD8AAPA/AACAPgAAQD8AAIA/AAAAAAAAwD4AAEA/AACAPwAAAD4AAMA+AABAPwAAgD8AAIA+AADAPgAAQD8AAIA/AADAPgAAwD4AAEA/AACAPwAAAD8AAMA+AABAPwAAgD8AACA/AADAPgAAQD8AAIA/AABAPwAAwD4AAEA/AACAPwAAYD8AAMA+AABAPwAAgD8AAIA/AADAPgAAQD8AAIA/AACQPwAAwD4AAEA/AACAPwAAoD8AAMA+AABAPwAAgD8AALA/AADAPgAAQD8AAIA/AADAPwAAwD4AAEA/AACAPwAA0D8AAMA+AABAPwAAgD8AAOA/AADAPgAAQD8AAIA/AADwPwAAwD4AAEA/AACAPwAAAAAAAAA/AABAPwAAgD8AAAA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAwD4AAAA/AABAPwAAgD8AAAA/AAAAPwAAQD8AAIA/AAAgPwAAAD8AAEA/AACAPwAAQD8AAAA/AABAPwAAgD8AAGA/AAAAPwAAQD8AAIA/AACAPwAAAD8AAEA/AACAPwAAkD8AAAA/AABAPwAAgD8AAKA/AAAAPwAAQD8AAIA/AACwPwAAAD8AAEA/AACAPwAAwD8AAAA/AABAPwAAgD8AANA/AAAAPwAAQD8AAIA/AADgPwAAAD8AAEA/AACAPwAA8D8AAAA/AABAPwAAgD8AAAAAAAAgPwAAQD8AAIA/AAAAPgAAID8AAEA/AACAPwAAgD4AACA/AABAPwAAgD8AAMA+AAAgPwAAQD8AAIA/AAAAPwAAID8AAEA/AACAPwAAID8AACA/AABAPwAAgD8AAEA/AAAgPwAAQD8AAIA/AABgPwAAID8AAEA/AACAPwAAgD8AACA/AABAPwAAgD8AAJA/AAAgPwAAQD8AAIA/AACgPwAAID8AAEA/AACAPwAAsD8AACA/AABAPwAAgD8AAMA/AAAgPwAAQD8AAIA/AADQPwAAID8AAEA/AACAPwAA4D8AACA/AABAPwAAgD8AAPA/AAAgPwAAQD8AAIA/AAAAAAAAQD8AAEA/AACAPwAAAD4AAEA/AABAPwAAgD8AAIA+AABAPwAAQD8AAIA/AADAPgAAQD8AAEA/AACAPwAAAD8AAEA/AABAPwAAgD8AACA/AABAPwAAQD8AAIA/AABAPwAAQD8AAEA/AACAPwAAYD8AAEA/AABAPwAAgD8AAIA/AABAPwAAQD8AAIA/AACQPwAAQD8AAEA/AACAPwAAoD8AAEA/AABAPwAAgD8AALA/AABAPwAAQD8AAIA/AADAPwAAQD8AAEA/AACAPwAA0D8AAEA/AABAPwAAgD8AAOA/AABAPwAAQD8AAIA/AADwPwAAQD8AAEA/AACAPwAAAAAAAGA/AABAPwAAgD8AAAA+AABgPwAAQD8AAIA/AACAPgAAYD8AAEA/AACAPwAAwD4AAGA/AABAPwAAgD8AAAA/AABgPwAAQD8AAIA/AAAgPwAAYD8AAEA/AACAPwAAQD8AAGA/AABAPwAAgD8AAGA/AABgPwAAQD8AAIA/AACAPwAAYD8AAEA/AACAPwAAkD8AAGA/AABAPwAAgD8AAKA/AABgPwAAQD8AAIA/AACwPwAAYD8AAEA/AACAPwAAwD8AAGA/AABAPwAAgD8AANA/AABgPwAAQD8AAIA/AADgPwAAYD8AAEA/AACAPwAA8D8AAGA/AABAPwAAgD8AAAAAAACAPwAAQD8AAIA/AAAAPgAAgD8AAEA/AACAPwAAgD4AAIA/AABAPwAAgD8AAMA+AACAPwAAQD8AAIA/AAAAPwAAgD8AAEA/AACAPwAAID8AAIA/AABAPwAAgD8AAEA/AACAPwAAQD8AAIA/AABgPwAAgD8AAEA/AACAPwAAgD8AAIA/AABAPwAAgD8AAJA/AACAPwAAQD8AAIA/AACgPwAAgD8AAEA/AACAPwAAsD8AAIA/AABAPwAAgD8AAMA/AACAPwAAQD8AAIA/AADQPwAAgD8AAEA/AACAPwAA4D8AAIA/AABAPwAAgD8AAPA/AACAPwAAQD8AAIA/AAAAAAAAkD8AAEA/AACAPwAAAD4AAJA/AABAPwAAgD8AAIA+AACQPwAAQD8AAIA/AADAPgAAkD8AAEA/AACAPwAAAD8AAJA/AABAPwAAgD8AACA/AACQPwAAQD8AAIA/AABAPwAAkD8AAEA/AACAPwAAYD8AAJA/AABAPwAAgD8AAIA/AACQPwAAQD8AAIA/AACQPwAAkD8AAEA/AACAPwAAoD8AAJA/AABAPwAAgD8AALA/AACQPwAAQD8AAIA/AADAPwAAkD8AAEA/AACAPwAA0D8AAJA/AABAPwAAgD8AAOA/AACQPwAAQD8AAIA/AADwPwAAkD8AAEA/AACAPwAAAAAAAKA/AABAPwAAgD8AAAA+AACgPwAAQD8AAIA/AACAPgAAoD8AAEA/AACAPwAAwD4AAKA/AABAPwAAgD8AAAA/AACgPwAAQD8AAIA/AAAgPwAAoD8AAEA/AACAPwAAQD8AAKA/AABAPwAAgD8AAGA/AACgPwAAQD8AAIA/AACAPwAAoD8AAEA/AACAPwAAkD8AAKA/AABAPwAAgD8AAKA/AACgPwAAQD8AAIA/AACwPwAAoD8AAEA/AACAPwAAwD8AAKA/AABAPwAAgD8AANA/AACgPwAAQD8AAIA/AADgPwAAoD8AAEA/AACAPwAA8D8AAKA/AABAPwAAgD8AAAAAAACwPwAAQD8AAIA/AAAAPgAAsD8AAEA/AACAPwAAgD4AALA/AABAPwAAgD8AAMA+AACwPwAAQD8AAIA/AAAAPwAAsD8AAEA/AACAPwAAID8AALA/AABAPwAAgD8AAEA/AACwPwAAQD8AAIA/AABgPwAAsD8AAEA/AACAPwAAgD8AALA/AABAPwAAgD8AAJA/AACwPwAAQD8AAIA/AACgPwAAsD8AAEA/AACAPwAAsD8AALA/AABAPwAAgD8AAMA/AACwPwAAQD8AAIA/AADQPwAAsD8AAEA/AACAPwAA4D8AALA/AABAPwAAgD8AAPA/AACwPwAAQD8AAIA/AAAAAAAAwD8AAEA/AACAPwAAAD4AAMA/AABAPwAAgD8AAIA+AADAPwAAQD8AAIA/AADAPgAAwD8AAEA/AACAPwAAAD8AAMA/AABAPwAAgD8AACA/AADAPwAAQD8AAIA/AABAPwAAwD8AAEA/AACAPwAAYD8AAMA/AABAPwAAgD8AAIA/AADAPwAAQD8AAIA/AACQPwAAwD8AAEA/AACAPwAAoD8AAMA/AABAPwAAgD8AALA/AADAPwAAQD8AAIA/AADAPwAAwD8AAEA/AACAPwAA0D8AAMA/AABAPwAAgD8AAOA/AADAPwAAQD8AAIA/AADwPwAAwD8AAEA/AACAPwAAAAAAANA/AABAPwAAgD8AAAA+AADQPwAAQD8AAIA/AACAPgAA0D8AAEA/AACAPwAAwD4AANA/AABAPwAAgD8AAAA/AADQPwAAQD8AAIA/AAAgPwAA0D8AAEA/AACAPwAAQD8AANA/AABAPwAAgD8AAGA/AADQPwAAQD8AAIA/AACAPwAA0D8AAEA/AACAPwAAkD8AANA/AABAPwAAgD8AAKA/AADQPwAAQD8AAIA/AACwPwAA0D8AAEA/AACAPwAAwD8AANA/AABAPwAAgD8AANA/AADQPwAAQD8AAIA/AADgPwAA0D8AAEA/AACAPwAA8D8AANA/AABAPwAAgD8AAAAAAADgPwAAQD8AAIA/AAAAPgAA4D8AAEA/AACAPwAAgD4AAOA/AABAPwAAgD8AAMA+AADgPwAAQD8AAIA/AAAAPwAA4D8AAEA/AACAPwAAID8AAOA/AABAPwAAgD8AAEA/AADgPwAAQD8AAIA/AABgPwAA4D8AAEA/AACAPwAAgD8AAOA/AABAPwAAgD8AAJA/AADgPwAAQD8AAIA/AACgPwAA4D8AAEA/AACAPwAAsD8AAOA/AABAPwAAgD8AAMA/AADgPwAAQD8AAIA/AADQPwAA4D8AAEA/AACAPwAA4D8AAOA/AABAPwAAgD8AAPA/AADgPwAAQD8AAIA/AAAAAAAA8D8AAEA/AACAPwAAAD4AAPA/AABAPwAAgD8AAIA+AADwPwAAQD8AAIA/AADAPgAA8D8AAEA/AACAPwAAAD8AAPA/AABAPwAAgD8AACA/AADwPwAAQD8AAIA/AABAPwAA8D8AAEA/AACAPwAAYD8AAPA/AABAPwAAgD8AAIA/AADwPwAAQD8AAIA/AACQPwAA8D8AAEA/AACAPwAAoD8AAPA/AABAPwAAgD8AALA/AADwPwAAQD8AAIA/AADAPwAA8D8AAEA/AACAPwAA0D8AAPA/AABAPwAAgD8AAOA/AADwPwAAQD8AAIA/AADwPwAA8D8AAEA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 4096
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 3,
+        "argument_samplers_taken": 1,
+        "argument_tables_retained": 2,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bind_views_worked_out": 1,
+        "command_buffers_begun": 9,
+        "command_buffers_begun_batch_barriers": 3,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 3,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 3,
+        "command_buffers_submitted": 9,
+        "commands_recorded.begin_command_buffer": 6,
+        "commands_recorded.cmd_begin_render_pass": 1,
+        "commands_recorded.cmd_bind_descriptor_sets": 2,
+        "commands_recorded.cmd_bind_pipeline": 2,
+        "commands_recorded.cmd_clear_color_image": 3,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_buffer_to_image": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_draw": 1,
+        "commands_recorded.cmd_end_render_pass": 1,
+        "commands_recorded.cmd_pipeline_barrier": 6,
+        "commands_recorded.cmd_push_constants": 2,
+        "commands_recorded.cmd_set_blend_constants": 1,
+        "commands_recorded.cmd_set_cull_mode": 1,
+        "commands_recorded.cmd_set_depth_bias": 1,
+        "commands_recorded.cmd_set_depth_compare_op": 1,
+        "commands_recorded.cmd_set_depth_test_enable": 1,
+        "commands_recorded.cmd_set_depth_write_enable": 1,
+        "commands_recorded.cmd_set_front_face": 1,
+        "commands_recorded.cmd_set_primitive_restart_enable": 1,
+        "commands_recorded.cmd_set_primitive_topology": 1,
+        "commands_recorded.cmd_set_scissor": 1,
+        "commands_recorded.cmd_set_stencil_compare_mask": 1,
+        "commands_recorded.cmd_set_stencil_op": 1,
+        "commands_recorded.cmd_set_stencil_reference": 1,
+        "commands_recorded.cmd_set_stencil_test_enable": 1,
+        "commands_recorded.cmd_set_stencil_write_mask": 1,
+        "commands_recorded.cmd_set_viewport": 1,
+        "commands_recorded.end_command_buffer": 9,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 1,
+        "creation_pipelines_made": 2,
+        "creation_render_pipelines_drawn": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326976,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "draw_shapes_made": 1,
+        "draw_states_recorded": 19,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 1,
+        "encoder_command_buffers_begun": 5,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 2,
+        "functions_translated": 3,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 1,
+        "heap_tables_worked_out": 3,
+        "host_steps_recorded": 1,
+        "inline_passes": 1,
+        "linked_use_questions_asked": 2,
+        "new_buffer_bytes_cleared": 8256,
+        "object_churn.buffers_evicted": 8,
+        "object_churn.buffers_parked": 4,
+        "object_churn.buffers_recycled": 4,
+        "object_churn.images_evicted": 2,
+        "object_churn.images_own_memory": 2,
+        "object_churn.images_parked": 2,
+        "object_churn.images_recycled": 2,
+        "object_churn.textures_image": 2,
+        "object_churn.vk_buffers_destroyed": 8,
+        "object_churn.vk_image_views_made": 3,
+        "object_churn.vk_images_destroyed": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 1,
+        "render_passes_begun_inline": 1,
+        "render_passes_made": 2,
+        "resident_textures_looked_at": 2,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "shader_modules_made": 3,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 3,
+        "stage_tables_read": 4,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 3,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "batches_submitted_by_waiters": 0,
+        "command_buffers_begun": 9,
+        "command_buffers_begun_batch_barriers": 3,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 9,
+        "commands_recorded.cmd_begin_render_pass": 0,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_copy_buffer_to_image": 0,
+        "commands_recorded.cmd_copy_image_to_buffer": 0,
+        "commands_recorded.cmd_dispatch": 0,
+        "commands_recorded.cmd_draw": 0,
+        "commands_recorded.cmd_end_render_pass": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.cmd_set_blend_constants": 0,
+        "commands_recorded.cmd_set_cull_mode": 0,
+        "commands_recorded.cmd_set_depth_bias": 0,
+        "commands_recorded.cmd_set_depth_compare_op": 0,
+        "commands_recorded.cmd_set_depth_test_enable": 0,
+        "commands_recorded.cmd_set_depth_write_enable": 0,
+        "commands_recorded.cmd_set_front_face": 0,
+        "commands_recorded.cmd_set_primitive_restart_enable": 0,
+        "commands_recorded.cmd_set_primitive_topology": 0,
+        "commands_recorded.cmd_set_scissor": 0,
+        "commands_recorded.cmd_set_stencil_compare_mask": 0,
+        "commands_recorded.cmd_set_stencil_op": 0,
+        "commands_recorded.cmd_set_stencil_reference": 0,
+        "commands_recorded.cmd_set_stencil_test_enable": 0,
+        "commands_recorded.cmd_set_stencil_write_mask": 0,
+        "commands_recorded.cmd_set_viewport": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 201326848,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 5,
+        "functions_translated": 3,
+        "host_steps_recorded": 1,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 2,
+        "stage_entries_specialized": 3,
+        "submit_infos": 2,
+        "variant_pipelines_made": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "creation_pipelines_made": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 3,
+        "variant_pipelines_made": 3
+      },
+      "per_state": {
+        "pipelines": 2,
+        "states": 2
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "fragment-writes-then-kernel-reads",
+        "calls": 13,
+        "in_calls": 56396376,
+        "on_cpu": 1795586,
+        "blocked": 54546083,
+        "elsewhere": 7763667,
+        "spend": 64227917,
+        "spend_least": 61358999,
+        "spend_most": 65797668,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4000,
+            "on_cpu": 4125,
+            "blocked": 0,
+            "wall_least": 3584,
+            "wall_most": 4583,
+            "wall_total": 4000,
+            "on_cpu_total": 4125,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 39750,
+            "on_cpu": 40000,
+            "blocked": 0,
+            "wall_least": 38125,
+            "wall_most": 41708,
+            "wall_total": 39750,
+            "on_cpu_total": 40000,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 23606500,
+            "on_cpu": 635375,
+            "blocked": 22919458,
+            "wall_least": 23071250,
+            "wall_most": 24772000,
+            "wall_total": 48009250,
+            "on_cpu_total": 1285834,
+            "blocked_total": 46666416
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 250,
+            "on_cpu": 375,
+            "blocked": 0,
+            "wall_least": 167,
+            "wall_most": 333,
+            "wall_total": 1083,
+            "on_cpu_total": 1417,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8085541,
+            "on_cpu": 257291,
+            "blocked": 7822458,
+            "wall_least": 7610417,
+            "wall_most": 8265584,
+            "wall_total": 8085541,
+            "on_cpu_total": 257291,
+            "blocked_total": 7822458
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 155958,
+            "on_cpu": 156250,
+            "blocked": 0,
+            "wall_least": 144584,
+            "wall_most": 184875,
+            "wall_total": 155958,
+            "on_cpu_total": 156250,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3875,
+            "on_cpu": 3958,
+            "blocked": 0,
+            "wall_least": 3375,
+            "wall_most": 4584,
+            "wall_total": 3875,
+            "on_cpu_total": 3958,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 5917,
+            "on_cpu": 6042,
+            "blocked": 0,
+            "wall_least": 5083,
+            "wall_most": 9250,
+            "wall_total": 42958,
+            "on_cpu_total": 43250,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 1792,
+            "on_cpu": 1917,
+            "blocked": 0,
+            "wall_least": 1667,
+            "wall_most": 1958,
+            "wall_total": 3750,
+            "on_cpu_total": 4000,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "fragment-writes-then-kernel-reads",
+        "calls": 13,
+        "in_calls": 4352831,
+        "on_cpu": 2945375,
+        "blocked": 1410957,
+        "elsewhere": 895208,
+        "spend": 5090670,
+        "spend_least": 4894917,
+        "spend_most": 6092249,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2666,
+            "on_cpu": 2750,
+            "blocked": 0,
+            "wall_least": 1792,
+            "wall_most": 3666,
+            "wall_total": 2666,
+            "on_cpu_total": 2750,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23000,
+            "on_cpu": 23250,
+            "blocked": 0,
+            "wall_least": 18041,
+            "wall_most": 35708,
+            "wall_total": 23000,
+            "on_cpu_total": 23250,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 235291,
+            "on_cpu": 236167,
+            "blocked": 0,
+            "wall_least": 228292,
+            "wall_most": 257583,
+            "wall_total": 511791,
+            "on_cpu_total": 516125,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 250,
+            "on_cpu": 375,
+            "blocked": 0,
+            "wall_least": 209,
+            "wall_most": 333,
+            "wall_total": 792,
+            "on_cpu_total": 1125,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1252625,
+            "on_cpu": 122791,
+            "blocked": 1162041,
+            "wall_least": 1209750,
+            "wall_most": 1409542,
+            "wall_total": 1252625,
+            "on_cpu_total": 122791,
+            "blocked_total": 1162041
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2525583,
+            "on_cpu": 2257917,
+            "blocked": 251917,
+            "wall_least": 2319834,
+            "wall_most": 2944916,
+            "wall_total": 2525583,
+            "on_cpu_total": 2257917,
+            "blocked_total": 251917
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1917,
+            "on_cpu": 2042,
+            "blocked": 0,
+            "wall_least": 1333,
+            "wall_most": 2791,
+            "wall_total": 1917,
+            "on_cpu_total": 2042,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 5291,
+            "on_cpu": 5375,
+            "blocked": 0,
+            "wall_least": 4500,
+            "wall_most": 7834,
+            "wall_total": 17458,
+            "on_cpu_total": 17708,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 667,
+            "on_cpu": 750,
+            "blocked": 0,
+            "wall_least": 542,
+            "wall_most": 834,
+            "wall_total": 1583,
+            "on_cpu_total": 1833,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

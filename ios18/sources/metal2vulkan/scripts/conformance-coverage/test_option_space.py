@@ -1,0 +1,1238 @@
+"""The option-space axis over inputs whose answers are known.
+
+Run by `coverage.py --selftest`, which is what the suite's
+`the_option_space_axis_still_measures_what_it_claims` runs.
+
+The axis is a derivation over text, and the way a derivation like it fails is by quietly matching
+nothing: a renamed JSON key, a spelling the sources use that the regex does not, and every count
+reads zero while the document still looks like a measurement. So each test here builds its own
+little tree, where the answer is known by construction, and asserts both directions — that a value
+it should find is found, and that a value it must not count is not.
+
+Every test owns its inputs. Nothing here reads the repository.
+"""
+
+import json
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+import option_space
+
+#: Every tree `tree` made, removed by `tearDownModule`. Each test wants a fresh one and none of
+#: them wants it afterwards, so one list and one sweep is the whole lifetime.
+MADE: list[Path] = []
+
+
+def tearDownModule() -> None:
+    """Remove the trees the tests built."""
+    while MADE:
+        shutil.rmtree(MADE.pop(), ignore_errors=True)
+
+#: A generated table of one enum and one option set, as `regen-metal-enums` writes them.
+GENERATED = """\
+// Generated from the macOS 27.0 SDK Metal.framework headers (names and values).
+
+metal_enum! {
+    /// `MTLThing`.
+    #[non_exhaustive]
+    Thing = "MTLThing" {
+        Alpha = 0, "MTLThingAlpha";
+        Beta = 1, "MTLThingBeta";
+        Gamma = 2, "MTLThingGamma";
+        Delta = 3, "MTLThingDelta";
+        Epsilon = 4, "MTLThingEpsilon";
+        Zeta = 5, "MTLThingZeta";
+    }
+    aliases {
+        "MTLThingOldBeta" => Beta;
+    }
+}
+
+metal_flags! {
+    /// `MTLSpread`.
+    Spread = "MTLSpread" {
+        NONE = 0, "MTLSpreadNone";
+        LEFT = 0x1, "MTLSpreadLeft";
+        RIGHT = 0x2, "MTLSpreadRight";
+    }
+    aliases {
+    }
+    dropped {
+    }
+}
+"""
+
+
+#: A generated enumerator table, as `regen-metal-enums` writes `TABLE_OUTPUT`: the SDK's values
+#: for a type the tree models by hand, with one deprecated spelling. `MTLKept` is declared by no
+#: generated Rust here, exactly as `MTLStoreAction` and `MTLPipelineOption` are declared by none.
+TABLE = """\
+# Generated from the macOS 27.0 SDK Metal.framework headers (names and values).
+type\tkind\trole\trust\tenumerator\tvalue
+MTLKept\tenum\tvalue\tFirst\tMTLKeptFirst\t0
+MTLKept\tenum\tvalue\tSecond\tMTLKeptSecond\t1
+MTLKept\tenum\tvalue\tThird\tMTLKeptThird\t2
+MTLKept\tenum\talias\tSecond\tMTLKeptOldSecond\t1
+"""
+
+#: A hand-written declaration of `MTLKept`, whose variants are spelled unlike the table's derived
+#: names, which is `MTLBlitOption`'s shape: the tree models an option set as a closed enum.
+BY_HAND_KEPT = """\
+/// `MTLKept`, which this tree declares itself.
+pub enum Kept {
+    First,
+    Second,
+    Third,
+}
+"""
+
+
+def tree(
+    cases: dict[str, str],
+    shared: str = "",
+    recordings: tuple[dict, ...] = (),
+    generated: str = GENERATED,
+    table: str = TABLE,
+    by_hand: str = "",
+    unreachable: str = "",
+    crossings: str = "",
+    other: str = "",
+) -> Path:
+    """A repository-shaped tree of exactly these sources and recordings."""
+    root = Path(tempfile.mkdtemp(prefix="option-space-selftest-"))
+    MADE.append(root)
+    enumerators = root / option_space.ENUMERATORS
+    enumerators.parent.mkdir(parents=True, exist_ok=True)
+    enumerators.write_text(table)
+    for name in option_space.GENERATED:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # The front end's file holds a different type in the tree; here one copy is enough, and
+        # `read_types` keeping the first reading is what this relies on.
+        path.write_text(generated)
+    for name in option_space.BY_HAND:
+        (root / name).mkdir(parents=True, exist_ok=True)
+    if by_hand:
+        (root / option_space.BY_HAND[0] / "kept.rs").write_text(by_hand)
+    suite = root / "crates/metal2vulkan-conformance"
+    (suite / "src/cases").mkdir(parents=True, exist_ok=True)
+    (suite / "recordings").mkdir(parents=True, exist_ok=True)
+    for module, text in cases.items():
+        (suite / "src/cases" / f"{module}.rs").write_text(text)
+    (suite / "src/side.rs").write_text(shared)
+    if unreachable:
+        declared = root / option_space.UNREACHABLE
+        declared.parent.mkdir(parents=True, exist_ok=True)
+        declared.write_text(unreachable)
+    if crossings:
+        crossed = root / option_space.CROSSINGS
+        crossed.parent.mkdir(parents=True, exist_ok=True)
+        crossed.write_text(crossings)
+    if other:
+        held = root / option_space.OTHER
+        held.parent.mkdir(parents=True, exist_ok=True)
+        held.write_text(other)
+    for data in recordings:
+        (suite / "recordings" / f"{data['case']}.json").write_text(json.dumps(data))
+    return root
+
+
+def recording(case: str, value: str, provenance: str = option_space.RAN, where: str = "ran") -> dict:
+    """A recording of `case` whose transcript, or whose validated leg, names `value`."""
+    node = {
+        "name": "case",
+        "observed": {"value": {"fields": {"factor": {"fields": {"name": {"lines": [value]}}}}}},
+    }
+    answer = {"provenance": provenance, "runs": 1, "outcomes": []}
+    if where == "ran":
+        answer["outcomes"] = [{"runs": 1, "transcript": {"root": node}}]
+    else:
+        answer["outcomes"] = [{"runs": 1, "transcript": {"root": {"name": "case"}}}]
+        answer["validated"] = {"stopped": {"message": f"Thing Validation\n{value} is not allowed"}}
+    return {"format": 1, "case": case, "suite_version": 1, "answers": [answer]}
+
+
+def runs(ran: set[str]) -> dict[str, str]:
+    """One recorded case a module, which is the case-level form of "this module ran Metal".
+
+    The axis takes the cases, because a crossing is declared at one of them; a test about the
+    per-value columns states the modules, which is all those columns read.
+    """
+    return {f"{module}-case": module for module in ran}
+
+
+def axis(root: Path, ran: set[str]):
+    """The axis over `root`, as the one row of `MTLThing`."""
+    held = option_space.inventory(root, runs(ran))
+    return next(row for row in held["rows"] if row["metal"] == "MTLThing")
+
+
+class Denominator(unittest.TestCase):
+    """The value list comes from the generated tables, and a parse of nothing is a failure."""
+
+    def test_the_values_are_the_generated_table_s(self):
+        row = axis(tree({}), set())
+        self.assertEqual(len(row["values"]), 6)
+        self.assertEqual(row["values"][0], "MTLThingAlpha")
+        self.assertEqual(row["compared"], [])
+        self.assertEqual(row["missing"], row["values"])
+
+    def test_an_option_set_s_named_combinations_are_values(self):
+        held = option_space.inventory(tree({}), {})
+        row = next(r for r in held["rows"] if r["metal"] == "MTLSpread")
+        self.assertEqual(row["values"], ["MTLSpreadNone", "MTLSpreadLeft", "MTLSpreadRight"])
+
+    def test_a_generated_file_that_parses_to_nothing_fails(self):
+        with self.assertRaises(SystemExit):
+            option_space.read_types(tree({}, generated="// nothing at all\n"))
+
+    def test_a_type_that_parses_to_no_values_fails(self):
+        broken = GENERATED.replace('Alpha = 0, "MTLThingAlpha";', "").replace(
+            'Beta = 1, "MTLThingBeta";', ""
+        )
+        broken = broken.replace('Gamma = 2, "MTLThingGamma";', "")
+        broken = broken.replace('Delta = 3, "MTLThingDelta";', "")
+        broken = broken.replace('Epsilon = 4, "MTLThingEpsilon";', "")
+        broken = broken.replace('Zeta = 5, "MTLThingZeta";', "")
+        with self.assertRaises(SystemExit):
+            option_space.read_types(tree({}, generated=broken))
+
+
+class InEffect(unittest.TestCase):
+    """A value a recorded case module states is in effect; one it does not is not."""
+
+    def test_a_value_a_case_module_names_is_in_effect(self):
+        row = axis(tree({"blends": "fn go() { let x = Thing::Beta; }"}), {"blends"})
+        self.assertEqual(row["in_effect"], ["MTLThingBeta"])
+        self.assertIn("MTLThingBeta", row["compared"])
+        self.assertNotIn("MTLThingBeta", row["missing"])
+
+    def test_an_aliased_spelling_is_in_effect(self):
+        # `use Thing as T;` and then `T::Gamma`, which is how the blend sweeps are written. A
+        # derivation reading only `Thing::` spellings reports this value as never exercised.
+        row = axis(tree({"blends": "use Thing as T;\nfn go() { let x = T::Gamma; }"}), {"blends"})
+        self.assertEqual(row["in_effect"], ["MTLThingGamma"])
+
+    def test_the_objc2_spelling_is_in_effect(self):
+        # `MTLThing::Delta`, which is how the Metal leg names a fixed value: `objc2` drops the
+        # type's prefix, so the enumerator is the two spelled back together.
+        row = axis(tree({"blends": "fn go() { d.set(MTLThing::Delta); }"}), {"blends"})
+        self.assertEqual(row["in_effect"], ["MTLThingDelta"])
+
+    def test_an_objc2_spelling_of_no_generated_name_is_not_counted(self):
+        row = axis(tree({"blends": "fn go() { d.set(MTLThing::Omega); }"}), {"blends"})
+        self.assertEqual(row["in_effect"], [])
+
+    def test_a_module_with_no_metal_run_recording_puts_nothing_in_effect(self):
+        text = "fn go() { let x = Thing::Beta; }"
+        self.assertEqual(axis(tree({"blends": text}), set())["in_effect"], [])
+        self.assertEqual(axis(tree({"blends": text}), {"blends"})["in_effect"], ["MTLThingBeta"])
+
+    def test_a_cfg_test_item_is_not_in_effect(self):
+        text = (
+            "fn go() { let x = Thing::Beta; }\n"
+            "#[cfg(test)]\nmod tests {\n"
+            "    #[test]\n    fn refused() { assert!(!matches!(f, Thing::Zeta)); }\n"
+            "}\n"
+        )
+        row = axis(tree({"blends": text}), {"blends"})
+        self.assertEqual(row["in_effect"], ["MTLThingBeta"])
+        self.assertIn("MTLThingZeta", row["missing"])
+
+    def test_a_cfg_test_item_with_no_body_is_blanked_to_its_semicolon(self):
+        text = (
+            "#[cfg(test)]\nconst WIDTHS: [u8; 4] = [Thing::Zeta as u8; 4];\n"
+            "fn go() { let x = Thing::Beta; }\n"
+        )
+        row = axis(tree({"blends": text}), {"blends"})
+        self.assertEqual(row["in_effect"], ["MTLThingBeta"])
+
+    def test_a_sweep_by_ordinal_states_nothing(self):
+        # The boundary of this column, kept visible: a case that hands the leg `0..n` reaches every
+        # value and names none, so the column reads zero and the document says it is a floor by
+        # exactly this. There is no sound textual reading of a computed ordinal, so the test holds
+        # the limit rather than a fix for it.
+        text = "fn go() { for raw in 0..6 { side.set_thing(raw); } }"
+        self.assertEqual(axis(tree({"sweep": text}), {"sweep"})["in_effect"], [])
+
+    def test_a_comment_naming_a_value_is_not_in_effect(self):
+        row = axis(tree({"blends": "// Thing::Beta is what Metal defaults to.\nfn go() {}"}), {"blends"})
+        self.assertEqual(row["in_effect"], [])
+
+
+class Answered(unittest.TestCase):
+    """A value a recording's compared transcript holds is answered; the other legs are not read."""
+
+    def test_a_value_in_a_run_transcript_is_answered(self):
+        root = tree({}, recordings=(recording("one", "MTLThingGamma"),))
+        row = axis(root, set())
+        self.assertEqual(row["answered"], ["MTLThingGamma"])
+        self.assertIn("MTLThingGamma", row["compared"])
+
+    def test_a_carried_answer_is_not_answered(self):
+        root = tree({}, recordings=(recording("one", "MTLThingGamma", provenance="carried"),))
+        row = axis(root, set())
+        self.assertEqual(row["answered"], [])
+        self.assertIn("MTLThingGamma", row["missing"])
+
+    def test_the_validated_leg_is_not_answered(self):
+        root = tree({}, recordings=(recording("one", "MTLThingGamma", where="validated"),))
+        row = axis(root, set())
+        self.assertEqual(row["answered"], [])
+
+    def test_base64_bytes_are_not_read_as_names(self):
+        # A recorded buffer is base64, and the alphabet is alphanumeric, so a payload **can** spell
+        # an enumerator name exactly: `MTLThingZeta` is twelve characters of the base64 alphabet,
+        # which is to say nine bytes of some texture. Reading it would credit the suite with a
+        # value from the contents of a buffer.
+        data = recording("one", "MTLThingGamma")
+        data["answers"][0]["outcomes"][0]["transcript"]["root"]["observed"] = {
+            "value": {"bytes": "MTLThingZeta"}
+        }
+        row = axis(tree({}, recordings=(data,)), set())
+        self.assertEqual(row["answered"], [])
+
+    def test_a_compound_site_name_is_split_into_its_tokens(self):
+        # The tokenising is what this is about, and it still holds. The column is `at_a_site` and
+        # not `answered`: a site's name is the case's label, so a value found there is in the
+        # compared text without Metal having named it back. See `AtASite`.
+        data = recording("one", "MTLThingGamma")
+        data["answers"][0]["outcomes"][0]["transcript"]["root"] = {
+            "name": "MTLThingZeta/TextureBuffer/64x1x1",
+            "observed": {"value": "absent"},
+        }
+        row = axis(tree({}, recordings=(data,)), set())
+        self.assertEqual(row["at_a_site"], ["MTLThingZeta"])
+        self.assertEqual(row["answered"], [])
+        self.assertIn("MTLThingZeta", row["compared"])
+
+
+class SharedOnly(unittest.TestCase):
+    """A value only the suite's shared sources name is its own column, not a gap."""
+
+    def test_a_value_only_shared_sources_name_is_neither_compared_nor_missing(self):
+        row = axis(tree({}, shared="fn go() { d.set(Thing::Delta); }"), set())
+        self.assertEqual(row["shared"], ["MTLThingDelta"])
+        self.assertNotIn("MTLThingDelta", row["compared"])
+        self.assertNotIn("MTLThingDelta", row["missing"])
+
+    def test_a_case_module_naming_it_takes_it_out_of_shared(self):
+        root = tree(
+            {"blends": "fn go() { let x = Thing::Delta; }"},
+            shared="fn go() { d.set(Thing::Delta); }",
+        )
+        row = axis(root, {"blends"})
+        self.assertEqual(row["shared"], [])
+        self.assertEqual(row["in_effect"], ["MTLThingDelta"])
+
+    def test_every_value_is_in_exactly_one_column(self):
+        root = tree(
+            {"blends": "use Thing as T;\nfn go() { let x = T::Beta; }"},
+            shared="fn go() { d.set(Thing::Delta); }",
+            recordings=(recording("one", "MTLThingGamma"),),
+        )
+        row = axis(root, {"blends"})
+        self.assertEqual(
+            len(row["compared"]) + len(row["shared"]) + len(row["missing"]), len(row["values"])
+        )
+        self.assertEqual(sorted(row["compared"]), ["MTLThingBeta", "MTLThingGamma"])
+        self.assertEqual(row["shared"], ["MTLThingDelta"])
+        self.assertEqual(row["missing"], ["MTLThingAlpha", "MTLThingEpsilon", "MTLThingZeta"])
+
+
+class ByHand(unittest.TestCase):
+    """A Metal type the tree models by hand is reported apart, with no denominator."""
+
+    SOURCE = """\
+/// `MTLThingy`.
+pub enum Thingy {
+    /// `MTLThingyFirst`.
+    First,
+    /// `MTLThingySecond`.
+    Second,
+}
+
+impl Thingy {
+    pub fn from_raw(raw: u64) -> Result<Thingy, Error> {
+        Ok(match raw {
+            0 => Thingy::First,
+            1 => Thingy::Second,
+            raw => return Err(undefined("MTLThingy", raw)),
+        })
+    }
+}
+"""
+
+    def held(self, cases: dict[str, str], ran: set[str]):
+        root = tree(cases)
+        (root / option_space.BY_HAND[0] / "values.rs").write_text(self.SOURCE)
+        found = option_space.inventory(root, runs(ran))
+        return next(row for row in found["by_hand"] if row["metal"] == "MTLThingy")
+
+    def test_a_hand_modelled_type_is_found_with_its_own_variants(self):
+        row = self.held({}, set())
+        self.assertEqual(row["rust"], "Thingy")
+        self.assertEqual(row["declared"], ["First", "Second"])
+        self.assertEqual(row["stated"], [])
+
+    def test_a_recorded_case_naming_one_states_it(self):
+        row = self.held({"blends": "fn go() { let x = Thingy::Second; }"}, {"blends"})
+        self.assertEqual(row["stated"], ["Second"])
+
+    def test_the_objc2_spelling_of_a_hand_modelled_type_states_it(self):
+        row = self.held({"blends": "fn go() { c.setThing(MTLThingy::First); }"}, {"blends"})
+        self.assertEqual(row["stated"], ["First"])
+
+    def test_an_option_set_newtype_is_listed_with_no_variants(self):
+        root = tree({})
+        (root / option_space.BY_HAND[0] / "values.rs").write_text(
+            "/// `MTLThingOptions`.\n#[repr(transparent)]\npub struct ThingOptions(u64);\n"
+        )
+        found = option_space.inventory(root, {})
+        row = next(r for r in found["by_hand"] if r["metal"] == "MTLThingOptions")
+        self.assertEqual((row["rust"], row["declared"]), ("ThingOptions", []))
+
+    def test_a_metal_structure_is_not_an_option_space(self):
+        # `MTLOrigin` is a structure of three numbers, not an enum; it has no values to count.
+        root = tree({})
+        (root / option_space.BY_HAND[0] / "values.rs").write_text(
+            "/// `MTLWhere`.\npub struct Where {\n    pub x: u64,\n    pub y: u64,\n}\n"
+        )
+        self.assertEqual(option_space.inventory(root, {})["by_hand"], [])
+
+    def test_a_metal_name_part_way_through_a_doc_is_prose(self):
+        # A type that says it models part of a Metal type is describing itself, not declaring that
+        # it is that type's value list.
+        root = tree({})
+        (root / option_space.BY_HAND[0] / "values.rs").write_text(
+            "/// What a buffer allows (Metal's\n"
+            "/// `MTLThingy`, as far as the format needs it): the kinds it takes.\n"
+            "pub enum Shape {\n    First,\n    Second,\n}\n"
+        )
+        self.assertEqual(option_space.inventory(root, {})["by_hand"], [])
+
+    def test_a_generated_type_is_not_listed_as_hand_modelled(self):
+        root = tree({})
+        (root / option_space.BY_HAND[0] / "values.rs").write_text(
+            self.SOURCE.replace("MTLThingy", "MTLThing")
+        )
+        found = option_space.inventory(root, {})
+        self.assertEqual([row["metal"] for row in found["by_hand"]], [])
+
+
+def site_named(case: str, value: str) -> dict:
+    """A recording of `case` whose transcript holds `value` as a site's **name**, observing nothing.
+
+    The shape 105 values of `MTLPixelFormat` are in across the committed recordings: a case labels
+    the site it asks about with the enumerator, and the site's own answer is a number.
+    """
+    node = {
+        "name": "case",
+        "children": [{"name": value, "observed": {"value": {"uint": 7}}}],
+    }
+    return {
+        "format": 1,
+        "case": case,
+        "suite_version": 1,
+        "answers": [
+            {
+                "provenance": option_space.RAN,
+                "runs": 1,
+                "outcomes": [{"runs": 1, "transcript": {"root": node}}],
+            }
+        ],
+    }
+
+
+class AtASite(unittest.TestCase):
+    """A value in a site's **name** is not Metal naming it back, and was counted as if it were.
+
+    The comparison pairs sites by name, so such a value is in the compared text and the case did
+    put it to Metal. But the name is the case's own label, so it is no evidence Metal said the
+    value -- and folding it into *answered* made that column read 172 where Metal's own
+    observations held 67.
+    """
+
+    def test_a_value_only_in_a_site_name_is_at_a_site_and_not_answered(self):
+        root = tree({"blends": "fn go() {}\n"}, recordings=(site_named("b-one", "MTLThingBeta"),))
+        row = axis(root, {"blends"})
+        self.assertEqual(row["at_a_site"], ["MTLThingBeta"])
+        self.assertEqual(row["answered"], [])
+        # Still compared: the value is in the text the comparison reads.
+        self.assertEqual(row["compared"], ["MTLThingBeta"])
+        self.assertEqual(row["missing"], [n for n in row["values"] if n != "MTLThingBeta"])
+
+    def test_a_value_a_site_observed_is_answered(self):
+        root = tree({"blends": "fn go() {}\n"}, recordings=(recording("b-one", "MTLThingBeta"),))
+        row = axis(root, {"blends"})
+        self.assertEqual(row["answered"], ["MTLThingBeta"])
+        self.assertEqual(row["at_a_site"], [])
+
+    def test_a_value_both_observed_and_named_is_answered_only(self):
+        # The two columns never hold one value twice: what Metal observed is answered, whatever
+        # else spells it.
+        root = tree(
+            {"blends": "fn go() {}\n"},
+            recordings=(
+                recording("b-one", "MTLThingBeta"),
+                site_named("b-two", "MTLThingBeta"),
+            ),
+        )
+        row = axis(root, {"blends"})
+        self.assertEqual(row["answered"], ["MTLThingBeta"])
+        self.assertEqual(row["at_a_site"], [])
+
+    def test_a_carried_answers_site_name_is_not_read(self):
+        # The same gate the rest of `answered` applies: a carried answer ran no Metal.
+        held = site_named("b-one", "MTLThingBeta")
+        held["answers"][0]["provenance"] = "carried"
+        root = tree({"blends": "fn go() {}\n"}, recordings=(held,))
+        row = axis(root, {"blends"})
+        self.assertEqual(row["at_a_site"], [])
+        self.assertEqual(row["answered"], [])
+
+
+class BracedUse(unittest.TestCase):
+    """`use Type::{A, B};` names those values, which only `Head::Tail` reading missed entirely.
+
+    `border_swizzles` sweeps all three `MTLSamplerBorderColor` values in nine samplers through a
+    braced `use` and then writes the variants bare, naming `SamplerBorderColor::` nowhere. The
+    axis read 1 of 3 and the document said so while the sweep was complete.
+    """
+
+    def test_a_braced_use_names_every_variant_it_imports(self):
+        root = tree({"blends": "use Thing::{Alpha, Gamma};\nlet pair = [Alpha, Gamma];\n"})
+        self.assertEqual(axis(root, {"blends"})["in_effect"], ["MTLThingAlpha", "MTLThingGamma"])
+
+    def test_a_renamed_import_names_the_value_imported_not_the_local_name(self):
+        root = tree({"blends": "use Thing::{Beta as B};\nlet x = [B, B];\n"})
+        self.assertEqual(axis(root, {"blends"})["in_effect"], ["MTLThingBeta"])
+
+    def test_the_objc2_spelling_of_a_braced_use_is_read(self):
+        root = tree({"blends": "use MTLThing::{Delta, Epsilon};\nlet x = [Delta, Epsilon];\n"})
+        self.assertEqual(axis(root, {"blends"})["in_effect"], ["MTLThingDelta", "MTLThingEpsilon"])
+
+    def test_a_qualified_path_resolves_to_its_last_segment(self):
+        root = tree({"blends": "use metal2vulkan::metal::Thing::{Zeta};\nlet x = Zeta;\n"})
+        self.assertEqual(axis(root, {"blends"})["in_effect"], ["MTLThingZeta"])
+
+    def test_a_braced_use_of_something_else_names_no_value(self):
+        # The direction this could go wrong in: a brace list of names that are not the type's
+        # values, and a type name that is not a Metal type at all.
+        root = tree({"blends": "use Thing::{Omega};\nuse Other::{Alpha, Beta};\n"})
+        self.assertEqual(axis(root, {"blends"})["in_effect"], [])
+
+    def test_a_bare_name_with_no_use_names_nothing(self):
+        # The unsound reading this deliberately does not take: a module that writes `Alpha` and
+        # imports nothing has not said which type's value it means.
+        root = tree({"blends": "let x = [Alpha, Beta, Gamma];\n"})
+        self.assertEqual(axis(root, {"blends"})["in_effect"], [])
+
+    def test_a_braced_use_in_a_comment_names_nothing(self):
+        root = tree({"blends": "// use Thing::{Alpha, Beta};\nfn go() {}\n"})
+        self.assertEqual(axis(root, {"blends"})["in_effect"], [])
+
+
+class Vocabulary(unittest.TestCase):
+    """The suite's own enums, which are how a case names a value it never spells.
+
+    `shared_creator_formats` sweeps all four `MTLStorageMode` values over 24 recorded cells and
+    writes every one of them `Storage::Private`, because `Storage` is the suite's own word for
+    where a resource lives. The axis read `0 of 4` and put all four in *shared only*, which looks
+    exactly like a type nothing reaches -- and the document's own caveat had warned that a spelling
+    it does not read would read that way.
+
+    So the mapping is derived from the vocabulary enum's declaration: each variant opens its doc
+    with the Metal enumerator it spells. Every test below asserts both directions, and four of them
+    are the ways the mapping can be **wrong** rather than absent, since a mapping that credits a
+    value nothing set would be a worse defect than the one it replaced.
+    """
+
+    #: The suite's own enum for one Metal type, declared variant by variant. `Both` is the shape
+    #: `TextureRole::ReadWrite` and `StageAsked::VertexAndFragment` have: one variant of the
+    #: vocabulary for a combination of an option set's values.
+    SHARED = """\
+/// Where a case asks for a thing.
+pub enum Where {
+    /// `MTLThingAlpha`: the first.
+    Alpha,
+    /// `MTLThingBeta`.
+    Beta,
+    /// `MTLThingAlpha | MTLThingBeta`: both at once, which Metal takes as one argument.
+    Both,
+}
+"""
+
+    def test_a_case_naming_the_suite_s_own_variant_states_the_metal_value(self):
+        root = tree({"blends": "fn go() { ask(Where::Beta); }"}, shared=self.SHARED)
+        self.assertEqual(axis(root, {"blends"})["in_effect"], ["MTLThingBeta"])
+
+    def test_a_variant_declaring_a_combination_states_every_value_in_it(self):
+        root = tree({"blends": "fn go() { ask(Where::Both); }"}, shared=self.SHARED)
+        row = axis(root, {"blends"})
+        self.assertEqual(row["in_effect"], ["MTLThingAlpha", "MTLThingBeta"])
+
+    def test_a_renamed_import_of_the_suite_s_own_enum_is_read(self):
+        text = "use Where as W;\nfn go() { ask(W::Alpha); }"
+        root = tree({"blends": text}, shared=self.SHARED)
+        self.assertEqual(axis(root, {"blends"})["in_effect"], ["MTLThingAlpha"])
+
+    def test_a_braced_use_of_the_suite_s_own_enum_is_read(self):
+        text = "use crate::side::Where::{Alpha, Beta};\nlet pair = [Alpha, Beta];\n"
+        root = tree({"blends": text}, shared=self.SHARED)
+        self.assertEqual(axis(root, {"blends"})["in_effect"], ["MTLThingAlpha", "MTLThingBeta"])
+
+    def test_the_declaration_alone_states_nothing(self):
+        # The direction that matters most: the declaration is a doc comment of a **shared** source,
+        # and a comment is not the suite putting a value to Metal. A reading that credited the
+        # declaration would report every spelled type as fully swept the moment it was declared.
+        row = axis(tree({}, shared=self.SHARED), set())
+        self.assertEqual(row["compared"], [])
+        self.assertEqual(row["shared"], [])
+        self.assertEqual(row["missing"], row["values"])
+
+    def test_a_variant_named_bare_with_no_import_states_nothing(self):
+        root = tree({"blends": "fn go() { ask(Beta); }"}, shared=self.SHARED)
+        self.assertEqual(axis(root, {"blends"})["in_effect"], [])
+
+    def test_a_module_with_no_metal_run_states_nothing(self):
+        text = "fn go() { ask(Where::Beta); }"
+        self.assertEqual(axis(tree({"blends": text}, shared=self.SHARED), set())["in_effect"], [])
+
+    def test_a_cfg_test_enum_is_no_vocabulary(self):
+        # A unit test's own enum must not become a spelling: `without_tests` blanks it, so the
+        # declaration is not there to read and a case naming its variant states nothing.
+        held = "#[cfg(test)]\nmod tests {\n" + self.SHARED + "}\n"
+        root = tree({"blends": "fn go() { ask(Where::Beta); }"}, shared=held)
+        self.assertEqual(axis(root, {"blends"})["in_effect"], [])
+
+    def test_an_enum_declaring_nothing_is_no_vocabulary_and_fails_nothing(self):
+        # The negative control for the completeness check below: most of the suite's shared enums
+        # declare no Metal value at all, and they must be passed over rather than refused.
+        held = "pub enum Shape {\n    /// A square.\n    Square,\n    Round,\n}\n"
+        root = tree({"blends": "fn go() { ask(Shape::Round); }"}, shared=held)
+        self.assertEqual(axis(root, {"blends"})["in_effect"], [])
+
+    def test_a_metal_name_part_way_through_a_doc_declares_nothing(self):
+        # Prose about a value is not a declaration of being it. A rule that read the name anywhere
+        # in the line would make `Loose::Other` name `MTLThingAlpha`, which no case ever set.
+        held = (
+            "pub enum Loose {\n"
+            "    /// `MTLThingAlpha`.\n    Alpha,\n"
+            "    /// Unlike `MTLThingAlpha`, this one is ours.\n    Other,\n"
+            "}\n"
+        )
+        with self.assertRaises(SystemExit) as held_here:
+            option_space.inventory(tree({}, shared=held), {})
+        self.assertIn("Other", str(held_here.exception))
+
+    def test_a_variant_with_no_declaration_fails(self):
+        # The check the whole mapping rests on. A vocabulary that gains a variant nobody gave a
+        # Metal spelling would otherwise go on reading as a closed sweep of the values it still
+        # covers, which is this axis's defect one variant smaller -- so the generator stops.
+        held = self.SHARED.replace("}\n", "    Gamma,\n}\n")
+        with self.assertRaises(SystemExit) as found:
+            option_space.inventory(tree({}, shared=held), {})
+        self.assertIn("Gamma", str(found.exception))
+
+    def test_a_declaration_of_no_generated_value_fails(self):
+        # A typo, or an enumerator the SDK renamed: the variant looks declared and resolves to
+        # nothing, so a case naming it would be credited with no value and nobody would know.
+        held = self.SHARED.replace("`MTLThingBeta`", "`MTLThingBetaa`")
+        with self.assertRaises(SystemExit) as found:
+            option_space.inventory(tree({}, shared=held), {})
+        self.assertIn("Beta", str(found.exception))
+
+    def test_two_metal_types_in_one_enum_fail(self):
+        held = self.SHARED.replace("`MTLThingBeta`", "`MTLSpreadLeft`")
+        with self.assertRaises(SystemExit) as found:
+            option_space.inventory(tree({}, shared=held), {})
+        self.assertIn("MTLSpread", str(found.exception))
+
+    def test_two_variants_declaring_the_same_value_fail(self):
+        held = self.SHARED.replace("/// `MTLThingBeta`.", "/// `MTLThingAlpha`.")
+        with self.assertRaises(SystemExit) as found:
+            option_space.inventory(tree({}, shared=held), {})
+        self.assertIn("same value", str(found.exception))
+
+    def test_a_payload_s_field_is_not_read_as_an_undeclared_variant(self):
+        # `_chunks` splits on depth-0 commas only. A field of a variant's payload is spelled
+        # exactly like a variant, so splitting on every comma would read `Rows` as a variant
+        # nobody declared and refuse a vocabulary that is complete.
+        held = self.SHARED.replace(
+            "    /// `MTLThingAlpha | MTLThingBeta`: both at once, which Metal takes as one"
+            " argument.\n    Both,\n",
+            "    /// `MTLThingGamma`: a shape of its own.\n"
+            "    Shaped { Rows: u32, Columns: u32 },\n",
+        )
+        text = "fn go() { ask(Where::Shaped { Rows: 1, Columns: 2 }); }"
+        root = tree({"blends": text}, shared=held)
+        self.assertEqual(axis(root, {"blends"})["in_effect"], ["MTLThingGamma"])
+
+    def test_an_aliased_enumerator_declaration_resolves_to_the_canonical_value(self):
+        # A deprecated spelling names the value it is an alias of, the way a recording holding one
+        # does: `MTLPipelineOptionBindingInfo` is the headers' newer name for bit 1, and a
+        # vocabulary declared with it must credit the value and not read as a typo.
+        held = (
+            "pub enum Keeping {\n"
+            "    /// `MTLKeptFirst`.\n    First,\n"
+            "    /// `MTLKeptOldSecond`.\n    Second,\n"
+            "}\n"
+        )
+        root = tree({"blends": "fn go() { ask(Keeping::Second); }"}, shared=held)
+        found = option_space.inventory(root, runs({"blends"}))
+        row = next(one for one in found["rows"] if one["metal"] == "MTLKept")
+        self.assertEqual(row["in_effect"], ["MTLKeptSecond"])
+
+    def test_the_spellings_are_reported_by_enum_and_variant(self):
+        held = option_space.inventory(tree({}, shared=self.SHARED), {})
+        self.assertEqual(
+            held["vocabulary"]["Where"]["Both"],
+            [("MTLThing", "MTLThingAlpha"), ("MTLThing", "MTLThingBeta")],
+        )
+
+
+class Table(unittest.TestCase):
+    """The generated enumerator table is the denominator for a type the tree declares by hand.
+
+    These types have no generated Rust, so before the table the axis measured a hand-written
+    variant list against itself: it could not report a value the SDK declares and the tree does
+    not, and it reported an option-set newtype -- which declares no variants at all -- as a type
+    with no values. Each test here asserts both that the table's values are counted and that
+    nothing is counted the table does not hold.
+    """
+
+    def row(self, root: Path, ran: set[str]):
+        """`MTLKept`'s row of the per-type table."""
+        held = option_space.inventory(root, runs(ran))
+        return next(row for row in held["rows"] if row["metal"] == "MTLKept")
+
+    def test_the_table_is_the_denominator_and_leaves_the_hand_modelled_list(self):
+        root = tree({}, by_hand=BY_HAND_KEPT)
+        held = option_space.inventory(root, {})
+        row = next(one for one in held["rows"] if one["metal"] == "MTLKept")
+        self.assertEqual(row["values"], ["MTLKeptFirst", "MTLKeptSecond", "MTLKeptThird"])
+        self.assertEqual(row["compared"], [])
+        self.assertEqual(row["missing"], row["values"])
+        # And it is no longer in the table of types with no denominator, which is where it sat.
+        self.assertNotIn("MTLKept", [one["metal"] for one in held["by_hand"]])
+
+    def test_a_value_the_table_does_not_hold_is_not_counted(self):
+        # The one direction a table-backed denominator could go wrong in: a name shaped like an
+        # enumerator of the type, which the SDK does not declare.
+        root = tree({"kept": "let x = Kept::Fourth;\n"}, by_hand=BY_HAND_KEPT)
+        row = self.row(root, {"kept"})
+        self.assertEqual(row["compared"], [])
+        self.assertEqual(len(row["values"]), 3)
+
+    def test_the_trees_own_variant_name_states_the_sdk_value(self):
+        # `MTLBlitOption`'s shape: our variant is `Second`, the table's derived name is `Second`
+        # here but the join that matters is the enumerator, so a tree whose spelling differs from
+        # the table's still resolves. The objc2 spelling resolves the same way.
+        root = tree({"kept": "let x = Kept::Second;\n"}, by_hand=BY_HAND_KEPT)
+        self.assertEqual(self.row(root, {"kept"})["in_effect"], ["MTLKeptSecond"])
+        root = tree({"kept": "let x = MTLKept::Third;\n"}, by_hand=BY_HAND_KEPT)
+        self.assertEqual(self.row(root, {"kept"})["in_effect"], ["MTLKeptThird"])
+
+    def test_a_deprecated_spelling_names_the_value_it_is_an_alias_of(self):
+        # `MTLPipelineOption`'s shape: the headers declare `MTLPipelineOptionArgumentInfo` first,
+        # so the canonical enumerator of bit 1 is the one nothing in the tree writes, and the
+        # spelling the leg does write -- `MTLPipelineOption::BindingInfo` -- is the alias. Without
+        # the alias rows that value reads as named nowhere.
+        root = tree({"kept": "let x = MTLKept::OldSecond;\n"}, by_hand=BY_HAND_KEPT)
+        row = self.row(root, {"kept"})
+        self.assertEqual(row["in_effect"], ["MTLKeptSecond"])
+        self.assertNotIn("MTLKeptOldSecond", row["values"])
+        # And answered reads an alias in a recording's transcript as the value too.
+        root = tree(
+            {"kept": "fn run() {}\n"},
+            recordings=(recording("kept-one", "MTLKeptOldSecond"),),
+            by_hand=BY_HAND_KEPT,
+        )
+        self.assertEqual(self.row(root, {"kept"})["answered"], ["MTLKeptSecond"])
+
+    def test_a_table_that_parsed_to_nothing_is_a_failure(self):
+        # The one way a denominator can read as a closed option space: a table whose rows the
+        # reader no longer matches lowers every count at once and still looks like a measurement.
+        root = tree({}, table="# only a comment\ntype\tkind\trole\trust\tenumerator\tvalue\n")
+        with self.assertRaises(SystemExit):
+            option_space.inventory(root, {})
+
+
+class NamedWithNoValue(unittest.TestCase):
+    """A type a module is about and states no value of: the raw-ordinal limit as a work list."""
+
+    def test_a_module_naming_the_type_and_no_value_is_reported(self):
+        root = tree({"blends": "for bits in 0..6 { side.go(MTLThing(bits)); }\n"})
+        self.assertEqual(axis(root, {"blends"})["named_no_value"], ["blends"])
+
+    def test_a_module_that_states_a_value_is_not_reported(self):
+        # The same module with one value named: it is no longer a case whose depth is unreadable,
+        # whatever else it sweeps by ordinal.
+        root = tree({"blends": "let x = MTLThing::Alpha;\nfor bits in 0..6 { go(bits); }\n"})
+        row = axis(root, {"blends"})
+        self.assertEqual(row["named_no_value"], [])
+        self.assertEqual(row["in_effect"], ["MTLThingAlpha"])
+
+    def test_a_module_naming_neither_is_not_reported(self):
+        root = tree({"blends": "let x = 3;\n"})
+        self.assertEqual(axis(root, {"blends"})["named_no_value"], [])
+
+    def test_the_type_name_is_matched_as_a_whole_identifier(self):
+        # `ThingCase` is not `Thing`, and `MTLThingAlpha` is a value's name and not the type's.
+        root = tree({"blends": "struct ThingCase;\nfn go(x: MTLThingAlphaish) {}\n"})
+        self.assertEqual(axis(root, {"blends"})["named_no_value"], [])
+
+    def test_a_module_with_no_metal_run_is_not_reported(self):
+        # The same gate the rest of the axis applies: a module that ran no Metal put nothing to it.
+        root = tree({"blends": "for bits in 0..6 { side.go(MTLThing(bits)); }\n"})
+        self.assertEqual(axis(root, set())["named_no_value"], [])
+
+
+
+class Unreachable(unittest.TestCase):
+    """A value no case can put to Metal is counted apart from the gap, and the list is falsifiable.
+
+    The column exists so that a work list is work. What makes it trustworthy is not the list but
+    the two refusals: it cannot claim a value some case compared, and it cannot name a value the
+    type does not have. Without those, one row would quietly raise the share this axis reports.
+    """
+
+    def test_a_declared_value_leaves_the_gap_and_joins_its_own_column(self):
+        row = axis(tree({}, unreachable="# type\tvalue\twhy\tfinding\nMTLThing\tMTLThingDelta\tthe process ends on it\tcases/m.rs\n"), set())
+        self.assertNotIn("MTLThingDelta", row["missing"])
+        self.assertEqual(["MTLThingDelta"], row["settled"])
+        self.assertNotIn("MTLThingDelta", row["compared"])
+
+    def test_declaring_a_value_a_case_compared_is_refused(self):
+        root = tree(
+            {"blends": "fn go() { let x = Thing::Beta; }"},
+            unreachable="MTLThing\tMTLThingBeta\tclaimed unreachable\tcases/blends.rs\n",
+        )
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, runs({"blends"}))
+        self.assertIn("but a case compared it", str(refused.exception))
+
+    def test_declaring_a_value_the_type_does_not_have_is_refused(self):
+        root = tree({}, unreachable="MTLThing\tMTLThingNope\trenamed or mistyped\tcases/m.rs\n")
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {})
+        self.assertIn("is not a value of MTLThing", str(refused.exception))
+
+    def test_a_row_without_a_reason_is_refused(self):
+        root = tree({}, unreachable="MTLThing\tMTLThingDelta\t\tcases/m.rs\n")
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {})
+        self.assertIn("carries no reason", str(refused.exception))
+
+    def test_a_malformed_row_is_refused(self):
+        root = tree({}, unreachable="MTLThing\tMTLThingDelta\n")
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {})
+        self.assertIn("is not `type", str(refused.exception))
+
+    def test_a_tree_declaring_none_settles_nothing(self):
+        self.assertEqual([], axis(tree({}), set())["settled"])
+
+class Crossings(unittest.TestCase):
+    """A declared crossing of two types, and the five ways a row can be false of the tree.
+
+    This is the pairs axis, and it rests on a declaration, so what it is worth is what it refuses.
+    Four of the refusals catch a row that no longer matches the sources -- a renamed cell, a module
+    that ran nothing, an axis that is not a Metal type -- and the fifth is the one that bears on the
+    claim: a module whose own text states fewer than two values of an axis cannot vary it, so a
+    single value would falsify the row and the cross is not stateable there.
+    """
+
+    #: Two values of each type, which is what a cross of the two needs.
+    PAIR = "fn go() { let a = [Thing::Beta, Thing::Gamma]; let s = Spread::LEFT | Spread::RIGHT; }"
+
+    def declared(self, text: str = "", cell: str = "blends-case", axes: str = "MTLThing+MTLSpread"):
+        """The crossings of a tree whose `blends` module states `text` and declares one row."""
+        root = tree(
+            {"blends": text or self.PAIR},
+            crossings=f"# module\tcell\taxes\twhat only the cross decides\n"
+            f"blends\t{cell}\t{axes}\tthe pair alone says which\n",
+        )
+        return option_space.inventory(root, {"blends-case": "blends"})["crossings"]
+
+    def test_a_declared_crossing_is_counted_with_its_pair(self):
+        held = self.declared()
+        self.assertEqual(len(held), 1)
+        self.assertEqual(held[0]["module"], "blends")
+        self.assertEqual(held[0]["cell"], "blends-case")
+        self.assertEqual(held[0]["axes"], ["MTLThing", "MTLSpread"])
+        self.assertEqual(held[0]["pairs"], [("MTLSpread", "MTLThing")])
+        self.assertEqual(held[0]["why"], "the pair alone says which")
+
+    def test_a_pair_is_sorted_so_either_order_is_one_pair(self):
+        # Two rows crossing the same two types in either order must count one pair, not two.
+        held = self.declared(axes="MTLSpread+MTLThing")
+        self.assertEqual(held[0]["pairs"], [("MTLSpread", "MTLThing")])
+
+    def test_a_three_axis_row_holds_its_three_pairs(self):
+        text = (
+            "fn go() { let a = [Thing::Beta, Thing::Gamma]; let s = Spread::LEFT | Spread::RIGHT; "
+            "let k = [Kept::First, Kept::Second]; }"
+        )
+        root = tree(
+            {"blends": text},
+            by_hand=BY_HAND_KEPT,
+            crossings="blends\tblends-case\tMTLThing+MTLSpread+MTLKept\tonly the triple says\n",
+        )
+        held = option_space.inventory(root, {"blends-case": "blends"})["crossings"]
+        self.assertEqual(
+            held[0]["pairs"],
+            [
+                ("MTLKept", "MTLSpread"),
+                ("MTLKept", "MTLThing"),
+                ("MTLSpread", "MTLThing"),
+            ],
+        )
+
+    def test_the_cells_may_be_the_familys_own_cases(self):
+        root = tree({"blends": self.PAIR}, crossings="blends\tfamily\tMTLThing+MTLSpread\tthe cross is read across its cases\n")
+        held = option_space.inventory(
+            root, {"blends-one": "blends", "blends-two": "blends"}
+        )["crossings"]
+        self.assertEqual(held[0]["cell"], option_space.FAMILY)
+
+    def test_a_tree_declaring_none_crosses_nothing(self):
+        root = tree({"blends": self.PAIR})
+        self.assertEqual(option_space.inventory(root, {"blends-case": "blends"})["crossings"], [])
+
+    def test_a_cell_that_is_not_a_case_of_the_module_is_refused(self):
+        # The rot this catches: a case renamed or deleted, its row left behind.
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(cell="blends-renamed")
+        self.assertIn("which is not a case of blends", str(refused.exception))
+
+    def test_a_module_that_ran_no_metal_is_refused(self):
+        root = tree(
+            {"blends": self.PAIR, "others": self.PAIR},
+            crossings="others\tothers-case\tMTLThing+MTLSpread\tthe pair alone says which\n",
+        )
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"})
+        self.assertIn("no case of others has a recording", str(refused.exception))
+
+    def test_a_family_of_one_recorded_case_is_refused(self):
+        # A grid whose cells are the family's cases needs at least two of them.
+        root = tree({"blends": self.PAIR}, crossings="blends\tfamily\tMTLThing+MTLSpread\tacross its cases\n")
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"})
+        self.assertIn("a cross across cases needs at least two", str(refused.exception))
+
+    def test_an_axis_with_no_generated_value_list_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+MTLNotAType")
+        self.assertIn("MTLNotAType, which has no generated value list", str(refused.exception))
+
+    def test_an_axis_the_module_states_one_value_of_is_refused(self):
+        # The refusal that bears on the claim: one value is a sweep's worth of an axis, so nothing
+        # in the text tells the cross from a sweep of the other axis at a fixed cell.
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(text="fn go() { let a = [Thing::Beta, Thing::Gamma]; let s = Spread::LEFT; }")
+        self.assertIn("states 1 of its values by name", str(refused.exception))
+
+    def test_an_axis_the_module_states_no_value_of_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(text="fn go() { let a = [Thing::Beta, Thing::Gamma]; }")
+        self.assertIn("states 0 of its values by name", str(refused.exception))
+
+    def test_a_value_only_the_shared_sources_name_does_not_vary_an_axis(self):
+        # A module that takes its value list from the suite's shared vocabulary states none of them
+        # itself, which is how the suite's widest cross product reads here.
+        root = tree(
+            {"blends": "fn go() { let a = [Thing::Beta, Thing::Gamma]; go(SPREADS); }"},
+            shared="const SPREADS: [Spread; 2] = [Spread::LEFT, Spread::RIGHT];",
+            crossings="blends\tblends-case\tMTLThing+MTLSpread\tthe pair alone says which\n",
+        )
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"})
+        self.assertIn("states 0 of its values by name", str(refused.exception))
+
+    def test_a_row_of_one_axis_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing")
+        self.assertIn("which is one axis", str(refused.exception))
+
+    def test_a_row_naming_an_axis_twice_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+MTLThing")
+        self.assertIn("names an axis twice", str(refused.exception))
+
+    def test_a_row_saying_nothing_about_the_cross_is_refused(self):
+        root = tree({"blends": self.PAIR}, crossings="blends\tblends-case\tMTLThing+MTLSpread\t \n")
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"})
+        self.assertIn("says nothing about what only the cross decides", str(refused.exception))
+
+    def test_a_malformed_row_is_refused(self):
+        root = tree({"blends": self.PAIR}, crossings="blends\tblends-case\tMTLThing+MTLSpread\n")
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"})
+        self.assertIn("is not `module", str(refused.exception))
+
+    def test_a_row_declared_twice_is_refused(self):
+        root = tree(
+            {"blends": self.PAIR},
+            crossings=(
+                "blends\tblends-case\tMTLThing+MTLSpread\tthe pair alone says which\n"
+                "blends\tblends-case\tMTLThing+MTLSpread\tthe same claim again\n"
+            ),
+        )
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"})
+        self.assertIn("is declared twice", str(refused.exception))
+
+
+#: The Metal items a field axis of the synthetic trees may name, as `coverage.py` hands them over:
+#: two fields of one type that answer no Metal type, one field whose call answers `MTLThing` --
+#: which is an enum under another name -- a field of a type the `blends` module never touches, and
+#: one the `blends` module's leg reaches only behind a guard its own data never takes, which is the
+#: two-strength reading `coverage.py` derives from the guards in the leg.
+def items(reached: str = "blends") -> dict[tuple[str, str], option_space.Item]:
+    return {
+        ("MTLWidget", "spun"): option_space.Item({reached}, ""),
+        ("MTLWidget", "setSpread:atIndex:"): option_space.Item({reached}, ""),
+        ("MTLWidget", "thing"): option_space.Item({reached}, "MTLThing"),
+        ("MTLGadget", "whirred"): option_space.Item({"others"}, ""),
+        # Reached by `blends`, stated by nobody: the shape of a field one shared encoder sets
+        # under a guard, which every case that calls the encoder reaches and only the cases whose
+        # own data asks for it ever put a value to.
+        ("MTLWidget", "counted"): option_space.Item(set(), "", {reached}),
+    }
+
+
+class OtherCrossings(unittest.TestCase):
+    """A declared crossing that is no pair of the option space, and what that second file refuses.
+
+    It holds what `crossings.tsv` cannot say -- a Metal enum crossed with a boolean or numeric
+    field, and a type crossed with itself in two slots -- so its rows are the weaker declaration
+    of the two, and its worth is again what it refuses. Three refusals are its own: a row that is
+    really a pair of the option space, a field axis that is not a Metal item this module's leg
+    reaches, and a field axis whose call answers a Metal type with a value list, which is an enum
+    under another name.
+    """
+
+    #: Two values of each type, which is what a cross naming either of them needs.
+    PAIR = "fn go() { let a = [Thing::Beta, Thing::Gamma]; let s = Spread::LEFT | Spread::RIGHT; }"
+
+    def declared(
+        self,
+        text: str = "",
+        cell: str = "blends-case",
+        axes: str = "MTLThing+MTLWidget.spun",
+        reached: str = "blends",
+        ran: dict[str, str] | None = None,
+    ):
+        """The other crossings of a tree whose `blends` module states `text` and declares one row."""
+        root = tree(
+            {"blends": text or self.PAIR},
+            other=f"# module\tcell\taxes\twhat only the cross decides\n"
+            f"blends\t{cell}\t{axes}\tonly the two together say which\n",
+        )
+        held = option_space.inventory(
+            root, ran or {"blends-case": "blends"}, items(reached)
+        )
+        return held["other_crossings"]
+
+    def test_an_enum_crossed_with_a_field_is_counted_apart_from_the_pairs(self):
+        held = self.declared()
+        self.assertEqual(len(held), 1)
+        self.assertEqual(held[0]["axes"], ["MTLThing", "MTLWidget.spun"])
+        self.assertEqual(held[0]["fields"], [("MTLWidget", "spun")])
+        self.assertEqual(held[0]["slots"], [])
+        # No pair of two Metal enums, so it adds nothing to the option space's own count.
+        self.assertEqual(held[0]["pairs"], [])
+
+    def test_the_pairs_count_does_not_hold_these_rows(self):
+        root = tree(
+            {"blends": self.PAIR},
+            other="blends\tblends-case\tMTLThing+MTLWidget.spun\tonly the two together\n",
+        )
+        held = option_space.inventory(root, {"blends-case": "blends"}, items())
+        self.assertEqual(held["crossings"], [])
+        self.assertEqual(len(held["other_crossings"]), 1)
+
+    def test_a_type_crossed_with_itself_names_its_slots(self):
+        held = self.declared(axes="MTLThing+MTLThing")
+        self.assertEqual(held[0]["slots"], ["MTLThing"])
+        self.assertEqual(held[0]["fields"], [])
+        # `(A, A)` is no pair of two types, so the pair count stays empty here too.
+        self.assertEqual(held[0]["pairs"], [])
+
+    def test_three_slots_of_one_type_are_one_row(self):
+        held = self.declared(axes="MTLThing+MTLThing+MTLThing")
+        self.assertEqual(held[0]["axes"], ["MTLThing"] * 3)
+        self.assertEqual(held[0]["slots"], ["MTLThing"])
+
+    def test_two_fields_and_no_enum_at_all_is_a_row(self):
+        held = self.declared(axes="MTLWidget.spun+MTLWidget.setSpread:atIndex:")
+        self.assertEqual(
+            held[0]["fields"], [("MTLWidget", "spun"), ("MTLWidget", "setSpread:atIndex:")]
+        )
+
+    def test_a_row_of_distinct_enums_also_holds_its_pair(self):
+        # A row that crosses two enums **and** a field is no pair-only row, and the two enums it
+        # names are still a pair of the option space: the shape is reported rather than dropped.
+        held = self.declared(axes="MTLThing+MTLSpread+MTLWidget.spun")
+        self.assertEqual(held[0]["pairs"], [("MTLSpread", "MTLThing")])
+
+    def test_a_tree_declaring_none_holds_none(self):
+        root = tree({"blends": self.PAIR})
+        held = option_space.inventory(root, {"blends-case": "blends"}, items())
+        self.assertEqual(held["other_crossings"], [])
+
+    def test_a_row_that_is_really_a_pair_of_the_option_space_is_refused(self):
+        # The refusal that keeps the two counts from overlapping, and keeps a pair from being
+        # declared here to dodge the pairs file's two-values check.
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+MTLSpread")
+        self.assertIn("that is a pair of the option space", str(refused.exception))
+
+    def test_a_field_objc2_metal_binds_nothing_for_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+MTLWidget.spunn")
+        self.assertIn("binds no spunn on MTLWidget", str(refused.exception))
+
+    def test_a_field_of_a_type_outside_the_api_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+MTLNotAType.spun")
+        self.assertIn("binds no spun on MTLNotAType", str(refused.exception))
+
+    def test_a_field_whose_call_answers_an_enum_is_refused(self):
+        # An enum under another name: declaring it as a field would carry none of the two-values
+        # check that the enum's own spelling carries.
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLSpread+MTLWidget.thing")
+        self.assertIn("whose call answers MTLThing", str(refused.exception))
+
+    def test_a_field_this_modules_metal_leg_does_not_reach_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+MTLGadget.whirred")
+        self.assertIn("reaches no call of it", str(refused.exception))
+
+    def test_a_field_no_module_reaches_is_refused_by_name(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(reached="others")
+        self.assertIn("attributes spun to others", str(refused.exception))
+
+    def test_a_field_reached_only_behind_a_guard_the_module_never_states_is_refused(self):
+        # The hole this closes: reachability alone is per shared encoder, so a field the leg sets
+        # under `if let Some(x) = pass.field` is reached by every case that opens a pass. A row
+        # whose module never states the field is a claim about the Metal **type** wearing a
+        # field's spelling, and is refused.
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+MTLWidget.counted")
+        held = str(refused.exception)
+        self.assertIn("sits behind a guard", held)
+        self.assertIn("ever put a value to it", held)
+
+    def test_a_field_reached_under_no_guard_at_all_is_taken(self):
+        # The other direction: a field the leg sets unconditionally has no guard to satisfy, so
+        # the stronger reading is the same as reachability and the row stands.
+        held = self.declared(axes="MTLThing+MTLWidget.spun")
+        self.assertEqual(held[0]["fields"], [("MTLWidget", "spun")])
+
+    def test_a_field_neither_reached_nor_stated_is_refused_as_unreached(self):
+        # A field of a type this module never touches is refused by the other message, which names
+        # who does reach it: the two refusals say different things and neither is the other's
+        # wording.
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+MTLGadget.whirred")
+        held = str(refused.exception)
+        self.assertIn("reaches no call of it", held)
+        self.assertNotIn("sits behind a guard", held)
+
+    def test_an_axis_that_is_no_metal_item_is_refused(self):
+        # The one kind of axis neither file can hold: a grouping that is no Metal item, so there is
+        # nothing to check it against.
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLThing+the fragment's own sample mask")
+        self.assertIn("neither a Metal type with a generated value list", str(refused.exception))
+
+    def test_an_enum_axis_the_module_states_one_value_of_is_refused(self):
+        # The pairs file's own check, applied here to the enum half of a row: a field axis carries
+        # no such check, and an enum axis must not lose it by sharing a row with one.
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(text="fn go() { let a = [Thing::Beta]; }")
+        self.assertIn("states 1 of its values by name", str(refused.exception))
+
+    def test_a_slot_crossing_of_an_axis_with_one_value_stated_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(text="fn go() { let a = [Thing::Beta]; }", axes="MTLThing+MTLThing")
+        self.assertIn("states 1 of its values by name", str(refused.exception))
+
+    def test_a_cell_that_is_not_a_case_of_the_module_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(cell="blends-renamed")
+        self.assertIn("which is not a case of blends", str(refused.exception))
+
+    def test_a_module_that_ran_no_metal_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(ran={"others-case": "others"})
+        self.assertIn("no case of blends has a recording", str(refused.exception))
+
+    def test_a_family_of_one_recorded_case_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(cell="family")
+        self.assertIn("a cross across cases needs at least two", str(refused.exception))
+
+    def test_the_cells_may_be_the_familys_own_cases(self):
+        held = self.declared(
+            cell="family", ran={"blends-one": "blends", "blends-two": "blends"}
+        )
+        self.assertEqual(held[0]["cell"], option_space.FAMILY)
+
+    def test_a_row_of_one_axis_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            self.declared(axes="MTLWidget.spun")
+        self.assertIn("which is one axis", str(refused.exception))
+
+    def test_a_row_saying_nothing_about_the_cross_is_refused(self):
+        root = tree(
+            {"blends": self.PAIR},
+            other="blends\tblends-case\tMTLThing+MTLWidget.spun\t \n",
+        )
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"}, items())
+        self.assertIn("says nothing about what only the cross decides", str(refused.exception))
+
+    def test_a_malformed_row_is_refused(self):
+        root = tree(
+            {"blends": self.PAIR}, other="blends\tblends-case\tMTLThing+MTLWidget.spun\n"
+        )
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"}, items())
+        self.assertIn("is not `module", str(refused.exception))
+
+    def test_a_row_declared_twice_is_refused(self):
+        root = tree(
+            {"blends": self.PAIR},
+            other=(
+                "blends\tblends-case\tMTLThing+MTLWidget.spun\tonly the two together\n"
+                "blends\tblends-case\tMTLThing+MTLWidget.spun\tthe same claim again\n"
+            ),
+        )
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"}, items())
+        self.assertIn("is declared twice", str(refused.exception))
+
+    def test_a_tree_handed_no_items_can_declare_no_field_axis(self):
+        # The default: a tree that passes no items has nothing to check a field against, so a
+        # field axis is refused rather than taken on trust.
+        root = tree(
+            {"blends": self.PAIR},
+            other="blends\tblends-case\tMTLThing+MTLWidget.spun\tonly the two together\n",
+        )
+        with self.assertRaises(SystemExit) as refused:
+            option_space.inventory(root, {"blends-case": "blends"})
+        self.assertIn("binds no spun on MTLWidget", str(refused.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

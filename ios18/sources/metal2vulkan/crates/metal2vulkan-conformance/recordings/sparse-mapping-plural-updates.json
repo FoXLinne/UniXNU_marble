@@ -1,0 +1,393 @@
+{
+  "format": 1,
+  "case": "sparse-mapping-plural-updates",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "program",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5a7f628a0f7c6d62f12927637a9c5d4954c5568e3260dc09b35030d3f690807e"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "sparse-mapping",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "used-size/0",
+                      "observed": {
+                        "value": {
+                          "uint": 0
+                        }
+                      }
+                    },
+                    {
+                      "name": "used-size/1",
+                      "observed": {
+                        "value": {
+                          "uint": 16384
+                        }
+                      }
+                    },
+                    {
+                      "name": "used-size/2",
+                      "observed": {
+                        "value": {
+                          "uint": 360448
+                        }
+                      }
+                    },
+                    {
+                      "name": "used-size/3",
+                      "observed": {
+                        "value": {
+                          "uint": 0
+                        }
+                      }
+                    },
+                    {
+                      "name": "tail/0/first-mipmap",
+                      "observed": {
+                        "value": {
+                          "uint": 3
+                        }
+                      }
+                    },
+                    {
+                      "name": "tail/0/bytes",
+                      "observed": {
+                        "value": {
+                          "uint": 16384
+                        }
+                      }
+                    },
+                    {
+                      "name": "status/0",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "status/1",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "status/2",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/0/updateTextureMappings",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/1/commit",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/2/updateTextureMappings",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/3/commit",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/4/updateTextureMappings",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "step/5/commit",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-emulated-sparse-texture"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "bare_starts": 3,
+        "batches_submitted_by_waiters": 3,
+        "batches_with_none_pending": 3,
+        "command_buffers_begun": 7,
+        "command_buffers_begun_batch_barriers": 3,
+        "command_buffers_begun_batch_work": 4,
+        "command_buffers_submitted": 7,
+        "commands_recorded.begin_command_buffer": 7,
+        "commands_recorded.cmd_copy_buffer": 6,
+        "commands_recorded.cmd_copy_buffer_to_image": 2,
+        "commands_recorded.cmd_pipeline_barrier": 16,
+        "commands_recorded.end_command_buffer": 7,
+        "commits_handed_off": 3,
+        "commits_taken_in": 3,
+        "completed_waits": 6,
+        "completed_where_seen": 3,
+        "completion_arms": 3,
+        "completion_arms_after_a_wake": 3,
+        "completion_waiter_parks": 3,
+        "device_memory_allocated": 201326592,
+        "fence_waits": 3,
+        "finales_apart": 3,
+        "gate_waits": 3,
+        "gate_waits_slept": 3,
+        "new_buffer_bytes_cleared": 304,
+        "object_churn.buffers_parked": 6,
+        "object_churn.buffers_recycled": 6,
+        "object_churn.images_other": 1,
+        "object_churn.making_sites_dropped": 2,
+        "object_churn.textures_in_heaps": 1,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_images_destroyed": 1,
+        "object_churn.vk_images_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 3,
+        "queues_sharing_a_vk_queue": 1,
+        "scheduled_where_submitted": 3,
+        "scheduler_passes_by_waiters": 3,
+        "scheduler_sleeps": 3,
+        "scheduler_wakes_commit": 3,
+        "slot_returns": 3,
+        "spare_command_pools_taken": 3,
+        "submit_infos": 6,
+        "trail_waits": 3,
+        "wakes_completion_waiters": 3,
+        "wakes_spared": 21
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 1,
+        "gate_waits_slept": 1
+      },
+      "composed": {
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_copy_buffer_to_image": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "device_memory_allocated": 201326592,
+        "queues_sharing_a_vk_queue": 0
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pooled_memory_blocks_made": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "sparse-mapping-plural-updates",
+        "calls": 1,
+        "in_calls": 4529542,
+        "on_cpu": 113167,
+        "blocked": 4392750,
+        "elsewhere": 3604917,
+        "spend": 8127084,
+        "spend_least": 7412209,
+        "spend_most": 8650084,
+        "per_call": [
+          {
+            "call": "sparse_mapping",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4529542,
+            "on_cpu": 113167,
+            "blocked": 4392750,
+            "wall_least": 4026875,
+            "wall_most": 5045167,
+            "wall_total": 4529542,
+            "on_cpu_total": 113167,
+            "blocked_total": 4392750
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "sparse-mapping-plural-updates",
+        "calls": 1,
+        "in_calls": 1518625,
+        "on_cpu": 39792,
+        "blocked": 1473625,
+        "elsewhere": 397208,
+        "spend": 1885000,
+        "spend_least": 1516750,
+        "spend_most": 2790459,
+        "degraded": [
+          "metal2vulkan-degrade-emulated-sparse-texture"
+        ],
+        "per_call": [
+          {
+            "call": "sparse_mapping",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1518625,
+            "on_cpu": 39792,
+            "blocked": 1473625,
+            "wall_least": 1124333,
+            "wall_most": 2291417,
+            "wall_total": 1518625,
+            "on_cpu_total": 39792,
+            "blocked_total": 1473625
+          }
+        ]
+      }
+    }
+  ]
+}

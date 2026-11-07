@@ -1,236 +1,26 @@
-diff --git a/crates/metal2vulkan-air/src/canon/const_loads.rs b/crates/metal2vulkan-air/src/canon/const_loads.rs
-index 7b3dfd7b..98976df2 100644
---- a/crates/metal2vulkan-air/src/canon/const_loads.rs
-+++ b/crates/metal2vulkan-air/src/canon/const_loads.rs
-@@ -1,4 +1,4 @@
--//! Pointers loaded from fields of constant globals.
-+//! Values loaded from fields of constant globals.
- //!
- //! A constant global whose initializer is known once function constants are bound and the static
- //! initializers have run may hold pointers: a program-scope `constexpr sampler` taken by value is
-@@ -9,18 +9,28 @@
- //! constant and threadgroup spaces, so such a module was refused, under the values that made the
- //! select one global.
- //!
-+//! The same holds for every other first-class field. An uber-shader takes its whole configuration
-+//! as one struct of function constants that a static initializer copies into an internal
-+//! `constant` global (QuartzCore's `fc_fragment_shader_config`, read field by field after a
-+//! function-constant `select` between it and a buffer). SCCP folds that select to the global but
-+//! not the field loads, so every branch the configuration decides survived: QuartzCore's
-+//! `fixed_frag` became about 46000 SPIR-V instructions where its specialized form is a few
-+//! hundred, and the driver compiled each such pipeline for about a second. Metal's compiler
-+//! specializes these reads away, so a module that reads them is translated as Metal compiles it.
-+//!
- //! This pass reads such a load as the initializer's constant at the field: a non-volatile,
--//! non-atomic load of a pointer whose address is a field of a constant global at constant indices
--//! (a `getelementptr` instruction or constant expression over the global's own value type, its
--//! first index 0), where the field's type is the load's. A copy LLVM made through an integer (a
--//! load of the field as an integer of the pointer's size, then `inttoptr` to the field's type)
--//! reads the same constant at its `inttoptr`. The global is never written (it is `constant`, and
--//! initialized by no one else), so every run reads that constant: the address of the sampler
--//! state, which the sampler family reads as the sampler it names. Only pointers are read this
--//! way: a load of any other type from a constant global is lowered from the global's form (its
--//! typed private copy, or the constant blob), and reading it here would change those modules
--//! without changing what they compute. SCCP then runs again over a body this pass changed, so
--//! what the constants decide (an aggregate of them, a phi of them, a member of either) folds too.
-+//! non-atomic load of a scalar, vector or pointer whose address is a field of a constant global at
-+//! constant indices (a `getelementptr` instruction or constant expression over the global's own
-+//! value type, its first index 0), where the field's type is the load's. A copy LLVM made through
-+//! an integer (a load of a pointer field as an integer of the pointer's size, then `inttoptr` to
-+//! the field's type) reads the same constant at its `inttoptr`. The global is never written (it
-+//! is `constant`, and initialized by no one else), so every run reads that constant: for a
-+//! pointer, the address of the sampler state, which the sampler family reads as the sampler it
-+//! names. An aggregate load, a load of another type than the field's, and a field the initializer
-+//! leaves `undef` (an unsupplied constant's) are left to the global's lowered form. SCCP then runs
-+//! again over a body this pass changed, so what the constants decide (a branch, an aggregate of
-+//! them, a phi of them, a member of either) folds too, and the two alternate until a round folds
-+//! nothing: a decided branch can expose a further select of the global.
- 
- use crate::budget::Meter;
- use crate::error::Error;
-@@ -29,9 +39,9 @@ use crate::ir::{InstId, InstKind, ModuleParts, Type, TypeId, Value};
- 
- use super::rewrite::{apply, scoped, BodyEdit};
- 
--/// Read every load of a pointer from a field of a constant global in `body`, and every
--/// `inttoptr` of such a field's integer copy, as the field's constant (module docs), and say
--/// whether there was one. Returns `body` itself when there is none.
-+/// Read every first-class load from a field of a constant global in `body`, and every `inttoptr`
-+/// of a pointer field's integer copy, as the field's constant (module docs), and say whether there
-+/// was one. Returns `body` itself when there is none.
- pub(super) fn fold(
-     body: Body,
-     parts: &mut ModuleParts,
-@@ -61,8 +71,8 @@ pub(super) fn fold(
-     }
- }
- 
--/// Each instruction of `body` that reads a pointer field of a constant global (module docs), with
--/// the field's constant.
-+/// Each instruction of `body` that reads a first-class field of a constant global (module docs),
-+/// with the field's constant.
- fn find(
-     body: &Body,
-     parts: &mut ModuleParts,
-@@ -71,24 +81,27 @@ fn find(
- ) -> Result<(), Error> {
-     for (id, inst) in body.insts.iter() {
-         m.tick(1)?;
--        let Some(space) = parts.types.ptr_space(inst.ty) else {
--            continue;
--        };
--        if !matches!(parts.types.get(inst.ty), Some(Type::Ptr { .. })) {
--            continue;
--        }
-+        let first_class = parts
-+            .types
-+            .get(inst.ty)
-+            .is_some_and(|t| t.is_sized() && !t.is_aggregate());
-+        let pointer = matches!(parts.types.get(inst.ty), Some(Type::Ptr { .. }));
-         let ptr = match inst.kind {
-             InstKind::Load {
-                 ptr,
-                 volatile: false,
-                 atomic: None,
-                 ..
--            } => ptr,
-+            } if first_class => ptr,
-             // `inttoptr` of an integer load of the pointer's size: a copy through an integer.
-             InstKind::Cast {
-                 op: CastOp::IntToPtr,
-                 v: Value::Inst(l),
--            } => match body.insts.get(l).map(|l| (&l.kind, l.ty)) {
-+            } if pointer => {
-+                let Some(space) = parts.types.ptr_space(inst.ty) else {
-+                    continue;
-+                };
-+                match body.insts.get(l).map(|l| (&l.kind, l.ty)) {
-                 Some((
-                     &InstKind::Load {
-                         ptr,
-@@ -104,7 +117,8 @@ fn find(
-                     ptr
-                 }
-                 _ => continue,
--            },
-+                }
-+            }
-             _ => continue,
-         };
-         let Some((g, path)) = field_address(body, parts, ptr) else {
-diff --git a/crates/metal2vulkan-air/src/canon/devirt_tests.rs b/crates/metal2vulkan-air/src/canon/devirt_tests.rs
-index 4b23e82e..dea08da8 100644
---- a/crates/metal2vulkan-air/src/canon/devirt_tests.rs
-+++ b/crates/metal2vulkan-air/src/canon/devirt_tests.rs
-@@ -229,6 +229,7 @@ fn candidates() -> LinkedModule {
-             .into_iter()
-             .zip(2..)
-             .map(|(name, word)| LinkedName {
-+                source_name: None,
-                 name: name.as_bytes().into(),
-                 constants: Ok(BTreeMap::new()),
-                 handle: Some(word),
-@@ -388,6 +389,7 @@ fn a_table_call_without_candidates_is_the_empty_switch() {
- fn an_unimportable_candidate_is_refused_at_a_surviving_call() {
-     let broken = || LinkedModule {
-         functions: vec![LinkedName {
-+            source_name: None,
-             name: b"inc".as_slice().into(),
-             constants: Ok(BTreeMap::new()),
-             handle: Some(2),
-@@ -469,6 +471,7 @@ fn a_candidate_calling_through_its_table_recurses_on_a_call_stack() {
-     }];
-     let linked = LinkedModule {
-         functions: vec![LinkedName {
-+            source_name: None,
-             name: b"rec".as_slice().into(),
-             constants: Ok(BTreeMap::new()),
-             handle: Some(2),
-@@ -740,6 +743,7 @@ fn pointer_candidates() -> LinkedModule {
-             .into_iter()
-             .zip(2..)
-             .map(|(name, word)| LinkedName {
-+                source_name: None,
-                 name: name.as_bytes().into(),
-                 constants: Ok(BTreeMap::new()),
-                 handle: Some(word),
-@@ -1404,6 +1408,7 @@ fn inlining_candidates_at_every_table_call_is_capped() {
-     }];
-     let linked = LinkedModule {
-         functions: vec![LinkedName {
-+            source_name: None,
-             name: b"big".as_slice().into(),
-             constants: Ok(BTreeMap::new()),
-             handle: Some(2),
-diff --git a/crates/metal2vulkan-air/src/canon/link.rs b/crates/metal2vulkan-air/src/canon/link.rs
-index 6dac3b02..87bdea79 100644
---- a/crates/metal2vulkan-air/src/canon/link.rs
-+++ b/crates/metal2vulkan-air/src/canon/link.rs
-@@ -74,6 +74,8 @@ pub struct LinkedModule {
- /// index, or why those values do not apply to its module (refused only at a surviving call).
- #[derive(Clone, Debug)]
- pub struct LinkedName {
-+    /// The definition in the source module. None uses the exported `name`.
-+    pub source_name: Option<Box<[u8]>>,
-     /// The Metal function name it links under.
-     pub name: Box<[u8]>,
-     /// The function-constant values it was specialized with, by index, or why they do not apply
-@@ -517,7 +519,8 @@ fn link_in(
-                         Ok(def) => Ok(def),
-                         Err(error) => Err(Unimported {
-                             error,
--                            ty: source_type(l, &f.name, m)?.map(|t| (i, t)),
-+                            ty: source_type(l, f.source_name.as_deref().unwrap_or(&f.name), m)?
-+                                .map(|t| (i, t)),
-                         }),
-                     };
-                     m.charge(std::mem::size_of::<Candidate>() + f.name.len())?;
-@@ -827,7 +830,7 @@ fn plan(
-         l.module
-             .func(v.func)
-             .and_then(|f| l.module.symbols().get(f.name))
--            == Some(name)
-+            == Some(f.source_name.as_deref().unwrap_or(name))
-     });
-     let Some(func) = visible.map(|v| v.func) else {
-         return Ok(Err(link_problem(name, LinkProblem::NotVisible)));
-diff --git a/crates/metal2vulkan-air/src/canon/link_tests.rs b/crates/metal2vulkan-air/src/canon/link_tests.rs
-index f6694358..b24fa04c 100644
---- a/crates/metal2vulkan-air/src/canon/link_tests.rs
-+++ b/crates/metal2vulkan-air/src/canon/link_tests.rs
-@@ -232,6 +232,7 @@ fn callee(name: &str, calls: &[&str]) -> LinkedModule {
- fn linked(name: &str, module: Module, abi: AirAbi) -> LinkedModule {
-     LinkedModule {
-         functions: vec![LinkedName {
-+            source_name: None,
-             name: name.as_bytes().into(),
-             constants: Ok(BTreeMap::new()),
-             handle: None,
 diff --git a/crates/metal2vulkan-air/src/canon/mod.rs b/crates/metal2vulkan-air/src/canon/mod.rs
-index 114354ab..d88d61f6 100644
+index 1890906..b2e8c82 100644
 --- a/crates/metal2vulkan-air/src/canon/mod.rs
 +++ b/crates/metal2vulkan-air/src/canon/mod.rs
-@@ -512,6 +512,7 @@ pub fn specialize_dynamic(
+@@ -528,6 +528,7 @@ pub fn specialize_dynamic(
      let emap = erase::erase_consts(&mut parts.consts, m)?;
      erase::erase_globals(parts.globals.values_mut(), &emap);
      erase_functions(&mut parts, &emap, m)?;
 +    prune_entry(&mut parts, func, &fcs, &name, m)?;
-     // The entry block always runs: a value use there of an unsupplied constant is SCCP's first
-     // refusal, known before the inlined body is built.
-     let entry_refusal = |consts: &ConstTable, m: &mut Meter| {
-@@ -595,11 +596,17 @@ pub fn specialize_dynamic(
-     };
-     body.release(m);
-     let body = solved;
--    // A pointer loaded from a field of a constant global is the field's constant: a `constexpr
--    // sampler` that SCCP's folded select picked is its sampler state. SCCP runs again over a body
+     let inlined = inline::inline(
+         &parts.funcs,
+         (&parts.types, &parts.symbols),
+@@ -589,16 +590,20 @@ pub fn specialize_dynamic(
+     } = solved;
+     // A pointer loaded from a field of a constant global is the field's constant: a `constexpr
+     // sampler` that SCCP's folded select picked is its sampler state. SCCP runs again over a body
 -    // that changed, to fold what those constants decide.
 -    let (body, folded) = const_loads::fold(body, &mut parts, m)?;
--    let body = if folded {
-+    // A value loaded from a field of a constant global is the field's constant: a `constexpr
-+    // sampler` that SCCP's folded select picked is its sampler state, and an uber-shader's
-+    // configuration struct of function constants is its members. SCCP runs again over a body that
-+    // changed, to fold what those constants decide; the two alternate until a round folds nothing.
+-    let mut body = if folded {
+-        let solved = solve(&body, &mut parts, &fcs, &name, m)?;
+-        body.release(m);
++    // that changed, to fold what those constants decide; the two alternate until a round folds
++    // nothing, since a decided branch can expose a further select of the global.
 +    let mut body = body;
 +    loop {
 +        let (next, folded) = const_loads::fold(body, &mut parts, m)?;
@@ -238,44 +28,35 @@ index 114354ab..d88d61f6 100644
 +            body = next;
 +            break;
 +        }
-         let solved = {
-             let mut cx = sccp::Context {
-                 folder: fold::Folder {
-@@ -611,13 +618,11 @@ pub fn specialize_dynamic(
-                 fcs: &fcs,
-                 name: name.clone(),
-             };
--            sccp::run(&body, &mut cx, m)?
-+            sccp::run(&next, &mut cx, m)?
-         };
--        body.release(m);
--        solved
++        let solved = solve(&next, &mut parts, &fcs, &name, m)?;
++        next.release(m);
+         undefined_reads.extend(solved.reads);
+-        solved.body
 -    } else {
 -        body
 -    };
-+        next.release(m);
-+        body = solved;
++        body = solved.body;
 +    }
-     matmul2d::refuse_left(&body, &parts, &ep.stage, &name, m)?;
-     post_check(&body, &parts, &stubs, &name, &control_points(ep), m)?;
-     // A branch's short arms that Metal's backend speculates, where a group operation in them
-@@ -816,6 +821,70 @@ fn erased_entry(
+     // Loops whose trip count the constants decided, unrolled where their counters decide a branch
+     // of their body; SCCP after each round folds what the copies decide. The unrolled body is
+     // kept only where it comes out no larger than the loops it replaces (`unroll::live_size`).
+@@ -850,6 +855,60 @@ fn erased_entry(
  }
  
  /// Erase every defined function's body in place, one at a time, each body replaced freed.
 +/// The entry's own blocks that its function constants leave unreachable, and its loads from
-+/// fields of constant globals (`const_loads`), folded before the entry is inlined, so the inliner
-+/// copies no callee only a dead block calls. An uber-shader's entry is most of the module and
-+/// branches on the constants into every effect it has: QuartzCore's `fixed_frag` entries inlined
-+/// 15,700 instructions of which SCCP kept 300, and building, solving and rebuilding the rest was
-+/// most of a specialization.
++/// fields of constant globals, folded before the entry is inlined, so the inliner copies no callee
++/// only a dead block calls. An uber-shader's entry is most of the module and branches on the
++/// constants into every effect it has: QuartzCore's `fixed_frag` entries inlined 15,700
++/// instructions of which SCCP kept 300, and building, solving and rebuilding the rest was most of a
++/// specialization.
 +///
 +/// Its calls are opaque here, so what it proves unreachable is unreachable whatever they return,
 +/// and the SCCP after inlining reaches the fixed point it reached over the whole body. It runs
-+/// only when every declared constant is supplied: an unsupplied constant's taint refuses a use
-+/// that only inlining shows is dead (a call argument the callee never reads). Any other refusal
-+/// here (a branch on `undef` that a call's constant result would have made dead) leaves the entry
-+/// as it was, for the SCCP after inlining to judge; a budget, cancellation or limit is final.
++/// only when every declared constant is supplied, so no undefined read goes unrecorded. Any
++/// refusal here (a branch on `undef` that a call's constant result would have made dead) leaves
++/// the entry as it was, for the SCCP after inlining to judge; a budget, cancellation or limit is
++/// final.
 +fn prune_entry(
 +    parts: &mut ModuleParts,
 +    func: FuncId,
@@ -289,27 +70,17 @@ index 114354ab..d88d61f6 100644
 +    let Some(entry) = parts.funcs.get_mut(func).and_then(|f| f.body.take()) else {
 +        return Ok(());
 +    };
-+    let solve = |body: &Body, parts: &mut ModuleParts, m: &mut Meter| {
-+        let mut cx = sccp::Context {
-+            folder: fold::Folder {
-+                types: &parts.types,
-+                consts: &mut parts.consts,
-+                held: 0,
-+            },
-+            globals: &parts.globals,
-+            fcs,
-+            name: name.clone(),
-+        };
-+        sccp::run(body, &mut cx, m)
-+    };
-+    let pruned = solve(&entry, parts, m).and_then(|mut body| loop {
-+        let (next, folded) = const_loads::fold(body, parts, m)?;
-+        if !folded {
-+            return Ok(next);
++    let pruned = solve(&entry, parts, fcs, name, m).and_then(|solved| {
++        let mut body = solved.body;
++        loop {
++            let (next, folded) = const_loads::fold(body, parts, m)?;
++            if !folded {
++                return Ok(next);
++            }
++            let solved = solve(&next, parts, fcs, name, m);
++            next.release(m);
++            body = solved?.body;
 +        }
-+        let solved = solve(&next, parts, m);
-+        next.release(m);
-+        body = solved?;
 +    });
 +    let kept = match pruned {
 +        Ok(body) => {
@@ -330,140 +101,11 @@ index 114354ab..d88d61f6 100644
  fn erase_functions(
      parts: &mut ModuleParts,
      emap: &[crate::ir::ConstId],
-diff --git a/crates/metal2vulkan-air/src/canon/sccp.rs b/crates/metal2vulkan-air/src/canon/sccp.rs
-index e47e6833..f89e2fc1 100644
---- a/crates/metal2vulkan-air/src/canon/sccp.rs
-+++ b/crates/metal2vulkan-air/src/canon/sccp.rs
-@@ -995,6 +995,30 @@ impl<'b> Solver<'b> {
-         self.set(i, new, m, held)
-     }
- 
-+    /// Whether `v` is an aggregate built by `insertvalue` chains whose only unsupplied-constant
-+    /// taint sits in individual inserted members, so those members alone can become `undef`
-+    /// (Metal leaves an unsupplied optional constant's value indeterminate) while the rest of
-+    /// the aggregate keeps its computed members.
-+    fn leafwise(&self, v: Value) -> bool {
-+        let mut cur = v;
-+        loop {
-+            if !matches!(self.lat(cur), Lat::Fc(_)) {
-+                return true;
-+            }
-+            let Value::Inst(i) = cur else { return false };
-+            let Some(inst) = self.body.insts.get(i) else {
-+                return false;
-+            };
-+            let InstKind::InsertValue { agg, val, .. } = &inst.kind else {
-+                return false;
-+            };
-+            if matches!(self.lat(*val), Lat::Fc(_)) && !matches!(val, Value::Inst(_)) {
-+                return false;
-+            }
-+            cur = *agg;
-+        }
-+    }
-+
-     /// After the fixpoint: every reachable non-pure use of an unsupplied constant needs the
-     /// caller's value, and a reachable branch on a literal `undef`/`poison` is refused.
-     fn check(&self, cx: &Context<'_>) -> Result<(), Error> {
-@@ -1031,6 +1055,11 @@ impl<'b> Solver<'b> {
-                         )));
-                     }
-                 }
-+                if let InstKind::Ret(Some(v)) = &inst.kind {
-+                    if self.leafwise(*v) {
-+                        continue;
-+                    }
-+                }
-                 let mut needs = None;
-                 inst.kind.for_each_value(|v| {
-                     if let Lat::Fc(index) = self.lat(v) {
-@@ -1070,7 +1099,11 @@ impl<'b> Solver<'b> {
-                 let deletable = is_pure(&inst.kind)
-                     || is_normalize(&inst.kind)
-                     || is_defined_arg(&inst.kind, cx.folder.consts, cx.fcs).is_some();
-+                let leaf_chain = matches!(inst.kind, InstKind::InsertValue { .. })
-+                    && matches!(lat, Lat::Fc(_))
-+                    && self.leafwise(Value::Inst(i));
-                 match (&inst.kind, lat) {
-+                    _ if leaf_chain => {}
-                     (_, Lat::Const(c)) if deletable => edit.replace(i, Value::Const(c)),
-                     (_, Lat::Fc(_)) if deletable => {
-                         let undef = cx.folder.consts.intern(
-diff --git a/crates/metal2vulkan-air/src/canon/tests.rs b/crates/metal2vulkan-air/src/canon/tests.rs
-index 93c19d4f..bd5a295f 100644
---- a/crates/metal2vulkan-air/src/canon/tests.rs
-+++ b/crates/metal2vulkan-air/src/canon/tests.rs
-@@ -1679,7 +1679,18 @@ fn a_deeply_nested_written_global_is_rebuilt_on_a_small_stack() {
-         static_init(&mut m, "init", |f| store(f, five, gaddr));
-         let fty = m.fn_ty(void, &[dev]);
-         let mut f = m.define("k", fty);
--        let v = load(&mut f, i32t, gaddr);
-+        // A volatile read keeps the global: a plain one now reads the rebuilt initializer's leaf
-+        // as its constant, and the unused global is pruned.
-+        let v = f.push(
-+            i32t,
-+            InstKind::Load {
-+                ptr: gaddr,
-+                align: Align::from_bytes(4),
-+                volatile: true,
-+                atomic: None,
-+                range: None,
-+            },
-+        );
-         store(&mut f, v, arg(0));
-         f.ret(None);
-         let k = f.finish();
-@@ -2380,9 +2391,12 @@ fn a_pointer_loaded_from_a_constant_globals_field_is_the_fields_constant() {
-             assert!(text.contains(kept) && !text.contains(gone), "{text}");
-         }
-     }
--    // A field of any other type is left to the memory plan: its load stays.
--    let text = body_text(&picked_field(Some(1), 1).unwrap());
--    assert!(text.contains("getelementptr"), "{text}");
-+    // A field of any other first-class type reads the same way: the picked struct's own `i64`.
-+    for (flag, kept, gone) in [(1, "333", "444"), (0, "444", "333")] {
-+        let text = body_text(&picked_field(Some(flag), 1).unwrap());
-+        assert!(!text.contains("getelementptr") && !text.contains("load"), "{text}");
-+        assert!(text.contains(kept) && !text.contains(gone), "{text}");
-+    }
-     // Unsupplied, the select stays undecided, as before.
-     assert_eq!(
-         picked_field(None, 0).unwrap_err(),
-diff --git a/crates/metal2vulkan-air/src/intrinsics/llvm.rs b/crates/metal2vulkan-air/src/intrinsics/llvm.rs
-index d784c6c5..b6ca3f98 100644
---- a/crates/metal2vulkan-air/src/intrinsics/llvm.rs
-+++ b/crates/metal2vulkan-air/src/intrinsics/llvm.rs
-@@ -56,6 +56,8 @@ pub enum LlvmIntOp {
-     Bswap,
-     /// `llvm.ctpop`: the number of set bits.
-     Ctpop,
-+    /// `llvm.bitreverse`: the bits in reverse order (what `reverse_bits` compiles to).
-+    Bitreverse,
-     /// `llvm.uadd.sat`: unsigned saturating addition.
-     UAddSat,
-     /// `llvm.usub.sat`: unsigned saturating subtraction.
-@@ -340,6 +342,7 @@ pub(super) const BASES: &[(&str, Base)] = &[
-     ("fshr", Base::Int(LlvmIntOp::Fshr)),
-     ("bswap", Base::Int(LlvmIntOp::Bswap)),
-     ("ctpop", Base::Int(LlvmIntOp::Ctpop)),
-+    ("bitreverse", Base::Int(LlvmIntOp::Bitreverse)),
-     ("uadd.sat", Base::Int(LlvmIntOp::UAddSat)),
-     ("usub.sat", Base::Int(LlvmIntOp::USubSat)),
-     ("sadd.sat", Base::Int(LlvmIntOp::SAddSat)),
-@@ -393,7 +396,7 @@ impl LlvmFloatOp {
- impl LlvmIntOp {
-     fn arity(self) -> usize {
-         match self {
--            LlvmIntOp::Bswap | LlvmIntOp::Ctpop => 1,
-+            LlvmIntOp::Bswap | LlvmIntOp::Ctpop | LlvmIntOp::Bitreverse => 1,
-             LlvmIntOp::Fshl | LlvmIntOp::Fshr => 3,
-             _ => 2,
-         }
 diff --git a/crates/metal2vulkan-runtime/src/command_buffer/completion.rs b/crates/metal2vulkan-runtime/src/command_buffer/completion.rs
-index cdd3cefb..5b9003a0 100644
+index 137c56b..0824988 100644
 --- a/crates/metal2vulkan-runtime/src/command_buffer/completion.rs
 +++ b/crates/metal2vulkan-runtime/src/command_buffer/completion.rs
-@@ -459,6 +459,11 @@ fn finish(watch: &Watch, lists: &mut FenceLists, mut finished: Vec<(usize, Submi
+@@ -686,6 +686,11 @@ fn finish(watch: &Watch, lists: &mut FenceLists, mut finished: Vec<(usize, Submi
          } = batch;
          lists.gathered.extend(fence.map(|fence| (queue, fence)));
          if last {
@@ -475,7 +117,7 @@ index cdd3cefb..5b9003a0 100644
              let mut state = lock(&buffer.state);
              state.times.completed = seen;
              state.keep_holds(holds);
-@@ -694,6 +699,8 @@ struct Front {
+@@ -964,6 +969,8 @@ struct Front {
      value: u64,
      /// The fence its submission signals, where it has one.
      fence: Option<vk::Fence>,
@@ -484,7 +126,7 @@ index cdd3cefb..5b9003a0 100644
  }
  
  /// `VkQueue` `queue`'s waiter (the module docs): it waits for its queue's first pending batch
-@@ -729,6 +736,7 @@ fn wait_for_queue(watch: &Watch, queue: usize) {
+@@ -999,6 +1006,7 @@ fn wait_for_queue(watch: &Watch, queue: usize) {
                          let front = Front {
                              value: batch.value,
                              fence: batch.fence,
@@ -492,7 +134,7 @@ index cdd3cefb..5b9003a0 100644
                          };
                          Some((front, batch.buffer.device().clone()))
                      }
-@@ -750,11 +758,18 @@ fn wait_for_queue(watch: &Watch, queue: usize) {
+@@ -1020,11 +1028,18 @@ fn wait_for_queue(watch: &Watch, queue: usize) {
              continue;
          };
          device.shared().counts.completion_armed(slept);
@@ -512,10 +154,10 @@ index cdd3cefb..5b9003a0 100644
                  Some(polled)
              }
 diff --git a/crates/metal2vulkan-runtime/src/command_buffer/mod.rs b/crates/metal2vulkan-runtime/src/command_buffer/mod.rs
-index 0d3f5897..ced40f61 100644
+index 2df5b1e..8b325a4 100644
 --- a/crates/metal2vulkan-runtime/src/command_buffer/mod.rs
 +++ b/crates/metal2vulkan-runtime/src/command_buffer/mod.rs
-@@ -1791,6 +1791,9 @@ fn write_fields(upload: &Upload, table: u64, set: u64, count: u64) -> Result<(),
+@@ -2081,6 +2081,9 @@ fn write_fields(upload: &Upload, table: u64, set: u64, count: u64) -> Result<(),
  }
  
  impl CommandBuffer {
@@ -524,23 +166,23 @@ index 0d3f5897..ced40f61 100644
 +
      /// A new command buffer of `queue`, holding `slot` of it.
      pub(super) fn new(queue: &CommandQueue, slot: Slot) -> CommandBuffer {
-         CommandBuffer(Arc::new(CommandBufferShared {
-@@ -2456,9 +2459,12 @@ impl CommandBuffer {
-     /// [`commit`](Self::commit) for `call`, or, with `failure`,
-     /// [`commit_failed`](Self::commit_failed).
-     fn commit_as(&self, call: &'static str, failure: Option<CommitFailure>) -> Result<(), Error> {
+         let footprints = Footprints::default();
+@@ -2934,9 +2937,12 @@ impl CommandBuffer {
+         failure: Option<CommitFailure>,
+         hand: Hand,
+     ) -> Result<(), Error> {
 +        let id = Arc::as_ptr(&self.0) as usize;
 +        crate::stage_trace::mark(id, crate::stage_trace::Stage::CommitCall, 0);
          // Left to wait for the last render encoder's end, where its call left it to the device's
          // lowering thread and the thread has not lowered it, or for the commits left so.
-         if failure.is_none() && self.queue_commit(call)? {
+         if failure.is_none() && self.queue_commit(call, hand)? {
 +            crate::stage_trace::mark(id, crate::stage_trace::Stage::CommitQueued, 0);
              return Ok(());
          }
          // The last render encoder's end, where its call left it to the device's lowering thread.
-@@ -2547,6 +2553,12 @@ impl CommandBuffer {
-         failure: Option<CommitFailure>,
+@@ -3039,6 +3045,12 @@ impl CommandBuffer {
          run: CommitRun,
+         hand: Hand,
      ) -> Result<(), Error> {
 +        let run_kind = match run {
 +            CommitRun::AtCall => 0,
@@ -551,7 +193,7 @@ index 0d3f5897..ced40f61 100644
          // The waiting fetched render targets take their storage form at this commit where it
          // allows (`storage_form.rs`): one atomic read where none waits. The scheduler's thread
          // ends the switch once it submitted the command buffer. None where nothing of it runs.
-@@ -2762,6 +2774,11 @@ impl CommandBuffer {
+@@ -3283,6 +3295,11 @@ impl CommandBuffer {
                  return Err(error);
              }
          };
@@ -563,15 +205,16 @@ index 0d3f5897..ced40f61 100644
          // The first segment a host step records, which the device announces (a loop's check
          // records nothing).
          let announced = segments
-@@ -4386,18 +4403,23 @@ impl CommandBufferShared {
+@@ -5036,6 +5053,7 @@ impl CommandBufferShared {
          result: Result<(), CommandBufferError>,
      ) {
          let (contexts, queue) = (buffer.device.shared().contexts.clone(), buffer.queue.id());
 +        let id = Arc::as_ptr(&*buffer) as usize;
-         let item = Item::Transition(Transition::finished(buffer, result));
-         let item = match program_objects::Unheld::enter() {
-             Some(unheld) => {
-                 let ran = contexts.run_here(queue, item);
+         let (signallers, own): (Vec<Arc<Follow>>, _) = {
+             let state = lock(&buffer.state);
+             let signallers = (state.waited.iter())
+@@ -5084,12 +5102,16 @@ impl CommandBufferShared {
+                 let ran = contexts.run_here(queue, item, may_run);
                  drop(unheld);
                  match ran {
 -                    Ok(()) => return,
@@ -585,19 +228,19 @@ index 0d3f5897..ced40f61 100644
              None => item,
          };
 +        crate::stage_trace::mark(id, crate::stage_trace::Stage::Finished, 2);
-         contexts.post(queue, item);
+         contexts.post(queue, item.whole());
+         posted();
      }
- 
-@@ -4408,6 +4430,8 @@ impl CommandBufferShared {
-     /// waiters once the transition's [`Hold`] (and every other) is gone, and they wait for the
-     /// trails below the mark. Waits from inside these steps answer as [`own`] says.
-     fn complete(self: &Arc<Self>, result: Result<(), CommandBufferError>) {
+@@ -5110,6 +5132,8 @@ impl CommandBufferShared {
+     /// The first part of [`complete`](Self::complete), to its completion-seen handlers: its
+     /// status final, they ran. What the rest needs is answered.
+     fn complete_seen(self: &Arc<Self>, result: Result<(), CommandBufferError>) -> Rest {
 +        let trace = Arc::as_ptr(self) as usize;
 +        crate::stage_trace::mark(trace, crate::stage_trace::Stage::CompleteBegin, 0);
          // A thread sleeps on `changed`, as the state's lock below reads.
          let parked;
          // Its command pool, where it settled, whose primary the device's spares begin ahead once
-@@ -4579,6 +4603,7 @@ impl CommandBufferShared {
+@@ -5281,6 +5305,7 @@ impl CommandBufferShared {
          }
          // The holds taken above go here, with no lock of the command buffer's held, before any
          // handler of its runs: a detach from one of them detaches (`detach.rs`).
@@ -605,7 +248,15 @@ index 0d3f5897..ced40f61 100644
          drop(submitted_holds);
          self.wake_parked(parked);
          let buffer = CommandBuffer(Arc::clone(self));
-@@ -4593,6 +4618,7 @@ impl CommandBufferShared {
+@@ -5311,6 +5336,7 @@ impl CommandBufferShared {
+     /// handlers ran ([`complete_seen`](Self::complete_seen)): its completed handlers, its queue's
+     /// slot, its releases and its gate.
+     fn complete_rest(self: &Arc<Self>, rest: Rest) {
++        let trace = Arc::as_ptr(self) as usize;
+         let Rest {
+             settled_pool,
+             released_versions,
+@@ -5337,6 +5363,7 @@ impl CommandBufferShared {
                  exit_guard::program(|| handler(&buffer));
              }
          }
@@ -613,7 +264,7 @@ index 0d3f5897..ced40f61 100644
          let handled = Instant::now();
          drop(buffer);
          // Its queue's slot comes back as its last completed handler returns, as Metal's does: a
-@@ -4673,6 +4699,7 @@ impl CommandBufferShared {
+@@ -5417,6 +5444,7 @@ impl CommandBufferShared {
          }
          // The gate notifies its waiters only where it opened here, which this transition's own
          // hold holds it from: the notify for them is that hold's, as it goes (`gate.rs`).
@@ -621,7 +272,7 @@ index 0d3f5897..ced40f61 100644
          let notified = self.gate.finish();
          self.device.shared().counts.command_buffer_wake(notified);
          // Its pool's primary begun ahead, where no command buffer took the pool since
-@@ -4683,6 +4710,7 @@ impl CommandBufferShared {
+@@ -5427,6 +5455,7 @@ impl CommandBufferShared {
              let shared = self.device.shared();
              shared.spares.begin_ahead(shared, pool);
          }
@@ -630,10 +281,10 @@ index 0d3f5897..ced40f61 100644
  }
  
 diff --git a/crates/metal2vulkan-runtime/src/command_buffer/submit.rs b/crates/metal2vulkan-runtime/src/command_buffer/submit.rs
-index 13f2d43d..e0d8c552 100644
+index 3c446f2..2a0f08d 100644
 --- a/crates/metal2vulkan-runtime/src/command_buffer/submit.rs
 +++ b/crates/metal2vulkan-runtime/src/command_buffer/submit.rs
-@@ -343,6 +343,29 @@ impl CommandBufferShared {
+@@ -419,6 +419,29 @@ impl CommandBufferShared {
          last: bool,
          event_waits: &[(vk::Semaphore, u64)],
          scheduler: &mut scheduler::State,
@@ -663,7 +314,7 @@ index 13f2d43d..e0d8c552 100644
      ) -> Result<Submitting, CommandBufferError> {
          let device = &self.device;
          if device.is_lost() {
-@@ -455,6 +478,7 @@ impl CommandBufferShared {
+@@ -542,6 +565,7 @@ impl CommandBufferShared {
          };
          // The scrubs of emulated textures' writes, as mapped now, then every segment in its place.
          self.record_scrubs(&mut state, range.clone())?;
@@ -671,7 +322,7 @@ index 13f2d43d..e0d8c552 100644
          state
              .place(range.clone())
              .map_err(|error| recording_error(device, error))?;
-@@ -636,11 +660,8 @@ impl CommandBufferShared {
+@@ -741,11 +765,8 @@ impl CommandBufferShared {
              barriers.first().is_some_and(Option::is_some) || !held_moves.transitions(0).is_empty();
          if entry.is_some() {
              started = true;
@@ -685,7 +336,7 @@ index 13f2d43d..e0d8c552 100644
              let stamps = Stamps {
                  start: start_stamp.filter(|_| !encoder_behind),
                  after: entry_barrier.is_some(),
-@@ -649,14 +670,11 @@ impl CommandBufferShared {
+@@ -754,14 +775,11 @@ impl CommandBufferShared {
              if stamps.start.is_some() {
                  start_stamp = None;
              }
@@ -703,7 +354,7 @@ index 13f2d43d..e0d8c552 100644
              let moves = held_moves.transitions(offset);
              if !globals.is_empty() || start_stamp.is_some() || !moves.is_empty() {
                  started |= offset == 0;
-@@ -666,7 +684,7 @@ impl CommandBufferShared {
+@@ -771,7 +789,7 @@ impl CommandBufferShared {
                      end: None,
                  };
                  let kept = &mut scheduler.kept;
@@ -712,7 +363,7 @@ index 13f2d43d..e0d8c552 100644
              }
              work.extend(&state.recorded[start + offset].raws);
          }
-@@ -879,6 +897,9 @@ impl CommandBufferShared {
+@@ -999,6 +1017,9 @@ impl CommandBufferShared {
                  false => work.insert(0, lead),
              }
          }
@@ -722,7 +373,7 @@ index 13f2d43d..e0d8c552 100644
          let mut work_timeline = vk::TimelineSemaphoreSubmitInfo::default()
              .wait_semaphore_values(wait_values)
              .signal_semaphore_values(work_signal_values);
-@@ -922,6 +943,7 @@ impl CommandBufferShared {
+@@ -1042,6 +1063,7 @@ impl CommandBufferShared {
          let buffers = (submits.iter())
              .map(|info| info.command_buffer_count as usize)
              .sum();
@@ -730,7 +381,7 @@ index 13f2d43d..e0d8c552 100644
          // From here its heap set versions may be pending: nothing writes them any more, and its
          // first batch takes the ticket a texture that goes from now on waits for
          // (`heap_sets.rs`). One committed and not yet submitted holds no gone texture.
-@@ -972,6 +994,7 @@ impl CommandBufferShared {
+@@ -1095,6 +1117,7 @@ impl CommandBufferShared {
                  scheduler
                      .group
                      .submit(device, &mut scheduler.waited[queue], Some(after));
@@ -738,17 +389,17 @@ index 13f2d43d..e0d8c552 100644
              if let Err(error) = submitted {
                  if let Some(fence) = fence {
                      // SAFETY: the failed submission is not pending; inside the section.
-@@ -1059,6 +1082,7 @@ impl CommandBufferShared {
-         // The holds its completion lets go (`State::holds_until`).
-         let holds = state.holds_until(index);
+@@ -1229,6 +1252,7 @@ impl CommandBufferShared {
+             finishes_after(&batches.all()[index].waits, (queue, self), waited)
+         };
          drop(state);
 +        crate::stage_trace::mark(Arc::as_ptr(self) as usize, crate::stage_trace::Stage::SubmitStep, 4);
          if rebound {
              device.degrade_encoded_use_rebound(rebound_use);
          }
-@@ -1430,3 +1454,15 @@ impl Stamps {
-         })
+@@ -1737,3 +1761,15 @@ fn finishes_after(
      }
+     after
  }
 +
 +/// `lead` then `barrier`, those of them there are, as the first `.1` of the array: the globals
@@ -763,16 +414,18 @@ index 13f2d43d..e0d8c552 100644
 +    (pair, count)
 +}
 diff --git a/crates/metal2vulkan-runtime/src/creation.rs b/crates/metal2vulkan-runtime/src/creation.rs
-index 1d760a06..a995df37 100644
+index 8e068e3..db002f6 100644
 --- a/crates/metal2vulkan-runtime/src/creation.rs
 +++ b/crates/metal2vulkan-runtime/src/creation.rs
-@@ -109,10 +109,67 @@ pub(crate) unsafe fn allocate_memory(
-     info: &vk::MemoryAllocateInfo<'_>,
- ) -> VkResult<vk::DeviceMemory> {
+@@ -115,12 +115,69 @@ pub(crate) unsafe fn allocate_memory(
+         return Err(vk::Result::ERROR_TOO_MANY_OBJECTS);
+     };
      vk_made(VkMaking::Memory, Location::caller());
 +    note_allocation_site(info.allocation_size);
      // SAFETY: the caller's.
-     unsafe { device.allocate_memory(info, None) }
+     let memory = unsafe { device.allocate_memory(info, None) };
+     allocations::allocated(admitted, memory.is_ok());
+     memory
  }
  
 +/// The call stacks that allocated device memory of at least [`SITE_BYTES`], by the bytes they
@@ -835,10 +488,10 @@ index 1d760a06..a995df37 100644
  ///
  /// # Safety
 diff --git a/crates/metal2vulkan-runtime/src/device/mod.rs b/crates/metal2vulkan-runtime/src/device/mod.rs
-index 380f21fb..8d5f6863 100644
+index f73a754..f5116ea 100644
 --- a/crates/metal2vulkan-runtime/src/device/mod.rs
 +++ b/crates/metal2vulkan-runtime/src/device/mod.rs
-@@ -27,6 +27,7 @@ pub(super) mod keeper;
+@@ -28,6 +28,7 @@ pub(super) mod keeper;
  pub(super) mod prime;
  pub(super) mod properties;
  pub(crate) mod relay;
@@ -846,7 +499,7 @@ index 380f21fb..8d5f6863 100644
  mod staging;
  pub(super) mod submit;
  pub(crate) mod submit_stalls;
-@@ -503,6 +504,9 @@ pub(super) struct DeviceShared {
+@@ -560,6 +561,9 @@ pub(super) struct DeviceShared {
      /// The thread that lets go of what a released state's pool pieces gave back as they ended
      /// (`pipeline/reaper.rs`).
      pub(super) reaper: crate::pipeline::reaper::Reaper,
@@ -856,7 +509,7 @@ index 380f21fb..8d5f6863 100644
      /// The trails its threads open between a signal and their last let-go of what they held for
      /// the work, which a command buffer's waiters wait for (`trails.rs`).
      pub(crate) trails: Arc<crate::trails::Trails>,
-@@ -724,6 +728,9 @@ impl Drop for DeviceShared {
+@@ -793,6 +797,9 @@ impl Drop for DeviceShared {
          // What the reaper is handed holds the device: none is left, and it only stops, unless
          // this teardown runs on its thread.
          self.reaper.stop();
@@ -866,7 +519,7 @@ index 380f21fb..8d5f6863 100644
          // What the residency thread releases holds the device: none is left.
          #[cfg(unix)]
          self.residency.stop();
-@@ -1020,13 +1027,24 @@ impl Device {
+@@ -1116,13 +1123,24 @@ impl Device {
      /// a pipeline state's, a buffer's, a texture's, a heap's), so that no encoding or commit makes
      /// a memory block, whose `vkAllocateMemory` waited 2.37 s for other processes' GPU work on
      /// NVIDIA's driver. Nothing in a host step, a serial point of the command buffers' stream
@@ -893,7 +546,7 @@ index 380f21fb..8d5f6863 100644
      }
  
      /// Whether `other` is this device (the same handle, not merely the same physical device).
-@@ -1512,6 +1530,31 @@ impl Device {
+@@ -1656,6 +1674,31 @@ impl Device {
          // SAFETY: the device is live, of `physical`, and enables timeline semaphores, and
          // `bufferDeviceAddress` where `device_address` says so; `queues` holds at least one of
          // its queues, which nothing uses yet.
@@ -925,7 +578,7 @@ index 380f21fb..8d5f6863 100644
          if let Err(error) = unsafe {
              prime::prime(
                  &instance.raw,
-@@ -1527,27 +1570,13 @@ impl Device {
+@@ -1671,27 +1714,13 @@ impl Device {
                  queue_family,
                  &queues,
                  Sharing::new(&queue_families),
@@ -955,7 +608,7 @@ index 380f21fb..8d5f6863 100644
              )
          } {
              scheduler.stop();
-@@ -1899,6 +1928,7 @@ impl Device {
+@@ -2070,6 +2099,7 @@ impl Device {
              uncommitted: Arc::default(),
              pipeline_pool: Default::default(),
              reaper: Default::default(),
@@ -964,10 +617,10 @@ index 380f21fb..8d5f6863 100644
              recoveries: Arc::default(),
              libraries: graphics_pipeline_library.then(Default::default),
 diff --git a/crates/metal2vulkan-runtime/src/device/prime.rs b/crates/metal2vulkan-runtime/src/device/prime.rs
-index 144a6e59..919f5c9e 100644
+index ec95824..0519ac8 100644
 --- a/crates/metal2vulkan-runtime/src/device/prime.rs
 +++ b/crates/metal2vulkan-runtime/src/device/prime.rs
-@@ -82,9 +82,11 @@ use crate::gpu_time::Calibration;
+@@ -83,9 +83,11 @@ use crate::gpu_time::Calibration;
  use crate::loader_word::LoaderWord;
  use crate::memory;
  use crate::release::{self, Generated, Released};
@@ -979,7 +632,7 @@ index 144a6e59..919f5c9e 100644
  use std::time::{Duration, Instant};
  
  use super::functions::Vk;
-@@ -361,7 +363,7 @@ fn specialization() -> vk::SpecializationInfo<'static> {
+@@ -362,7 +364,7 @@ fn specialization() -> vk::SpecializationInfo<'static> {
  /// What the device primed has: a queue family that writes timestamps, `hostQueryReset`, device
  /// addresses, `VK_EXT_device_generated_commands`, sparse binding on its queues, the push command,
  /// calibrated timestamps, and the render encoder's commands of [`PrimedDraws`].
@@ -988,7 +641,7 @@ index 144a6e59..919f5c9e 100644
  pub(crate) struct Has {
      pub(crate) timestamps: bool,
      pub(crate) host_query_reset: bool,
-@@ -403,6 +405,16 @@ impl PrimedDraws {
+@@ -404,6 +406,16 @@ impl PrimedDraws {
      }
  }
  
@@ -1005,7 +658,7 @@ index 144a6e59..919f5c9e 100644
  /// Prime `device` of `physical`, made from `instance`, whose queues are `queues`, the first of
  /// its primary family `queue_family`, its buffers and images shared as `sharing` says, on this
  /// thread; `has` says what the device has, `generated` holds the commands of
-@@ -430,6 +442,7 @@ pub(super) unsafe fn prime(
+@@ -431,6 +443,7 @@ pub(super) unsafe fn prime(
      calibration: Option<Calibration>,
      drawn: PrimedDraws,
      ycbcr: Option<vk::SamplerYcbcrConversionCreateInfo<'static>>,
@@ -1013,7 +666,7 @@ index 144a6e59..919f5c9e 100644
  ) -> Result<(), Error> {
      let mut primer = Primer {
          device,
-@@ -442,6 +455,8 @@ pub(super) unsafe fn prime(
+@@ -443,6 +456,8 @@ pub(super) unsafe fn prime(
          memory: unsafe { instance.get_physical_device_memory_properties(physical) },
          calls: 0,
          held: Vec::new(),
@@ -1022,7 +675,7 @@ index 144a6e59..919f5c9e 100644
      };
      // SAFETY: the caller's.
      let primed = unsafe {
-@@ -460,6 +475,10 @@ pub(super) unsafe fn prime(
+@@ -461,6 +476,10 @@ pub(super) unsafe fn prime(
      unsafe {
          let _ = device.device_wait_idle();
          primer.made(Call::DeviceWaitIdle);
@@ -1033,7 +686,7 @@ index 144a6e59..919f5c9e 100644
          while let Some(release) = primer.held.pop() {
              let call = release(device);
              primer.made(call);
-@@ -547,6 +566,8 @@ struct Primer<'a> {
+@@ -548,6 +567,8 @@ struct Primer<'a> {
      calls: u128,
      /// What was made, released last first.
      held: Vec<Release>,
@@ -1042,7 +695,7 @@ index 144a6e59..919f5c9e 100644
  }
  
  impl Primer<'_> {
-@@ -840,7 +861,7 @@ impl Primer<'_> {
+@@ -855,7 +876,7 @@ impl Primer<'_> {
                  .layout(layout)
                  .push_next(&mut flags);
              let pipeline = device
@@ -1051,7 +704,7 @@ index 144a6e59..919f5c9e 100644
                  .map_err(|(_, error)| vulkan(error))?[0];
              self.hold(pipeline);
              let pipelines = ExecutionSetPipelineInfo::new(pipeline, 1);
-@@ -1171,9 +1192,8 @@ impl Primer<'_> {
+@@ -1187,9 +1208,8 @@ impl Primer<'_> {
              let module = device.create_shader_module(&info, None).map_err(vulkan)?;
              self.made(Call::CreateShaderModule);
              self.hold(module);
@@ -1065,7 +718,7 @@ index 144a6e59..919f5c9e 100644
              let specialization = specialization();
 diff --git a/crates/metal2vulkan-runtime/src/device/room.rs b/crates/metal2vulkan-runtime/src/device/room.rs
 new file mode 100644
-index 00000000..fc6f5a88
+index 0000000..e970e1d
 --- /dev/null
 +++ b/crates/metal2vulkan-runtime/src/device/room.rs
 @@ -0,0 +1,134 @@
@@ -1163,7 +816,7 @@ index 00000000..fc6f5a88
 +        return;
 +    };
 +    let shared = device.shared();
-+    crate::memory::reap_retired(&shared.memory, shared.vk());
++    crate::memory::age_spares(&shared.memory, shared.vk());
 +    crate::memory::keep_room(&shared.memory, shared.vk(), &shared.counts);
 +}
 +
@@ -1196,7 +849,7 @@ index 00000000..fc6f5a88
 +            keep(&device);
 +        } else {
 +            let parts = device.shared();
-+            crate::memory::reap_retired(&parts.memory, parts.vk());
++            crate::memory::age_spares(&parts.memory, parts.vk());
 +        }
 +        // Outside the state's lock: it may be the device's last handle, whose teardown stops
 +        // this thread.
@@ -1204,10 +857,10 @@ index 00000000..fc6f5a88
 +    }
 +}
 diff --git a/crates/metal2vulkan-runtime/src/exit_guard.rs b/crates/metal2vulkan-runtime/src/exit_guard.rs
-index 25cb2dc7..9635292c 100644
+index 2e6a0b5..ff59e4e 100644
 --- a/crates/metal2vulkan-runtime/src/exit_guard.rs
 +++ b/crates/metal2vulkan-runtime/src/exit_guard.rs
-@@ -955,7 +955,7 @@ thread_local! {
+@@ -963,7 +963,7 @@ thread_local! {
  /// `device/compiles.rs`). MoltenVK runs each
  /// compile on a dispatch queue that takes the class of the thread asking, so the class here is the
  /// compile's class in Metal's compiler service.
@@ -1216,7 +869,7 @@ index 25cb2dc7..9635292c 100644
  pub(crate) fn raise_to_user_initiated() {
      if !at_least_user_initiated() {
          // SAFETY: sets the calling thread's own class; no pointer.
-@@ -965,8 +965,8 @@ pub(crate) fn raise_to_user_initiated() {
+@@ -973,28 +973,28 @@ pub(crate) fn raise_to_user_initiated() {
      }
  }
  
@@ -1227,7 +880,22 @@ index 25cb2dc7..9635292c 100644
  pub(crate) fn raise_to_user_initiated() {}
  
  /// Lower this thread to the utility quality of service: a warm pass's thread (`warm/pass.rs`),
-@@ -986,7 +986,7 @@ pub(crate) fn lower_to_utility() {}
+ /// whose translations nothing waits for. Its pipeline makings still compile at the
+ /// user-initiated class, on a thread of their own (`device/compiles.rs`), and a thread it starts
+ /// starts at the default class ([`spawn`]).
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ pub(crate) fn lower_to_utility() {
+     // SAFETY: sets the calling thread's own class; no pointer.
+     unsafe { libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_UTILITY, 0) };
+ }
+ 
+ /// Nothing elsewhere: a Linux thread's nice value passes to the threads it starts, and the warm
+-/// pass starts the pipeline pool's, which serve the program ([`lower_to_utility`] on macOS).
+-#[cfg(not(target_os = "macos"))]
++/// pass starts the pipeline pool's, which serve the program ([`lower_to_utility`] on macOS and iOS).
++#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+ pub(crate) fn lower_to_utility() {}
  
  /// Run this thread at the user-interactive quality of service, whatever its class: a thread of
  /// the runtime's own that takes command buffers to their handlers ([`spawn_user_interactive`]).
@@ -1236,7 +904,7 @@ index 25cb2dc7..9635292c 100644
  fn run_at_user_interactive() {
      // Metal runs every command buffer's scheduled and completed handlers at the user-interactive
      // class, whatever the class of the thread that committed it: measured on an M3 Max, macOS
-@@ -1107,12 +1107,12 @@ impl SchedAttr {
+@@ -1115,12 +1115,12 @@ impl SchedAttr {
  }
  
  /// Nothing: no such hint here ([`run_at_user_interactive`] on macOS and Linux).
@@ -1251,7 +919,7 @@ index 25cb2dc7..9635292c 100644
  pub(crate) fn at_least_user_initiated() -> bool {
      use libc::qos_class_t as Q;
      let mut class = Q::QOS_CLASS_UNSPECIFIED;
-@@ -1127,8 +1127,8 @@ pub(crate) fn at_least_user_initiated() -> bool {
+@@ -1135,8 +1135,8 @@ pub(crate) fn at_least_user_initiated() -> bool {
          )
  }
  
@@ -1263,7 +931,7 @@ index 25cb2dc7..9635292c 100644
      true
  }
 diff --git a/crates/metal2vulkan-runtime/src/in_place.rs b/crates/metal2vulkan-runtime/src/in_place.rs
-index 86f42373..d287774a 100644
+index 2bad4ac..0418f75 100644
 --- a/crates/metal2vulkan-runtime/src/in_place.rs
 +++ b/crates/metal2vulkan-runtime/src/in_place.rs
 @@ -251,6 +251,10 @@ pub(crate) fn in_place(
@@ -1278,18 +946,18 @@ index 86f42373..d287774a 100644
          return Err(ShadowCause::RenderTarget);
      }
 diff --git a/crates/metal2vulkan-runtime/src/lib.rs b/crates/metal2vulkan-runtime/src/lib.rs
-index c2e31fe2..f4be246c 100644
+index 606eab5..1851084 100644
 --- a/crates/metal2vulkan-runtime/src/lib.rs
 +++ b/crates/metal2vulkan-runtime/src/lib.rs
-@@ -24,6 +24,7 @@
- #![warn(missing_docs)]
+@@ -29,6 +29,7 @@
+ #![recursion_limit = "256"]
  
  mod address;
 +pub mod stage_trace;
  mod address_map;
  mod address_pool;
- mod amplification;
-@@ -341,6 +342,7 @@ pub use render_values::{
+ mod allocations;
+@@ -357,6 +358,7 @@ pub use render_values::{
  pub use resource::{ObjectId, ResourceRef};
  pub use resource_ids::{IdPlacement, ResourceId, ResourceIdKind};
  pub use sampler::{sampler_border_color, SamplerState, SamplerStateOptions};
@@ -1298,87 +966,30 @@ index c2e31fe2..f4be246c 100644
      ShaderCacheOptions, ShaderCacheStatistics, DEFAULT_CAPACITY, DEFAULT_MEMORY_CAPACITY,
  };
 diff --git a/crates/metal2vulkan-runtime/src/library.rs b/crates/metal2vulkan-runtime/src/library.rs
-index b96d52ef..e4c89b2f 100644
+index b16b5fb..9cb6aec 100644
 --- a/crates/metal2vulkan-runtime/src/library.rs
 +++ b/crates/metal2vulkan-runtime/src/library.rs
-@@ -88,6 +88,7 @@ pub struct Function {
-     /// The options the function was made with (`newFunctionWithDescriptor:`); none for the
-     /// other forms.
-     options: FunctionOptions,
-+    specialized_name: Option<String>,
-     /// What the function object holds of the sampler IDs its function's pipeline states
-     /// numbered, shared with every function object of the same function of its library
-     /// (`resource_ids/numbered.rs`); held for its drop.
-@@ -100,6 +101,8 @@ pub struct Function {
- pub struct FunctionDescriptor {
-     /// `name`.
-     pub name: String,
-+    /// `specializedName`: the exported symbol; None retains the original name.
-+    pub specialized_name: Option<String>,
-     /// `constantValues`: `None` for nil, the function as `newFunctionWithName:` makes it.
-     pub constant_values: Option<FunctionConstantValues>,
-     /// `options`. `COMPILE_TO_BINARY` makes a function a stage's `binary_functions` and a made
-@@ -114,6 +117,7 @@ impl FunctionDescriptor {
-     pub fn new(name: &str) -> FunctionDescriptor {
-         FunctionDescriptor {
-             name: name.to_string(),
-+            specialized_name: None,
-             constant_values: None,
-             options: FunctionOptions::NONE,
-         }
-@@ -301,6 +305,7 @@ impl Library {
-             )?,
-         };
-         function.options = descriptor.options;
-+        function.specialized_name = descriptor.specialized_name.clone();
-         Ok(function)
+@@ -536,6 +536,15 @@ impl Function {
+         descriptor
      }
  
-@@ -327,6 +332,7 @@ impl Library {
-             properties: Arc::default(),
-             constants_dictionary: Arc::default(),
-             options: FunctionOptions::NONE,
-+            specialized_name: None,
-             _holds: holds,
-         })
-     }
-@@ -358,6 +364,12 @@ impl Library {
- }
- 
- impl Function {
-+    /// Return the function with a new exported name, retaining its source and specialization.
-+    pub fn with_specialized_name(mut self, name: Option<String>) -> Self {
++    /// The function as `newFunctionWithDescriptor:` makes it with `name` as its specialized name,
++    /// for a frontend that makes the function first: `None` keeps its own name. Its definition and
++    /// constants stay its own.
++    pub fn with_specialized_name(mut self, name: Option<String>) -> Function {
 +        self.specialized_name = name;
++        self.by_descriptor = true;
 +        self
 +    }
 +
-     /// `device`.
-     pub fn device(&self) -> &Device {
-         &self.device
-@@ -365,7 +377,9 @@ impl Function {
- 
-     /// `name`.
-     pub fn name(&self) -> &str {
--        self.function.info().name
-+        self.specialized_name
-+            .as_deref()
-+            .unwrap_or(self.function.info().name)
-     }
- 
-     /// `options`: the options a [`FunctionDescriptor`] made the function with; none for a
-@@ -505,6 +519,7 @@ impl Function {
-     /// [`LinkedFunctions`]: metal2vulkan::pipeline::LinkedFunctions
-     pub fn linked_function(&self) -> LinkedFunction {
-         LinkedFunction::new(self.function.clone())
-+            .with_specialized_name(self.specialized_name.clone())
-             .with_constants(self.constants.clone())
-             .with_precompiled(self.precompiled())
-     }
+     /// The function as a stage links it, with its constant values, under its specialized name
+     /// where it was made with one, specialized where it was made with constant values or by
+     /// [`Library::new_function_with_descriptor`], and precompiled where it was made compiled to a
 diff --git a/crates/metal2vulkan-runtime/src/linear_plan.rs b/crates/metal2vulkan-runtime/src/linear_plan.rs
-index 034be29f..ab2551eb 100644
+index b89aba0..98b24b2 100644
 --- a/crates/metal2vulkan-runtime/src/linear_plan.rs
 +++ b/crates/metal2vulkan-runtime/src/linear_plan.rs
-@@ -947,6 +947,26 @@ pub(super) fn holding(layout: &BufferLayout, usage: TextureUsage) -> Result<(),
+@@ -1072,6 +1072,26 @@ pub(super) fn holding(layout: &BufferLayout, usage: TextureUsage) -> Result<(),
      ))
  }
  
@@ -1406,10 +1017,10 @@ index 034be29f..ab2551eb 100644
  /// the first texel of their slice, `array_pitch` apart, holds no byte but the texture's texels:
  /// the texels lie with no byte between them ([`holding`]), and its last subresource ends at their
 diff --git a/crates/metal2vulkan-runtime/src/memory.rs b/crates/metal2vulkan-runtime/src/memory.rs
-index ff194844..7c0428f9 100644
+index fb118ed..6494057 100644
 --- a/crates/metal2vulkan-runtime/src/memory.rs
 +++ b/crates/metal2vulkan-runtime/src/memory.rs
-@@ -84,6 +84,79 @@ pub(super) const KEPT_EMPTY_FOR: Duration = Duration::from_secs(1);
+@@ -90,6 +90,77 @@ pub(super) const KEPT_EMPTY_FOR: Duration = Duration::from_secs(1);
  /// makes and frees blocks.
  const LOGGED_PLACEMENT_BYTES: u64 = 4 << 20;
  
@@ -1431,15 +1042,13 @@ index ff194844..7c0428f9 100644
 +/// ([`Memory::release_spare`]).
 +pub(super) const SPARE_FOR: Duration = Duration::from_secs(10);
 +
-+/// Maximum backing waiting for physical release on the room worker.
-+const RETIRED_BYTES: u64 = 512 << 20;
-+/// Small frees do not need another thread handoff.
-+const RETIRE_MIN_BYTES: u64 = 256 << 10;
++/// Memory operations below this size are not traced.
++const TRACE_MIN_BYTES: u64 = 256 << 10;
 +
 +fn trace_memory(pool: (Holds, u32), bytes: u64, available: u64, kind: u32) -> usize {
 +    use crate::stage_trace::{self, Stage};
 +    use std::sync::atomic::{AtomicUsize, Ordering};
-+    if bytes < RETIRE_MIN_BYTES || !stage_trace::diagnostics() {
++    if bytes < TRACE_MIN_BYTES || !stage_trace::diagnostics() {
 +        return 0;
 +    }
 +    static NEXT: AtomicUsize = AtomicUsize::new(1);
@@ -1489,7 +1098,7 @@ index ff194844..7c0428f9 100644
  /// What memory a resource needs.
  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
  pub(super) enum MemoryClass {
-@@ -421,6 +494,14 @@ impl<T> Pool<T> {
+@@ -479,6 +550,14 @@ impl<T> Pool<T> {
          }
      }
  
@@ -1504,7 +1113,7 @@ index ff194844..7c0428f9 100644
      /// Whether a pooled block has room for `size` bytes at the largest alignment asked of the
      /// pool so far: whether [`Pool::room`] is that long.
      ///
-@@ -610,13 +691,20 @@ impl<T> Pool<T> {
+@@ -668,13 +747,20 @@ impl<T> Pool<T> {
      /// imports, whatever else they are.
      fn count_into(&self, census: &mut Census, imported: impl Fn(&T) -> bool) {
          for block in self.blocks.iter().flatten() {
@@ -1530,9 +1139,9 @@ index ff194844..7c0428f9 100644
          }
      }
  }
-@@ -667,6 +755,13 @@ pub(super) struct Census {
+@@ -725,6 +811,13 @@ pub(super) struct Census {
      pub(super) dedicated: u64,
-     /// The caller's host memory imported ([`Memory::import_host`]), a block each.
+     /// The caller's host memory imported ([`import_host`]), a block each.
      pub(super) imported: u64,
 +    /// The bytes of those blocks: pooled ones, the bytes placed in them, empty kept ones,
 +    /// dedicated ones and imports.
@@ -1544,7 +1153,7 @@ index ff194844..7c0428f9 100644
  }
  
  /// A host pointer the runtime may send between threads: the mapping of a block it owns.
-@@ -728,6 +823,12 @@ struct BlockAddresses {
+@@ -786,6 +879,12 @@ struct BlockAddresses {
  }
  
  impl Block {
@@ -1556,33 +1165,26 @@ index ff194844..7c0428f9 100644
 +
      /// The cause its `vkFreeMemory` is counted under. A block freed as the one placement in it
      /// went ([`FreeCause::Dedicated`]) that is an import of its own is counted as that import
-     /// instead: the caller's host memory ([`Memory::import_host`]) or a buffer's fresh pages
-@@ -1066,6 +1167,13 @@ pub(super) struct Memory {
-     /// ([`binds_wait`]), so an image bound while such work may be queued takes a block of its own
-     /// ([`allocate_image_while_queued`]).
-     binds_wait: bool,
+     /// instead: the caller's host memory ([`import_host`]) or a buffer's fresh pages
+@@ -1147,6 +1246,9 @@ pub(super) struct Memory {
+     /// The placements so far that lie past their class's own memory types, in one they
+     /// overflowed into ([`overflow_candidates`], `WorkCounts::device_memory_overflows`).
+     overflows: u64,
 +    /// The dedicated blocks of images kept for the next dedicated image of their pool
 +    /// ([`SPARE_FOR`]).
 +    spare: Vec<Spare>,
-+    /// Owned, unused backing released by the room worker, with no program-owned holds.
-+    retired: std::collections::VecDeque<(usize, Block, FreeCause)>,
-+    retiring_bytes: Arc<std::sync::atomic::AtomicU64>,
-+    retiring_count: Arc<std::sync::atomic::AtomicU64>,
  }
  
  impl Memory {
-@@ -1101,6 +1209,10 @@ impl Memory {
-             freed_by: [0; FreeCause::COUNT],
-             log: None,
+@@ -1190,6 +1292,7 @@ impl Memory {
+             heaps,
              binds_wait: binds_wait(driver),
+             overflows: 0,
 +            spare: Vec::new(),
-+            retired: std::collections::VecDeque::new(),
-+            retiring_bytes: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-+            retiring_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
          }
      }
  
-@@ -1176,6 +1288,16 @@ impl Memory {
+@@ -1354,6 +1457,10 @@ impl Memory {
          for pool in &self.pools {
              pool.count_into(&mut census, |block| block.imported);
          }
@@ -1590,16 +1192,10 @@ index ff194844..7c0428f9 100644
 +            census.empty += 1;
 +            census.empty_bytes += spare.block.size;
 +        }
-+        census.empty += self
-+            .retiring_count
-+            .load(std::sync::atomic::Ordering::Relaxed);
-+        census.empty_bytes += self
-+            .retiring_bytes
-+            .load(std::sync::atomic::Ordering::Relaxed);
          census
      }
  
-@@ -1291,6 +1413,17 @@ impl Memory {
+@@ -1473,6 +1580,17 @@ impl Memory {
              .add(size, dedicated, block, used)
      }
  
@@ -1617,7 +1213,7 @@ index ff194844..7c0428f9 100644
      /// What making a block takes, copied out so that the block is made with the memory's lock
      /// released ([`place`], [`keep_room`]).
      fn maker(&self) -> BlockMaker {
-@@ -1434,10 +1567,19 @@ impl Memory {
+@@ -1617,10 +1735,19 @@ impl Memory {
          let pool = self.pool(holds, type_index);
          let (freed, stale) = (pool.release(block, offset, size, now), pool.stale(now));
          if let Some(stale) = stale {
@@ -1639,7 +1235,7 @@ index ff194844..7c0428f9 100644
              Some((block, dedicated)) => {
                  let cause = match dedicated {
                      true => FreeCause::Dedicated,
-@@ -1453,11 +1595,39 @@ impl Memory {
+@@ -1636,10 +1763,15 @@ impl Memory {
      /// Release every kept empty pooled block of memory type `type_index`, of buffers and of
      /// images, as a block of that type fails to be made ([`place`]): how many went.
      fn release_kept(&mut self, device: &ash::Device, type_index: u32) -> usize {
@@ -1648,40 +1244,15 @@ index ff194844..7c0428f9 100644
              .into_iter()
              .flat_map(|holds| self.pool(holds, type_index).take_kept())
              .collect();
--        let count = blocks.len();
 +        blocks.extend(
 +            (self.spare)
 +                .extract_if(.., |spare| spare.pool.1 == type_index)
 +                .map(|spare| spare.block),
 +        );
-+        // Allocation failure must reclaim queued backing before retrying Vulkan.
-+        let mut count = blocks.len();
-+        while let Some(index) = self
-+            .retired
-+            .iter()
-+            .position(|(_, block, _)| block.type_index == type_index)
-+        {
-+            let (id, block, cause) = self.retired.remove(index).expect("found retired block");
-+            count += 1;
-+            let bytes = block.size;
-+            if id != 0 {
-+                crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryFreeBegin, 0);
-+            }
-+            // SAFETY: retired blocks have no placement, owner or pending GPU user.
-+            unsafe { block.release(device) };
-+            self.freed_by[cause as usize] += 1;
-+            self.retiring_bytes
-+                .fetch_sub(bytes, std::sync::atomic::Ordering::Relaxed);
-+            self.retiring_count
-+                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
-+            if id != 0 {
-+                crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryFreeEnd, 0);
-+            }
-+        }
+         let count = blocks.len();
          for block in blocks {
              // SAFETY: nothing is placed in a kept empty block, and no command reads it.
-             drop(unsafe { self.let_go(device, block, FreeCause::KeptForRoom, None) });
-@@ -1465,6 +1635,81 @@ impl Memory {
+@@ -1648,6 +1780,81 @@ impl Memory {
          count
      }
  
@@ -1763,61 +1334,36 @@ index ff194844..7c0428f9 100644
      /// Over every pool: the block slots the room queries have walked and the free ranges they
      /// have visited ([`Pool::room_work`]), then what one query of each pool would walk and visit
      /// where it derived per call ([`Pool::room_per_call`]).
-@@ -1501,13 +1746,52 @@ impl Memory {
-         cause: FreeCause,
-         after: Option<Box<dyn Send>>,
-     ) -> Option<Box<dyn Send>> {
--        self.freed_by[block.cause(cause) as usize] += 1;
-+        let counted_cause = block.cause(cause);
+@@ -1701,10 +1908,18 @@ impl Memory {
+         };
+         let (heap, size) = (self.heap_of(block.type_index), block.size);
          let Some(parking) = &self.parking else {
-+            use std::sync::atomic::Ordering;
 +            let id = trace_memory((Holds::Buffers, block.type_index), block.size, 0, 3);
 +            trace_handle(id, block.memory);
-+            // Imported memory and program-owned keep-alives retain their synchronous release contract.
-+            let can_defer = block.plain()
-+                && after.is_none()
-+                && block.size >= RETIRE_MIN_BYTES
-+                && cause != FreeCause::KeptForRoom;
-+            if can_defer
-+                && self
-+                    .retiring_bytes
-+                    .load(Ordering::Relaxed)
-+                    .saturating_add(block.size)
-+                    <= RETIRED_BYTES
-+            {
-+                let bytes =
-+                    self.retiring_bytes.fetch_add(block.size, Ordering::Relaxed) + block.size;
-+                self.retiring_count.fetch_add(1, Ordering::Relaxed);
-+                self.retired.push_back((id, block, counted_cause));
-+                if id != 0 {
-+                    crate::stage_trace::mark(
-+                        id,
-+                        crate::stage_trace::Stage::MemoryDeferred,
-+                        (bytes >> 10) as u32,
-+                    );
-+                }
-+                return None;
-+            }
-+            if id != 0 {
-+                if can_defer {
-+                    crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryQueueFull, 0);
-+                }
-+                crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryFreeBegin, 0);
-+            }
-+            self.freed_by[counted_cause as usize] += 1;
              self.say_block("freed a block", &block);
+             let Some(frees) = frees else {
++                if id != 0 {
++                    crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryFreeBegin, 0);
++                }
+                 // SAFETY: the caller's.
+                 unsafe { block.release(device) };
++                if id != 0 {
++                    crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryFreeEnd, 0);
++                }
+                 return after;
+             };
+             let Block {
+@@ -1721,6 +1936,9 @@ impl Memory {
+                 size,
+             };
              // SAFETY: the caller's.
-             unsafe { block.release(device) };
 +            if id != 0 {
-+                crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryFreeEnd, 0);
++                crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryDeferred, (size >> 10) as u32);
 +            }
-             return after;
+             return unsafe { frees.post_or_free(posted, device) };
          };
-+        self.freed_by[counted_cause as usize] += 1;
          self.say_block(
-             "a block goes, freed once the batches in flight complete",
-             &block,
-@@ -1745,9 +2029,15 @@ impl Memory {
+@@ -1932,9 +2150,10 @@ impl Memory {
      /// and no resource is left. What waited with them, for the caller to let go of with no lock
      /// held.
      pub(super) fn destroy(&mut self, device: &ash::Device) -> Vec<Box<dyn Send>> {
@@ -1826,21 +1372,19 @@ index ff194844..7c0428f9 100644
              .flat_map(|pool| pool.drain())
              .collect();
 +        blocks.extend(self.spare.drain(..).map(|spare| spare.block));
-+        blocks.extend(self.retired.drain(..).map(|(_, block, _)| block));
-+        self.retiring_bytes
-+            .store(0, std::sync::atomic::Ordering::Relaxed);
-+        self.retiring_count
-+            .store(0, std::sync::atomic::Ordering::Relaxed);
          for block in blocks {
              self.say_block("freed a block as the device is destroyed", &block);
              self.freed_by[block.cause(FreeCause::Teardown) as usize] += 1;
-@@ -2113,14 +2403,44 @@ fn place(
+@@ -2359,18 +2578,48 @@ fn place(
          return Err(Error::OutOfMemory(MemoryKind::Device));
      }
      let dedicated = fit == Fit::Apart || size > maker.block_bytes / 2;
 -    let block_size = if dedicated { size } else { maker.block_bytes };
      let mut failure = Error::OutOfMemory(MemoryKind::Device);
-     for type_index in candidates {
+     // The class's own types first, then those it overflows into where none of them has room.
+     let order = (candidates.iter().map(|&type_index| (type_index, false)))
+         .chain(overflow.iter().map(|&type_index| (type_index, true)));
+     for (type_index, overflowing) in order {
          let pool = (holds, type_index);
 +        let block_size = match dedicated {
 +            true => size,
@@ -1849,14 +1393,15 @@ index ff194844..7c0428f9 100644
 +        let available = lock(memory).pool(pool.0, pool.1).room();
 +        let trace = trace_memory(pool, block_size, available, 1);
          if fit == Fit::Pooled {
+             let mut memory = lock(memory);
              if let Some(placement) =
-                 lock(memory).place_pooled(device, pool, (size, align), addressed, class)?
+                 memory.place_pooled(device, pool, (size, align), addressed, class)?
              {
 +                trace_handle(trace, placement.memory);
 +                if trace != 0 {
 +                    crate::stage_trace::mark(trace, crate::stage_trace::Stage::MemoryReused, 1);
 +                }
-+                return Ok(placement);
++                return Ok(memory.mark_overflowed(placement, overflowing));
 +            }
 +        }
 +        // A dedicated image takes a spare block of its pool where one fits ([`SPARE_FOR`]); one
@@ -1877,10 +1422,10 @@ index ff194844..7c0428f9 100644
 +                    crate::stage_trace::mark(trace, crate::stage_trace::Stage::MemoryReused, 2);
 +                }
 +                memory.say_placement("placed", &placement, Some(class));
-                 return Ok(placement);
+                 return Ok(memory.mark_overflowed(placement, overflowing));
              }
          }
-@@ -2133,14 +2453,26 @@ fn place(
+@@ -2390,14 +2639,26 @@ fn place(
          };
          match made {
              Ok(block) => {
@@ -1892,7 +1437,7 @@ index ff194844..7c0428f9 100644
                  let index = memory.add_block(pool, block, block_size, dedicated, size);
                  let placement = memory.placement(pool, index, 0, size, addressed.is_some());
                  memory.say_placement("placed", &placement, Some(class));
-                 return Ok(placement);
+                 return Ok(memory.mark_overflowed(placement, overflowing));
              }
 -            Err(error @ Error::OutOfMemory(_)) => failure = error,
 -            Err(error) => return Err(error),
@@ -1909,42 +1454,20 @@ index ff194844..7c0428f9 100644
          }
      }
      Err(failure)
-@@ -2153,32 +2485,253 @@ fn place(
- /// with room rather than making one. A block of buffers gets its buffer of addresses (counted in
- /// `counts`) where blocks carry one. A block that fails to be made, or a pool the query fails for,
- /// is left to the placement that needs it.
-+/// Release owned unused backing on the room worker, outside the allocator lock.
-+pub(super) fn reap_retired(memory: &Mutex<Memory>, device: &ash::Device) {
-+    use std::sync::atomic::Ordering;
-+    let (blocks, bytes, count) = {
-+        let mut memory = lock(memory);
-+        memory.age_spare(device, Instant::now());
-+        let blocks: Vec<_> = memory.retired.drain(..).collect();
-+        (
-+            blocks,
-+            Arc::clone(&memory.retiring_bytes),
-+            Arc::clone(&memory.retiring_count),
-+        )
-+    };
-+    for (id, block, cause) in blocks {
-+        let size = block.size;
-+        if id != 0 {
-+            crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryFreeBegin, 0);
-+        }
-+        // SAFETY: retired blocks contain no placement, pending GPU reader or program-owned keep-alive.
-+        unsafe { block.release(device) };
-+        lock(memory).freed_by[cause as usize] += 1;
-+        bytes.fetch_sub(size, Ordering::Relaxed);
-+        count.fetch_sub(1, Ordering::Relaxed);
-+        if id != 0 {
-+            crate::stage_trace::mark(id, crate::stage_trace::Stage::MemoryFreeEnd, 0);
-+        }
-+    }
+@@ -2418,6 +2679,12 @@ fn make_room(memory: &Mutex<Memory>, device: &ash::Device, type_index: u32) -> b
+     released > 0 || waited
+ }
+ 
++/// Free the spare blocks whose time is up, from the room worker: a device that releases nothing
++/// more still lets its spares go after [`SPARE_FOR`].
++pub(super) fn age_spares(memory: &Mutex<Memory>, device: &ash::Device) {
++    lock(memory).age_spare(device, Instant::now());
 +}
 +
- pub(super) fn keep_room(memory: &Mutex<Memory>, device: &ash::Device, counts: &Counters) {
-     let (lacking, maker) = {
-         let mut memory = lock(memory);
+ /// Keep room for any pooled placement (half a block) in each pool the runtime's encodings and
+ /// commits place their own resources in ([`Memory::kept`]), making a block, with `memory`'s lock
+ /// released, for a pool that lacks it. The device's creation calls, which may wait, keep it, so
+@@ -2431,26 +2698,158 @@ pub(super) fn keep_room(memory: &Mutex<Memory>, device: &ash::Device, counts: &C
          let Ok(kept) = memory.kept(device) else {
              return;
          };
@@ -2020,7 +1543,6 @@ index ff194844..7c0428f9 100644
 +
 +    static SERIAL: Mutex<()> = Mutex::new(());
 +    static FREED: AtomicU64 = AtomicU64::new(0);
-+    static WORKER_FREED: AtomicU64 = AtomicU64::new(0);
 +
 +    unsafe extern "system" fn free_memory(
 +        _: vk::Device,
@@ -2028,9 +1550,6 @@ index ff194844..7c0428f9 100644
 +        _: *const vk::AllocationCallbacks<'_>,
 +    ) {
 +        FREED.fetch_add(1, Ordering::Relaxed);
-+        if std::thread::current().name() == Some("memory-release-test-worker") {
-+            WORKER_FREED.fetch_add(1, Ordering::Relaxed);
-+        }
 +    }
 +
 +    fn driver() -> ash::Device {
@@ -2071,43 +1590,6 @@ index ff194844..7c0428f9 100644
 +    }
 +
 +    #[test]
-+    fn owned_release_is_bounded_and_runs_off_the_caller() {
-+        let _serial = lock(&SERIAL);
-+        FREED.store(0, Ordering::Relaxed);
-+        WORKER_FREED.store(0, Ordering::Relaxed);
-+        let driver = driver();
-+        let mut memory = allocator();
-+        unsafe {
-+            assert!(memory
-+                .let_go(&driver, block(1, 64 << 20), FreeCause::Dedicated, None)
-+                .is_none());
-+            assert!(memory
-+                .let_go(&driver, block(2, 64 << 20), FreeCause::Dedicated, None)
-+                .is_none());
-+        }
-+        assert_eq!(FREED.load(Ordering::Relaxed), 0);
-+        assert_eq!(memory.census().empty_bytes, RETIRED_BYTES);
-+        unsafe {
-+            drop(memory.let_go(&driver, block(3, 1 << 20), FreeCause::Dedicated, None));
-+        }
-+        assert_eq!(
-+            FREED.load(Ordering::Relaxed),
-+            1,
-+            "a full queue does not grow beyond its byte bound"
-+        );
-+        let memory = Arc::new(Mutex::new(memory));
-+        let for_worker = Arc::clone(&memory);
-+        let thread = crate::exit_guard::spawn(
-+            std::thread::Builder::new().name("memory-release-test-worker".into()),
-+            move || reap_retired(&for_worker, &driver),
-+        )
-+        .unwrap();
-+        thread.join().unwrap();
-+        assert_eq!(WORKER_FREED.load(Ordering::Relaxed), 2);
-+        assert_eq!(lock(&memory).census().empty_bytes, 0);
-+    }
-+
-+    #[test]
 +    fn surplus_pooled_image_backing_can_be_reused() {
 +        let _serial = lock(&SERIAL);
 +        FREED.store(0, Ordering::Relaxed);
@@ -2133,25 +1615,6 @@ index ff194844..7c0428f9 100644
 +    }
 +
 +    #[test]
-+    fn allocation_failure_reclaims_queued_backing_before_retry() {
-+        let _serial = lock(&SERIAL);
-+        FREED.store(0, Ordering::Relaxed);
-+        let driver = driver();
-+        let mut memory = allocator();
-+        unsafe {
-+            drop(memory.let_go(&driver, block(1, 64 << 20), FreeCause::Dedicated, None));
-+        }
-+        assert_eq!(FREED.load(Ordering::Relaxed), 0);
-+        assert_eq!(memory.release_kept(&driver, 0), 1);
-+        assert_eq!(FREED.load(Ordering::Relaxed), 1);
-+        assert_eq!(memory.retiring_bytes.load(Ordering::Relaxed), 0);
-+        assert_eq!(memory.retiring_count.load(Ordering::Relaxed), 0);
-+        assert!(memory.retired.is_empty());
-+        assert!(memory.destroy(&driver).is_empty());
-+        assert_eq!(FREED.load(Ordering::Relaxed), 1);
-+    }
-+
-+    #[test]
 +    fn image_spares_age_and_give_room() {
 +        let _serial = lock(&SERIAL);
 +        FREED.store(0, Ordering::Relaxed);
@@ -2174,7 +1637,7 @@ index ff194844..7c0428f9 100644
      }
  }
 diff --git a/crates/metal2vulkan-runtime/src/neutral.rs b/crates/metal2vulkan-runtime/src/neutral.rs
-index c75c19f6..947f1008 100644
+index c75c19f..947f100 100644
 --- a/crates/metal2vulkan-runtime/src/neutral.rs
 +++ b/crates/metal2vulkan-runtime/src/neutral.rs
 @@ -37,7 +37,7 @@ use metal2vulkan::bind::NeutralResource;
@@ -2213,24 +1676,8 @@ index c75c19f6..947f1008 100644
  }
  
  impl Neutrals {
-diff --git a/crates/metal2vulkan-runtime/src/pipeline/budget.rs b/crates/metal2vulkan-runtime/src/pipeline/budget.rs
-index 2ec1208c..8da2f326 100644
---- a/crates/metal2vulkan-runtime/src/pipeline/budget.rs
-+++ b/crates/metal2vulkan-runtime/src/pipeline/budget.rs
-@@ -178,7 +178,10 @@ pub(crate) fn ticket() -> u64 {
- pub(crate) fn process() -> &'static Arc<Budget> {
-     PROCESS.get_or_init(|| {
-         let threads = std::thread::available_parallelism().map_or(0, std::num::NonZeroUsize::get);
--        let turns = turns_for(threads);
-+        let turns = std::env::var("M2V_PIPELINE_TURNS").ok()
-+            .and_then(|value| value.parse::<usize>().ok())
-+            .filter(|&value| value > 0 && value <= threads.max(1))
-+            .unwrap_or_else(|| turns_for(threads));
-         Arc::new(Budget::new(turns, turns - 1))
-     })
- }
 diff --git a/crates/metal2vulkan-runtime/src/range.rs b/crates/metal2vulkan-runtime/src/range.rs
-index 1512ab0e..1fcd2f2e 100644
+index 1512ab0..1fcd2f2 100644
 --- a/crates/metal2vulkan-runtime/src/range.rs
 +++ b/crates/metal2vulkan-runtime/src/range.rs
 @@ -111,6 +111,11 @@ impl RangeAllocator {
@@ -2246,7 +1693,7 @@ index 1512ab0e..1fcd2f2e 100644
      pub(super) fn is_empty(&self) -> bool {
          self.free.len() == 1 && self.free.get(&self.base) == Some(&(self.end - self.base))
 diff --git a/crates/metal2vulkan-runtime/src/rebind.rs b/crates/metal2vulkan-runtime/src/rebind.rs
-index 8e6149ba..8674c1d9 100644
+index 9505520..ef5958a 100644
 --- a/crates/metal2vulkan-runtime/src/rebind.rs
 +++ b/crates/metal2vulkan-runtime/src/rebind.rs
 @@ -99,6 +99,8 @@ pub enum RebindProblem {
@@ -2266,9 +1713,9 @@ index 8e6149ba..8674c1d9 100644
 +    /// hold no buffer over host pages, as though it had none.
 +    refused: std::sync::atomic::AtomicBool,
      buffers: Mutex<KeyMap<ResourceKey, Entry>>,
-     /// How many of them are detached (`detach.rs`): else no command names a detached one.
-     detached: AtomicUsize,
-@@ -213,7 +218,7 @@ impl Rebinds {
+     /// The keys `buffers` may hold ([`HostedKeys`]): a use of any other names no buffer over host
+     /// pages, which an encoder's hold tells without taking `buffers`' lock.
+@@ -255,7 +260,7 @@ impl Rebinds {
  
      /// Whether the device has a buffer over host pages: else no use names one.
      pub(super) fn any(&self) -> bool {
@@ -2277,7 +1724,7 @@ index 8e6149ba..8674c1d9 100644
      }
  
      /// Note the buffer of `key` over host pages, `cell` its hold on them.
-@@ -938,6 +943,9 @@ impl Buffer {
+@@ -998,6 +1003,9 @@ impl Buffer {
          keep_alive: Option<KeepAlive>,
      ) -> Result<(), Error> {
          const CALL: &str = "rebind_bytes_no_copy";
@@ -2287,7 +1734,7 @@ index 8e6149ba..8674c1d9 100644
          let Some(cell) = self.host_cell() else {
              return Err(invalid(CALL, Problem::Rebind(RebindProblem::NotHostMemory)));
          };
-@@ -993,6 +1001,9 @@ impl Heap {
+@@ -1053,6 +1061,9 @@ impl Heap {
          keep_alive: Option<KeepAlive>,
      ) -> Result<(), Error> {
          const CALL: &str = "rebind_bytes_no_copy";
@@ -2297,7 +1744,7 @@ index 8e6149ba..8674c1d9 100644
          let Some((own, cell)) = self
              .bytes()
              .and_then(|own| own.host_cell().map(|cell| (own, cell)))
-@@ -1022,3 +1033,16 @@ impl Device {
+@@ -1082,3 +1093,16 @@ impl Device {
          self.shared().rebinds.pending(key)
      }
  }
@@ -2315,10 +1762,10 @@ index 8e6149ba..8674c1d9 100644
 +    }
 +}
 diff --git a/crates/metal2vulkan-runtime/src/render.rs b/crates/metal2vulkan-runtime/src/render.rs
-index ddb93327..a37c8ba8 100644
+index 38da352..0736dd8 100644
 --- a/crates/metal2vulkan-runtime/src/render.rs
 +++ b/crates/metal2vulkan-runtime/src/render.rs
-@@ -10970,6 +10970,11 @@ impl Recording<'_> {
+@@ -12030,6 +12030,11 @@ impl Recording<'_> {
      /// recorded into it bound (each recorded through it). With a pair, the pass is one
      /// `render_target` made, of no views (`snapshot::Pair::record`).
      unsafe fn record(&self, bound: &mut Bound) -> Recorded {
@@ -2331,20 +1778,20 @@ index ddb93327..a37c8ba8 100644
          let dynamic = |state| self.dynamic.contains(&state);
          bound.follow(cb);
 diff --git a/crates/metal2vulkan-runtime/src/scheduler/mod.rs b/crates/metal2vulkan-runtime/src/scheduler/mod.rs
-index d8a3b7b3..34485655 100644
+index 0ba3fc1..5e9c63c 100644
 --- a/crates/metal2vulkan-runtime/src/scheduler/mod.rs
 +++ b/crates/metal2vulkan-runtime/src/scheduler/mod.rs
-@@ -388,6 +388,9 @@ impl SchedulerShared {
-     /// (`asleep`, read under the lock the mark was made under; one that sleeps later reads the
-     /// mark first), counted as `woken`; else the notify, a system call, is spared.
+@@ -517,6 +517,9 @@ impl SchedulerShared {
+     /// lock of its sleep; one that sleeps later reads what the waker wrote first), counted as
+     /// `woken`; else the notify, a system call, is spared.
      fn woken(&self, woken: Woken, asleep: Asleep) {
 +        if !matches!(asleep, Asleep::No) {
 +            crate::stage_trace::mark(0, crate::stage_trace::Stage::SchedulerWake, woken as u32);
 +        }
          match asleep {
+             // The thread alone waits on it.
              Asleep::OnCondvar => {
-                 self.wakings[woken as usize].fetch_add(1, Ordering::Relaxed);
-@@ -537,6 +540,8 @@ struct Held {
+@@ -697,6 +700,8 @@ struct Held {
      /// The host nanoseconds at the first look of the scheduler's that found it held
      /// ([`held_for`](Self::held_for)), until it goes ([`hold_ended`](Self::hold_ended)).
      held_since: Option<u64>,
@@ -2353,7 +1800,7 @@ index d8a3b7b3..34485655 100644
  }
  
  impl Held {
-@@ -545,6 +550,15 @@ impl Held {
+@@ -705,6 +710,15 @@ impl Held {
      /// read from the host's clock while nothing waits.
      fn held_for(&mut self, reason: HeldFor) {
          (self.buffer.device().shared().counts).head_held_for(reason);
@@ -2369,8 +1816,8 @@ index d8a3b7b3..34485655 100644
          if self.held_since.is_none() {
              self.held_since = Some(gpu_time::host_nanos());
          }
-@@ -685,6 +699,11 @@ impl Scheduler {
-         batches: Vec<BatchSync>,
+@@ -848,6 +862,11 @@ impl Scheduler {
+         hand: Hand,
      ) {
          let shared = &*self.shared;
 +        crate::stage_trace::mark(
@@ -2381,51 +1828,52 @@ index d8a3b7b3..34485655 100644
          let committed = Committed {
              buffer: buffer.hold(),
              queue,
-@@ -966,15 +985,20 @@ fn run(shared: &SchedulerShared) {
-             };
+@@ -1216,6 +1235,7 @@ fn run(shared: &Arc<SchedulerShared>) {
+                 && bound.is_none()
+                 && stalls.is_none();
              let slice = bound.map_or(slice, |left| left.min(slice));
-             shared.sleeps.fetch_add(1, Ordering::Relaxed);
 +            let slice_ms = slice.as_millis().min(0x7fff) as u32;
-             if let Some(nudge) = shared.nudge.get().filter(|_| shared.gpu_waits(&mut gpu)) {
+             let on_gpu = shared.nudge.get().filter(|_| shared.gpu_waits(&mut gpu));
+             // The lock of the sleep ([`Sleep`]), under the scheduler's: a waker that found no
+             // pass under way wrote what it asks for before it took it, so its commit or nudge is
+@@ -1226,12 +1246,15 @@ fn run(shared: &Arc<SchedulerShared>) {
+             }
+             shared.sleeps.fetch_add(1, Ordering::Relaxed);
+             if let Some(nudge) = on_gpu {
 +                crate::stage_trace::mark(0, crate::stage_trace::Stage::SchedulerSleep, slice_ms | 0x8000);
-                 state = wait_for_gpu(shared, state, nudge, &mut gpu, (slice, short));
+                 state = wait_for_gpu(shared, (state, sleep), nudge, &mut gpu, (slice, short));
 +                crate::stage_trace::mark(0, crate::stage_trace::Stage::SchedulerResumed, 0);
+                 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+                 trace::submitting("thread woke");
                  continue;
              }
-             state.asleep = true;
+             sleep.asleep = true;
 +            crate::stage_trace::mark(0, crate::stage_trace::Stage::SchedulerSleep, slice_ms);
-             let (woke, waited) = shared
-                 .wake
-                 .wait_timeout(state, slice)
-                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-+            crate::stage_trace::mark(0, crate::stage_trace::Stage::SchedulerResumed, u32::from(waited.timed_out()));
-             state = woke;
-             state.asleep = false;
-             if waited.timed_out() && !short {
-@@ -1072,7 +1096,10 @@ fn run_work(kind: Kind, work: Work) -> bool {
-     let (buffer, index) = &work;
-     match kind {
-         Kind::Step => {
-+            let id = Arc::as_ptr(&**buffer) as usize;
-+            crate::stage_trace::mark(id, crate::stage_trace::Stage::StepBegin, *index as u32);
-             buffer.host_step(*index);
-+            crate::stage_trace::mark(id, crate::stage_trace::Stage::StepEnd, *index as u32);
-             for &call in exit_guard::HOST_STEP {
-                 exit_guard::called(call);
-             }
-@@ -1098,7 +1125,11 @@ fn run_work(kind: Kind, work: Work) -> bool {
+             // A waker that marks the state under the scheduler's lock takes it once this lets
+             // go of it, and then the sleep's, which the wait lets go of.
+             drop(state);
+@@ -1248,6 +1271,7 @@ fn run(shared: &Arc<SchedulerShared>) {
+                     waited.timed_out()
+                 }
+             };
++            crate::stage_trace::mark(0, crate::stage_trace::Stage::SchedulerResumed, u32::from(timed_out));
+             sleep.asleep = false;
+             drop(sleep);
+             #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+@@ -1371,8 +1395,12 @@ fn run_work(shared: &Arc<SchedulerShared>, kind: Kind, work: Work) -> bool {
  fn round(shared: &SchedulerShared, left: &mut Left<Work>, passed: &mut Passed) -> bool {
      (shared.inbox).pass(|state, commits| {
          shared.passes.fetch_add(1, Ordering::Relaxed);
 +        crate::stage_trace::mark(0, crate::stage_trace::Stage::PassBegin, 0);
 +        let before = passed.spent.len();
-         pass(state, commits, (&mut *passed, &mut *left), &shared.awaits);
+         let taken = pass(state, commits, (&mut *passed, &mut *left), &shared.awaits);
+         shared.took_in(taken);
 +        let spent = passed.spent.len().saturating_sub(before);
 +        crate::stage_trace::mark(0, crate::stage_trace::Stage::PassEnd, spent.min(0xffff) as u32);
          !passed.exiting && left.is_empty() && !passed.more
      });
      passed.more = false;
-@@ -1137,6 +1168,11 @@ fn take_in(state: &mut State, commits: &mut Vec<Committed>, spent: &mut Spent) {
+@@ -1429,6 +1457,11 @@ fn take_in(state: &mut State, commits: &mut Vec<Committed>, spent: &mut Spent) -
      } in commits.drain(..)
      {
          let count = batches.len();
@@ -2437,7 +1885,7 @@ index d8a3b7b3..34485655 100644
          let State { order, binary, .. } = &mut *state;
          let held = batches.into_iter().enumerate().map(|(index, batch)| Held {
              buffer: buffer.hold(),
-@@ -1151,6 +1187,7 @@ fn take_in(state: &mut State, commits: &mut Vec<Committed>, spent: &mut Spent) {
+@@ -1444,6 +1477,7 @@ fn take_in(state: &mut State, commits: &mut Vec<Committed>, spent: &mut Spent) -
              hastened: false,
              counted_held: false,
              held_since: None,
@@ -2445,8 +1893,23 @@ index d8a3b7b3..34485655 100644
          });
          order.push(queue, held);
          spent.push(buffer);
+diff --git a/crates/metal2vulkan-runtime/src/scheduler/steps.rs b/crates/metal2vulkan-runtime/src/scheduler/steps.rs
+index 6ac0573..52b9f9a 100644
+--- a/crates/metal2vulkan-runtime/src/scheduler/steps.rs
++++ b/crates/metal2vulkan-runtime/src/scheduler/steps.rs
+@@ -138,7 +138,10 @@ fn record(shared: &SchedulerShared, work: Work) -> bool {
+     };
+     let (buffer, index) = &work;
+     let started = Instant::now();
++    let id = Arc::as_ptr(&**buffer) as usize;
++    crate::stage_trace::mark(id, crate::stage_trace::Stage::StepBegin, *index as u32);
+     buffer.host_step(*index);
++    crate::stage_trace::mark(id, crate::stage_trace::Stage::StepEnd, *index as u32);
+     for &call in exit_guard::HOST_STEP {
+         exit_guard::called(call);
+     }
 diff --git a/crates/metal2vulkan-runtime/src/shader_cache/mod.rs b/crates/metal2vulkan-runtime/src/shader_cache/mod.rs
-index 3e2a6ef4..6c541e05 100644
+index 351160a..508af31 100644
 --- a/crates/metal2vulkan-runtime/src/shader_cache/mod.rs
 +++ b/crates/metal2vulkan-runtime/src/shader_cache/mod.rs
 @@ -383,6 +383,106 @@ impl CacheSetup {
@@ -2557,7 +2020,7 @@ index 3e2a6ef4..6c541e05 100644
  /// records, the `VkPipelineCache` it keeps for each record, and the cache thread.
  pub(super) struct ShaderCache {
 diff --git a/crates/metal2vulkan-runtime/src/shader_cache/store.rs b/crates/metal2vulkan-runtime/src/shader_cache/store.rs
-index 93c4c265..1938e048 100644
+index 93c4c26..1938e04 100644
 --- a/crates/metal2vulkan-runtime/src/shader_cache/store.rs
 +++ b/crates/metal2vulkan-runtime/src/shader_cache/store.rs
 @@ -82,6 +82,11 @@ impl Directory {
@@ -2603,7 +2066,7 @@ index 93c4c265..1938e048 100644
      /// The directory the consumer named or the platform's default.
 diff --git a/crates/metal2vulkan-runtime/src/stage_trace.rs b/crates/metal2vulkan-runtime/src/stage_trace.rs
 new file mode 100644
-index 00000000..c841b33e
+index 0000000..3325dd0
 --- /dev/null
 +++ b/crates/metal2vulkan-runtime/src/stage_trace.rs
 @@ -0,0 +1,246 @@
@@ -2689,7 +2152,7 @@ index 00000000..c841b33e
 +    MemoryHandleHigh = 47,
 +    /// Its backing was retained for reuse (`arg`: total spare bytes in KiB).
 +    MemoryCached = 48,
-+    /// Its physical release was queued (`arg`: pending bytes in KiB).
++    /// Its physical release was posted to the device's free thread (`arg`: bytes in KiB).
 +    MemoryDeferred = 49,
 +    /// Its physical release began.
 +    MemoryFreeBegin = 50,
@@ -2854,7 +2317,7 @@ index 00000000..c841b33e
 +    }
 +}
 diff --git a/crates/metal2vulkan-runtime/src/texture.rs b/crates/metal2vulkan-runtime/src/texture.rs
-index 18bf0dde..a6a0e92b 100644
+index d5c3cfe..6c7b475 100644
 --- a/crates/metal2vulkan-runtime/src/texture.rs
 +++ b/crates/metal2vulkan-runtime/src/texture.rs
 @@ -84,7 +84,7 @@ use super::image_plan::{
@@ -2866,7 +2329,7 @@ index 18bf0dde..a6a0e92b 100644
  };
  use super::memory::{MemoryClass, Placement};
  use super::nan_clear;
-@@ -2221,6 +2221,13 @@ impl Device {
+@@ -2270,6 +2270,13 @@ impl Device {
                          true => HostPageTexturePolicy::InPlace,
                          false => self.compile_device().policy().host_page_textures,
                      };
@@ -2880,7 +2343,7 @@ index 18bf0dde..a6a0e92b 100644
                      let verdict = |class| match checking {
                          true => Verdict::Passed,
                          false => self.in_place_verdict(class),
-@@ -2258,7 +2265,30 @@ impl Device {
+@@ -2307,7 +2314,30 @@ impl Device {
              None => {
                  // Whether an image may hold the texels: none where their rows (or slices) lie
                  // with the buffer's bytes between them (`linear_plan::holding`), and else why.
@@ -2912,7 +2375,7 @@ index 18bf0dde..a6a0e92b 100644
                  // The usage the texture lacks, as for a texture of its own: plain Metal writes a
                  // texture over a buffer made without `ShaderWrite` and reads one made without
                  // `ShaderRead`. A linear image aliasing the buffer's memory takes it where one
-@@ -4899,6 +4929,30 @@ impl Texture {
+@@ -5032,6 +5062,30 @@ impl Texture {
          self.heap_place().map(|place| place.size)
      }
  
@@ -2944,10 +2407,10 @@ index 18bf0dde..a6a0e92b 100644
      /// automatic heap gives its range to the next resource it places; a placement heap's texture
      /// is aliasable from the start, so nothing changes. Using the texture after is the program's
 diff --git a/crates/metal2vulkan-runtime/src/texture/heap.rs b/crates/metal2vulkan-runtime/src/texture/heap.rs
-index c3dbc8bc..a1efeba6 100644
+index 091dda5..1260b27 100644
 --- a/crates/metal2vulkan-runtime/src/texture/heap.rs
 +++ b/crates/metal2vulkan-runtime/src/texture/heap.rs
-@@ -1879,6 +1879,16 @@ impl Device {
+@@ -1881,6 +1881,16 @@ impl Device {
                  metal_layout = tiles;
              }
          }
@@ -2965,7 +2428,7 @@ index c3dbc8bc..a1efeba6 100644
          // and the routes decide that (`holds_heap_base`).
          check_heap_base(image.route, size_and_align.align)?;
 diff --git a/crates/metal2vulkan-runtime/src/texture/surface_two_planes.rs b/crates/metal2vulkan-runtime/src/texture/surface_two_planes.rs
-index 322cb108..1c69338c 100644
+index b651c7d..abde0ee 100644
 --- a/crates/metal2vulkan-runtime/src/texture/surface_two_planes.rs
 +++ b/crates/metal2vulkan-runtime/src/texture/surface_two_planes.rs
 @@ -58,6 +58,7 @@ use crate::degradation::Degradation;
@@ -2993,7 +2456,7 @@ index 322cb108..1c69338c 100644
          let staging = HeapPlaneCopies::staging(self, &planes, start, hazard)?;
          let moves = Box::new(HeapPlaneCopies::new(self, &staging, &planes, hazard)?);
 diff --git a/crates/metal2vulkan-runtime/src/used_resources.rs b/crates/metal2vulkan-runtime/src/used_resources.rs
-index 61f56de6..54e1551f 100644
+index 61f56de..54e1551 100644
 --- a/crates/metal2vulkan-runtime/src/used_resources.rs
 +++ b/crates/metal2vulkan-runtime/src/used_resources.rs
 @@ -59,6 +59,62 @@ pub struct UsedResources {
@@ -3060,10 +2523,10 @@ index 61f56de6..54e1551f 100644
  #[non_exhaustive]
  #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 diff --git a/crates/metal2vulkan-runtime/src/work_counts.rs b/crates/metal2vulkan-runtime/src/work_counts.rs
-index 46e4103a..e0359ad0 100644
+index d87270a..de624e3 100644
 --- a/crates/metal2vulkan-runtime/src/work_counts.rs
 +++ b/crates/metal2vulkan-runtime/src/work_counts.rs
-@@ -3327,6 +3327,16 @@ pub struct WorkCounts {
+@@ -4142,6 +4142,16 @@ pub struct WorkCounts {
      pub pooled_memory_blocks_freed: u64,
      /// Its live dedicated blocks: a placement larger than half a block, or one placed apart.
      pub dedicated_memory_blocks_live: u64,
@@ -3080,7 +2543,7 @@ index 46e4103a..e0359ad0 100644
      /// Every block its allocator freed so far, by what made it go (`MemoryFrees`): one
      /// `vkFreeMemory` each, and the allocator's whole share of
      /// `object_churn.vk_memory_freed`.
-@@ -5164,6 +5174,11 @@ impl Device {
+@@ -6485,6 +6495,11 @@ impl Device {
              pooled_memory_blocks_made: made,
              pooled_memory_blocks_freed: freed,
              dedicated_memory_blocks_live: census.dedicated,
@@ -3092,11 +2555,24 @@ index 46e4103a..e0359ad0 100644
              memory_frees: MemoryFrees {
                  dedicated: frees[FreeCause::Dedicated as usize],
                  pooled_emptied: frees[FreeCause::PooledEmptied as usize],
+diff --git a/crates/metal2vulkan/src/cache/mod.rs b/crates/metal2vulkan/src/cache/mod.rs
+index 25ca111..c36050d 100644
+--- a/crates/metal2vulkan/src/cache/mod.rs
++++ b/crates/metal2vulkan/src/cache/mod.rs
+@@ -60,7 +60,7 @@ mod tests;
+ /// unchanged version, and its bless records the version. Independent of the crate's version and of
+ /// [`ARTIFACT_FORMAT_VERSION`]. The commit that bumps it says what changed; this comment keeps no
+ /// history.
+-pub const SEMANTICS_VERSION: u32 = 1972;
++pub const SEMANTICS_VERSION: u32 = 1973;
+ 
+ /// The byte-layout version of encoded artifacts (`CompiledFunction::to_bytes` and the
+ /// [`PipelineArtifact`] encodings). Every encoded artifact carries it, and a decode under another
 diff --git a/crates/metal2vulkan/src/device/policy.rs b/crates/metal2vulkan/src/device/policy.rs
-index be5bec3d..6687452e 100644
+index b1226e0..1f3999d 100644
 --- a/crates/metal2vulkan/src/device/policy.rs
 +++ b/crates/metal2vulkan/src/device/policy.rs
-@@ -271,6 +271,14 @@ pub enum HostPageTexturePolicy {
+@@ -301,6 +301,14 @@ pub enum HostPageTexturePolicy {
      /// texels into before each use and merge back after each write, whose copies touch the
      /// texels alone.
      Shadow,
@@ -3112,7 +2588,7 @@ index be5bec3d..6687452e 100644
  
  /// How a chain of `half` additions, subtractions and products rounds on a device without
 diff --git a/crates/metal2vulkan/src/lower/access/blob.rs b/crates/metal2vulkan/src/lower/access/blob.rs
-index 1ed5aed3..130f80cc 100644
+index 1ed5aed..130f80c 100644
 --- a/crates/metal2vulkan/src/lower/access/blob.rs
 +++ b/crates/metal2vulkan/src/lower/access/blob.rs
 @@ -169,13 +169,45 @@ pub fn blob_ptr(cx: &SelectCx<'_>, v: Value) -> Result<LocalPtr, Error> {
@@ -3166,20 +2642,8 @@ index 1ed5aed3..130f80cc 100644
  }
  
  /// A leaf load of AIR type `ty` with alignment `align` through blob pointer `ptr`.
-diff --git a/crates/metal2vulkan/src/lower/arith/mod.rs b/crates/metal2vulkan/src/lower/arith/mod.rs
-index 37266364..4e67c2c5 100644
---- a/crates/metal2vulkan/src/lower/arith/mod.rs
-+++ b/crates/metal2vulkan/src/lower/arith/mod.rs
-@@ -1693,6 +1693,7 @@ fn llvm_math(op: &LlvmIntrinsic) -> Result<Fun, Error> {
-             LlvmIntOp::Fshr => IntFn::Fshr,
-             LlvmIntOp::Bswap => IntFn::Bswap,
-             LlvmIntOp::Ctpop => IntFn::Popcount,
-+            LlvmIntOp::Bitreverse => IntFn::ReverseBits,
-             LlvmIntOp::UAddSat => IntFn::AddSat(Sign::Unsigned),
-             LlvmIntOp::USubSat => IntFn::SubSat(Sign::Unsigned),
-             LlvmIntOp::SAddSat => IntFn::AddSat(Sign::Signed),
 diff --git a/crates/metal2vulkan/src/memory/plan.rs b/crates/metal2vulkan/src/memory/plan.rs
-index 02a23865..2c02ee1a 100644
+index 46543cc..365ef3f 100644
 --- a/crates/metal2vulkan/src/memory/plan.rs
 +++ b/crates/metal2vulkan/src/memory/plan.rs
 @@ -33,7 +33,8 @@
@@ -3254,224 +2718,8 @@ index 02a23865..2c02ee1a 100644
                  grow(out, 1, m)?;
                  out.push(ConstGlobalPlan { global: g, form });
              }
-diff --git a/crates/metal2vulkan/src/pipeline/compile.rs b/crates/metal2vulkan/src/pipeline/compile.rs
-index 6ada6393..b87a5578 100644
---- a/crates/metal2vulkan/src/pipeline/compile.rs
-+++ b/crates/metal2vulkan/src/pipeline/compile.rs
-@@ -281,6 +281,12 @@ pub struct LinkedSource<'a> {
- }
- 
- impl<'a> LinkedSource<'a> {
-+    /// Link the source definition under a distinct exported name.
-+    pub fn with_specialized_name(mut self, name: &'a str) -> Self {
-+        self.key.name = name;
-+        self
-+    }
-+
-     /// The function `name` of `functions` (`MTLLinkedFunctions.functions`), defined in the module
-     /// `bitcode` (hashed here), specialized with `constants`.
-     pub fn new(
-@@ -292,6 +298,7 @@ impl<'a> LinkedSource<'a> {
-             key: LinkedKey {
-                 list: crate::pipeline::descriptor::LinkedList::Functions,
-                 name,
-+                source_name: name,
-                 air_hash: container::sha256(bitcode),
-                 constants,
-             },
-@@ -308,7 +315,8 @@ pub(crate) fn linked_keys(linked: &LinkedFunctions) -> Vec<LinkedKey<'_>> {
-             let info = f.function.info();
-             LinkedKey {
-                 list,
--                name: info.name,
-+                name: f.specialized_name.as_deref().unwrap_or(info.name),
-+                source_name: info.name,
-                 air_hash: info.air_hash,
-                 constants: &f.constants,
-             }
-@@ -1670,7 +1678,7 @@ pub(crate) fn linked_modules(
-     let keys: Vec<LinkedKey<'_>> = linked.iter().map(|s| s.key).collect();
-     let handles = crate::pipeline::table::handles(&keys);
-     let mut out: Vec<(Hash256, LinkedModule)> = Vec::new();
--    let mut listed: Vec<(Hash256, &str, &FunctionConstantValues)> = Vec::new();
-+    let mut listed: Vec<(Hash256, &str, &str, &FunctionConstantValues)> = Vec::new();
-     let mut seen: BTreeSet<Box<[u8]>> = BTreeSet::new();
-     let mut queue: VecDeque<Box<[u8]>> = VecDeque::new();
-     let tables = abi.entries.iter().any(|e| {
-@@ -1709,14 +1717,21 @@ pub(crate) fn linked_modules(
-                 continue;
-             }
-             // The same function listed twice (in two lists, or twice in one) is one function.
--            if listed
--                .iter()
--                .any(|(h, n, c)| *h == key.air_hash && *n == key.name && *c == key.constants)
--            {
-+            if listed.iter().any(|(h, n, src, c)| {
-+                *h == key.air_hash
-+                    && *n == key.name
-+                    && *src == key.source_name
-+                    && *c == key.constants
-+            }) {
-                 continue;
-             }
--            m.charge(std::mem::size_of::<(Hash256, &str, &FunctionConstantValues)>())?;
--            listed.push((key.air_hash, key.name, key.constants));
-+            m.charge(std::mem::size_of::<(
-+                Hash256,
-+                &str,
-+                &str,
-+                &FunctionConstantValues,
-+            )>())?;
-+            listed.push((key.air_hash, key.name, key.source_name, key.constants));
-             let at = match out.iter().position(|(h, _)| *h == key.air_hash) {
-                 Some(at) => at,
-                 None => {
-@@ -1748,8 +1763,9 @@ pub(crate) fn linked_modules(
-                 // Refused for the module's code first.
-                 Err(_) => Ok(BTreeMap::new()),
-             };
--            m.charge(std::mem::size_of::<LinkedName>())?;
-+            m.charge(std::mem::size_of::<LinkedName>() + key.source_name.len())?;
-             l.functions.push(LinkedName {
-+                source_name: Some(key.source_name.as_bytes().into()),
-                 name: name.clone(),
-                 constants,
-                 handle: handle.map(|h| h.word()),
-@@ -1763,9 +1779,9 @@ pub(crate) fn linked_modules(
-     for (s, handle) in linked.iter().zip(&handles) {
-         m.tick(1)?;
-         let key = &s.key;
--        let reached = listed
--            .iter()
--            .any(|(h, n, c)| *h == key.air_hash && *n == key.name && *c == key.constants);
-+        let reached = listed.iter().any(|(h, n, src, c)| {
-+            *h == key.air_hash && *n == key.name && *src == key.source_name && *c == key.constants
-+        });
-         if handle.is_none() || reached {
-             continue;
-         }
-@@ -1798,10 +1814,16 @@ pub(crate) fn linked_modules(
-             }
-             _ => continue,
-         };
--        m.charge(std::mem::size_of::<(Hash256, &str, &FunctionConstantValues)>())?;
--        listed.push((key.air_hash, key.name, key.constants));
--        m.charge(std::mem::size_of::<LinkedName>() + key.name.len())?;
-+        m.charge(std::mem::size_of::<(
-+            Hash256,
-+            &str,
-+            &str,
-+            &FunctionConstantValues,
-+        )>())?;
-+        listed.push((key.air_hash, key.name, key.source_name, key.constants));
-+        m.charge(std::mem::size_of::<LinkedName>() + key.name.len() + key.source_name.len())?;
-         l.functions.push(LinkedName {
-+            source_name: Some(key.source_name.as_bytes().into()),
-             name: key.name.as_bytes().into(),
-             constants,
-             handle: handle.map(|h| h.word()),
-diff --git a/crates/metal2vulkan/src/pipeline/compile/key.rs b/crates/metal2vulkan/src/pipeline/compile/key.rs
-index a02631d0..c5362e04 100644
---- a/crates/metal2vulkan/src/pipeline/compile/key.rs
-+++ b/crates/metal2vulkan/src/pipeline/compile/key.rs
-@@ -34,6 +34,7 @@ use crate::pipeline::descriptor::{
- pub struct LinkedKey<'a> {
-     pub list: LinkedList<'a>,
-     pub name: &'a str,
-+    pub source_name: &'a str,
-     pub air_hash: Hash256,
-     pub constants: &'a FunctionConstantValues,
- }
-@@ -480,6 +481,10 @@ pub fn function_key(
-                 LinkedList::Group(name) => h.u64(3).bytes(name.as_bytes()),
-             };
-             h.bytes(&l.air_hash).bytes(l.name.as_bytes());
-+            if l.source_name != l.name {
-+                h.bytes(b"specialized-source")
-+                    .bytes(l.source_name.as_bytes());
-+            }
-             constants(&mut h, l.constants);
-         }
-     }
-diff --git a/crates/metal2vulkan/src/pipeline/descriptor.rs b/crates/metal2vulkan/src/pipeline/descriptor.rs
-index 01b2814b..c3218ffc 100644
---- a/crates/metal2vulkan/src/pipeline/descriptor.rs
-+++ b/crates/metal2vulkan/src/pipeline/descriptor.rs
-@@ -246,6 +246,8 @@ impl LinkedList<'_> {
- #[derive(Clone, Debug, PartialEq, Eq)]
- pub struct LinkedFunction {
-     pub function: Function,
-+    /// The symbol exported for visible references and function tables. None keeps the library name.
-+    pub specialized_name: Option<String>,
-     pub constants: FunctionConstantValues,
-     /// The function was made compiled to a binary (`MTLFunctionOptionCompileToBinary`), as
-     /// Metal requires of a function in `binary_functions` and of a binary function added to a
-@@ -255,10 +257,17 @@ pub struct LinkedFunction {
- }
- 
- impl LinkedFunction {
-+    /// Export this function under `name`, retaining its original definition and constants.
-+    pub fn with_specialized_name(mut self, name: Option<String>) -> Self {
-+        self.specialized_name = name;
-+        self
-+    }
-+
-     /// `function` with no constant values, not compiled to a binary.
-     pub fn new(function: Function) -> LinkedFunction {
-         LinkedFunction {
-             function,
-+            specialized_name: None,
-             constants: FunctionConstantValues::defaults(),
-             precompiled: false,
-         }
-diff --git a/crates/metal2vulkan/src/pipeline/table.rs b/crates/metal2vulkan/src/pipeline/table.rs
-index 4154b74b..afbc64db 100644
---- a/crates/metal2vulkan/src/pipeline/table.rs
-+++ b/crates/metal2vulkan/src/pipeline/table.rs
-@@ -66,18 +66,18 @@ fn callable(list: LinkedList<'_>) -> bool {
- /// numbered in order, one function (its AIR hash, name, and constants) listed twice having one
- /// handle. A function no callable list has has none.
- pub(crate) fn handles(keys: &[LinkedKey<'_>]) -> Vec<Option<FunctionHandle>> {
--    let mut callable_keys: Vec<(&[u8; 32], &str, &FunctionConstantValues)> = Vec::new();
-+    let mut callable_keys: Vec<(&[u8; 32], &str, &str, &FunctionConstantValues)> = Vec::new();
-     for k in keys.iter().filter(|k| callable(k.list)) {
--        let id = (&k.air_hash, k.name, k.constants);
-+        let id = (&k.air_hash, k.name, k.source_name, k.constants);
-         if !callable_keys.contains(&id) {
-             callable_keys.push(id);
-         }
-     }
-     keys.iter()
-         .map(|k| {
--            let at = callable_keys
--                .iter()
--                .position(|&(h, n, c)| h == &k.air_hash && n == k.name && c == k.constants)?;
-+            let at = callable_keys.iter().position(|&(h, n, src, c)| {
-+                h == &k.air_hash && n == k.name && src == k.source_name && c == k.constants
-+            })?;
-             FunctionHandle::nth(at)
-         })
-         .collect()
-@@ -94,7 +94,8 @@ impl LinkedFunctions {
-         let at = keys.iter().position(|k| {
-             callable(k.list)
-                 && k.air_hash == info.air_hash
--                && k.name == info.name
-+                && k.name == f.specialized_name.as_deref().unwrap_or(info.name)
-+                && k.source_name == info.name
-                 && *k.constants == f.constants
-         })?;
-         handles(&keys).get(at).copied().flatten()
-@@ -115,6 +116,7 @@ mod tests {
-         LinkedKey {
-             list,
-             name,
-+            source_name: name,
-             air_hash: [hash; 32],
-             constants,
-         }
 diff --git a/crates/metal2vulkan/src/reflection/function.rs b/crates/metal2vulkan/src/reflection/function.rs
-index 1be12a74..cc910cf3 100644
+index 1be12a7..cc910cf 100644
 --- a/crates/metal2vulkan/src/reflection/function.rs
 +++ b/crates/metal2vulkan/src/reflection/function.rs
 @@ -225,9 +225,12 @@ pub(crate) fn metallib_properties(
@@ -3489,50 +2737,10 @@ index 1be12a74..cc910cf3 100644
              };
              Some((kind, count))
 diff --git a/crates/metal2vulkan/src/tests/engine_arena.rs b/crates/metal2vulkan/src/tests/engine_arena.rs
-index 4e9aa6f7..8f68efa9 100644
+index d06163b..aa26abc 100644
 --- a/crates/metal2vulkan/src/tests/engine_arena.rs
 +++ b/crates/metal2vulkan/src/tests/engine_arena.rs
-@@ -1367,7 +1367,7 @@ fn struct_dag_kernel(depth: u32, constant: bool) -> String {
-     let read = if constant {
-         types +=
-             &format!("@g = internal addrspace(2) constant %e{depth} zeroinitializer, align 4\n");
--        "  %x = load i32, ptr %a, align 4\n  %y = load i32, ptr addrspace(2) @g, align 4\n  %v0 = add i32 %x, %y"
-+        "  %x = load i32, ptr %a, align 4\n  %y = load volatile i32, ptr addrspace(2) @g, align 4\n  %v0 = add i32 %x, %y"
-     } else {
-         "  %v0 = load i32, ptr %a, align 4"
-     };
-@@ -1438,7 +1438,8 @@ fn a_struct_dag_is_planned_in_linear_work() {
- }
- 
- /// A struct DAG within the function's room is typed, and keeps its values: `a`'s two words read
--/// back what was stored, and `@g` (all zero) adds nothing. At 14 levels `@g` (planned first) takes
-+/// back what was stored, and `@g` (all zero, read volatile so it
-+/// stays in memory) adds nothing. At 14 levels `@g` (planned first) takes
- /// the room and `a` has its place in the private arena; at 15 levels neither fits, so `@g` is in
- /// the constant blob too. Each passes L3, and the values are the same typed (3 levels) and untyped
- /// (15 levels). The CPU interpreter walks a struct type's every path to lay it out, so it does not
-@@ -1502,6 +1503,7 @@ fn a_struct_dag_keeps_its_values_typed_or_untyped() {
- /// `%e13`) and `%big`'s `32,767 + extra`: with 17 extra members exactly `alloca::MAX_UNSHARED`
- /// (65,536), with 18 one more. With `constant`, `%big` is the type of `@g`, a closed constant whose
- /// DAG halves are zero and whose extra member `i` is `i + 1`, and `v0 = t + @g.2`, `v1 = @g.18`;
-+/// (volatile reads, so the constant-load fold leaves `@g` in memory and the layout is what is tested);
- /// otherwise of the alloca `a`, which stores `t` at byte 0 and 7 in member 2 (byte 65,536) and
- /// reads them back as `v0` and `v1`.
- fn room_kernel(extra: u32, constant: bool) -> String {
-@@ -1519,10 +1521,10 @@ fn room_kernel(extra: u32, constant: bool) -> String {
-             "@g = internal addrspace(2) constant %big {{ %e13 zeroinitializer, %e13 zeroinitializer{ints} }}, align 4\n"
-         );
-         r#"  %p2 = getelementptr inbounds %big, ptr addrspace(2) @g, i32 0, i32 2
--  %g2 = load i32, ptr addrspace(2) %p2, align 4
-+  %g2 = load volatile i32, ptr addrspace(2) %p2, align 4
-   %v0 = add i32 %t, %g2
-   %q = getelementptr inbounds %big, ptr addrspace(2) @g, i32 0, i32 18
--  %v1 = load i32, ptr addrspace(2) %q, align 4"#
-+  %v1 = load volatile i32, ptr addrspace(2) %q, align 4"#
-             .to_string()
-     } else {
-         r#"  %a = alloca %big, align 4
-@@ -1825,3 +1827,48 @@ fn an_integer_threadgroup_address_outside_the_static_objects_is_refused() {
+@@ -1828,3 +1828,48 @@ fn an_integer_threadgroup_address_outside_the_static_objects_is_refused() {
          }
      }
  }
@@ -3581,102 +2789,11 @@ index 4e9aa6f7..8f68efa9 100644
 +        assert_eq!(run_both(&module, &res).expect("table output"), want);
 +    }
 +}
-diff --git a/crates/metal2vulkan/src/tests/engine_linking.rs b/crates/metal2vulkan/src/tests/engine_linking.rs
-index f8768e36..02968604 100644
---- a/crates/metal2vulkan/src/tests/engine_linking.rs
-+++ b/crates/metal2vulkan/src/tests/engine_linking.rs
-@@ -587,3 +587,86 @@ fn a_linked_function_s_constexpr_sampler_is_numbered() {
-     assert_eq!(e.interface.numbered_samplers, []);
-     assert!(!noted(&e), "{:?}", e.precision);
- }
-+
-+/// Export aliases select their exact definition even when the same module contains
-+/// several visible functions. The alias is part of the cache and function-table identity.
-+#[test]
-+fn specialized_names_resolve_exact_definitions_and_keys() {
-+    let Some(caller) = fixture(CALLER) else {
-+        return;
-+    };
-+    let Some(functions) = edited(FUNCTIONS, |text| {
-+        text.replace("linked_scale", "source_scale")
-+    }) else {
-+        return;
-+    };
-+    let none = FunctionConstantValues::defaults();
-+    let scale = LinkedSource::new("source_scale", &functions, &none);
-+    let blend = LinkedSource::new("linked_blend", &functions, &none);
-+    let offset = LinkedSource::new("linked_offset", &caller, &none);
-+    assert_eq!(
-+        compile_linked(&caller, &[scale, blend, offset], "moltenvk-m3").map(|_| ()),
-+        Err(needs("linked_scale"))
-+    );
-+    let renamed = scale.with_specialized_name("linked_scale");
-+    let p = profile("moltenvk-m3", DevicePolicy::default()).expect("profile");
-+    let compiled =
-+        compile_linked(&caller, &[renamed, blend, offset], "moltenvk-m3").expect("alias linked");
-+    link_and_validate(&compiled, &p).expect("valid alias module");
-+    let (_, module) =
-+        typed_module_linked(&caller, CALLER, &p, &[renamed, blend, offset]).expect("module");
-+    let buffer = |index| Buffer {
-+        slot: Some(ResourceSlot {
-+            stage: Stage::Kernel,
-+            kind: ResourceKind::Buffer,
-+            index,
-+        }),
-+        address: None,
-+        bytes: vec![0; 32 * 4],
-+    };
-+    let out = run(
-+        &module,
-+        &Config {
-+            workgroups: [32, 1, 1],
-+            ..Config::default()
-+        },
-+        Resources {
-+            buffers: vec![buffer(0), buffer(1)],
-+            push: vec![0; 128],
-+            spec: Default::default(),
-+        },
-+    )
-+    .expect("execution");
-+    for i in 0..32usize {
-+        assert_eq!(
-+            &out.buffers[0][i * 4..i * 4 + 4],
-+            &(3 * i as u32 + (i as u32 & 7)).to_le_bytes()
-+        );
-+        assert_eq!(
-+            &out.buffers[1][i * 4..i * 4 + 4],
-+            &(i as f32 * 0.5 + 1.0).to_le_bytes()
-+        );
-+    }
-+    let lib = Library::from_air(&functions).expect("library");
-+    let f = LinkedFunction::new(lib.function("source_scale").expect("source"));
-+    let a = f.clone().with_specialized_name(Some("a".into()));
-+    let b = f.clone().with_specialized_name(Some("b".into()));
-+    let linked = LinkedFunctions::new()
-+        .with_function(a.clone())
-+        .with_function(b.clone());
-+    assert_ne!(linked.function_handle(&a), linked.function_handle(&b));
-+    assert_eq!(linked.function_handle(&f), None);
-+    let dev = device("moltenvk-m3");
-+    let entry = Library::from_air(&caller)
-+        .expect("caller")
-+        .function(CALLER)
-+        .expect("entry");
-+    let key = |f| {
-+        dev.function_compile_key(
-+            &FunctionDescriptor::new(entry.clone())
-+                .with_linked(LinkedFunctions::new().with_function(f)),
-+            &LowerInputs::new(),
-+        )
-+    };
-+    assert_ne!(key(a), key(b));
-+}
 diff --git a/crates/metal2vulkan/src/tests/fast_paths.rs b/crates/metal2vulkan/src/tests/fast_paths.rs
-index b707ec71..10514ee6 100644
+index 89512cf..233585f 100644
 --- a/crates/metal2vulkan/src/tests/fast_paths.rs
 +++ b/crates/metal2vulkan/src/tests/fast_paths.rs
-@@ -78,7 +78,7 @@ fn choices() -> Vec<Choice> {
+@@ -84,7 +84,7 @@ fn choices() -> Vec<Choice> {
          choice!(p.completion: CompletionPolicy { Grouped, Exact }),
          choice!(p.batch_order: BatchOrderPolicy { Ends, Exact }),
          choice!(p.render_lowering: RenderLoweringPolicy { AtCall, Worker }),
@@ -3684,256 +2801,12 @@ index b707ec71..10514ee6 100644
 +        choice!(p.host_page_textures: HostPageTexturePolicy { InPlace, Shadow, InPlaceWrites }),
          choice!(p.half_chains: HalfChainPolicy { AtExits, EachOperation }),
          choice!(p.pipeline_waits: PipelineWaitPolicy { Bounded, Exact }),
-     ]
-diff --git a/crates/metal2vulkan/tests/api_signatures.tsv b/crates/metal2vulkan/tests/api_signatures.tsv
-index df8430b9..363f1954 100644
---- a/crates/metal2vulkan/tests/api_signatures.tsv
-+++ b/crates/metal2vulkan/tests/api_signatures.tsv
-@@ -1297,6 +1297,7 @@ enum	metal2vulkan-runtime::VisibilityProblem	#[derive(Clone, Debug, PartialEq, E
- enum	metal2vulkan-runtime::VisibilityResultMode	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum VisibilityResultMode
- enum	metal2vulkan-runtime::WrappedBufferProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum WrappedBufferProblem
- enum	metal2vulkan-runtime::WrappedImageProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum WrappedImageProblem
-+enum	metal2vulkan-runtime::stage_trace::Stage	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[repr(u16)] pub enum Stage
- enum	metal2vulkan::bind::AccessClass	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum AccessClass
- enum	metal2vulkan::bind::ArgumentLayoutError	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum ArgumentLayoutError
- enum	metal2vulkan::bind::ArgumentType	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum ArgumentType
-@@ -1536,6 +1537,7 @@ field	metal2vulkan-air::LinkedModule.functions	pub functions: Vec<LinkedName>
- field	metal2vulkan-air::LinkedName.constants	pub constants: Result<BTreeMap<u32, ConstValue>, Error>
- field	metal2vulkan-air::LinkedName.handle	pub handle: Option<u32>
- field	metal2vulkan-air::LinkedName.name	pub name: Box<[u8]>
-+field	metal2vulkan-air::LinkedName.source_name	pub source_name: Option<Box<[u8]>>
- field	metal2vulkan-air::LinkedSamplerGroup.kept	pub kept: usize
- field	metal2vulkan-air::LinkedSamplerGroup.library	pub library: bool
- field	metal2vulkan-air::LinkedSamplerGroup.states	pub states: Vec<SamplerState>
-@@ -1941,6 +1943,9 @@ field	metal2vulkan-air::tensor_ops::RunForm.single_thread	pub single_thread: boo
- field	metal2vulkan-air::tensor_ops::RunForm.v2	pub v2: bool
- field	metal2vulkan-runtime::AddressRange.length	pub length: u64
- field	metal2vulkan-runtime::AddressRange.start	pub start: GpuAddress
-+field	metal2vulkan-runtime::AllocationSite.bytes	pub bytes: u64
-+field	metal2vulkan-runtime::AllocationSite.count	pub count: u64
-+field	metal2vulkan-runtime::AllocationSite.frames	pub frames: [usize; SITE_FRAMES]
- field	metal2vulkan-runtime::BinaryArchiveDescriptor.url	pub url: Option<PathBuf>
- field	metal2vulkan-runtime::BinaryArchiveMiss.function	pub function: String
- field	metal2vulkan-runtime::BinaryArchiveMiss.pipeline	pub pipeline: ArchivedPipeline
-@@ -2077,6 +2082,7 @@ field	metal2vulkan-runtime::FailedPipeline.variant	pub variant: metal2vulkan::ca
- field	metal2vulkan-runtime::FunctionDescriptor.constant_values	pub constant_values: Option<FunctionConstantValues>
- field	metal2vulkan-runtime::FunctionDescriptor.name	pub name: String
- field	metal2vulkan-runtime::FunctionDescriptor.options	pub options: FunctionOptions
-+field	metal2vulkan-runtime::FunctionDescriptor.specialized_name	pub specialized_name: Option<String>
- field	metal2vulkan-runtime::HeapDescriptor.heap_type	pub heap_type: HeapType
- field	metal2vulkan-runtime::HeapDescriptor.placement	pub placement: AddressPlacement
- field	metal2vulkan-runtime::HeapDescriptor.resource_options	pub resource_options: ResourceOptions
-@@ -2512,6 +2518,7 @@ field	metal2vulkan-runtime::WorkCounts.creation_render_pipelines_drawn	pub creat
- field	metal2vulkan-runtime::WorkCounts.creation_render_pipelines_made	pub creation_render_pipelines_made: u64
- field	metal2vulkan-runtime::WorkCounts.creations_left_making	pub creations_left_making: u64
- field	metal2vulkan-runtime::WorkCounts.dedicated_memory_blocks_live	pub dedicated_memory_blocks_live: u64
-+field	metal2vulkan-runtime::WorkCounts.dedicated_memory_bytes_live	pub dedicated_memory_bytes_live: u64
- field	metal2vulkan-runtime::WorkCounts.depth_attachments_moved	pub depth_attachments_moved: u64
- field	metal2vulkan-runtime::WorkCounts.depth_instances_held	pub depth_instances_held: u64
- field	metal2vulkan-runtime::WorkCounts.descriptor_keys_built	pub descriptor_keys_built: u64
-@@ -2549,6 +2556,7 @@ field	metal2vulkan-runtime::WorkCounts.draws_pushing_set_zero	pub draws_pushing_
- field	metal2vulkan-runtime::WorkCounts.draws_settled	pub draws_settled: u64
- field	metal2vulkan-runtime::WorkCounts.driver_diagnostics_withheld	pub driver_diagnostics_withheld: u64
- field	metal2vulkan-runtime::WorkCounts.empty_memory_blocks_live	pub empty_memory_blocks_live: u64
-+field	metal2vulkan-runtime::WorkCounts.empty_memory_bytes_live	pub empty_memory_bytes_live: u64
- field	metal2vulkan-runtime::WorkCounts.encoder_command_buffers_begun	pub encoder_command_buffers_begun: u64
- field	metal2vulkan-runtime::WorkCounts.encoder_primaries_begun_ahead	pub encoder_primaries_begun_ahead: u64
- field	metal2vulkan-runtime::WorkCounts.encoders_reencoded	pub encoders_reencoded: u64
-@@ -2667,6 +2675,7 @@ field	metal2vulkan-runtime::WorkCounts.host_textures_in_place	pub host_textures_
- field	metal2vulkan-runtime::WorkCounts.idle_submits	pub idle_submits: u64
- field	metal2vulkan-runtime::WorkCounts.image_blits_recorded	pub image_blits_recorded: u64
- field	metal2vulkan-runtime::WorkCounts.images_started_on_the_host	pub images_started_on_the_host: u64
-+field	metal2vulkan-runtime::WorkCounts.imported_memory_bytes_live	pub imported_memory_bytes_live: u64
- field	metal2vulkan-runtime::WorkCounts.in_place_checks_failed	pub in_place_checks_failed: u64
- field	metal2vulkan-runtime::WorkCounts.in_place_checks_passed	pub in_place_checks_passed: u64
- field	metal2vulkan-runtime::WorkCounts.in_place_checks_recalled	pub in_place_checks_recalled: u64
-@@ -2734,6 +2743,8 @@ field	metal2vulkan-runtime::WorkCounts.pitched_host_images	pub pitched_host_imag
- field	metal2vulkan-runtime::WorkCounts.pooled_backings_made	pub pooled_backings_made: u64
- field	metal2vulkan-runtime::WorkCounts.pooled_memory_blocks_freed	pub pooled_memory_blocks_freed: u64
- field	metal2vulkan-runtime::WorkCounts.pooled_memory_blocks_made	pub pooled_memory_blocks_made: u64
-+field	metal2vulkan-runtime::WorkCounts.pooled_memory_bytes_live	pub pooled_memory_bytes_live: u64
-+field	metal2vulkan-runtime::WorkCounts.pooled_memory_bytes_used	pub pooled_memory_bytes_used: u64
- field	metal2vulkan-runtime::WorkCounts.predicated_loop_runs_again	pub predicated_loop_runs_again: u64
- field	metal2vulkan-runtime::WorkCounts.prefixed_starts	pub prefixed_starts: u64
- field	metal2vulkan-runtime::WorkCounts.primaries_begun_ahead	pub primaries_begun_ahead: u64
-@@ -2935,6 +2946,11 @@ field	metal2vulkan-runtime::WorkCounts.ycbcr_planes_images_kept_memory	pub ycbcr
- field	metal2vulkan-runtime::WorkCounts.ycbcr_refreshes	pub ycbcr_refreshes: u64
- field	metal2vulkan-runtime::WorkCounts.ycbcr_textures_in_place	pub ycbcr_textures_in_place: u64
- field	metal2vulkan-runtime::WorkCounts.ycbcr_whole_conversions	pub ycbcr_whole_conversions: u64
-+field	metal2vulkan-runtime::stage_trace::StageRecord.arg	pub arg: u16
-+field	metal2vulkan-runtime::stage_trace::StageRecord.id	pub id: u64
-+field	metal2vulkan-runtime::stage_trace::StageRecord.sequence	pub sequence: u32
-+field	metal2vulkan-runtime::stage_trace::StageRecord.stage	pub stage: u16
-+field	metal2vulkan-runtime::stage_trace::StageRecord.when	pub when: u64
- field	metal2vulkan::Budget.cancel	pub cancel: Option<CancelToken>
- field	metal2vulkan::Budget.deadline	pub deadline: Option<Instant>
- field	metal2vulkan::bind::ArgumentBufferLayout.alignment	pub alignment: u64
-@@ -4135,6 +4151,7 @@ field	metal2vulkan::pipeline::InputAttachmentUse.input_attachment_index	pub inpu
- field	metal2vulkan::pipeline::LinkedFunction.constants	pub constants: FunctionConstantValues
- field	metal2vulkan::pipeline::LinkedFunction.function	pub function: Function
- field	metal2vulkan::pipeline::LinkedFunction.precompiled	pub precompiled: bool
-+field	metal2vulkan::pipeline::LinkedFunction.specialized_name	pub specialized_name: Option<String>
- field	metal2vulkan::pipeline::LinkedFunctions.binary_functions	pub binary_functions: Vec<LinkedFunction>
- field	metal2vulkan::pipeline::LinkedFunctions.functions	pub functions: Vec<LinkedFunction>
- field	metal2vulkan::pipeline::LinkedFunctions.groups	pub groups: BTreeMap<String, Vec<LinkedFunction>>
-@@ -4519,9 +4536,12 @@ fn	metal2vulkan-air::intrinsics::undecoded_feature	pub fn undecoded_feature(name
- fn	metal2vulkan-air::specialize	pub fn specialize(d: Decoded, r: &SpecRequest, m: &mut Meter) -> Result<Entry, Error>
- fn	metal2vulkan-air::specialize_dynamic	pub fn specialize_dynamic(d: Decoded, r: &SpecRequest, (linked, dynamic): (&[LinkedModule], &DynamicLinks), m: &mut Meter) -> Result<Entry, Error>
- fn	metal2vulkan-air::specialize_linked	pub fn specialize_linked(d: Decoded, r: &SpecRequest, linked: &[LinkedModule], m: &mut Meter) -> Result<Entry, Error>
-+fn	metal2vulkan-runtime::allocation_sites	pub fn allocation_sites() -> Vec<AllocationSite>
- fn	metal2vulkan-runtime::host_time	pub fn host_time() -> f64
- fn	metal2vulkan-runtime::process_exiting	pub fn process_exiting() -> bool
- fn	metal2vulkan-runtime::sampler_border_color	pub fn sampler_border_color(raw: u64) -> SamplerBorderColor
-+fn	metal2vulkan-runtime::stage_trace::now_nanos	pub fn now_nanos() -> u64
-+fn	metal2vulkan-runtime::stage_trace::read	pub fn read(from: u64, out: &mut [StageRecord]) -> (usize, u64)
- fn	metal2vulkan::ash_interop::sampler_create_info	pub fn sampler_create_info<'a>(desc: &vk::SamplerDesc, reduction: &'a mut ash::vk::SamplerReductionModeCreateInfo<'static>, border: &'a mut ash::vk::SamplerBorderColorComponentMappingCreateInfoEXT<'static>) -> ash::vk::SamplerCreateInfo<'a>
- fn	metal2vulkan::bind::astc_decode_module	pub fn astc_decode_module(device: &Device, decode: AstcDecode, texels: AstcTexels) -> Result<BlockDecodeModule, Error>
- fn	metal2vulkan::bind::chroma_decode_module	pub fn chroma_decode_module(device: &Device, decode: ChromaDecode) -> Result<BlockDecodeModule, Error>
-@@ -7699,8 +7719,10 @@ method	metal2vulkan-runtime::Device::pixel_format_info	pub fn pixel_format_info(
- method	metal2vulkan-runtime::Device::private_properties	pub fn private_properties(&self) -> PrivateProperties
- method	metal2vulkan-runtime::Device::properties	pub fn properties(&self) -> &DeviceProperties
- method	metal2vulkan-runtime::Device::raw	pub unsafe fn raw(&self) -> DeviceHandles<'_>
-+method	metal2vulkan-runtime::Device::refuse_rebinds	pub fn refuse_rebinds(&self)
- method	metal2vulkan-runtime::Device::registry_id	pub fn registry_id(&self) -> u64
- method	metal2vulkan-runtime::Device::registry_ids_with	pub fn registry_ids_with(options: &DeviceOptions) -> Result<Vec<u64>, Error>
-+method	metal2vulkan-runtime::Device::release_kept_memory	pub fn release_kept_memory(&self) -> usize
- method	metal2vulkan-runtime::Device::reserve_address_pool	pub fn reserve_address_pool(&self, placement: AddressPlacement, length: u64) -> Result<AddressPool, Error>
- method	metal2vulkan-runtime::Device::reserve_resource_ids	pub fn reserve_resource_ids(&self, kind: ResourceIdKind, ids: &[ResourceId]) -> Result<(), Error>
- method	metal2vulkan-runtime::Device::sampler_id_pool_size	pub fn sampler_id_pool_size(&self) -> u64
-@@ -7776,6 +7798,7 @@ method	metal2vulkan-runtime::Function::patch_control_point_count	pub fn patch_co
- method	metal2vulkan-runtime::Function::patch_type	pub fn patch_type(&self) -> Result<PatchType, Error>
- method	metal2vulkan-runtime::Function::stage_input_attributes	pub fn stage_input_attributes(&self) -> Result<Option<Vec<Attribute>>, Error>
- method	metal2vulkan-runtime::Function::vertex_attributes	pub fn vertex_attributes(&self) -> Result<Option<Vec<Attribute>>, Error>
-+method	metal2vulkan-runtime::Function::with_specialized_name	pub fn with_specialized_name(mut self, name: Option<String>) -> Self
- method	metal2vulkan-runtime::FunctionDescriptor::new	pub fn new(name: &str) -> FunctionDescriptor
- method	metal2vulkan-runtime::FunctionHandle::device	pub fn device(&self) -> &Device
- method	metal2vulkan-runtime::FunctionHandle::name	pub fn name(&self) -> &str
-@@ -8182,6 +8205,7 @@ method	metal2vulkan-runtime::Texture::allow_gpu_optimized_contents	pub fn allow_
- method	metal2vulkan-runtime::Texture::alpha_reads_one	pub fn alpha_reads_one(&self) -> bool
- method	metal2vulkan-runtime::Texture::array_length	pub fn array_length(&self) -> u64
- method	metal2vulkan-runtime::Texture::as_resource	pub fn as_resource(&self) -> ResourceRef<'_>
-+method	metal2vulkan-runtime::Texture::backing_allocation_size	pub fn backing_allocation_size(&self) -> u64
- method	metal2vulkan-runtime::Texture::cpu_cache_mode	pub fn cpu_cache_mode(&self) -> CpuCacheMode
- method	metal2vulkan-runtime::Texture::depth	pub fn depth(&self) -> u64
- method	metal2vulkan-runtime::Texture::device	pub fn device(&self) -> &Device
-@@ -8235,6 +8259,8 @@ method	metal2vulkan-runtime::TextureSwizzleChannels::compose	pub fn compose(self
- method	metal2vulkan-runtime::TextureSwizzleChannels::is_default	pub fn is_default(self) -> bool
- method	metal2vulkan-runtime::TextureSwizzleChannels::new	pub fn new(red: TextureSwizzle, green: TextureSwizzle, blue: TextureSwizzle, alpha: TextureSwizzle) -> TextureSwizzleChannels
- method	metal2vulkan-runtime::Unproven::new	pub fn new(call: &'static str, problem: Problem) -> Unproven
-+method	metal2vulkan-runtime::UsedResources::references_heap	pub fn references_heap(&self, heap: &Heap) -> bool
-+method	metal2vulkan-runtime::UsedResources::references_resource	pub fn references_resource(&self, resource: super::resource::ResourceRef<'_>) -> bool
- method	metal2vulkan-runtime::VertexAmplificationViewMapping::new	pub fn new(viewport_array_index_offset: u32, render_target_array_index_offset: u32) -> VertexAmplificationViewMapping
- method	metal2vulkan-runtime::Viewport::new	pub fn new(origin_x: f64, origin_y: f64, width: f64, height: f64, znear: f64, zfar: f64) -> Viewport
- method	metal2vulkan-runtime::VisibilityResultMode::from_raw	pub fn from_raw(raw: u64) -> Result<VisibilityResultMode, Error>
-@@ -8936,6 +8962,7 @@ method	metal2vulkan::pipeline::InputAttachmentUse::new	pub fn new(color_index: u
- method	metal2vulkan::pipeline::LinkedFunction::new	pub fn new(function: Function) -> LinkedFunction
- method	metal2vulkan::pipeline::LinkedFunction::with_constants	pub fn with_constants(mut self, constants: FunctionConstantValues) -> LinkedFunction
- method	metal2vulkan::pipeline::LinkedFunction::with_precompiled	pub fn with_precompiled(mut self, precompiled: bool) -> LinkedFunction
-+method	metal2vulkan::pipeline::LinkedFunction::with_specialized_name	pub fn with_specialized_name(mut self, name: Option<String>) -> Self
- method	metal2vulkan::pipeline::LinkedFunctions::function_handle	pub fn function_handle(&self, f: &LinkedFunction) -> Option<FunctionHandle>
- method	metal2vulkan::pipeline::LinkedFunctions::is_empty	pub fn is_empty(&self) -> bool
- method	metal2vulkan::pipeline::LinkedFunctions::new	pub fn new() -> LinkedFunctions
-@@ -8943,6 +8970,7 @@ method	metal2vulkan::pipeline::LinkedFunctions::with_function	pub fn with_functi
- method	metal2vulkan::pipeline::LinkedFunctions::with_private_function	pub fn with_private_function(mut self, f: impl Into<LinkedFunction>) -> LinkedFunctions
- method	metal2vulkan::pipeline::LinkedList::resolves_references	pub fn resolves_references(self) -> bool
- method	metal2vulkan::pipeline::LinkedSource::new	pub fn new(name: &'a str, bitcode: &'a [u8], constants: &'a FunctionConstantValues) -> LinkedSource<'a>
-+method	metal2vulkan::pipeline::LinkedSource::with_specialized_name	pub fn with_specialized_name(mut self, name: &'a str) -> Self
- method	metal2vulkan::pipeline::LoweringInputs::new	pub fn new() -> LoweringInputs
- method	metal2vulkan::pipeline::MeshPipelineDescriptor::fragment_writes_depth_unattached	pub fn fragment_writes_depth_unattached(&self, budget: &crate::Budget, entries: &StageEntries) -> Result<bool, Error>
- method	metal2vulkan::pipeline::MeshPipelineDescriptor::new	pub fn new(mesh: StageSource) -> MeshPipelineDescriptor
-@@ -9247,6 +9275,7 @@ struct	metal2vulkan-air::tensor_ops::RunForm	#[derive(Clone, Copy, Debug, Partia
- struct	metal2vulkan-runtime::AddressModeMap	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct AddressModeMap
- struct	metal2vulkan-runtime::AddressPool	pub struct AddressPool
- struct	metal2vulkan-runtime::AddressRange	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct AddressRange
-+struct	metal2vulkan-runtime::AllocationSite	#[derive(Clone, Copy, Debug, Default)] pub struct AllocationSite
- struct	metal2vulkan-runtime::ArgumentEncoder	#[derive(Clone, Debug)] pub struct ArgumentEncoder
- struct	metal2vulkan-runtime::BinaryArchive	#[derive(Clone)] pub struct BinaryArchive(Arc<Shared>)
- struct	metal2vulkan-runtime::BinaryArchiveDescriptor	#[derive(Clone, Debug, Default, PartialEq, Eq)] #[non_exhaustive] pub struct BinaryArchiveDescriptor
-@@ -9375,6 +9404,7 @@ struct	metal2vulkan-runtime::VkImageLayouts	#[derive(Clone, Copy, Debug, Partial
- struct	metal2vulkan-runtime::VkResultCode	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] pub struct VkResultCode(pub i32)
- struct	metal2vulkan-runtime::WarmStatistics	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)] #[non_exhaustive] pub struct WarmStatistics
- struct	metal2vulkan-runtime::WorkCounts	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)] pub struct WorkCounts
-+struct	metal2vulkan-runtime::stage_trace::StageRecord	#[derive(Clone, Copy, Debug, Default)] #[repr(C)] pub struct StageRecord
- struct	metal2vulkan::Budget	#[derive(Clone, Debug, Default)] #[non_exhaustive] pub struct Budget
- struct	metal2vulkan::CancelToken	#[derive(Clone, Debug, Default)] pub struct CancelToken(Arc<AtomicBool>)
- struct	metal2vulkan::bind::ArgumentBufferLayout	#[derive(Clone, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct ArgumentBufferLayout
-@@ -10535,6 +10565,7 @@ variant	metal2vulkan-air::intrinsics::LlvmFloatOp::Log2	Log2
- variant	metal2vulkan-air::intrinsics::LlvmFloatOp::MaxNum	MaxNum
- variant	metal2vulkan-air::intrinsics::LlvmFloatOp::MinNum	MinNum
- variant	metal2vulkan-air::intrinsics::LlvmFloatOp::Sqrt	Sqrt
-+variant	metal2vulkan-air::intrinsics::LlvmIntOp::Bitreverse	Bitreverse
- variant	metal2vulkan-air::intrinsics::LlvmIntOp::Bswap	Bswap
- variant	metal2vulkan-air::intrinsics::LlvmIntOp::Ctpop	Ctpop
- variant	metal2vulkan-air::intrinsics::LlvmIntOp::Fshl	Fshl
-@@ -11725,6 +11756,7 @@ variant	metal2vulkan-runtime::RateMapProblem::NotCompiled	NotCompiled
- variant	metal2vulkan-runtime::RateMapProblem::ScreenSize	ScreenSize { width: u32, height: u32 }
- variant	metal2vulkan-runtime::RebindProblem::EncodedUses	EncodedUses
- variant	metal2vulkan-runtime::RebindProblem::NotHostMemory	NotHostMemory
-+variant	metal2vulkan-runtime::RebindProblem::Refused	Refused
- variant	metal2vulkan-runtime::RecordsRead::Commit	Commit
- variant	metal2vulkan-runtime::RecordsRead::Gpu	Gpu
- variant	metal2vulkan-runtime::RecordsRead::HostStep	HostStep
-@@ -11945,6 +11977,27 @@ variant	metal2vulkan-runtime::WrappedImageProblem::Samples	Samples { image: Samp
- variant	metal2vulkan-runtime::WrappedImageProblem::Tiling	Tiling { image: ImageTiling }
- variant	metal2vulkan-runtime::WrappedImageProblem::Untracked	Untracked
- variant	metal2vulkan-runtime::WrappedImageProblem::Usage	Usage { missing: ImageUsageFlags }
-+variant	metal2vulkan-runtime::stage_trace::Stage::CommitCall	CommitCall = 1
-+variant	metal2vulkan-runtime::stage_trace::Stage::CommitQueued	CommitQueued = 2
-+variant	metal2vulkan-runtime::stage_trace::Stage::CommitRun	CommitRun = 3
-+variant	metal2vulkan-runtime::stage_trace::Stage::Finished	Finished = 15
-+variant	metal2vulkan-runtime::stage_trace::Stage::Handed	Handed = 5
-+variant	metal2vulkan-runtime::stage_trace::Stage::Held	Held = 7
-+variant	metal2vulkan-runtime::stage_trace::Stage::PassBegin	PassBegin = 23
-+variant	metal2vulkan-runtime::stage_trace::Stage::PassEnd	PassEnd = 24
-+variant	metal2vulkan-runtime::stage_trace::Stage::PollArmed	PollArmed = 12
-+variant	metal2vulkan-runtime::stage_trace::Stage::PollDone	PollDone = 13
-+variant	metal2vulkan-runtime::stage_trace::Stage::Prepared	Prepared = 4
-+variant	metal2vulkan-runtime::stage_trace::Stage::SchedulerResumed	SchedulerResumed = 22
-+variant	metal2vulkan-runtime::stage_trace::Stage::SchedulerSleep	SchedulerSleep = 20
-+variant	metal2vulkan-runtime::stage_trace::Stage::SchedulerWake	SchedulerWake = 21
-+variant	metal2vulkan-runtime::stage_trace::Stage::Seen	Seen = 14
-+variant	metal2vulkan-runtime::stage_trace::Stage::StepBegin	StepBegin = 10
-+variant	metal2vulkan-runtime::stage_trace::Stage::StepEnd	StepEnd = 11
-+variant	metal2vulkan-runtime::stage_trace::Stage::SubmitBegin	SubmitBegin = 8
-+variant	metal2vulkan-runtime::stage_trace::Stage::SubmitEnd	SubmitEnd = 9
-+variant	metal2vulkan-runtime::stage_trace::Stage::SubmitStep	SubmitStep = 16
-+variant	metal2vulkan-runtime::stage_trace::Stage::Taken	Taken = 6
- variant	metal2vulkan::bind::AccessClass::Attachment	Attachment
- variant	metal2vulkan::bind::AccessClass::Index	Index
- variant	metal2vulkan::bind::AccessClass::Indirect	Indirect
-@@ -12438,6 +12491,7 @@ variant	metal2vulkan::device::HandleDomain::Table	Table
- variant	metal2vulkan::device::HeapCompressionPolicy::Compressed	Compressed
- variant	metal2vulkan::device::HeapCompressionPolicy::Uncompressed	Uncompressed
- variant	metal2vulkan::device::HostPageTexturePolicy::InPlace	InPlace
-+variant	metal2vulkan::device::HostPageTexturePolicy::InPlaceWrites	InPlaceWrites
- variant	metal2vulkan::device::HostPageTexturePolicy::Shadow	Shadow
- variant	metal2vulkan::device::Independence::All	All
- variant	metal2vulkan::device::Independence::None	None
-diff --git a/docs/API.md b/docs/API.md
-index b65ed3cf..6be2e8e1 100644
---- a/docs/API.md
-+++ b/docs/API.md
-@@ -3741,3 +3741,15 @@ each item named states the rule in full.
- - **A pass over a map of a zero screen extent is refused**, `RegionError::RegionExtent` on that
-   axis: the layer has no physical pixel there, so no attachment of the map's physical size can be
-   made, and what Metal rasterizes in such a pass is not measured.
-+
-+### Specialized link names and native texture accounting
-+
-+`pipeline::LinkedFunction::with_specialized_name` exports a function under an alias while
-+retaining its source definition and constant values. The alias and source name both enter
-+compile keys and function-table identities. `pipeline::LinkedSource::with_specialized_name`
-+provides the same behavior for bitcode inputs. The runtime's `FunctionDescriptor.specialized_name`
-+and `Function::with_specialized_name` preserve that alias through `linked_function()`.
-+
-+`Texture::backing_allocation_size` reports the Vulkan backing allocation for a native frontend.
-+Heap textures report their reserved range; buffer textures report their buffer length. Unowned
-+and sparse images report zero. `Texture::allocated_size` retains its Metal heap-layout semantics.
+         choice!(p.wide_lines: WideLinePolicy { Device, Exact }),
 diff --git a/docs/FAST-PATHS.md b/docs/FAST-PATHS.md
-index c77768c1..dad75108 100644
+index 0e13f81..9a3333b 100644
 --- a/docs/FAST-PATHS.md
 +++ b/docs/FAST-PATHS.md
-@@ -107,6 +107,11 @@ known. The rest of the differences are docs/API.md section 9's precision notes.
+@@ -112,6 +112,11 @@ known. The rest of the differences are docs/API.md section 9's precision notes.
  
  ## Costs of matching Metal
  
@@ -3945,53 +2818,16 @@ index c77768c1..dad75108 100644
  Where matching what Metal observably does costs time, the runtime matches it and the cost is
  recorded here.
  
-diff --git a/docs/METAL-COVERAGE.md b/docs/METAL-COVERAGE.md
-index f14d3d41..61047e5f 100644
---- a/docs/METAL-COVERAGE.md
-+++ b/docs/METAL-COVERAGE.md
-@@ -10,12 +10,12 @@ Every public item of the macOS 27.0 SDK (Xcode 27.0, 27A266a)'s Metal headers, b
- 
- | Status | Items | Of which deprecated |
- |---|---|---|
--| implemented | 958 | 36 |
--| missing | 828 | 27 |
-+| implemented | 959 | 36 |
-+| missing | 827 | 27 |
- | out of scope | 349 | 5 |
- | all | 2135 | 68 |
- 
--Implemented by the runtime: 635; by the translator's values: 323. Missing by size: S 145, M 147, L 160, XL 376.
-+Implemented by the runtime: 636; by the translator's values: 323. Missing by size: S 144, M 147, L 160, XL 376.
- 
- ## Missing, in build order
- 
-@@ -32,7 +32,6 @@ Cheap items a plain app calls first, then medium pieces by how often a plain app
- | `textureBarrier` and queue-stage barriers | S/M | 2 | `MTLCommandEncoder.barrierAfterQueueStages:beforeStages:`, `MTLRenderCommandEncoder.textureBarrier` |
- | a pipeline state's reflection after creation | S | 2 | `MTLComputePipelineState.reflection`, `MTLRenderPipelineState.reflection` |
- | function handles by name, and a handle's type and ID | S | 4 | `MTLComputePipelineState.functionHandleWithName:`, `MTLFunctionHandle.functionType`, `MTLFunctionHandle.gpuResourceID`, ... |
--| a specialized function's name | S | 1 | `MTLFunctionDescriptor.specializedName` |
- | more binary archive entries | S | 4 | `MTLBinaryArchive.addMeshRenderPipelineFunctionsWithDescriptor:error:`, `MTLBinaryArchive.addLibraryWithDescriptor:error:`, `MTLBinaryArchive.addFunctionWithDescriptor:library:error:`, ... |
- | the shared event listener | S | 1 | `MTLSharedEventListener.sharedListener` |
- | accumulated visibility results | S | 1 | `MTLRenderPassDescriptor.visibilityResultType` |
-@@ -1590,7 +1589,7 @@ Cheap items a plain app calls first, then medium pieces by how often a plain app
- | `MTLFunctionDescriptor` | class | implemented | `FunctionDescriptor` (runtime) |
- | `MTLFunctionDescriptor.functionDescriptor` | class method | implemented | `FunctionDescriptor::new` (runtime) |
- | `MTLFunctionDescriptor.name` | property | implemented | `FunctionDescriptor.name` (runtime) |
--| `MTLFunctionDescriptor.specializedName` | property | missing | S: a specialized function's own name |
-+| `MTLFunctionDescriptor.specializedName` | property | implemented | `FunctionDescriptor.specialized_name` (runtime) |
- | `MTLFunctionDescriptor.constantValues` | property | implemented | `FunctionDescriptor.constant_values` (runtime) |
- | `MTLFunctionDescriptor.options` | property | implemented | `FunctionDescriptor.options` (runtime) |
- | `MTLFunctionDescriptor.binaryArchives` | property | missing | S: binary archives searched for one function's compile (`PipelineOptions.binary_archives` serves pipelines) |
-diff --git a/scripts/metal-coverage/coverage.tsv b/scripts/metal-coverage/coverage.tsv
-index f8082d94..22c3cfde 100644
---- a/scripts/metal-coverage/coverage.tsv
-+++ b/scripts/metal-coverage/coverage.tsv
-@@ -1231,7 +1231,7 @@ MTLFunctionConstantValues.h	MTLFunctionConstantValues	method	reset		I	translator
- MTLFunctionDescriptor.h	MTLFunctionDescriptor	class	MTLFunctionDescriptor		I	runtime	FunctionDescriptor			
- MTLFunctionDescriptor.h	MTLFunctionDescriptor	class method	functionDescriptor		I	runtime	FunctionDescriptor::new			
- MTLFunctionDescriptor.h	MTLFunctionDescriptor	property	name		I	runtime	FunctionDescriptor.name			
--MTLFunctionDescriptor.h	MTLFunctionDescriptor	property	specializedName		M			a specialized function's own name	S	functions
-+MTLFunctionDescriptor.h	MTLFunctionDescriptor	property	specializedName		I	runtime	FunctionDescriptor.specialized_name			functions
- MTLFunctionDescriptor.h	MTLFunctionDescriptor	property	constantValues		I	runtime	FunctionDescriptor.constant_values			
- MTLFunctionDescriptor.h	MTLFunctionDescriptor	property	options		I	runtime	FunctionDescriptor.options			
- MTLFunctionDescriptor.h	MTLFunctionDescriptor	property	binaryArchives		M			binary archives searched for one function's compile (`PipelineOptions.binary_archives` serves pipelines)	S	archive
+@@ -209,6 +214,12 @@ recorded here.
+   (`RGBA16Float` at 30% of a 1920x1080 target), and on the Iris Xe from an eighth of the reader's
+   scissor covered, whatever its area, so the rule costs up to 2.1 times there (a 320x180 scissor
+   covered whole over a private 1920x1080 `BGRA8Unorm` texture).
++- **`host_page_textures = HostPageTexturePolicy::InPlaceWrites` holds a texture over host pages or
++  padded rows in place whatever its usage, rendered and written too,** where the policy's default
++  and `HostPageTexturePolicy::Shadow` take the shadow below. It trusts the driver: an image's first
++  move and a pass's load and store must touch the texels alone, which Vulkan does not promise. A
++  consumer sets it where its driver is known to, as Turnip with its linear host images; nothing
++  checks it, and no copy in or merge back is paid.
+ - **A texture over a no-copy buffer's host pages, or over a host-visible buffer longer than 32
+   MiB, that renders or writes (or whose class's check has not passed, or whose pitch no image
+   takes, or under `HostPageTexturePolicy::Shadow`), and a texture over a buffer of the runtime's

@@ -3,12 +3,25 @@
 import argparse
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 DEVICE = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--root', type=Path, default=DEVICE.parent.parent / 'outputs/UniXNU_marble/ios18_arm64e')
 args = parser.parse_args()
+sys.path.insert(0, str(DEVICE / 'scripts'))
+from pack_ios18_ufs import merge_kernel_args
+
+assert merge_kernel_args('marble-display-flip=1 cpus=7', ['marble-display-flip=0']) == 'cpus=7 marble-display-flip=0'
+assert merge_kernel_args('a=1 a=2 b=3', ['a=0', 'a=4']) == 'b=3 a=4'
+for invalid in ('', 'a=1 b=2', '\0', '=1'):
+    try:
+        merge_kernel_args('a=1', [invalid])
+    except ValueError:
+        continue
+    raise AssertionError(repr(invalid))
+print('PASS: boot argument replacement and rejected malformed overrides', flush=True)
 driver = args.root.resolve() / 'gpu/AdrenoMetal'
 source = (DEVICE / 'package/MarbleAdreno.cpp').read_text()
 start = source.index('    static void finishPreemption(')

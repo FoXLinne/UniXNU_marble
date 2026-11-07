@@ -1,0 +1,63 @@
+--- a/security/mac_vfs.c
++++ b/security/mac_vfs.c
+@@ -798,6 +798,8 @@
+ 	return error;
+ }
+
++char native_init_mac_failure[128];
++
+ void
+ mac_cred_label_update_execve(vfs_context_t ctx, kauth_cred_t new, struct vnode *vp, off_t offset,
+     struct vnode *scriptvp, struct label *scriptvnodelabel, struct label *execl, u_int *csflags,
+@@ -845,9 +847,13 @@
+ 			size_t spawnattrlen = 0;
+ 			void *spawnattr = exec_spawnattr_getmacpolicyinfo(macextensions, mpc->mpc_name, &spawnattrlen);
+
+-			error = mac_error_select(hook(cred, new, vfs_context_proc(ctx), vp, offset, scriptvp,
+-			    mac_vnode_label(vp), scriptvnodelabel, execl, csflags, spawnattr, spawnattrlen, disjoint),
+-			    error);
++			int hook_error = hook(cred, new, vfs_context_proc(ctx), vp, offset, scriptvp,
++			    mac_vnode_label(vp), scriptvnodelabel, execl, csflags, spawnattr, spawnattrlen, disjoint);
++			if (hook_error && proc_getpid(vfs_context_proc(ctx)) == 1) {
++				snprintf(native_init_mac_failure, sizeof(native_init_mac_failure),
++				    "policy=%s errno=%d csflags=%x", mpc->mpc_name, hook_error, *csflags);
++			}
++			error = mac_error_select(hook_error, error);
+ 		}
+ 		if (mac_policy_list_conditional_busy() != 0) {
+ 			for (; i <= mac_policy_list.maxindex; i++) {
+@@ -864,9 +870,13 @@
+ 				size_t spawnattrlen = 0;
+ 				void *spawnattr = exec_spawnattr_getmacpolicyinfo(macextensions, mpc->mpc_name, &spawnattrlen);
+
+-				error = mac_error_select(hook(cred, new, vfs_context_proc(ctx), vp, offset, scriptvp,
+-				    mac_vnode_label(vp), scriptvnodelabel, execl, csflags, spawnattr, spawnattrlen, disjoint),
+-				    error);
++				int hook_error = hook(cred, new, vfs_context_proc(ctx), vp, offset, scriptvp,
++				    mac_vnode_label(vp), scriptvnodelabel, execl, csflags, spawnattr, spawnattrlen, disjoint);
++				if (hook_error && proc_getpid(vfs_context_proc(ctx)) == 1) {
++					snprintf(native_init_mac_failure, sizeof(native_init_mac_failure),
++					    "policy=%s errno=%d csflags=%x", mpc->mpc_name, hook_error, *csflags);
++				}
++				error = mac_error_select(hook_error, error);
+ 			}
+ 			mac_policy_list_unbusy();
+ 		}
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -8553,6 +8553,15 @@
+ 		KERNEL_DEBUG_CONSTANT(BSDDBG_CODE(DBG_BSD_PROC, BSD_PROC_EXITREASON_CREATE) | DBG_FUNC_NONE,
+ 		    proc_getpid(p), OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY, 0, 0);
+ 		signature_failure_reason = os_reason_create(OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY);
++		if (proc_getpid(p) == 1) {
++			extern char native_init_mac_failure[128];
++			char description[256];
++			snprintf(description, sizeof(description),
++			    "init MAC label errno=%d csflags=%x %s",
++			    imgp->ip_mac_return, imgp->ip_csflags, native_init_mac_failure);
++			os_reason_set_description_data(signature_failure_reason,
++			    EXIT_REASON_USER_DESC, description, strlen(description) + 1);
++		}
+ 		error = imgp->ip_mac_return;
+ 		unexpected_failure = TRUE;
+ 		goto done;

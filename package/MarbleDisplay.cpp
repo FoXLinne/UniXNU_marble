@@ -25,6 +25,8 @@ extern "C" IOService *native_gop_presenter_create(void);
 extern "C" void native_gop_presenter_set_source(IOService *, IOService *);
 extern "C" bool native_gop_gpu_offer(IOService *, void *, IOMemoryDescriptor *, uint64_t,
                                      uint32_t, uint32_t, uint32_t);
+extern "C" bool native_gop_gpu_offer_token(IOService *, void *, uint64_t, IOMemoryDescriptor *, uint64_t,
+                                           uint32_t, uint32_t, uint32_t);
 extern "C" void marble_gop_static_init(void) __asm__("__GLOBAL__sub_I_NativeGOPPresenter.cpp");
 static IOService *gpuPresenter;
 extern "C" void native_keyevents_start(void);
@@ -213,6 +215,14 @@ bool native_legacy_gpu_offer(void *display, IOMemoryDescriptor *memory, uint64_t
     return offered;
 }
 void native_legacy_gpu_fallback_observed(int status) { native_legacy_direct[0] = status; }
+bool native_legacy_gpu_offer_token(void *display, uint64_t tag, IOMemoryDescriptor *memory, uint64_t stride,
+                                  uint32_t width, uint32_t height, uint32_t format)
+{
+    const bool offered = gpuPresenter && native_gop_gpu_offer_token(gpuPresenter, display, tag,
+        memory, stride, width, height, format);
+    if (!offered) native_gop_scanout_restore();
+    return offered;
+}
 void native_legacy_vsync_observed(unsigned event, unsigned hz)
 {
     marble_display_vsync[0] = event; marble_display_vsync[1] = hz;

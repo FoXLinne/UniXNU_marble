@@ -1,0 +1,171 @@
+{
+  "format": 1,
+  "case": "buffer-textures-stride-below-the-row",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": {
+        "never_returned": {
+          "from": "AGX's own assertion text, which this suite's own whole-set replay prints from the driver (`AGX: Texture read/write assertion failed: bytes_per_row >= used_bytes_per_row`), and the refusal-surface stream's finding of 2026-10-23 that Metal ends the process on it",
+          "call": "newTextureWithDescriptor:offset:bytesPerRow:/pitch-below-the-row"
+        }
+      },
+      "device": "apple-m3-max",
+      "runs": 1,
+      "outcomes": [
+        {
+          "runs": 1,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "request",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fdc1550828d2a85f85ded46d4ad09b5d1045e8863e28c14e95ea3aade2304172"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "newTextureWithDescriptor:offset:bytesPerRow:/pitch-below-the-row",
+                  "observed": {
+                    "value": {
+                      "nothing": "never_returned"
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "not_run"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "device_memory_allocated": 201326592,
+        "new_buffer_bytes_cleared": 4096,
+        "object_churn.buffers_parked": 1,
+        "object_churn.buffers_recycled": 1,
+        "pooled_memory_blocks_made": 3
+      },
+      "composed": {
+        "device_memory_allocated": 201326592
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pooled_memory_blocks_made": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "buffer-textures-stride-below-the-row",
+        "calls": 0,
+        "in_calls": 0,
+        "on_cpu": 0,
+        "blocked": 0,
+        "elsewhere": 0,
+        "spend": 0,
+        "spend_least": 0,
+        "spend_most": 0,
+        "stopped": "Metal does not return from newTextureWithDescriptor:offset:bytesPerRow:/pitch-below-the-row: a texture over a buffer whose bytesPerRow is below the texture's own row fails AGX's assertion `bytes_per_row >= used_bytes_per_row`, which ends Metal's process in the call; the runtime refuses it typed (BufferTextureProblem::RowPitch) and that refusal is what the row pins",
+        "per_call": []
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "buffer-textures-stride-below-the-row",
+        "calls": 1,
+        "in_calls": 5042,
+        "on_cpu": 5167,
+        "blocked": 0,
+        "elsewhere": 0,
+        "spend": 5166,
+        "spend_least": 4417,
+        "spend_most": 6917,
+        "per_call": [
+          {
+            "call": "buffer_texture",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 5042,
+            "on_cpu": 5167,
+            "blocked": 0,
+            "wall_least": 4417,
+            "wall_most": 5542,
+            "wall_total": 5042,
+            "on_cpu_total": 5167,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

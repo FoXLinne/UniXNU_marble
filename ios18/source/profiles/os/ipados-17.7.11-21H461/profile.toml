@@ -1,0 +1,112 @@
+
+["os"]
+"name" = "ipados-17.7.11-21H461"
+"darwin" = "23.6.0"
+"xnu_version" = "10063.141.1"
+"xnu_revision" = "d8b80295118ef25ac3a784134bcf95cd8e88109f"
+"driverkit_tag" = "xnu-10063.121.3"
+"trustcache_tag" = "xnu-8796.101.5"
+"abi" = ["IOGPUFamily", "IOHIDFamily-2031.120.4", "IOMobileGraphicsFamily"]
+
+
+["ipsw"]
+"url" = "https://updates.cdn-apple.com/2025SpringFCS/fullrestores/122-77166/DCA6CFE8-90E9-4B92-880D-3DE171798E40/iPad_Pro_HFR_17.7.11_21H461_Restore.ipsw"
+"product" = "iPad7,1"
+"version" = "17.7.11"
+"build" = "21H461"
+"device_class" = "j120ap"
+"chip_id" = 32785
+"board_id" = 12
+"fetch" = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
+
+["ipsw"."sha256"]
+"044-76040-038.dmg" = "3f99b859c9728379110b66657c7b15285bcb1925ad8b5726542e2cdcf8b1028d"
+"044-76034-038.dmg" = "b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f"
+
+
+
+["kernel"]
+
+["kernel"."prelink"]
+"tool" = "kits/XnuPrelink/emit_prelink.py"
+"kernel" = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf"
+"kernelcache_sha256" = "f18b4df865405f2a287b84977d7aca745e056d656d9fc9df1662970ce2969de7"
+"slide" = "-0x1000000"
+"early_security_init" = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff005ab4ae0"
+"roots" = ["com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMPlatform", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.iokit.IOHIDEventDriver"]
+
+
+
+["payload"]
+"text_fixups" = ["dyld_shared_cache_arm64.15,421e8bc,28ad1bb0008544f9,c0035fd6008544f9", "dyld_shared_cache_arm64.13,1b05bec,44008052,24008052", "dyld_shared_cache_arm64.13,1b05b08,44008052,24008052", "BTAudioHALPlugin,38bec,ffc300d1f44f01a9,000080d2c0035fd6"]
+"trust_cache_sha256" = ["7416ca4f8377146626bb284e2133c76bee6cb4e3ee0af5d648b186235a7323a7", "8900d6a93d7a59ce1a872a5c081e559f4240a218f97e12d44d22dda46644d68f"]
+
+
+["adt"]
+
+["adt"."root"]
+
+["adt"."root"."string"]
+"model" = "iPad7,1"
+"target-type" = "J120"
+# The board name first: the audio server keys its routing database and MediaExperience its per-board tables on it.
+"compatible" = "J120AP"
+
+
+
+["adt"."chosen"]
+
+["adt"."chosen"."string"]
+"osenvironment" = "main"
+"crypto-hash-method" = "sha2-384"
+
+
+["adt"."chosen"."u32"]
+"certificate-production-status" = 0
+"effective-production-status-ap" = 0
+"certificate-security-mode" = 1
+"effective-security-mode-sep" = 1
+"amfi-only-platform-code" = 1
+
+
+
+["adt"."product"]
+
+["adt"."product"."string"]
+"product-name" = "iPad Pro (12.9-inch) (2nd generation)"
+"product-description" = "iPad Pro (12.9-inch) (2nd generation)"
+"artwork-device-idiom" = "pad"
+"artwork-display-gamut" = "P3"
+"compatible-device-fallback" = "iPad6,7"
+
+
+["adt"."product"."u32"]
+"artwork-device-subtype" = 2732
+"artwork-scale-factor" = 2
+
+# MGGetProductType() looks this 20-byte id up in libMobileGestalt's product table (J120: 0x80ac7ae0); without it every client that
+# switches on the product type (the audio server's routing database, among others) sees an unknown device.
+["adt"."product"."bytes"]
+"product-id" = "e9fefef6e6f9d12a5ba1a2551866cbbd749f0ec3"
+
+
+# The audio server reads IODeviceTree:/product/audio. The original node also sets supports-always-listening, left out here.
+["adt"."product"."audio"]
+
+["adt"."product"."audio"."u32"]
+"wireless-splitter" = 1
+
+
+
+["adt"."defaults"]
+
+["adt"."defaults"."u32"]
+"kern.maxvnodes" = 66560
+
+[userdata]
+# Disk images of this OS, in window order; the device sets the partition geometry.
+windows = [{ name = "OS", component = "OS" }, { name = "SystemOS", component = "Cryptex1,SystemOS", optional = true }]
+
+[root]
+# The OS disk image: the APFS volume UUID the root policy signs.
+os_volume_uuid = "04769D26-2CA0-4825-B443-E2E5F88300F2"

@@ -1,0 +1,5615 @@
+{
+  "format": 1,
+  "case": "point-viewport-coverage",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_restart.ll",
+      "entry": "rt6_restart_vertex",
+      "source_sha256": "ee3fb102a9172fb5214a2c468b5fb177a7000fb169043ed578a12dd5b43c0464"
+    },
+    {
+      "fixture": "rt6_restart.air.ll",
+      "entry": "rt6_restart_vertex",
+      "source_sha256": "08138096f5f8bef1f56267558b5bbbf1c9780e08bae5d84b87f3da4025ab6d09"
+    },
+    {
+      "fixture": "rt6_render_state.ll",
+      "entry": "rt6_white",
+      "source_sha256": "e6d3dec276cfc8f50921b0b8ec5e8278336afd80217f85372483a8ccab92a109"
+    },
+    {
+      "fixture": "rt6_render_state.air.ll",
+      "entry": "rt6_white",
+      "source_sha256": "a9ba7ae6952dab0e401cdae73e2714a7c5208fe7261dfdd958fb00fa0efc48cd"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air:rt6_restart",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ee3fb102a9172fb5214a2c468b5fb177a7000fb169043ed578a12dd5b43c0464"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:rt6_restart",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "08138096f5f8bef1f56267558b5bbbf1c9780e08bae5d84b87f3da4025ab6d09"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air:rt6_render_state",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e6d3dec276cfc8f50921b0b8ec5e8278336afd80217f85372483a8ccab92a109"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:rt6_render_state",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a9ba7ae6952dab0e401cdae73e2714a7c5208fe7261dfdd958fb00fa0efc48cd"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b57a65112686705dbb791852de12166731f819e68600d44a212ff76672db4314"
+                        }
+                      }
+                    },
+                    {
+                      "name": "viewports",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2d8a7cba0530226bf07802093ce70362b9a68ae9b38b06e9ee4e31b223c09029"
+                        }
+                      }
+                    },
+                    {
+                      "name": "positions",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ff7bf24bbee7dad95d2d4bb0d58270a2e3729f1e8911750062660eb54e8fa907"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library/vertex",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "library/fragment",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "v0/x/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/x/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,1"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v0/y/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/x/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,1"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v1/y/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/x/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,1"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v2/y/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/x/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,1"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v3/y/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "5,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "1,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "7,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "0,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "7,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "0,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/x/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,4"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v4/y/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/x/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,4"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,2"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v5/y/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "3,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/x/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/00000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,3"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/3f000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,1"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/bf000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,5"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/3f666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/bf666666",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/3f7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,0"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/bf7d70a4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "set": [
+                            "4,7"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/3f8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/bf8147ae",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/3f8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/bf8ccccd",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/3fc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/bfc00000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/40000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/c0000000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/40400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/c0400000",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/3fc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/3fbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/bfc00001",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "v6/y/bfbfffff",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "coverage",
+                      "observed": {
+                        "value": {
+                          "nothing": "drew_nothing"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "written-words",
+                  "observed": {
+                    "value": {
+                      "set": [
+                        "0xffffffff"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_samplers_taken": 1,
+        "bare_starts": 1,
+        "batches_with_none_pending": 1,
+        "command_buffers_begun": 2647,
+        "command_buffers_begun_batch_barriers": 588,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 294,
+        "command_buffers_begun_encoders": 588,
+        "command_buffers_begun_secondaries": 882,
+        "command_buffers_begun_segments": 294,
+        "command_buffers_deferred": 2058,
+        "command_buffers_submitted": 1765,
+        "commands_recorded.begin_command_buffer": 1732,
+        "commands_recorded.cmd_begin_render_pass": 294,
+        "commands_recorded.cmd_bind_descriptor_sets": 294,
+        "commands_recorded.cmd_bind_pipeline": 294,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 294,
+        "commands_recorded.cmd_draw": 294,
+        "commands_recorded.cmd_end_render_pass": 294,
+        "commands_recorded.cmd_execute_commands": 294,
+        "commands_recorded.cmd_pipeline_barrier": 812,
+        "commands_recorded.cmd_push_constants": 294,
+        "commands_recorded.cmd_set_blend_constants": 294,
+        "commands_recorded.cmd_set_cull_mode": 294,
+        "commands_recorded.cmd_set_depth_bias": 294,
+        "commands_recorded.cmd_set_depth_compare_op": 294,
+        "commands_recorded.cmd_set_depth_test_enable": 294,
+        "commands_recorded.cmd_set_depth_write_enable": 294,
+        "commands_recorded.cmd_set_front_face": 294,
+        "commands_recorded.cmd_set_primitive_restart_enable": 294,
+        "commands_recorded.cmd_set_primitive_topology": 294,
+        "commands_recorded.cmd_set_scissor": 294,
+        "commands_recorded.cmd_set_stencil_compare_mask": 294,
+        "commands_recorded.cmd_set_stencil_op": 294,
+        "commands_recorded.cmd_set_stencil_reference": 294,
+        "commands_recorded.cmd_set_stencil_test_enable": 294,
+        "commands_recorded.cmd_set_stencil_write_mask": 294,
+        "commands_recorded.cmd_set_viewport": 294,
+        "commands_recorded.end_command_buffer": 2058,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 2,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326592,
+        "draw_shapes_carried": 287,
+        "draw_shapes_made": 1,
+        "draw_shapes_reused": 285,
+        "draw_states_recorded": 5586,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 2,
+        "encoder_command_buffers_begun": 2058,
+        "fence_waits": 2,
+        "finales_apart": 1,
+        "functions_shared": 1,
+        "functions_translated": 3,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 294,
+        "heap_tables_worked_out": 588,
+        "inline_passes": 293,
+        "linked_use_questions_asked": 2,
+        "live_tables_uploaded": 1,
+        "new_buffer_bytes_cleared": 77680,
+        "object_churn.buffers_evicted": 4,
+        "object_churn.buffers_parked": 4,
+        "object_churn.images_evicted": 1,
+        "object_churn.images_own_memory": 1,
+        "object_churn.images_parked": 1,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_buffer_bindings": 4,
+        "object_churn.vk_buffers_destroyed": 4,
+        "object_churn.vk_buffers_made": 4,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_image_views_made": 1,
+        "object_churn.vk_images_destroyed": 3,
+        "object_churn.vk_images_made": 3,
+        "passes_not_inline_draws": 294,
+        "pipeline_layouts_made": 2,
+        "pipelines_pooled": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 294,
+        "render_passes_begun_inline": 293,
+        "render_passes_begun_instances": 294,
+        "render_passes_made": 2,
+        "resident_textures_looked_at": 294,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "set_zero_sets_found": 292,
+        "shader_modules_made": 3,
+        "shader_modules_shared": 1,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 1176,
+        "submit_infos": 2,
+        "submit_stalls_on_work": 1,
+        "trail_waits": 1,
+        "variant_pipelines_made": 2,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 8
+      },
+      "moving": {
+        "command_buffers_begun": 1182,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_secondaries": 3,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 593,
+        "command_buffers_submitted": 1179,
+        "commands_recorded.cmd_execute_commands": 1,
+        "commands_recorded.cmd_pipeline_barrier": 2,
+        "commands_recorded.end_command_buffer": 593,
+        "encoder_command_buffers_begun": 593,
+        "graphics_pipelines_looked_up": 2,
+        "inline_passes": 0,
+        "passes_not_inline_draws": 1,
+        "render_passes_begun_inline": 0,
+        "render_passes_begun_instances": 1
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "command_buffers_begun": 1192,
+        "command_buffers_begun_continuations": 3,
+        "command_buffers_begun_secondaries": 9,
+        "command_buffers_begun_segments": 3,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 1183,
+        "commands_recorded.cmd_execute_commands": 3,
+        "commands_recorded.cmd_pipeline_barrier": 596,
+        "commands_recorded.end_command_buffer": 1192,
+        "completion_arms": 1,
+        "device_memory_allocated": 201326592,
+        "encoder_command_buffers_begun": 603,
+        "fence_waits": 1,
+        "graphics_pipelines_looked_up": 4,
+        "inline_passes": 292,
+        "passes_not_inline_draws": 3,
+        "pooled_memory_blocks_made": 3,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_begun_inline": 292,
+        "render_passes_begun_instances": 3,
+        "render_passes_made": 2
+      },
+      "per_state": {
+        "pipelines": 3,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "point-viewport-coverage",
+        "calls": 7,
+        "in_calls": 75391748,
+        "on_cpu": 6786957,
+        "blocked": 68630749,
+        "elsewhere": 12342166,
+        "spend": 87796707,
+        "spend_least": 85628000,
+        "spend_most": 96504126,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 21628833,
+            "on_cpu": 577916,
+            "blocked": 21044458,
+            "wall_least": 20929792,
+            "wall_most": 25695333,
+            "wall_total": 43635041,
+            "on_cpu_total": 1192084,
+            "blocked_total": 42444583
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 9250,
+            "on_cpu": 9416,
+            "blocked": 0,
+            "wall_least": 7125,
+            "wall_most": 27208,
+            "wall_total": 9250,
+            "on_cpu_total": 9416,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 31548583,
+            "on_cpu": 5362417,
+            "blocked": 26186166,
+            "wall_least": 29444209,
+            "wall_most": 32282125,
+            "wall_total": 31548583,
+            "on_cpu_total": 5362417,
+            "blocked_total": 26186166
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 145625,
+            "on_cpu": 145833,
+            "blocked": 0,
+            "wall_least": 135042,
+            "wall_most": 910708,
+            "wall_total": 145625,
+            "on_cpu_total": 145833,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 32667,
+            "on_cpu": 32875,
+            "blocked": 0,
+            "wall_least": 22416,
+            "wall_most": 43292,
+            "wall_total": 32667,
+            "on_cpu_total": 32875,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 20875,
+            "on_cpu": 21083,
+            "blocked": 0,
+            "wall_least": 16875,
+            "wall_most": 28917,
+            "wall_total": 20875,
+            "on_cpu_total": 21083,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "point-viewport-coverage",
+        "calls": 7,
+        "in_calls": 32662249,
+        "on_cpu": 6913082,
+        "blocked": 25771917,
+        "elsewhere": 10707125,
+        "spend": 43428208,
+        "spend_least": 42551791,
+        "spend_most": 45226292,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 109500,
+            "on_cpu": 111167,
+            "blocked": 0,
+            "wall_least": 105917,
+            "wall_most": 117500,
+            "wall_total": 227916,
+            "on_cpu_total": 230833,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2250,
+            "on_cpu": 2333,
+            "blocked": 0,
+            "wall_least": 1917,
+            "wall_most": 2666,
+            "wall_total": 2250,
+            "on_cpu_total": 2333,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 29703917,
+            "on_cpu": 4214792,
+            "blocked": 25525792,
+            "wall_least": 28964625,
+            "wall_most": 30286333,
+            "wall_total": 29703917,
+            "on_cpu_total": 4214792,
+            "blocked_total": 25525792
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2665875,
+            "on_cpu": 2439500,
+            "blocked": 226375,
+            "wall_least": 2605875,
+            "wall_most": 2705583,
+            "wall_total": 2665875,
+            "on_cpu_total": 2439500,
+            "blocked_total": 226375
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 19625,
+            "on_cpu": 19792,
+            "blocked": 0,
+            "wall_least": 19417,
+            "wall_most": 21917,
+            "wall_total": 19625,
+            "on_cpu_total": 19792,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3208,
+            "on_cpu": 3333,
+            "blocked": 0,
+            "wall_least": 2750,
+            "wall_most": 3541,
+            "wall_total": 3208,
+            "on_cpu_total": 3333,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

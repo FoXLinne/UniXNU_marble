@@ -1,0 +1,25 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -7219,7 +7219,9 @@
+ #if !defined(XNU_OWNER_BOOT_MANIFEST) || !XNU_OWNER_BOOT_MANIFEST
+ #error Scratch Data mounting requires the authenticated original OS startup path
+ #endif
+-#if defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
++extern int native_root_block_data_seed(dev_t *, char *, size_t, uint64_t *, uint64_t *, uint8_t *);
++#elif defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
+ #ifndef XNU_OWNER_DATA_VOLUME_UUID
+ #error Supply the observed scratch volume UUID for the IOKit backend
+ #endif
+@@ -7865,7 +7867,10 @@
+ 	int error = EINVAL;
+ 	vnode_t data_root = NULLVP;
+ 	char device_path[64] = "/dev/md0";
+-#if defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
++	if (!native_root_block_data_seed(&device, device_path,
++	    sizeof(device_path), &base, &size, native_owner_data_seed_sha256)) { error = ENOENT; goto done; }
++#elif defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
+ 	/* The typed provider supplies logical seed identity for both dense and
+ 	 * sparse media. A sparse disk has no contiguous logical-byte address. */
+ 	if (!native_ram_block_volume_seed(XNU_OWNER_DATA_VOLUME_UUID, &device, device_path,

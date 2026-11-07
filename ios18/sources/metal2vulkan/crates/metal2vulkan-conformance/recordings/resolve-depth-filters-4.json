@@ -1,0 +1,1320 @@
+{
+  "format": 1,
+  "case": "resolve-depth-filters-4",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_resolves.ll",
+      "entry": "rt6_resolve_full+rt6_resolve_masked",
+      "source_sha256": "826f30ea88e648ce64e04e26abdfaa51c2c81fdd933f41e0a5b621eb7c9d18e9"
+    },
+    {
+      "fixture": "rt6_resolves.air.ll",
+      "entry": "rt6_resolve_full+rt6_resolve_masked",
+      "source_sha256": "deacd509ddf64f7fe146057f3097edfb6582b0033fd623a9d2ec49db7596aec9"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 8,
+      "outcomes": [
+        {
+          "runs": 8,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "826f30ea88e648ce64e04e26abdfaa51c2c81fdd933f41e0a5b621eb7c9d18e9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "deacd509ddf64f7fe146057f3097edfb6582b0033fd623a9d2ec49db7596aec9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "render-pipeline",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "bb960003a46605beb95a8a9d8a1281e30ec5c865acd5d8616178d3870afe6c96"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:color",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "146942f667d9caec61206d7538bea4c3503d5abf195835fd21f9e88967c83ac2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:depth",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "916229a00b47feb110cccd140d1290cd53e1f757536310223ad88f10093bce89"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:resolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "33f7a52b1b7de5461505081087c512c4758f0762a164ae64dc642da9f116138c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear:depth",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6c3c396ed6b5c36dcae172271f462051b1266b851e92df3deea8ac65478fd712"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ffe7a35c449de51132a303fd59bab80daf2f0b7cf1b1659f33c49c501236f44e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ee37073beba95953030e51673cfe5cd4645822f6cb971d525f839618864a349b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "244210409b072edddd3d6d08f258a896fd39c015e3976bee9dbe98291477b5f5"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a95bd6d7ffa8e3a76ede15c316a5fd9662205a68d5b30fa81e8cd34e207ecc9d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "56532d0e9be57b4699414acf2d3648536455ffab7d1c85afb8a4a96bb1f8c832"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d3c8914a80f866a12f06cfd1a302c9770bdd93ea48304a86cf8057afd4015488"
+                        }
+                      }
+                    },
+                    {
+                      "name": "patterns",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "efae061eb854f9ff0e97f791a85e7fe209b47b5248963469623df4d093900a03"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render-pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:color",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:depth",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "state",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pieces",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "resolved",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPgAAAD4AAAA/AAAAPwAAwD4AAMA+AADAPgAAwD4AAAA+AAAAPgAAAD8AAAA/AADAPgAAwD4AAMA+AADAPgAAgD4AAIA+AABAPwAAQD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAEA/AABAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPgAAAD4AAAA/AAAAPwAAwD4AAMA+AADAPgAAwD4AAAA+AAAAPgAAAD8AAAA/AADAPgAAwD4AAMA+AADAPgAAgD4AAIA+AABAPwAAQD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAEA/AABAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAgD4AAIA+AAAAPgAAAD4AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAAA+AAAAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAgD4AAIA+AAAAPgAAAD4AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAAA+AAAAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPwAAAD8AAAA/AAAAPwAAID8AACA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAgPwAAID8AAIA/AACAPwAAgD4AAIA+AABAPwAAQD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAEA/AABAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPwAAAD8AAAA/AAAAPwAAID8AACA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAgPwAAID8AAIA/AACAPwAAgD4AAIA+AABAPwAAQD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAEA/AABAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "render",
+          "message": "Set Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect."
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_samplers_taken": 1,
+        "argument_tables_held_at_bind": 264,
+        "bare_starts": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 1,
+        "command_buffers_begun": 319,
+        "command_buffers_begun_batch_barriers": 12,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 6,
+        "command_buffers_begun_encoders": 12,
+        "command_buffers_begun_secondaries": 282,
+        "command_buffers_begun_segments": 6,
+        "command_buffers_deferred": 306,
+        "command_buffers_submitted": 37,
+        "commands_noted_as_before": 132,
+        "commands_recorded.begin_command_buffer": 123,
+        "commands_recorded.cmd_begin_render_pass": 6,
+        "commands_recorded.cmd_bind_descriptor_sets": 138,
+        "commands_recorded.cmd_bind_pipeline": 138,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_clear_depth_stencil_image": 7,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 6,
+        "commands_recorded.cmd_draw": 138,
+        "commands_recorded.cmd_end_render_pass": 6,
+        "commands_recorded.cmd_execute_commands": 6,
+        "commands_recorded.cmd_pipeline_barrier": 27,
+        "commands_recorded.cmd_push_constants": 276,
+        "commands_recorded.cmd_set_blend_constants": 138,
+        "commands_recorded.cmd_set_cull_mode": 138,
+        "commands_recorded.cmd_set_depth_bias": 138,
+        "commands_recorded.cmd_set_depth_compare_op": 138,
+        "commands_recorded.cmd_set_depth_test_enable": 138,
+        "commands_recorded.cmd_set_depth_write_enable": 138,
+        "commands_recorded.cmd_set_front_face": 138,
+        "commands_recorded.cmd_set_primitive_restart_enable": 138,
+        "commands_recorded.cmd_set_primitive_topology": 138,
+        "commands_recorded.cmd_set_scissor": 138,
+        "commands_recorded.cmd_set_stencil_compare_mask": 138,
+        "commands_recorded.cmd_set_stencil_op": 138,
+        "commands_recorded.cmd_set_stencil_reference": 138,
+        "commands_recorded.cmd_set_stencil_test_enable": 138,
+        "commands_recorded.cmd_set_stencil_write_mask": 138,
+        "commands_recorded.cmd_set_viewport": 138,
+        "commands_recorded.end_command_buffer": 319,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326592,
+        "draw_shapes_carried": 137,
+        "draw_shapes_made": 1,
+        "draw_shapes_reused": 102,
+        "draw_states_recorded": 2622,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 4,
+        "encoder_command_buffers_begun": 306,
+        "fence_waits": 1,
+        "finales_apart": 1,
+        "flights_followed": 2,
+        "functions_shared": 1,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 138,
+        "heap_tables_worked_out": 276,
+        "host_steps_recorded": 1,
+        "linked_use_questions_asked": 2,
+        "live_tables_uploaded": 1,
+        "new_buffer_bytes_cleared": 5136,
+        "object_churn.buffers_evicted": 7,
+        "object_churn.buffers_parked": 9,
+        "object_churn.buffers_recycled": 3,
+        "object_churn.images_own_memory": 8,
+        "object_churn.images_parked": 8,
+        "object_churn.textures_image": 8,
+        "object_churn.vk_buffer_bindings": 7,
+        "object_churn.vk_buffers_destroyed": 7,
+        "object_churn.vk_buffers_made": 7,
+        "object_churn.vk_image_bindings": 8,
+        "object_churn.vk_image_views_made": 8,
+        "object_churn.vk_images_destroyed": 8,
+        "object_churn.vk_images_made": 16,
+        "passes_not_inline_layouts": 6,
+        "pipeline_layouts_made": 1,
+        "pipeline_layouts_shared": 1,
+        "pipelines_pooled": 3,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 6,
+        "render_passes_begun_instances": 6,
+        "render_passes_made": 10,
+        "resident_textures_looked_at": 6,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "set_zero_sets_found": 5,
+        "set_zero_sets_reused": 131,
+        "shader_modules_made": 2,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 4,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 288,
+        "stage_tables_read_in_part": 264,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 4,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 8
+      },
+      "moving": {
+        "command_buffers_begun": 61,
+        "command_buffers_begun_continuations": 3,
+        "command_buffers_begun_secondaries": 30,
+        "command_buffers_begun_segments": 3,
+        "command_buffers_deferred": 102,
+        "command_buffers_submitted": 31,
+        "commands_recorded.cmd_bind_pipeline": 18,
+        "commands_recorded.cmd_pipeline_barrier": 6,
+        "commands_recorded.cmd_push_constants": 36,
+        "commands_recorded.cmd_set_blend_constants": 18,
+        "commands_recorded.cmd_set_cull_mode": 18,
+        "commands_recorded.cmd_set_depth_bias": 18,
+        "commands_recorded.cmd_set_depth_compare_op": 18,
+        "commands_recorded.cmd_set_depth_test_enable": 18,
+        "commands_recorded.cmd_set_depth_write_enable": 18,
+        "commands_recorded.cmd_set_front_face": 18,
+        "commands_recorded.cmd_set_primitive_restart_enable": 18,
+        "commands_recorded.cmd_set_primitive_topology": 18,
+        "commands_recorded.cmd_set_scissor": 46,
+        "commands_recorded.cmd_set_stencil_compare_mask": 18,
+        "commands_recorded.cmd_set_stencil_op": 18,
+        "commands_recorded.cmd_set_stencil_reference": 18,
+        "commands_recorded.cmd_set_stencil_test_enable": 18,
+        "commands_recorded.cmd_set_stencil_write_mask": 18,
+        "commands_recorded.cmd_set_viewport": 18,
+        "commands_recorded.end_command_buffer": 61,
+        "draw_states_recorded": 490,
+        "encoder_command_buffers_begun": 48,
+        "flights_followed": 0,
+        "gate_waits_slept": 0,
+        "graphics_pipelines_looked_up": 15,
+        "host_steps_recorded": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "argument_samplers_taken": 1,
+        "command_buffers_begun": 99,
+        "command_buffers_begun_continuations": 3,
+        "command_buffers_begun_secondaries": 68,
+        "command_buffers_begun_segments": 3,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 31,
+        "commands_recorded.cmd_begin_render_pass": 0,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 37,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_clear_depth_stencil_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_copy_image_to_buffer": 0,
+        "commands_recorded.cmd_draw": 0,
+        "commands_recorded.cmd_end_render_pass": 0,
+        "commands_recorded.cmd_execute_commands": 0,
+        "commands_recorded.cmd_pipeline_barrier": 21,
+        "commands_recorded.cmd_push_constants": 74,
+        "commands_recorded.cmd_set_blend_constants": 37,
+        "commands_recorded.cmd_set_cull_mode": 37,
+        "commands_recorded.cmd_set_depth_bias": 37,
+        "commands_recorded.cmd_set_depth_compare_op": 37,
+        "commands_recorded.cmd_set_depth_test_enable": 37,
+        "commands_recorded.cmd_set_depth_write_enable": 37,
+        "commands_recorded.cmd_set_front_face": 37,
+        "commands_recorded.cmd_set_primitive_restart_enable": 37,
+        "commands_recorded.cmd_set_primitive_topology": 37,
+        "commands_recorded.cmd_set_scissor": 61,
+        "commands_recorded.cmd_set_stencil_compare_mask": 37,
+        "commands_recorded.cmd_set_stencil_op": 37,
+        "commands_recorded.cmd_set_stencil_reference": 37,
+        "commands_recorded.cmd_set_stencil_test_enable": 37,
+        "commands_recorded.cmd_set_stencil_write_mask": 37,
+        "commands_recorded.cmd_set_viewport": 37,
+        "commands_recorded.end_command_buffer": 99,
+        "device_memory_allocated": 201326592,
+        "draw_states_recorded": 828,
+        "encoder_command_buffers_begun": 86,
+        "flights_followed": 0,
+        "functions_translated": 2,
+        "graphics_pipelines_looked_up": 34,
+        "host_steps_recorded": 0,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_shared": 4,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3
+      },
+      "per_state": {
+        "pipelines": 5,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "resolve-depth-filters-4",
+        "calls": 24,
+        "in_calls": 31582209,
+        "on_cpu": 1171417,
+        "blocked": 30393583,
+        "elsewhere": 7547084,
+        "spend": 39165209,
+        "spend_least": 37081041,
+        "spend_most": 41115708,
+        "per_call": [
+          {
+            "call": "depth_stencil_state",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2250,
+            "on_cpu": 2375,
+            "blocked": 0,
+            "wall_least": 1833,
+            "wall_most": 2584,
+            "wall_total": 2250,
+            "on_cpu_total": 2375,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22997375,
+            "on_cpu": 621500,
+            "blocked": 22370542,
+            "wall_least": 22055083,
+            "wall_most": 24592750,
+            "wall_total": 22997375,
+            "on_cpu_total": 621500,
+            "blocked_total": 22370542
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 42,
+            "on_cpu": 208,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 84,
+            "wall_total": 875,
+            "on_cpu_total": 1790,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8384291,
+            "on_cpu": 357666,
+            "blocked": 8023041,
+            "wall_least": 7792583,
+            "wall_most": 8570709,
+            "wall_total": 8384291,
+            "on_cpu_total": 357666,
+            "blocked_total": 8023041
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 132250,
+            "on_cpu": 132500,
+            "blocked": 0,
+            "wall_least": 125375,
+            "wall_most": 509000,
+            "wall_total": 132250,
+            "on_cpu_total": 132500,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 2667,
+            "on_cpu": 2792,
+            "blocked": 0,
+            "wall_least": 2625,
+            "wall_most": 2959,
+            "wall_total": 52460,
+            "on_cpu_total": 53625,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 1459,
+            "on_cpu": 1583,
+            "blocked": 0,
+            "wall_least": 1417,
+            "wall_most": 1625,
+            "wall_total": 10541,
+            "on_cpu_total": 11208,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "resolve-depth-filters-4",
+        "calls": 24,
+        "in_calls": 6846628,
+        "on_cpu": 2750415,
+        "blocked": 4117625,
+        "elsewhere": 3759583,
+        "spend": 10571087,
+        "spend_least": 10409877,
+        "spend_most": 11174958,
+        "per_call": [
+          {
+            "call": "depth_stencil_state",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 167,
+            "on_cpu": 292,
+            "blocked": 0,
+            "wall_least": 166,
+            "wall_most": 209,
+            "wall_total": 167,
+            "on_cpu_total": 292,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 142500,
+            "on_cpu": 145791,
+            "blocked": 0,
+            "wall_least": 137500,
+            "wall_most": 149625,
+            "wall_total": 142500,
+            "on_cpu_total": 145791,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 125,
+            "on_cpu": 250,
+            "blocked": 0,
+            "wall_least": 83,
+            "wall_most": 167,
+            "wall_total": 750,
+            "on_cpu_total": 1626,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4443667,
+            "on_cpu": 593500,
+            "blocked": 3850167,
+            "wall_least": 4276583,
+            "wall_most": 4691208,
+            "wall_total": 4443667,
+            "on_cpu_total": 593500,
+            "blocked_total": 3850167
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2185958,
+            "on_cpu": 1945791,
+            "blocked": 256125,
+            "wall_least": 2153000,
+            "wall_most": 2290458,
+            "wall_total": 2185958,
+            "on_cpu_total": 1945791,
+            "blocked_total": 256125
+          },
+          {
+            "call": "target",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 4667,
+            "on_cpu": 4792,
+            "blocked": 0,
+            "wall_least": 4125,
+            "wall_most": 5291,
+            "wall_total": 70998,
+            "on_cpu_total": 72292,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 917,
+            "on_cpu": 1083,
+            "blocked": 0,
+            "wall_least": 875,
+            "wall_most": 1000,
+            "wall_total": 7376,
+            "on_cpu_total": 8084,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

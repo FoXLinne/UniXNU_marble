@@ -1,0 +1,2180 @@
+{
+  "format": 1,
+  "case": "argument-encoder-cross-type-mixtures",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "reflection/argument_buffers.ll",
+      "entry": "reflection_argument_buffers",
+      "source_sha256": "3a8505c3ba66afa163e2ddf8680916df1dd135176275322b3248f95b97d5706a"
+    },
+    {
+      "fixture": "reflection/argument_buffers.air.ll",
+      "entry": "reflection_argument_buffers",
+      "source_sha256": "a4b911b3b9eb3530c654b8aa8d5e1caf8ab57edeb14ac10109f96fc8fc02d9fa"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3a8505c3ba66afa163e2ddf8680916df1dd135176275322b3248f95b97d5706a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a4b911b3b9eb3530c654b8aa8d5e1caf8ab57edeb14ac10109f96fc8fc02d9fa"
+                        }
+                      }
+                    },
+                    {
+                      "name": "layouts",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "55890ca8115c7eccc91130931f8dd5717644094502f8a896bdd5504038fa29af"
+                        }
+                      }
+                    },
+                    {
+                      "name": "constant",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "42aed6d934f4954763c1514a5d0f6d7bd85da1dcf1b99f4be7058fcc41fa2ab5"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sampler",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 48
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 16
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "narrow-then-wide/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/constant-offset/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/constant-write/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/constant-offset/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 1
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/constant-write/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/constant-offset/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 16
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/constant-write/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/constant-offset/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 32
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/constant-write/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "narrow-then-wide/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AQABAQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 64
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 16
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "wide-then-narrow/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/constant-offset/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/constant-write/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/constant-offset/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 16
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/constant-write/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/constant-offset/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 32
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/constant-write/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/constant-offset/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 48
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/constant-write/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "wide-then-narrow/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AQEBAAEBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 64
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 16
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "alternating/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/constant-offset/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/constant-write/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/constant-offset/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 16
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/constant-write/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/constant-offset/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 32
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/constant-write/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/constant-offset/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 48
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/constant-write/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "alternating/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AQABAQEAAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 48
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 16
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "constants-then-handle/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/write/0-setTexture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/constant-offset/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/constant-write/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/constant-offset/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 4
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/constant-write/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/constant-offset/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 16
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/constant-write/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "constants-then-handle/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AQABAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 48
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 16
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "handle-then-constants/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/write/0-setTexture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/constant-offset/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 16
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/constant-write/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/constant-offset/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 32
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/constant-write/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/constant-offset/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 36
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/constant-write/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-constants/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AQABAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 48
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 16
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/write/0-setSamplerState",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/constant-offset/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 8
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/constant-write/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/constant-offset/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 16
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/constant-write/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "depth-stencil-state-then-constants/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAEBAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "tables-then-constant/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "tables-then-constant/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 40
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 8
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "tables-then-constant/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "tables-then-constant/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "tables-then-constant/constant-offset/4",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 32
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "tables-then-constant/constant-write/4",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "tables-then-constant/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "tables-then-constant/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 72
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 8
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/write/0-setTexture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/constant-offset/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 64
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/constant-write/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/constant-offset/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 68
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/constant-write/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handle-then-block-aligned-constant/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/encoder",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "encoded_length",
+                      "observed": {
+                        "value": {
+                          "uint": 48
+                        }
+                      }
+                    },
+                    {
+                      "name": "alignment",
+                      "observed": {
+                        "value": {
+                          "uint": 16
+                        }
+                      }
+                    },
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-argument-crossing"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "array-between-constants/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/setArgumentBuffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/write/0-setTexture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/write/1-setTexture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/constant-offset/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/constant-write/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/constant-offset/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "uint": 32
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/constant-write/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "array-between-constants/changed-words",
+                  "observed": {
+                    "value": {
+                      "bytes": "AQEBAAEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 256
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 32,
+                        "row_pitch": 32,
+                        "rows": 1,
+                        "image_pitch": 32,
+                        "images": 1,
+                        "gaps": "compared"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "device_memory_allocated": 268435456,
+        "host_texel_copies": 1,
+        "images_started_on_the_host": 1,
+        "new_buffer_bytes_cleared": 2560,
+        "object_churn.buffers_parked": 10,
+        "object_churn.buffers_recycled": 10,
+        "object_churn.images_own_memory": 1,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_images_destroyed": 1,
+        "object_churn.vk_images_made": 1,
+        "pooled_memory_blocks_made": 4
+      },
+      "composed": {
+        "device_memory_allocated": 268435456
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pooled_memory_blocks_made": 4
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "argument-encoder-cross-type-mixtures",
+        "calls": 104,
+        "in_calls": 46416,
+        "on_cpu": 58455,
+        "blocked": 0,
+        "elsewhere": 3542,
+        "spend": 50709,
+        "spend_least": 47416,
+        "spend_most": 55670,
+        "per_call": [
+          {
+            "call": "argument_encoder_facts",
+            "least_calls": 9,
+            "most_calls": 9,
+            "wall": 291,
+            "on_cpu": 375,
+            "blocked": 0,
+            "wall_least": 250,
+            "wall_most": 292,
+            "wall_total": 2624,
+            "on_cpu_total": 3667,
+            "blocked_total": 0
+          },
+          {
+            "call": "argument_encoder_with_arguments",
+            "least_calls": 9,
+            "most_calls": 9,
+            "wall": 2083,
+            "on_cpu": 2250,
+            "blocked": 0,
+            "wall_least": 1959,
+            "wall_most": 2208,
+            "wall_total": 20000,
+            "on_cpu_total": 21125,
+            "blocked_total": 0
+          },
+          {
+            "call": "buffer",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 1458,
+            "on_cpu": 1583,
+            "blocked": 0,
+            "wall_least": 1375,
+            "wall_most": 1875,
+            "wall_total": 14792,
+            "on_cpu_total": 16082,
+            "blocked_total": 0
+          },
+          {
+            "call": "constant_data_offset",
+            "least_calls": 25,
+            "most_calls": 25,
+            "wall": 41,
+            "on_cpu": 125,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 42,
+            "wall_total": 709,
+            "on_cpu_total": 3458,
+            "blocked_total": 0
+          },
+          {
+            "call": "encode_argument",
+            "least_calls": 31,
+            "most_calls": 31,
+            "wall": 41,
+            "on_cpu": 125,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 42,
+            "wall_total": 1373,
+            "on_cpu_total": 4956,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 9,
+            "most_calls": 9,
+            "wall": 42,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 42,
+            "wall_total": 459,
+            "on_cpu_total": 1501,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1125,
+            "on_cpu": 1250,
+            "blocked": 0,
+            "wall_least": 1000,
+            "wall_most": 1250,
+            "wall_total": 1125,
+            "on_cpu_total": 1250,
+            "blocked_total": 0
+          },
+          {
+            "call": "set_argument_buffer",
+            "least_calls": 9,
+            "most_calls": 9,
+            "wall": 42,
+            "on_cpu": 166,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 42,
+            "wall_total": 373,
+            "on_cpu_total": 1376,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 5084,
+            "on_cpu": 5208,
+            "blocked": 0,
+            "wall_least": 4709,
+            "wall_most": 5583,
+            "wall_total": 5084,
+            "on_cpu_total": 5208,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "argument-encoder-cross-type-mixtures",
+        "calls": 104,
+        "in_calls": 20208,
+        "on_cpu": 32499,
+        "blocked": 0,
+        "elsewhere": 208,
+        "spend": 20249,
+        "spend_least": 18997,
+        "spend_most": 22413,
+        "per_call": [
+          {
+            "call": "argument_encoder_facts",
+            "least_calls": 9,
+            "most_calls": 9,
+            "wall": 41,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 42,
+            "wall_total": 332,
+            "on_cpu_total": 1414,
+            "blocked_total": 0
+          },
+          {
+            "call": "argument_encoder_with_arguments",
+            "least_calls": 9,
+            "most_calls": 9,
+            "wall": 166,
+            "on_cpu": 250,
+            "blocked": 0,
+            "wall_least": 125,
+            "wall_most": 167,
+            "wall_total": 1416,
+            "on_cpu_total": 2542,
+            "blocked_total": 0
+          },
+          {
+            "call": "buffer",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 459,
+            "on_cpu": 625,
+            "blocked": 0,
+            "wall_least": 416,
+            "wall_most": 541,
+            "wall_total": 5085,
+            "on_cpu_total": 6333,
+            "blocked_total": 0
+          },
+          {
+            "call": "constant_data_offset",
+            "least_calls": 25,
+            "most_calls": 25,
+            "wall": 42,
+            "on_cpu": 166,
+            "blocked": 0,
+            "wall_least": 0,
+            "wall_most": 42,
+            "wall_total": 794,
+            "on_cpu_total": 3711,
+            "blocked_total": 0
+          },
+          {
+            "call": "encode_argument",
+            "least_calls": 31,
+            "most_calls": 31,
+            "wall": 42,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 42,
+            "wall_most": 83,
+            "wall_total": 2247,
+            "on_cpu_total": 5957,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 9,
+            "most_calls": 9,
+            "wall": 42,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 0,
+            "wall_most": 42,
+            "wall_total": 416,
+            "on_cpu_total": 1376,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 542,
+            "on_cpu": 708,
+            "blocked": 0,
+            "wall_least": 500,
+            "wall_most": 584,
+            "wall_total": 542,
+            "on_cpu_total": 708,
+            "blocked_total": 0
+          },
+          {
+            "call": "set_argument_buffer",
+            "least_calls": 9,
+            "most_calls": 9,
+            "wall": 41,
+            "on_cpu": 125,
+            "blocked": 0,
+            "wall_least": 0,
+            "wall_most": 42,
+            "wall_total": 289,
+            "on_cpu_total": 1292,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8958,
+            "on_cpu": 9125,
+            "blocked": 0,
+            "wall_least": 8000,
+            "wall_most": 9750,
+            "wall_total": 8958,
+            "on_cpu_total": 9125,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

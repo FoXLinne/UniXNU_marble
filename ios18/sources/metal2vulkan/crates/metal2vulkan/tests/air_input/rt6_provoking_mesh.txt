@@ -1,0 +1,280 @@
+target triple = "air64_v28-apple-macosx26.0.0"
+source_filename = "-"
+; datalayout DataLayout { endian: Little, pointers: {0: PointerSpec { size_bits: 64, abi_bits: 64, pref_bits: 64, index_bits: 64 }}, ints: {1: AlignSpec { abi_bits: 8, pref_bits: 8 }, 8: AlignSpec { abi_bits: 8, pref_bits: 8 }, 16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }}, floats: {16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }, 128: AlignSpec { abi_bits: 128, pref_bits: 128 }}, vectors: {16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 24: AlignSpec { abi_bits: 32, pref_bits: 32 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 48: AlignSpec { abi_bits: 64, pref_bits: 64 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }, 96: AlignSpec { abi_bits: 128, pref_bits: 128 }, 128: AlignSpec { abi_bits: 128, pref_bits: 128 }, 192: AlignSpec { abi_bits: 256, pref_bits: 256 }, 256: AlignSpec { abi_bits: 256, pref_bits: 256 }, 512: AlignSpec { abi_bits: 512, pref_bits: 512 }, 1024: AlignSpec { abi_bits: 1024, pref_bits: 1024 }}, aggregate: AlignSpec { abi_bits: 0, pref_bits: 64 }, native_ints: [8, 16, 32], stack_align_bits: None, alloca_space: 0, program_space: 0, globals_space: 0, mangling: None, fn_ptr_align: None, non_integral: [] }
+%t2 = type [12 x i8]
+%t5 = type [12 x <2 x float>]
+%t10 = type void (ptr addrspace(7), i32)
+%t13 = type <{ <4 x float>, <4 x float>, <4 x i32> }>
+%t15 = type %t13 (<4 x float>, float, i32, <3 x float>)
+%t16 = type %t13 (<4 x float>, float, i32)
+%t17 = type %t13 (<4 x float>, float, <3 x float>)
+%t18 = type float (i32)
+%t19 = type void (ptr addrspace(7), i32, <4 x float>)
+%t20 = type void (ptr addrspace(7), i32, i32, float)
+%t21 = type void (ptr addrspace(7), i32, i32, i32)
+%t22 = type void (ptr addrspace(7), i32, i8)
+%t24 = type [2 x i32]
+c40 = %t2 [0, 1, 2, 5, 3, 4, 8, 6, 7, 10, 11, 9]
+c41 = %t2 [0, 1, 3, 2, 4, 7, 9, 5, 6, 10, 11, 8]
+c42 = <2 x float> [0xBF666666, 0xBF666666]
+c43 = <2 x float> [0x3F666666, 0xBF4CCCCD]
+c44 = <2 x float> [0xBF333333, 0x3F666666]
+c45 = <2 x float> [0x3F733333, 0x3F733333]
+c46 = <2 x float> [0xBF733333, 0x3F19999A]
+c47 = <2 x float> [0x3F19999A, 0xBF733333]
+c48 = <2 x float> [0xBE4CCCCD, 0xBF733333]
+c49 = <2 x float> [0x3F733333, 0x3DCCCCCD]
+c50 = <2 x float> [0xBF733333, 0xBDCCCCCD]
+c51 = <2 x float> [0x3DCCCCCD, 0x3F733333]
+c52 = <2 x float> [0x3F666666, 0xBF000000]
+c53 = <2 x float> [0xBF19999A, 0xBF333333]
+c54 = %t5 [c42, c43, c44, c45, c46, c47, c48, c49, c50, c51, c52, c53]
+c56 = %t24 [27, 0]
+c73 = <4 x i32> [0, 1, poison, poison]
+c78 = <4 x i32> [0, 1, 2, poison]
+c81 = <4 x float> [poison, 0x0, 0x0, 0x3F800000]
+c82 = <4 x i32> [poison, 0, 0, 1]
+c84 = <4 x float> [0x0, 0x0, 0x0, 0x3F800000]
+c87 = %t13 [c84, undef, undef]
+c88 = <4 x i32> [0, 0, 0, 1]
+@g0 "_ZL12PM_TRIANGLES" = internal addrspace(2) constant %t2 c40, align 1
+@g1 "_ZL8PM_LINES" = internal addrspace(2) constant %t2 c41, align 1
+@g2 "_ZL12PM_POSITIONS" = internal addrspace(2) constant %t5 c54, align 8
+
+define %t10 @f0 "pm_triangles" "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = icmp ult %a1, i32 12
+  br %i0, bb1, bb2
+bb1:
+  %i2 = and i32 %a1, i32 3
+  %i3 = tail call reassoc nnan ninf nsz arcp contract afn float @f5 [air Convert(Convert { dst: NumTy { elem: F32, lanes: 1 }, dst_kind: Float, src: NumTy { elem: I32, lanes: 1 }, src_kind: Unsigned, src_fp8: None })](%i2)
+  %i4 = fmul reassoc nnan ninf nsz arcp contract afn float %i3, float 0x3E99999A
+  %i5 = fadd reassoc nnan ninf nsz arcp contract afn float %i4, float 0x3F800000
+  %i6 = zext %a1 to i64
+  %i7 = getelementptr inbounds %t5, ptr addrspace(2) @g2, i64 0, %i6
+  %i8 = load <2 x float>, %i7, align 8
+  %i9 = insertelement <2 x float> poison, %i5, i64 0
+  %i10 = shufflevector <2 x float> %i9, <2 x float> poison, <0, 0>
+  %i11 = fmul reassoc nnan ninf nsz arcp contract afn <2 x float> %i10, %i8
+  %i12 = shufflevector <4 x float> %i11, <2 x float> poison, <0, 1, poison, poison>
+  %i13 = insertelement %i12, float 0x3F000000, i64 2
+  %i14 = insertelement %i13, %i5, i64 3
+  %i15 = tail call reassoc nnan ninf nsz arcp contract afn float @f5 [air Convert(Convert { dst: NumTy { elem: F32, lanes: 1 }, dst_kind: Float, src: NumTy { elem: I32, lanes: 1 }, src_kind: Unsigned, src_fp8: None })](%a1)
+  tail call void @f6 [air Mesh(Position)](%a0, %a1, %i14) arg0( nocapture )
+  tail call void @f7 [air Mesh(VertexData(NumTy { elem: F32, lanes: 1 }))](%a0, i32 0, %a1, %i15) arg0( nocapture )
+  tail call void @f8 [air Mesh(VertexData(NumTy { elem: I32, lanes: 1 }))](%a0, i32 1, %a1, %a1) arg0( nocapture )
+  %i19 = getelementptr inbounds %t2, ptr addrspace(2) @g0, i64 0, %i6
+  %i20 = load i8, %i19, align 1
+  tail call void @f9 [air Mesh(Index)](%a0, %a1, %i20) arg0( nocapture )
+  br bb2
+bb2:
+  %i23 = icmp eq %a1, i32 0
+  br %i23, bb3, bb4
+bb3:
+  tail call void @f10 [air Mesh(PrimitiveCount)](%a0, i32 4) arg0( nocapture )
+  br bb4
+bb4:
+  ret void
+}
+
+define %t10 @f1 "pm_lines" "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = icmp ult %a1, i32 12
+  br %i0, bb1, bb2
+bb1:
+  %i2 = and i32 %a1, i32 3
+  %i3 = tail call reassoc nnan ninf nsz arcp contract afn float @f5 [air Convert(Convert { dst: NumTy { elem: F32, lanes: 1 }, dst_kind: Float, src: NumTy { elem: I32, lanes: 1 }, src_kind: Unsigned, src_fp8: None })](%i2)
+  %i4 = fmul reassoc nnan ninf nsz arcp contract afn float %i3, float 0x3E99999A
+  %i5 = fadd reassoc nnan ninf nsz arcp contract afn float %i4, float 0x3F800000
+  %i6 = zext %a1 to i64
+  %i7 = getelementptr inbounds %t5, ptr addrspace(2) @g2, i64 0, %i6
+  %i8 = load <2 x float>, %i7, align 8
+  %i9 = insertelement <2 x float> poison, %i5, i64 0
+  %i10 = shufflevector <2 x float> %i9, <2 x float> poison, <0, 0>
+  %i11 = fmul reassoc nnan ninf nsz arcp contract afn <2 x float> %i10, %i8
+  %i12 = shufflevector <4 x float> %i11, <2 x float> poison, <0, 1, poison, poison>
+  %i13 = insertelement %i12, float 0x3F000000, i64 2
+  %i14 = insertelement %i13, %i5, i64 3
+  %i15 = tail call reassoc nnan ninf nsz arcp contract afn float @f5 [air Convert(Convert { dst: NumTy { elem: F32, lanes: 1 }, dst_kind: Float, src: NumTy { elem: I32, lanes: 1 }, src_kind: Unsigned, src_fp8: None })](%a1)
+  tail call void @f6 [air Mesh(Position)](%a0, %a1, %i14) arg0( nocapture )
+  tail call void @f7 [air Mesh(VertexData(NumTy { elem: F32, lanes: 1 }))](%a0, i32 0, %a1, %i15) arg0( nocapture )
+  tail call void @f8 [air Mesh(VertexData(NumTy { elem: I32, lanes: 1 }))](%a0, i32 1, %a1, %a1) arg0( nocapture )
+  %i19 = getelementptr inbounds %t2, ptr addrspace(2) @g1, i64 0, %i6
+  %i20 = load i8, %i19, align 1
+  tail call void @f9 [air Mesh(Index)](%a0, %a1, %i20) arg0( nocapture )
+  br bb2
+bb2:
+  %i23 = icmp eq %a1, i32 0
+  br %i23, bb3, bb4
+bb3:
+  tail call void @f10 [air Mesh(PrimitiveCount)](%a0, i32 6) arg0( nocapture )
+  br bb4
+bb4:
+  ret void
+}
+
+define %t15 @f2 "pm_both" memory(NoModRef, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = shufflevector <4 x float> %a3, <3 x float> poison, <0, 1, 2, poison>
+  %i1 = insertelement %i0, float 0x3F800000, i64 3
+  %i2 = insertelement <4 x float> c81, %a1, i64 0
+  %i3 = insertelement <4 x i32> c82, %a2, i64 0
+  %i4 = insertvalue %t13 undef %i1, 0
+  %i5 = insertvalue %i4 %i2, 1
+  %i6 = insertvalue %i5 %i3, 2
+  ret %i6
+}
+
+define %t16 @f3 "pm_flat" memory(NoModRef, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = insertelement <4 x float> c81, %a1, i64 0
+  %i1 = insertelement <4 x i32> c82, %a2, i64 0
+  %i2 = insertvalue %t13 c87 %i0, 1
+  %i3 = insertvalue %i2 %i1, 2
+  ret %i3
+}
+
+define %t17 @f4 "pm_weights" memory(NoModRef, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = shufflevector <4 x float> %a2, <3 x float> poison, <0, 1, 2, poison>
+  %i1 = insertelement %i0, float 0x3F800000, i64 3
+  %i2 = insertelement <4 x float> c81, %a1, i64 0
+  %i3 = insertvalue %t13 undef %i1, 0
+  %i4 = insertvalue %i3 %i2, 1
+  %i5 = insertvalue %i4 <4 x i32> c88, 2
+  ret %i5
+}
+
+declare %t18 @f5 "air.convert.f.f32.u.i32" memory(NoModRef, NoModRef, NoModRef)
+
+declare %t19 @f6 "air.set_position_mesh" memory(ModRef, NoModRef, NoModRef) %a0( nocapture )
+
+declare %t20 @f7 "air.set_vertex_data_mesh.f32" memory(ModRef, NoModRef, NoModRef) %a0( nocapture )
+
+declare %t21 @f8 "air.set_vertex_data_mesh.i32" memory(ModRef, NoModRef, NoModRef) %a0( nocapture )
+
+declare %t22 @f9 "air.set_index_mesh" memory(ModRef, NoModRef, NoModRef) %a0( nocapture )
+
+declare %t10 @f10 "air.set_primitive_count_mesh" memory(ModRef, NoModRef, NoModRef) %a0( nocapture )
+!md0 = !"SDK Version"
+!md1 = !"wchar_size"
+!md2 = !"frame-pointer"
+!md3 = !"air.max_device_buffers"
+!md4 = !"air.max_constant_buffers"
+!md5 = !"air.max_threadgroup_buffers"
+!md6 = !"air.max_textures"
+!md7 = !"air.max_read_write_textures"
+!md8 = !"air.max_samplers"
+!md9 = !"air.mesh"
+!md10 = !"air.mesh_type_info"
+!md11 = !"air.position"
+!md12 = !"air.arg_type_name"
+!md13 = !"float4"
+!md14 = !"air.arg_name"
+!md15 = !"position"
+!md16 = !"air.mesh_vertex_data"
+!md17 = !"generated(9smooth_idf)"
+!md18 = !"float"
+!md19 = !"smooth_id"
+!md20 = !"generated(7flat_idj)"
+!md21 = !"uint"
+!md22 = !"flat_id"
+!md23 = !"air.triangle"
+!md24 = !"mesh<PmVertex, void, 12, 4, triangle>"
+!md25 = !"out"
+!md26 = !"air.thread_index_in_threadgroup"
+!md27 = !"tid"
+!md28 = !"air.line"
+!md29 = !"mesh<PmVertex, void, 12, 6, line>"
+!md30 = !"air.render_target"
+!md31 = !"weights"
+!md32 = !"uint4"
+!md33 = !"ids"
+!md34 = !"air.center"
+!md35 = !"air.no_perspective"
+!md36 = !"air.arg_unused"
+!md37 = !"air.fragment_input"
+!md38 = !"air.perspective"
+!md39 = !"air.flat"
+!md40 = !"air.barycentric_coord"
+!md41 = !"float3"
+!md42 = !"air.compile.denorms_disable"
+!md43 = !"air.compile.fast_math_enable"
+!md44 = !"air.compile.framebuffer_fetch_enable"
+!md45 = !"Apple metal version 32023.921 (metalfe-32023.921.6)"
+!md46 = !"Metal"
+!md47 = !"omnipotent char"
+!md48 = !"Simple C++ TBAA"
+!md49 = i32 2
+!md50 = %t24 c56
+!md51 = i32 1
+!md52 = i32 4
+!md53 = i32 7
+!md54 = i32 31
+!md55 = i32 128
+!md56 = i32 8
+!md57 = i32 16
+!md58 = ptr addrspace(0) @f0
+!md59 = i32 0
+!md60 = i32 12
+!md61 = ptr addrspace(0) @f1
+!md62 = i32 6
+!md63 = ptr addrspace(0) @f2
+!md64 = i32 3
+!md65 = ptr addrspace(0) @f3
+!md66 = ptr addrspace(0) @f4
+!md67 = i64 0
+!md68 = !{!md49, !md0, !md50}
+!md69 = !{!md51, !md1, !md52}
+!md70 = !{!md53, !md2, !md49}
+!md71 = !{!md53, !md3, !md54}
+!md72 = !{!md53, !md4, !md54}
+!md73 = !{!md53, !md5, !md54}
+!md74 = !{!md53, !md6, !md55}
+!md75 = !{!md53, !md7, !md56}
+!md76 = !{!md53, !md8, !md57}
+!md77 = !{}
+!md78 = !{!md11, !md12, !md13, !md14, !md15}
+!md79 = !{!md16, !md59, !md17, !md12, !md18, !md14, !md19}
+!md80 = !{!md16, !md51, !md20, !md12, !md21, !md14, !md22}
+!md81 = !{!md78, !md79, !md80}
+!md82 = !{!md10, !md81, !md77, !md60, !md52, !md23}
+!md83 = !{!md59, !md9, !md82, !md12, !md24, !md14, !md25}
+!md84 = !{!md51, !md26, !md12, !md21, !md14, !md27}
+!md85 = !{!md83, !md84}
+!md86 = !{!md58, !md77, !md85}
+!md87 = !{!md10, !md81, !md77, !md60, !md62, !md28}
+!md88 = !{!md59, !md9, !md87, !md12, !md29, !md14, !md25}
+!md89 = !{!md88, !md84}
+!md90 = !{!md61, !md77, !md89}
+!md91 = !{!md30, !md59, !md59, !md12, !md13, !md14, !md31}
+!md92 = !{!md30, !md51, !md59, !md12, !md13, !md14, !md19}
+!md93 = !{!md30, !md49, !md59, !md12, !md32, !md14, !md33}
+!md94 = !{!md91, !md92, !md93}
+!md95 = !{!md59, !md11, !md34, !md35, !md12, !md13, !md14, !md15, !md36}
+!md96 = !{!md51, !md37, !md17, !md34, !md38, !md12, !md18, !md14, !md19}
+!md97 = !{!md49, !md37, !md20, !md39, !md12, !md21, !md14, !md22}
+!md98 = !{!md64, !md40, !md34, !md38, !md12, !md41, !md14, !md31}
+!md99 = !{!md95, !md96, !md97, !md98}
+!md100 = !{!md63, !md94, !md99}
+!md101 = !{!md95, !md96, !md97}
+!md102 = !{!md65, !md94, !md101}
+!md103 = !{!md49, !md40, !md34, !md38, !md12, !md41, !md14, !md31}
+!md104 = !{!md95, !md96, !md103}
+!md105 = !{!md66, !md94, !md104}
+!md106 = !{!md42}
+!md107 = !{!md43}
+!md108 = !{!md44}
+!md109 = !{!md45}
+!md110 = !{!md49, !md56, !md59}
+!md111 = !{!md46, !md52, !md59, !md59}
+!md112 = !{!md48}
+!md113 = !{!md47, !md112, !md67}
+!md114 = !{!md113, !md113, !md67}
+!"llvm.module.flags" = !{!md68, !md69, !md70, !md71, !md72, !md73, !md74, !md75, !md76}
+!"air.mesh" = !{!md86, !md90}
+!"air.fragment" = !{!md100, !md102, !md105}
+!"air.compile_options" = !{!md106, !md107, !md108}
+!"llvm.ident" = !{!md109}
+!"air.version" = !{!md110}
+!"air.language_version" = !{!md111}

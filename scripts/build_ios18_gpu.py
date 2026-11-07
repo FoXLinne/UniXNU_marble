@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 from pathlib import Path
 import shutil
 import struct
@@ -14,6 +13,7 @@ import tempfile
 import tomllib
 
 from prepare_ios18_wallpaper import prepare_wallpaper
+from marble_sources import stage_ios18, stage_ios18_build
 
 DEVICE = Path(__file__).resolve().parents[1]
 LLVM = Path('/opt/homebrew/opt/llvm/bin')
@@ -60,59 +60,35 @@ def phone_ui(root):
 def source_tree(root):
     gpu = root / 'gpu'
     gpu.mkdir(exist_ok=True)
-    for name, revision in SOURCES.items():
-        path = gpu / name
-        url = f'https://github.com/UniXNU/{name}.git'
-        fresh = not (path / '.git').exists()
-        if fresh:
-            subprocess.run(['git', 'clone', '--filter=blob:none', '--no-checkout', url, path], check=True)
-        available = subprocess.run(['git', '-C', path, 'cat-file', '-e', revision + '^{commit}'],
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if available.returncode:
-            subprocess.run(['git', '-C', path, 'fetch', '--recurse-submodules=no', '--quiet', 'origin', revision], check=True)
-        current = subprocess.check_output(['git', '-C', path, 'rev-parse', 'HEAD'], text=True).strip()
-        if fresh or current != revision:
-            subprocess.run(['git', '-C', path, 'checkout', '--detach', revision], check=True)
     tree = gpu / 'UniXNU'
+    stage_ios18_build(tree)
+    for name in SOURCES:
+        if name != 'UniXNU':
+            stage_ios18(name, gpu / name)
+    for name in ('AdrenoPM4', 'AdrenoFirmware'):
+        stage_ios18(name, gpu / name)
+    stage_ios18('GopFramebuffer', root / 'GopFramebuffer')
     host_patch = DEVICE / 'patches/UniXNU/ios18-gpu-host.patch'
     applied = subprocess.run(['git', '-C', tree, 'apply', '--reverse', '--check', host_patch],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if applied.returncode:
         subprocess.run(['git', '-C', tree, 'apply', host_patch], check=True)
-    for component, filename in [('Adreno740', 'a725.patch'), ('AdrenoMetal', 'ios18.patch')]:
-        patch = DEVICE / 'patches' / component / filename
-        for name in re.findall(r'^\+\+\+ b/(.+)$', patch.read_text(), re.M):
-            command = ['git', '-C', gpu / component, 'apply', '--include=' + name]
-            applied = subprocess.run(command + ['--reverse', '--check', patch],
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if applied.returncode:
-                subprocess.run(command + [patch], check=True)
-    surface_patch = DEVICE / 'patches/AdrenoMetal/ios18-surface-cache.patch'
-    surface_tree = gpu / 'AdrenoMetal'
-    applied = subprocess.run(['git', '-C', surface_tree, 'apply', '--reverse', '--check', surface_patch],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if applied.returncode:
-        subprocess.run(['git', '-C', surface_tree, 'apply', surface_patch], check=True)
-    for component, checkout in [('GopFramebuffer', root / 'GopFramebuffer'),
-                                ('AdrenoMetal', gpu / 'AdrenoMetal')]:
-        patch = DEVICE / 'patches' / component / 'marble-buffered-scanout.patch'
-        applied = subprocess.run(['git', '-C', checkout, 'apply', '--reverse', '--check', patch],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if applied.returncode:
-            subprocess.run(['git', '-C', checkout, 'apply', patch], check=True)
     links = {
         gpu / 'GopFramebuffer': root / 'GopFramebuffer',
         tree / 'drivers/Adreno740': gpu / 'Adreno740',
         tree / 'drivers/AdrenoMetal': gpu / 'AdrenoMetal',
         tree / 'drivers/GopFramebuffer': root / 'GopFramebuffer',
         tree / 'kits/ArmSmmu4K': gpu / 'ArmSmmu4K',
-        tree / 'kits/AdrenoPM4': DEVICE.parent / 'upstream/UniXNU/kits/AdrenoPM4',
-        tree / 'kits/AdrenoFirmware': DEVICE.parent / 'upstream/UniXNU/kits/AdrenoFirmware',
+        tree / 'kits/AdrenoPM4': gpu / 'AdrenoPM4',
+        tree / 'kits/AdrenoFirmware': gpu / 'AdrenoFirmware',
     }
     for path, target in links.items():
+        if path.is_symlink() and path.resolve() != target.resolve():
+            path.unlink()
         if path.is_dir() and not path.is_symlink() and not any(path.iterdir()):
             path.rmdir()
         if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.symlink_to(target.resolve(), target_is_directory=True)
     cache = tree / '.cache'
     if cache.is_symlink():
@@ -125,16 +101,10 @@ def source_tree(root):
             target.symlink_to(path.resolve(), target_is_directory=path.is_dir())
     reference = cache / 'gpu-reference'
     reference.mkdir(exist_ok=True)
-    pin = PROFILE['translator']
-    translator = reference / 'metal2vulkan'
-    if not translator.exists():
-        subprocess.run(['git', 'clone', '--quiet', '--filter=blob:none', '--no-checkout',
-                        pin['repository'], translator], check=True)
-        subprocess.run(['git', '-C', translator, 'checkout', '--quiet', '--detach', pin['commit']], check=True)
-    if subprocess.check_output(['git', '-C', translator, 'rev-parse', 'HEAD'], text=True).strip() != pin['commit']:
-        raise RuntimeError('Translator source differs from the iOS 18 profile')
+    stage_ios18('metal2vulkan', reference / 'metal2vulkan')
     inputs = tree / 'scripts/data/gpu-metal-vulkan-inputs.json'
     pins = json.loads(inputs.read_text())
+    pin = PROFILE['translator']
     pins['translator'] = {key: pin[key] for key in ('repository', 'commit')}
     inputs.write_text(json.dumps(pins, indent=2) + '\n')
     (gpu / 'sources.json').write_text(json.dumps(SOURCES, indent=2) + '\n')
@@ -239,7 +209,7 @@ def kernel(root):
     driver = source / 'drivers/Adreno740'
     includes = [out, driver, source / 'drivers/AdrenoMetal', source / 'drivers/GopFramebuffer',
                 source / 'kits/ArmSmmu4K', source / 'kits/AdrenoPM4', source / 'kits/AdrenoFirmware',
-                DEVICE.parent / 'UniXNU-sheng/package']
+                DEVICE / 'package']
     for name in ('OriginalAcceleratorABI.h',):
         shutil.copyfile(source / 'drivers/AdrenoMetal' / name, out / name)
     accelerator = out / 'NativeAdrenoAccelerator.cpp'
@@ -295,44 +265,15 @@ def kernel(root):
 
 def userspace(root):
     tree = source_tree(root)
-    mesa_patch = DEVICE / 'patches/mesa/ios18-startup-error.patch'
-    mesa = tree / '.cache/mesa-work'
-    if mesa.resolve() == (DEVICE.parent / 'UniXNU/.cache/mesa-work').resolve():
-        isolated = root / 'gpu/Mesa'
-        if not isolated.exists():
-            subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', mesa.resolve(), isolated], check=True)
-            subprocess.run(['git', '-C', isolated, 'read-tree', 'HEAD'], check=True)
-            origin = mesa.resolve()
-            shutil.copytree(origin, isolated, dirs_exist_ok=True, symlinks=True, copy_function=os.link,
-                            ignore=lambda path, names: ['.git'] if Path(path) == origin else [])
-            shutil.copyfile(origin / '.git/index', isolated / '.git/index')
-            sparse = origin / '.git/info/sparse-checkout'
-            if sparse.is_file():
-                shutil.copyfile(sparse, isolated / '.git/info/sparse-checkout')
-                for flag in ('core.sparseCheckout', 'core.sparseCheckoutCone'):
-                    value = subprocess.check_output(['git', '-C', origin, 'config', '--get', flag], text=True).strip()
-                    subprocess.run(['git', '-C', isolated, 'config', flag, value], check=True)
-                subprocess.run(['git', '-C', isolated, 'sparse-checkout', 'reapply', '--sparse-index'], check=True)
-            for name in re.findall(r'^\+\+\+ b/(.+)$', mesa_patch.read_text(), re.M):
-                path = isolated / name
-                contents = path.read_bytes()
-                path.unlink()
-                path.write_bytes(contents)
-        mesa.unlink()
-        mesa.symlink_to(isolated, target_is_directory=True)
-    applied = subprocess.run(['git', '-C', mesa, 'apply', '--reverse', '--check', mesa_patch],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if applied.returncode:
-        subprocess.run(['git', '-C', mesa, 'apply', mesa_patch], check=True)
-    task_patch = DEVICE / 'patches/mesa/ios18-task-cpu-map.patch'
-    applied = subprocess.run(['git', '-C', mesa, 'apply', '--reverse', '--check', task_patch],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if applied.returncode:
-        subprocess.run(['git', '-C', mesa, 'apply', task_patch], check=True)
+    mesa = root / 'gpu/Mesa'
+    stage_ios18('Mesa', mesa)
+    source_link = tree / '.cache/mesa-work'
+    if source_link.is_symlink():
+        source_link.unlink()
+    if not source_link.exists():
+        source_link.symlink_to(mesa.resolve(), target_is_directory=True)
     manifest = tree / 'scripts/data/adreno-compiler-inputs.json'
-    pins = json.loads(subprocess.check_output(['git', '-C', tree, 'show',
-                      'HEAD:scripts/data/adreno-compiler-inputs.json'], text=True))
-    pins['patches'] += [str(mesa_patch), str(task_patch)]
+    pins = json.loads((DEVICE / 'ios18/source/scripts/data/adreno-compiler-inputs.json').read_text())
     manifest.write_text(json.dumps(pins, indent=2) + '\n')
     turnip_out = tree / 'build/mesa-tu-ios18'
     info = turnip_out / 'meson-info/meson-info.json'
@@ -341,14 +282,10 @@ def userspace(root):
         turnip_out.rename(previous)
     # arm64e Metal callers use the upstream Rust PAC boundary, built against the 18.0 ABI.
     for name in ('build-turnip-darwin.py', 'build-adreno-metal-plugin.py', 'build-adreno-metal-bridge.py'):
-        original = subprocess.check_output(['git', '-C', tree, 'show', 'HEAD:scripts/' + name], text=True)
+        original = (DEVICE / 'ios18/source/scripts' / name).read_text()
         translated = (original.replace('ios27', 'ios18').replace('ios27.0', 'ios18.0')
                                            .replace("'27.0'", "'18.0'").replace('iOS 27', 'iOS 18')
                                            .replace('plugin27', 'plugin18'))
-        if name == 'build-adreno-metal-bridge.py':
-            start = translated.index('PATCHES = ')
-            end = translated.index('\ndef git_tree', start)
-            translated = translated[:start] + 'PATCHES = [Path(' + repr(str(DEVICE / PROFILE['translator']['patch'])) + ')]\n\n' + translated[end:]
         if name == 'build-adreno-metal-plugin.py':
             translated = translated.replace('bundle.mkdir(parents=True)',
                 'bundle.mkdir(parents=True)\nshutil.copyfile(ROOT / "build/QuartzCore.metallib", bundle / "QuartzCore.metallib")')

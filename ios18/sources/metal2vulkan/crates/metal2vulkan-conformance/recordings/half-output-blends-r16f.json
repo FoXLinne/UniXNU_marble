@@ -1,0 +1,2808 @@
+{
+  "format": 1,
+  "case": "half-output-blends-r16f",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_samples.ll",
+      "entry": "rt6_fill_vertex",
+      "source_sha256": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+    },
+    {
+      "fixture": "rt6_samples.air.ll",
+      "entry": "rt6_fill_vertex",
+      "source_sha256": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+    },
+    {
+      "fixture": "rt6_samples.ll",
+      "entry": "rt6_fill_rgba16float",
+      "source_sha256": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+    },
+    {
+      "fixture": "rt6_samples.air.ll",
+      "entry": "rt6_fill_rgba16float",
+      "source_sha256": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "fills:air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "fills:air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "format",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0623ccb9b1619bd388284a438034d8cb6431964ba727d8b1c450303105735488"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "36d5543c67f020d7803fc398d197d6afb3b58fe2f4631a1770307186de10f1ad"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:values",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5f37f68d4c6a32a923c63d50d255f8e0dd888e800b193a5cb878458cbd5d2e1f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:shape",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c4b0abe54ae451ca314522244a354d1ceca4772379b7a566e241b29c6d301bdc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:destination",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fff499f7ea3b8b0f5ba07cb08bb78e0661bd0c5d15ba7e9fd8f4c9b0a7ae71ed"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-color",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6ca841056d16d47af129ea9204b07ceae4aa3c0956d3e300b62743bcc8f902ef"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:one-zero",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3f3e1b5d80f94b0379417d053d6c21aa0db4390602fd95cfc09efd93a94b52a9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:one-one",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2b07a10cbe9b06ace7be1e399e3f2cb195741564b03ccd92358c54f5b584b8d6"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:one-1msa",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0a8232b7e3451afcc8d5d85de91dde3641b34b6c7f9ea1755e0491e97c870aaa"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:sa-1msa",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0b21a646c0157f657ce24f3187351581042f1ed3aaaa01a7fe6dbb3e3010808c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:zero-1msa",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0efc78029a0de58c64ead380f2dbbe5c8a2e943af6f404175d73c7a24819d06b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:dc-1mdc",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "00c68810b0014f958c34d0fd6486177b49adbb5adb6aae9712a27ef28769d77c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:1msc-1msc",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d5be19f63dc4ddc75bf2617d36bc580082e4958966a54b4bea61bc6b922d4d05"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:sc-dc",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "57e4cd3601be5a868b807e9b1eecaff464b080f20c57740acfea15aefba702c7"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:da-1mda",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "59b7d1bb2a43cd21a6166109308c1fe8a5ff26d5a291bc911fdaa3fdbf27cf92"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:sas-1msa",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2ed28eddbab0694a4381387ab3c4890dd24dcec17608fc6b714cdd971be59d8e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:1mdc-one",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "45480b3a8b19838c44a4880a614c304ffd3ad54b617efef26bd1701464a32e59"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:dc-zero",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9da55296586cc9031a314387b3dcbffd7bc6063de994a9cc2154a3e3c9150dbd"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:min",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e1ce2d03085532bc9cd9a4c2cf5ab50b2b8fc0096ea8aa75f49c58e7380afa68"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:max",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d0ec4598d9a79db7c14926b48a4e997b70f51bdf0206e19edc76736330b40cbe"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:one-1msa-sub",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "4ced45d489daf559f017fa512632b413f08b7c9db4c59544cd97a331ff3cd7ef"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:sa-1msa-rsub",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "69451f3104fbc75398412740842789b5bc307b0cdd0477da8454a47cd44782c1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:one-one-sub",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "41c359c1518a1a07c40bafd9220e95da1957685eee23db0f4144ae85da46f310"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:bc-1mbc",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a8de1bb74f0b3795fbf0ee372b4e94c8a581d88e7d20b9029d9d3f1be425acd9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:1mbc-zero",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "439c4f9cf0d5655690bfd4d56a0d59c428b70972b8bf1654a517b396dfa54ca2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:ba-1mba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "8427ae7c5d0931de88abacf76527539c818ff974dbcaf4417ed534c3fdb1b835"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend:bc-1msa",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ce923e4b073e7740c48906fcf19013cc3f55f36bc388b9e3edd2069dded98451"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/values",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/shape",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sa-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sa-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sa-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sa-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/zero-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/zero-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/zero-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/zero-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/dc-1mdc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/dc-1mdc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/dc-1mdc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/dc-1mdc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/1msc-1msc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/1msc-1msc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/1msc-1msc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/1msc-1msc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sc-dc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sc-dc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sc-dc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sc-dc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/da-1mda",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/da-1mda",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/da-1mda",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/da-1mda",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sas-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sas-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sas-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sas-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/1mdc-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/1mdc-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/1mdc-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/1mdc-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/dc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/dc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/dc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/dc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-1msa-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-1msa-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-1msa-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-1msa-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sa-1msa-rsub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sa-1msa-rsub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sa-1msa-rsub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sa-1msa-rsub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-one-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-one-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-one-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-one-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/bc-1mbc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/bc-1mbc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/bc-1mbc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/bc-1mbc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/1mbc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/1mbc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/1mbc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/1mbc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/ba-1mba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/ba-1mba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/ba-1mba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/ba-1mba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/bc-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/bc-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/bc-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/bc-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back/one-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sa-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/zero-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/dc-1mdc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/1msc-1msc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sc-dc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/da-1mda",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sas-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/1mdc-one",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/dc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-1msa-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sa-1msa-rsub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-one-sub",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/bc-1mbc",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/1mbc-zero",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/ba-1mba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/bc-1msa",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "blended",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "one-zero",
+                      "observed": {
+                        "value": {
+                          "bytes": "AMDAv4C/QL8Av8C+gL5AvgC+wL2AvUC9AL3AvIC8QLwAvIC7ALuAugC6gLkAuYC4ALgAtwC2ALUAtACyALAArAAAACwAMAAyADQANQA2ADcAOIA4ADmAOQA6gDoAO4A7ADxAPIA8wDwAPUA9gD3APQA+QD6APsA+AD9AP4A/wD8AwMC/gL9AvwC/wL6AvkC+AL7AvYC9QL0AvcC8gLxAvAC8gLsAu4C6ALqAuQC5gLgAuAC3ALYAtQC0ALIAsACsAAAALAAwADIANAA1ADYANwA4gDgAOYA5ADqAOgA7gDsAPEA8gDzAPAA9QD2APcA9AD5APoA+wD4AP0A/gD/APwDAwL+Av0C/AL/AvoC+QL4AvsC9gL1AvQC9wLyAvEC8ALyAuwC7gLoAuoC5ALmAuAC4ALcAtgC1ALQAsgCwAKwAAAAsADAAMgA0ADUANgA3ADiAOAA5gDkAOoA6ADuAOwA8QDyAPMA8AD1APYA9wD0APkA+gD7APgA/QD+AP8A/AMDAv4C/QL8Av8C+gL5AvgC+wL2AvUC9AL3AvIC8QLwAvIC7ALuAugC6gLkAuYC4ALgAtwC2ALUAtACyALAArAAAACwAMAAyADQANQA2ADcAOIA4ADmAOQA6gDoAO4A7ADxAPIA8wDwAPUA9gD3APQA+QD6APsA+AD9AP4A/wD8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-one",
+                      "observed": {
+                        "value": {
+                          "bytes": "Jb2dvS69Zb5Guvy5gL30ufi63ruAvMq4dLovvEi4GLLwrx64EK7Ys6AsRLiMtoCu0DcQMsCowCQgsFA6Fjk0NPw44jsaPNg5Ajr+OgY6fDp8PPY9qjokOkE+Ez/bPLY9zz8wPvQ84D06P10/TT6mQBhA2EDPPoJADEFMPzxANEHQvY2+7LtLvAG+Ib12ukK7e7y4uVq43rrku2S2vrs2uqi3ZLrArgAo/rm8tEw1lDVwrCAvgKhUN7A3IK8QOXQ2bjkgNHQ34DOUNSE91jlpPKo8nTxgPEw9UzzuPnE98DumPpE/Sj9GQBk+nz2fQFU+cz54PsU/PUESQEI/KEHcQPi8VbxFvwG90LwkvmC9wLoYusy8TLosuMi3urzstDi4YLEAuwCpdLVQuAApfDRwrXA0iDBgtCS0QCvmON44oCuMOio8CjnQNO46XDmYOvo8uDg/PpQ7Xj0xPqk+cT10PMc8JD4VPeg8XkBHP4s/2j4SQChAcT9gQOU/aEAWQds/Jr7Wuwi9hL1gvmi78LpGvW28FL0wvPW8qLXAtri0OLXAqTC1yLgeutS58C6ENMQ1fDZkN6gxGLEMNXw0gjmKOlY7GjzMNFQ3cDykOII5wDzVPfk8DDxdPXQ7hzyjPNo+yz9gPKw+1T7cPklAmkD5PaI/+T/wP4o/GkEvQDRA3kE="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-1msa",
+                      "observed": {
+                        "value": {
+                          "bytes": "XbpHvMC7+L3JtVW2ML1RuAa6artwvMq4rbpBvCq5ibZdtmO5+rY7uD62Crl2uCi3CbW/taq1ALUftPS0SLSasDuyirROtGCtEqjsqF8vDDHAnPqz4TZsO0dCH0NQP5JAHkOrQKk9kD83QSJBWj/cQmZBxkIjP6VBgEJWP6FAMkJPvM294rehuZG9hbxruPK5Mrz/uN+33roDvPi3+rvIuiK5zroTt0C2/7lTuDi1W7W1tue1qbUAtbu0TrJGtLqxyrKAoSymEDE6MrK0NDDYq0Sp1CnwMTJB5D7qQntAWjyPQXpC00EfQ60/Ij4UQw8//D63Po9AGkObQEQ/TUKZQcW5ZLgkv8O7trvqvQa9ULn8uK68AbosuEa4u7xgt0q52bYwu3q2nbhDuaS2ebUXt6u12LXmtQC1TrSatDO09K0YtN+0I64wMC+utC08LFyx1Tb8tCo1TUEwQodCe0CvPRc+m0D+PSQ9DkMIQR1BHUBXQVJBOUBhQV5AGEEtQu8/4LwYtkm7prwavh+5C7kIvSG8/rwbvPW8jrYkuDa3Fbh+tW+4wLlPuu25OrZ3tU+1SbU0tXO1ALWRtN+zcbSFtJa0x7Q2KrAqeLOmMBoxALB0tDyoMzRMQSI97D6yPiRCGUOUPAhB+kDEQJFCB0NAPslA9UC8QCpAmUKsQJFAXEM="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sa-1msa",
+                      "observed": {
+                        "value": {
+                          "bytes": "KUEpQNg/6TxPQLM/sDqoPR08hjmgNbY5ZjVIpks0NzajNJatLivYr/Sr87XMtei0ErPftEq1ALVftFS1qLQasTuyKrTbsgAh9y4FMfg1xjdtNsYzEDyKvH475zwQua60+TpIt9+9ULwKt2a4Xr1GMqq4PixFvmy4fLBCvla8r7SYQMw+4EAIQH88wzxSPtc83DnxO8A7RDdpMVQ4U62IquQpPbRoKgAkvraGtDCwNrI1tQe1SbUAtfu0DrOmtDqyyrKAItQnCDRdNUquOjZFNNg1TTgsOkg4sbd8PBKz9r3iLTI3aCe8OIO8Vr6+NeG9JL6Rvkq8oDFavFS+6rO8uE9BM0GUPP8+NT69OgQ7KD2iPCo3rzlUOho5lrBAN1gwJzQAtZgtdLFGtQixsrDXtCu0+LSGtQC1jrT6tJO09K4YtH+0RqkwM6IpjTQvNSQxqjrHMUU7tDggO2w7ErOhvKm8xreKvby+szfPuP24trziuEi597x8udS80Lr6tKG9UECJQQpAOj7sO7g+Aj6ROf055jX0NrAsGTosOGo3ljSCNRAoQrMetpq2M7CusB6ykrNUtBO1ALXRtFC00bTFtJa0Z7SbLqww8K1zNa02gDIYMFg3yjquOFu72LhLut434zqUvt21rrdQuVYxWDWwvhu7vrriuyy9061AvHW8pDQ="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "zero-1msa",
+                      "observed": {
+                        "value": {
+                          "bytes": "0jzyOkA7IjWOPSs9QDUYPPo5FjhANLY5pjbuL6s3PDnRODo0BjeKNMI1aCtRLGAv7jEELWglAADAn9CvkLA0rTuyirVOtli0grSetSi0erQKuH66PrKwM8dAf0GgO2Q9HkEWPaU0oDltPQU9aDf5P8s8TD8YMYo8AD6gJQY3pDxiO8w3iD1wPLo1dThLPI46ODeBOhA7RDfpM4Q5FjDeMrw1jC3tNsA2AA+zMMg0SjMrLWQscCUAANip4KCMsHSvyrKwrMawgKcaq9m4zLP7t1S4I7gIt6Q/yDtKQXY90DAeP1pAJj+/QFo5DTNUQD013DNwLz05dD9sOIAbGz3kOh49jj3DLb06Sjq0Mug1MDsEO0o0/zhUOro5QB1QOWw2lDgAKYY3jDPoLVw0hzSkL6owoiyAHgAA6KRmrmaw0KcYtN+1ErNAq4y1JrPxtNe4rKz+uta02j+wQOdAdj28Ny449jz3NUAujkDRPLk89TivPGQ8xDcCPO824DnaPOgpQDo6Prc7NDkwMzA89TviNHo3DDKUNbAsuTpcOWU5azhBOSI2/jAgJtAgxjSJNGIzbjEyL2ooAACGqHyr4rAKs5a0x7XlrFSwvLdaseaygLg6usS4zbXXP0U4WDtlOkRAGUFALZE9ND2IPOM/R0ACMCU7UjvuOVA2Mz4wOIs2+T4="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dc-1mdc",
+                      "observed": {
+                        "value": {
+                          "bytes": "5bxKusG6BrOhvh2+ALOFvK65erYAsd2567T3qb+2hbokuuCwF7jmsoe3QCZmKIihubcsqTUujS/gLCCxkC1fMoQzIDB5Mpk1ATa/Ngc2WjZeOLY4tzQeMBg6jToqOK05+zseOkszSjiKO4o7+DZ/PUc82j1KMtA8Hz40KBo5CD7Euu+1Or6XvPazFre3vGK6WbW1ugK8krVWsCe6rqlirlq0aKHwt264+Avup3K46LalJ68fNC4YrE4jLiuvLQgz+jJsMUc0PCxFL1E1yjUcOHI4mDhWOFo5hDeSOmU5ly4WOxc89zu0PFY4ljJjPVc1SjRkMN05iz6fOZ8dHj7QPFS9IL7hqiy6rLkYsBS0XrtQuyexh7j8ujG6pJQquh61irkAAMG4SrA4INC0rrflpOay7KDOKlsoWjAzIaUuXy7CMEItAjXKL0A2djWnNhI4DjCBOLg2aDkUOow6ZTn0NJ01AzqcNF8t6zxSO547wzg1PDs8gDhiPIY4ljvoPeksa7lDv167U7iIsGq8MbxNsqC1gq5iszynHLzWuVi6tbhMu2i1aKnYHgcdKLa6tyu337XZtCwpPi2uLikxaCp9Kt8sIy5RMfAzXzV5NFM1IDgnOM04qTdoOY80oTc8NzU7+zsQLN868TqjOuw8XT0/MNU6WTuEOtw3PT6pOcg4vD8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "1msc-1msc",
+                      "observed": {
+                        "value": {
+                          "bytes": "uMMfxHLDf8RQwAXAOMOhv1vAy8BYwYq9Qr+TwIy8Sbbws/q7r7EctwwwM7tSuRSx3DlcNIiqPCYosX87uTl3NPw4ZDsuO8A4gjjPOIg3TDd8ODc5ADWtM0E2TjXbMLYtAAAwrvSwaLQ6t5q4urgRvBi8c71BvDO+kr/uvWm/4cBcxNDEssEJwiHE5MI9wKbAmsH4viu98b9wwP26HcBovqi7Mb5UskArPr39t044XDiorh8xMKrPOM44O7CyOds2bjm8M4Y2ZjIvNA07TDf2OKo4CTiQNp82UzQyNXEx8CsAAJGvSrNpthm2B7fuuoq5c7pHu9u8NL8bvua9g8COwHTDXcI6xQnDnsIgxA7DU8Cev9nBer/TvGC8K8E7uVq8YLXIvrCs8biMuzgsSjdAsKg2hDIEtm+1iCzROXo5DSyMOs87aTjSMzI5XjcfOJk5uDR3Oa81tjYxNv80cTF0LAAAJK4VsVyzXriMuKi5/7kSvK28p7wEvuy9Kb9zwF2/nMTBwTzDwsNixPrAjsDCwojBMML5wLvBXbpiuwS5YrnArQa5fLyLvRq92jFWN4E43ThQOcczsLJPNlM1MjrzOlY7sTsyNPQ1qDpiNuI2WDnVOVo4Eja0NnQzyjKjMNouAABgrKyyILXctlu557o6uaK7fLz2vC+9p7/Mvlu/gME="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sc-dc",
+                      "observed": {
+                        "value": {
+                          "bytes": "gkQKRLRDqUL+Q3ZDaEE5QktBjEDQP3dACT+5PXQ+jz8SPzs8fz3bO/Q88jf/Njs46DytOBQ0ojLwLOk7wTgFLzY22DqcOkg1BDWcNok0SjUWObU88TaqN+Y8TD4LO3o8oD90PR099T19PwFAuT+0QRpBW0JLQVdCU0OSQiZDMkRNRLBDTESqQ0BCBkKeQr5BykAtQSpBtz+HPhBAKT3YPBY9LztuPX09gDgCOTg9ljz4NuI3GTSIOcU4Pim4OBIzXzdiKTgw8CifLCc8QzQSOYw5UzniOAY7YDkHPgE8DjvBPUQ/Aj+fQI0+7T6IQS1AhkDkQHxBbkNKQpJCA0T+Q5NEfEQKQzNDuUK+QXBB6kGXQT9AeUCyQEtApD28P6k9xT4QO9w9EDvbOAE81zxbONY6NzjUMG8uAjFmOW440SRcObE7VDQkKhM3NzN7Nb06ITRCPek3NTvMPIw9ATxHOyc8aT0mPaY930DrP05ASUATQWtBZEEzQjpC4ULtQ4JDN0SsRMtD8kIsQttCbkIBQc9AMED+P+k+u0D8P9I/rz6mPwU9vjpNOYE4bTzbPKw8RzwAPB83wS8eNhA0azk6Oro6czvpKe8uaDprMaUzCDqsPD06UjgyO8Q4GTrFOuw9mT+FPD4+uT4dP9NAfkEkQNVAQUGKQcZBaEO6QiJDv0Q="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "da-1mda",
+                      "observed": {
+                        "value": {
+                          "bytes": "AMDAv4C/QL8Av8C+gL5AvgC+wL2AvUC9AL3AvIC8QLwAvIC7ALuAugC6gLkAuYC4ALgAtwC2ALUAtACyALAArAAAACwAMAAyADQANQA2ADcAOIA4ADmAOQA6gDoAO4A7ADxAPIA8wDwAPUA9gD3APQA+QD6APsA+AD9AP4A/wD8AwMC/gL9AvwC/wL6AvkC+AL7AvYC9QL0AvcC8gLxAvAC8gLsAu4C6ALqAuQC5gLgAuAC3ALYAtQC0ALIAsACsAAAALAAwADIANAA1ADYANwA4gDgAOYA5ADqAOgA7gDsAPEA8gDzAPAA9QD2APcA9AD5APoA+wD4AP0A/gD/APwDAwL+Av0C/AL/AvoC+QL4AvsC9gL1AvQC9wLyAvEC8ALyAuwC7gLoAuoC5ALmAuAC4ALcAtgC1ALQAsgCwAKwAAAAsADAAMgA0ADUANgA3ADiAOAA5gDkAOoA6ADuAOwA8QDyAPMA8AD1APYA9wD0APkA+gD7APgA/QD+AP8A/AMDAv4C/QL8Av8C+gL5AvgC+wL2AvUC9AL3AvIC8QLwAvIC7ALuAugC6gLkAuYC4ALgAtwC2ALUAtACyALAArAAAACwAMAAyADQANQA2ADcAOIA4ADmAOQA6gDoAO4A7ADxAPIA8wDwAPUA9gD3APQA+QD6APsA+AD9AP4A/wD8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sas-1msa",
+                      "observed": {
+                        "value": {
+                          "bytes": "KUEoQNg/6DxPQLM/sDqoPR08hjmgNbY5pjbuL6s3PDnRODo0BjeKNMI1aCtRLGAv7jEELWglAADAn9CvkLA0rTuyirVOtli0grSetSi0erQKuH66PrKKvHw75jwQubC0+DpIt9+9ULwMt2a4Xr1IMqq4QCxFvmy4gLBCvla8sLSYQMs+4EAIQH48wjxTPtc83DnxO8A7RDfpM4Q5FjDeMrw1jC3tNsA2AA+zMMg0SjMrLWQscCUAANip4KCMsHSvyrKwrMawgKcaq9m4zLP7t1S4I7gIt0g4sLd8PBCz9r3gLTA3gCe8OIO8Vr7ANeG9JL6Rvkq8oDFavFS+6LO8uE9BM0GUPP4+NT69OgQ7KD2iPCo3rzlUOro5QB1QOWw2lDgAKYY3jDPoLVw0hzSkL6owoiyAHgAA6KRmrmaw0KcYtN+1ErNAq4y1JrPxtNe4rKz+uta0tDggO2w7ELOhvKm8yLeKvby+sDfOuP64trziuEi597x8udS80Lr4tKG9UECJQQpAOj7sO7g+Aj6ROf055jX0NrAsuTpcOWU5azhBOSI2/jAgJtAgxjSJNGIzbjEyL2ooAACGqHyr4rAKs5a0x7XlrFSwvLdaseaygLg6usS4zbWuOFu72LhLuuA35DqUvty1sLdQuVgxWDWwvhu7vrriuyy90K1AvHW8pDQ="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "1mdc-one",
+                      "observed": {
+                        "value": {
+                          "bytes": "iDDltaKy2LxAO7M6wLtHOKAsSrVAumo1CrQGuxww5DkEOpGvtDjoMoM51rZktAwx3DtsN7wtzy9Qrsc72TmHNPw4bDtOOwg5AjmXOeQ4Ljl8Or87oDmzOaA77ztXO787ADwhPHI8ijxyPJc8Mz0zPOg8UjxPPjE9rTw2P6c+Qz3AtTq8WjlENEO8ybgqOHcvZ7gvNco4M7RBuUs4VLqPt4ApWrmLOLw5/LnUpm475DqsMKA16C2XOU45Nq7SOes2bjncM8Y2hjMvNdU7xjh+Oqo6kTpoOhg7qjrhO3w7hzsAPAs8JzwKPLo8Ij0ZPH89xj0gPrU9MDwlPj4/CT3oPWA0lTjWvnaz4LMdvRi7eDSINdq6cCUiOH43s7zlOEgpUDmIuoo5bikYtk84xTrgMVQ5UjaIs76zRDAZOpo5TSyMOtc7iTh5NLI5dzg/OSE7XDj/O/g5IzuYO8c7fDuWOwA8IjxtPLg8ETyePLw8RT3uPBY96T1fPVQ++j0pPac/5LgDO3CuvrhIvcE11DV/uyG4HbzEuJO8IzrMNxw5TDdIOwM0rrXOubO5PznLOgk73TrYOiQ2H69PN+M1Ujr7OlY7uTtyNIQ2KDvyN5E44DrVO+I6KToiO106+zpJO+M7ADw+PDo8XDyJPDY8HTynPS89SD2aPTU+mjxYPrY+BDw="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dc-zero",
+                      "observed": {
+                        "value": {
+                          "bytes": "tr0kvFq8NLbDvle+gLYdvYy7ObmAtX+7b7hisU+5arsCu1i2drlgt++4yq5RsCa06LdktA6wn67Ap9yxFq40pQAAYis0L4QuAjCeMYkwOTH4NC04KTAMK+I4Nzq+NFo3njseOBQwWDWROYw5aDQYPZM6XT0DMKk7bD1wJUQ3JD1gvKa4o75cvfm2eblQvRi8j7govJK8xbhGtX27qbHdtCy4KbBjuXy5AJJPtMi4Grjksq+zFLC0s9ixUKMQrnSnAABAInQpoCFQJtk0QTCoNFQ1UTWwNAE38jP7Ocw2kCpMOQw7RjqCPH01yy8lPbIyZDF4LSA4Sj78N0AbSD2hOxC+n77qrhK8qLsdtFC3frxuvHu1eLonvKO7IJ9bu4y4qLqAq9q5IrYQsf63h7hMtDi2DrTgqEyk6KzMsN6t0J8AANQrCixwJe4wJi9kMaY1wCl/OHIyMjfKOIs5zDZGMTgyBDg9MfAprDxSOZ45VjZsOnU6HjbDOkM2rjkEPYoqaLttv6G8SrpgtCS97bwatrm4urM4tyeufLxGu3i7Qrqku5q4xLP6qCCkYbiJuCe4PrdMtp+yIqqGsJ2tgq4KqwAAtCuYJX4q4DJaLYYvQDWqNyA2vDMwN1wwJzT1M9E5ljtAKOM48jimOFw8Fj0fLeY4YjmsOFQ1mT0NOMQ2uD8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "min",
+                      "observed": {
+                        "value": {
+                          "bytes": "AMDAv4C/QL8Av8C+gL5AvgC+wL2AvUC9AL3AvIC8QLwAvIC7ALuAugC6gLkAuYC4ALgAtwC2ALUAtACyALAArAAAACwAMAAyADQANQA2+DUAOIA4qDIgLQA6gDpsNdg3njvAN0AvgDR0ODo4aDIWO2I43jrwLIo4MjoAIsAzTjkAwMC/gL9AvwC/wL6AvkC+AL7AvYC9QL0AvcC8gLxAvAC8gLsAu4C6ALqAuQC5gLgAuAC3ALYAtQC0ALIAsACsAAAALAAwgCtQLgA1rDUANwA4gDiANxg5TDWAOsQ3ACtMOaI6lDmYO2Q08C18O6gwMC8AKxQ1dDuQNAAYojngNwDAwL+Av0C/AL/AvoC+QL4AvsC9gL1AvQC9wLyAvEC8ALyAuwC7gLoAuoC5ALmAuAC4ALcAtgC1ALQAsgCwAKwAAAAsADBALwA0ADUANgA3wC2AOCg1PDkAOoA6xDegMTgykDeoMAApejsOOBY4aDRIOCI4iDMCOCgzRDZaOcAmAMDAv4C/QL8Av8C+gL5AvgC+wL2AvUC9AL3AvIC8QLwAvIC7ALuAugC6gLkAuYC4ALgAtwC2ALUAtACyALAArAAAACwAMAAyADRINAQ1ADcAOIA4MDY6OdAxHDWMNDQ6ljsAKFg4KjhwN6Q6ZjsgK4g25DbANVAyZjp4NDgz+Ds="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "max",
+                      "observed": {
+                        "value": {
+                          "bytes": "tjlGOKQ42DK6O4Q7ADSMOgg5RDcANLY5GDeIMLg4+joCO8Q2PjqKOJQ68DDoMmA36DsEOWg1TDXAL9A7Fjo0Nfw4Yjs0O1g4Ajh+OAw2ADf4OGw7ADmAOYI6pjsAO4A7ADxAPIA8wDwAPUA9gD3APQA+QD6APsA+AD9AP4A/wD9gOMw0FDvqOfgzfDaKOj45FDbIOaY6RDc4NE46CDGUNCw4cDAoOsA6ABRENqY7SjvkNmQ4cDUqOtg54CwQOnQ3bjlAMnQ1ADIANMI7ADZSOVQ5ujgAOYA5ADpcOwA7gDsAPEA8gDzAPAA9QD2APcA9AD5APoA+wD4AP0A/gD/APxA61jpgK344YDjgMIA0wDnoOaAztDhUOhw6AB6KOkg4qDoALLA6jDfAMtA5PjukNzg6ojiALuAq6DRmOt450C+MOtQ7CjgAMu44uDUwN3Q6ADj+OwA5gDliOtI6ADuAOwA8QDyAPMA8AD1APYA9wD0APkA+gD7APgA/QD+AP8A/aDeqO/A48DYAMRg6EDrQM0w2YDFANbAsLDsgOqQ65DmkO+g4cDQgKoAlXjpCO2I7PjsyO2o46DCGOHw3gjoKO1Y7tDuYMVQ04DoANQA2ADqqO3I5ADmAOQA6gDoAO4A7ADxAPIA8wDwAPUA9gD3APQA+QD6APsA+AD9AP4A/wD8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-1msa-sub",
+                      "observed": {
+                        "value": {
+                          "bytes": "acKcwZDBRMBHwvXB0L8swX7Ay7+Qvg7Aqr4/vWu+3r5pvs+8Qb1ivHC89rmKuWy5fLkguFa2ALXCszCshCTQJDsyijYnOFg3QThPORQ5vTkFPH89jzooN4++v7//rJK2PL6wsq46wDfWrmQrTDtyuNM0MLTdPWw4/DMqP749ODrYwdnAhMLYwTfAfcBlwcPAzr+AwITAEb/9vYK/A70cvW+9Gbw7vfC8AbqtumS7UrqluAy4V7YAtYqysrFgJOgqyjJYMGM08DLjNFk78zh+Oyo8UTxCPOS8HrNUv9e3TDo8unW8S7m+vKY4XjxPunE8BD3JPcM7oLHKPDw/yjhOPI/Cp8Lcv0/BEsGWv/q/7MDBwNK+AMA1wN2/xbwov9u9Sr7Qu2K9Mry9uq67Q7t0uSq5FLgatgC1Y7OarWgiGKgYNN82iTXQM8Y4Sjh4OSw8lji/PWs7Gr1gvo6+17dEN6U3tLEEOlw8Hbz2LjQyizpFNXA3jzx8OUQ9UDxNOZE/kMH9wq7B7cDmv3jBPcF4v9+/gr7lvou9LsBuvzO/dr6gvki9ILyxuhO647tFu1i6XLlmuI22ALXesiGwDCcKMZY0xzZyMio13jmtN7k4ADwdPaI85jsXve0ywq7ZLMi8Mr7YO0O0SK98L0a5HLpAPds4LjkSOyw9ajIoPd09ODI="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sa-1msa-rsub",
+                      "observed": {
+                        "value": {
+                          "bytes": "dLF8tb+wr7j7OEY5wLEPOXM3TDXAMbY55jdcNIY5XDtRO+04kzqFOUE6zTf0N0w4vDhhN/Y1ADUhNLAt8B2Amjuy6raXuGy4YbnfuiS7LrylvXe/oL12Pq9DRkQUQfpBP0T/QRlA+EBPQh5CiUCUQ/ZBKkOLP6VBSEJuPto/OkE8t8q5PjV8Moa21qyFONs2cDEROWA6RDc0NbQ6azWvN145AzeGOqA6wjadONQ5MjnLNzk39zUANQozcjKAHuioyrIYsUO1+LQjt3W8A7sPvcq9Sb6avpJC2kArROdBKj/vQs5DF0MoRO5ADUDwQ0BADkB/P8NAGkNjQFw+mUGhQCiurzG4uxisQCXGtnCwEDjEOKgtTzhUOlo66jAAO1Y5FDtANtM6IzkdOJ45szlUOGo4SDe6NQA14zMaL5ghGCoYtD+3abZotea52rmIu3y91ru3vw2+rUKYQ/ND50FAQGtA70FDQIQ/E0QEQvlB1UDnQbZBbUBhQSZApEB5Qf89wLiINcitGLRUuKI2yjd4rfQxwCA0NLAsWTuMOhU7izrBO+E5UDjiNuY20zm1OTg5nDjsNy02ADVeM+EwMJyKsJa0J7cZtKq2/rpmucm6UL29vpq+S76sQvI/4kDFQIxDPEQ8P0xCKkLcQY1D40OwP1lBWUHwQCpAYUI4QLs/ZEI="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-one-sub",
+                      "observed": {
+                        "value": {
+                          "bytes": "bsHywOnADsBuwUHBgL/DwELAkb+Avg7Axr5Rvdy+vb+Bv3G9n76FvUq+vLq6uhi89L1CvLS5Jrnwtai8Frs0tvy44ro0urC1BLT4swCaICzAr9i1rDbcOBCsmLBKOCg3ICqgOAw8QDuMOUY6szxqOJ47ojkxPns8zjs0P4g+GT0YwXrAhcEawf+/MMDiwHDAhb9SwGrAEb8Ovue/Ib1lvRa+TryUvqC+ArpRvFO+5b1yu+S7uLlVvNi7OLQQuzq4brlAsOiyIDDYMEK5QCVIs1CxQKcAMYAqtDbgrjw2EDtoNXgz2DagM8474TwINys9jT0IPjs9DDrcPT4/rzzIPYTBlsG7v8DAmMBcv6C/kMB6wLS+2r81wAfAxrzFv2S+VL8AvNi+I72wu6i9H74pvBy9Ebygt9y1dLjmu9666LGMulS7FLbALNy1wKnArOi1kDb8ttg0QCggqiCpPDYYOnI6uDjWO5g8DDVyOuo6pjy4Oy88jz2/PBs+rz3TPKU/7cDKwfzAfsCgv+bAxMA6v5O/bL7Qvou9S8DQv9K/Mr/SvzS+nLziuiy6770hvvG9n71ZvWq7dLeGuj65gruKu1a7NLtgqlCt4LjAKeArALVUt5CvoDNgKIw45De6ODAxoCogPKg4VjlIOrg3NDeHPV48hzwQPfY9mjsiPpk+iDs="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "bc-1mbc",
+                      "observed": {
+                        "value": {
+                          "bytes": "cq6msgOxULbXMNcwALWoLg6hQ6+as8IuJawdtNIsqjQCNYQjijToMJw1Sq6rqOwwVTjsNO8vajD+IAU56zevMvo2UTlYOfs20DbKNwg2RzauOIw6VDUzNFs6Tjv/N/84uztDOas2bTgeOhw6bDg1PKs6RzxVODo7RTxrONs5Lzz0svO1Qiuvpp21IrNuLVuh5bHFLGcx3awZskAySLOWrygs5bFrNIw1LrNXLLU3gTfYMAw0AzAhN/s2B5rjN+s0mjf6MGs0Oi6cMC46xTXGOO44qTggODc5TzcaO9E4HTUcOjE7mzoVPIk4VzdFPEQ4OzgPOK45ojzMOV04OTxoO3WsNyQuuNawjrBltqe0YyhFLDy0ZJQeMRoxo7WCMyQrhDSasyk1hy30rNY0IzdMMU42YzROqTGreDAHOJ03RSyVOKE5QTZWMA04gTXVNpE50DLyOpw2UDlFOrk60Th4Nvo2MjkINyM2Hjz9OSk6/jiZOqU6ODnbOnQ5izogPMw4a7S6LS6wsbOntt8mfCnEtJaxBbXasXu1CjS/McozSjLlNbwwYay7sriynTUpN6M3vTf5N2E08CIiNVc0QTjHOCM5izkeMdwzajl/NFA1QDmROik5VTdPOaM1ejdiN5g6tjtzNb45xDmaOcw7PTyGN+M5KjrqOSg5VzzqOcQ5HT0="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "1mbc-zero",
+                      "observed": {
+                        "value": {
+                          "bytes": "mr1tvUC9FL3nvLq8jbxgvDS8B7y0u1q7ALunuk269LmauUC557iNuDS4tLcAt022mrXntDS0ALOasTSwmq2aqQAAmimaLTQwmjEAMzQ05zSaNU02ADe0NzQ4jTjnOEA5mjn0OU06pzoAO1o7tDsHPDQ8YDyNPLo85zwUPUA9bT2avW29QL0Uvee8uryNvGC8NLwHvLS7WrsAu6e6Tbr0uZq5QLnnuI24NLi0twC3Tbaatee0NLQAs5qxNLCarZqpAACaKZotNDCaMQAzNDTnNJo1TTYAN7Q3NDiNOOc4QDmaOfQ5TTqnOgA7Wju0Owc8NDxgPI08ujznPBQ9QD1tPZq9bb1AvRS957y6vI28YLw0vAe8tLtauwC7p7pNuvS5mrlAuee4jbg0uLS3ALdNtpq157Q0tACzmrE0sJqtmqkAAJopmi00MJoxADM0NOc0mjVNNgA3tDc0OI045zhAOZo59DlNOqc6ADtaO7Q7Bzw0PGA8jTy6POc8FD1APW09mr1tvUC9FL3nvLq8jbxgvDS8B7y0u1q7ALunuk269LmauUC557iNuDS4tLcAt022mrXntDS0ALOasTSwmq2aqQAAmimaLTQwmjEAMzQ05zSaNU02ADe0NzQ4jTjnOEA5mjn0OU06pzoAO1o7tDsHPDQ8YDyNPLo85zwUPUA9bT0="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "ba-1mba",
+                      "observed": {
+                        "value": {
+                          "bytes": "ELihuDK4lrkXtMOzwLgMtES1Wrazt1myGbVOt9GxlhYVKA6yiyjZqlkvL7MzsTgPGTW8MGIkTynfqT83zDXTMHw1SThpOCE2NTYxNwc2bzaIOBs6VTanNUg6IjukOIg5yjv1OYw4gznzOg071TmJPM87szwwOkk82zyTOtE78jzLuKm5trWJtjS5S7iAtH21dbf6sy+xdLWutnSut7YitTixh7WSJ04uZLUDrtQz8DMZIrkuqSSINKE0cKnFNU0z+TVWMMwzdi9WMWQ50jWAOLs4oDhQOEc5KDj5Okk5OzeDOnk7Hjs6PLU5IjmIPNE55TndOT87Fj2OO4g67DySPLu3b7Z/ug+4ybdnuZ247LRNtCC4urT6sI6wQLg+q+Gx5B8ztjssy64Ws8gt7zLnIHwyyi85rxyvMSuwNY41/yg0N4g4WDWyMDk3ZTWnNiA5ZDRsOlY3Wzk2Oq06STkmOHQ46DmxOHI4Tjz0OjI7YzrBO+Y74zokPEk7IDzZPBc7KrmDtQm4nriduXK1CLWNuFa3b7gDt2e4cKw+r1qqrazTLGituLNutTa1HDD4MhI0XjTENFAwNKtaMokxQjZLNwk4djjgMHYzrjibNHU14DgEOgU55zdZOf82VDhmOMk6xjvtN3A6kTqMOjA8gjxrOTI7hTtuO/E66TzBO747rj0="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "bc-1msa",
+                      "observed": {
+                        "value": {
+                          "bytes": "1ziXNIA1I7PpOkk6GrFwOMA0FS20sB81Lilws4kwXjXVNGOkpTEcKVAwwLCwr9qqhCjGqtqtAK5JrbWxw7FnrjuyPbW0teOynrIetLawwbCutSS5uJ8lNzpB/EHdPIQ+uEFcPgY5PTztPpg+ATvZQJg+lkAtOZA+DUCHOAI89z4qNQWukDqGOFqxgCqvOJw1gBQbNoY3uCsYsFU1t7KrrngrOrJzMbMxMLOcqyAvjitvrAOs2K0ArrmvNqy/sVSwyrL6qiav5yYAJRm4MrDhtUK2k7UItDxAyjzHQYM+6DYpQP1AQEB1QS086jgnQRI6kTmuOJI8vUBQPGE4Wz/FPW85dTqQt8Y0LTTAtJSv4DbUNjmxyDJbNnQ1nrU5NUktWzTAs6UyEqBAsDwsHC5SqmCciqvMrgCuB64AsZmxTqoYtJK137FAjlm0JrBIspS37iykuVivV0AjQWRBgz4eOpQ6PD6vOUM3TkFkPl8+NDx8PkQ+yTsIPqs7HT0aPwU5zDHNO2420i7PtFM4Djg9sWgkwbMYrCG1cjcFNWM1eDO1NYcu0q4Js+ay5C0kLu4rCCXTpP6sAK4Qr1ivFbKks5a0erX9qA6tiba0rJiu5rYHudW2mrFVQBI6pjw/PNRAs0FqNus+oT4IPrtAGkF0OF89iT3qPDU7JkBFPMY7pkA="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "u16",
+                            "row_offset": 0,
+                            "row_elements": 1,
+                            "row_pitch": 2,
+                            "rows": 256,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-half-output-fast-math-blend"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 42,
+        "argument_samplers_taken": 8,
+        "argument_tables_retained": 21,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 21,
+        "command_buffers_begun": 64,
+        "command_buffers_begun_batch_barriers": 21,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_encoders": 42,
+        "command_buffers_submitted": 64,
+        "commands_recorded.begin_command_buffer": 63,
+        "commands_recorded.cmd_begin_render_pass": 21,
+        "commands_recorded.cmd_bind_descriptor_sets": 21,
+        "commands_recorded.cmd_bind_pipeline": 21,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 21,
+        "commands_recorded.cmd_draw": 21,
+        "commands_recorded.cmd_end_render_pass": 21,
+        "commands_recorded.cmd_pipeline_barrier": 24,
+        "commands_recorded.cmd_push_constants": 21,
+        "commands_recorded.cmd_set_blend_constants": 21,
+        "commands_recorded.cmd_set_cull_mode": 21,
+        "commands_recorded.cmd_set_depth_bias": 21,
+        "commands_recorded.cmd_set_depth_compare_op": 21,
+        "commands_recorded.cmd_set_depth_test_enable": 21,
+        "commands_recorded.cmd_set_depth_write_enable": 21,
+        "commands_recorded.cmd_set_front_face": 21,
+        "commands_recorded.cmd_set_primitive_restart_enable": 21,
+        "commands_recorded.cmd_set_primitive_topology": 21,
+        "commands_recorded.cmd_set_scissor": 21,
+        "commands_recorded.cmd_set_stencil_compare_mask": 21,
+        "commands_recorded.cmd_set_stencil_op": 21,
+        "commands_recorded.cmd_set_stencil_reference": 21,
+        "commands_recorded.cmd_set_stencil_test_enable": 21,
+        "commands_recorded.cmd_set_stencil_write_mask": 21,
+        "commands_recorded.cmd_set_viewport": 21,
+        "commands_recorded.end_command_buffer": 64,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 21,
+        "creation_pipelines_made": 21,
+        "creation_render_pipelines_drawn": 21,
+        "creation_render_pipelines_made": 21,
+        "descriptor_keys_built": 21,
+        "device_memory_allocated": 268436096,
+        "draw_shapes_made": 8,
+        "draw_states_recorded": 399,
+        "draws_settled": 21,
+        "driver_diagnostics_withheld": 21,
+        "encoder_command_buffers_begun": 42,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 41,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 21,
+        "heap_tables_worked_out": 42,
+        "host_texel_copies": 21,
+        "images_started_on_the_host": 21,
+        "inline_passes": 21,
+        "linked_use_questions_asked": 42,
+        "new_buffer_bytes_cleared": 12816,
+        "object_churn.buffers_evicted": 12,
+        "object_churn.buffers_parked": 23,
+        "object_churn.buffers_recycled": 1,
+        "object_churn.images_own_memory": 21,
+        "object_churn.textures_image": 21,
+        "object_churn.vk_buffer_bindings": 22,
+        "object_churn.vk_buffers_destroyed": 12,
+        "object_churn.vk_buffers_made": 22,
+        "object_churn.vk_image_bindings": 21,
+        "object_churn.vk_image_views_made": 21,
+        "object_churn.vk_images_destroyed": 23,
+        "object_churn.vk_images_made": 23,
+        "pipeline_layouts_made": 1,
+        "pipeline_layouts_shared": 20,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 21,
+        "render_passes_begun_inline": 21,
+        "render_passes_made": 2,
+        "resident_textures_looked_at": 21,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "set_zero_sets_found": 20,
+        "shader_modules_made": 2,
+        "shader_modules_shared": 40,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 126,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 84,
+        "submit_infos": 1,
+        "trail_waits": 1,
+        "variant_pipelines_made": 21,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0
+      },
+      "composed": {
+        "command_buffers_begun": 64,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_submitted": 64,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 24,
+        "commands_recorded.end_command_buffer": 64,
+        "device_memory_allocated": 268435456,
+        "functions_translated": 2,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_shared": 105,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "pooled_memory_blocks_made": 4
+      },
+      "per_state": {
+        "pipelines": 42,
+        "states": 21
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 4.72 and ours at 4.74; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 239,
+      "times": {
+        "case": "half-output-blends-r16f",
+        "calls": 109,
+        "in_calls": 45360456,
+        "on_cpu": 2567665,
+        "blocked": 42854208,
+        "elsewhere": 9592750,
+        "spend": 55758010,
+        "spend_least": 54242753,
+        "spend_most": 421576670,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 3458,
+            "on_cpu": 3542,
+            "blocked": 0,
+            "wall_least": 2542,
+            "wall_most": 3791,
+            "wall_total": 33501,
+            "on_cpu_total": 33833,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 32982750,
+            "on_cpu": 1003333,
+            "blocked": 31933750,
+            "wall_least": 31655583,
+            "wall_most": 395998833,
+            "wall_total": 32982750,
+            "on_cpu_total": 1003333,
+            "blocked_total": 31933750
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 83,
+            "on_cpu": 208,
+            "blocked": 0,
+            "wall_least": 42,
+            "wall_most": 84,
+            "wall_total": 3085,
+            "on_cpu_total": 6210,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 11151000,
+            "on_cpu": 681959,
+            "blocked": 10478125,
+            "wall_least": 11004958,
+            "wall_most": 12865250,
+            "wall_total": 11151000,
+            "on_cpu_total": 681959,
+            "blocked_total": 10478125
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 24042,
+            "on_cpu": 24167,
+            "blocked": 0,
+            "wall_least": 23166,
+            "wall_most": 28292,
+            "wall_total": 676127,
+            "on_cpu_total": 680210,
+            "blocked_total": 0
+          },
+          {
+            "call": "replace_region",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 209,
+            "on_cpu": 333,
+            "blocked": 0,
+            "wall_least": 208,
+            "wall_most": 250,
+            "wall_total": 7790,
+            "on_cpu_total": 10291,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 3959,
+            "on_cpu": 4083,
+            "blocked": 0,
+            "wall_least": 3709,
+            "wall_most": 4917,
+            "wall_total": 101997,
+            "on_cpu_total": 104793,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 1875,
+            "on_cpu": 2041,
+            "blocked": 0,
+            "wall_least": 1750,
+            "wall_most": 2208,
+            "wall_total": 41834,
+            "on_cpu_total": 44543,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 4.72 and ours at 4.74; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 237,
+      "times": {
+        "case": "half-output-blends-r16f",
+        "calls": 109,
+        "in_calls": 56470328,
+        "on_cpu": 46481122,
+        "blocked": 9792749,
+        "elsewhere": 8949167,
+        "spend": 65419495,
+        "spend_least": 61777411,
+        "spend_most": 81985466,
+        "degraded": [
+          "metal2vulkan-degrade-half-output-fast-math-blend",
+          "metal2vulkan-degrade-shader-half-color-bits"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 1834,
+            "on_cpu": 2000,
+            "blocked": 0,
+            "wall_least": 1750,
+            "wall_most": 2875,
+            "wall_total": 2493000,
+            "on_cpu_total": 2493541,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 498292,
+            "on_cpu": 498792,
+            "blocked": 0,
+            "wall_least": 485458,
+            "wall_most": 624583,
+            "wall_total": 498292,
+            "on_cpu_total": 498792,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 42,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 42,
+            "wall_most": 42,
+            "wall_total": 1501,
+            "on_cpu_total": 4249,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 7663375,
+            "on_cpu": 568291,
+            "blocked": 7037375,
+            "wall_least": 7080542,
+            "wall_most": 9481375,
+            "wall_total": 7663375,
+            "on_cpu_total": 568291,
+            "blocked_total": 7037375
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 1956292,
+            "on_cpu": 1848166,
+            "blocked": 108167,
+            "wall_least": 1892292,
+            "wall_most": 2511500,
+            "wall_total": 43704539,
+            "on_cpu_total": 41161748,
+            "blocked_total": 2542791
+          },
+          {
+            "call": "replace_region",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 833,
+            "on_cpu": 917,
+            "blocked": 0,
+            "wall_least": 500,
+            "wall_most": 1583,
+            "wall_total": 21458,
+            "on_cpu_total": 24166,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 17417,
+            "on_cpu": 17625,
+            "blocked": 0,
+            "wall_least": 11167,
+            "wall_most": 31500,
+            "wall_total": 1686040,
+            "on_cpu_total": 1690376,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 21,
+            "most_calls": 21,
+            "wall": 1542,
+            "on_cpu": 1708,
+            "blocked": 0,
+            "wall_least": 1125,
+            "wall_most": 3083,
+            "wall_total": 38875,
+            "on_cpu_total": 41499,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

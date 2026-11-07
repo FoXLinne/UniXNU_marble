@@ -27,6 +27,7 @@ fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustC
 patch = "patches/xnu-11417/arm64e.patch"
 gpu_patch = "patches/xnu-11417/gpu-trust-cache.patch"
 ui_patch = "patches/xnu-11417/phone-ui-startup.patch"
+filesystem_patch = "patches/xnu-11417/native-union-statfs-fsid.patch"
 roots = ["com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMPlatform", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.iokit.IOHIDEventDriver", "com.apple.kec.pthread"]
 
 [kernel.prelink]
@@ -34,7 +35,7 @@ kernelcache_sha256 = "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed
 early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff009083bcc"
 
 [upstream]
-commit = "e2fdae4312d0acc3d8a52bc457101e7918095e6a"
+commit = "b56f17c00aa0753ad9cf0714dfcac55c24e799c0"
 scripts_patch = "patches/UniXNU/ios18-static-if.patch"
 prelink_url = "https://github.com/UniXNU/XnuPrelink.git"
 prelink_commit = "f1d80d37528a33e24643583787123c652b70a268"
@@ -46,9 +47,9 @@ root_volume_uuid = "D38FFE6A-C933-4C2C-BDE0-CCCDC3889156"
 kernel_args = ["-v", "serial=0", "keepsyms=1", "debug=0x14e", "msgbuf=1048576"]
 
 [ui_identity]
-product = "iPhone16,2"
-name = "iPhone 15 Pro Max"
-target_type = "D84"
-artwork_device_subtype = 2796
-compatible_device_fallback = "iPhone15,3"
-generation = 1602
+product = "iPhone17,1"
+name = "iPhone 16 Pro"
+target_type = "D93"
+artwork_device_subtype = 2622
+compatible_device_fallback = "iPhone16,1"
+generation = 1701

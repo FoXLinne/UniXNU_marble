@@ -1,0 +1,25 @@
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -697,7 +697,7 @@
+ 	dsb		ish
+ 
+ 
+-#if defined(BCM2837)
++#if defined(BCM2837) && (!defined(XNU_NATIVE_ARCH_TIMER) || !XNU_NATIVE_ARCH_TIMER)
+ 	// Setup timer interrupt routing; must be done before MMU is enabled
+ 	mrs		x15, MPIDR_EL1						// Load MPIDR to get CPU number
+ 	and		x15, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -2393,8 +2393,11 @@
+ 	uint64_t cntvctl = CNTV_CTL_EL0_ENABLE; /* One wants to use 32 bits, but "mrs" prefers it this way */
+ 
+ 	__builtin_arm_wsr64("CNTV_CTL_EL0", cntvctl);
++	/* Native ArmCpu uses the virtual timer; physical timer access may trap to EL2. */
++#if !defined(XNU_NATIVE_ARCH_TIMER) || !XNU_NATIVE_ARCH_TIMER
+ 	/* disable the physical timer as a precaution, as its registers reset to architecturally unknown values */
+ 	__builtin_arm_wsr64("CNTP_CTL_EL0", CNTP_CTL_EL0_IMASKED);
++#endif
+ }
+ 
+ void

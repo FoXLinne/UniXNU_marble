@@ -1,0 +1,975 @@
+{
+  "format": 1,
+  "case": "texel-swizzles-views",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "texture_ops.ll",
+      "entry": "texel_buffers",
+      "source_sha256": "bb3c9a00be3b6bbb1a5800f8607c4bd06540cc503a9e83c0283fa11f9e035bd0"
+    },
+    {
+      "fixture": "texture_ops.air.ll",
+      "entry": "texel_buffers",
+      "source_sha256": "c9a815efad8668b2c69f651cb9dd5e37ce60dcd2cf9630c7b709454cd13e6d8e"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "bb3c9a00be3b6bbb1a5800f8607c4bd06540cc503a9e83c0283fa11f9e035bd0"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c9a815efad8668b2c69f651cb9dd5e37ce60dcd2cf9630c7b709454cd13e6d8e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:source",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9c94926dfb94433e790f2c209e2633b2dd3e922b2741ac687e164d488d1ff67c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:doubled",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "349d65e9ba1de7b0a13f9a3eadcc5b0202f15d6008fe9477f2a7b80f6194b20f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:parent/rgba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "dc3a36c908d19a80e27bfb6ce0799a49b6dfc7ca7e8507d1d7fd1035ec23b37a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:parent/bgr1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ccf965013d8200c39c1e91e6d973a590826ecfa16dce1a433d8a251d3878266e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:view/01ar",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "38a03cd0e271326a214b2791b424e27c00ddba1a7e26169af0eefe5a3d37b2e8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:view/abgr",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "1934c6ff4f99590615be1b3eb3880f2743000ebf12cfa537c43be5df0e2af034"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:doubled",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "140b7d08f78823a736609005cab08ccbe1e1c40f4a28ca37ddf66680508d57cd"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/buffer/source",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/texture/parent",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/01ar/texture/view",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/01ar/buffer/doubled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/01ar/texture/doubled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/01ar/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/01ar/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/01ar/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/01ar/doubled",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAAAAAEDBwEA+wcDAPAAAAAAAAABA0dDQPvn4eD4AAAAAAAAAQKGgID/t7Ow+AAAAAAAAAEDZ2Fg/r64uPwAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 128
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 8,
+                        "image_pitch": 128,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/abgr/texture/view",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/abgr/buffer/doubled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/abgr/texture/doubled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/abgr/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/abgr/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/abgr/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "rgba/abgr/doubled",
+                  "observed": {
+                    "value": {
+                      "bytes": "wcBAPomICD6hoKA9wcDAPNHQ0D61tLQ+mZiYPvn4eD6hoCA/k5ISP4WEBD/t7Ow+2dhYP8vKSj+9vDw/r64uPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 128
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 8,
+                        "image_pitch": 128,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/buffer/source",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/texture/parent",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/01ar/texture/view",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/01ar/buffer/doubled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/01ar/texture/doubled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/01ar/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/01ar/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/01ar/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/01ar/doubled",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAAAAAEDBwEA+wcDAPAAAAAAAAABA0dDQPvn4eD4AAAAAAAAAQKGgID/t7Ow+AAAAAAAAAEDZ2Fg/r64uPwAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 128
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 8,
+                        "image_pitch": 128,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/abgr/texture/view",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/abgr/buffer/doubled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/abgr/texture/doubled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/abgr/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/abgr/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/abgr/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "bgr1/abgr/doubled",
+                  "observed": {
+                    "value": {
+                      "bytes": "wcBAPomICD6hoKA9wcDAPNHQ0D61tLQ+mZiYPvn4eD6hoCA/k5ISP4WEBD/t7Ow+2dhYP8vKSj+9vDw/r64uPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 128
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 8,
+                        "image_pitch": 128,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 8,
+        "argument_tables_retained": 4,
+        "bare_starts": 4,
+        "batches_submitted_by_waiters": 4,
+        "batches_with_none_pending": 4,
+        "command_buffers_begun": 11,
+        "command_buffers_begun_batch_barriers": 2,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 2,
+        "command_buffers_begun_encoders": 4,
+        "command_buffers_begun_segments": 2,
+        "command_buffers_deferred": 4,
+        "command_buffers_submitted": 11,
+        "commands_recorded.begin_command_buffer": 4,
+        "commands_recorded.cmd_bind_descriptor_sets": 4,
+        "commands_recorded.cmd_bind_pipeline": 4,
+        "commands_recorded.cmd_copy_buffer": 2,
+        "commands_recorded.cmd_dispatch": 4,
+        "commands_recorded.cmd_pipeline_barrier": 6,
+        "commands_recorded.cmd_push_constants": 4,
+        "commands_recorded.end_command_buffer": 11,
+        "commits_handed_off": 4,
+        "commits_taken_in": 4,
+        "completed_waits": 7,
+        "completed_where_seen": 4,
+        "completion_arms": 4,
+        "completion_arms_after_a_wake": 4,
+        "completion_waiter_parks": 4,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 201326592,
+        "dispatch_pipelines_pooled": 2,
+        "dispatch_shapes_found": 2,
+        "dispatch_shapes_made": 2,
+        "dispatch_used_resources_listed": 1,
+        "dispatches_planned_as_before": 2,
+        "encoder_command_buffers_begun": 8,
+        "fence_waits": 4,
+        "finales_folded": 4,
+        "functions_shared": 1,
+        "functions_translated": 1,
+        "gate_waits": 4,
+        "gate_waits_slept": 4,
+        "heap_tables_worked_out": 1,
+        "host_steps_recorded": 2,
+        "new_buffer_bytes_cleared": 544,
+        "object_churn.buffers_parked": 6,
+        "object_churn.buffers_recycled": 6,
+        "object_churn.textures_texels": 10,
+        "object_churn.vk_buffer_views_destroyed": 6,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 4,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 4,
+        "scheduled_where_submitted": 4,
+        "scheduler_passes_by_waiters": 4,
+        "scheduler_sleeps": 4,
+        "scheduler_wakes_commit": 4,
+        "shader_modules_made": 1,
+        "slot_returns": 4,
+        "spare_command_pools_taken": 4,
+        "stage_entries_specialized": 1,
+        "submit_infos": 6,
+        "trail_waits": 4,
+        "variant_pipelines_made": 3,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 4,
+        "wakes_spared": 28
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 3
+      },
+      "composed": {
+        "batches_submitted_by_waiters": 2,
+        "command_buffers_begun": 11,
+        "command_buffers_begun_batch_barriers": 2,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 2,
+        "command_buffers_begun_segments": 2,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 11,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_dispatch": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 201326592,
+        "dispatch_pipelines_pooled": 2,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 8,
+        "functions_translated": 1,
+        "host_steps_recorded": 2,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_specialized": 1,
+        "submit_infos": 6,
+        "variant_pipelines_made": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 1,
+        "creation_pipelines_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 1,
+        "variant_pipelines_made": 3
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "texel-swizzles-views",
+        "calls": 30,
+        "in_calls": 28625541,
+        "on_cpu": 982126,
+        "blocked": 27647917,
+        "elsewhere": 3247791,
+        "spend": 32185458,
+        "spend_least": 31043041,
+        "spend_most": 36021043,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 4125,
+            "on_cpu": 4250,
+            "blocked": 0,
+            "wall_least": 2834,
+            "wall_most": 6041,
+            "wall_total": 45501,
+            "on_cpu_total": 46541,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 77458,
+            "on_cpu": 77709,
+            "blocked": 0,
+            "wall_least": 70500,
+            "wall_most": 110125,
+            "wall_total": 77458,
+            "on_cpu_total": 77709,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 8166,
+            "on_cpu": 8291,
+            "blocked": 0,
+            "wall_least": 6333,
+            "wall_most": 11500,
+            "wall_total": 135959,
+            "on_cpu_total": 136708,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23756792,
+            "on_cpu": 638292,
+            "blocked": 23047417,
+            "wall_least": 22892417,
+            "wall_most": 27537459,
+            "wall_total": 23756792,
+            "on_cpu_total": 638292,
+            "blocked_total": 23047417
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 208,
+            "on_cpu": 333,
+            "blocked": 0,
+            "wall_least": 166,
+            "wall_most": 250,
+            "wall_total": 1333,
+            "on_cpu_total": 2167,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 2459,
+            "on_cpu": 2542,
+            "blocked": 0,
+            "wall_least": 2333,
+            "wall_most": 3458,
+            "wall_total": 36290,
+            "on_cpu_total": 37541,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 529458,
+            "on_cpu": 3500,
+            "blocked": 525708,
+            "wall_least": 161792,
+            "wall_most": 677875,
+            "wall_total": 4621751,
+            "on_cpu_total": 21667,
+            "blocked_total": 4600501
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "texel-swizzles-views",
+        "calls": 30,
+        "in_calls": 2166501,
+        "on_cpu": 434712,
+        "blocked": 1735333,
+        "elsewhere": 490542,
+        "spend": 2559584,
+        "spend_least": 2191128,
+        "spend_most": 3694707,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 1083,
+            "on_cpu": 1166,
+            "blocked": 0,
+            "wall_least": 833,
+            "wall_most": 1875,
+            "wall_total": 7667,
+            "on_cpu_total": 8459,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 29833,
+            "on_cpu": 30042,
+            "blocked": 0,
+            "wall_least": 25792,
+            "wall_most": 31541,
+            "wall_total": 29833,
+            "on_cpu_total": 30042,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 21709,
+            "on_cpu": 21916,
+            "blocked": 0,
+            "wall_least": 17958,
+            "wall_most": 27625,
+            "wall_total": 109667,
+            "on_cpu_total": 110250,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 247625,
+            "on_cpu": 249459,
+            "blocked": 0,
+            "wall_least": 239250,
+            "wall_most": 256333,
+            "wall_total": 247625,
+            "on_cpu_total": 249459,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 167,
+            "on_cpu": 333,
+            "blocked": 0,
+            "wall_least": 125,
+            "wall_most": 542,
+            "wall_total": 875,
+            "on_cpu_total": 1418,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 1250,
+            "on_cpu": 1375,
+            "blocked": 0,
+            "wall_least": 1042,
+            "wall_most": 1917,
+            "wall_total": 15626,
+            "on_cpu_total": 17000,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 269917,
+            "on_cpu": 2542,
+            "blocked": 267750,
+            "wall_least": 214125,
+            "wall_most": 695708,
+            "wall_total": 1749917,
+            "on_cpu_total": 11333,
+            "blocked_total": 1735333
+          }
+        ]
+      }
+    }
+  ]
+}

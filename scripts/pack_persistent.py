@@ -88,7 +88,7 @@ def main():
         raw=bytearray((base/'firmware_prefix.bin').read_bytes()+struct.pack('<II',0x50554e58,len(body))+body)
         struct.pack_into('<Q',raw,16,(len(raw)+0x1fffff)&~0x1fffff)
         firmware=out/firmware_name;firmware.write_bytes(gzip.compress(raw,6)+(base/'platform.dtb').read_bytes())
-        subprocess.run([sys.executable,str(ROOT.parent/'marble_hackios/Mu-Silicium/Resources/Scripts/mkbootimg.py'),'--kernel',firmware,
+        subprocess.run([sys.executable,str(ROOT/'firmware/Mu-Silicium/Resources/Scripts/mkbootimg.py'),'--kernel',firmware,
                         '--ramdisk',base/'ramdisk','--header_version','4','-o',out/image_name],check=True)
         print(out/image_name)
 

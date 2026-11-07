@@ -1,0 +1,1014 @@
+{
+  "format": 1,
+  "case": "norm-storage-codes-rgba16snorm",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "hsw_storage_writes.ll",
+      "entry": "hsw_write",
+      "source_sha256": "d95ab47fc230b39f261399809174caa5ac0497d0d98e9a3cc2b0966ff4fcf860"
+    },
+    {
+      "fixture": "hsw_storage_writes.air.ll",
+      "entry": "hsw_write",
+      "source_sha256": "67272da2abea78abc56d20daa36c5f4969a9e9f61f1728fc09c01c0fe2acf34a"
+    },
+    {
+      "fixture": "hsw_storage_writes.ll",
+      "entry": "hsw_read_write",
+      "source_sha256": "d95ab47fc230b39f261399809174caa5ac0497d0d98e9a3cc2b0966ff4fcf860"
+    },
+    {
+      "fixture": "hsw_storage_writes.air.ll",
+      "entry": "hsw_read_write",
+      "source_sha256": "67272da2abea78abc56d20daa36c5f4969a9e9f61f1728fc09c01c0fe2acf34a"
+    },
+    {
+      "fixture": "hsw_storage_writes.ll",
+      "entry": "hsw_buffer",
+      "source_sha256": "d95ab47fc230b39f261399809174caa5ac0497d0d98e9a3cc2b0966ff4fcf860"
+    },
+    {
+      "fixture": "hsw_storage_writes.air.ll",
+      "entry": "hsw_buffer",
+      "source_sha256": "67272da2abea78abc56d20daa36c5f4969a9e9f61f1728fc09c01c0fe2acf34a"
+    },
+    {
+      "fixture": "hsw_storage_writes.ll",
+      "entry": "hsw_held",
+      "source_sha256": "d95ab47fc230b39f261399809174caa5ac0497d0d98e9a3cc2b0966ff4fcf860"
+    },
+    {
+      "fixture": "hsw_storage_writes.air.ll",
+      "entry": "hsw_held",
+      "source_sha256": "67272da2abea78abc56d20daa36c5f4969a9e9f61f1728fc09c01c0fe2acf34a"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "library",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d95ab47fc230b39f261399809174caa5ac0497d0d98e9a3cc2b0966ff4fcf860"
+                        }
+                      }
+                    },
+                    {
+                      "name": "values",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f2ebf43ec368e9bfa95b70c34d383d0810f12468d860b6b86477e34f0d3364b4"
+                        }
+                      }
+                    },
+                    {
+                      "name": "geometry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5a6c93f2ff925b7b1448fb4cd393d6670552b9a110d66195aa13b91828487308"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/width",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_write/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_write/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_write/buffer/values",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_write/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_write/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_write/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_write/texels",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAQABAAEAAQABAAEAAQABAAEAAQABAP//////////AQABAAEAAQABAAEAAQABAAEAAQABAAEAAgACAAIAAgACAAIAAgACAAIAAgACAAIA/v/+//7//v8CAAIAAgACAAIAAgACAAIAAgACAAIAAgADAAMAAwADAAMAAwADAAMAAwADAAMAAwD9//3//f/9/wMAAwADAAMAAwADAAMAAwADAAMAAwADAAQABAAEAAQABAAEAAQABAAEAAQABAAEAPz//P/8//z/BAAEAAQABAAEAAQABAAEAAQABAAEAAQABQAFAAUABQAFAAUABQAFAAUABQAFAAUA+//7//v/+/8FAAUABQAFAAUABQAFAAUABQAFAAUABQAGAAYABgAGAAYABgAGAAYABgAGAAYABgD6//r/+v/6/wYABgAGAAYABgAGAAYABgAGAAYABgAGAAcABwAHAAcABwAHAAcABwAHAAcABwAHAPn/+f/5//n/BwAHAAcABwAHAAcABwAHAAcABwAHAAcACAAIAAgACAAIAAgACAAIAAgACAAIAAgA+P/4//j/+P8IAAgACAAIAAgACAAIAAgACAAIAAgACAAJAAkACQAJAAkACQAJAAkACQAJAAkACQD3//f/9//3/wkACQAJAAkACQAJAAkACQAJAAkACQAJAAoACgAKAAoACgAKAAoACgAKAAoACgAKAPb/9v/2//b/CgAKAAoACgAKAAoACgAKAAoACgAKAAoACwALAAsACwALAAsACwALAAsACwALAAsA9f/1//X/9f8LAAsACwALAAsACwALAAsACwALAAsACwAMAAwADAAMAAwADAAMAAwADAAMAAwADAD0//T/9P/0/wwADAAMAAwADAAMAAwADAAMAAwADAAMAA0ADQANAA0ADQANAA0ADQANAA0ADQANAPP/8//z//P/DQANAA0ADQANAA0ADQANAA0ADQANAA0ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4A8v/y//L/8v8OAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwDx//H/8f/x/w8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPABAAEAAQABAAEAAQABAAEAAQABAAEAAQAPD/8P/w//D/EAAQABAAEAAQABAAEAAQABAAEAAQABAAEQARABEAEQARABEAEQARABEAEQARABEA7//v/+//7/8RABEAEQARABEAEQARABEAEQARABEAEQASABIAEgASABIAEgASABIAEgASABIAEgDu/+7/7v/u/xIAEgASABIAEgASABIAEgASABIAEgASABMAEwATABMAEwATABMAEwATABMAEwATAO3/7f/t/+3/EwATABMAEwATABMAEwATABMAEwATABMAFAAUABQAFAAUABQAFAAUABQAFAAUABQA7P/s/+z/7P8UABQAFAAUABQAFAAUABQAFAAUABQAFAAVABUAFQAVABUAFQAVABUAFQAVABUAFQDr/+v/6//r/xUAFQAVABUAFQAVABUAFQAVABUAFQAVABYAFgAWABYAFgAWABYAFgAWABYAFgAWAOr/6v/q/+r/FgAWABYAFgAWABYAFgAWABYAFgAWABYAFwAXABcAFwAXABcAFwAXABcAFwAXABcA6f/p/+n/6f8XABcAFwAXABcAFwAXABcAFwAXABcAFwAYABgAGAAYABgAGAAYABgAGAAYABgAGADo/+j/6P/o/xgAGAAYABgAGAAYABgAGAAYABgAGAAYABkAGQAZABkAGQAZABkAGQAZABkAGQAZAOf/5//n/+f/GQAZABkAGQAZABkAGQAZABkAGQAZABkAGgAaABoAGgAaABoAGgAaABoAGgAaABoA5v/m/+b/5v8aABoAGgAaABoAGgAaABoAGgAaABoAGgAbABsAGwAbABsAGwAbABsAGwAbABsAGwDl/+X/5f/l/xsAGwAbABsAGwAbABsAGwAbABsAGwAbABwAHAAcABwAHAAcABwAHAAcABwAHAAcAOT/5P/k/+T/HAAcABwAHAAcABwAHAAcABwAHAAcABwAHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0A4//j/+P/4/8dAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgDi/+L/4v/i/x4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAOH/4f/h/+H/HwAfAB8AHwAfAB8AHwAfAB8AHwAfAB8AIAAgACAAIAAgACAAIAAgACAAIAAgACAA4P/g/+D/4P8gACAAIAAgACAAIAAgACAAIAAgACAAIAAhACEAIQAhACEAIQAhACEAIQAhACEAIQDf/9//3//f/yEAIQAhACEAIQAhACEAIQAhACEAIQAhACIAIgAiACIAIgAiACIAIgAiACIAIgAiAN7/3v/e/97/IgAiACIAIgAiACIAIgAiACIAIgAiACIAIwAjACMAIwAjACMAIwAjACMAIwAjACMA3f/d/93/3f8jACMAIwAjACMAIwAjACMAIwAjACMAIwAkACQAJAAkACQAJAAkACQAJAAkACQAJADc/9z/3P/c/yQAJAAkACQAJAAkACQAJAAkACQAJAAkACUAJQAlACUAJQAlACUAJQAlACUAJQAlANv/2//b/9v/JQAlACUAJQAlACUAJQAlACUAJQAlACUAJgAmACYAJgAmACYAJgAmACYAJgAmACYA2v/a/9r/2v8mACYAJgAmACYAJgAmACYAJgAmACYAJgAnACcAJwAnACcAJwAnACcAJwAnACcAJwDZ/9n/2f/Z/ycAJwAnACcAJwAnACcAJwAnACcAJwAnACgAKAAoACgAKAAoACgAKAAoACgAKAAoANj/2P/Y/9j/KAAoACgAKAAoACgAKAAoACgAKAAoACgAKQApACkAKQApACkAKQApACkAKQApACkA1//X/9f/1/8pACkAKQApACkAKQApACkAKQApACkAKQAqACoAKgAqACoAKgAqACoAKgAqACoAKgDW/9b/1v/W/yoAKgAqACoAKgAqACoAKgAqACoAKgAqACsAKwArACsAKwArACsAKwArACsAKwArANX/1f/V/9X/KwArACsAKwArACsAKwArACsAKwArACsALAAsACwALAAsACwALAAsACwALAAsACwA1P/U/9T/1P8sACwALAAsACwALAAsACwALAAsACwALAAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQDT/9P/0//T/y0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC4ALgAuAC4ALgAuAC4ALgAuAC4ALgAuANL/0v/S/9L/LgAuAC4ALgAuAC4ALgAuAC4ALgAuAC4ALwAvAC8ALwAvAC8ALwAvAC8ALwAvAC8A0f/R/9H/0f8vAC8ALwAvAC8ALwAvAC8ALwAvAC8ALwAwADAAMAAwADAAMAAwADAAMAAwADAAMADQ/9D/0P/Q/zAAMAAwADAAMAAwADAAMAAwADAAMAAwADEAMQAxADEAMQAxADEAMQAxADEAMQAxAM//z//P/8//MQAxADEAMQAxADEAMQAxADEAMQAxADEAMgAyADIAMgAyADIAMgAyADIAMgAyADIAzv/O/87/zv8yADIAMgAyADIAMgAyADIAMgAyADIAMgAzADMAMwAzADMAMwAzADMAMwAzADMAMwDN/83/zf/N/zMAMwAzADMAMwAzADMAMwAzADMAMwAzADQANAA0ADQANAA0ADQANAA0ADQANAA0AMz/zP/M/8z/NAA0ADQANAA0ADQANAA0ADQANAA0ADQANQA1ADUANQA1ADUANQA1ADUANQA1ADUAy//L/8v/y/81ADUANQA1ADUANQA1ADUANQA1ADUANQA2ADYANgA2ADYANgA2ADYANgA2ADYANgDK/8r/yv/K/zYANgA2ADYANgA2ADYANgA2ADYANgA2ADcANwA3ADcANwA3ADcANwA3ADcANwA3AMn/yf/J/8n/NwA3ADcANwA3ADcANwA3ADcANwA3ADcAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAyP/I/8j/yP84ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA5ADkAOQA5ADkAOQA5ADkAOQA5ADkAOQDH/8f/x//H/zkAOQA5ADkAOQA5ADkAOQA5ADkAOQA5ADoAOgA6ADoAOgA6ADoAOgA6ADoAOgA6AMb/xv/G/8b/OgA6ADoAOgA6ADoAOgA6ADoAOgA6ADoAOwA7ADsAOwA7ADsAOwA7ADsAOwA7ADsAxf/F/8X/xf87ADsAOwA7ADsAOwA7ADsAOwA7ADsAOwA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPADE/8T/xP/E/zwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8AD0APQA9AD0APQA9AD0APQA9AD0APQA9AMP/w//D/8P/PQA9AD0APQA9AD0APQA9AD0APQA9AD0APgA+AD4APgA+AD4APgA+AD4APgA+AD4Awv/C/8L/wv8+AD4APgA+AD4APgA+AD4APgA+AD4APgA/AD8APwA/AD8APwA/AD8APwA/AD8APwDB/8H/wf/B/z8APwA/AD8APwA/AD8APwA/AD8APwA/AEAAQABAAEAAQABAAEAAQABAAEAAQABAAMD/wP/A/8D/QABAAEAAQABAAEAAQABAAEAAQABAAEAAQQBBAEEAQQBBAEEAQQBBAEEAQQBBAEEAv/+//7//v/9BAEEAQQBBAEEAQQBBAEEAQQBBAEEAQQBCAEIAQgBCAEIAQgBCAEIAQgBCAEIAQgC+/77/vv++/0IAQgBCAEIAQgBCAEIAQgBCAEIAQgBCAEMAQwBDAEMAQwBDAEMAQwBDAEMAQwBDAL3/vf+9/73/QwBDAEMAQwBDAEMAQwBDAEMAQwBDAEMARABEAEQARABEAEQARABEAEQARABEAEQAvP+8/7z/vP9EAEQARABEAEQARABEAEQARABEAEQARABFAEUARQBFAEUARQBFAEUARQBFAEUARQC7/7v/u/+7/0UARQBFAEUARQBFAEUARQBFAEUARQBFAEYARgBGAEYARgBGAEYARgBGAEYARgBGALr/uv+6/7r/RgBGAEYARgBGAEYARgBGAEYARgBGAEYARwBHAEcARwBHAEcARwBHAEcARwBHAEcAuf+5/7n/uf9HAEcARwBHAEcARwBHAEcARwBHAEcARwBIAEgASABIAEgASABIAEgASABIAEgASAC4/7j/uP+4/0gASABIAEgASABIAEgASABIAEgASABIAEkASQBJAEkASQBJAEkASQBJAEkASQBJALf/t/+3/7f/SQBJAEkASQBJAEkASQBJAEkASQBJAEkASgBKAEoASgBKAEoASgBKAEoASgBKAEoAtv+2/7b/tv9KAEoASgBKAEoASgBKAEoASgBKAEoASgBLAEsASwBLAEsASwBLAEsASwBLAEsASwC1/7X/tf+1/0sASwBLAEsASwBLAEsASwBLAEsASwBLAEwATABMAEwATABMAEwATABMAEwATABMALT/tP+0/7T/TABMAEwATABMAEwATABMAEwATABMAEwATQBNAE0ATQBNAE0ATQBNAE0ATQBNAE0As/+z/7P/s/9NAE0ATQBNAE0ATQBNAE0ATQBNAE0ATQBOAE4ATgBOAE4ATgBOAE4ATgBOAE4ATgCy/7L/sv+y/04ATgBOAE4ATgBOAE4ATgBOAE4ATgBOAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPALH/sf+x/7H/TwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8AUABQAFAAUABQAFAAUABQAFAAUABQAFAAsP+w/7D/sP9QAFAAUABQAFAAUABQAFAAUABQAFAAUABRAFEAUQBRAFEAUQBRAFEAUQBRAFEAUQCv/6//r/+v/1EAUQBRAFEAUQBRAFEAUQBRAFEAUQBRAFIAUgBSAFIAUgBSAFIAUgBSAFIAUgBSAK7/rv+u/67/UgBSAFIAUgBSAFIAUgBSAFIAUgBSAFIAUwBTAFMAUwBTAFMAUwBTAFMAUwBTAFMArf+t/63/rf9TAFMAUwBTAFMAUwBTAFMAUwBTAFMAUwBUAFQAVABUAFQAVABUAFQAVABUAFQAVACs/6z/rP+s/1QAVABUAFQAVABUAFQAVABUAFQAVABUAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAKv/q/+r/6v/VQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAqv+q/6r/qv9WAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwCp/6n/qf+p/1cAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFgAWABYAFgAWABYAFgAWABYAFgAWABYAKj/qP+o/6j/WABYAFgAWABYAFgAWABYAFgAWABYAFgAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAp/+n/6f/p/9ZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgCm/6b/pv+m/1oAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFsAWwBbAFsAWwBbAFsAWwBbAFsAWwBbAKX/pf+l/6X/WwBbAFsAWwBbAFsAWwBbAFsAWwBbAFsAXABcAFwAXABcAFwAXABcAFwAXABcAFwApP+k/6T/pP9cAFwAXABcAFwAXABcAFwAXABcAFwAXABdAF0AXQBdAF0AXQBdAF0AXQBdAF0AXQCj/6P/o/+j/10AXQBdAF0AXQBdAF0AXQBdAF0AXQBdAF4AXgBeAF4AXgBeAF4AXgBeAF4AXgBeAKL/ov+i/6L/XgBeAF4AXgBeAF4AXgBeAF4AXgBeAF4AXwBfAF8AXwBfAF8AXwBfAF8AXwBfAF8Aof+h/6H/of9fAF8AXwBfAF8AXwBfAF8AXwBfAF8AXwBgAGAAYABgAGAAYABgAGAAYABgAGAAYACg/6D/oP+g/2AAYABgAGAAYABgAGAAYABgAGAAYABgAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAJ//n/+f/5//YQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYgBiAGIAYgBiAGIAYgBiAGIAYgBiAGIAnv+e/57/nv9iAGIAYgBiAGIAYgBiAGIAYgBiAGIAYgBjAGMAYwBjAGMAYwBjAGMAYwBjAGMAYwCd/53/nf+d/2MAYwBjAGMAYwBjAGMAYwBjAGMAYwBjAGQAZABkAGQAZABkAGQAZABkAGQAZABkAJz/nP+c/5z/ZABkAGQAZABkAGQAZABkAGQAZABkAGQAZQBlAGUAZQBlAGUAZQBlAGUAZQBlAGUAm/+b/5v/m/9lAGUAZQBlAGUAZQBlAGUAZQBlAGUAZQBmAGYAZgBmAGYAZgBmAGYAZgBmAGYAZgCa/5r/mv+a/2YAZgBmAGYAZgBmAGYAZgBmAGYAZgBmAGcAZwBnAGcAZwBnAGcAZwBnAGcAZwBnAJn/mf+Z/5n/ZwBnAGcAZwBnAGcAZwBnAGcAZwBnAGcAaABoAGgAaABoAGgAaABoAGgAaABoAGgAmP+Y/5j/mP9oAGgAaABoAGgAaABoAGgAaABoAGgAaABpAGkAaQBpAGkAaQBpAGkAaQBpAGkAaQCX/5f/l/+X/2kAaQBpAGkAaQBpAGkAaQBpAGkAaQBpAGoAagBqAGoAagBqAGoAagBqAGoAagBqAJb/lv+W/5b/agBqAGoAagBqAGoAagBqAGoAagBqAGoAawBrAGsAawBrAGsAawBrAGsAawBrAGsAlf+V/5X/lf9rAGsAawBrAGsAawBrAGsAawBrAGsAawBsAGwAbABsAGwAbABsAGwAbABsAGwAbACU/5T/lP+U/2wAbABsAGwAbABsAGwAbABsAGwAbABsAG0AbQBtAG0AbQBtAG0AbQBtAG0AbQBtAJP/k/+T/5P/bQBtAG0AbQBtAG0AbQBtAG0AbQBtAG0AbgBuAG4AbgBuAG4AbgBuAG4AbgBuAG4Akv+S/5L/kv9uAG4AbgBuAG4AbgBuAG4AbgBuAG4AbgBvAG8AbwBvAG8AbwBvAG8AbwBvAG8AbwCR/5H/kf+R/28AbwBvAG8AbwBvAG8AbwBvAG8AbwBvAHAAcABwAHAAcABwAHAAcABwAHAAcABwAJD/kP+Q/5D/cABwAHAAcABwAHAAcABwAHAAcABwAHAAcQBxAHEAcQBxAHEAcQBxAHEAcQBxAHEAj/+P/4//j/9xAHEAcQBxAHEAcQBxAHEAcQBxAHEAcQByAHIAcgByAHIAcgByAHIAcgByAHIAcgCO/47/jv+O/3IAcgByAHIAcgByAHIAcgByAHIAcgByAHMAcwBzAHMAcwBzAHMAcwBzAHMAcwBzAI3/jf+N/43/cwBzAHMAcwBzAHMAcwBzAHMAcwBzAHMAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAjP+M/4z/jP90AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQCL/4v/i/+L/3UAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHYAdgB2AHYAdgB2AHYAdgB2AHYAdgB2AIr/iv+K/4r/dgB2AHYAdgB2AHYAdgB2AHYAdgB2AHYAdwB3AHcAdwB3AHcAdwB3AHcAdwB3AHcAif+J/4n/if93AHcAdwB3AHcAdwB3AHcAdwB3AHcAdwB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACI/4j/iP+I/3gAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHkAeQB5AHkAeQB5AHkAeQB5AHkAeQB5AIf/h/+H/4f/eQB5AHkAeQB5AHkAeQB5AHkAeQB5AHkAegB6AHoAegB6AHoAegB6AHoAegB6AHoAhv+G/4b/hv96AHoAegB6AHoAegB6AHoAegB6AHoAegB7AHsAewB7AHsAewB7AHsAewB7AHsAewCF/4X/hf+F/3sAewB7AHsAewB7AHsAewB7AHsAewB7AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAB8AIT/hP+E/4T/fAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfQB9AH0AfQB9AH0AfQB9AH0AfQB9AH0Ag/+D/4P/g/99AH0AfQB9AH0AfQB9AH0AfQB9AH0AfQB+AH4AfgB+AH4AfgB+AH4AfgB+AH4AfgCC/4L/gv+C/34AfgB+AH4AfgB+AH4AfgB+AH4AfgB+AH8AfwB/AH8AfwB/AH8AfwB/AH8AfwB/AIH/gf+B/4H/fwB/AH8AfwB/AH8AfwB/AH8AfwB/AH8AgACAAIAAgACAAIAAgACAAAACAAIAAgACAP4A/gD+AP4AAgACAAIAAgACAAIAAgACAAIAAgACAAIBAgECAQIBAgECAQIBAgECAAQABAAEAAQA/AD8APwA/AAEAAQABAAEAAQABAAEAAQABAAEAAQABAEEAQQBBAEEAQQBBAEEAQQABgAGAAYABgD6APoA+gD6AAYABgAGAAYABgAGAAYABgAGAAYABgAGAQYBBgEGAQYBBgEGAQYBBgAIAAgACAAIAPgA+AD4APgACAAIAAgACAAIAAgACAAIAAgACAAIAAgBCAEIAQgBCAEIAQgBCAEIAAoACgAKAAoA9gD2APYA9gAKAAoACgAKAAoACgAKAAoACgAKAAoACgEKAQoBCgEKAQoBCgEKAQoADAAMAAwADAD0APQA9AD0AAwADAAMAAwADAAMAAwADAAMAAwADAAMAQwBDAEMAQwBDAEMAQwBDAAOAA4ADgAOAPIA8gDyAPIADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4BDgEOAQ4BDgEOAQ4BDgEOABAAEAAQABAA8ADwAPAA8AAQABAAEAAQABAAEAAQABAAEAAQABAAEAEQARABEAEQARABEAEQARAAEgASABIAEgDuAO4A7gDuABIAEgASABIAEgASABIAEgASABIAEgASARIBEgESARIBEgESARIBEgAUABQAFAAUAOwA7ADsAOwAFAAUABQAFAAUABQAFAAUABQAFAAUABQBFAEUARQBFAEUARQBFAEUABYAFgAWABYA6gDqAOoA6gAWABYAFgAWABYAFgAWABYAFgAWABYAFgEWARYBFgEWARYBFgEWARYAGAAYABgAGADoAOgA6ADoABgAGAAYABgAGAAYABgAGAAYABgAGAAYARgBGAEYARgBGAEYARgBGAAaABoAGgAaAOYA5gDmAOYAGgAaABoAGgAaABoAGgAaABoAGgAaABoBGgEaARoBGgEaARoBGgEaABwAHAAcABwA5ADkAOQA5AAcABwAHAAcABwAHAAcABwAHAAcABwAHAEcARwBHAEcARwBHAEcARwAHgAeAB4AHgDiAOIA4gDiAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAR4BHgEeAR4BHgEeAR4BHgAgACAAIAAgAOAA4ADgAOAAIAAgACAAIAAgACAAIAAgACAAIAAgACABIAEgASABIAEgASABIAEgACIAIgAiACIA3gDeAN4A3gAiACIAIgAiACIAIgAiACIAIgAiACIAIgEiASIBIgEiASIBIgEiASIAJAAkACQAJADcANwA3ADcACQAJAAkACQAJAAkACQAJAAkACQAJAAkASQBJAEkASQBJAEkASQBJAAmACYAJgAmANoA2gDaANoAJgAmACYAJgAmACYAJgAmACYAJgAmACYBJgEmASYBJgEmASYBJgEmACgAKAAoACgA2ADYANgA2AAoACgAKAAoACgAKAAoACgAKAAoACgAKAEoASgBKAEoASgBKAEoASgAKgAqACoAKgDWANYA1gDWACoAKgAqACoAKgAqACoAKgAqACoAKgAqASoBKgEqASoBKgEqASoBKgAsACwALAAsANQA1ADUANQALAAsACwALAAsACwALAAsACwALAAsACwBLAEsASwBLAEsASwBLAEsAC4ALgAuAC4A0gDSANIA0gAuAC4ALgAuAC4ALgAuAC4ALgAuAC4ALgEuAS4BLgEuAS4BLgEuAS4AMAAwADAAMADQANAA0ADQADAAMAAwADAAMAAwADAAMAAwADAAMAAwATABMAEwATABMAEwATABMAAyADIAMgAyAM4AzgDOAM4AMgAyADIAMgAyADIAMgAyADIAMgAyADIBMgEyATIBMgEyATIBMgEyADQANAA0ADQAzADMAMwAzAA0ADQANAA0ADQANAA0ADQANAA0ADQANAE0ATQBNAE0ATQBNAE0ATQANgA2ADYANgDKAMoAygDKADYANgA2ADYANgA2ADYANgA2ADYANgA2ATYBNgE2ATYBNgE2ATYBNgA4ADgAOAA4AMgAyADIAMgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgBOAE4ATgBOAE4ATgBOAE4ADoAOgA6ADoAxgDGAMYAxgA6ADoAOgA6ADoAOgA6ADoAOgA6ADoAOgE6AToBOgE6AToBOgE6AToAPAA8ADwAPADEAMQAxADEADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ATwBPAE8ATwBPAE8ATwBPAA+AD4APgA+AMIAwgDCAMIAPgA+AD4APgA+AD4APgA+AD4APgA+AD4BPgE+AT4BPgE+AT4BPgE+AEAAQABAAEAAwADAAMAAwABAAEAAQABAAEAAQABAAEAAQABAAEAAQAFAAUABQAFAAUABQAFAAUAAQgBCAEIAQgC+AL4AvgC+AEIAQgBCAEIAQgBCAEIAQgBCAEIAQgBCAUIBQgFCAUIBQgFCAUIBQgBEAEQARABEALwAvAC8ALwARABEAEQARABEAEQARABEAEQARABEAEQBRAFEAUQBRAFEAUQBRAFEAEYARgBGAEYAugC6ALoAugBGAEYARgBGAEYARgBGAEYARgBGAEYARgFGAUYBRgFGAUYBRgFGAUYASABIAEgASAC4ALgAuAC4AEgASABIAEgASABIAEgASABIAEgASABIAUgBSAFIAUgBSAFIAUgBSABKAEoASgBKALYAtgC2ALYASgBKAEoASgBKAEoASgBKAEoASgBKAEoBSgFKAUoBSgFKAUoBSgFKAEwATABMAEwAtAC0ALQAtABMAEwATABMAEwATABMAEwATABMAEwATAFMAUwBTAFMAUwBTAFMAUwATgBOAE4ATgCyALIAsgCyAE4ATgBOAE4ATgBOAE4ATgBOAE4ATgBOAU4BTgFOAU4BTgFOAU4BTgBQAFAAUABQALAAsACwALAAUABQAFAAUABQAFAAUABQAFAAUABQAFABUAFQAVABUAFQAVABUAFQAFIAUgBSAFIArgCuAK4ArgBSAFIAUgBSAFIAUgBSAFIAUgBSAFIAUgFSAVIBUgFSAVIBUgFSAVIAVABUAFQAVACsAKwArACsAFQAVABUAFQAVABUAFQAVABUAFQAVABUAVQBVAFUAVQBVAFUAVQBVABWAFYAVgBWAKoAqgCqAKoAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYBVgFWAVYBVgFWAVYBVgFWAFgAWABYAFgAqACoAKgAqABYAFgAWABYAFgAWABYAFgAWABYAFgAWAFYAVgBWAFYAVgBWAFYAVgAWgBaAFoAWgCmAKYApgCmAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAVoBWgFaAVoBWgFaAVoBWgBcAFwAXABcAKQApACkAKQAXABcAFwAXABcAFwAXABcAFwAXABcAFwBXAFcAVwBXAFcAVwBXAFcAF4AXgBeAF4AogCiAKIAogBeAF4AXgBeAF4AXgBeAF4AXgBeAF4AXgFeAV4BXgFeAV4BXgFeAV4AYABgAGAAYACgAKAAoACgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAWABYAFgAWABYAFgAWABYABiAGIAYgBiAJ4AngCeAJ4AYgBiAGIAYgBiAGIAYgBiAGIAYgBiAGIBYgFiAWIBYgFiAWIBYgFiAGQAZABkAGQAnACcAJwAnABkAGQAZABkAGQAZABkAGQAZABkAGQAZAFkAWQBZAFkAWQBZAFkAWQAZgBmAGYAZgCaAJoAmgCaAGYAZgBmAGYAZgBmAGYAZgBmAGYAZgBmAWYBZgFmAWYBZgFmAWYBZgBoAGgAaABoAJgAmACYAJgAaABoAGgAaABoAGgAaABoAGgAaABoAGgBaAFoAWgBaAFoAWgBaAFoAGoAagBqAGoAlgCWAJYAlgBqAGoAagBqAGoAagBqAGoAagBqAGoAagFqAWoBagFqAWoBagFqAWoAbABsAGwAbACUAJQAlACUAGwAbABsAGwAbABsAGwAbABsAGwAbABsAWwBbAFsAWwBbAFsAWwBbABuAG4AbgBuAJIAkgCSAJIAbgBuAG4AbgBuAG4AbgBuAG4AbgBuAG4BbgFuAW4BbgFuAW4BbgFuAHAAcABwAHAAkACQAJAAkABwAHAAcABwAHAAcABwAHAAcABwAHAAcAFwAXABcAFwAXABcAFwAXAAcgByAHIAcgCOAI4AjgCOAHIAcgByAHIAcgByAHIAcgByAHIAcgByAXIBcgFyAXIBcgFyAXIBcgB0AHQAdAB0AIwAjACMAIwAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQBdAF0AXQBdAF0AXQBdAF0AHYAdgB2AHYAigCKAIoAigB2AHYAdgB2AHYAdgB2AHYAdgB2AHYAdgF2AXYBdgF2AXYBdgF2AXYAeAB4AHgAeACIAIgAiACIAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AXgBeAF4AXgBeAF4AXgBeAB6AHoAegB6AIYAhgCGAIYAegB6AHoAegB6AHoAegB6AHoAegB6AHoBegF6AXoBegF6AXoBegF6AHwAfAB8AHwAhACEAIQAhAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAF8AXwBfAF8AXwBfAF8AXwAfgB+AH4AfgCCAIIAggCCAH4AfgB+AH4AfgB+AH4AfgB+AH4AfgB+AX4BfgF+AX4BfgF+AX4Bfv9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwAAAAAAAAAAAAAAAAAAAAD/f/9//3//fwGAAYABgAGAAEAAQABAAEAAwADAAMAAwP9//3//f/9/AYABgAGAAYD/f/9//3//fwGAAYABgAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/3//f/9//38BgAGAAYABgAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 21608
+                          }
+                        },
+                        "element": "u64",
+                        "row_offset": 0,
+                        "row_elements": 2701,
+                        "row_pitch": 21608,
+                        "rows": 1,
+                        "image_pitch": 21608,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_read_write/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_read_write/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_read_write/buffer/values",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_read_write/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_read_write/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_read_write/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_read_write/texels",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAQABAAEAAQABAAEAAQABAAEAAQABAP//////////AQABAAEAAQABAAEAAQABAAEAAQABAAEAAgACAAIAAgACAAIAAgACAAIAAgACAAIA/v/+//7//v8CAAIAAgACAAIAAgACAAIAAgACAAIAAgADAAMAAwADAAMAAwADAAMAAwADAAMAAwD9//3//f/9/wMAAwADAAMAAwADAAMAAwADAAMAAwADAAQABAAEAAQABAAEAAQABAAEAAQABAAEAPz//P/8//z/BAAEAAQABAAEAAQABAAEAAQABAAEAAQABQAFAAUABQAFAAUABQAFAAUABQAFAAUA+//7//v/+/8FAAUABQAFAAUABQAFAAUABQAFAAUABQAGAAYABgAGAAYABgAGAAYABgAGAAYABgD6//r/+v/6/wYABgAGAAYABgAGAAYABgAGAAYABgAGAAcABwAHAAcABwAHAAcABwAHAAcABwAHAPn/+f/5//n/BwAHAAcABwAHAAcABwAHAAcABwAHAAcACAAIAAgACAAIAAgACAAIAAgACAAIAAgA+P/4//j/+P8IAAgACAAIAAgACAAIAAgACAAIAAgACAAJAAkACQAJAAkACQAJAAkACQAJAAkACQD3//f/9//3/wkACQAJAAkACQAJAAkACQAJAAkACQAJAAoACgAKAAoACgAKAAoACgAKAAoACgAKAPb/9v/2//b/CgAKAAoACgAKAAoACgAKAAoACgAKAAoACwALAAsACwALAAsACwALAAsACwALAAsA9f/1//X/9f8LAAsACwALAAsACwALAAsACwALAAsACwAMAAwADAAMAAwADAAMAAwADAAMAAwADAD0//T/9P/0/wwADAAMAAwADAAMAAwADAAMAAwADAAMAA0ADQANAA0ADQANAA0ADQANAA0ADQANAPP/8//z//P/DQANAA0ADQANAA0ADQANAA0ADQANAA0ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4A8v/y//L/8v8OAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwDx//H/8f/x/w8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPABAAEAAQABAAEAAQABAAEAAQABAAEAAQAPD/8P/w//D/EAAQABAAEAAQABAAEAAQABAAEAAQABAAEQARABEAEQARABEAEQARABEAEQARABEA7//v/+//7/8RABEAEQARABEAEQARABEAEQARABEAEQASABIAEgASABIAEgASABIAEgASABIAEgDu/+7/7v/u/xIAEgASABIAEgASABIAEgASABIAEgASABMAEwATABMAEwATABMAEwATABMAEwATAO3/7f/t/+3/EwATABMAEwATABMAEwATABMAEwATABMAFAAUABQAFAAUABQAFAAUABQAFAAUABQA7P/s/+z/7P8UABQAFAAUABQAFAAUABQAFAAUABQAFAAVABUAFQAVABUAFQAVABUAFQAVABUAFQDr/+v/6//r/xUAFQAVABUAFQAVABUAFQAVABUAFQAVABYAFgAWABYAFgAWABYAFgAWABYAFgAWAOr/6v/q/+r/FgAWABYAFgAWABYAFgAWABYAFgAWABYAFwAXABcAFwAXABcAFwAXABcAFwAXABcA6f/p/+n/6f8XABcAFwAXABcAFwAXABcAFwAXABcAFwAYABgAGAAYABgAGAAYABgAGAAYABgAGADo/+j/6P/o/xgAGAAYABgAGAAYABgAGAAYABgAGAAYABkAGQAZABkAGQAZABkAGQAZABkAGQAZAOf/5//n/+f/GQAZABkAGQAZABkAGQAZABkAGQAZABkAGgAaABoAGgAaABoAGgAaABoAGgAaABoA5v/m/+b/5v8aABoAGgAaABoAGgAaABoAGgAaABoAGgAbABsAGwAbABsAGwAbABsAGwAbABsAGwDl/+X/5f/l/xsAGwAbABsAGwAbABsAGwAbABsAGwAbABwAHAAcABwAHAAcABwAHAAcABwAHAAcAOT/5P/k/+T/HAAcABwAHAAcABwAHAAcABwAHAAcABwAHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0A4//j/+P/4/8dAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgDi/+L/4v/i/x4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAOH/4f/h/+H/HwAfAB8AHwAfAB8AHwAfAB8AHwAfAB8AIAAgACAAIAAgACAAIAAgACAAIAAgACAA4P/g/+D/4P8gACAAIAAgACAAIAAgACAAIAAgACAAIAAhACEAIQAhACEAIQAhACEAIQAhACEAIQDf/9//3//f/yEAIQAhACEAIQAhACEAIQAhACEAIQAhACIAIgAiACIAIgAiACIAIgAiACIAIgAiAN7/3v/e/97/IgAiACIAIgAiACIAIgAiACIAIgAiACIAIwAjACMAIwAjACMAIwAjACMAIwAjACMA3f/d/93/3f8jACMAIwAjACMAIwAjACMAIwAjACMAIwAkACQAJAAkACQAJAAkACQAJAAkACQAJADc/9z/3P/c/yQAJAAkACQAJAAkACQAJAAkACQAJAAkACUAJQAlACUAJQAlACUAJQAlACUAJQAlANv/2//b/9v/JQAlACUAJQAlACUAJQAlACUAJQAlACUAJgAmACYAJgAmACYAJgAmACYAJgAmACYA2v/a/9r/2v8mACYAJgAmACYAJgAmACYAJgAmACYAJgAnACcAJwAnACcAJwAnACcAJwAnACcAJwDZ/9n/2f/Z/ycAJwAnACcAJwAnACcAJwAnACcAJwAnACgAKAAoACgAKAAoACgAKAAoACgAKAAoANj/2P/Y/9j/KAAoACgAKAAoACgAKAAoACgAKAAoACgAKQApACkAKQApACkAKQApACkAKQApACkA1//X/9f/1/8pACkAKQApACkAKQApACkAKQApACkAKQAqACoAKgAqACoAKgAqACoAKgAqACoAKgDW/9b/1v/W/yoAKgAqACoAKgAqACoAKgAqACoAKgAqACsAKwArACsAKwArACsAKwArACsAKwArANX/1f/V/9X/KwArACsAKwArACsAKwArACsAKwArACsALAAsACwALAAsACwALAAsACwALAAsACwA1P/U/9T/1P8sACwALAAsACwALAAsACwALAAsACwALAAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQDT/9P/0//T/y0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC4ALgAuAC4ALgAuAC4ALgAuAC4ALgAuANL/0v/S/9L/LgAuAC4ALgAuAC4ALgAuAC4ALgAuAC4ALwAvAC8ALwAvAC8ALwAvAC8ALwAvAC8A0f/R/9H/0f8vAC8ALwAvAC8ALwAvAC8ALwAvAC8ALwAwADAAMAAwADAAMAAwADAAMAAwADAAMADQ/9D/0P/Q/zAAMAAwADAAMAAwADAAMAAwADAAMAAwADEAMQAxADEAMQAxADEAMQAxADEAMQAxAM//z//P/8//MQAxADEAMQAxADEAMQAxADEAMQAxADEAMgAyADIAMgAyADIAMgAyADIAMgAyADIAzv/O/87/zv8yADIAMgAyADIAMgAyADIAMgAyADIAMgAzADMAMwAzADMAMwAzADMAMwAzADMAMwDN/83/zf/N/zMAMwAzADMAMwAzADMAMwAzADMAMwAzADQANAA0ADQANAA0ADQANAA0ADQANAA0AMz/zP/M/8z/NAA0ADQANAA0ADQANAA0ADQANAA0ADQANQA1ADUANQA1ADUANQA1ADUANQA1ADUAy//L/8v/y/81ADUANQA1ADUANQA1ADUANQA1ADUANQA2ADYANgA2ADYANgA2ADYANgA2ADYANgDK/8r/yv/K/zYANgA2ADYANgA2ADYANgA2ADYANgA2ADcANwA3ADcANwA3ADcANwA3ADcANwA3AMn/yf/J/8n/NwA3ADcANwA3ADcANwA3ADcANwA3ADcAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAyP/I/8j/yP84ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA5ADkAOQA5ADkAOQA5ADkAOQA5ADkAOQDH/8f/x//H/zkAOQA5ADkAOQA5ADkAOQA5ADkAOQA5ADoAOgA6ADoAOgA6ADoAOgA6ADoAOgA6AMb/xv/G/8b/OgA6ADoAOgA6ADoAOgA6ADoAOgA6ADoAOwA7ADsAOwA7ADsAOwA7ADsAOwA7ADsAxf/F/8X/xf87ADsAOwA7ADsAOwA7ADsAOwA7ADsAOwA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPADE/8T/xP/E/zwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8AD0APQA9AD0APQA9AD0APQA9AD0APQA9AMP/w//D/8P/PQA9AD0APQA9AD0APQA9AD0APQA9AD0APgA+AD4APgA+AD4APgA+AD4APgA+AD4Awv/C/8L/wv8+AD4APgA+AD4APgA+AD4APgA+AD4APgA/AD8APwA/AD8APwA/AD8APwA/AD8APwDB/8H/wf/B/z8APwA/AD8APwA/AD8APwA/AD8APwA/AEAAQABAAEAAQABAAEAAQABAAEAAQABAAMD/wP/A/8D/QABAAEAAQABAAEAAQABAAEAAQABAAEAAQQBBAEEAQQBBAEEAQQBBAEEAQQBBAEEAv/+//7//v/9BAEEAQQBBAEEAQQBBAEEAQQBBAEEAQQBCAEIAQgBCAEIAQgBCAEIAQgBCAEIAQgC+/77/vv++/0IAQgBCAEIAQgBCAEIAQgBCAEIAQgBCAEMAQwBDAEMAQwBDAEMAQwBDAEMAQwBDAL3/vf+9/73/QwBDAEMAQwBDAEMAQwBDAEMAQwBDAEMARABEAEQARABEAEQARABEAEQARABEAEQAvP+8/7z/vP9EAEQARABEAEQARABEAEQARABEAEQARABFAEUARQBFAEUARQBFAEUARQBFAEUARQC7/7v/u/+7/0UARQBFAEUARQBFAEUARQBFAEUARQBFAEYARgBGAEYARgBGAEYARgBGAEYARgBGALr/uv+6/7r/RgBGAEYARgBGAEYARgBGAEYARgBGAEYARwBHAEcARwBHAEcARwBHAEcARwBHAEcAuf+5/7n/uf9HAEcARwBHAEcARwBHAEcARwBHAEcARwBIAEgASABIAEgASABIAEgASABIAEgASAC4/7j/uP+4/0gASABIAEgASABIAEgASABIAEgASABIAEkASQBJAEkASQBJAEkASQBJAEkASQBJALf/t/+3/7f/SQBJAEkASQBJAEkASQBJAEkASQBJAEkASgBKAEoASgBKAEoASgBKAEoASgBKAEoAtv+2/7b/tv9KAEoASgBKAEoASgBKAEoASgBKAEoASgBLAEsASwBLAEsASwBLAEsASwBLAEsASwC1/7X/tf+1/0sASwBLAEsASwBLAEsASwBLAEsASwBLAEwATABMAEwATABMAEwATABMAEwATABMALT/tP+0/7T/TABMAEwATABMAEwATABMAEwATABMAEwATQBNAE0ATQBNAE0ATQBNAE0ATQBNAE0As/+z/7P/s/9NAE0ATQBNAE0ATQBNAE0ATQBNAE0ATQBOAE4ATgBOAE4ATgBOAE4ATgBOAE4ATgCy/7L/sv+y/04ATgBOAE4ATgBOAE4ATgBOAE4ATgBOAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPALH/sf+x/7H/TwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8AUABQAFAAUABQAFAAUABQAFAAUABQAFAAsP+w/7D/sP9QAFAAUABQAFAAUABQAFAAUABQAFAAUABRAFEAUQBRAFEAUQBRAFEAUQBRAFEAUQCv/6//r/+v/1EAUQBRAFEAUQBRAFEAUQBRAFEAUQBRAFIAUgBSAFIAUgBSAFIAUgBSAFIAUgBSAK7/rv+u/67/UgBSAFIAUgBSAFIAUgBSAFIAUgBSAFIAUwBTAFMAUwBTAFMAUwBTAFMAUwBTAFMArf+t/63/rf9TAFMAUwBTAFMAUwBTAFMAUwBTAFMAUwBUAFQAVABUAFQAVABUAFQAVABUAFQAVACs/6z/rP+s/1QAVABUAFQAVABUAFQAVABUAFQAVABUAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAKv/q/+r/6v/VQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAqv+q/6r/qv9WAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwCp/6n/qf+p/1cAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFgAWABYAFgAWABYAFgAWABYAFgAWABYAKj/qP+o/6j/WABYAFgAWABYAFgAWABYAFgAWABYAFgAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAp/+n/6f/p/9ZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgCm/6b/pv+m/1oAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFsAWwBbAFsAWwBbAFsAWwBbAFsAWwBbAKX/pf+l/6X/WwBbAFsAWwBbAFsAWwBbAFsAWwBbAFsAXABcAFwAXABcAFwAXABcAFwAXABcAFwApP+k/6T/pP9cAFwAXABcAFwAXABcAFwAXABcAFwAXABdAF0AXQBdAF0AXQBdAF0AXQBdAF0AXQCj/6P/o/+j/10AXQBdAF0AXQBdAF0AXQBdAF0AXQBdAF4AXgBeAF4AXgBeAF4AXgBeAF4AXgBeAKL/ov+i/6L/XgBeAF4AXgBeAF4AXgBeAF4AXgBeAF4AXwBfAF8AXwBfAF8AXwBfAF8AXwBfAF8Aof+h/6H/of9fAF8AXwBfAF8AXwBfAF8AXwBfAF8AXwBgAGAAYABgAGAAYABgAGAAYABgAGAAYACg/6D/oP+g/2AAYABgAGAAYABgAGAAYABgAGAAYABgAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAJ//n/+f/5//YQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYgBiAGIAYgBiAGIAYgBiAGIAYgBiAGIAnv+e/57/nv9iAGIAYgBiAGIAYgBiAGIAYgBiAGIAYgBjAGMAYwBjAGMAYwBjAGMAYwBjAGMAYwCd/53/nf+d/2MAYwBjAGMAYwBjAGMAYwBjAGMAYwBjAGQAZABkAGQAZABkAGQAZABkAGQAZABkAJz/nP+c/5z/ZABkAGQAZABkAGQAZABkAGQAZABkAGQAZQBlAGUAZQBlAGUAZQBlAGUAZQBlAGUAm/+b/5v/m/9lAGUAZQBlAGUAZQBlAGUAZQBlAGUAZQBmAGYAZgBmAGYAZgBmAGYAZgBmAGYAZgCa/5r/mv+a/2YAZgBmAGYAZgBmAGYAZgBmAGYAZgBmAGcAZwBnAGcAZwBnAGcAZwBnAGcAZwBnAJn/mf+Z/5n/ZwBnAGcAZwBnAGcAZwBnAGcAZwBnAGcAaABoAGgAaABoAGgAaABoAGgAaABoAGgAmP+Y/5j/mP9oAGgAaABoAGgAaABoAGgAaABoAGgAaABpAGkAaQBpAGkAaQBpAGkAaQBpAGkAaQCX/5f/l/+X/2kAaQBpAGkAaQBpAGkAaQBpAGkAaQBpAGoAagBqAGoAagBqAGoAagBqAGoAagBqAJb/lv+W/5b/agBqAGoAagBqAGoAagBqAGoAagBqAGoAawBrAGsAawBrAGsAawBrAGsAawBrAGsAlf+V/5X/lf9rAGsAawBrAGsAawBrAGsAawBrAGsAawBsAGwAbABsAGwAbABsAGwAbABsAGwAbACU/5T/lP+U/2wAbABsAGwAbABsAGwAbABsAGwAbABsAG0AbQBtAG0AbQBtAG0AbQBtAG0AbQBtAJP/k/+T/5P/bQBtAG0AbQBtAG0AbQBtAG0AbQBtAG0AbgBuAG4AbgBuAG4AbgBuAG4AbgBuAG4Akv+S/5L/kv9uAG4AbgBuAG4AbgBuAG4AbgBuAG4AbgBvAG8AbwBvAG8AbwBvAG8AbwBvAG8AbwCR/5H/kf+R/28AbwBvAG8AbwBvAG8AbwBvAG8AbwBvAHAAcABwAHAAcABwAHAAcABwAHAAcABwAJD/kP+Q/5D/cABwAHAAcABwAHAAcABwAHAAcABwAHAAcQBxAHEAcQBxAHEAcQBxAHEAcQBxAHEAj/+P/4//j/9xAHEAcQBxAHEAcQBxAHEAcQBxAHEAcQByAHIAcgByAHIAcgByAHIAcgByAHIAcgCO/47/jv+O/3IAcgByAHIAcgByAHIAcgByAHIAcgByAHMAcwBzAHMAcwBzAHMAcwBzAHMAcwBzAI3/jf+N/43/cwBzAHMAcwBzAHMAcwBzAHMAcwBzAHMAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAjP+M/4z/jP90AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQCL/4v/i/+L/3UAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHYAdgB2AHYAdgB2AHYAdgB2AHYAdgB2AIr/iv+K/4r/dgB2AHYAdgB2AHYAdgB2AHYAdgB2AHYAdwB3AHcAdwB3AHcAdwB3AHcAdwB3AHcAif+J/4n/if93AHcAdwB3AHcAdwB3AHcAdwB3AHcAdwB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACI/4j/iP+I/3gAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHkAeQB5AHkAeQB5AHkAeQB5AHkAeQB5AIf/h/+H/4f/eQB5AHkAeQB5AHkAeQB5AHkAeQB5AHkAegB6AHoAegB6AHoAegB6AHoAegB6AHoAhv+G/4b/hv96AHoAegB6AHoAegB6AHoAegB6AHoAegB7AHsAewB7AHsAewB7AHsAewB7AHsAewCF/4X/hf+F/3sAewB7AHsAewB7AHsAewB7AHsAewB7AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAB8AIT/hP+E/4T/fAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfQB9AH0AfQB9AH0AfQB9AH0AfQB9AH0Ag/+D/4P/g/99AH0AfQB9AH0AfQB9AH0AfQB9AH0AfQB+AH4AfgB+AH4AfgB+AH4AfgB+AH4AfgCC/4L/gv+C/34AfgB+AH4AfgB+AH4AfgB+AH4AfgB+AH8AfwB/AH8AfwB/AH8AfwB/AH8AfwB/AIH/gf+B/4H/fwB/AH8AfwB/AH8AfwB/AH8AfwB/AH8AgACAAIAAgACAAIAAgACAAAACAAIAAgACAP4A/gD+AP4AAgACAAIAAgACAAIAAgACAAIAAgACAAIBAgECAQIBAgECAQIBAgECAAQABAAEAAQA/AD8APwA/AAEAAQABAAEAAQABAAEAAQABAAEAAQABAEEAQQBBAEEAQQBBAEEAQQABgAGAAYABgD6APoA+gD6AAYABgAGAAYABgAGAAYABgAGAAYABgAGAQYBBgEGAQYBBgEGAQYBBgAIAAgACAAIAPgA+AD4APgACAAIAAgACAAIAAgACAAIAAgACAAIAAgBCAEIAQgBCAEIAQgBCAEIAAoACgAKAAoA9gD2APYA9gAKAAoACgAKAAoACgAKAAoACgAKAAoACgEKAQoBCgEKAQoBCgEKAQoADAAMAAwADAD0APQA9AD0AAwADAAMAAwADAAMAAwADAAMAAwADAAMAQwBDAEMAQwBDAEMAQwBDAAOAA4ADgAOAPIA8gDyAPIADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4BDgEOAQ4BDgEOAQ4BDgEOABAAEAAQABAA8ADwAPAA8AAQABAAEAAQABAAEAAQABAAEAAQABAAEAEQARABEAEQARABEAEQARAAEgASABIAEgDuAO4A7gDuABIAEgASABIAEgASABIAEgASABIAEgASARIBEgESARIBEgESARIBEgAUABQAFAAUAOwA7ADsAOwAFAAUABQAFAAUABQAFAAUABQAFAAUABQBFAEUARQBFAEUARQBFAEUABYAFgAWABYA6gDqAOoA6gAWABYAFgAWABYAFgAWABYAFgAWABYAFgEWARYBFgEWARYBFgEWARYAGAAYABgAGADoAOgA6ADoABgAGAAYABgAGAAYABgAGAAYABgAGAAYARgBGAEYARgBGAEYARgBGAAaABoAGgAaAOYA5gDmAOYAGgAaABoAGgAaABoAGgAaABoAGgAaABoBGgEaARoBGgEaARoBGgEaABwAHAAcABwA5ADkAOQA5AAcABwAHAAcABwAHAAcABwAHAAcABwAHAEcARwBHAEcARwBHAEcARwAHgAeAB4AHgDiAOIA4gDiAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAR4BHgEeAR4BHgEeAR4BHgAgACAAIAAgAOAA4ADgAOAAIAAgACAAIAAgACAAIAAgACAAIAAgACABIAEgASABIAEgASABIAEgACIAIgAiACIA3gDeAN4A3gAiACIAIgAiACIAIgAiACIAIgAiACIAIgEiASIBIgEiASIBIgEiASIAJAAkACQAJADcANwA3ADcACQAJAAkACQAJAAkACQAJAAkACQAJAAkASQBJAEkASQBJAEkASQBJAAmACYAJgAmANoA2gDaANoAJgAmACYAJgAmACYAJgAmACYAJgAmACYBJgEmASYBJgEmASYBJgEmACgAKAAoACgA2ADYANgA2AAoACgAKAAoACgAKAAoACgAKAAoACgAKAEoASgBKAEoASgBKAEoASgAKgAqACoAKgDWANYA1gDWACoAKgAqACoAKgAqACoAKgAqACoAKgAqASoBKgEqASoBKgEqASoBKgAsACwALAAsANQA1ADUANQALAAsACwALAAsACwALAAsACwALAAsACwBLAEsASwBLAEsASwBLAEsAC4ALgAuAC4A0gDSANIA0gAuAC4ALgAuAC4ALgAuAC4ALgAuAC4ALgEuAS4BLgEuAS4BLgEuAS4AMAAwADAAMADQANAA0ADQADAAMAAwADAAMAAwADAAMAAwADAAMAAwATABMAEwATABMAEwATABMAAyADIAMgAyAM4AzgDOAM4AMgAyADIAMgAyADIAMgAyADIAMgAyADIBMgEyATIBMgEyATIBMgEyADQANAA0ADQAzADMAMwAzAA0ADQANAA0ADQANAA0ADQANAA0ADQANAE0ATQBNAE0ATQBNAE0ATQANgA2ADYANgDKAMoAygDKADYANgA2ADYANgA2ADYANgA2ADYANgA2ATYBNgE2ATYBNgE2ATYBNgA4ADgAOAA4AMgAyADIAMgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgBOAE4ATgBOAE4ATgBOAE4ADoAOgA6ADoAxgDGAMYAxgA6ADoAOgA6ADoAOgA6ADoAOgA6ADoAOgE6AToBOgE6AToBOgE6AToAPAA8ADwAPADEAMQAxADEADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ATwBPAE8ATwBPAE8ATwBPAA+AD4APgA+AMIAwgDCAMIAPgA+AD4APgA+AD4APgA+AD4APgA+AD4BPgE+AT4BPgE+AT4BPgE+AEAAQABAAEAAwADAAMAAwABAAEAAQABAAEAAQABAAEAAQABAAEAAQAFAAUABQAFAAUABQAFAAUAAQgBCAEIAQgC+AL4AvgC+AEIAQgBCAEIAQgBCAEIAQgBCAEIAQgBCAUIBQgFCAUIBQgFCAUIBQgBEAEQARABEALwAvAC8ALwARABEAEQARABEAEQARABEAEQARABEAEQBRAFEAUQBRAFEAUQBRAFEAEYARgBGAEYAugC6ALoAugBGAEYARgBGAEYARgBGAEYARgBGAEYARgFGAUYBRgFGAUYBRgFGAUYASABIAEgASAC4ALgAuAC4AEgASABIAEgASABIAEgASABIAEgASABIAUgBSAFIAUgBSAFIAUgBSABKAEoASgBKALYAtgC2ALYASgBKAEoASgBKAEoASgBKAEoASgBKAEoBSgFKAUoBSgFKAUoBSgFKAEwATABMAEwAtAC0ALQAtABMAEwATABMAEwATABMAEwATABMAEwATAFMAUwBTAFMAUwBTAFMAUwATgBOAE4ATgCyALIAsgCyAE4ATgBOAE4ATgBOAE4ATgBOAE4ATgBOAU4BTgFOAU4BTgFOAU4BTgBQAFAAUABQALAAsACwALAAUABQAFAAUABQAFAAUABQAFAAUABQAFABUAFQAVABUAFQAVABUAFQAFIAUgBSAFIArgCuAK4ArgBSAFIAUgBSAFIAUgBSAFIAUgBSAFIAUgFSAVIBUgFSAVIBUgFSAVIAVABUAFQAVACsAKwArACsAFQAVABUAFQAVABUAFQAVABUAFQAVABUAVQBVAFUAVQBVAFUAVQBVABWAFYAVgBWAKoAqgCqAKoAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYBVgFWAVYBVgFWAVYBVgFWAFgAWABYAFgAqACoAKgAqABYAFgAWABYAFgAWABYAFgAWABYAFgAWAFYAVgBWAFYAVgBWAFYAVgAWgBaAFoAWgCmAKYApgCmAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAVoBWgFaAVoBWgFaAVoBWgBcAFwAXABcAKQApACkAKQAXABcAFwAXABcAFwAXABcAFwAXABcAFwBXAFcAVwBXAFcAVwBXAFcAF4AXgBeAF4AogCiAKIAogBeAF4AXgBeAF4AXgBeAF4AXgBeAF4AXgFeAV4BXgFeAV4BXgFeAV4AYABgAGAAYACgAKAAoACgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAWABYAFgAWABYAFgAWABYABiAGIAYgBiAJ4AngCeAJ4AYgBiAGIAYgBiAGIAYgBiAGIAYgBiAGIBYgFiAWIBYgFiAWIBYgFiAGQAZABkAGQAnACcAJwAnABkAGQAZABkAGQAZABkAGQAZABkAGQAZAFkAWQBZAFkAWQBZAFkAWQAZgBmAGYAZgCaAJoAmgCaAGYAZgBmAGYAZgBmAGYAZgBmAGYAZgBmAWYBZgFmAWYBZgFmAWYBZgBoAGgAaABoAJgAmACYAJgAaABoAGgAaABoAGgAaABoAGgAaABoAGgBaAFoAWgBaAFoAWgBaAFoAGoAagBqAGoAlgCWAJYAlgBqAGoAagBqAGoAagBqAGoAagBqAGoAagFqAWoBagFqAWoBagFqAWoAbABsAGwAbACUAJQAlACUAGwAbABsAGwAbABsAGwAbABsAGwAbABsAWwBbAFsAWwBbAFsAWwBbABuAG4AbgBuAJIAkgCSAJIAbgBuAG4AbgBuAG4AbgBuAG4AbgBuAG4BbgFuAW4BbgFuAW4BbgFuAHAAcABwAHAAkACQAJAAkABwAHAAcABwAHAAcABwAHAAcABwAHAAcAFwAXABcAFwAXABcAFwAXAAcgByAHIAcgCOAI4AjgCOAHIAcgByAHIAcgByAHIAcgByAHIAcgByAXIBcgFyAXIBcgFyAXIBcgB0AHQAdAB0AIwAjACMAIwAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQBdAF0AXQBdAF0AXQBdAF0AHYAdgB2AHYAigCKAIoAigB2AHYAdgB2AHYAdgB2AHYAdgB2AHYAdgF2AXYBdgF2AXYBdgF2AXYAeAB4AHgAeACIAIgAiACIAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AXgBeAF4AXgBeAF4AXgBeAB6AHoAegB6AIYAhgCGAIYAegB6AHoAegB6AHoAegB6AHoAegB6AHoBegF6AXoBegF6AXoBegF6AHwAfAB8AHwAhACEAIQAhAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAF8AXwBfAF8AXwBfAF8AXwAfgB+AH4AfgCCAIIAggCCAH4AfgB+AH4AfgB+AH4AfgB+AH4AfgB+AX4BfgF+AX4BfgF+AX4Bfv9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwAAAAAAAAAAAAAAAAAAAAD/f/9//3//fwGAAYABgAGAAEAAQABAAEAAwADAAMAAwP9//3//f/9/AYABgAGAAYD/f/9//3//fwGAAYABgAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/3//f/9//38BgAGAAYABgAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 21608
+                          }
+                        },
+                        "element": "u64",
+                        "row_offset": 0,
+                        "row_elements": 2701,
+                        "row_pitch": 21608,
+                        "rows": 1,
+                        "image_pitch": 21608,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_buffer/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_buffer/buffer/backing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_buffer/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_buffer/buffer/values",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_buffer/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_buffer/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_buffer/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_buffer/texels",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAQABAAEAAQABAAEAAQABAAEAAQABAP//////////AQABAAEAAQABAAEAAQABAAEAAQABAAEAAgACAAIAAgACAAIAAgACAAIAAgACAAIA/v/+//7//v8CAAIAAgACAAIAAgACAAIAAgACAAIAAgADAAMAAwADAAMAAwADAAMAAwADAAMAAwD9//3//f/9/wMAAwADAAMAAwADAAMAAwADAAMAAwADAAQABAAEAAQABAAEAAQABAAEAAQABAAEAPz//P/8//z/BAAEAAQABAAEAAQABAAEAAQABAAEAAQABQAFAAUABQAFAAUABQAFAAUABQAFAAUA+//7//v/+/8FAAUABQAFAAUABQAFAAUABQAFAAUABQAGAAYABgAGAAYABgAGAAYABgAGAAYABgD6//r/+v/6/wYABgAGAAYABgAGAAYABgAGAAYABgAGAAcABwAHAAcABwAHAAcABwAHAAcABwAHAPn/+f/5//n/BwAHAAcABwAHAAcABwAHAAcABwAHAAcACAAIAAgACAAIAAgACAAIAAgACAAIAAgA+P/4//j/+P8IAAgACAAIAAgACAAIAAgACAAIAAgACAAJAAkACQAJAAkACQAJAAkACQAJAAkACQD3//f/9//3/wkACQAJAAkACQAJAAkACQAJAAkACQAJAAoACgAKAAoACgAKAAoACgAKAAoACgAKAPb/9v/2//b/CgAKAAoACgAKAAoACgAKAAoACgAKAAoACwALAAsACwALAAsACwALAAsACwALAAsA9f/1//X/9f8LAAsACwALAAsACwALAAsACwALAAsACwAMAAwADAAMAAwADAAMAAwADAAMAAwADAD0//T/9P/0/wwADAAMAAwADAAMAAwADAAMAAwADAAMAA0ADQANAA0ADQANAA0ADQANAA0ADQANAPP/8//z//P/DQANAA0ADQANAA0ADQANAA0ADQANAA0ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4A8v/y//L/8v8OAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwDx//H/8f/x/w8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPABAAEAAQABAAEAAQABAAEAAQABAAEAAQAPD/8P/w//D/EAAQABAAEAAQABAAEAAQABAAEAAQABAAEQARABEAEQARABEAEQARABEAEQARABEA7//v/+//7/8RABEAEQARABEAEQARABEAEQARABEAEQASABIAEgASABIAEgASABIAEgASABIAEgDu/+7/7v/u/xIAEgASABIAEgASABIAEgASABIAEgASABMAEwATABMAEwATABMAEwATABMAEwATAO3/7f/t/+3/EwATABMAEwATABMAEwATABMAEwATABMAFAAUABQAFAAUABQAFAAUABQAFAAUABQA7P/s/+z/7P8UABQAFAAUABQAFAAUABQAFAAUABQAFAAVABUAFQAVABUAFQAVABUAFQAVABUAFQDr/+v/6//r/xUAFQAVABUAFQAVABUAFQAVABUAFQAVABYAFgAWABYAFgAWABYAFgAWABYAFgAWAOr/6v/q/+r/FgAWABYAFgAWABYAFgAWABYAFgAWABYAFwAXABcAFwAXABcAFwAXABcAFwAXABcA6f/p/+n/6f8XABcAFwAXABcAFwAXABcAFwAXABcAFwAYABgAGAAYABgAGAAYABgAGAAYABgAGADo/+j/6P/o/xgAGAAYABgAGAAYABgAGAAYABgAGAAYABkAGQAZABkAGQAZABkAGQAZABkAGQAZAOf/5//n/+f/GQAZABkAGQAZABkAGQAZABkAGQAZABkAGgAaABoAGgAaABoAGgAaABoAGgAaABoA5v/m/+b/5v8aABoAGgAaABoAGgAaABoAGgAaABoAGgAbABsAGwAbABsAGwAbABsAGwAbABsAGwDl/+X/5f/l/xsAGwAbABsAGwAbABsAGwAbABsAGwAbABwAHAAcABwAHAAcABwAHAAcABwAHAAcAOT/5P/k/+T/HAAcABwAHAAcABwAHAAcABwAHAAcABwAHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0A4//j/+P/4/8dAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgDi/+L/4v/i/x4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAOH/4f/h/+H/HwAfAB8AHwAfAB8AHwAfAB8AHwAfAB8AIAAgACAAIAAgACAAIAAgACAAIAAgACAA4P/g/+D/4P8gACAAIAAgACAAIAAgACAAIAAgACAAIAAhACEAIQAhACEAIQAhACEAIQAhACEAIQDf/9//3//f/yEAIQAhACEAIQAhACEAIQAhACEAIQAhACIAIgAiACIAIgAiACIAIgAiACIAIgAiAN7/3v/e/97/IgAiACIAIgAiACIAIgAiACIAIgAiACIAIwAjACMAIwAjACMAIwAjACMAIwAjACMA3f/d/93/3f8jACMAIwAjACMAIwAjACMAIwAjACMAIwAkACQAJAAkACQAJAAkACQAJAAkACQAJADc/9z/3P/c/yQAJAAkACQAJAAkACQAJAAkACQAJAAkACUAJQAlACUAJQAlACUAJQAlACUAJQAlANv/2//b/9v/JQAlACUAJQAlACUAJQAlACUAJQAlACUAJgAmACYAJgAmACYAJgAmACYAJgAmACYA2v/a/9r/2v8mACYAJgAmACYAJgAmACYAJgAmACYAJgAnACcAJwAnACcAJwAnACcAJwAnACcAJwDZ/9n/2f/Z/ycAJwAnACcAJwAnACcAJwAnACcAJwAnACgAKAAoACgAKAAoACgAKAAoACgAKAAoANj/2P/Y/9j/KAAoACgAKAAoACgAKAAoACgAKAAoACgAKQApACkAKQApACkAKQApACkAKQApACkA1//X/9f/1/8pACkAKQApACkAKQApACkAKQApACkAKQAqACoAKgAqACoAKgAqACoAKgAqACoAKgDW/9b/1v/W/yoAKgAqACoAKgAqACoAKgAqACoAKgAqACsAKwArACsAKwArACsAKwArACsAKwArANX/1f/V/9X/KwArACsAKwArACsAKwArACsAKwArACsALAAsACwALAAsACwALAAsACwALAAsACwA1P/U/9T/1P8sACwALAAsACwALAAsACwALAAsACwALAAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQDT/9P/0//T/y0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC4ALgAuAC4ALgAuAC4ALgAuAC4ALgAuANL/0v/S/9L/LgAuAC4ALgAuAC4ALgAuAC4ALgAuAC4ALwAvAC8ALwAvAC8ALwAvAC8ALwAvAC8A0f/R/9H/0f8vAC8ALwAvAC8ALwAvAC8ALwAvAC8ALwAwADAAMAAwADAAMAAwADAAMAAwADAAMADQ/9D/0P/Q/zAAMAAwADAAMAAwADAAMAAwADAAMAAwADEAMQAxADEAMQAxADEAMQAxADEAMQAxAM//z//P/8//MQAxADEAMQAxADEAMQAxADEAMQAxADEAMgAyADIAMgAyADIAMgAyADIAMgAyADIAzv/O/87/zv8yADIAMgAyADIAMgAyADIAMgAyADIAMgAzADMAMwAzADMAMwAzADMAMwAzADMAMwDN/83/zf/N/zMAMwAzADMAMwAzADMAMwAzADMAMwAzADQANAA0ADQANAA0ADQANAA0ADQANAA0AMz/zP/M/8z/NAA0ADQANAA0ADQANAA0ADQANAA0ADQANQA1ADUANQA1ADUANQA1ADUANQA1ADUAy//L/8v/y/81ADUANQA1ADUANQA1ADUANQA1ADUANQA2ADYANgA2ADYANgA2ADYANgA2ADYANgDK/8r/yv/K/zYANgA2ADYANgA2ADYANgA2ADYANgA2ADcANwA3ADcANwA3ADcANwA3ADcANwA3AMn/yf/J/8n/NwA3ADcANwA3ADcANwA3ADcANwA3ADcAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAyP/I/8j/yP84ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA5ADkAOQA5ADkAOQA5ADkAOQA5ADkAOQDH/8f/x//H/zkAOQA5ADkAOQA5ADkAOQA5ADkAOQA5ADoAOgA6ADoAOgA6ADoAOgA6ADoAOgA6AMb/xv/G/8b/OgA6ADoAOgA6ADoAOgA6ADoAOgA6ADoAOwA7ADsAOwA7ADsAOwA7ADsAOwA7ADsAxf/F/8X/xf87ADsAOwA7ADsAOwA7ADsAOwA7ADsAOwA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPADE/8T/xP/E/zwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8AD0APQA9AD0APQA9AD0APQA9AD0APQA9AMP/w//D/8P/PQA9AD0APQA9AD0APQA9AD0APQA9AD0APgA+AD4APgA+AD4APgA+AD4APgA+AD4Awv/C/8L/wv8+AD4APgA+AD4APgA+AD4APgA+AD4APgA/AD8APwA/AD8APwA/AD8APwA/AD8APwDB/8H/wf/B/z8APwA/AD8APwA/AD8APwA/AD8APwA/AEAAQABAAEAAQABAAEAAQABAAEAAQABAAMD/wP/A/8D/QABAAEAAQABAAEAAQABAAEAAQABAAEAAQQBBAEEAQQBBAEEAQQBBAEEAQQBBAEEAv/+//7//v/9BAEEAQQBBAEEAQQBBAEEAQQBBAEEAQQBCAEIAQgBCAEIAQgBCAEIAQgBCAEIAQgC+/77/vv++/0IAQgBCAEIAQgBCAEIAQgBCAEIAQgBCAEMAQwBDAEMAQwBDAEMAQwBDAEMAQwBDAL3/vf+9/73/QwBDAEMAQwBDAEMAQwBDAEMAQwBDAEMARABEAEQARABEAEQARABEAEQARABEAEQAvP+8/7z/vP9EAEQARABEAEQARABEAEQARABEAEQARABFAEUARQBFAEUARQBFAEUARQBFAEUARQC7/7v/u/+7/0UARQBFAEUARQBFAEUARQBFAEUARQBFAEYARgBGAEYARgBGAEYARgBGAEYARgBGALr/uv+6/7r/RgBGAEYARgBGAEYARgBGAEYARgBGAEYARwBHAEcARwBHAEcARwBHAEcARwBHAEcAuf+5/7n/uf9HAEcARwBHAEcARwBHAEcARwBHAEcARwBIAEgASABIAEgASABIAEgASABIAEgASAC4/7j/uP+4/0gASABIAEgASABIAEgASABIAEgASABIAEkASQBJAEkASQBJAEkASQBJAEkASQBJALf/t/+3/7f/SQBJAEkASQBJAEkASQBJAEkASQBJAEkASgBKAEoASgBKAEoASgBKAEoASgBKAEoAtv+2/7b/tv9KAEoASgBKAEoASgBKAEoASgBKAEoASgBLAEsASwBLAEsASwBLAEsASwBLAEsASwC1/7X/tf+1/0sASwBLAEsASwBLAEsASwBLAEsASwBLAEwATABMAEwATABMAEwATABMAEwATABMALT/tP+0/7T/TABMAEwATABMAEwATABMAEwATABMAEwATQBNAE0ATQBNAE0ATQBNAE0ATQBNAE0As/+z/7P/s/9NAE0ATQBNAE0ATQBNAE0ATQBNAE0ATQBOAE4ATgBOAE4ATgBOAE4ATgBOAE4ATgCy/7L/sv+y/04ATgBOAE4ATgBOAE4ATgBOAE4ATgBOAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPALH/sf+x/7H/TwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8AUABQAFAAUABQAFAAUABQAFAAUABQAFAAsP+w/7D/sP9QAFAAUABQAFAAUABQAFAAUABQAFAAUABRAFEAUQBRAFEAUQBRAFEAUQBRAFEAUQCv/6//r/+v/1EAUQBRAFEAUQBRAFEAUQBRAFEAUQBRAFIAUgBSAFIAUgBSAFIAUgBSAFIAUgBSAK7/rv+u/67/UgBSAFIAUgBSAFIAUgBSAFIAUgBSAFIAUwBTAFMAUwBTAFMAUwBTAFMAUwBTAFMArf+t/63/rf9TAFMAUwBTAFMAUwBTAFMAUwBTAFMAUwBUAFQAVABUAFQAVABUAFQAVABUAFQAVACs/6z/rP+s/1QAVABUAFQAVABUAFQAVABUAFQAVABUAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAKv/q/+r/6v/VQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAqv+q/6r/qv9WAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwCp/6n/qf+p/1cAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFgAWABYAFgAWABYAFgAWABYAFgAWABYAKj/qP+o/6j/WABYAFgAWABYAFgAWABYAFgAWABYAFgAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAp/+n/6f/p/9ZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgCm/6b/pv+m/1oAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFsAWwBbAFsAWwBbAFsAWwBbAFsAWwBbAKX/pf+l/6X/WwBbAFsAWwBbAFsAWwBbAFsAWwBbAFsAXABcAFwAXABcAFwAXABcAFwAXABcAFwApP+k/6T/pP9cAFwAXABcAFwAXABcAFwAXABcAFwAXABdAF0AXQBdAF0AXQBdAF0AXQBdAF0AXQCj/6P/o/+j/10AXQBdAF0AXQBdAF0AXQBdAF0AXQBdAF4AXgBeAF4AXgBeAF4AXgBeAF4AXgBeAKL/ov+i/6L/XgBeAF4AXgBeAF4AXgBeAF4AXgBeAF4AXwBfAF8AXwBfAF8AXwBfAF8AXwBfAF8Aof+h/6H/of9fAF8AXwBfAF8AXwBfAF8AXwBfAF8AXwBgAGAAYABgAGAAYABgAGAAYABgAGAAYACg/6D/oP+g/2AAYABgAGAAYABgAGAAYABgAGAAYABgAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAJ//n/+f/5//YQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYgBiAGIAYgBiAGIAYgBiAGIAYgBiAGIAnv+e/57/nv9iAGIAYgBiAGIAYgBiAGIAYgBiAGIAYgBjAGMAYwBjAGMAYwBjAGMAYwBjAGMAYwCd/53/nf+d/2MAYwBjAGMAYwBjAGMAYwBjAGMAYwBjAGQAZABkAGQAZABkAGQAZABkAGQAZABkAJz/nP+c/5z/ZABkAGQAZABkAGQAZABkAGQAZABkAGQAZQBlAGUAZQBlAGUAZQBlAGUAZQBlAGUAm/+b/5v/m/9lAGUAZQBlAGUAZQBlAGUAZQBlAGUAZQBmAGYAZgBmAGYAZgBmAGYAZgBmAGYAZgCa/5r/mv+a/2YAZgBmAGYAZgBmAGYAZgBmAGYAZgBmAGcAZwBnAGcAZwBnAGcAZwBnAGcAZwBnAJn/mf+Z/5n/ZwBnAGcAZwBnAGcAZwBnAGcAZwBnAGcAaABoAGgAaABoAGgAaABoAGgAaABoAGgAmP+Y/5j/mP9oAGgAaABoAGgAaABoAGgAaABoAGgAaABpAGkAaQBpAGkAaQBpAGkAaQBpAGkAaQCX/5f/l/+X/2kAaQBpAGkAaQBpAGkAaQBpAGkAaQBpAGoAagBqAGoAagBqAGoAagBqAGoAagBqAJb/lv+W/5b/agBqAGoAagBqAGoAagBqAGoAagBqAGoAawBrAGsAawBrAGsAawBrAGsAawBrAGsAlf+V/5X/lf9rAGsAawBrAGsAawBrAGsAawBrAGsAawBsAGwAbABsAGwAbABsAGwAbABsAGwAbACU/5T/lP+U/2wAbABsAGwAbABsAGwAbABsAGwAbABsAG0AbQBtAG0AbQBtAG0AbQBtAG0AbQBtAJP/k/+T/5P/bQBtAG0AbQBtAG0AbQBtAG0AbQBtAG0AbgBuAG4AbgBuAG4AbgBuAG4AbgBuAG4Akv+S/5L/kv9uAG4AbgBuAG4AbgBuAG4AbgBuAG4AbgBvAG8AbwBvAG8AbwBvAG8AbwBvAG8AbwCR/5H/kf+R/28AbwBvAG8AbwBvAG8AbwBvAG8AbwBvAHAAcABwAHAAcABwAHAAcABwAHAAcABwAJD/kP+Q/5D/cABwAHAAcABwAHAAcABwAHAAcABwAHAAcQBxAHEAcQBxAHEAcQBxAHEAcQBxAHEAj/+P/4//j/9xAHEAcQBxAHEAcQBxAHEAcQBxAHEAcQByAHIAcgByAHIAcgByAHIAcgByAHIAcgCO/47/jv+O/3IAcgByAHIAcgByAHIAcgByAHIAcgByAHMAcwBzAHMAcwBzAHMAcwBzAHMAcwBzAI3/jf+N/43/cwBzAHMAcwBzAHMAcwBzAHMAcwBzAHMAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAjP+M/4z/jP90AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQCL/4v/i/+L/3UAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHYAdgB2AHYAdgB2AHYAdgB2AHYAdgB2AIr/iv+K/4r/dgB2AHYAdgB2AHYAdgB2AHYAdgB2AHYAdwB3AHcAdwB3AHcAdwB3AHcAdwB3AHcAif+J/4n/if93AHcAdwB3AHcAdwB3AHcAdwB3AHcAdwB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACI/4j/iP+I/3gAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHkAeQB5AHkAeQB5AHkAeQB5AHkAeQB5AIf/h/+H/4f/eQB5AHkAeQB5AHkAeQB5AHkAeQB5AHkAegB6AHoAegB6AHoAegB6AHoAegB6AHoAhv+G/4b/hv96AHoAegB6AHoAegB6AHoAegB6AHoAegB7AHsAewB7AHsAewB7AHsAewB7AHsAewCF/4X/hf+F/3sAewB7AHsAewB7AHsAewB7AHsAewB7AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAB8AIT/hP+E/4T/fAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfQB9AH0AfQB9AH0AfQB9AH0AfQB9AH0Ag/+D/4P/g/99AH0AfQB9AH0AfQB9AH0AfQB9AH0AfQB+AH4AfgB+AH4AfgB+AH4AfgB+AH4AfgCC/4L/gv+C/34AfgB+AH4AfgB+AH4AfgB+AH4AfgB+AH8AfwB/AH8AfwB/AH8AfwB/AH8AfwB/AIH/gf+B/4H/fwB/AH8AfwB/AH8AfwB/AH8AfwB/AH8AgACAAIAAgACAAIAAgACAAAACAAIAAgACAP4A/gD+AP4AAgACAAIAAgACAAIAAgACAAIAAgACAAIBAgECAQIBAgECAQIBAgECAAQABAAEAAQA/AD8APwA/AAEAAQABAAEAAQABAAEAAQABAAEAAQABAEEAQQBBAEEAQQBBAEEAQQABgAGAAYABgD6APoA+gD6AAYABgAGAAYABgAGAAYABgAGAAYABgAGAQYBBgEGAQYBBgEGAQYBBgAIAAgACAAIAPgA+AD4APgACAAIAAgACAAIAAgACAAIAAgACAAIAAgBCAEIAQgBCAEIAQgBCAEIAAoACgAKAAoA9gD2APYA9gAKAAoACgAKAAoACgAKAAoACgAKAAoACgEKAQoBCgEKAQoBCgEKAQoADAAMAAwADAD0APQA9AD0AAwADAAMAAwADAAMAAwADAAMAAwADAAMAQwBDAEMAQwBDAEMAQwBDAAOAA4ADgAOAPIA8gDyAPIADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4BDgEOAQ4BDgEOAQ4BDgEOABAAEAAQABAA8ADwAPAA8AAQABAAEAAQABAAEAAQABAAEAAQABAAEAEQARABEAEQARABEAEQARAAEgASABIAEgDuAO4A7gDuABIAEgASABIAEgASABIAEgASABIAEgASARIBEgESARIBEgESARIBEgAUABQAFAAUAOwA7ADsAOwAFAAUABQAFAAUABQAFAAUABQAFAAUABQBFAEUARQBFAEUARQBFAEUABYAFgAWABYA6gDqAOoA6gAWABYAFgAWABYAFgAWABYAFgAWABYAFgEWARYBFgEWARYBFgEWARYAGAAYABgAGADoAOgA6ADoABgAGAAYABgAGAAYABgAGAAYABgAGAAYARgBGAEYARgBGAEYARgBGAAaABoAGgAaAOYA5gDmAOYAGgAaABoAGgAaABoAGgAaABoAGgAaABoBGgEaARoBGgEaARoBGgEaABwAHAAcABwA5ADkAOQA5AAcABwAHAAcABwAHAAcABwAHAAcABwAHAEcARwBHAEcARwBHAEcARwAHgAeAB4AHgDiAOIA4gDiAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAR4BHgEeAR4BHgEeAR4BHgAgACAAIAAgAOAA4ADgAOAAIAAgACAAIAAgACAAIAAgACAAIAAgACABIAEgASABIAEgASABIAEgACIAIgAiACIA3gDeAN4A3gAiACIAIgAiACIAIgAiACIAIgAiACIAIgEiASIBIgEiASIBIgEiASIAJAAkACQAJADcANwA3ADcACQAJAAkACQAJAAkACQAJAAkACQAJAAkASQBJAEkASQBJAEkASQBJAAmACYAJgAmANoA2gDaANoAJgAmACYAJgAmACYAJgAmACYAJgAmACYBJgEmASYBJgEmASYBJgEmACgAKAAoACgA2ADYANgA2AAoACgAKAAoACgAKAAoACgAKAAoACgAKAEoASgBKAEoASgBKAEoASgAKgAqACoAKgDWANYA1gDWACoAKgAqACoAKgAqACoAKgAqACoAKgAqASoBKgEqASoBKgEqASoBKgAsACwALAAsANQA1ADUANQALAAsACwALAAsACwALAAsACwALAAsACwBLAEsASwBLAEsASwBLAEsAC4ALgAuAC4A0gDSANIA0gAuAC4ALgAuAC4ALgAuAC4ALgAuAC4ALgEuAS4BLgEuAS4BLgEuAS4AMAAwADAAMADQANAA0ADQADAAMAAwADAAMAAwADAAMAAwADAAMAAwATABMAEwATABMAEwATABMAAyADIAMgAyAM4AzgDOAM4AMgAyADIAMgAyADIAMgAyADIAMgAyADIBMgEyATIBMgEyATIBMgEyADQANAA0ADQAzADMAMwAzAA0ADQANAA0ADQANAA0ADQANAA0ADQANAE0ATQBNAE0ATQBNAE0ATQANgA2ADYANgDKAMoAygDKADYANgA2ADYANgA2ADYANgA2ADYANgA2ATYBNgE2ATYBNgE2ATYBNgA4ADgAOAA4AMgAyADIAMgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgBOAE4ATgBOAE4ATgBOAE4ADoAOgA6ADoAxgDGAMYAxgA6ADoAOgA6ADoAOgA6ADoAOgA6ADoAOgE6AToBOgE6AToBOgE6AToAPAA8ADwAPADEAMQAxADEADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ATwBPAE8ATwBPAE8ATwBPAA+AD4APgA+AMIAwgDCAMIAPgA+AD4APgA+AD4APgA+AD4APgA+AD4BPgE+AT4BPgE+AT4BPgE+AEAAQABAAEAAwADAAMAAwABAAEAAQABAAEAAQABAAEAAQABAAEAAQAFAAUABQAFAAUABQAFAAUAAQgBCAEIAQgC+AL4AvgC+AEIAQgBCAEIAQgBCAEIAQgBCAEIAQgBCAUIBQgFCAUIBQgFCAUIBQgBEAEQARABEALwAvAC8ALwARABEAEQARABEAEQARABEAEQARABEAEQBRAFEAUQBRAFEAUQBRAFEAEYARgBGAEYAugC6ALoAugBGAEYARgBGAEYARgBGAEYARgBGAEYARgFGAUYBRgFGAUYBRgFGAUYASABIAEgASAC4ALgAuAC4AEgASABIAEgASABIAEgASABIAEgASABIAUgBSAFIAUgBSAFIAUgBSABKAEoASgBKALYAtgC2ALYASgBKAEoASgBKAEoASgBKAEoASgBKAEoBSgFKAUoBSgFKAUoBSgFKAEwATABMAEwAtAC0ALQAtABMAEwATABMAEwATABMAEwATABMAEwATAFMAUwBTAFMAUwBTAFMAUwATgBOAE4ATgCyALIAsgCyAE4ATgBOAE4ATgBOAE4ATgBOAE4ATgBOAU4BTgFOAU4BTgFOAU4BTgBQAFAAUABQALAAsACwALAAUABQAFAAUABQAFAAUABQAFAAUABQAFABUAFQAVABUAFQAVABUAFQAFIAUgBSAFIArgCuAK4ArgBSAFIAUgBSAFIAUgBSAFIAUgBSAFIAUgFSAVIBUgFSAVIBUgFSAVIAVABUAFQAVACsAKwArACsAFQAVABUAFQAVABUAFQAVABUAFQAVABUAVQBVAFUAVQBVAFUAVQBVABWAFYAVgBWAKoAqgCqAKoAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYBVgFWAVYBVgFWAVYBVgFWAFgAWABYAFgAqACoAKgAqABYAFgAWABYAFgAWABYAFgAWABYAFgAWAFYAVgBWAFYAVgBWAFYAVgAWgBaAFoAWgCmAKYApgCmAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAVoBWgFaAVoBWgFaAVoBWgBcAFwAXABcAKQApACkAKQAXABcAFwAXABcAFwAXABcAFwAXABcAFwBXAFcAVwBXAFcAVwBXAFcAF4AXgBeAF4AogCiAKIAogBeAF4AXgBeAF4AXgBeAF4AXgBeAF4AXgFeAV4BXgFeAV4BXgFeAV4AYABgAGAAYACgAKAAoACgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAWABYAFgAWABYAFgAWABYABiAGIAYgBiAJ4AngCeAJ4AYgBiAGIAYgBiAGIAYgBiAGIAYgBiAGIBYgFiAWIBYgFiAWIBYgFiAGQAZABkAGQAnACcAJwAnABkAGQAZABkAGQAZABkAGQAZABkAGQAZAFkAWQBZAFkAWQBZAFkAWQAZgBmAGYAZgCaAJoAmgCaAGYAZgBmAGYAZgBmAGYAZgBmAGYAZgBmAWYBZgFmAWYBZgFmAWYBZgBoAGgAaABoAJgAmACYAJgAaABoAGgAaABoAGgAaABoAGgAaABoAGgBaAFoAWgBaAFoAWgBaAFoAGoAagBqAGoAlgCWAJYAlgBqAGoAagBqAGoAagBqAGoAagBqAGoAagFqAWoBagFqAWoBagFqAWoAbABsAGwAbACUAJQAlACUAGwAbABsAGwAbABsAGwAbABsAGwAbABsAWwBbAFsAWwBbAFsAWwBbABuAG4AbgBuAJIAkgCSAJIAbgBuAG4AbgBuAG4AbgBuAG4AbgBuAG4BbgFuAW4BbgFuAW4BbgFuAHAAcABwAHAAkACQAJAAkABwAHAAcABwAHAAcABwAHAAcABwAHAAcAFwAXABcAFwAXABcAFwAXAAcgByAHIAcgCOAI4AjgCOAHIAcgByAHIAcgByAHIAcgByAHIAcgByAXIBcgFyAXIBcgFyAXIBcgB0AHQAdAB0AIwAjACMAIwAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQBdAF0AXQBdAF0AXQBdAF0AHYAdgB2AHYAigCKAIoAigB2AHYAdgB2AHYAdgB2AHYAdgB2AHYAdgF2AXYBdgF2AXYBdgF2AXYAeAB4AHgAeACIAIgAiACIAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AXgBeAF4AXgBeAF4AXgBeAB6AHoAegB6AIYAhgCGAIYAegB6AHoAegB6AHoAegB6AHoAegB6AHoBegF6AXoBegF6AXoBegF6AHwAfAB8AHwAhACEAIQAhAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAF8AXwBfAF8AXwBfAF8AXwAfgB+AH4AfgCCAIIAggCCAH4AfgB+AH4AfgB+AH4AfgB+AH4AfgB+AX4BfgF+AX4BfgF+AX4Bfv9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwAAAAAAAAAAAAAAAAAAAAD/f/9//3//fwGAAYABgAGAAEAAQABAAEAAwADAAMAAwP9//3//f/9/AYABgAGAAYD/f/9//3//fwGAAYABgAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/3//f/9//38BgAGAAYABgAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 21608
+                          }
+                        },
+                        "element": "u64",
+                        "row_offset": 0,
+                        "row_elements": 2701,
+                        "row_pitch": 21608,
+                        "rows": 1,
+                        "image_pitch": 21608,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_held/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_held/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_held/buffer/values",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_held/argument-buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_held/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_held/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_held/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hsw_held/texels",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAQABAAEAAQABAAEAAQABAAEAAQABAP//////////AQABAAEAAQABAAEAAQABAAEAAQABAAEAAgACAAIAAgACAAIAAgACAAIAAgACAAIA/v/+//7//v8CAAIAAgACAAIAAgACAAIAAgACAAIAAgADAAMAAwADAAMAAwADAAMAAwADAAMAAwD9//3//f/9/wMAAwADAAMAAwADAAMAAwADAAMAAwADAAQABAAEAAQABAAEAAQABAAEAAQABAAEAPz//P/8//z/BAAEAAQABAAEAAQABAAEAAQABAAEAAQABQAFAAUABQAFAAUABQAFAAUABQAFAAUA+//7//v/+/8FAAUABQAFAAUABQAFAAUABQAFAAUABQAGAAYABgAGAAYABgAGAAYABgAGAAYABgD6//r/+v/6/wYABgAGAAYABgAGAAYABgAGAAYABgAGAAcABwAHAAcABwAHAAcABwAHAAcABwAHAPn/+f/5//n/BwAHAAcABwAHAAcABwAHAAcABwAHAAcACAAIAAgACAAIAAgACAAIAAgACAAIAAgA+P/4//j/+P8IAAgACAAIAAgACAAIAAgACAAIAAgACAAJAAkACQAJAAkACQAJAAkACQAJAAkACQD3//f/9//3/wkACQAJAAkACQAJAAkACQAJAAkACQAJAAoACgAKAAoACgAKAAoACgAKAAoACgAKAPb/9v/2//b/CgAKAAoACgAKAAoACgAKAAoACgAKAAoACwALAAsACwALAAsACwALAAsACwALAAsA9f/1//X/9f8LAAsACwALAAsACwALAAsACwALAAsACwAMAAwADAAMAAwADAAMAAwADAAMAAwADAD0//T/9P/0/wwADAAMAAwADAAMAAwADAAMAAwADAAMAA0ADQANAA0ADQANAA0ADQANAA0ADQANAPP/8//z//P/DQANAA0ADQANAA0ADQANAA0ADQANAA0ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4A8v/y//L/8v8OAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwDx//H/8f/x/w8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPABAAEAAQABAAEAAQABAAEAAQABAAEAAQAPD/8P/w//D/EAAQABAAEAAQABAAEAAQABAAEAAQABAAEQARABEAEQARABEAEQARABEAEQARABEA7//v/+//7/8RABEAEQARABEAEQARABEAEQARABEAEQASABIAEgASABIAEgASABIAEgASABIAEgDu/+7/7v/u/xIAEgASABIAEgASABIAEgASABIAEgASABMAEwATABMAEwATABMAEwATABMAEwATAO3/7f/t/+3/EwATABMAEwATABMAEwATABMAEwATABMAFAAUABQAFAAUABQAFAAUABQAFAAUABQA7P/s/+z/7P8UABQAFAAUABQAFAAUABQAFAAUABQAFAAVABUAFQAVABUAFQAVABUAFQAVABUAFQDr/+v/6//r/xUAFQAVABUAFQAVABUAFQAVABUAFQAVABYAFgAWABYAFgAWABYAFgAWABYAFgAWAOr/6v/q/+r/FgAWABYAFgAWABYAFgAWABYAFgAWABYAFwAXABcAFwAXABcAFwAXABcAFwAXABcA6f/p/+n/6f8XABcAFwAXABcAFwAXABcAFwAXABcAFwAYABgAGAAYABgAGAAYABgAGAAYABgAGADo/+j/6P/o/xgAGAAYABgAGAAYABgAGAAYABgAGAAYABkAGQAZABkAGQAZABkAGQAZABkAGQAZAOf/5//n/+f/GQAZABkAGQAZABkAGQAZABkAGQAZABkAGgAaABoAGgAaABoAGgAaABoAGgAaABoA5v/m/+b/5v8aABoAGgAaABoAGgAaABoAGgAaABoAGgAbABsAGwAbABsAGwAbABsAGwAbABsAGwDl/+X/5f/l/xsAGwAbABsAGwAbABsAGwAbABsAGwAbABwAHAAcABwAHAAcABwAHAAcABwAHAAcAOT/5P/k/+T/HAAcABwAHAAcABwAHAAcABwAHAAcABwAHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0A4//j/+P/4/8dAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgDi/+L/4v/i/x4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAOH/4f/h/+H/HwAfAB8AHwAfAB8AHwAfAB8AHwAfAB8AIAAgACAAIAAgACAAIAAgACAAIAAgACAA4P/g/+D/4P8gACAAIAAgACAAIAAgACAAIAAgACAAIAAhACEAIQAhACEAIQAhACEAIQAhACEAIQDf/9//3//f/yEAIQAhACEAIQAhACEAIQAhACEAIQAhACIAIgAiACIAIgAiACIAIgAiACIAIgAiAN7/3v/e/97/IgAiACIAIgAiACIAIgAiACIAIgAiACIAIwAjACMAIwAjACMAIwAjACMAIwAjACMA3f/d/93/3f8jACMAIwAjACMAIwAjACMAIwAjACMAIwAkACQAJAAkACQAJAAkACQAJAAkACQAJADc/9z/3P/c/yQAJAAkACQAJAAkACQAJAAkACQAJAAkACUAJQAlACUAJQAlACUAJQAlACUAJQAlANv/2//b/9v/JQAlACUAJQAlACUAJQAlACUAJQAlACUAJgAmACYAJgAmACYAJgAmACYAJgAmACYA2v/a/9r/2v8mACYAJgAmACYAJgAmACYAJgAmACYAJgAnACcAJwAnACcAJwAnACcAJwAnACcAJwDZ/9n/2f/Z/ycAJwAnACcAJwAnACcAJwAnACcAJwAnACgAKAAoACgAKAAoACgAKAAoACgAKAAoANj/2P/Y/9j/KAAoACgAKAAoACgAKAAoACgAKAAoACgAKQApACkAKQApACkAKQApACkAKQApACkA1//X/9f/1/8pACkAKQApACkAKQApACkAKQApACkAKQAqACoAKgAqACoAKgAqACoAKgAqACoAKgDW/9b/1v/W/yoAKgAqACoAKgAqACoAKgAqACoAKgAqACsAKwArACsAKwArACsAKwArACsAKwArANX/1f/V/9X/KwArACsAKwArACsAKwArACsAKwArACsALAAsACwALAAsACwALAAsACwALAAsACwA1P/U/9T/1P8sACwALAAsACwALAAsACwALAAsACwALAAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQDT/9P/0//T/y0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC4ALgAuAC4ALgAuAC4ALgAuAC4ALgAuANL/0v/S/9L/LgAuAC4ALgAuAC4ALgAuAC4ALgAuAC4ALwAvAC8ALwAvAC8ALwAvAC8ALwAvAC8A0f/R/9H/0f8vAC8ALwAvAC8ALwAvAC8ALwAvAC8ALwAwADAAMAAwADAAMAAwADAAMAAwADAAMADQ/9D/0P/Q/zAAMAAwADAAMAAwADAAMAAwADAAMAAwADEAMQAxADEAMQAxADEAMQAxADEAMQAxAM//z//P/8//MQAxADEAMQAxADEAMQAxADEAMQAxADEAMgAyADIAMgAyADIAMgAyADIAMgAyADIAzv/O/87/zv8yADIAMgAyADIAMgAyADIAMgAyADIAMgAzADMAMwAzADMAMwAzADMAMwAzADMAMwDN/83/zf/N/zMAMwAzADMAMwAzADMAMwAzADMAMwAzADQANAA0ADQANAA0ADQANAA0ADQANAA0AMz/zP/M/8z/NAA0ADQANAA0ADQANAA0ADQANAA0ADQANQA1ADUANQA1ADUANQA1ADUANQA1ADUAy//L/8v/y/81ADUANQA1ADUANQA1ADUANQA1ADUANQA2ADYANgA2ADYANgA2ADYANgA2ADYANgDK/8r/yv/K/zYANgA2ADYANgA2ADYANgA2ADYANgA2ADcANwA3ADcANwA3ADcANwA3ADcANwA3AMn/yf/J/8n/NwA3ADcANwA3ADcANwA3ADcANwA3ADcAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAyP/I/8j/yP84ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA5ADkAOQA5ADkAOQA5ADkAOQA5ADkAOQDH/8f/x//H/zkAOQA5ADkAOQA5ADkAOQA5ADkAOQA5ADoAOgA6ADoAOgA6ADoAOgA6ADoAOgA6AMb/xv/G/8b/OgA6ADoAOgA6ADoAOgA6ADoAOgA6ADoAOwA7ADsAOwA7ADsAOwA7ADsAOwA7ADsAxf/F/8X/xf87ADsAOwA7ADsAOwA7ADsAOwA7ADsAOwA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPADE/8T/xP/E/zwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8AD0APQA9AD0APQA9AD0APQA9AD0APQA9AMP/w//D/8P/PQA9AD0APQA9AD0APQA9AD0APQA9AD0APgA+AD4APgA+AD4APgA+AD4APgA+AD4Awv/C/8L/wv8+AD4APgA+AD4APgA+AD4APgA+AD4APgA/AD8APwA/AD8APwA/AD8APwA/AD8APwDB/8H/wf/B/z8APwA/AD8APwA/AD8APwA/AD8APwA/AEAAQABAAEAAQABAAEAAQABAAEAAQABAAMD/wP/A/8D/QABAAEAAQABAAEAAQABAAEAAQABAAEAAQQBBAEEAQQBBAEEAQQBBAEEAQQBBAEEAv/+//7//v/9BAEEAQQBBAEEAQQBBAEEAQQBBAEEAQQBCAEIAQgBCAEIAQgBCAEIAQgBCAEIAQgC+/77/vv++/0IAQgBCAEIAQgBCAEIAQgBCAEIAQgBCAEMAQwBDAEMAQwBDAEMAQwBDAEMAQwBDAL3/vf+9/73/QwBDAEMAQwBDAEMAQwBDAEMAQwBDAEMARABEAEQARABEAEQARABEAEQARABEAEQAvP+8/7z/vP9EAEQARABEAEQARABEAEQARABEAEQARABFAEUARQBFAEUARQBFAEUARQBFAEUARQC7/7v/u/+7/0UARQBFAEUARQBFAEUARQBFAEUARQBFAEYARgBGAEYARgBGAEYARgBGAEYARgBGALr/uv+6/7r/RgBGAEYARgBGAEYARgBGAEYARgBGAEYARwBHAEcARwBHAEcARwBHAEcARwBHAEcAuf+5/7n/uf9HAEcARwBHAEcARwBHAEcARwBHAEcARwBIAEgASABIAEgASABIAEgASABIAEgASAC4/7j/uP+4/0gASABIAEgASABIAEgASABIAEgASABIAEkASQBJAEkASQBJAEkASQBJAEkASQBJALf/t/+3/7f/SQBJAEkASQBJAEkASQBJAEkASQBJAEkASgBKAEoASgBKAEoASgBKAEoASgBKAEoAtv+2/7b/tv9KAEoASgBKAEoASgBKAEoASgBKAEoASgBLAEsASwBLAEsASwBLAEsASwBLAEsASwC1/7X/tf+1/0sASwBLAEsASwBLAEsASwBLAEsASwBLAEwATABMAEwATABMAEwATABMAEwATABMALT/tP+0/7T/TABMAEwATABMAEwATABMAEwATABMAEwATQBNAE0ATQBNAE0ATQBNAE0ATQBNAE0As/+z/7P/s/9NAE0ATQBNAE0ATQBNAE0ATQBNAE0ATQBOAE4ATgBOAE4ATgBOAE4ATgBOAE4ATgCy/7L/sv+y/04ATgBOAE4ATgBOAE4ATgBOAE4ATgBOAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPALH/sf+x/7H/TwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8AUABQAFAAUABQAFAAUABQAFAAUABQAFAAsP+w/7D/sP9QAFAAUABQAFAAUABQAFAAUABQAFAAUABRAFEAUQBRAFEAUQBRAFEAUQBRAFEAUQCv/6//r/+v/1EAUQBRAFEAUQBRAFEAUQBRAFEAUQBRAFIAUgBSAFIAUgBSAFIAUgBSAFIAUgBSAK7/rv+u/67/UgBSAFIAUgBSAFIAUgBSAFIAUgBSAFIAUwBTAFMAUwBTAFMAUwBTAFMAUwBTAFMArf+t/63/rf9TAFMAUwBTAFMAUwBTAFMAUwBTAFMAUwBUAFQAVABUAFQAVABUAFQAVABUAFQAVACs/6z/rP+s/1QAVABUAFQAVABUAFQAVABUAFQAVABUAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAKv/q/+r/6v/VQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAqv+q/6r/qv9WAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwCp/6n/qf+p/1cAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFgAWABYAFgAWABYAFgAWABYAFgAWABYAKj/qP+o/6j/WABYAFgAWABYAFgAWABYAFgAWABYAFgAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAp/+n/6f/p/9ZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgCm/6b/pv+m/1oAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFsAWwBbAFsAWwBbAFsAWwBbAFsAWwBbAKX/pf+l/6X/WwBbAFsAWwBbAFsAWwBbAFsAWwBbAFsAXABcAFwAXABcAFwAXABcAFwAXABcAFwApP+k/6T/pP9cAFwAXABcAFwAXABcAFwAXABcAFwAXABdAF0AXQBdAF0AXQBdAF0AXQBdAF0AXQCj/6P/o/+j/10AXQBdAF0AXQBdAF0AXQBdAF0AXQBdAF4AXgBeAF4AXgBeAF4AXgBeAF4AXgBeAKL/ov+i/6L/XgBeAF4AXgBeAF4AXgBeAF4AXgBeAF4AXwBfAF8AXwBfAF8AXwBfAF8AXwBfAF8Aof+h/6H/of9fAF8AXwBfAF8AXwBfAF8AXwBfAF8AXwBgAGAAYABgAGAAYABgAGAAYABgAGAAYACg/6D/oP+g/2AAYABgAGAAYABgAGAAYABgAGAAYABgAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAJ//n/+f/5//YQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYgBiAGIAYgBiAGIAYgBiAGIAYgBiAGIAnv+e/57/nv9iAGIAYgBiAGIAYgBiAGIAYgBiAGIAYgBjAGMAYwBjAGMAYwBjAGMAYwBjAGMAYwCd/53/nf+d/2MAYwBjAGMAYwBjAGMAYwBjAGMAYwBjAGQAZABkAGQAZABkAGQAZABkAGQAZABkAJz/nP+c/5z/ZABkAGQAZABkAGQAZABkAGQAZABkAGQAZQBlAGUAZQBlAGUAZQBlAGUAZQBlAGUAm/+b/5v/m/9lAGUAZQBlAGUAZQBlAGUAZQBlAGUAZQBmAGYAZgBmAGYAZgBmAGYAZgBmAGYAZgCa/5r/mv+a/2YAZgBmAGYAZgBmAGYAZgBmAGYAZgBmAGcAZwBnAGcAZwBnAGcAZwBnAGcAZwBnAJn/mf+Z/5n/ZwBnAGcAZwBnAGcAZwBnAGcAZwBnAGcAaABoAGgAaABoAGgAaABoAGgAaABoAGgAmP+Y/5j/mP9oAGgAaABoAGgAaABoAGgAaABoAGgAaABpAGkAaQBpAGkAaQBpAGkAaQBpAGkAaQCX/5f/l/+X/2kAaQBpAGkAaQBpAGkAaQBpAGkAaQBpAGoAagBqAGoAagBqAGoAagBqAGoAagBqAJb/lv+W/5b/agBqAGoAagBqAGoAagBqAGoAagBqAGoAawBrAGsAawBrAGsAawBrAGsAawBrAGsAlf+V/5X/lf9rAGsAawBrAGsAawBrAGsAawBrAGsAawBsAGwAbABsAGwAbABsAGwAbABsAGwAbACU/5T/lP+U/2wAbABsAGwAbABsAGwAbABsAGwAbABsAG0AbQBtAG0AbQBtAG0AbQBtAG0AbQBtAJP/k/+T/5P/bQBtAG0AbQBtAG0AbQBtAG0AbQBtAG0AbgBuAG4AbgBuAG4AbgBuAG4AbgBuAG4Akv+S/5L/kv9uAG4AbgBuAG4AbgBuAG4AbgBuAG4AbgBvAG8AbwBvAG8AbwBvAG8AbwBvAG8AbwCR/5H/kf+R/28AbwBvAG8AbwBvAG8AbwBvAG8AbwBvAHAAcABwAHAAcABwAHAAcABwAHAAcABwAJD/kP+Q/5D/cABwAHAAcABwAHAAcABwAHAAcABwAHAAcQBxAHEAcQBxAHEAcQBxAHEAcQBxAHEAj/+P/4//j/9xAHEAcQBxAHEAcQBxAHEAcQBxAHEAcQByAHIAcgByAHIAcgByAHIAcgByAHIAcgCO/47/jv+O/3IAcgByAHIAcgByAHIAcgByAHIAcgByAHMAcwBzAHMAcwBzAHMAcwBzAHMAcwBzAI3/jf+N/43/cwBzAHMAcwBzAHMAcwBzAHMAcwBzAHMAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAjP+M/4z/jP90AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQCL/4v/i/+L/3UAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHYAdgB2AHYAdgB2AHYAdgB2AHYAdgB2AIr/iv+K/4r/dgB2AHYAdgB2AHYAdgB2AHYAdgB2AHYAdwB3AHcAdwB3AHcAdwB3AHcAdwB3AHcAif+J/4n/if93AHcAdwB3AHcAdwB3AHcAdwB3AHcAdwB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACI/4j/iP+I/3gAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHkAeQB5AHkAeQB5AHkAeQB5AHkAeQB5AIf/h/+H/4f/eQB5AHkAeQB5AHkAeQB5AHkAeQB5AHkAegB6AHoAegB6AHoAegB6AHoAegB6AHoAhv+G/4b/hv96AHoAegB6AHoAegB6AHoAegB6AHoAegB7AHsAewB7AHsAewB7AHsAewB7AHsAewCF/4X/hf+F/3sAewB7AHsAewB7AHsAewB7AHsAewB7AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAB8AIT/hP+E/4T/fAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfQB9AH0AfQB9AH0AfQB9AH0AfQB9AH0Ag/+D/4P/g/99AH0AfQB9AH0AfQB9AH0AfQB9AH0AfQB+AH4AfgB+AH4AfgB+AH4AfgB+AH4AfgCC/4L/gv+C/34AfgB+AH4AfgB+AH4AfgB+AH4AfgB+AH8AfwB/AH8AfwB/AH8AfwB/AH8AfwB/AIH/gf+B/4H/fwB/AH8AfwB/AH8AfwB/AH8AfwB/AH8AgACAAIAAgACAAIAAgACAAAACAAIAAgACAP4A/gD+AP4AAgACAAIAAgACAAIAAgACAAIAAgACAAIBAgECAQIBAgECAQIBAgECAAQABAAEAAQA/AD8APwA/AAEAAQABAAEAAQABAAEAAQABAAEAAQABAEEAQQBBAEEAQQBBAEEAQQABgAGAAYABgD6APoA+gD6AAYABgAGAAYABgAGAAYABgAGAAYABgAGAQYBBgEGAQYBBgEGAQYBBgAIAAgACAAIAPgA+AD4APgACAAIAAgACAAIAAgACAAIAAgACAAIAAgBCAEIAQgBCAEIAQgBCAEIAAoACgAKAAoA9gD2APYA9gAKAAoACgAKAAoACgAKAAoACgAKAAoACgEKAQoBCgEKAQoBCgEKAQoADAAMAAwADAD0APQA9AD0AAwADAAMAAwADAAMAAwADAAMAAwADAAMAQwBDAEMAQwBDAEMAQwBDAAOAA4ADgAOAPIA8gDyAPIADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4BDgEOAQ4BDgEOAQ4BDgEOABAAEAAQABAA8ADwAPAA8AAQABAAEAAQABAAEAAQABAAEAAQABAAEAEQARABEAEQARABEAEQARAAEgASABIAEgDuAO4A7gDuABIAEgASABIAEgASABIAEgASABIAEgASARIBEgESARIBEgESARIBEgAUABQAFAAUAOwA7ADsAOwAFAAUABQAFAAUABQAFAAUABQAFAAUABQBFAEUARQBFAEUARQBFAEUABYAFgAWABYA6gDqAOoA6gAWABYAFgAWABYAFgAWABYAFgAWABYAFgEWARYBFgEWARYBFgEWARYAGAAYABgAGADoAOgA6ADoABgAGAAYABgAGAAYABgAGAAYABgAGAAYARgBGAEYARgBGAEYARgBGAAaABoAGgAaAOYA5gDmAOYAGgAaABoAGgAaABoAGgAaABoAGgAaABoBGgEaARoBGgEaARoBGgEaABwAHAAcABwA5ADkAOQA5AAcABwAHAAcABwAHAAcABwAHAAcABwAHAEcARwBHAEcARwBHAEcARwAHgAeAB4AHgDiAOIA4gDiAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAR4BHgEeAR4BHgEeAR4BHgAgACAAIAAgAOAA4ADgAOAAIAAgACAAIAAgACAAIAAgACAAIAAgACABIAEgASABIAEgASABIAEgACIAIgAiACIA3gDeAN4A3gAiACIAIgAiACIAIgAiACIAIgAiACIAIgEiASIBIgEiASIBIgEiASIAJAAkACQAJADcANwA3ADcACQAJAAkACQAJAAkACQAJAAkACQAJAAkASQBJAEkASQBJAEkASQBJAAmACYAJgAmANoA2gDaANoAJgAmACYAJgAmACYAJgAmACYAJgAmACYBJgEmASYBJgEmASYBJgEmACgAKAAoACgA2ADYANgA2AAoACgAKAAoACgAKAAoACgAKAAoACgAKAEoASgBKAEoASgBKAEoASgAKgAqACoAKgDWANYA1gDWACoAKgAqACoAKgAqACoAKgAqACoAKgAqASoBKgEqASoBKgEqASoBKgAsACwALAAsANQA1ADUANQALAAsACwALAAsACwALAAsACwALAAsACwBLAEsASwBLAEsASwBLAEsAC4ALgAuAC4A0gDSANIA0gAuAC4ALgAuAC4ALgAuAC4ALgAuAC4ALgEuAS4BLgEuAS4BLgEuAS4AMAAwADAAMADQANAA0ADQADAAMAAwADAAMAAwADAAMAAwADAAMAAwATABMAEwATABMAEwATABMAAyADIAMgAyAM4AzgDOAM4AMgAyADIAMgAyADIAMgAyADIAMgAyADIBMgEyATIBMgEyATIBMgEyADQANAA0ADQAzADMAMwAzAA0ADQANAA0ADQANAA0ADQANAA0ADQANAE0ATQBNAE0ATQBNAE0ATQANgA2ADYANgDKAMoAygDKADYANgA2ADYANgA2ADYANgA2ADYANgA2ATYBNgE2ATYBNgE2ATYBNgA4ADgAOAA4AMgAyADIAMgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgBOAE4ATgBOAE4ATgBOAE4ADoAOgA6ADoAxgDGAMYAxgA6ADoAOgA6ADoAOgA6ADoAOgA6ADoAOgE6AToBOgE6AToBOgE6AToAPAA8ADwAPADEAMQAxADEADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ATwBPAE8ATwBPAE8ATwBPAA+AD4APgA+AMIAwgDCAMIAPgA+AD4APgA+AD4APgA+AD4APgA+AD4BPgE+AT4BPgE+AT4BPgE+AEAAQABAAEAAwADAAMAAwABAAEAAQABAAEAAQABAAEAAQABAAEAAQAFAAUABQAFAAUABQAFAAUAAQgBCAEIAQgC+AL4AvgC+AEIAQgBCAEIAQgBCAEIAQgBCAEIAQgBCAUIBQgFCAUIBQgFCAUIBQgBEAEQARABEALwAvAC8ALwARABEAEQARABEAEQARABEAEQARABEAEQBRAFEAUQBRAFEAUQBRAFEAEYARgBGAEYAugC6ALoAugBGAEYARgBGAEYARgBGAEYARgBGAEYARgFGAUYBRgFGAUYBRgFGAUYASABIAEgASAC4ALgAuAC4AEgASABIAEgASABIAEgASABIAEgASABIAUgBSAFIAUgBSAFIAUgBSABKAEoASgBKALYAtgC2ALYASgBKAEoASgBKAEoASgBKAEoASgBKAEoBSgFKAUoBSgFKAUoBSgFKAEwATABMAEwAtAC0ALQAtABMAEwATABMAEwATABMAEwATABMAEwATAFMAUwBTAFMAUwBTAFMAUwATgBOAE4ATgCyALIAsgCyAE4ATgBOAE4ATgBOAE4ATgBOAE4ATgBOAU4BTgFOAU4BTgFOAU4BTgBQAFAAUABQALAAsACwALAAUABQAFAAUABQAFAAUABQAFAAUABQAFABUAFQAVABUAFQAVABUAFQAFIAUgBSAFIArgCuAK4ArgBSAFIAUgBSAFIAUgBSAFIAUgBSAFIAUgFSAVIBUgFSAVIBUgFSAVIAVABUAFQAVACsAKwArACsAFQAVABUAFQAVABUAFQAVABUAFQAVABUAVQBVAFUAVQBVAFUAVQBVABWAFYAVgBWAKoAqgCqAKoAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYBVgFWAVYBVgFWAVYBVgFWAFgAWABYAFgAqACoAKgAqABYAFgAWABYAFgAWABYAFgAWABYAFgAWAFYAVgBWAFYAVgBWAFYAVgAWgBaAFoAWgCmAKYApgCmAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAVoBWgFaAVoBWgFaAVoBWgBcAFwAXABcAKQApACkAKQAXABcAFwAXABcAFwAXABcAFwAXABcAFwBXAFcAVwBXAFcAVwBXAFcAF4AXgBeAF4AogCiAKIAogBeAF4AXgBeAF4AXgBeAF4AXgBeAF4AXgFeAV4BXgFeAV4BXgFeAV4AYABgAGAAYACgAKAAoACgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAWABYAFgAWABYAFgAWABYABiAGIAYgBiAJ4AngCeAJ4AYgBiAGIAYgBiAGIAYgBiAGIAYgBiAGIBYgFiAWIBYgFiAWIBYgFiAGQAZABkAGQAnACcAJwAnABkAGQAZABkAGQAZABkAGQAZABkAGQAZAFkAWQBZAFkAWQBZAFkAWQAZgBmAGYAZgCaAJoAmgCaAGYAZgBmAGYAZgBmAGYAZgBmAGYAZgBmAWYBZgFmAWYBZgFmAWYBZgBoAGgAaABoAJgAmACYAJgAaABoAGgAaABoAGgAaABoAGgAaABoAGgBaAFoAWgBaAFoAWgBaAFoAGoAagBqAGoAlgCWAJYAlgBqAGoAagBqAGoAagBqAGoAagBqAGoAagFqAWoBagFqAWoBagFqAWoAbABsAGwAbACUAJQAlACUAGwAbABsAGwAbABsAGwAbABsAGwAbABsAWwBbAFsAWwBbAFsAWwBbABuAG4AbgBuAJIAkgCSAJIAbgBuAG4AbgBuAG4AbgBuAG4AbgBuAG4BbgFuAW4BbgFuAW4BbgFuAHAAcABwAHAAkACQAJAAkABwAHAAcABwAHAAcABwAHAAcABwAHAAcAFwAXABcAFwAXABcAFwAXAAcgByAHIAcgCOAI4AjgCOAHIAcgByAHIAcgByAHIAcgByAHIAcgByAXIBcgFyAXIBcgFyAXIBcgB0AHQAdAB0AIwAjACMAIwAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQBdAF0AXQBdAF0AXQBdAF0AHYAdgB2AHYAigCKAIoAigB2AHYAdgB2AHYAdgB2AHYAdgB2AHYAdgF2AXYBdgF2AXYBdgF2AXYAeAB4AHgAeACIAIgAiACIAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AXgBeAF4AXgBeAF4AXgBeAB6AHoAegB6AIYAhgCGAIYAegB6AHoAegB6AHoAegB6AHoAegB6AHoBegF6AXoBegF6AXoBegF6AHwAfAB8AHwAhACEAIQAhAB8AHwAfAB8AHwAfAB8AHwAfAB8AHwAfAF8AXwBfAF8AXwBfAF8AXwAfgB+AH4AfgCCAIIAggCCAH4AfgB+AH4AfgB+AH4AfgB+AH4AfgB+AX4BfgF+AX4BfgF+AX4Bfv9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9/AYABgAGAAYD/f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//38BgAGAAYABgP9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwGAAYABgAGA/3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//f/9//3//fwAAAAAAAAAAAAAAAAAAAAD/f/9//3//fwGAAYABgAGAAEAAQABAAEAAwADAAMAAwP9//3//f/9/AYABgAGAAYD/f/9//3//fwGAAYABgAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/3//f/9//38BgAGAAYABgAAAAAAAAAAAAAAAAAAAAAA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 21608
+                          }
+                        },
+                        "element": "u64",
+                        "row_offset": 0,
+                        "row_elements": 2701,
+                        "row_pitch": 21608,
+                        "rows": 1,
+                        "image_pitch": 21608,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-set-past-layout-support"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 11,
+        "argument_tables_retained": 4,
+        "bare_starts": 4,
+        "batches_submitted_by_waiters": 4,
+        "batches_with_none_pending": 4,
+        "bound_notices_made": 1,
+        "command_buffers_begun": 19,
+        "command_buffers_begun_batch_barriers": 4,
+        "command_buffers_begun_batch_work": 3,
+        "command_buffers_begun_continuations": 4,
+        "command_buffers_begun_encoders": 4,
+        "command_buffers_begun_segments": 4,
+        "command_buffers_deferred": 4,
+        "command_buffers_submitted": 19,
+        "commands_recorded.begin_command_buffer": 4,
+        "commands_recorded.cmd_bind_descriptor_sets": 5,
+        "commands_recorded.cmd_bind_pipeline": 4,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer": 2,
+        "commands_recorded.cmd_dispatch": 4,
+        "commands_recorded.cmd_pipeline_barrier": 9,
+        "commands_recorded.cmd_push_constants": 4,
+        "commands_recorded.end_command_buffer": 18,
+        "commits_handed_off": 4,
+        "commits_taken_in": 4,
+        "completed_waits": 7,
+        "completed_where_seen": 4,
+        "completion_arms": 4,
+        "completion_arms_after_a_wake": 4,
+        "completion_waiter_parks": 4,
+        "creation_pipelines_made": 4,
+        "device_memory_allocated": 268435712,
+        "dispatch_pipelines_pooled": 4,
+        "dispatch_shapes_made": 3,
+        "dispatch_used_resources_listed": 2,
+        "encoder_command_buffers_begun": 12,
+        "fence_waits": 4,
+        "finales_folded": 4,
+        "functions_shared": 4,
+        "functions_translated": 4,
+        "gate_waits": 4,
+        "gate_waits_slept": 4,
+        "heap_tables_worked_out": 4,
+        "host_steps_recorded": 4,
+        "host_texel_copies": 3,
+        "images_started_on_the_host": 3,
+        "new_buffer_bytes_cleared": 213536,
+        "object_churn.buffers_parked": 7,
+        "object_churn.buffers_recycled": 2,
+        "object_churn.images_own_memory": 3,
+        "object_churn.textures_image": 3,
+        "object_churn.textures_texels": 1,
+        "object_churn.vk_buffer_bindings": 5,
+        "object_churn.vk_buffer_views_destroyed": 1,
+        "object_churn.vk_buffers_made": 5,
+        "object_churn.vk_image_bindings": 3,
+        "object_churn.vk_image_views_made": 3,
+        "object_churn.vk_images_destroyed": 3,
+        "object_churn.vk_images_made": 3,
+        "pipeline_layouts_made": 3,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 4,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 5,
+        "scheduled_where_submitted": 4,
+        "scheduler_passes_by_waiters": 4,
+        "scheduler_sleeps": 4,
+        "scheduler_wakes_commit": 4,
+        "shader_modules_made": 3,
+        "slot_returns": 4,
+        "spare_command_pools_taken": 4,
+        "stage_entries_specialized": 4,
+        "submit_infos": 8,
+        "trail_waits": 4,
+        "variant_pipelines_made": 8,
+        "variants_taken_back": 4,
+        "wakes_completion_waiters": 4,
+        "wakes_spared": 28
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 3
+      },
+      "composed": {
+        "batches_submitted_by_waiters": 0,
+        "command_buffers_begun": 18,
+        "command_buffers_begun_batch_barriers": 4,
+        "command_buffers_begun_batch_work": 2,
+        "command_buffers_begun_continuations": 4,
+        "command_buffers_begun_segments": 4,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 18,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_dispatch": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 268435584,
+        "dispatch_pipelines_pooled": 4,
+        "encoder_command_buffers_begun": 12,
+        "functions_translated": 4,
+        "host_steps_recorded": 4,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_specialized": 4,
+        "submit_infos": 8,
+        "variant_pipelines_made": 4
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "creation_pipelines_made": 4,
+        "pipeline_layouts_made": 3,
+        "pooled_memory_blocks_made": 4,
+        "shader_modules_made": 3,
+        "variant_pipelines_made": 8
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 4
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "norm-storage-codes-rgba16snorm",
+        "calls": 28,
+        "in_calls": 28287040,
+        "on_cpu": 1152417,
+        "blocked": 27182458,
+        "elsewhere": 3302667,
+        "spend": 31589417,
+        "spend_least": 30262540,
+        "spend_most": 36572919,
+        "per_call": [
+          {
+            "call": "argument_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3333,
+            "on_cpu": 3500,
+            "blocked": 0,
+            "wall_least": 3084,
+            "wall_most": 9041,
+            "wall_total": 3333,
+            "on_cpu_total": 3500,
+            "blocked_total": 0
+          },
+          {
+            "call": "buffer",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 12042,
+            "on_cpu": 12291,
+            "blocked": 0,
+            "wall_least": 8084,
+            "wall_most": 12625,
+            "wall_total": 64334,
+            "on_cpu_total": 65126,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 34334,
+            "on_cpu": 34542,
+            "blocked": 0,
+            "wall_least": 27958,
+            "wall_most": 60208,
+            "wall_total": 170833,
+            "on_cpu_total": 171584,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 12042,
+            "on_cpu": 12125,
+            "blocked": 0,
+            "wall_least": 6458,
+            "wall_most": 15875,
+            "wall_total": 149832,
+            "on_cpu_total": 150417,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22609459,
+            "on_cpu": 625875,
+            "blocked": 21988542,
+            "wall_least": 21795000,
+            "wall_most": 26640292,
+            "wall_total": 22609459,
+            "on_cpu_total": 625875,
+            "blocked_total": 21988542
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3125,
+            "on_cpu": 3375,
+            "blocked": 0,
+            "wall_least": 2958,
+            "wall_most": 6458,
+            "wall_total": 3125,
+            "on_cpu_total": 3375,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_texture",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 5917,
+            "on_cpu": 6083,
+            "blocked": 0,
+            "wall_least": 5208,
+            "wall_most": 12583,
+            "wall_total": 18917,
+            "on_cpu_total": 19375,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 12250,
+            "on_cpu": 12458,
+            "blocked": 0,
+            "wall_least": 8167,
+            "wall_most": 28209,
+            "wall_total": 60250,
+            "on_cpu_total": 60875,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 505167,
+            "on_cpu": 4292,
+            "blocked": 500917,
+            "wall_least": 486708,
+            "wall_most": 656208,
+            "wall_total": 5198209,
+            "on_cpu_total": 23249,
+            "blocked_total": 5182042
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 11417,
+            "on_cpu": 11500,
+            "blocked": 0,
+            "wall_least": 8458,
+            "wall_most": 17041,
+            "wall_total": 11417,
+            "on_cpu_total": 11500,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "norm-storage-codes-rgba16snorm",
+        "calls": 28,
+        "in_calls": 2147206,
+        "on_cpu": 477042,
+        "blocked": 1617999,
+        "elsewhere": 507209,
+        "spend": 2669956,
+        "spend_least": 2474293,
+        "spend_most": 3640541,
+        "per_call": [
+          {
+            "call": "argument_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 792,
+            "on_cpu": 916,
+            "blocked": 0,
+            "wall_least": 750,
+            "wall_most": 1208,
+            "wall_total": 792,
+            "on_cpu_total": 916,
+            "blocked_total": 0
+          },
+          {
+            "call": "buffer",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 2292,
+            "on_cpu": 2459,
+            "blocked": 0,
+            "wall_least": 2167,
+            "wall_most": 3250,
+            "wall_total": 12291,
+            "on_cpu_total": 12875,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 10500,
+            "on_cpu": 10750,
+            "blocked": 0,
+            "wall_least": 8625,
+            "wall_most": 18167,
+            "wall_total": 53249,
+            "on_cpu_total": 54085,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 22875,
+            "on_cpu": 23042,
+            "blocked": 0,
+            "wall_least": 16458,
+            "wall_most": 36250,
+            "wall_total": 180833,
+            "on_cpu_total": 181416,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 132791,
+            "on_cpu": 134583,
+            "blocked": 0,
+            "wall_least": 124542,
+            "wall_most": 158792,
+            "wall_total": 132791,
+            "on_cpu_total": 134583,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 667,
+            "on_cpu": 875,
+            "blocked": 0,
+            "wall_least": 625,
+            "wall_most": 1000,
+            "wall_total": 667,
+            "on_cpu_total": 875,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_texture",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 3459,
+            "on_cpu": 3625,
+            "blocked": 0,
+            "wall_least": 3208,
+            "wall_most": 4542,
+            "wall_total": 11208,
+            "on_cpu_total": 11625,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 15500,
+            "on_cpu": 15666,
+            "blocked": 0,
+            "wall_least": 13708,
+            "wall_most": 16208,
+            "wall_total": 62082,
+            "on_cpu_total": 62625,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 276333,
+            "on_cpu": 2167,
+            "blocked": 273916,
+            "wall_least": 242125,
+            "wall_most": 710250,
+            "wall_total": 1632167,
+            "on_cpu_total": 13833,
+            "blocked_total": 1617999
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2084,
+            "on_cpu": 2208,
+            "blocked": 0,
+            "wall_least": 1625,
+            "wall_most": 3375,
+            "wall_total": 2084,
+            "on_cpu_total": 2208,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

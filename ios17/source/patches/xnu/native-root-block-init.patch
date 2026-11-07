@@ -1,0 +1,28 @@
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -110,7 +110,14 @@
+ kern_return_t
+ IOKitBSDInit( void )
+ {
+ 	IOService::publishResource("IOBSD");
++
++	// Publish RAM storage after platform power management and BSD resources.
++	extern void native_root_block_start(void) __asm__("_native_root_block_start")
++	    __attribute__((weak_import));
++	if (&native_root_block_start) {
++		native_root_block_start();
++	}
+ 
+ #if IOPOLLED_COREFILE
+ 	corefile_open_call = thread_call_allocate_with_options(IOOpenPolledCoreFile, NULL, THREAD_CALL_PRIORITY_KERNEL, THREAD_CALL_OPTIONS_ONCE);
+@@ -982,6 +989,10 @@
+ 			// The disk isn't found - have the user pick from System Recovery.
+ 			(void)IOSetRecoveryBoot(BSD_BOOTFAIL_MEDIA_MISSING, NULL, true);
+ #elif XNU_TARGET_OS_IOS
++			extern const char *native_root_block_report(void) __asm__("_native_root_block_report")
++			    __attribute__((weak_import));
++			if (&native_root_block_report)
++				panic("Failed to mount root device: %s", native_root_block_report());
+ 			panic("Failed to mount root device");
+ #endif
+ 		}

@@ -1,0 +1,1738 @@
+{
+  "format": 1,
+  "case": "pass-bound-clear-reach",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_resolves.ll",
+      "entry": "rt6_resolve_full+rt6_resolve_white",
+      "source_sha256": "826f30ea88e648ce64e04e26abdfaa51c2c81fdd933f41e0a5b621eb7c9d18e9"
+    },
+    {
+      "fixture": "rt6_resolves.air.ll",
+      "entry": "rt6_resolve_full+rt6_resolve_white",
+      "source_sha256": "deacd509ddf64f7fe146057f3097edfb6582b0033fd623a9d2ec49db7596aec9"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 8,
+      "outcomes": [
+        {
+          "runs": 8,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "826f30ea88e648ce64e04e26abdfaa51c2c81fdd933f41e0a5b621eb7c9d18e9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "deacd509ddf64f7fe146057f3097edfb6582b0033fd623a9d2ec49db7596aec9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "render-pipeline",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "8adf71eee3eec21cc2230535578f6b08f6d82fbc67268f33e83266369cfbf220"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3db5d3f9fc2394d0a9c78f7b816a0c64ddf253abfb776a47156524ae1e3875b7"
+                        }
+                      }
+                    },
+                    {
+                      "name": "depth",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d99e58435243d9fef9c88273b8d553b4fba4d0baf8009d29eae74fa99e0d9f57"
+                        }
+                      }
+                    },
+                    {
+                      "name": "values",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a7063094f778cec9f35932f0750ddffc33923d312e5c1d358947f9ed99a52e24"
+                        }
+                      }
+                    },
+                    {
+                      "name": "reach",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "affa851a16c3eba47a440766f5ec75213ca794e34d12658d45cdc3114b50a696"
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fa313d0cbda46dae8cb1e62d12a86d190beb0460a7958a7fde5413409910e3dc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:whole-area/clear/drawing",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "28d2bbd8812c220d9a18f65d489513da83a19fc1a91d56881d5b1793b1421663"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/clear/drawing",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a61234ecf166d94fa7f44ebd7311f8429bc289fbf361fc59a41acf8bb21f4f8e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-33x33/clear/drawing",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "1ccb9ee376ad2929befcdb34fa1b8e44e47ad95f41d7f702d1c454676383a724"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-8x40/clear/drawing",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0f5486b3210056315be24039da11a9419ebc26f419f5c507f02b28db72480c23"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-40x8/clear/drawing",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6122515f91a4c051c3d22b29146517b6fcafea7057721dd776ec9b4473c53612"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/clear/no-draw-call",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "94ded23dad25cefda71bb4e22aa526e3c6e5335102fb29c0ef6090fcd4422f3f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/clear/draw-covers-nothing",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9b20186a55cceb13a08b413b771331328ccdfb5cf5719cb9e5942ba5a7c10004"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/load/drawing",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "576407b78fb1e4a0aeb3a95c6707bb554a480ed2b9176703138f627833d4cf7b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:whole-area/load/drawing",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "004964617eb9ec8734c5c8082880989b68f919ea4cfc4919187cc408c6c12781"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/load/no-draw-call",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a272a0d1a5aefd86df10281d11d31d004fb880d68e1f7b90f6f7467123a0594c"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render-pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:whole-area/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:whole-area/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:area-32x32/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:area-32x32/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:area-33x33/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:area-33x33/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:area-8x40/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:area-8x40/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:area-40x8/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:area-40x8/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:area-32x32/clear/no-draw-call",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:area-32x32/clear/no-draw-call",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:area-32x32/clear/draw-covers-nothing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:area-32x32/clear/draw-covers-nothing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:area-32x32/load/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:area-32x32/load/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:whole-area/load/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:whole-area/load/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:area-32x32/load/no-draw-call",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:area-32x32/load/no-draw-call",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pieces",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "prime:whole-area/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:whole-area/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:whole-area/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:area-32x32/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:area-32x32/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:area-33x33/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-33x33/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:area-33x33/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:area-8x40/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-8x40/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:area-8x40/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:area-40x8/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-40x8/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:area-40x8/clear/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:area-32x32/clear/no-draw-call",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/clear/no-draw-call",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:area-32x32/clear/no-draw-call",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:area-32x32/clear/draw-covers-nothing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/clear/draw-covers-nothing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:area-32x32/clear/draw-covers-nothing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:area-32x32/load/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/load/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:area-32x32/load/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:whole-area/load/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:whole-area/load/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:whole-area/load/drawing",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "prime:area-32x32/load/no-draw-call",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:area-32x32/load/no-draw-call",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:area-32x32/load/no-draw-call",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back/whole-area/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/area-32x32/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/area-33x33/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/area-8x40/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/area-40x8/clear/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/area-32x32/clear/no-draw-call",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/area-32x32/clear/draw-covers-nothing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/area-32x32/load/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/whole-area/load/drawing",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/area-32x32/load/no-draw-call",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "planes",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "whole-area/clear/drawing/MTLLoadActionClear",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "area-32x32/clear/drawing/MTLLoadActionClear",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "area-33x33/clear/drawing/MTLLoadActionClear",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "area-8x40/clear/drawing/MTLLoadActionClear",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "area-40x8/clear/drawing/MTLLoadActionClear",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "area-32x32/clear/no-draw-call/MTLLoadActionClear",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "area-32x32/clear/draw-covers-nothing/MTLLoadActionClear",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "area-32x32/load/drawing/MTLLoadActionLoad",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "whole-area/load/drawing/MTLLoadActionLoad",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "area-32x32/load/no-draw-call/MTLLoadActionLoad",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPgAAgD4AAIA+AACAPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  40,
+                                  40,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 40,
+                            "row_pitch": 160,
+                            "rows": 40,
+                            "image_pitch": 6400,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "render",
+          "message": "End Encoding Validation\nendEncoding without encoding GPU work."
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_samplers_taken": 1,
+        "attachment_clears_recorded": 1,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 1,
+        "command_buffers_begun": 50,
+        "command_buffers_begun_batch_barriers": 19,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_encoders": 30,
+        "command_buffers_deferred": 30,
+        "command_buffers_submitted": 50,
+        "commands_recorded.begin_command_buffer": 50,
+        "commands_recorded.cmd_begin_render_pass": 20,
+        "commands_recorded.cmd_bind_descriptor_sets": 8,
+        "commands_recorded.cmd_bind_pipeline": 8,
+        "commands_recorded.cmd_clear_attachments": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_buffer_to_image": 10,
+        "commands_recorded.cmd_copy_image_to_buffer": 10,
+        "commands_recorded.cmd_draw": 8,
+        "commands_recorded.cmd_end_render_pass": 20,
+        "commands_recorded.cmd_pipeline_barrier": 25,
+        "commands_recorded.cmd_push_constants": 8,
+        "commands_recorded.cmd_set_blend_constants": 8,
+        "commands_recorded.cmd_set_cull_mode": 8,
+        "commands_recorded.cmd_set_depth_bias": 8,
+        "commands_recorded.cmd_set_depth_compare_op": 8,
+        "commands_recorded.cmd_set_depth_test_enable": 8,
+        "commands_recorded.cmd_set_depth_write_enable": 8,
+        "commands_recorded.cmd_set_front_face": 8,
+        "commands_recorded.cmd_set_primitive_restart_enable": 8,
+        "commands_recorded.cmd_set_primitive_topology": 8,
+        "commands_recorded.cmd_set_scissor": 8,
+        "commands_recorded.cmd_set_stencil_compare_mask": 8,
+        "commands_recorded.cmd_set_stencil_op": 8,
+        "commands_recorded.cmd_set_stencil_reference": 8,
+        "commands_recorded.cmd_set_stencil_test_enable": 8,
+        "commands_recorded.cmd_set_stencil_write_mask": 8,
+        "commands_recorded.cmd_set_viewport": 8,
+        "commands_recorded.end_command_buffer": 50,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 1,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_drawn": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326592,
+        "draw_shapes_carried": 2,
+        "draw_shapes_made": 1,
+        "draw_shapes_reused": 2,
+        "draw_states_recorded": 152,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 1,
+        "encoder_command_buffers_begun": 30,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 2,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 1,
+        "heap_tables_worked_out": 16,
+        "inline_passes": 8,
+        "linked_use_questions_asked": 2,
+        "new_buffer_bytes_cleared": 64096,
+        "object_churn.buffers_evicted": 11,
+        "object_churn.buffers_parked": 11,
+        "object_churn.images_evicted": 10,
+        "object_churn.images_own_memory": 10,
+        "object_churn.images_parked": 10,
+        "object_churn.textures_image": 10,
+        "object_churn.vk_buffer_bindings": 11,
+        "object_churn.vk_buffers_destroyed": 11,
+        "object_churn.vk_buffers_made": 11,
+        "object_churn.vk_image_bindings": 10,
+        "object_churn.vk_image_views_made": 10,
+        "object_churn.vk_images_destroyed": 16,
+        "object_churn.vk_images_made": 16,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 20,
+        "render_passes_begun_inline": 8,
+        "render_passes_begun_instances": 11,
+        "render_passes_made": 4,
+        "resident_textures_looked_at": 8,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "set_zero_sets_found": 7,
+        "shader_modules_made": 2,
+        "shader_modules_shared": 1,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 32,
+        "submit_infos": 1,
+        "submit_stalls_on_work": 1,
+        "trail_waits": 1,
+        "untouched_passes_skipped": 1,
+        "variant_pipelines_made": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "argument_samplers_taken": 1,
+        "command_buffers_deferred": 0,
+        "commands_recorded.cmd_begin_render_pass": 0,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_clear_attachments": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_copy_buffer_to_image": 0,
+        "commands_recorded.cmd_copy_image_to_buffer": 0,
+        "commands_recorded.cmd_draw": 0,
+        "commands_recorded.cmd_end_render_pass": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.cmd_set_blend_constants": 0,
+        "commands_recorded.cmd_set_cull_mode": 0,
+        "commands_recorded.cmd_set_depth_bias": 0,
+        "commands_recorded.cmd_set_depth_compare_op": 0,
+        "commands_recorded.cmd_set_depth_test_enable": 0,
+        "commands_recorded.cmd_set_depth_write_enable": 0,
+        "commands_recorded.cmd_set_front_face": 0,
+        "commands_recorded.cmd_set_primitive_restart_enable": 0,
+        "commands_recorded.cmd_set_primitive_topology": 0,
+        "commands_recorded.cmd_set_scissor": 0,
+        "commands_recorded.cmd_set_stencil_compare_mask": 0,
+        "commands_recorded.cmd_set_stencil_op": 0,
+        "commands_recorded.cmd_set_stencil_reference": 0,
+        "commands_recorded.cmd_set_stencil_test_enable": 0,
+        "commands_recorded.cmd_set_stencil_write_mask": 0,
+        "commands_recorded.cmd_set_viewport": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "device_memory_allocated": 201326592,
+        "functions_translated": 2,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 4,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 2
+      },
+      "per_state": {
+        "pipelines": 2,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "pass-bound-clear-reach",
+        "calls": 33,
+        "in_calls": 33024206,
+        "on_cpu": 1398796,
+        "blocked": 31663999,
+        "elsewhere": 8103666,
+        "spend": 41066914,
+        "spend_least": 40782793,
+        "spend_most": 43207207,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23098458,
+            "on_cpu": 658583,
+            "blocked": 22448208,
+            "wall_least": 22962541,
+            "wall_most": 25079792,
+            "wall_total": 23098458,
+            "on_cpu_total": 658583,
+            "blocked_total": 22448208
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 375,
+            "on_cpu": 584,
+            "blocked": 0,
+            "wall_least": 333,
+            "wall_most": 875,
+            "wall_total": 5583,
+            "on_cpu_total": 8585,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 9522709,
+            "on_cpu": 478167,
+            "blocked": 9066709,
+            "wall_least": 9355041,
+            "wall_most": 9737250,
+            "wall_total": 9522709,
+            "on_cpu_total": 478167,
+            "blocked_total": 9066709
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 127791,
+            "on_cpu": 128041,
+            "blocked": 0,
+            "wall_least": 110833,
+            "wall_most": 157250,
+            "wall_total": 127791,
+            "on_cpu_total": 128041,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 4292,
+            "on_cpu": 4417,
+            "blocked": 0,
+            "wall_least": 3792,
+            "wall_most": 7167,
+            "wall_total": 86582,
+            "on_cpu_total": 87917,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 1834,
+            "on_cpu": 2000,
+            "blocked": 0,
+            "wall_least": 1750,
+            "wall_most": 1958,
+            "wall_total": 21543,
+            "on_cpu_total": 22833,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "pass-bound-clear-reach",
+        "calls": 33,
+        "in_calls": 4884837,
+        "on_cpu": 2122751,
+        "blocked": 2769834,
+        "elsewhere": 1204167,
+        "spend": 6087753,
+        "spend_least": 5862209,
+        "spend_most": 6550923,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 139583,
+            "on_cpu": 142042,
+            "blocked": 0,
+            "wall_least": 128833,
+            "wall_most": 144333,
+            "wall_total": 139583,
+            "on_cpu_total": 142042,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 333,
+            "on_cpu": 458,
+            "blocked": 0,
+            "wall_least": 292,
+            "wall_most": 375,
+            "wall_total": 3418,
+            "on_cpu_total": 4832,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2825625,
+            "on_cpu": 211083,
+            "blocked": 2598834,
+            "wall_least": 2641000,
+            "wall_most": 3056417,
+            "wall_total": 2825625,
+            "on_cpu_total": 211083,
+            "blocked_total": 2598834
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1837917,
+            "on_cpu": 1661958,
+            "blocked": 173542,
+            "wall_least": 1650167,
+            "wall_most": 1920292,
+            "wall_total": 1837917,
+            "on_cpu_total": 1661958,
+            "blocked_total": 173542
+          },
+          {
+            "call": "target",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 5416,
+            "on_cpu": 5542,
+            "blocked": 0,
+            "wall_least": 5209,
+            "wall_most": 5916,
+            "wall_total": 92083,
+            "on_cpu_total": 93499,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 10,
+            "most_calls": 10,
+            "wall": 1208,
+            "on_cpu": 1334,
+            "blocked": 0,
+            "wall_least": 1084,
+            "wall_most": 1292,
+            "wall_total": 14334,
+            "on_cpu_total": 15501,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

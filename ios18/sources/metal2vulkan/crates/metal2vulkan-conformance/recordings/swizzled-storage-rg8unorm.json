@@ -1,0 +1,2286 @@
+{
+  "format": 1,
+  "case": "swizzled-storage-rg8unorm",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rrp_swizzled_storage.ll",
+      "entry": "rrp_sw_read_f",
+      "source_sha256": "e3e5ea994f002476ab10dac454f0089503c937ac2d2855bc4570883f06a72365"
+    },
+    {
+      "fixture": "rrp_swizzled_storage.air.ll",
+      "entry": "rrp_sw_read_f",
+      "source_sha256": "76c28b229cf5c10744dacee8594bf32f510e75cd2a0e7fb2f139aed988427376"
+    },
+    {
+      "fixture": "rrp_swizzled_storage.ll",
+      "entry": "rrp_sw_rwread_f",
+      "source_sha256": "e3e5ea994f002476ab10dac454f0089503c937ac2d2855bc4570883f06a72365"
+    },
+    {
+      "fixture": "rrp_swizzled_storage.air.ll",
+      "entry": "rrp_sw_rwread_f",
+      "source_sha256": "76c28b229cf5c10744dacee8594bf32f510e75cd2a0e7fb2f139aed988427376"
+    },
+    {
+      "fixture": "rrp_swizzled_storage.ll",
+      "entry": "rrp_sw_write_f",
+      "source_sha256": "e3e5ea994f002476ab10dac454f0089503c937ac2d2855bc4570883f06a72365"
+    },
+    {
+      "fixture": "rrp_swizzled_storage.air.ll",
+      "entry": "rrp_sw_write_f",
+      "source_sha256": "76c28b229cf5c10744dacee8594bf32f510e75cd2a0e7fb2f139aed988427376"
+    },
+    {
+      "fixture": "rrp_swizzled_storage.ll",
+      "entry": "rrp_sw_rwwrite_f",
+      "source_sha256": "e3e5ea994f002476ab10dac454f0089503c937ac2d2855bc4570883f06a72365"
+    },
+    {
+      "fixture": "rrp_swizzled_storage.air.ll",
+      "entry": "rrp_sw_rwwrite_f",
+      "source_sha256": "76c28b229cf5c10744dacee8594bf32f510e75cd2a0e7fb2f139aed988427376"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e3e5ea994f002476ab10dac454f0089503c937ac2d2855bc4570883f06a72365"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "76c28b229cf5c10744dacee8594bf32f510e75cd2a0e7fb2f139aed988427376"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:level",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0fc5845e546cb85989c64455f5db6464a80e07ee59a705b23ae373c149f7a50b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5a2cfe8ab935918525d44fd6fd87c70fc83b4f29d1a727672e1b48f380473fc1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:parent/GR01",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "89204b000e99d84ee1aebb40525e3bd2b1132f10b283b66fd5571f00c1218bdc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:view/GR01",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b020552674285d282a1371018b38dc36471e624a11df1e6008538b89c4dd014f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:parent/GRBA",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "89204b000e99d84ee1aebb40525e3bd2b1132f10b283b66fd5571f00c1218bdc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:view/GRBA",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5982ea594701db29a1c78d9326bf1bcaf5a776f968de5a349ad63bde1a930acd"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:parent/RRRR",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "89204b000e99d84ee1aebb40525e3bd2b1132f10b283b66fd5571f00c1218bdc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:view/RRRR",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "120901c68307404ec28e833d69cffc7fff1ce41c1346495211148f9e4eb6bdf5"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:parent/0R01",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "89204b000e99d84ee1aebb40525e3bd2b1132f10b283b66fd5571f00c1218bdc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:view/0R01",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "23621827f5fd82a1e74d1f09a68d0f979c44d8fd3ea757750f162a18f6dfbff7"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:1/rrp_sw_write_f",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "419a47d0ca09e4b671b5fd124b3b7551eae9a772cdff216f629da96c3d39480a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:1/rrp_sw_rwwrite_f",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "709931a496df0782a07c330f4670ea90eed3ad5049ea3f700cb9215b260682b6"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/rrp_sw_read_f",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/rrp_sw_rwread_f",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/rrp_sw_write_f",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/rrp_sw_rwwrite_f",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/texture/parent",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/texture/view",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_read_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_read_f/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_read_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_read_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_read_f/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_read_f/read",
+                  "observed": {
+                    "value": {
+                      "bytes": "oaCgPaGgID0AAAAAAACAPw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwread_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwread_f/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwread_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwread_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwread_f/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwread_f/read",
+                  "observed": {
+                    "value": {
+                      "bytes": "oaCgPaGgID0AAAAAAACAPw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_write_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_write_f/buffer/value",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_write_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_write_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_write_f/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_write_f/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "IBAgECAQIBA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              2,
+                              2,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 4,
+                        "rows": 2,
+                        "image_pitch": 8,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwwrite_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwwrite_f/buffer/value",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwwrite_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwwrite_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwwrite_f/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GR01/rrp_sw_rwwrite_f/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "YFBgUGBQYFA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              2,
+                              2,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 4,
+                        "rows": 2,
+                        "image_pitch": 8,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/texture/parent",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/texture/view",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_read_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_read_f/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_read_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_read_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_read_f/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_read_f/read",
+                  "observed": {
+                    "value": {
+                      "bytes": "oaCgPaGgID0AAAAAAACAPw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwread_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwread_f/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwread_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwread_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwread_f/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwread_f/read",
+                  "observed": {
+                    "value": {
+                      "bytes": "oaCgPaGgID0AAAAAAACAPw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_write_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_write_f/buffer/value",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_write_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_write_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_write_f/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_write_f/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "IBAgECAQIBA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              2,
+                              2,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 4,
+                        "rows": 2,
+                        "image_pitch": 8,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwwrite_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwwrite_f/buffer/value",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwwrite_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwwrite_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwwrite_f/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "GRBA/rrp_sw_rwwrite_f/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "YFBgUGBQYFA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              2,
+                              2,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 4,
+                        "rows": 2,
+                        "image_pitch": 8,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/texture/parent",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/texture/view",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_read_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_read_f/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_read_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_read_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_read_f/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_read_f/read",
+                  "observed": {
+                    "value": {
+                      "bytes": "oaAgPaGgID2hoCA9oaAgPQ=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwread_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwread_f/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwread_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwread_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwread_f/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwread_f/read",
+                  "observed": {
+                    "value": {
+                      "bytes": "oaAgPaGgID2hoCA9oaAgPQ=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_write_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_write_f/buffer/value",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_write_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_write_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_write_f/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_write_f/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "ECAQIBAgECA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              2,
+                              2,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 4,
+                        "rows": 2,
+                        "image_pitch": 8,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwwrite_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwwrite_f/buffer/value",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwwrite_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwwrite_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwwrite_f/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "RRRR/rrp_sw_rwwrite_f/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "UGBQYFBgUGA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              2,
+                              2,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 4,
+                        "rows": 2,
+                        "image_pitch": 8,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/texture/parent",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/texture/view",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_read_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_read_f/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_read_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_read_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_read_f/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_read_f/read",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAKGgID0AAAAAAACAPw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwread_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwread_f/buffer/out",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwread_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwread_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwread_f/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwread_f/read",
+                  "observed": {
+                    "value": {
+                      "bytes": "AAAAAKGgID0AAAAAAACAPw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 16
+                          }
+                        },
+                        "element": "u32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 1,
+                        "image_pitch": 16,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_write_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_write_f/buffer/value",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_write_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_write_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_write_f/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_write_f/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "ICAgICAgICA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              2,
+                              2,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 4,
+                        "rows": 2,
+                        "image_pitch": 8,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwwrite_f/reset",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwwrite_f/buffer/value",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwwrite_f/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwwrite_f/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwwrite_f/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "0R01/rrp_sw_rwwrite_f/stored",
+                  "observed": {
+                    "value": {
+                      "bytes": "YGBgYGBgYGA="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              2,
+                              2,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u8",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 4,
+                        "rows": 2,
+                        "image_pitch": 8,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "dispatch_threads",
+          "message": "Compute Function(rrp_sw_rwread_f): writes texture (v[0]) whose usage (0x11) doesn't specify MTLTextureUsageShaderWrite (0x02)"
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 3,
+        "argument_objects_retained": 32,
+        "argument_tables_retained": 16,
+        "bare_starts": 16,
+        "batches_held_past_a_look": 6,
+        "batches_submitted_by_waiters": 10,
+        "batches_with_none_pending": 16,
+        "command_buffers_begun": 56,
+        "command_buffers_begun_batch_barriers": 13,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 13,
+        "command_buffers_begun_encoders": 16,
+        "command_buffers_begun_segments": 13,
+        "command_buffers_deferred": 28,
+        "command_buffers_submitted": 56,
+        "commands_recorded.begin_command_buffer": 34,
+        "commands_recorded.cmd_bind_descriptor_sets": 16,
+        "commands_recorded.cmd_bind_pipeline": 16,
+        "commands_recorded.cmd_clear_color_image": 2,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_dispatch": 16,
+        "commands_recorded.cmd_pipeline_barrier": 19,
+        "commands_recorded.cmd_push_constants": 16,
+        "commands_recorded.end_command_buffer": 56,
+        "commits_handed_off": 16,
+        "commits_taken_in": 16,
+        "completed_waits": 19,
+        "completed_where_seen": 16,
+        "completion_arms": 16,
+        "completion_arms_after_a_wake": 16,
+        "completion_waiter_parks": 16,
+        "creation_pipelines_made": 4,
+        "device_memory_allocated": 268435840,
+        "dispatch_pipelines_pooled": 13,
+        "dispatch_shapes_made": 8,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 42,
+        "fence_waits": 16,
+        "finales_apart": 6,
+        "finales_folded": 10,
+        "functions_shared": 7,
+        "functions_translated": 7,
+        "gate_waits": 16,
+        "gate_waits_slept": 16,
+        "heads_held_for_host_steps": 18,
+        "heap_tables_worked_out": 4,
+        "host_steps_recorded": 13,
+        "host_texel_copies": 28,
+        "images_started_on_the_host": 4,
+        "new_buffer_bytes_cleared": 256,
+        "object_churn.buffers_parked": 16,
+        "object_churn.buffers_recycled": 16,
+        "object_churn.images_own_memory": 4,
+        "object_churn.textures_image": 8,
+        "object_churn.vk_image_bindings": 4,
+        "object_churn.vk_image_views_made": 8,
+        "object_churn.vk_images_destroyed": 4,
+        "object_churn.vk_images_made": 4,
+        "pipeline_layouts_made": 3,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 16,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 16,
+        "scheduled_where_submitted": 16,
+        "scheduler_passes": 26,
+        "scheduler_passes_by_waiters": 16,
+        "scheduler_sleeps": 29,
+        "scheduler_wakes_commit": 16,
+        "scheduler_wakes_host": 13,
+        "shader_modules_made": 5,
+        "slot_returns": 16,
+        "spare_command_pools_taken": 16,
+        "stage_entries_shared": 3,
+        "stage_entries_specialized": 4,
+        "submit_infos": 29,
+        "trail_waits": 16,
+        "variant_pipelines_made": 17,
+        "variants_taken_back": 7,
+        "wakes_completion_waiters": 16,
+        "wakes_spared": 118
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 13
+      },
+      "composed": {
+        "batches_submitted_by_waiters": 3,
+        "command_buffers_begun": 56,
+        "command_buffers_begun_batch_barriers": 13,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 13,
+        "command_buffers_begun_segments": 13,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 56,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_dispatch": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 268435712,
+        "dispatch_pipelines_pooled": 13,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 42,
+        "functions_translated": 7,
+        "host_steps_recorded": 13,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_shared": 3,
+        "stage_entries_specialized": 4,
+        "submit_infos": 29,
+        "variant_pipelines_made": 13
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 3,
+        "creation_pipelines_made": 4,
+        "pipeline_layouts_made": 3,
+        "pooled_memory_blocks_made": 4,
+        "shader_modules_made": 5,
+        "variant_pipelines_made": 17
+      },
+      "per_state": {
+        "pipelines": 6,
+        "states": 4
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "swizzled-storage-rg8unorm",
+        "calls": 93,
+        "in_calls": 33333920,
+        "on_cpu": 1240331,
+        "blocked": 32152960,
+        "elsewhere": 3859584,
+        "spend": 37109461,
+        "spend_least": 34644456,
+        "spend_most": 51305331,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 3542,
+            "on_cpu": 3667,
+            "blocked": 0,
+            "wall_least": 3166,
+            "wall_most": 11375,
+            "wall_total": 73749,
+            "on_cpu_total": 75917,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 25041,
+            "on_cpu": 25208,
+            "blocked": 0,
+            "wall_least": 24709,
+            "wall_most": 29208,
+            "wall_total": 150375,
+            "on_cpu_total": 151166,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 6417,
+            "on_cpu": 6542,
+            "blocked": 0,
+            "wall_least": 5542,
+            "wall_most": 19250,
+            "wall_total": 241499,
+            "on_cpu_total": 243751,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22790792,
+            "on_cpu": 644292,
+            "blocked": 22173458,
+            "wall_least": 22237667,
+            "wall_most": 25468083,
+            "wall_total": 22790792,
+            "on_cpu_total": 644292,
+            "blocked_total": 22173458
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 250,
+            "on_cpu": 417,
+            "blocked": 0,
+            "wall_least": 250,
+            "wall_most": 459,
+            "wall_total": 2708,
+            "on_cpu_total": 4249,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_texture",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 625,
+            "on_cpu": 791,
+            "blocked": 0,
+            "wall_least": 500,
+            "wall_most": 1291,
+            "wall_total": 6209,
+            "on_cpu_total": 7666,
+            "blocked_total": 0
+          },
+          {
+            "call": "replace_region",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 333,
+            "on_cpu": 458,
+            "blocked": 0,
+            "wall_least": 250,
+            "wall_most": 792,
+            "wall_total": 6500,
+            "on_cpu_total": 8915,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 3958,
+            "on_cpu": 4125,
+            "blocked": 0,
+            "wall_least": 2791,
+            "wall_most": 8875,
+            "wall_total": 70377,
+            "on_cpu_total": 72168,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 511625,
+            "on_cpu": 3250,
+            "blocked": 508125,
+            "wall_least": 175584,
+            "wall_most": 624292,
+            "wall_total": 9277290,
+            "on_cpu_total": 64878,
+            "blocked_total": 9207333
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "swizzled-storage-rg8unorm",
+        "calls": 93,
+        "in_calls": 6923629,
+        "on_cpu": 750466,
+        "blocked": 6234329,
+        "elsewhere": 3648584,
+        "spend": 10567879,
+        "spend_least": 10189541,
+        "spend_most": 12111786,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 916,
+            "on_cpu": 1042,
+            "blocked": 0,
+            "wall_least": 834,
+            "wall_most": 1250,
+            "wall_total": 17083,
+            "on_cpu_total": 19504,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 8708,
+            "on_cpu": 8917,
+            "blocked": 0,
+            "wall_least": 8375,
+            "wall_most": 9958,
+            "wall_total": 78707,
+            "on_cpu_total": 79542,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 17458,
+            "on_cpu": 17625,
+            "blocked": 0,
+            "wall_least": 15750,
+            "wall_most": 23416,
+            "wall_total": 344252,
+            "on_cpu_total": 346752,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 137917,
+            "on_cpu": 138375,
+            "blocked": 0,
+            "wall_least": 125916,
+            "wall_most": 161833,
+            "wall_total": 137917,
+            "on_cpu_total": 138375,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 291,
+            "on_cpu": 416,
+            "blocked": 0,
+            "wall_least": 250,
+            "wall_most": 292,
+            "wall_total": 2292,
+            "on_cpu_total": 3333,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_texture",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 750,
+            "on_cpu": 875,
+            "blocked": 0,
+            "wall_least": 709,
+            "wall_most": 958,
+            "wall_total": 7208,
+            "on_cpu_total": 8250,
+            "blocked_total": 0
+          },
+          {
+            "call": "replace_region",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 583,
+            "on_cpu": 708,
+            "blocked": 0,
+            "wall_least": 500,
+            "wall_most": 666,
+            "wall_total": 10460,
+            "on_cpu_total": 12582,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 1125,
+            "on_cpu": 1250,
+            "blocked": 0,
+            "wall_least": 959,
+            "wall_most": 1250,
+            "wall_total": 69790,
+            "on_cpu_total": 70956,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 16,
+            "most_calls": 16,
+            "wall": 229833,
+            "on_cpu": 2167,
+            "blocked": 227250,
+            "wall_least": 211833,
+            "wall_most": 252000,
+            "wall_total": 6279874,
+            "on_cpu_total": 44877,
+            "blocked_total": 6234329
+          }
+        ]
+      }
+    }
+  ]
+}

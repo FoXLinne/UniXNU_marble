@@ -1,0 +1,1313 @@
+//! The device's completion: each submitted batch finishes once its queue's timeline reached the
+//! batch's value, which one waiter thread per `VkQueue` watches, and the waiter that sees the
+//! value reached finishes it ([`turns`]).
+//!
+//! - **In each queue's order.** A `VkQueue`'s batches signal its timeline with rising values, and
+//!   Vulkan's signal operation order makes them complete in that order, so each queue's batches
+//!   wait in one line, and a value reached finishes every batch up to it.
+//! - **What a finished batch does.** Its queue's completed value is published for the tracker
+//!   (the host saw it before any later submission), the events it signaled are reached, and the
+//!   batch that ends a command buffer finishes it, once the turn read the command buffer's GPU
+//!   timestamps and gave their slot back (`gpu_time.rs`): the turn runs its transition to
+//!   `Completed` itself where that runs none of the program's code but its completion-seen
+//!   handlers (a runtime extension), else posts it to its queue's context
+//!   ([`contexts`](crate::contexts)). A turn runs no other handler.
+//! - **Finished where seen.** Metal's completion wakes a thread waiting for a command buffer with
+//!   no completed handler from the thread that saw it complete, and orders it after its queue's
+//!   earlier completed handlers. Measured on the Apple M3 Max (macOS 27.0.1), 40 runs each: with
+//!   no handler, the status read `Completed` 91 to 137 us after `GPUEndTime` and
+//!   `waitUntilCompleted` returned 3 to 10 us after the status; with a completed handler of 20 ms,
+//!   the status read `Completed` before the handler began (within 10 us) and in it, and the wait
+//!   returned 10 to 23 us after it ended; a command buffer with no handler behind an earlier one of
+//!   its queue whose handler ran 20 ms read `Completed`, and its wait returned, 3 to 23 us after
+//!   that handler ended, 21 to 30 ms after its own `GPUEndTime`. So the turn runs a command
+//!   buffer's transition itself (`CommandBufferShared::finish_here`) where it has no completed
+//!   handler (none being added after the commit) and no notice, its queue's context runs on no
+//!   handler thread and holds only such transitions, which the turn runs first, in order, and the
+//!   runtime holds none of the program's objects a release drops or runs (`program_objects.rs`):
+//!   its status, release and gate then come from the waiter, which wakes the program's waiting
+//!   thread itself. Its completion-seen handlers (`CommandBuffer::add_completion_seen_handler`)
+//!   then run on the waiter too, once its status is final, for a program that answers the
+//!   completion where it is seen: one wake where a completed handler's is two (counted:
+//!   `WorkCounts::completion_seen_handlers_where_seen`). A command buffer with completed handlers
+//!   too, and no event signal at its end that another queue's command buffer may wait for, runs
+//!   there to its completion-seen handlers, and the rest, its completed handlers on, is posted
+//!   to its queue's context, which the waiter runs meanwhile, so the queue's later transitions
+//!   follow it (`Transition::seen_first`). Everywhere else it is posted, as before, and they run
+//!   in it on the handler thread. Beside the
+//!   runtime lane's tests on the M3 Max at the utility clamp, the handler thread's wake between
+//!   the turn and the program's thread took up to 13 to 55 ms at a light burst's 99th percentile
+//!   of the queue storm (`runtime_lane::queue_storms`), over Metal's one wake from its completion;
+//!   counted (`WorkCounts::completed_where_seen`).
+//! - **A command buffer finishes at its fence, where it has one.** Where the driver still reads a
+//!   command buffer's query pools after the value (MoltenVK), the batch that ends it also signals
+//!   a fence ([`fences`](super::fences)), which the driver signals after those reads: the turn
+//!   posts the transition, after which what the command buffer used is released, only once the
+//!   fence is signaled too, and then resets the fence and gives it back. A wait for fences holds
+//!   up the other queues' batches by as long. Elsewhere Vulkan's value is enough, and the batch
+//!   has no fence. On MoltenVK every command buffer takes one, not only the ones whose query pools
+//!   that driver reads late: a relayed queue's failure attribution needs one for every batch, and
+//!   the host sees the fence sooner than the value there anyway (`fences.rs`, which holds the
+//!   argument, the reading of MoltenVK's completed handlers and the measurement).
+//! - **One waiter per `VkQueue`, each waiting for one object** (replacing the wait for any of the
+//!   timelines). Each `VkQueue`'s waiter thread waits for its queue's first pending batch past the
+//!   value it saw reached: for the batch's fence where it has one, else for its queue's timeline to
+//!   reach the batch's value, a wait of that one fence or that one semaphore (`poll`). Then it
+//!   reads the timeline and publishes it; a signaled fence's batch reached its value whatever the
+//!   read shows (lavapipe can show it later). A batch
+//!   submitted to an idle `VkQueue` is waited for by that queue's own waiter, so it completes when
+//!   its work does, not when another queue's does. No wait names several objects: MoltenVK 1.4.1's
+//!   wait for any of several timelines (`vkWaitSemaphores` with `VK_SEMAPHORE_WAIT_ANY_BIT`,
+//!   `mvkWaitSemaphores`) loses a signal that lands while it is still registering a later timeline
+//!   (`RuntimeDriverDefect::WaitForAnyObjectLosesASignal`, `driver_defects.rs`),
+//!   so the waiter saw the batch only when its 100 ms wait ran out (the consumer's guest presented
+//!   at about a quarter of Metal's rate); its wait for any of several fences has the same flaw. A
+//!   wait for one timeline or one fence counts its one signal under a lock, and loses none. The
+//!   value is read again after every wait, so the waiter relies on no wake for the value, only for
+//!   its timing. Counted by which object the wait named (`WorkCounts::fence_waits`,
+//!   `WorkCounts::timeline_waits`), and by whether the batch was watched while this waiter was
+//!   parked, so the wait for it began only after a notify and a thread wake
+//!   (`WorkCounts::completion_arms` and `WorkCounts::completion_arms_after_a_wake`); a read that
+//!   ran past the wait's value, and so costs one wait more, by
+//!   `WorkCounts::completion_reads_ran_ahead`.
+//! - **Finished by the waiter that saw it, one turn at a time** ([`turns`]). A waiter whose wait
+//!   returned with its queue's value reached, or with a failure, makes the turn itself where none
+//!   is under way: it takes every queue's batches their waiters saw reached (or the failure) and
+//!   finishes them, and looks again until a look finds none. One turn runs at a time on the device:
+//!   a waiter that finds one under way leaves what it saw to it, under the lock that turn's last
+//!   look takes, so nothing is left behind. So a turn keeps every ordering across the queues:
+//!   events reached before the scheduler is woken, fences settled before the transitions, each
+//!   queue's batches in value order, and the failure drain over every queue, whose errors so never
+//!   pass a queue's earlier completions (Metal runs a queue's completed handlers in commit order).
+//!   No thread is woken between a batch's wait and its transition's run or post: on an Apple M3 Max (macOS
+//!   27.0.1, MoltenVK 1.4.1) beside 24 processes spinning at the utility clamp, a separate thread
+//!   that the waiters woke for their batches took them 8.8 to 15.1 ms after the wake in 4 runs of 6
+//!   (22 us at the median), and since a turn finishes every queue's batches, each such wait put
+//!   every light queue's burst of the queue storm (`runtime_lane::queue_storms`) into its tail.
+//!   While its waiter makes a turn, a queue's next batch waits for that turn to end before its wait
+//!   begins; its fence and value stay signaled meanwhile.
+//! - **After what it waited for.** Metal's completion follows the GPU's: a command buffer whose
+//!   work waited, through an event, for another queue's GPU signal completes after the command
+//!   buffer that signalled, its status, completion-seen handlers and completed handlers too. Here
+//!   each `VkQueue`'s waiter sees its own batches, and the waiter of a batch that waited may see it
+//!   before the signaller's waiter sees the signaller (a read of the event's counter let the
+//!   waiting batch go before the signaller's turn, and its waiter woke first); a turn takes the
+//!   queues in index order; and two queues' transitions run on two of the handler threads. So a
+//!   batch records, as it is submitted, the batches of other `VkQueue`s whose kept signals its
+//!   event waits were met by and whose completion turns had not run then
+//!   (`EventTimeline::signallers`, [`Submitted::after`]), and a take leaves it, with its queue's
+//!   later batches, until those are taken, by the same take or a later one ([`reached`]): no waiter
+//!   makes a turn for it meanwhile ([`front_due`]). Its command buffer's transition to `Completed`
+//!   then waits for the signallers' transitions to reach their completed handlers, where those lead
+//!   their contexts (`follow.rs`). A batch that waits for no other queue's costs an empty list, and
+//!   a take looks at the queues again only while a reached batch waits for another queue's.
+//! - **No GPU work: finished where it is taken** ([`Completion::watch_unsubmitted`]). A command
+//!   buffer that needs no GPU work is taken with no submission (`submit.rs`) and watched at its
+//!   `VkQueue`'s last submitted value, behind its queue's earlier batches: it finishes in the turn
+//!   that finishes the batch before it, by the waiter that saw that one complete. Where its queue
+//!   reached that value already and no turn is under way, no waiter is woken for it: the thread
+//!   that took it makes the turn itself once it holds no lock ([`Completion::turn_owed`]), the
+//!   scheduler's or a thread about to block for a command buffer, which runs only plain
+//!   transitions (`CommandBufferShared::finish_here`). A turn takes every queue's batches seen
+//!   reached, so the one turn at a time on the device keeps every order above. Counted:
+//!   `WorkCounts::completion_turns_where_taken`.
+//! - **Published once a host wait returned for it** ([`seen`]). The host sees a batch's writes once
+//!   the batch completed: its last command buffer makes them available to the host
+//!   (`Barrier::to_host`, or `Barrier::to_all`), before its signal in submission order, and the
+//!   host's reads come after a host wait for that signal. Vulkan orders host operations after a
+//!   signal only through a wait: "signal operations happening before host operations that wait on
+//!   them" system-synchronize-with them (the memory model), and a fence's "execution dependency is
+//!   defined by waiting for a fence to become signaled, either via `vkWaitForFences` or by polling
+//!   on `vkGetFenceStatus`". It gives `vkGetSemaphoreCounterValue` no such dependency (its value
+//!   "may immediately be out of date"). So a value the read shows past the one a wait returned for
+//!   (later batches that completed meanwhile, or the front's after a wait that ran out) is waited
+//!   for in turn, a wait that returns at once ("If the condition is satisfied when
+//!   `vkWaitSemaphores` is called, then `vkWaitSemaphores` returns immediately"), before it is
+//!   published: one call more, and only where the read ran ahead.
+//! - **Waits on the GPU are bounded.** A waiter waits for its fence or value at most
+//!   [`WAIT_SLICE`] at a time, so a lost device is reported by the next wait. A wait that ran out
+//!   its slice although its fence or value was signaled when the waiter looked again is a wake it
+//!   missed (or a signal in the slice's last moment), counted
+//!   (`WorkCounts::missed_completion_wakes`), which the completion test holds to none.
+//! - **An idle waiter sleeps until it is woken** ([`wait`]). Parked with no batch of its queue
+//!   pending, a waiter sleeps on its condition variable with no timeout: every change it waits for
+//!   notifies it where it sleeps (below), so an idle device's waiters do not wake at all. Parked
+//!   with a batch pending (left to a turn under way, held by a drain, or a failure pending), it
+//!   still wakes at least every slice. Counted: `WorkCounts::completion_waiter_parks` and
+//!   `WorkCounts::completion_waiter_parks_timed_out`, which the idle test holds to none. The
+//!   changes a parked waiter waits for, each made under `pending`'s lock and each notifying it
+//!   where `Pending::parked` says it sleeps, or every waiter: a batch watched on its queue
+//!   ([`Completion::watch`], [`Completion::watch_unsubmitted`] where it owes no turn), a turn's
+//!   take of its queue's batches that leaves it one to arm for or finds the waiters stopping
+//!   ([`turns`]), the pending batches given back after a failure ([`take_pending`], every
+//!   waiter), a stop ([`Completion::stop`], every waiter) and an exit (`exit`, and a waiter that
+//!   found the process exiting, every waiter). A failure a waiter's wait saw, and a batch owed to
+//!   the thread that took it, leave the waiters asleep: the turn that finishes them is made by
+//!   that waiter or that thread, or by the turn under way, and ends in a take (or, for a failure,
+//!   [`take_pending`]'s wake of every waiter).
+//! - **Exit.** Each wait is a section of the exit guard ([`exit_guard`]), so an exit waits at most
+//!   one slice for it; once the process is exiting, the waiters end.
+//! - **A drain waits for the waiters.** A failed wait or read finishes every pending batch, which
+//!   may destroy their fences (`let_go`); the batches are taken only once no waiter is waiting,
+//!   and none arms until they are.
+//! - **Let go before the waiters return.** A turn holds a command buffer through a [`Hold`],
+//!   and lets go of everything it holds for a batch (its events, then the command buffer, or
+//!   hands the hold to the transition it posts) before the next; the command buffer's waiters
+//!   return once no hold is left ([`gate`](super::gate)). It reaches the device through a pending
+//!   command buffer only for the wait, and for a failed wait's drain.
+//! - **A failed wait drains the queues first**. Its command buffers finish with its error, and let
+//!   go of what they used, once the device's queues were drained (`Device::drain_queues`): MoltenVK
+//!   1.4.1 reports a lost device from the first completed handler of a failed Metal command buffer,
+//!   while later ones still read the command buffers' pools.
+//! - **No self-join.** A turn's drop of a command buffer's last reference can drop the device's
+//!   last handle on its waiter; stopping from a waiter then joins the others and only asks it to
+//!   end.
+//! - **Woken only where one sleeps, and only the one a change is for.** Each waiter sleeps on a
+//!   condition variable of its own, and a drain ([`take_pending`]) on another. A change wakes only
+//!   the sleepers it is for: a batch watched, its queue's waiter; a turn that took a queue's
+//!   batches, that queue's waiter (its next batch may arm); a wait that ended, a drain waiting for
+//!   it; the pending batches given back after a failure, a stop or an exit, every one. Each where
+//!   it sleeps (`Pending::parked`, `Pending::draining`), read under the lock the change is made
+//!   under: one that sleeps later looks at the change first. A batch watched while its waiter is
+//!   in its queue's wait, or a turn's look, so costs no system call (a notify is one, sleeper or
+//!   not), and the waiters of the device's idle `VkQueue`s sleep through the other queues'
+//!   batches. Counted: `WorkCounts::wakes_completion_waiters`, `WorkCounts::wakes_spared`.
+
+use super::gate::Hold;
+use super::CommandBufferShared;
+use crate::copied::Written;
+use crate::device::lock;
+use crate::error::{CommandBufferError, Error, MemoryKind, VkResultCode};
+use crate::event::EventShared;
+use crate::exit_guard::{self, Call};
+use crate::gpu_time;
+use crate::rebind::SubmittedHolds;
+use crate::release;
+use crate::Device;
+use ash::vk;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+/// How long one wait on the timelines lasts.
+const WAIT_SLICE: Duration = Duration::from_millis(100);
+
+/// One device's `VkQueue`s' waiters, which finish its batches.
+pub(crate) struct Completion {
+    watch: Arc<Watch>,
+    threads: Mutex<Vec<JoinHandle<()>>>,
+}
+
+/// What the waiters and the scheduler share.
+struct Watch {
+    pending: Mutex<Pending>,
+    /// Per `VkQueue`: its waiter's condition variable, notified where it sleeps on it on a change
+    /// it waits for (the module docs): a batch watched on its queue, its queue's batches taken by
+    /// a turn, the pending batches given back after a failure, a stop, an exit.
+    wakes: Box<[Condvar]>,
+    /// A drain's ([`take_pending`]), notified where one sleeps on it as a waiter's wait ends, and
+    /// on a stop or an exit.
+    drained: Condvar,
+    /// The notifies made, and those spared as no waiter slept (`WorkCounts`).
+    woke: AtomicU64,
+    spared: AtomicU64,
+    /// A batch watched with no submission ([`Completion::watch_unsubmitted`]) found its queue's
+    /// value reached and no turn under way, and woke no waiter: the thread that took it makes the
+    /// turn ([`Completion::turn_owed`]). Set under `pending`'s lock.
+    owed: AtomicBool,
+    /// The fence lists of the turns [`Completion::turn_owed`] makes, kept with their room: one
+    /// turn at a time runs on the device (`turning`), so one thread at a time takes them.
+    lists: Mutex<FenceLists>,
+    /// The turns made so ([`Completion::turn_owed`], `WorkCounts::completion_turns_where_taken`).
+    turns_where_taken: AtomicU64,
+    /// The waiters' sleeps on their condition variables, and those of them that ended at their
+    /// slice ([`wait`], `WorkCounts`).
+    parks: AtomicU64,
+    parks_timed_out: AtomicU64,
+}
+
+impl Watch {
+    /// Notify `wake` where `asleep` (read under the lock the change was made under) says a thread
+    /// sleeps on it, counted either way.
+    fn notify(&self, wake: &Condvar, asleep: bool) {
+        if asleep {
+            self.woke.fetch_add(1, Ordering::Relaxed);
+            wake.notify_all();
+        } else {
+            self.spared.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Wake every waiter and drain, wherever they sleep: the pending batches were given back after
+    /// a failure, or the waiters stop or end.
+    fn wake_all(&self) {
+        self.woke.fetch_add(1, Ordering::Relaxed);
+        for wake in &self.wakes {
+            wake.notify_all();
+        }
+        self.drained.notify_all();
+    }
+}
+
+struct Pending {
+    /// Per `VkQueue`: the submitted batches not yet finished, in value order.
+    queues: Vec<VecDeque<Submitted>>,
+    /// Per `VkQueue`: the largest value its waiter saw its timeline reach.
+    reached: Vec<u64>,
+    /// Per `VkQueue`: the value of the last batch a turn (or a drain) took from it; every batch
+    /// up to it is taken.
+    taken: Vec<u64>,
+    /// Per `VkQueue`: its waiter is in a wait.
+    waiting: Vec<bool>,
+    /// A waiter's failed wait or read, which every pending batch finishes with.
+    failed: Option<CommandBufferError>,
+    /// The pending batches are being taken (`take_pending`): no waiter arms.
+    holding: bool,
+    /// A waiter makes a turn ([`turns`]): another leaves what it saw to that turn.
+    turning: bool,
+    /// The process is exiting: every waiter ends, and what is pending stays pending.
+    exiting: bool,
+    stopping: bool,
+    /// Per `VkQueue`: its waiter sleeps on its condition variable ([`wait`]).
+    parked: Vec<bool>,
+    /// The drains sleeping until no waiter is in a wait ([`take_pending`]).
+    draining: usize,
+}
+
+/// A submitted batch its queue's waiter waits for.
+pub(crate) struct Submitted {
+    /// The value its queue's timeline reaches once it completed.
+    pub(crate) value: u64,
+    pub(crate) buffer: Hold<CommandBufferShared>,
+    /// It ends its command buffer: finishing it completes the command buffer.
+    pub(crate) last: bool,
+    /// The fence its submission signals after the work, when it ends its command buffer where
+    /// the driver needs one, or its queue's failures are relayed: the command buffer finishes
+    /// once it is signaled ([`fences`](super::fences)).
+    pub(crate) fence: Option<vk::Fence>,
+    /// The events it signals, with their signal indices.
+    pub(crate) signals: Vec<(Arc<EventShared>, u64)>,
+    /// The holds of what its event group's commands took that its completion lets go
+    /// (`State::holds_until`): at once, or, where it ends its command buffer, as that command
+    /// buffer's completion is processed, before its completed handlers run
+    /// (`State::keep_holds`, `CommandBufferShared::complete`).
+    pub(crate) holds: Vec<SubmittedHolds>,
+    /// The batches of other `VkQueue`s it finishes after: those whose GPU signals its event waits
+    /// were met by, not finished as it was submitted (the module docs, "After what it waited
+    /// for"). Empty for most.
+    pub(crate) after: Vec<Waited>,
+    /// A take left it for one of those ([`reached`]): counted once.
+    pub(crate) held: bool,
+}
+
+/// A batch of another `VkQueue` that a batch waited for and finishes after
+/// ([`Submitted::after`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Waited {
+    /// Its `VkQueue`.
+    pub(crate) queue: usize,
+    /// Its value on that queue's timeline.
+    pub(crate) value: u64,
+}
+
+impl Waited {
+    /// Whether a turn took it: every batch of its queue up to it is taken.
+    fn taken(&self, taken: &[u64]) -> bool {
+        taken[self.queue] >= self.value
+    }
+}
+
+impl Completion {
+    /// Start the waiters of a device with `queues` `VkQueue`s, one per `VkQueue`; refused when the
+    /// host cannot start one.
+    pub(crate) fn start(queues: usize) -> Result<Completion, Error> {
+        let watch = Arc::new(Watch {
+            pending: Mutex::new(Pending {
+                queues: (0..queues).map(|_| VecDeque::new()).collect(),
+                reached: vec![0; queues],
+                taken: vec![0; queues],
+                waiting: vec![false; queues],
+                failed: None,
+                holding: false,
+                turning: false,
+                exiting: false,
+                stopping: false,
+                parked: vec![false; queues],
+                draining: 0,
+            }),
+            wakes: (0..queues).map(|_| Condvar::new()).collect(),
+            drained: Condvar::new(),
+            woke: AtomicU64::new(0),
+            spared: AtomicU64::new(0),
+            owed: AtomicBool::new(false),
+            lists: Mutex::new(FenceLists::default()),
+            turns_where_taken: AtomicU64::new(0),
+            parks: AtomicU64::new(0),
+            parks_timed_out: AtomicU64::new(0),
+        });
+        let completion = Completion {
+            watch: Arc::clone(&watch),
+            threads: Mutex::new(Vec::new()),
+        };
+        let spawned: std::io::Result<()> = (|| {
+            for queue in 0..queues {
+                let watch = Arc::clone(&watch);
+                let waiter = exit_guard::spawn_user_interactive(
+                    std::thread::Builder::new().name(format!("metal2vulkan-queue-wait-{queue}")),
+                    move || wait_for_queue(&watch, queue),
+                )?;
+                lock(&completion.threads).push(waiter);
+            }
+            Ok(())
+        })();
+        match spawned {
+            Ok(()) => Ok(completion),
+            Err(_) => {
+                completion.stop();
+                Err(Error::OutOfMemory(MemoryKind::Host))
+            }
+        }
+    }
+
+    /// Wait for `batch`, just submitted to `VkQueue` `queue` (or a failed command buffer's end,
+    /// at the queue's last submitted value).
+    pub(crate) fn watch(&self, queue: usize, batch: Submitted) {
+        #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+        trace::record(|| trace::Traced::Watched {
+            queue,
+            value: batch.value,
+            at: gpu_time::host_nanos(),
+        });
+        let parked = {
+            let mut pending = lock(&self.watch.pending);
+            pending.queues[queue].push_back(batch);
+            pending.parked[queue]
+        };
+        self.watch.notify(&self.watch.wakes[queue], parked);
+    }
+
+    /// Wait for `batch`, of a command buffer that needs no GPU work, taken with no submission and
+    /// watched at the last value submitted to `VkQueue` `queue` (`submit.rs`), with no fence: as
+    /// [`watch`](Self::watch), but where its queue reached that value already, no failure is
+    /// pending and no turn is under way, no waiter is woken, and the turn that finishes it is owed
+    /// to the caller, which makes it once it holds no lock ([`turn_owed`](Self::turn_owed)). A
+    /// turn under way takes it at its next look, which takes this lock.
+    pub(crate) fn watch_unsubmitted(&self, queue: usize, batch: Submitted) {
+        debug_assert!(
+            batch.fence.is_none(),
+            "a batch with no submission has no fence"
+        );
+        let parked = {
+            let mut pending = lock(&self.watch.pending);
+            pending.queues[queue].push_back(batch);
+            let owed = !pending.turning
+                && !pending.holding
+                && !pending.exiting
+                && pending.failed.is_none()
+                && front_due(&pending, queue);
+            if owed {
+                self.watch.owed.store(true, Ordering::SeqCst);
+                drop(pending);
+                self.watch.spared.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+            pending.parked[queue]
+        };
+        self.watch.notify(&self.watch.wakes[queue], parked);
+    }
+
+    /// Make the turn a batch watched with no submission left to this thread
+    /// ([`watch_unsubmitted`](Self::watch_unsubmitted)), where one is owed, no turn is under way
+    /// and a queue's batches are still seen reached: one look at a flag where none is owed. The
+    /// caller holds no lock of the runtime's: the turn finishes command buffers, takes the
+    /// scheduler's lock to wake it, and may run their transitions here
+    /// (`CommandBufferShared::finish_here`).
+    pub(crate) fn turn_owed(&self) {
+        let watch = &*self.watch;
+        if !watch.owed.swap(false, Ordering::SeqCst) {
+            return;
+        }
+        {
+            let mut pending = lock(&watch.pending);
+            let reached = (0..pending.queues.len()).any(|queue| front_due(&pending, queue));
+            if pending.turning || pending.exiting || !reached {
+                return;
+            }
+            pending.turning = true;
+        }
+        watch.turns_where_taken.fetch_add(1, Ordering::Relaxed);
+        let mut lists = lock(&watch.lists);
+        turns(watch, &mut lists);
+    }
+
+    /// The turns made by the thread that took a command buffer needing no GPU work
+    /// ([`turn_owed`](Self::turn_owed)).
+    pub(crate) fn turns_where_taken(&self) -> u64 {
+        self.watch.turns_where_taken.load(Ordering::Relaxed)
+    }
+
+    /// The waiters' sleeps on their condition variables, and those that ended at their slice
+    /// ([`wait`]).
+    pub(crate) fn parks(&self) -> (u64, u64) {
+        (
+            self.watch.parks.load(Ordering::Relaxed),
+            self.watch.parks_timed_out.load(Ordering::Relaxed),
+        )
+    }
+
+    /// The notifies made to the waiters, and those spared as none slept.
+    pub(crate) fn wakes(&self) -> (u64, u64) {
+        (
+            self.watch.woke.load(Ordering::Relaxed),
+            self.watch.spared.load(Ordering::Relaxed),
+        )
+    }
+
+    /// Ask the waiters to end once nothing is pending, and wait for each but this one (the
+    /// device's last handle can drop on one of them, in its turn).
+    pub(crate) fn stop(&self) {
+        lock(&self.watch.pending).stopping = true;
+        self.watch.wake_all();
+        let current = std::thread::current().id();
+        let threads: Vec<JoinHandle<()>> = lock(&self.threads).drain(..).collect();
+        for handle in threads {
+            if handle.thread().id() != current {
+                let _ = handle.join();
+            }
+        }
+    }
+}
+
+/// What a turn's look found: batches whose values their queues reached, or a waiter's failure.
+enum Turn {
+    Finished(Vec<(usize, Submitted)>),
+    Failed(CommandBufferError),
+}
+
+/// Wait on `queue`'s waiter's condition variable, counted as parked meanwhile: until it is woken
+/// where its queue holds no pending batch, else up to one slice (the module docs).
+fn wait<'a>(
+    watch: &'a Watch,
+    mut pending: std::sync::MutexGuard<'a, Pending>,
+    queue: usize,
+) -> std::sync::MutexGuard<'a, Pending> {
+    pending.parked[queue] = true;
+    watch.parks.fetch_add(1, Ordering::Relaxed);
+    let wake = &watch.wakes[queue];
+    let mut pending = match pending.queues[queue].is_empty() || unbounded_parks() {
+        true => wake
+            .wait(pending)
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+        false => {
+            let (pending, waited) = wake
+                .wait_timeout(pending, WAIT_SLICE)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if waited.timed_out() {
+                watch.parks_timed_out.fetch_add(1, Ordering::Relaxed);
+            }
+            pending
+        }
+    };
+    pending.parked[queue] = false;
+    pending
+}
+
+/// Whether every waiter's park waits until it is woken, a batch of its queue pending or not:
+/// set by a test, so a change that wakes no parked waiter it should hangs the test instead of
+/// waiting out a slice (`tests::completion_wakes`). Never set outside tests.
+#[cfg(test)]
+static UNBOUNDED_PARKS: AtomicBool = AtomicBool::new(false);
+
+#[cfg(test)]
+fn unbounded_parks() -> bool {
+    UNBOUNDED_PARKS.load(Ordering::SeqCst)
+}
+
+#[cfg(not(test))]
+fn unbounded_parks() -> bool {
+    false
+}
+
+/// Make every waiter's park of this process wait until it is woken (`unbounded_parks`).
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+pub(crate) fn park_unbounded() {
+    UNBOUNDED_PARKS.store(true, Ordering::SeqCst);
+}
+
+/// The process is exiting: every waiter ends.
+fn exit(watch: &Watch) {
+    lock(&watch.pending).exiting = true;
+    watch.wake_all();
+}
+
+/// Turns, made by the waiter that called this once it set `turning`, or by the thread a batch with
+/// no submission left one to ([`Completion::turn_owed`]) (the module docs): each looks
+/// for the batches the queues' waiters saw reached, or a waiter's failure, and finishes them
+/// ([`finish`]), or finishes every pending batch with the failure ([`fail`]); until a look finds
+/// nothing, which clears `turning` under the lock it took: a waiter that saw a value reached while
+/// `turning` was set left it to that look. `lists` is the caller's own, kept from turn to turn: a
+/// turn fills them again within the room the earlier ones left, so in a steady state it allocates
+/// none. False once the process is exiting.
+fn turns(watch: &Watch, lists: &mut FenceLists) -> bool {
+    loop {
+        let turn = {
+            let mut pending = lock(&watch.pending);
+            if pending.exiting {
+                return false;
+            }
+            lists.woken.clear();
+            if let Some(error) = pending.failed.take() {
+                // No waiter arms until the pending batches are taken (`fail`).
+                pending.holding = true;
+                Turn::Failed(error)
+            } else {
+                let finished = reached(&mut pending);
+                if finished.is_empty() {
+                    pending.turning = false;
+                    return true;
+                }
+                // The waiters of the queues whose batches it took, where they sleep and their
+                // queue still holds a batch to arm for, or they stop: one whose queue it emptied
+                // has nothing to do, and the next batch watched wakes it.
+                for (queue, _) in &finished {
+                    if !lists.woken.contains(queue) {
+                        lists.woken.push(*queue);
+                    }
+                }
+                let stopping = pending.stopping;
+                lists.woken.retain(|&queue| {
+                    pending.parked[queue] && (stopping || !pending.queues[queue].is_empty())
+                });
+                Turn::Finished(finished)
+            }
+        };
+        // A waiter whose front finished may arm for its queue's next.
+        if lists.woken.is_empty() {
+            watch.spared.fetch_add(1, Ordering::Relaxed);
+        }
+        for &queue in &lists.woken {
+            watch.notify(&watch.wakes[queue], true);
+        }
+        match turn {
+            Turn::Finished(finished) => {
+                if !finish(watch, lists, finished) {
+                    return false;
+                }
+            }
+            Turn::Failed(error) => fail(watch, Vec::new(), error),
+        }
+    }
+}
+
+/// Finish `finished`, the batches a turn took, each queue's in its value order: their events
+/// reached, the scheduler told, their fences settled, then, for each that ends its command buffer,
+/// its timestamps read and its GPU times placed, and its transition posted. False once the
+/// process is exiting.
+fn finish(watch: &Watch, lists: &mut FenceLists, mut finished: Vec<(usize, Submitted)>) -> bool {
+    // The host time the batches were seen complete: an uncalibrated command buffer's GPU end
+    // (`gpu_time.rs`).
+    let seen = gpu_time::host_nanos();
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    for (queue, batch) in finished.iter().filter(|(_, batch)| batch.last) {
+        trace::record(|| trace::Traced::Finished {
+            queue: *queue,
+            value: batch.value,
+            seen,
+        });
+    }
+    // The device, held while the batches finish (each holds it meanwhile).
+    let Some(device) = finished
+        .first()
+        .map(|(_, batch)| batch.buffer.device().clone())
+    else {
+        return true;
+    };
+    // The GPU's writes into copied host buffers go back to the caller's pages before anything
+    // sees the batches complete: their event signals, the scheduler, a waiter, their completed
+    // handlers (`copied.rs`). Only the copies the batches' command buffers may have written are
+    // compared.
+    let copied = &device.shared().copied;
+    if copied.any() {
+        let mut written = Written::default();
+        for (_, batch) in &finished {
+            let buffer = &batch.buffer;
+            if buffer.unnoted.load(Ordering::Relaxed) || lock(&buffer.state).reaches_unnamed {
+                written = Written::all();
+                break;
+            }
+            lock(&buffer.dirty).copies_written(&mut written);
+        }
+        copied.merge_back(&device.shared().counts, &written);
+    }
+    // So do their command buffers' shadows' copies back and merges and writes into logged host
+    // pages imported in place, to the pages' logs, again now they ran (`dirty_pages.rs`,
+    // `DirtyShadows::ran`): once a command buffer, at the batch that ends it, and at one before
+    // it that signals an event, which a copy may follow before the command buffer ends. A batch
+    // before it that signals nothing tells nothing outside the command buffer that its work ran.
+    let dirty = &device.shared().dirty;
+    if dirty.collects() {
+        for (_, batch) in &finished {
+            if batch.last || !batch.signals.is_empty() {
+                dirty.ran(&mut lock(&batch.buffer.dirty), batch.last);
+            }
+        }
+    }
+    // The holds of the batches that end no command buffer go first, their work completed: a
+    // detach that sees one of their signals detaches what only they held (`detach.rs`).
+    for (_, batch) in &mut finished {
+        if !batch.last {
+            batch.holds.clear();
+        }
+    }
+    // Their event signals are seen before the scheduler looks again: a batch whose submission
+    // checks wait for a GPU signal to land may now go.
+    for (_, batch) in &finished {
+        for (event, index) in &batch.signals {
+            event.reached(*index);
+        }
+    }
+    // A batch held at its gate, or for a GPU signal to land, may now go (`scheduler`).
+    device.shared().scheduler.completions(&device);
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    trace::step("events reached");
+    // Every finished batch's fence is waited for: where a queue's failures are relayed each
+    // batch has one (`device/relay.rs`), signaled after the driver reported its failure.
+    let mut ending = Vec::new();
+    lists.gathered.clear();
+    for (queue, batch) in finished {
+        let Submitted {
+            buffer,
+            last,
+            fence,
+            holds,
+            ..
+        } = batch;
+        lists.gathered.extend(fence.map(|fence| (queue, fence)));
+        if last {
+            crate::stage_trace::mark(
+                Arc::as_ptr(&*buffer) as usize,
+                crate::stage_trace::Stage::Seen,
+                queue.min(255) as u32,
+            );
+            let mut state = lock(&buffer.state);
+            state.times.completed = seen;
+            state.keep_holds(holds);
+            drop(state);
+            ending.push(buffer);
+        }
+    }
+    let settled = settle(&device, lists);
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    trace::step("fences settled");
+    // Their GPU times' timestamps are read, and their slots given back, and their GPU times
+    // placed among their queues' in order, before their transitions are posted: a completed
+    // handler reads the times. A section, as each poll.
+    if let Settled::Signaled = settled {
+        let Some(_busy) = exit_guard::enter() else {
+            exit(watch);
+            return false;
+        };
+        for buffer in &ending {
+            buffer.read_stamps();
+            buffer.place_gpu_times();
+        }
+    }
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    trace::step("times placed");
+    drop(device);
+    match settled {
+        Settled::Signaled => {
+            for buffer in ending {
+                CommandBufferShared::finish_here(buffer, Ok(()));
+            }
+        }
+        // What is pending stays pending, as Metal's does.
+        Settled::Exiting => {
+            exit(watch);
+            return false;
+        }
+        Settled::Failed(error) => fail(watch, ending, error),
+    }
+    true
+}
+
+/// Every pending batch, and the command buffers `ending` whose work completed (their fences let
+/// go of already), finish with `error`: a wait or a read failed. The pending batches' fences are
+/// let go of ([`let_go`]).
+///
+/// First the device's queues are drained (`Device::drain_queues`): a failed command buffer lets go
+/// of its pools as it finishes, and a driver may still read them after the failed wait returned
+/// (MoltenVK 1.4.1, from its later completed handlers), until its own completion of the work ran.
+fn fail(watch: &Watch, ending: Vec<Hold<CommandBufferShared>>, error: CommandBufferError) {
+    let failed = take_pending(watch);
+    let held = (ending.first().map(|buffer| buffer.device()))
+        .or_else(|| failed.first().map(|(_, batch)| batch.buffer.device()));
+    if let Some(device) = held {
+        // Their writes into copied host buffers are merged back by the next turn, which compares
+        // every copy (`copied.rs`).
+        device.shared().copied.owe();
+        device.drain_queues();
+    }
+    let failed = failed.into_iter().filter_map(|(queue, batch)| {
+        let Submitted {
+            buffer,
+            last,
+            fence,
+            holds,
+            signals,
+            ..
+        } = batch;
+        // No batch finishes after it any more (`EventShared::signaller`).
+        for (event, index) in &signals {
+            event.drained(*index);
+        }
+        if let Some(fence) = fence {
+            let_go(buffer.device(), queue, fence);
+        }
+        if last {
+            lock(&buffer.state).keep_holds(holds);
+        }
+        last.then_some(buffer)
+    });
+    for buffer in ending.into_iter().chain(failed) {
+        CommandBufferShared::post_finished(buffer, Err(error));
+    }
+}
+
+/// Let go of `fence` of `device`'s `VkQueue` `queue` after a failed wait: released once the
+/// device is lost, when every submission counts as completed (out of the queue's submissions in
+/// flight first, `device/relay.rs`); otherwise left to the device, since a submission that
+/// signals it may still be pending. The release reaches the device's functions inside a section
+/// of the exit guard, whether or not the caller is in one ([`fail`] is not: it posts the
+/// command buffers' transitions, which a section may not), and once the process is exiting the
+/// fence is left to its end.
+fn let_go(device: &Device, queue: usize, fence: vk::Fence) {
+    if device.is_lost() {
+        let Some(_busy) = exit_guard::enter() else {
+            return;
+        };
+        let shared = device.shared();
+        if let Some(flights) = shared.flights(queue) {
+            flights.let_go(fence);
+        }
+        // SAFETY: the fence is the device's, and the device is lost.
+        unsafe { release::object(shared.vk(), fence) };
+    }
+}
+
+/// How the fences of the command buffers whose work completed ended.
+enum Settled {
+    /// Each is signaled, reset and given back.
+    Signaled,
+    /// The process is exiting: the waiters end.
+    Exiting,
+    /// A wait or a reset failed: the command buffers finish with this error, and the fences are
+    /// let go of ([`let_go`]).
+    Failed(CommandBufferError),
+}
+
+/// A turn's fences, and the waiters it wakes, in lists each waiter keeps from turn to turn
+/// ([`turns`]).
+#[derive(Default)]
+struct FenceLists {
+    /// The queues whose batches a look took and whose waiters sleep, to wake.
+    woken: Vec<usize>,
+    /// The fences of the batches the turn finished, each with its `VkQueue`.
+    gathered: Vec<(usize, vk::Fence)>,
+    /// Those the turn waits for, then resets and gives back, the relayed queues' marks with them.
+    waited: Vec<vk::Fence>,
+    /// One relayed queue's of `gathered`.
+    queue: Vec<vk::Fence>,
+}
+
+/// Wait for `lists.gathered`'s fences of `device` (each of a `VkQueue`) to be signaled, a slice at
+/// a time, each wait a section of the exit guard; then reset them and give them back to the
+/// device's idle fences, with the marks before them where the queue's failures are relayed
+/// (`device/relay.rs`), which leave its submissions in flight first. `lists.waited` and
+/// `lists.queue` are filled here.
+fn settle(device: &Device, lists: &mut FenceLists) -> Settled {
+    let FenceLists {
+        gathered,
+        waited,
+        queue: ours,
+        ..
+    } = lists;
+    if gathered.is_empty() {
+        return Settled::Signaled;
+    }
+    waited.clear();
+    waited.extend(gathered.iter().map(|&(_, fence)| fence));
+    loop {
+        let Some(_busy) = exit_guard::enter() else {
+            return Settled::Exiting;
+        };
+        let shared = device.shared();
+        let raw = shared.vk();
+        // SAFETY: the fences are the device's, each signaled by a submission made.
+        let signaled = unsafe { raw.wait_for_fences(waited, true, WAIT_SLICE.as_nanos() as u64) };
+        exit_guard::called(Call::WaitForFences);
+        let error = match signaled {
+            Ok(()) => {
+                // Out of the queues' submissions in flight before they go back: every
+                // submission before a signaled fence's completed too.
+                for (queue, flights) in shared.relayed_queues() {
+                    ours.clear();
+                    ours.extend(
+                        (gathered.iter())
+                            .filter(|&&(q, _)| q == queue)
+                            .map(|&(_, fence)| fence),
+                    );
+                    flights.settled(ours, waited);
+                }
+                // SAFETY: each fence is signaled and its submission completed.
+                let reset = unsafe { raw.reset_fences(waited) };
+                exit_guard::called(Call::ResetFences);
+                match reset {
+                    Ok(()) => {
+                        // SAFETY: each fence is unsignaled and in no pending submission; inside
+                        // a section.
+                        unsafe { shared.fences.give(raw, waited) };
+                        return Settled::Signaled;
+                    }
+                    Err(error) => error,
+                }
+            }
+            Err(vk::Result::TIMEOUT) => continue,
+            Err(error) => error,
+        };
+        let failed = failure(device, error);
+        for &(queue, fence) in gathered.iter() {
+            let_go(device, queue, fence);
+        }
+        return Settled::Failed(failed);
+    }
+}
+
+/// Each queue's batches whose values its waiter saw its timeline reach, taken from `pending`, in
+/// each queue's order, each after the batches of other queues it finishes after
+/// ([`Submitted::after`]): one waits, with its queue's later batches, until those are taken, by
+/// this take or a later one (the module docs, "After what it waited for"). It looks at the queues
+/// again only while a reached batch waits for another queue's and the last look took one, so a
+/// take whose reached batches wait for no other queue's makes one look.
+fn reached(pending: &mut Pending) -> Vec<(usize, Submitted)> {
+    let Pending {
+        queues,
+        reached,
+        taken,
+        ..
+    } = pending;
+    let mut finished = Vec::new();
+    loop {
+        let mut took = false;
+        for (queue, batches) in queues.iter_mut().enumerate() {
+            while let Some(batch) = batches.front() {
+                let after = |waited: &Waited| waited.taken(taken);
+                if batch.value > reached[queue] || !batch.after.iter().all(after) {
+                    break;
+                }
+                taken[queue] = taken[queue].max(batch.value);
+                finished.extend(batches.pop_front().map(|batch| (queue, batch)));
+                took = true;
+            }
+        }
+        // The reached batches left for other queues' batches they waited for, each counted once.
+        let mut waiting = false;
+        for (queue, batches) in queues.iter_mut().enumerate() {
+            let Some(batch) = batches.front_mut() else {
+                continue;
+            };
+            if batch.value <= reached[queue] && !batch.after.is_empty() {
+                waiting = true;
+                if !batch.held {
+                    batch.held = true;
+                    (batch.buffer.device().shared().counts).batch_held_for_another_queue();
+                }
+            }
+        }
+        if !took || !waiting {
+            return finished;
+        }
+    }
+}
+
+/// Every pending batch, taken once no waiter is in a wait: a waiter may wait for a pending
+/// batch's fence, which the caller may destroy (`let_go`). No waiter arms meanwhile.
+fn take_pending(watch: &Watch) -> Vec<(usize, Submitted)> {
+    let mut pending = lock(&watch.pending);
+    pending.holding = true;
+    while pending.waiting.iter().any(|&waiting| waiting) {
+        pending.draining += 1;
+        pending = (watch.drained)
+            .wait_timeout(pending, WAIT_SLICE)
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .0;
+        pending.draining -= 1;
+    }
+    let Pending { queues, taken, .. } = &mut *pending;
+    for (queue, batches) in queues.iter().enumerate() {
+        if let Some(last) = batches.back() {
+            taken[queue] = taken[queue].max(last.value);
+        }
+    }
+    let taken = queues
+        .iter_mut()
+        .enumerate()
+        .flat_map(|(queue, batches)| batches.drain(..).map(move |batch| (queue, batch)))
+        .collect();
+    pending.holding = false;
+    drop(pending);
+    watch.wake_all();
+    taken
+}
+
+/// A queue's first pending batch, as [`poll`] waits for it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Front {
+    /// The value its queue's timeline reaches once it completed.
+    value: u64,
+    /// The fence its submission signals, where it has one.
+    fence: Option<vk::Fence>,
+    /// Its command buffer, for the stage trace (`stage_trace.rs`).
+    id: usize,
+}
+
+/// `VkQueue` `queue`'s waiter (the module docs): it waits for its queue's first pending batch
+/// past the value it saw reached, a slice at a time, and makes the turn that finishes what its
+/// queue reached, or a failure, where no turn is under way ([`turns`]); else it leaves them to the
+/// turn under way.
+fn wait_for_queue(watch: &Watch, queue: usize) {
+    exit_guard::serves_completion();
+    // The fence lists of the turns it makes.
+    let mut lists = FenceLists::default();
+    loop {
+        // Whether the look for a batch to wait for slept first: the batch was watched while this
+        // waiter was parked, so the wait for it began only after a notify and a thread wake, which
+        // sit between the submission and the wait (`WorkCounts::completion_arms_after_a_wake`).
+        let mut slept = false;
+        // The front to wait for, and the device, reached through it (held only for the wait); or
+        // none, for a turn: its queue holds batches it reached that no turn took yet (a failed
+        // command buffer's end, watched at a value its queue reached), or a waiter failed, and no
+        // turn is under way.
+        let armed = {
+            let mut pending = lock(&watch.pending);
+            loop {
+                if pending.exiting {
+                    return;
+                }
+                if !pending.turning && due(&pending, queue) {
+                    pending.turning = true;
+                    break None;
+                }
+                let armable = !pending.holding && pending.failed.is_none();
+                let armed = match pending.queues[queue].front() {
+                    Some(batch) if armable && batch.value > pending.reached[queue] => {
+                        let front = Front {
+                            value: batch.value,
+                            fence: batch.fence,
+                            id: Arc::as_ptr(&*batch.buffer) as usize,
+                        };
+                        Some((front, batch.buffer.device().clone()))
+                    }
+                    None if pending.stopping => return,
+                    _ => None,
+                };
+                if let Some(armed) = armed {
+                    pending.waiting[queue] = true;
+                    break Some(armed);
+                }
+                pending = wait(watch, pending, queue);
+                slept = true;
+            }
+        };
+        let Some((front, device)) = armed else {
+            if !turns(watch, &mut lists) {
+                return;
+            }
+            continue;
+        };
+        device.shared().counts.completion_armed(slept);
+        crate::stage_trace::mark(
+            front.id,
+            crate::stage_trace::Stage::PollArmed,
+            (queue.min(255) as u32) | (u32::from(slept) << 8),
+        );
+        // The wait is a section of the exit guard; once the process is exiting the waiters end,
+        // and what is pending stays pending, as Metal's does.
+        let polled = match exit_guard::enter() {
+            Some(busy) => {
+                let id = front.id;
+                let polled = poll(&device, queue, front);
+                crate::stage_trace::mark(id, crate::stage_trace::Stage::PollDone, queue.min(255) as u32);
+                drop(busy);
+                Some(polled)
+            }
+            None => None,
+        };
+        // Let go of the device before the report: until then the front is pending (nothing
+        // finishes or takes it while this waits), and holds the device, so this is never its
+        // last handle, which goes on the program's or the handlers' threads (`teardown_threads`).
+        drop(device);
+        let mut pending = lock(&watch.pending);
+        pending.waiting[queue] = false;
+        let Some(polled) = polled else {
+            pending.exiting = true;
+            drop(pending);
+            watch.wake_all();
+            return;
+        };
+        match polled {
+            Ok(value) => {
+                let reached = &mut pending.reached[queue];
+                *reached = (*reached).max(value);
+            }
+            Err(error) => {
+                pending.failed.get_or_insert(error);
+            }
+        }
+        // This waiter finishes what it saw, where no turn is under way; the one under way takes
+        // it at its next look, which takes this lock. A drain waits for the wait to end.
+        let turn = !pending.turning && due(&pending, queue);
+        pending.turning |= turn;
+        let draining = pending.draining > 0;
+        drop(pending);
+        watch.notify(&watch.drained, draining);
+        if turn && !turns(watch, &mut lists) {
+            return;
+        }
+    }
+}
+
+/// Whether a turn has work that `queue`'s waiter sees: a waiter's failure, or its queue's first
+/// pending batch due.
+fn due(pending: &Pending, queue: usize) -> bool {
+    pending.failed.is_some() || front_due(pending, queue)
+}
+
+/// Whether `queue`'s first pending batch may be taken: its value is at most the one its waiter saw
+/// its timeline reach, and every batch of another queue it finishes after is taken
+/// ([`Submitted::after`]). One reached that waits for another queue's is not due: the take of that
+/// one takes it too, and its waiter sleeps meanwhile ([`wait`]).
+fn front_due(pending: &Pending, queue: usize) -> bool {
+    pending.queues[queue].front().is_some_and(|batch| {
+        batch.value <= pending.reached[queue]
+            && (batch.after.iter()).all(|waited| waited.taken(&pending.taken))
+    })
+}
+
+/// Wait up to one slice for `front`, the first pending batch of `device`'s `VkQueue` `queue`: for
+/// its fence where it has one, else for the queue's timeline to reach its value, a
+/// wait of that one object (the module docs). Then read the timeline and publish what a host wait
+/// returned for ([`seen`]): the front's where its wait returned, and the value read where a wait
+/// for it returned too. A failed wait or read is the error every pending command buffer finishes
+/// with.
+///
+/// MoltenVK signals a fence from its Metal command buffer's completion handler, where it wakes a
+/// timeline wait from a shared event's listener (MoltenVK's `MVKSync.mm`; 6 to 11 us later).
+///
+/// A signaled fence's batch reached its value whatever its timeline's read shows: a submission's
+/// fence signal follows its timeline signal in Vulkan's signal operation order. A driver may show
+/// the value later than the fence: lavapipe's emulated timeline shows it once the thread that
+/// submitted the batch installed its point, after the batch ran, which a loaded host can hold up
+/// past the fence's signal.
+fn poll(device: &Device, queue: usize, front: Front) -> Result<u64, CommandBufferError> {
+    let shared = device.shared();
+    let raw = shared.vk();
+    let slot = &shared.queues[queue];
+    // A wait of up to one slice for the queue's timeline to reach `value`: whether it did.
+    let reaches = |value: u64| {
+        let semaphores = [slot.timeline];
+        let values = [value];
+        let info = vk::SemaphoreWaitInfo::default()
+            .semaphores(&semaphores)
+            .values(&values);
+        // SAFETY: the semaphore is the device's timeline, live while the device is (held here).
+        let waited = unsafe { raw.wait_semaphores(&info, WAIT_SLICE.as_nanos() as u64) };
+        exit_guard::called(Call::WaitSemaphores);
+        match waited {
+            Ok(()) => Ok(true),
+            Err(vk::Result::TIMEOUT) => Ok(false),
+            Err(error) => Err(failure(device, error)),
+        }
+    };
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    let entered = gpu_time::host_nanos();
+    let waited = match front.fence {
+        Some(fence) => {
+            // SAFETY: the fence is the device's, in a submission made and not yet reset (its
+            // batch is pending, and is not taken while this waits: `take_pending`), live while
+            // the device is (held here).
+            shared.counts.fence_wait();
+            let waited =
+                unsafe { raw.wait_for_fences(&[fence], true, WAIT_SLICE.as_nanos() as u64) };
+            exit_guard::called(Call::WaitForFences);
+            match waited {
+                Ok(()) => true,
+                Err(vk::Result::TIMEOUT) => false,
+                Err(error) => return Err(failure(device, error)),
+            }
+        }
+        None => {
+            shared.counts.timeline_wait();
+            reaches(front.value)?
+        }
+    };
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    trace::record(|| trace::Traced::Waited {
+        queue,
+        value: front.value,
+        entered,
+        returned: gpu_time::host_nanos(),
+    });
+    // SAFETY: the semaphore is the device's timeline, live while the device is (held here).
+    let read = unsafe { raw.get_semaphore_counter_value(slot.timeline) };
+    exit_guard::called(Call::GetSemaphoreCounterValue);
+    let read = read.map_err(|error| failure(device, error))?;
+    // A wait that ran out its slice although what it waited for was signaled by now: a wake it
+    // missed, counted (`WorkCounts::missed_completion_wakes`). A timeline is looked at by its
+    // read; a fence by a wait of no time: "If timeout is zero, then vkWaitForFences does not
+    // wait, but simply returns the current state of the fences".
+    if !waited {
+        let signaled = match front.fence {
+            Some(fence) => {
+                // SAFETY: as the wait's above.
+                let looked = unsafe { raw.wait_for_fences(&[fence], true, 0) };
+                exit_guard::called(Call::WaitForFences);
+                looked.is_ok()
+            }
+            None => read >= front.value,
+        };
+        if signaled {
+            shared.counts.missed_completion_wake();
+        }
+    }
+    let value = seen(
+        slot.completed_value(),
+        waited.then_some(front.value),
+        read,
+        |value| {
+            // The read ran past what this wait returned for: one more wait, to put the host
+            // operation after a signal ([`seen`]).
+            shared.counts.completion_read_ran_ahead();
+            reaches(value)
+        },
+    )?;
+    slot.completed(value);
+    // Freed memory that waits for the batches in flight goes once they completed, on a handler
+    // thread (`freed_memory.rs`).
+    if let Some(parking) = shared.parking.get() {
+        parking.completed(queue, value);
+        parking.after_completion(device);
+    }
+    Ok(value)
+}
+
+/// The value of a queue's timeline the host may publish as reached (the module docs): `known`,
+/// the one it published before; `waited`, the one a wait just returned for (a timeline's wait,
+/// or the front's fence, whose signal follows its timeline's in signal operation order, whatever
+/// the read shows); `read`, the timeline's read after that wait. A read past both is a value
+/// no host wait returned for yet: `reaches` waits for it, which returns at once where the read
+/// was right, and it is published only where that wait returned.
+pub(crate) fn seen<E>(
+    known: u64,
+    waited: Option<u64>,
+    read: u64,
+    reaches: impl FnOnce(u64) -> Result<bool, E>,
+) -> Result<u64, E> {
+    let confirmed = waited.map_or(known, |waited| waited.max(known));
+    if read <= confirmed {
+        return Ok(confirmed);
+    }
+    Ok(match reaches(read)? {
+        true => read,
+        false => confirmed,
+    })
+}
+
+/// The command-buffer error of a failed wait, recording a lost device.
+fn failure(device: &Device, error: vk::Result) -> CommandBufferError {
+    match error {
+        vk::Result::ERROR_DEVICE_LOST => {
+            device.mark_lost();
+            // A batch held for an event may now be refused.
+            device.shared().scheduler.wake();
+            CommandBufferError::DeviceLost
+        }
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+            CommandBufferError::OutOfMemory
+        }
+        other => CommandBufferError::Internal(VkResultCode(other.as_raw())),
+    }
+}
+
+/// The host times of each queue waiter's steps, kept while a test asks for them, in the device
+/// tests' builds only: the completion latency's measurement reads them
+/// (`tests::completion_latency`).
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+pub(crate) mod trace {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Mutex;
+
+    /// One step, its host time in nanoseconds of the host's clock (`gpu_time::host_nanos`).
+    #[derive(Clone, Copy, Debug)]
+    pub(crate) enum Traced {
+        /// A batch of value `value` was watched on `queue` (`Completion::watch`).
+        Watched { queue: usize, value: u64, at: u64 },
+        /// `queue`'s waiter waited for its front, of value `value`: the driver's wait was entered
+        /// and returned (`poll`).
+        Waited {
+            queue: usize,
+            value: u64,
+            entered: u64,
+            returned: u64,
+        },
+        /// A turn finished the batch of value `value` of `queue` that ends its command buffer;
+        /// `seen` is the command buffer's completion time (`finish`).
+        Finished { queue: usize, value: u64, seen: u64 },
+        /// The turn that finished the batches reached step `what` of `finish`.
+        Step { what: &'static str, at: u64 },
+        /// A commit's way to its submission reached step `what`: posted to the scheduler, its
+        /// thread woken, taken in by a pass, the driver's submission called and returned.
+        Submitting { what: &'static str, at: u64 },
+    }
+
+    static ON: AtomicBool = AtomicBool::new(false);
+    static STEPS: Mutex<Vec<Traced>> = Mutex::new(Vec::new());
+
+    /// Keep the steps from now on.
+    pub(crate) fn start() {
+        STEPS.lock().unwrap().clear();
+        ON.store(true, Ordering::SeqCst);
+    }
+
+    /// Stop keeping steps, and the steps kept.
+    pub(crate) fn stop() -> Vec<Traced> {
+        ON.store(false, Ordering::SeqCst);
+        STEPS.lock().unwrap().drain(..).collect()
+    }
+
+    /// Keep the turn's step `what`, now.
+    pub(super) fn step(what: &'static str) {
+        record(|| Traced::Step {
+            what,
+            at: crate::gpu_time::host_nanos(),
+        });
+    }
+
+    /// Keep the commit's step `what` on its way to its submission, now.
+    pub(crate) fn submitting(what: &'static str) {
+        record(|| Traced::Submitting {
+            what,
+            at: crate::gpu_time::host_nanos(),
+        });
+    }
+
+    /// Keep the step `step` makes, while a test asks.
+    pub(super) fn record(step: impl FnOnce() -> Traced) {
+        if ON.load(Ordering::Relaxed) {
+            let step = step();
+            STEPS.lock().unwrap().push(step);
+        }
+    }
+}

@@ -1,18 +1,19 @@
 diff --git a/NativeGOPPresenter.cpp b/NativeGOPPresenter.cpp
-index 72ee4eb..329da6f 100644
+index 72ee4eb..08d0713 100644
 --- a/NativeGOPPresenter.cpp
 +++ b/NativeGOPPresenter.cpp
-@@ -26,6 +26,9 @@ bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_
+@@ -26,6 +26,10 @@ bool native_gop_gpu_offer(IOService *,void *display,IOMemoryDescriptor *,uint64_
  void native_gop_presenter_set_source(IOService *presenter,IOService *nub);
  // Provided by the display driver: finishes (status 0) or fails the swap that was offered.
  void native_legacy_gpu_complete(void *display,int status);
++void native_legacy_gpu_copied(void *,uint64_t) __attribute__((weak_import));
 +IOMemoryDescriptor *native_gop_scanout_ring(uint32_t *,uint64_t *) __attribute__((weak_import));
 +IOReturn native_gop_scanout_present(uint32_t) __attribute__((weak_import));
 +void native_gop_scanout_restore(void) __attribute__((weak_import));
  }
  class NativeGOPClient;
  class NativeGOPPresenter;
-@@ -34,6 +37,8 @@ class NativeGOPPresenter : public IOService {
+@@ -34,15 +38,17 @@ class NativeGOPPresenter : public IOService {
      OSDeclareDefaultStructors(NativeGOPPresenter)
      friend class NativeGOPClient;
      IOMemoryMap *mapping=nullptr;
@@ -21,19 +22,44 @@ index 72ee4eb..329da6f 100644
      IOLock *gate=nullptr;
      IOService *owner=nullptr;
      NGPMode mode={};
-@@ -52,7 +57,7 @@ class NativeGOPPresenter : public IOService {
+     bool online=false;
+     IOService *memorySource=nullptr;
+     // GPU hand-off (sheng-fb-gpu=1): one offered frame at a time, from the display driver to the privileged client.
+-    bool gpuMode=false,gpuClient=false;
++    bool gpuMode=false,gpuClient=false,presenting=false;
+     struct {bool offered,delivered;uint64_t sequence;void *display;IOMemoryDescriptor *memory;IOMemoryMap *map;
+-            uint64_t stride;uint32_t width,height,format;} swap={};
++            uint64_t stride;uint32_t width,height,format;uint64_t tag;} swap={};
+     uint64_t swapSequence=0;
+     // The compositor swaps the same few surfaces. Each one's mapping into the client stays here under an id (NGPSwap reserved), so the client
+     // keeps its GPU import of those pages and neither side maps 12000 scattered pages again per frame (untagged-203fd45bf: a half-float
+@@ -52,14 +58,16 @@ class NativeGOPPresenter : public IOService {
      Kept kept[kKept]={};
      uint32_t keptId=0;uint64_t keptUse=0;
      void dropKept();
 -    IOReturn waitSwap(task_t,uint64_t timeoutMs,NGPSwap *);
++    void configureScanout();
++    bool scanoutConfigured=false;
 +    IOReturn waitSwap(task_t,uint64_t timeoutMs,NGPSwap *,uint32_t *target=nullptr);
      IOReturn completeSwap(uint64_t sequence,int status);
      void abandonSwap();
  public:
-@@ -106,6 +111,15 @@ bool NativeGOPPresenter::start(IOService *provider) {
-     gate=IOLockAlloc();if(!gate)return false;
-     {unsigned v=0;PE_parse_boot_argn("sheng-fb-gpu",&v,sizeof v);gpuMode=(v==1);}
-     mode={NGP_VERSION,NGP_BGRX8888,video.v_width,video.v_height,video.v_rowBytes,mapping->getLength()};
+     void setMemorySource(IOService *source) {memorySource=source;}
+     static IOReturn handoffCall(uint32_t op,task_t task,const void *in,size_t inSize,void *out,size_t outSize);
+     static IOMemoryDescriptor *handoffMemory();
+-    bool offer(void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height,uint32_t format);
++    bool offer(void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height,uint32_t format,uint64_t tag=0);
+ private:
+     IOReturn transfer(task_t,const NGPPresent &,NGPTransfer *);
+ public:
+@@ -109,6 +117,21 @@ bool NativeGOPPresenter::start(IOService *provider) {
+     native_gop_physical=mapping->getPhysicalAddress();native_gop_virtual=mapping->getVirtualAddress();
+     online=true;native_gop_ready=1;if(gpuMode)gHandoff=this;registerService();return true;
+ }
++void NativeGOPPresenter::configureScanout() {
++    IOLockLock(gate);
++    if(scanoutConfigured){IOLockUnlock(gate);return;}
++    scanoutConfigured=true;
 +    if(gpuMode && &native_gop_scanout_ring && &native_gop_scanout_present && &native_gop_scanout_restore) {
 +        uint64_t span=0;
 +        scanoutRing=native_gop_scanout_ring(&scanoutBuffers,&span);
@@ -43,10 +69,12 @@ index 72ee4eb..329da6f 100644
 +            mode.version=NGP_VERSION_BUFFERED;mode.bytes=span*scanoutBuffers;
 +        } else {OSSafeReleaseNULL(scanoutRing);scanoutBuffers=0;}
 +    }
-     native_gop_physical=mapping->getPhysicalAddress();native_gop_virtual=mapping->getVirtualAddress();
-     online=true;native_gop_ready=1;if(gpuMode)gHandoff=this;registerService();return true;
- }
-@@ -116,7 +130,7 @@ void NativeGOPPresenter::stop(IOService *provider) {
++    IOLockUnlock(gate);
++}
+ void NativeGOPPresenter::stop(IOService *provider) {
+     if(gHandoff==this)gHandoff=nullptr;
+     if(gate)IOLockLock(gate);online=false;native_gop_ready=0;if(gate){IOLockWakeup(gate,&swap,false);IOLockUnlock(gate);}
+@@ -116,7 +139,7 @@ void NativeGOPPresenter::stop(IOService *provider) {
      IOService::stop(provider);
  }
  void NativeGOPPresenter::free() {
@@ -55,7 +83,22 @@ index 72ee4eb..329da6f 100644
  }
  IOReturn NativeGOPPresenter::transfer(task_t task,const NGPPresent &q,NGPTransfer *result) {
      if(gpuMode)return kIOReturnUnsupported;   // in GPU mode no CPU copy exists, not even on request
-@@ -153,7 +167,8 @@ bool NativeGOPPresenter::offer(void *display,IOMemoryDescriptor *memory,uint64_t
+@@ -141,19 +164,20 @@ IOReturn NativeGOPPresenter::transfer(task_t task,const NGPPresent &q,NGPTransfe
+ }
+ // The display driver offers a finished frame. Accepted only while the privileged GPU client is alive and waiting for work; otherwise the
+ // display driver keeps its own path (counted by it as a fallback).
+-bool NativeGOPPresenter::offer(void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height,uint32_t format) {
++bool NativeGOPPresenter::offer(void *display,IOMemoryDescriptor *memory,uint64_t stride,uint32_t width,uint32_t height,uint32_t format,uint64_t tag) {
+     if(!gpuMode || !memory || !display || !gate)return false;
+     IOLockLock(gate);
+-    bool accepted=online && gpuClient && !swap.offered;
++    bool accepted=online && gpuClient && !swap.offered && !presenting;
+     if(accepted) {
+         memory->retain();
+-        swap={true,false,++swapSequence,display,memory,nullptr,stride,width,height,format};
++        swap={true,false,++swapSequence,display,memory,nullptr,stride,width,height,format,tag};
+         native_gop_gpu_offers=native_gop_gpu_offers+1;
+         IOLockWakeup(gate,&swap,false);
      }
      IOLockUnlock(gate);return accepted;
  }
@@ -65,7 +108,7 @@ index 72ee4eb..329da6f 100644
      if(!gpuMode)return kIOReturnUnsupported;
      if(timeoutMs>1000)timeoutMs=1000;
      uint64_t deadline;clock_interval_to_deadline((uint32_t)timeoutMs,kMillisecondScale,&deadline);
-@@ -215,17 +230,25 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
+@@ -215,17 +239,30 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
      swap.map=map;
      out->sequence=sequence;out->address=map->getVirtualAddress();out->bytes=map->getLength();out->stride=stride;
      out->width=width;out->height=height;out->format=format;out->reserved=id;
@@ -75,13 +118,19 @@ index 72ee4eb..329da6f 100644
  IOReturn NativeGOPPresenter::completeSwap(uint64_t sequence,int status) {
      IOLockLock(gate);
      if(!swap.offered || !swap.delivered || swap.sequence!=sequence) {IOLockUnlock(gate);return kIOReturnBadArgument;}
+-    auto done=swap;swap={};
 +    const uint32_t target=nextTarget;
++    auto done=swap;swap={};presenting=true;
++    IOLockUnlock(gate);
++    if(scanoutRing && !status && done.tag && &native_legacy_gpu_copied)
++        native_legacy_gpu_copied(done.display,done.tag);
 +    if(scanoutRing && !status)status=native_gop_scanout_present(target);
++    IOLockLock(gate);
 +    if(scanoutRing) {
-+        if(status){gpuClient=false;native_gop_scanout_restore();}
++        if(status || !gpuClient){gpuClient=false;native_gop_scanout_restore();}
 +        else nextTarget=(target+1)%scanoutBuffers;
 +    }
-     auto done=swap;swap={};
++    presenting=false;IOLockWakeup(gate,&swap,false);
      IOLockUnlock(gate);
      OSSafeReleaseNULL(done.map);done.memory->release();
      if(status)__atomic_fetch_add(&native_gop_gpu_failures,1,__ATOMIC_RELAXED);
@@ -92,7 +141,7 @@ index 72ee4eb..329da6f 100644
  }
  // The client went away with a frame outstanding: the display driver is told it failed, so it can use its own path instead of waiting forever.
  // The kept mappings go with the client (its task's mappings, the surfaces they hold).
-@@ -247,6 +270,7 @@ void NativeGOPPresenter::abandonSwap() {
+@@ -247,6 +284,7 @@ void NativeGOPPresenter::abandonSwap() {
      if(!done.offered)return;
      OSSafeReleaseNULL(done.map);if(done.memory)done.memory->release();
      __atomic_fetch_add(&native_gop_gpu_abandoned,1,__ATOMIC_RELAXED);
@@ -100,7 +149,23 @@ index 72ee4eb..329da6f 100644
      native_legacy_gpu_complete(done.display,kIOReturnAborted);
  }
  extern "C" void native_gop_presenter_set_source(IOService *presenter,IOService *nub) {
-@@ -267,10 +291,12 @@ IOReturn NativeGOPPresenter::handoffCall(uint32_t op,task_t task,const void *in,
+@@ -256,6 +294,11 @@ extern "C" bool native_gop_gpu_offer(IOService *presenter,void *display,IOMemory
+     NativeGOPPresenter *p=OSDynamicCast(NativeGOPPresenter,presenter);
+     return p && p->offer(display,memory,stride,width,height,format);
+ }
++extern "C" bool native_gop_gpu_offer_token(IOService *presenter,void *display,uint64_t tag,IOMemoryDescriptor *memory,
++    uint64_t stride,uint32_t width,uint32_t height,uint32_t format) {
++    NativeGOPPresenter *p=OSDynamicCast(NativeGOPPresenter,presenter);
++    return p && p->offer(display,memory,stride,width,height,format,tag);
++}
+ // Entry points for the GPU client that reaches the hand-off through an already admitted connection (the Adreno accelerator's user client, which
+ // the original sandbox profiles allow where they do not allow this service): op 0 mode, 2 wait for a frame, 3 complete it (the NGP_METHOD_*
+ // numbers). Same checks as the service's own methods; sizes are the wire records'.
+@@ -264,13 +307,16 @@ IOReturn NativeGOPPresenter::handoffCall(uint32_t op,task_t task,const void *in,
+     if(!p || !p->gpuMode || !p->online)return kIOReturnNotReady;
+     switch(op) {
+     case NGP_METHOD_MODE:
++        p->configureScanout();
          if(inSize || !out || outSize!=sizeof(NGPMode))return kIOReturnBadArgument;
          memcpy(out,&p->mode,sizeof(NGPMode));return kIOReturnSuccess;
      case NGP_METHOD_WAIT_SWAP: {
@@ -117,7 +182,7 @@ index 72ee4eb..329da6f 100644
      }
      case NGP_METHOD_COMPLETE_SWAP: {
          if(!in || inSize!=sizeof(NGPComplete) || outSize)return kIOReturnBadArgument;
-@@ -284,7 +310,7 @@ IOReturn NativeGOPPresenter::handoffCall(uint32_t op,task_t task,const void *in,
+@@ -284,7 +330,7 @@ IOReturn NativeGOPPresenter::handoffCall(uint32_t op,task_t task,const void *in,
  IOMemoryDescriptor *NativeGOPPresenter::handoffMemory() {
      NativeGOPPresenter *p=gHandoff;
      if(!p || !p->gpuMode || !p->online || !p->mapping)return nullptr;
@@ -149,3 +214,92 @@ index 0ce3c04..bd5c4a4 100644
  static_assert(sizeof(NGPWait)==8 && sizeof(NGPSwap)==48 && sizeof(NGPComplete)==16,"GOP hand-off ABI");
  static_assert(sizeof(NGPMode)==40 && sizeof(NGPPresent)==32 && sizeof(NGPTransfer)==16,"GOP transfer ABI");
 +static_assert(sizeof(NGPBufferedSwap)==56,"GOP buffered hand-off ABI");
+diff --git a/NativeLegacyDisplay.cpp b/NativeLegacyDisplay.cpp
+index c3776ab..5fde3d1 100644
+--- a/NativeLegacyDisplay.cpp
++++ b/NativeLegacyDisplay.cpp
+@@ -44,6 +44,7 @@ extern "C" void native_legacy_retirement_observed(IOService *);
+ // client reports the GPU copy done (native_legacy_gpu_complete). A refused offer or a failed copy uses the CPU copy below and is counted.
+ // format: NGP_BGRX8888, or for a half-float surface NGP_RGBA16F_LINEAR / NGP_RGBA16F_ENCODED (the client converts it on the GPU).
+ extern "C" bool native_legacy_gpu_offer(void *display,IOMemoryDescriptor *,uint64_t stride,uint32_t width,uint32_t height,uint32_t format);
++extern "C" bool native_legacy_gpu_offer_token(void *,uint64_t,IOMemoryDescriptor *,uint64_t,uint32_t,uint32_t,uint32_t) __attribute__((weak_import));
+ // The compositor's swapped surfaces, for a display that fetches them itself: [0] distinct surfaces seen, [1] swaps checked; for the first four, at
+ // [2 + 3 * k]: allocation bytes, physical segments, largest segment (KiB). The pages are wired for the count and released.
+ extern "C" {volatile uint32_t native_legacy_surfaces[14];}
+@@ -442,6 +443,17 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
+         OSSafeReleaseNULL(vsyncTimer);vsyncArmed=false;
+     }
+ public:
++    void gpuCopied(uint64_t tag) {
++        struct Args {NativeLegacyDisplay *display;uint64_t tag;} args={this,tag};
++        auto action=[](OSObject *,void *a0,void *,void *,void *)->IOReturn {
++            Args *a=static_cast<Args *>(a0);auto *d=a->display;
++            if(d->gpuRequest && !d->gpuRetired && d->gpuTraceRequest==a->tag && d->retireSwap(d->gpuRequest,true)) {
++                d->gpuRetired=true;native_legacy_early_retires=native_legacy_early_retires+1;
++            }
++            return kIOReturnSuccess;
++        };
++        if(IOWorkLoop *loop=getWorkLoop())loop->runAction(action,this,&args);else action(this,&args,nullptr,nullptr,nullptr);
++    }
+     // Called by the GPU client's completion (any thread): the swap is finished on the framebuffer's work loop.
+     void gpuComplete(int status) {
+         struct Args {NativeLegacyDisplay *display;int status;} args={this,status};
+@@ -473,7 +485,16 @@ public:
+     bool start(IOService *provider) override {
+         if(!startDisplay(provider))return false;
+         publishOneLayer();
+-        startVsync();startDirect();return true;
++        startVsync();startDirect();
++        // GPU copies consume producer pixels just as direct display does.
++        // Their fence timer belongs to the display work loop independently
++        // of the optional direct-scanout MMIO path.
++        if(!fenceTimer && (&native_adreno_fences_detail || &native_adreno_fences)) {
++            IOWorkLoop *loop=getWorkLoop();
++            fenceTimer=loop?IOTimerEventSource::timerEventSource(this,&NativeLegacyDisplay::fenceFired):nullptr;
++            if(fenceTimer && loop->addEventSource(fenceTimer)!=kIOReturnSuccess)OSSafeReleaseNULL(fenceTimer);
++        }
++        return true;
+     }
+     // CoreAnimation reads how many layers the display scans out from IOMFBNumLayers (MaxNumLayers). Without the property it may hand a
+     // full-screen layer (an app's Metal layer) to the display as a detached layer of its own, copied through the IOSurfaceAccelerator
+@@ -627,9 +648,9 @@ public:
+         }
+         noteSurface(surface,memory);
+         const bool half=nativeHalf(native_legacy_surface_format(surface),native_legacy_surface_planes(surface));
++        if(!gpuBypass && fenceTimer && !gpuWrote(request)) {transferred=true;return;}
+         if(directOn && !half && !gpuBypass && latchRequest)stat(5);
+         if(directOn && !half && !gpuBypass && !latchRequest) {
+-            if(!gpuWrote(request)) {transferred=true;return;}
+             const int slot=directSlot(surface,memory);
+             if(slot>=0) {
+                 native_legacy_swap_stage(1);
+@@ -644,7 +665,10 @@ public:
+         }
+         directToBoot();
+         stat(7);note(7,-1,request);
+-        if(!gpuBypass && native_legacy_gpu_offer(this,memory,sourceStride,width,height,half?halfOfferFormat():NGP_BGRX8888)) {
++        const bool offered=!gpuBypass && (&native_legacy_gpu_offer_token?
++            native_legacy_gpu_offer_token(this,traceId(request),memory,sourceStride,width,height,half?halfOfferFormat():NGP_BGRX8888):
++            native_legacy_gpu_offer(this,memory,sourceStride,width,height,half?halfOfferFormat():NGP_BGRX8888));
++        if(offered) {
+             // The GPU writes the scanout memory behind the CPU's back: the differential copy's picture of it is stale from now on.
+             native_legacy_swap_stage(1);
+             shadowValid=false;gpuRequest=request;gpuTraceRequest=traceId(request);gpuLength=length;transferred=true;
+@@ -748,6 +772,9 @@ public:
+         if(!activateOnlyPendingSwap(request))return false;
+         stat(11);note(6,-1,request);
+         removeValidated(request);
++        if(fenceFor==request) {
++            fenceFor=nullptr;fenceTarget=0;fenceSince=0;fenceCaptured=false;fenceSlow=false;
++        }
+         IOMobileFramebufferLegacy::completeCurrentSwap();
+         native_legacy_retirement_observed(this);
+         return true;
+@@ -894,4 +921,7 @@ public:
+ OSDefineMetaClassAndStructors(NativeLegacyDisplay,IOMobileFramebufferLegacy)
+ extern "C" void native_legacy_direct_snapshot(void) {if(gDirectDisplay)gDirectDisplay->snapshot();}
+ IOService *native_legacy_display_allocate(void) {return new NativeLegacyDisplay;}
++extern "C" void native_legacy_gpu_copied(void *display,uint64_t tag) {
++    if(display)static_cast<NativeLegacyDisplay *>(display)->gpuCopied(tag);
++}
+ extern "C" void native_legacy_gpu_complete(void *display,int status) {if(display)static_cast<NativeLegacyDisplay *>(display)->gpuComplete(status);}

@@ -1,0 +1,749 @@
+{
+  "format": 1,
+  "case": "render-state-facing",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "tob_renders.ll",
+      "entry": "tob_rect+tob_triangle+tob_solid+tob_read",
+      "source_sha256": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+    },
+    {
+      "fixture": "tob_renders.air.ll",
+      "entry": "tob_rect+tob_triangle+tob_solid+tob_read",
+      "source_sha256": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 8,
+      "outcomes": [
+        {
+          "runs": 8,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "render-pipeline",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "34a1c7dba0069e23790df0de0263ca7e71b5866e7ef4df7016ef0581d05c49af"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a4ead74e2478c9a99b18bd17e46c9e653d10c730ef20d00962a5b227a5a40fd8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:points",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "821a35a14e5a1415689112c661915656bfef2ddf62426a5a0dca2cfba1048c39"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:colors",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "8924ccf76859cbcbebbc2d5abc74d5b6ffea0c3b0866147f47f4e4f84b704705"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7e66234cd745b3e9b22f591477558fb610f17f820abbf0aa5aaf6759da6e1701"
+                        }
+                      }
+                    },
+                    {
+                      "name": "cells",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5f6dd412a703185647d96783ab07e4dc1de1c41e81437b67705624053e9b8f73"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render-pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:points",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:colors",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pieces",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "pass",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "drawn",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAAAAvwAAcEAAAAA/AACAPgAAAL8AAHBAAAAAPwAAgD4AAAC/AABwQAAAAD8AAIA+AAAAvwAAcEAAAAA/AACAPgAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAAAL8AAHBAAAAAPwAAgD4AAAC/AABwQAAAAD8AAIA+AAAAvwAAcEAAAAA/AACAPgAAAL8AAHBAAAAAPwAAgD4AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAAC/AABwQAAAAD8AAIA+AAAAvwAAcEAAAAA/AACAPgAAAL8AAHBAAAAAPwAAgD4AAAC/AABwQAAAAD8AAIA+AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAAAAvwAAcEAAAAA/AACAPgAAAL8AAHBAAAAAPwAAgD4AAAC/AABwQAAAAD8AAIA+AAAAvwAAcEAAAAA/AACAPgAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAFBAAAAAPgAAYMAAAAA/AABQQAAAAD4AAGDAAAAAPwAAUEAAAAA+AABgwAAAAD8AAFBAAAAAPgAAYMAAAAA/AADgvwAACEAAAKA/AABAPwAA4L8AAAhAAACgPwAAQD8AAOC/AAAIQAAAoD8AAEA/AADgvwAACEAAAKA/AABAPwAAID8AAJDAAAAwQAAAwL8AACA/AACQwAAAMEAAAMC/AAAgPwAAkMAAADBAAADAvwAAID8AAJDAAAAwQAAAwL8AAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAABQQAAAAD4AAGDAAAAAPwAAUEAAAAA+AABgwAAAAD8AAFBAAAAAPgAAYMAAAAA/AABQQAAAAD4AAGDAAAAAPwAA4L8AAAhAAACgPwAAQD8AAOC/AAAIQAAAoD8AAEA/AADgvwAACEAAAKA/AABAPwAA4L8AAAhAAACgPwAAQD8AACA/AACQwAAAMEAAAMC/AAAgPwAAkMAAADBAAADAvwAAID8AAJDAAAAwQAAAwL8AACA/AACQwAAAMEAAAMC/AADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAAUEAAAAA+AABgwAAAAD8AAFBAAAAAPgAAYMAAAAA/AABQQAAAAD4AAGDAAAAAPwAAUEAAAAA+AABgwAAAAD8AAOC/AAAIQAAAoD8AAEA/AADgvwAACEAAAKA/AABAPwAA4L8AAAhAAACgPwAAQD8AAOC/AAAIQAAAoD8AAEA/AAAgPwAAkMAAADBAAADAvwAAID8AAJDAAAAwQAAAwL8AACA/AACQwAAAMEAAAMC/AAAgPwAAkMAAADBAAADAvwAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAFBAAAAAPgAAYMAAAAA/AABQQAAAAD4AAGDAAAAAPwAAUEAAAAA+AABgwAAAAD8AAFBAAAAAPgAAYMAAAAA/AADgvwAACEAAAKA/AABAPwAA4L8AAAhAAACgPwAAQD8AAOC/AAAIQAAAoD8AAEA/AADgvwAACEAAAKA/AABAPwAAID8AAJDAAAAwQAAAwL8AACA/AACQwAAAMEAAAMC/AAAgPwAAkMAAADBAAADAvwAAID8AAJDAAAAwQAAAwL8AAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAAIMAAAEA/AABIQAAAAL4AACDAAABAPwAASEAAAAC+AAAgwAAAQD8AAEhAAAAAvgAAIMAAAEA/AABIQAAAAL4AAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAACDAAABAPwAASEAAAAC+AAAgwAAAQD8AAEhAAAAAvgAAIMAAAEA/AABIQAAAAL4AACDAAABAPwAASEAAAAC+AADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAAAgwAAAQD8AAEhAAAAAvgAAIMAAAEA/AABIQAAAAL4AACDAAABAPwAASEAAAAC+AAAgwAAAQD8AAEhAAAAAvgAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAAIMAAAEA/AABIQAAAAL4AACDAAABAPwAASEAAAAC+AAAgwAAAQD8AAEhAAAAAvgAAIMAAAEA/AABIQAAAAL4AAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwAAA8MAAAPDAAADwwA=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "render",
+          "message": "redundant setting of <AGXG15XFamilyBuffer: 0xADDR>\n    label = <none>\n    length = 64\n    cpuCacheMode = MTLCPUCacheModeDefaultCache\n    storageMode = MTLStorageModeShared\n    hazardTrackingMode = MTLHazardTrackingModeTracked\n    resourceOptions = MTLResourceCPUCacheModeDefaultCache MTLResourceStorageModeShared MTLResourceHazardTrackingModeTracked\n    purgeableState = MTLPurgeableStateNonVolatile\n    label = <none>."
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-render-pass-split"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 2,
+        "argument_samplers_taken": 1,
+        "argument_tables_held_at_bind": 18,
+        "argument_tables_retained": 2,
+        "bare_starts": 1,
+        "batches_held_past_a_look": 1,
+        "batches_with_none_pending": 1,
+        "bound_offsets_moved": 18,
+        "command_buffers_begun": 11,
+        "command_buffers_begun_batch_barriers": 2,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 2,
+        "command_buffers_begun_encoders": 2,
+        "command_buffers_begun_secondaries": 3,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 8,
+        "command_buffers_submitted": 8,
+        "commands_recorded.begin_command_buffer": 11,
+        "commands_recorded.cmd_begin_render_pass": 2,
+        "commands_recorded.cmd_bind_descriptor_sets": 10,
+        "commands_recorded.cmd_bind_pipeline": 3,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_buffer_to_image": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 1,
+        "commands_recorded.cmd_draw": 10,
+        "commands_recorded.cmd_end_render_pass": 2,
+        "commands_recorded.cmd_execute_commands": 1,
+        "commands_recorded.cmd_pipeline_barrier": 9,
+        "commands_recorded.cmd_push_constants": 13,
+        "commands_recorded.cmd_set_blend_constants": 3,
+        "commands_recorded.cmd_set_cull_mode": 5,
+        "commands_recorded.cmd_set_depth_bias": 3,
+        "commands_recorded.cmd_set_depth_compare_op": 3,
+        "commands_recorded.cmd_set_depth_test_enable": 3,
+        "commands_recorded.cmd_set_depth_write_enable": 3,
+        "commands_recorded.cmd_set_front_face": 5,
+        "commands_recorded.cmd_set_primitive_restart_enable": 3,
+        "commands_recorded.cmd_set_primitive_topology": 3,
+        "commands_recorded.cmd_set_scissor": 10,
+        "commands_recorded.cmd_set_stencil_compare_mask": 3,
+        "commands_recorded.cmd_set_stencil_op": 3,
+        "commands_recorded.cmd_set_stencil_reference": 3,
+        "commands_recorded.cmd_set_stencil_test_enable": 3,
+        "commands_recorded.cmd_set_stencil_write_mask": 3,
+        "commands_recorded.cmd_set_viewport": 3,
+        "commands_recorded.end_command_buffer": 11,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 1,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_drawn": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326592,
+        "draw_shapes_carried": 1,
+        "draw_shapes_made": 1,
+        "draw_shapes_reused": 5,
+        "draw_states_recorded": 82,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 2,
+        "encoder_command_buffers_begun": 8,
+        "fence_waits": 1,
+        "finales_apart": 1,
+        "functions_shared": 1,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 2,
+        "heads_held_for_host_steps": 3,
+        "heap_tables_worked_out": 20,
+        "host_steps_recorded": 1,
+        "inline_passes": 1,
+        "inline_passes_split": 1,
+        "instance_splits_pending_pipeline": 1,
+        "linked_use_questions_asked": 2,
+        "live_tables_uploaded": 1,
+        "new_buffer_bytes_cleared": 4480,
+        "object_churn.buffers_evicted": 1,
+        "object_churn.buffers_parked": 4,
+        "object_churn.buffers_recycled": 3,
+        "object_churn.images_evicted": 2,
+        "object_churn.images_own_memory": 1,
+        "object_churn.images_parked": 1,
+        "object_churn.images_recycled": 1,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_buffer_bindings": 1,
+        "object_churn.vk_buffers_destroyed": 1,
+        "object_churn.vk_buffers_made": 1,
+        "object_churn.vk_image_views_made": 1,
+        "object_churn.vk_images_destroyed": 2,
+        "pipeline_layouts_made": 1,
+        "pipelines_pooled": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 1,
+        "render_passes_begun_inline": 1,
+        "render_passes_begun_instances": 1,
+        "render_passes_made": 3,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 4,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 3,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 2,
+        "set_zero_sets_reused": 9,
+        "shader_modules_made": 2,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 22,
+        "stage_tables_read_in_part": 18,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 2,
+        "wakes_completion_waiters": 1,
+        "wakes_handler_threads": 1,
+        "wakes_spared": 8
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "command_buffers_deferred": 0,
+        "commands_recorded.cmd_begin_render_pass": 0,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_copy_buffer_to_image": 0,
+        "commands_recorded.cmd_copy_image_to_buffer": 0,
+        "commands_recorded.cmd_draw": 0,
+        "commands_recorded.cmd_end_render_pass": 0,
+        "commands_recorded.cmd_execute_commands": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.cmd_set_blend_constants": 0,
+        "commands_recorded.cmd_set_cull_mode": 0,
+        "commands_recorded.cmd_set_depth_bias": 0,
+        "commands_recorded.cmd_set_depth_compare_op": 0,
+        "commands_recorded.cmd_set_depth_test_enable": 0,
+        "commands_recorded.cmd_set_depth_write_enable": 0,
+        "commands_recorded.cmd_set_front_face": 0,
+        "commands_recorded.cmd_set_primitive_restart_enable": 0,
+        "commands_recorded.cmd_set_primitive_topology": 0,
+        "commands_recorded.cmd_set_scissor": 0,
+        "commands_recorded.cmd_set_stencil_compare_mask": 0,
+        "commands_recorded.cmd_set_stencil_op": 0,
+        "commands_recorded.cmd_set_stencil_reference": 0,
+        "commands_recorded.cmd_set_stencil_test_enable": 0,
+        "commands_recorded.cmd_set_stencil_write_mask": 0,
+        "commands_recorded.cmd_set_viewport": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "device_memory_allocated": 201326592,
+        "functions_translated": 2,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 3,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "pooled_memory_blocks_made": 3
+      },
+      "per_state": {
+        "pipelines": 3,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "render-state-facing",
+        "calls": 8,
+        "in_calls": 31770125,
+        "on_cpu": 1025624,
+        "blocked": 30751542,
+        "elsewhere": 7470708,
+        "spend": 39084665,
+        "spend_least": 38266708,
+        "spend_most": 40293333,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 1833,
+            "on_cpu": 1959,
+            "blocked": 0,
+            "wall_least": 1709,
+            "wall_most": 2292,
+            "wall_total": 6167,
+            "on_cpu_total": 6458,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23826583,
+            "on_cpu": 637291,
+            "blocked": 23208708,
+            "wall_least": 23587666,
+            "wall_most": 24810250,
+            "wall_total": 23826583,
+            "on_cpu_total": 637291,
+            "blocked_total": 23208708
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 750,
+            "on_cpu": 875,
+            "blocked": 0,
+            "wall_least": 667,
+            "wall_most": 875,
+            "wall_total": 750,
+            "on_cpu_total": 875,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 7769541,
+            "on_cpu": 218667,
+            "blocked": 7542749,
+            "wall_least": 7385750,
+            "wall_most": 7862583,
+            "wall_total": 7769541,
+            "on_cpu_total": 218667,
+            "blocked_total": 7542749
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 122083,
+            "on_cpu": 122291,
+            "blocked": 0,
+            "wall_least": 113458,
+            "wall_most": 153666,
+            "wall_total": 122083,
+            "on_cpu_total": 122291,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 30583,
+            "on_cpu": 30792,
+            "blocked": 0,
+            "wall_least": 27042,
+            "wall_most": 37500,
+            "wall_total": 30583,
+            "on_cpu_total": 30792,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1833,
+            "on_cpu": 2000,
+            "blocked": 0,
+            "wall_least": 1625,
+            "wall_most": 2292,
+            "wall_total": 1833,
+            "on_cpu_total": 2000,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "render-state-facing",
+        "calls": 8,
+        "in_calls": 4178958,
+        "on_cpu": 2289750,
+        "blocked": 1846583,
+        "elsewhere": 1218042,
+        "spend": 5421999,
+        "spend_least": 5137917,
+        "spend_most": 5713542,
+        "degraded": [
+          "metal2vulkan-degrade-render-pass-split"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 834,
+            "on_cpu": 958,
+            "blocked": 0,
+            "wall_least": 708,
+            "wall_most": 1166,
+            "wall_total": 2792,
+            "on_cpu_total": 3084,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 224000,
+            "on_cpu": 227541,
+            "blocked": 0,
+            "wall_least": 211875,
+            "wall_most": 251334,
+            "wall_total": 224000,
+            "on_cpu_total": 227541,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 375,
+            "on_cpu": 542,
+            "blocked": 0,
+            "wall_least": 333,
+            "wall_most": 583,
+            "wall_total": 375,
+            "on_cpu_total": 542,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1770750,
+            "on_cpu": 122875,
+            "blocked": 1647875,
+            "wall_least": 1700625,
+            "wall_most": 1932750,
+            "wall_total": 1770750,
+            "on_cpu_total": 122875,
+            "blocked_total": 1647875
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2136208,
+            "on_cpu": 1929750,
+            "blocked": 203166,
+            "wall_least": 2018166,
+            "wall_most": 2252459,
+            "wall_total": 2136208,
+            "on_cpu_total": 1929750,
+            "blocked_total": 203166
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 11666,
+            "on_cpu": 11833,
+            "blocked": 0,
+            "wall_least": 9792,
+            "wall_most": 18750,
+            "wall_total": 11666,
+            "on_cpu_total": 11833,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 708,
+            "on_cpu": 834,
+            "blocked": 0,
+            "wall_least": 667,
+            "wall_most": 833,
+            "wall_total": 708,
+            "on_cpu_total": 834,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

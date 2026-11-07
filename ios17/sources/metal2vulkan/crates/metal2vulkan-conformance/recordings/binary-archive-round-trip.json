@@ -1,0 +1,583 @@
+{
+  "format": 1,
+  "case": "binary-archive-round-trip",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "px_samplers.ll",
+      "entry": "px_sample_argument",
+      "source_sha256": "8c4a0024c9ba10e25d2487017101ff9a6437a48c58602537d0a41ee693e32f20"
+    },
+    {
+      "fixture": "px_samplers.air.ll",
+      "entry": "px_sample_argument",
+      "source_sha256": "5cedd165bee51449aaab252183a73661902625d2ddf8aa9fa5582f605ea564b1"
+    },
+    {
+      "fixture": "reflection/texture_accesses.ll",
+      "entry": "texture_accesses_vertex",
+      "source_sha256": "081bf6dfe075bb2171d010f4720eb3bd1fce1d77b5cf5b7cf6cb07afaec9bfc8"
+    },
+    {
+      "fixture": "reflection/texture_accesses.air.ll",
+      "entry": "texture_accesses_vertex",
+      "source_sha256": "954c6d7119e9d0bc9526de28fbbea84424cb9619dc05a1e9ee7b8659f60e0dd3"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air-0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "8c4a0024c9ba10e25d2487017101ff9a6437a48c58602537d0a41ee693e32f20"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed-0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5cedd165bee51449aaab252183a73661902625d2ddf8aa9fa5582f605ea564b1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "081bf6dfe075bb2171d010f4720eb3bd1fce1d77b5cf5b7cf6cb07afaec9bfc8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed-1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "954c6d7119e9d0bc9526de28fbbea84424cb9619dc05a1e9ee7b8659f60e0dd3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "program",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b3672713797af6abdd121bf9dd7218efa57045031becf0041a5631f0e933824a"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "new-archive",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "label-before",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "label",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "label-after",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "label",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Some",
+                                "payload": {
+                                  "lines": [
+                                    "the case's archive"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "device",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "add-compute",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "add-compute-again",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "add-render",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "serialize",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "file",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "exists",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        },
+                        {
+                          "name": "nonempty",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "serialize-over-itself",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reload",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reloaded-label",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "label",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "None",
+                                "payload": "absent"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reloaded-device",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "device",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reloaded-compute-hit",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reloaded-compute-miss",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reloaded-render-hit",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "serialize-the-reloaded-archive",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "refused",
+                          "observed": {
+                            "value": {
+                              "bool": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "again",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "exists",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        },
+                        {
+                          "name": "nonempty",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "creation_pipelines_made": 2,
+        "descriptor_keys_built": 2,
+        "device_memory_allocated": 201326976,
+        "driver_diagnostics_withheld": 1,
+        "functions_shared": 3,
+        "linked_use_questions_asked": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "render_passes_made": 1,
+        "scheduler_sleep_slices": 1,
+        "scheduler_sleeps": 1,
+        "shader_modules_made": 3,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2,
+        "variant_pipelines_made": 2,
+        "variants_taken_back": 5
+      },
+      "composed": {
+        "addressable_buffers_made": 0,
+        "device_memory_allocated": 201326976,
+        "driver_diagnostics_withheld": 1,
+        "linked_use_questions_asked": 2,
+        "render_passes_made": 1,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "creation_pipelines_made": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 3,
+        "variant_pipelines_made": 2
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "binary-archive-round-trip",
+        "calls": 1,
+        "in_calls": 80295042,
+        "on_cpu": 2323584,
+        "blocked": 77969000,
+        "elsewhere": 367500,
+        "spend": 80658750,
+        "spend_least": 79237750,
+        "spend_most": 83106583,
+        "per_call": [
+          {
+            "call": "archives",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 80295042,
+            "on_cpu": 2323584,
+            "blocked": 77969000,
+            "wall_least": 78865708,
+            "wall_most": 82676083,
+            "wall_total": 80295042,
+            "on_cpu_total": 2323584,
+            "blocked_total": 77969000
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "binary-archive-round-trip",
+        "calls": 1,
+        "in_calls": 28830791,
+        "on_cpu": 1702417,
+        "blocked": 27128374,
+        "elsewhere": 14917,
+        "spend": 28851666,
+        "spend_least": 18195750,
+        "spend_most": 41097250,
+        "per_call": [
+          {
+            "call": "archives",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 28830791,
+            "on_cpu": 1702417,
+            "blocked": 27128374,
+            "wall_least": 18176250,
+            "wall_most": 41086542,
+            "wall_total": 28830791,
+            "on_cpu_total": 1702417,
+            "blocked_total": 27128374
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,1321 @@
+{
+  "format": 1,
+  "case": "resolve-depth-filters-2",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_resolves.ll",
+      "entry": "rt6_resolve_full+rt6_resolve_masked",
+      "source_sha256": "826f30ea88e648ce64e04e26abdfaa51c2c81fdd933f41e0a5b621eb7c9d18e9"
+    },
+    {
+      "fixture": "rt6_resolves.air.ll",
+      "entry": "rt6_resolve_full+rt6_resolve_masked",
+      "source_sha256": "deacd509ddf64f7fe146057f3097edfb6582b0033fd623a9d2ec49db7596aec9"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 8,
+      "outcomes": [
+        {
+          "runs": 8,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "826f30ea88e648ce64e04e26abdfaa51c2c81fdd933f41e0a5b621eb7c9d18e9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "deacd509ddf64f7fe146057f3097edfb6582b0033fd623a9d2ec49db7596aec9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "render-pipeline",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "daefa7fe83879404b99c5f870960ace86dae84ccb9c8aa588290be0a4a27a92a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:color",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d0d0d028c61e03f21c4e1b9be990a529ab6b620a9f86f6211ae7a6ec28a7ccff"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:depth",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b98be368bc96ca262336cfd8fcd5ec7496f0e86a69fa6bca1da35492d0f3ce25"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:resolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "33f7a52b1b7de5461505081087c512c4758f0762a164ae64dc642da9f116138c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear:depth",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6c3c396ed6b5c36dcae172271f462051b1266b851e92df3deea8ac65478fd712"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fbcf39c1eb131f9a6f5418462e65a3bcf673aa2d36b10c79f0a1aea8144aaae9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b150ad59775b58f525434ec9f1c89776d74a74451fa2e80b8f65fe56d36785f9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f5580a0dc390b66bbffff5901822e638b2a82a29aec5b3c78bc705a31f3fe585"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6892e973a92fa3cfdf664ef5195fe38c00af94cc76b84bdd47894861ec2b6a6d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "111914e4f8f0043cb980b876e284eeb5c642b6fdc180163d8c18fe74cf345460"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d08d189f82a293ff447a63c9b7c5d84a19e588606b38303fae376c8f00342af7"
+                        }
+                      }
+                    },
+                    {
+                      "name": "patterns",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "efae061eb854f9ff0e97f791a85e7fe209b47b5248963469623df4d093900a03"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render-pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:color",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:depth",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "state",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:resolve:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pieces",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read:MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "resolved",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterSample0/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPgAAAD4AAAA/AAAAPwAAwD4AAMA+AADAPgAAwD4AAAA+AAAAPgAAAD8AAAA/AADAPgAAwD4AAMA+AADAPgAAgD4AAIA+AABAPwAAQD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAEA/AABAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterSample0/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPgAAAD4AAAA/AAAAPwAAwD4AAMA+AADAPgAAwD4AAAA+AAAAPgAAAD8AAAA/AADAPgAAwD4AAMA+AADAPgAAgD4AAIA+AABAPwAAQD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAEA/AABAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterMin/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPgAAAD4AAMA+AADAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAwD4AAMA+AAAAPgAAAD4AAAA+AAAAPgAAgD4AAIA+AAAAPgAAAD4AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAAA+AAAAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterMin/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAPgAAAD4AAMA+AADAPgAAAD4AAAA+AAAAPgAAAD4AAAA+AAAAPgAAwD4AAMA+AAAAPgAAAD4AAAA+AAAAPgAAgD4AAIA+AAAAPgAAAD4AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAAA+AAAAPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterMax/MTLStoreActionMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPgAAgD4AAAA/AAAAPwAAwD4AAMA+AADAPgAAwD4AAIA+AACAPgAAAD8AAAA/AADAPgAAwD4AAMA+AADAPgAAgD4AAIA+AABAPwAAQD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAEA/AABAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MTLMultisampleDepthResolveFilterMax/MTLStoreActionStoreAndMultisampleResolve",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPgAAgD4AAAA/AAAAPwAAwD4AAMA+AADAPgAAwD4AAIA+AACAPgAAAD8AAAA/AADAPgAAwD4AAMA+AADAPgAAgD4AAIA+AABAPwAAQD8AAIA/AACAPwAAgD8AAIA/AACAPgAAgD4AAEA/AABAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "depth",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 8,
+                            "row_pitch": 32,
+                            "rows": 8,
+                            "image_pitch": 256,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "render",
+          "message": "Set Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Render Pipeline State Validation\nredundant setRenderPipelineState.\nSet Depth Stencil State Validation\nredundant setDepthStencilState.\nSet Scissor Rect Validation\nredundant setScissorRect."
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_samplers_taken": 1,
+        "argument_tables_held_at_bind": 132,
+        "bare_starts": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 1,
+        "command_buffers_begun": 187,
+        "command_buffers_begun_batch_barriers": 12,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 6,
+        "command_buffers_begun_encoders": 12,
+        "command_buffers_begun_secondaries": 150,
+        "command_buffers_begun_segments": 6,
+        "command_buffers_deferred": 174,
+        "command_buffers_submitted": 37,
+        "commands_noted_as_before": 66,
+        "commands_recorded.begin_command_buffer": 107,
+        "commands_recorded.cmd_begin_render_pass": 6,
+        "commands_recorded.cmd_bind_descriptor_sets": 72,
+        "commands_recorded.cmd_bind_pipeline": 72,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_clear_depth_stencil_image": 7,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 6,
+        "commands_recorded.cmd_draw": 72,
+        "commands_recorded.cmd_end_render_pass": 6,
+        "commands_recorded.cmd_execute_commands": 6,
+        "commands_recorded.cmd_pipeline_barrier": 26,
+        "commands_recorded.cmd_push_constants": 144,
+        "commands_recorded.cmd_set_blend_constants": 72,
+        "commands_recorded.cmd_set_cull_mode": 72,
+        "commands_recorded.cmd_set_depth_bias": 72,
+        "commands_recorded.cmd_set_depth_compare_op": 72,
+        "commands_recorded.cmd_set_depth_test_enable": 72,
+        "commands_recorded.cmd_set_depth_write_enable": 72,
+        "commands_recorded.cmd_set_front_face": 72,
+        "commands_recorded.cmd_set_primitive_restart_enable": 72,
+        "commands_recorded.cmd_set_primitive_topology": 72,
+        "commands_recorded.cmd_set_scissor": 72,
+        "commands_recorded.cmd_set_stencil_compare_mask": 72,
+        "commands_recorded.cmd_set_stencil_op": 72,
+        "commands_recorded.cmd_set_stencil_reference": 72,
+        "commands_recorded.cmd_set_stencil_test_enable": 72,
+        "commands_recorded.cmd_set_stencil_write_mask": 72,
+        "commands_recorded.cmd_set_viewport": 72,
+        "commands_recorded.end_command_buffer": 187,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326592,
+        "draw_shapes_carried": 71,
+        "draw_shapes_made": 1,
+        "draw_shapes_reused": 49,
+        "draw_states_recorded": 1368,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 4,
+        "encoder_command_buffers_begun": 174,
+        "fence_waits": 1,
+        "finales_apart": 1,
+        "flights_followed": 2,
+        "functions_shared": 2,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 72,
+        "heap_tables_worked_out": 144,
+        "host_steps_recorded": 1,
+        "linked_use_questions_asked": 2,
+        "live_tables_uploaded": 1,
+        "new_buffer_bytes_cleared": 3552,
+        "object_churn.buffers_evicted": 21,
+        "object_churn.buffers_parked": 8,
+        "object_churn.buffers_recycled": 8,
+        "object_churn.images_own_memory": 8,
+        "object_churn.images_parked": 8,
+        "object_churn.images_recycled": 6,
+        "object_churn.textures_image": 8,
+        "object_churn.vk_buffers_destroyed": 21,
+        "object_churn.vk_image_bindings": 2,
+        "object_churn.vk_image_views_made": 8,
+        "object_churn.vk_images_destroyed": 6,
+        "object_churn.vk_images_made": 8,
+        "passes_not_inline_layouts": 6,
+        "pipeline_layouts_made": 1,
+        "pipeline_layouts_shared": 1,
+        "pipelines_pooled": 3,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 6,
+        "render_passes_begun_instances": 6,
+        "render_passes_made": 10,
+        "resident_textures_looked_at": 6,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 2,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 1,
+        "set_zero_sets_found": 5,
+        "set_zero_sets_reused": 66,
+        "shader_modules_made": 2,
+        "shader_modules_shared": 2,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 4,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 156,
+        "stage_tables_read_in_part": 132,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 4,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 8
+      },
+      "moving": {
+        "command_buffers_begun": 77,
+        "command_buffers_begun_continuations": 3,
+        "command_buffers_begun_secondaries": 46,
+        "command_buffers_begun_segments": 3,
+        "command_buffers_deferred": 74,
+        "command_buffers_submitted": 31,
+        "commands_recorded.cmd_bind_pipeline": 25,
+        "commands_recorded.cmd_pipeline_barrier": 6,
+        "commands_recorded.cmd_push_constants": 50,
+        "commands_recorded.cmd_set_blend_constants": 25,
+        "commands_recorded.cmd_set_cull_mode": 25,
+        "commands_recorded.cmd_set_depth_bias": 25,
+        "commands_recorded.cmd_set_depth_compare_op": 25,
+        "commands_recorded.cmd_set_depth_test_enable": 25,
+        "commands_recorded.cmd_set_depth_write_enable": 25,
+        "commands_recorded.cmd_set_front_face": 25,
+        "commands_recorded.cmd_set_primitive_restart_enable": 25,
+        "commands_recorded.cmd_set_primitive_topology": 25,
+        "commands_recorded.cmd_set_scissor": 47,
+        "commands_recorded.cmd_set_stencil_compare_mask": 25,
+        "commands_recorded.cmd_set_stencil_op": 25,
+        "commands_recorded.cmd_set_stencil_reference": 25,
+        "commands_recorded.cmd_set_stencil_test_enable": 25,
+        "commands_recorded.cmd_set_stencil_write_mask": 25,
+        "commands_recorded.cmd_set_viewport": 25,
+        "commands_recorded.end_command_buffer": 74,
+        "draw_states_recorded": 544,
+        "encoder_command_buffers_begun": 64,
+        "flights_followed": 0,
+        "gate_waits_slept": 0,
+        "graphics_pipelines_looked_up": 23,
+        "host_steps_recorded": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "argument_samplers_taken": 1,
+        "command_buffers_begun": 97,
+        "command_buffers_begun_continuations": 3,
+        "command_buffers_begun_secondaries": 66,
+        "command_buffers_begun_segments": 3,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 31,
+        "commands_recorded.cmd_begin_render_pass": 0,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 35,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_clear_depth_stencil_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_copy_image_to_buffer": 0,
+        "commands_recorded.cmd_draw": 0,
+        "commands_recorded.cmd_end_render_pass": 0,
+        "commands_recorded.cmd_execute_commands": 0,
+        "commands_recorded.cmd_pipeline_barrier": 21,
+        "commands_recorded.cmd_push_constants": 70,
+        "commands_recorded.cmd_set_blend_constants": 35,
+        "commands_recorded.cmd_set_cull_mode": 35,
+        "commands_recorded.cmd_set_depth_bias": 35,
+        "commands_recorded.cmd_set_depth_compare_op": 35,
+        "commands_recorded.cmd_set_depth_test_enable": 35,
+        "commands_recorded.cmd_set_depth_write_enable": 35,
+        "commands_recorded.cmd_set_front_face": 35,
+        "commands_recorded.cmd_set_primitive_restart_enable": 35,
+        "commands_recorded.cmd_set_primitive_topology": 35,
+        "commands_recorded.cmd_set_scissor": 51,
+        "commands_recorded.cmd_set_stencil_compare_mask": 35,
+        "commands_recorded.cmd_set_stencil_op": 35,
+        "commands_recorded.cmd_set_stencil_reference": 35,
+        "commands_recorded.cmd_set_stencil_test_enable": 35,
+        "commands_recorded.cmd_set_stencil_write_mask": 35,
+        "commands_recorded.cmd_set_viewport": 35,
+        "commands_recorded.end_command_buffer": 97,
+        "device_memory_allocated": 201326592,
+        "draw_states_recorded": 718,
+        "encoder_command_buffers_begun": 84,
+        "flights_followed": 0,
+        "functions_translated": 2,
+        "graphics_pipelines_looked_up": 33,
+        "host_steps_recorded": 0,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_specialized": 2
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 2
+      },
+      "per_state": {
+        "pipelines": 5,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "resolve-depth-filters-2",
+        "calls": 24,
+        "in_calls": 31581873,
+        "on_cpu": 1208003,
+        "blocked": 30262250,
+        "elsewhere": 7709833,
+        "spend": 39321415,
+        "spend_least": 37070124,
+        "spend_most": 44512415,
+        "per_call": [
+          {
+            "call": "depth_stencil_state",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2208,
+            "on_cpu": 2333,
+            "blocked": 0,
+            "wall_least": 2084,
+            "wall_most": 2458,
+            "wall_total": 2208,
+            "on_cpu_total": 2333,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22873875,
+            "on_cpu": 640834,
+            "blocked": 22260750,
+            "wall_least": 22049500,
+            "wall_most": 24484250,
+            "wall_total": 22873875,
+            "on_cpu_total": 640834,
+            "blocked_total": 22260750
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 83,
+            "on_cpu": 209,
+            "blocked": 0,
+            "wall_least": 42,
+            "wall_most": 166,
+            "wall_total": 1167,
+            "on_cpu_total": 2002,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8438792,
+            "on_cpu": 334500,
+            "blocked": 8087417,
+            "wall_least": 7781125,
+            "wall_most": 10363000,
+            "wall_total": 8438792,
+            "on_cpu_total": 334500,
+            "blocked_total": 8087417
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 129208,
+            "on_cpu": 129458,
+            "blocked": 0,
+            "wall_least": 117917,
+            "wall_most": 145417,
+            "wall_total": 129208,
+            "on_cpu_total": 129458,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 2625,
+            "on_cpu": 2750,
+            "blocked": 0,
+            "wall_least": 2458,
+            "wall_most": 3291,
+            "wall_total": 55374,
+            "on_cpu_total": 56375,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 1375,
+            "on_cpu": 1500,
+            "blocked": 0,
+            "wall_least": 1333,
+            "wall_most": 1417,
+            "wall_total": 10083,
+            "on_cpu_total": 10876,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "resolve-depth-filters-2",
+        "calls": 24,
+        "in_calls": 5701792,
+        "on_cpu": 1920500,
+        "blocked": 3794209,
+        "elsewhere": 3110292,
+        "spend": 8797708,
+        "spend_least": 8418208,
+        "spend_most": 9069043,
+        "per_call": [
+          {
+            "call": "depth_stencil_state",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 167,
+            "on_cpu": 291,
+            "blocked": 0,
+            "wall_least": 166,
+            "wall_most": 209,
+            "wall_total": 167,
+            "on_cpu_total": 291,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 144292,
+            "on_cpu": 147875,
+            "blocked": 0,
+            "wall_least": 136583,
+            "wall_most": 154333,
+            "wall_total": 144292,
+            "on_cpu_total": 147875,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 83,
+            "on_cpu": 209,
+            "blocked": 0,
+            "wall_least": 83,
+            "wall_most": 83,
+            "wall_total": 625,
+            "on_cpu_total": 1500,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3955792,
+            "on_cpu": 371583,
+            "blocked": 3584583,
+            "wall_least": 3711750,
+            "wall_most": 4078875,
+            "wall_total": 3955792,
+            "on_cpu_total": 371583,
+            "blocked_total": 3584583
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1560792,
+            "on_cpu": 1379583,
+            "blocked": 190707,
+            "wall_least": 1414666,
+            "wall_most": 1644375,
+            "wall_total": 1560792,
+            "on_cpu_total": 1379583,
+            "blocked_total": 190707
+          },
+          {
+            "call": "target",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 2292,
+            "on_cpu": 2375,
+            "blocked": 0,
+            "wall_least": 2084,
+            "wall_most": 2541,
+            "wall_total": 47918,
+            "on_cpu_total": 49041,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 667,
+            "on_cpu": 792,
+            "blocked": 0,
+            "wall_least": 584,
+            "wall_most": 750,
+            "wall_total": 4917,
+            "on_cpu_total": 5626,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

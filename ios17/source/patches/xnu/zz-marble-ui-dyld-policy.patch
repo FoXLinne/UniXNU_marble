@@ -1,0 +1,21 @@
+--- a/security/mac_base.c
++++ b/security/mac_base.c
+@@ -1560,6 +1560,8 @@
+  *                !0                      Not success
+  *
+  */
++extern int native_marble_ui_dyld_policy(proc_t, int, user_addr_t, int) __attribute__((weak_import));
++
+ int
+ __mac_syscall(proc_t p, struct __mac_syscall_args *uap, int *retv __unused)
+ {
+@@ -1614,6 +1616,9 @@
+ 	}
+ 
+ done:
++	if (native_marble_ui_dyld_policy && strcmp(target, "AMFI") == 0) {
++		error = native_marble_ui_dyld_policy(p, uap->call, uap->arg, error);
++	}
+ 	return error;
+ }
+ 

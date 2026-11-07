@@ -1,0 +1,17 @@
+--- a/bsd/vfs/vfs_syscalls.c
++++ b/bsd/vfs/vfs_syscalls.c
+@@ -3730,6 +3730,14 @@
+ 
+ 	sfsp = &__nameidata_statfs64->sfs;
+ 	vfs_get_statfs64(mp, sfsp);
++	/* BaseBoard compares path queries for /System and a system executable.
++	 * Scope the root-union alias to statfs64. Mount enumeration and descriptor
++	 * queries retain real filesystem IDs for LaunchServices volume indexing. */
++	if ((mp->mnt_flag & MNT_UNION) && mp->mnt_vnodecovered != NULLVP &&
++	    (mp->mnt_vnodecovered->v_flag & VROOT) &&
++	    (mp->mnt_vnodecovered->v_mount->mnt_flag & MNT_ROOTFS)) {
++		sfsp->f_fsid = mp->mnt_vnodecovered->v_mount->mnt_vfsstat.f_fsid;
++	}
+ 	if ((mp->mnt_kern_flag & MNTK_SYSTEMDATA) &&
+ 	    (p->p_vfs_iopolicy & P_VFS_IOPOLICY_STATFS_NO_DATA_VOLUME)) {
+ 		/* This process does not want to see a seperate data volume mountpoint */

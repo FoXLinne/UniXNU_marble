@@ -1,0 +1,955 @@
+{
+  "format": 1,
+  "case": "pass-writes-then-kernel-reads",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "tob_renders.ll",
+      "entry": "tob_rect+tob_solid",
+      "source_sha256": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+    },
+    {
+      "fixture": "tob_renders.air.ll",
+      "entry": "tob_rect+tob_solid",
+      "source_sha256": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+    },
+    {
+      "fixture": "format_scout.ll",
+      "entry": "scout_read_f",
+      "source_sha256": "3d6a9f693cb8eaa851e08e12bcce2afce2890bf3973e9b47312f5e18f2157cb9"
+    },
+    {
+      "fixture": "format_scout.air.ll",
+      "entry": "scout_read_f",
+      "source_sha256": "3631bf570501999cd192eacf86330e5c45cc74b914cdda669586ada3838dc110"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air:tob_renders",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "41c076b9a59d34aa65706f301ddba9ed60c4ad8f0beae55f2679df50495f8b48"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:tob_renders",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "62c34fb6d65ce1e8a577788317d44e0dee58bf8b45d4c5bb5e4c2ef1ca9e40bc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air:format_scout",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3d6a9f693cb8eaa851e08e12bcce2afce2890bf3973e9b47312f5e18f2157cb9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:format_scout",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3631bf570501999cd192eacf86330e5c45cc74b914cdda669586ada3838dc110"
+                        }
+                      }
+                    },
+                    {
+                      "name": "render-pipeline",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3f17e0536057ade794ad4f34e42dfeea917b30c2d490c0c41a6e08776d8a9602"
+                        }
+                      }
+                    },
+                    {
+                      "name": "kernel",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6f138a7dacebbf62f307f8ed31e2eeb270a9a7da239deff99c7be8a8ec64886c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:handed-over",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "aa0250e54ef44b2e08bb4963e1d4c0739a6d8d05dcef5c64196af733b23c8996"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:attachment",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "aa0250e54ef44b2e08bb4963e1d4c0739a6d8d05dcef5c64196af733b23c8996"
+                        }
+                      }
+                    },
+                    {
+                      "name": "sampler",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "640e494dd31edb66b0748239aa90547d77e8ab37843b5bc8352a5f39e5296f06"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:colors",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ea8844d6ec5379a18151ccf6497eeda363cc1c7af9ff82abb9959297a566e72e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "rects",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "26757c4f6e12c7a12116bd9ce20d5b48d9e17228e71f4d073f66c1e1b5f402bb"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "355469d6f1a49ff8102fdfbaadd7eb51d4c52bd69a153bc178ab42c36de698a3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "grid",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "67f6e29b66fbf2707a705a7b0f515af11967d951daf158ee1b8c31c74474508e"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library:tob_renders",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "library:format_scout",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render-pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "compute-pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture:handed-over",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture:attachment",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sampler",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:colors",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:kernel",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pieces",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "pass",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dispatch",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "read-handed-over",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-handed-over",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-other",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "handed-over",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-by-the-kernel",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "values",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AACAPgAAAD8AAEA/AACAPwAAgD4AAAA/AABAPwAAgD8AAIA+AAAAPwAAQD8AAIA/AACAPgAAAD8AAEA/AACAPwAAAD4AAMA+AAAgPwAAYD8AAAA+AADAPgAAID8AAGA/AAAAPgAAwD4AACA/AABgPwAAAD4AAMA+AAAgPwAAYD8AACBAAACgvwAAAAAAAMA/AAAgQAAAoL8AAAAAAADAPwAAIEAAAKC/AAAAAAAAwD8AACBAAACgvwAAAAAAAMA/AAAAvwAAcEAAAAA/AAAgPwAAAL8AAHBAAAAAPwAAID8AAAC/AABwQAAAAD8AACA/AAAAvwAAcEAAAAA/AAAgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 4096
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 3,
+        "argument_samplers_taken": 1,
+        "argument_tables_held_at_bind": 6,
+        "argument_tables_retained": 2,
+        "bare_starts": 1,
+        "batches_held_past_a_look": 1,
+        "batches_with_none_pending": 1,
+        "bound_offsets_moved": 3,
+        "command_buffers_begun": 9,
+        "command_buffers_begun_batch_barriers": 3,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 3,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 5,
+        "command_buffers_submitted": 9,
+        "commands_recorded.begin_command_buffer": 9,
+        "commands_recorded.cmd_begin_render_pass": 1,
+        "commands_recorded.cmd_bind_descriptor_sets": 5,
+        "commands_recorded.cmd_bind_pipeline": 2,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_buffer_to_image": 2,
+        "commands_recorded.cmd_copy_image_to_buffer": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_draw": 4,
+        "commands_recorded.cmd_end_render_pass": 1,
+        "commands_recorded.cmd_pipeline_barrier": 6,
+        "commands_recorded.cmd_push_constants": 3,
+        "commands_recorded.cmd_set_blend_constants": 1,
+        "commands_recorded.cmd_set_cull_mode": 1,
+        "commands_recorded.cmd_set_depth_bias": 1,
+        "commands_recorded.cmd_set_depth_compare_op": 1,
+        "commands_recorded.cmd_set_depth_test_enable": 1,
+        "commands_recorded.cmd_set_depth_write_enable": 1,
+        "commands_recorded.cmd_set_front_face": 1,
+        "commands_recorded.cmd_set_primitive_restart_enable": 1,
+        "commands_recorded.cmd_set_primitive_topology": 1,
+        "commands_recorded.cmd_set_scissor": 1,
+        "commands_recorded.cmd_set_stencil_compare_mask": 1,
+        "commands_recorded.cmd_set_stencil_op": 1,
+        "commands_recorded.cmd_set_stencil_reference": 1,
+        "commands_recorded.cmd_set_stencil_test_enable": 1,
+        "commands_recorded.cmd_set_stencil_write_mask": 1,
+        "commands_recorded.cmd_set_viewport": 1,
+        "commands_recorded.end_command_buffer": 9,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 1,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_drawn": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201326848,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "draw_shapes_made": 1,
+        "draw_shapes_reused": 2,
+        "draw_states_recorded": 22,
+        "draws_rebound": 1,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 1,
+        "encoder_command_buffers_begun": 5,
+        "fence_waits": 1,
+        "finales_apart": 1,
+        "functions_shared": 3,
+        "functions_translated": 3,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 1,
+        "heads_held_for_host_steps": 3,
+        "heap_tables_worked_out": 7,
+        "host_steps_recorded": 1,
+        "inline_passes": 1,
+        "linked_use_questions_asked": 2,
+        "new_buffer_bytes_cleared": 8256,
+        "object_churn.buffers_evicted": 5,
+        "object_churn.buffers_parked": 4,
+        "object_churn.buffers_recycled": 4,
+        "object_churn.images_evicted": 2,
+        "object_churn.images_own_memory": 2,
+        "object_churn.images_parked": 2,
+        "object_churn.images_recycled": 1,
+        "object_churn.textures_image": 2,
+        "object_churn.vk_buffers_destroyed": 5,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_image_views_made": 2,
+        "object_churn.vk_images_destroyed": 2,
+        "object_churn.vk_images_made": 1,
+        "pipeline_layouts_made": 2,
+        "pipeline_layouts_shared": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 1,
+        "render_passes_begun_inline": 1,
+        "render_passes_made": 2,
+        "resident_textures_looked_at": 2,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 4,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 4,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 3,
+        "set_zero_sets_reused": 3,
+        "shader_modules_made": 3,
+        "shader_modules_shared": 2,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 6,
+        "stage_entries_specialized": 3,
+        "stage_tables_read": 10,
+        "stage_tables_read_in_part": 6,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "variant_pipelines_made": 2,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 8
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "command_buffers_deferred": 0,
+        "commands_recorded.cmd_begin_render_pass": 0,
+        "commands_recorded.cmd_bind_descriptor_sets": 0,
+        "commands_recorded.cmd_bind_pipeline": 0,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_copy_buffer_to_image": 0,
+        "commands_recorded.cmd_copy_image_to_buffer": 0,
+        "commands_recorded.cmd_dispatch": 0,
+        "commands_recorded.cmd_draw": 0,
+        "commands_recorded.cmd_end_render_pass": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.cmd_push_constants": 0,
+        "commands_recorded.cmd_set_blend_constants": 0,
+        "commands_recorded.cmd_set_cull_mode": 0,
+        "commands_recorded.cmd_set_depth_bias": 0,
+        "commands_recorded.cmd_set_depth_compare_op": 0,
+        "commands_recorded.cmd_set_depth_test_enable": 0,
+        "commands_recorded.cmd_set_depth_write_enable": 0,
+        "commands_recorded.cmd_set_front_face": 0,
+        "commands_recorded.cmd_set_primitive_restart_enable": 0,
+        "commands_recorded.cmd_set_primitive_topology": 0,
+        "commands_recorded.cmd_set_scissor": 0,
+        "commands_recorded.cmd_set_stencil_compare_mask": 0,
+        "commands_recorded.cmd_set_stencil_op": 0,
+        "commands_recorded.cmd_set_stencil_reference": 0,
+        "commands_recorded.cmd_set_stencil_test_enable": 0,
+        "commands_recorded.cmd_set_stencil_write_mask": 0,
+        "commands_recorded.cmd_set_viewport": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "device_memory_allocated": 201326720,
+        "dispatch_used_resources_listed": 1,
+        "functions_translated": 3,
+        "host_steps_recorded": 0,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 2,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 3
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 3
+      },
+      "per_state": {
+        "pipelines": 3,
+        "states": 2
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "pass-writes-then-kernel-reads",
+        "calls": 13,
+        "in_calls": 55931082,
+        "on_cpu": 1790624,
+        "blocked": 54116959,
+        "elsewhere": 7428334,
+        "spend": 63408416,
+        "spend_least": 61864793,
+        "spend_most": 67902375,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4250,
+            "on_cpu": 4375,
+            "blocked": 0,
+            "wall_least": 3708,
+            "wall_most": 5417,
+            "wall_total": 4250,
+            "on_cpu_total": 4375,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 41792,
+            "on_cpu": 42000,
+            "blocked": 0,
+            "wall_least": 40334,
+            "wall_most": 50000,
+            "wall_total": 41792,
+            "on_cpu_total": 42000,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 23721541,
+            "on_cpu": 627792,
+            "blocked": 23052666,
+            "wall_least": 23430125,
+            "wall_most": 25866583,
+            "wall_total": 47787333,
+            "on_cpu_total": 1281542,
+            "blocked_total": 46492916
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 292,
+            "on_cpu": 417,
+            "blocked": 0,
+            "wall_least": 209,
+            "wall_most": 334,
+            "wall_total": 1208,
+            "on_cpu_total": 1542,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 7756958,
+            "on_cpu": 254916,
+            "blocked": 7502042,
+            "wall_least": 7301583,
+            "wall_most": 7979000,
+            "wall_total": 7756958,
+            "on_cpu_total": 254916,
+            "blocked_total": 7502042
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 145667,
+            "on_cpu": 145958,
+            "blocked": 0,
+            "wall_least": 138625,
+            "wall_most": 179084,
+            "wall_total": 145667,
+            "on_cpu_total": 145958,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4791,
+            "on_cpu": 4959,
+            "blocked": 0,
+            "wall_least": 4125,
+            "wall_most": 5458,
+            "wall_total": 4791,
+            "on_cpu_total": 4959,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 5250,
+            "on_cpu": 5375,
+            "blocked": 0,
+            "wall_least": 4875,
+            "wall_most": 5833,
+            "wall_total": 41999,
+            "on_cpu_total": 42292,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 1833,
+            "on_cpu": 1959,
+            "blocked": 0,
+            "wall_least": 1792,
+            "wall_most": 2125,
+            "wall_total": 3917,
+            "on_cpu_total": 4083,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "pass-writes-then-kernel-reads",
+        "calls": 13,
+        "in_calls": 4679293,
+        "on_cpu": 2812540,
+        "blocked": 1920749,
+        "elsewhere": 1189209,
+        "spend": 5842001,
+        "spend_least": 5637252,
+        "spend_most": 6730834,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2417,
+            "on_cpu": 2583,
+            "blocked": 0,
+            "wall_least": 1542,
+            "wall_most": 3917,
+            "wall_total": 2417,
+            "on_cpu_total": 2583,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 228125,
+            "on_cpu": 126417,
+            "blocked": 103458,
+            "wall_least": 187667,
+            "wall_most": 265750,
+            "wall_total": 228125,
+            "on_cpu_total": 126417,
+            "blocked_total": 103458
+          },
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 232708,
+            "on_cpu": 233209,
+            "blocked": 0,
+            "wall_least": 194958,
+            "wall_most": 258375,
+            "wall_total": 502875,
+            "on_cpu_total": 503876,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 291,
+            "on_cpu": 416,
+            "blocked": 0,
+            "wall_least": 125,
+            "wall_most": 292,
+            "wall_total": 833,
+            "on_cpu_total": 1167,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1708875,
+            "on_cpu": 132250,
+            "blocked": 1564250,
+            "wall_least": 1572417,
+            "wall_most": 1791833,
+            "wall_total": 1708875,
+            "on_cpu_total": 132250,
+            "blocked_total": 1564250
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2231458,
+            "on_cpu": 2020125,
+            "blocked": 238666,
+            "wall_least": 2145959,
+            "wall_most": 2657167,
+            "wall_total": 2231458,
+            "on_cpu_total": 2020125,
+            "blocked_total": 238666
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2084,
+            "on_cpu": 2250,
+            "blocked": 0,
+            "wall_least": 1167,
+            "wall_most": 3292,
+            "wall_total": 2084,
+            "on_cpu_total": 2250,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 13584,
+            "on_cpu": 13750,
+            "blocked": 0,
+            "wall_least": 10042,
+            "wall_most": 19125,
+            "wall_total": 27293,
+            "on_cpu_total": 27666,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 750,
+            "on_cpu": 917,
+            "blocked": 0,
+            "wall_least": 667,
+            "wall_most": 1000,
+            "wall_total": 1875,
+            "on_cpu_total": 2167,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

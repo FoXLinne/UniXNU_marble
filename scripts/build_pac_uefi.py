@@ -10,10 +10,14 @@ import subprocess
 import sys
 import tomllib
 
+from prepare_firmware import prepare as prepare_firmware
+
 DEVICE = Path(__file__).resolve().parents[1]
 
 
 def build_applications(out, platform, stack):
+    if platform.resolve() == (DEVICE / 'firmware').resolve():
+        prepare_firmware()
     out.mkdir(parents=True, exist_ok=True)
     firmware = platform / 'Mu-Silicium'
     edk = firmware / 'Mu_Basecore'
@@ -72,7 +76,7 @@ def pack_boot_image(out, platform, payload, name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--platform', type=Path, default=DEVICE.parent / 'marble_hackios')
+    parser.add_argument('--platform', type=Path, default=DEVICE / 'firmware')
     parser.add_argument('--stack', type=Path, default=DEVICE.parent / 'UniXNU')
     args = parser.parse_args()
     out, platform, stack = args.output.resolve(), args.platform.resolve(), args.stack.resolve()

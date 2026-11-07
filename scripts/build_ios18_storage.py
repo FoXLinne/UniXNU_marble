@@ -52,7 +52,7 @@ OSDefineOperatorMethods(IOBlockStorageDevice)
             command += ['-isystem', str(out / 'include'), '-I', str(tree / '.cache/xnu-work/osfmk'),
                         '-I', str(tree / 'package/UniXNUPkg/Include'),
                         '-I', str(DEVICE / 'package'),
-                        '-I', str(DEVICE.parent / 'UniXNU/drivers/NativeUfs'),
+                        '-I', str(DEVICE / 'ios17/source/drivers/NativeUfs'),
                         '-Wno-missing-include-dirs', '-Wno-unnecessary-virtual-specifier']
             if source != base:
                 command += ['-Werror', '-Wno-c99-designator', '-Wno-nrvo', '-Wno-unused-function']

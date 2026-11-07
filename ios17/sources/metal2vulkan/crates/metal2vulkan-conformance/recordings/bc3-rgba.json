@@ -1,0 +1,924 @@
+{
+  "format": 1,
+  "case": "bc3-rgba",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "format_scout.ll",
+      "entry": "scout_read_f",
+      "source_sha256": "3d6a9f693cb8eaa851e08e12bcce2afce2890bf3973e9b47312f5e18f2157cb9"
+    },
+    {
+      "fixture": "format_scout.air.ll",
+      "entry": "scout_read_f",
+      "source_sha256": "3631bf570501999cd192eacf86330e5c45cc74b914cdda669586ada3838dc110"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3d6a9f693cb8eaa851e08e12bcce2afce2890bf3973e9b47312f5e18f2157cb9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3631bf570501999cd192eacf86330e5c45cc74b914cdda669586ada3838dc110"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "1334cfca863d90b7074699b732272b5105551d284afb771cc6e3a1511b7b5769"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2de77858405f9ab73553d65f1b01128fb8920d1e958ff7208ba4ee11c600ddbe"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d17f556c184736f01fda4d87089d940db7bcad5220a01115a21a1d474133dbe1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:3",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "4df768021d1e4d9b9556e507742e205f580bd2e8b523c3b1d11d529c7cd35414"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/0/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/0/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/0/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/0/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/0/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/0",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "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"
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "round/1/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/1/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/1/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/1/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/1/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/1",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "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"
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "round/2/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/2/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/2/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/2/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/2/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/2",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "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"
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "round/3/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/3/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/3/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/3/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/3/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "round/3",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "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"
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 8,
+        "argument_tables_retained": 4,
+        "bare_starts": 4,
+        "batches_submitted_by_waiters": 4,
+        "batches_with_none_pending": 4,
+        "command_buffers_begun": 15,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 8,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 4,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 6,
+        "command_buffers_replayed_inline": 4,
+        "command_buffers_submitted": 15,
+        "commands_replayed.begin_command_buffer": 6,
+        "commands_replayed.cmd_bind_descriptor_sets": 4,
+        "commands_replayed.cmd_bind_pipeline": 4,
+        "commands_replayed.cmd_dispatch": 4,
+        "commands_replayed.cmd_pipeline_barrier": 4,
+        "commands_replayed.cmd_push_constants": 4,
+        "commands_replayed.end_command_buffer": 6,
+        "commits_handed_off": 4,
+        "completed_waits": 7,
+        "completed_where_seen": 4,
+        "completion_arms": 4,
+        "completion_arms_after_a_wake": 4,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 268435584,
+        "dispatch_pipelines_pooled": 1,
+        "dispatches_planned_as_before": 3,
+        "encoder_command_buffers_begun": 6,
+        "encoder_primaries_begun_ahead": 2,
+        "fence_waits": 4,
+        "finales_folded": 4,
+        "functions_shared": 1,
+        "gate_waits": 4,
+        "gate_waits_slept": 4,
+        "new_buffer_bytes_cleared": 17664,
+        "object_churn.buffers_evicted": 1,
+        "object_churn.buffers_parked": 12,
+        "object_churn.buffers_recycled": 12,
+        "object_churn.images_own_memory": 4,
+        "object_churn.images_parked": 4,
+        "object_churn.textures_image": 4,
+        "object_churn.vk_buffers_destroyed": 1,
+        "object_churn.vk_image_bindings": 4,
+        "object_churn.vk_image_views_made": 4,
+        "object_churn.vk_images_made": 4,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 4,
+        "primaries_begun_ahead": 1,
+        "queue_submissions": 4,
+        "queues_sharing_a_vk_queue": 1,
+        "scheduled_where_submitted": 4,
+        "scheduler_passes": 4,
+        "scheduler_passes_by_waiters": 4,
+        "scheduler_sleeps": 4,
+        "scheduler_wakes_commit": 4,
+        "shader_modules_made": 1,
+        "slot_returns": 4,
+        "spare_command_pools_taken": 8,
+        "submit_infos": 5,
+        "trail_waits": 4,
+        "variant_pipelines_made": 2,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 4,
+        "wakes_spared": 28
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 1,
+        "commands_replayed.begin_command_buffer": 2,
+        "gate_waits_slept": 3
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "batches_submitted_by_waiters": 2,
+        "command_buffers_begun": 11,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 4,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 6,
+        "command_buffers_submitted": 11,
+        "commands_replayed.begin_command_buffer": 6,
+        "commands_replayed.cmd_pipeline_barrier": 3,
+        "commands_replayed.end_command_buffer": 6,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 201326848,
+        "dispatch_pipelines_pooled": 1,
+        "encoder_command_buffers_begun": 6,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 1,
+        "submit_infos": 5,
+        "variant_pipelines_made": 2
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "bc3-rgba",
+        "calls": 22,
+        "in_calls": 29467874,
+        "on_cpu": 972332,
+        "blocked": 28515167,
+        "elsewhere": 3265083,
+        "spend": 32737249,
+        "spend_least": 32410749,
+        "spend_most": 34055500,
+        "per_call": [
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 75208,
+            "on_cpu": 75375,
+            "blocked": 0,
+            "wall_least": 69542,
+            "wall_most": 86000,
+            "wall_total": 75208,
+            "on_cpu_total": 75375,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 10500,
+            "on_cpu": 10667,
+            "blocked": 0,
+            "wall_least": 6292,
+            "wall_most": 13375,
+            "wall_total": 138249,
+            "on_cpu_total": 138833,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 24773500,
+            "on_cpu": 677542,
+            "blocked": 24054667,
+            "wall_least": 23753167,
+            "wall_most": 25271333,
+            "wall_total": 24773500,
+            "on_cpu_total": 677542,
+            "blocked_total": 24054667
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 459,
+            "on_cpu": 625,
+            "blocked": 0,
+            "wall_least": 417,
+            "wall_most": 1458,
+            "wall_total": 3917,
+            "on_cpu_total": 4917,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 11125,
+            "on_cpu": 11292,
+            "blocked": 0,
+            "wall_least": 7041,
+            "wall_most": 24125,
+            "wall_total": 76625,
+            "on_cpu_total": 77500,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 499542,
+            "on_cpu": 3875,
+            "blocked": 496000,
+            "wall_least": 188791,
+            "wall_most": 548667,
+            "wall_total": 4943708,
+            "on_cpu_total": 25792,
+            "blocked_total": 4912915
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 2708,
+            "on_cpu": 2875,
+            "blocked": 0,
+            "wall_least": 2125,
+            "wall_most": 3542,
+            "wall_total": 11416,
+            "on_cpu_total": 12083,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "bc3-rgba",
+        "calls": 22,
+        "in_calls": 3229664,
+        "on_cpu": 463916,
+        "blocked": 2757460,
+        "elsewhere": 644917,
+        "spend": 3815045,
+        "spend_least": 2738624,
+        "spend_most": 4017793,
+        "per_call": [
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 21583,
+            "on_cpu": 21833,
+            "blocked": 0,
+            "wall_least": 20250,
+            "wall_most": 32500,
+            "wall_total": 21583,
+            "on_cpu_total": 21833,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 17167,
+            "on_cpu": 17292,
+            "blocked": 0,
+            "wall_least": 14292,
+            "wall_most": 23167,
+            "wall_total": 86916,
+            "on_cpu_total": 87541,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 270417,
+            "on_cpu": 274250,
+            "blocked": 0,
+            "wall_least": 242833,
+            "wall_most": 300667,
+            "wall_total": 270417,
+            "on_cpu_total": 274250,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 333,
+            "on_cpu": 458,
+            "blocked": 0,
+            "wall_least": 292,
+            "wall_most": 416,
+            "wall_total": 2042,
+            "on_cpu_total": 3041,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 10083,
+            "on_cpu": 10292,
+            "blocked": 0,
+            "wall_least": 9083,
+            "wall_most": 18000,
+            "wall_total": 59333,
+            "on_cpu_total": 60291,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 640875,
+            "on_cpu": 2166,
+            "blocked": 638958,
+            "wall_least": 334917,
+            "wall_most": 713333,
+            "wall_total": 2769667,
+            "on_cpu_total": 15374,
+            "blocked_total": 2757460
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 709,
+            "on_cpu": 875,
+            "blocked": 0,
+            "wall_least": 625,
+            "wall_most": 958,
+            "wall_total": 3459,
+            "on_cpu_total": 3959,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

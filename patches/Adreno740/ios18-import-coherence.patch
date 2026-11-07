@@ -1,0 +1,20 @@
+--- a/NativeAdrenoUserClient.cpp
++++ b/NativeAdrenoUserClient.cpp
+@@ -331,12 +331,11 @@
+     uint64_t handle=0;
+     /* Memory the owner maps read-only could only be pinned for reading: the GPU gets the read half of what was asked. */
+     const unsigned permissions=entry->memory.readOnly()?(request->permissions&~2u):request->permissions;
+-    /* Imported memory is the owner's cacheable memory (IOSurfaces, no-copy buffers): once the board proved IO coherence, the GPU maps it
+-     * write-back inner-shareable (Linux's IOMMU_CACHE PTE) and the CPU caches over it need no maintenance. The GPU's own BOs stay
+-     * non-cacheable: their CPU view is write-combined, and a snoop could find a stale line of the kernel's cacheable alias. */
+-    /* Only memory the GPU never writes is mapped coherent: sysmem passes written through write-back inner-shareable mappings stopped
+-     * the GPU inside its end-of-pass cache clean (BR and BV idle at the clean events), while non-coherent mappings never did. */
+-    const bool coherent=(entry->memory.imported() && native_adreno_io_coherent && !(permissions&2u)) || (!entry->memory.imported() && ownedCoherent());
++    /* Read coherence and render-target cache clean are separate capabilities.
++     * Keep the caller cache attributes for writable imports so shared-page aliases agree. */
++    const bool importedWrite=entry->memory.imported() && (permissions&2u);
++    const bool coherent=(entry->memory.imported() && native_adreno_io_coherent && !importedWrite) ||
++                        (!entry->memory.imported() && ownedCoherent());
+     const IOReturn status=vm_->map(&entry->memory,0,request->iova,permissions,
+         coherent?1u:request->writeback,coherent?3u:request->shareability,&handle);
+     if(status)return status;

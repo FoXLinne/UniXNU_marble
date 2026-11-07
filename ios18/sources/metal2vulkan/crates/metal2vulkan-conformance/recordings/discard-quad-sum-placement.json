@@ -1,0 +1,1649 @@
+{
+  "format": 1,
+  "case": "discard-quad-sum-placement",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "discard_hoist_full",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "discard_hoist_full",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_known",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_known",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "counted_dependent",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "counted_dependent",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_const",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_const",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_device_read",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_device_read",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_written_read",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_written_read",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_sample",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_sample",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_texture_read",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_texture_read",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_loop",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_loop",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_call",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_call",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "counted_call_use",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "counted_call_use",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "hoisted_nested",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "hoisted_nested",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "counted_store",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "counted_store",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    },
+    {
+      "fixture": "fragment_discard_hoist.ll",
+      "entry": "counted_atomic",
+      "source_sha256": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+    },
+    {
+      "fixture": "fragment_discard_hoist.air.ll",
+      "entry": "counted_atomic",
+      "source_sha256": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c887f628c2e61fdf4ac151a1563de276d9a1d44c79b92cded8f2222e5890121b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "4d8fe0086d79336aa1d7a1c8d3d009f2aa114748262ee139f51d5904b1e678f2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9e5c346e8bc2b35c84e3a7d71e7818491dac90a4612931e82356ad588c6a0709"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pipelines",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d366726121540789dc588fe7142c520ce4a74984797ace8af3644278a7d338c9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:sampled",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb"
+                        }
+                      }
+                    },
+                    {
+                      "name": "sampler",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "640e494dd31edb66b0748239aa90547d77e8ab37843b5bc8352a5f39e5296f06"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5341e6b2646979a70e57653007a1f310169421ec9bdd9f1a5648f75ade005af1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:3",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:4",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "dd834710f8167e94146e2693ed379df621ad2932a30a76bcedeab6bffe84f1a6"
+                        }
+                      }
+                    },
+                    {
+                      "name": "shapes",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "af2496949a744a8f882cbae7428e4380fff42f507dd5765d63f72ceb31c6e7b1"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture/sampled",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sampler",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/4",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_known/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "counted_dependent/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_const/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_device_read/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_written_read/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_sample/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_texture_read/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_loop/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_call/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "counted_call_use/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_nested/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "counted_store/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "counted_atomic/pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "hoisted_known",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "counted_dependent",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8BAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "hoisted_const",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "hoisted_device_read",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "hoisted_written_read",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "hoisted_sample",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "hoisted_texture_read",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "hoisted_loop",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "hoisted_call",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "counted_call_use",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8BAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "hoisted_nested",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "counted_store",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8BAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "counted_atomic",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAD5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8BAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAPn////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n////5////+f////n///8="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  4,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "i32",
+                            "row_offset": 0,
+                            "row_elements": 32,
+                            "row_pitch": 128,
+                            "rows": 4,
+                            "image_pitch": 512,
+                            "images": 1,
+                            "gaps": "compared"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "render",
+          "message": "End Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 4.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0.\nEnd Encoding Validation\nunused fragment binding in render encoder at Buffer index 2.\nunused fragment binding in render encoder at Buffer index 3.\nunused fragment binding in render encoder at Texture index 0.\nunused fragment binding in render encoder at Sampler index 0."
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-quads-counted-before-discard"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 4,
+        "argument_objects_retained": 91,
+        "argument_samplers_taken": 8,
+        "argument_tables_retained": 13,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bind_views_worked_out": 1,
+        "bound_notices_made": 13,
+        "command_buffers_begun": 52,
+        "command_buffers_begun_batch_barriers": 25,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_encoders": 26,
+        "command_buffers_submitted": 52,
+        "commands_recorded.begin_command_buffer": 52,
+        "commands_recorded.cmd_begin_render_pass": 13,
+        "commands_recorded.cmd_bind_descriptor_sets": 13,
+        "commands_recorded.cmd_bind_pipeline": 13,
+        "commands_recorded.cmd_clear_color_image": 2,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 13,
+        "commands_recorded.cmd_draw": 13,
+        "commands_recorded.cmd_end_render_pass": 13,
+        "commands_recorded.cmd_pipeline_barrier": 29,
+        "commands_recorded.cmd_push_constants": 13,
+        "commands_recorded.cmd_set_blend_constants": 13,
+        "commands_recorded.cmd_set_cull_mode": 13,
+        "commands_recorded.cmd_set_depth_bias": 13,
+        "commands_recorded.cmd_set_depth_compare_op": 13,
+        "commands_recorded.cmd_set_depth_test_enable": 13,
+        "commands_recorded.cmd_set_depth_write_enable": 13,
+        "commands_recorded.cmd_set_front_face": 13,
+        "commands_recorded.cmd_set_primitive_restart_enable": 13,
+        "commands_recorded.cmd_set_primitive_topology": 13,
+        "commands_recorded.cmd_set_scissor": 13,
+        "commands_recorded.cmd_set_stencil_compare_mask": 13,
+        "commands_recorded.cmd_set_stencil_op": 13,
+        "commands_recorded.cmd_set_stencil_reference": 13,
+        "commands_recorded.cmd_set_stencil_test_enable": 13,
+        "commands_recorded.cmd_set_stencil_write_mask": 13,
+        "commands_recorded.cmd_set_viewport": 13,
+        "commands_recorded.end_command_buffer": 52,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 13,
+        "creation_pipelines_made": 13,
+        "creation_render_pipelines_drawn": 13,
+        "creation_render_pipelines_made": 13,
+        "descriptor_keys_built": 13,
+        "device_memory_allocated": 268435584,
+        "draw_shapes_made": 8,
+        "draw_states_recorded": 247,
+        "draws_settled": 13,
+        "driver_diagnostics_withheld": 26,
+        "encoder_command_buffers_begun": 26,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 12,
+        "functions_translated": 14,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 13,
+        "heap_tables_worked_out": 26,
+        "host_texel_copies": 1,
+        "images_started_on_the_host": 1,
+        "inline_passes": 13,
+        "linked_use_questions_asked": 26,
+        "new_buffer_bytes_cleared": 8032,
+        "object_churn.buffers_evicted": 4,
+        "object_churn.buffers_parked": 6,
+        "object_churn.buffers_recycled": 2,
+        "object_churn.images_evicted": 1,
+        "object_churn.images_own_memory": 2,
+        "object_churn.images_parked": 1,
+        "object_churn.textures_image": 2,
+        "object_churn.vk_buffer_bindings": 4,
+        "object_churn.vk_buffers_destroyed": 4,
+        "object_churn.vk_buffers_made": 4,
+        "object_churn.vk_image_bindings": 2,
+        "object_churn.vk_image_views_made": 2,
+        "object_churn.vk_images_destroyed": 6,
+        "object_churn.vk_images_made": 6,
+        "pipeline_layouts_made": 4,
+        "pipeline_layouts_shared": 9,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 13,
+        "render_passes_begun_inline": 13,
+        "render_passes_made": 2,
+        "resident_textures_looked_at": 13,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "set_zero_sets_found": 6,
+        "shader_modules_made": 14,
+        "shader_modules_shared": 12,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 68,
+        "stage_entries_specialized": 14,
+        "stage_tables_read": 52,
+        "submit_infos": 1,
+        "trail_waits": 1,
+        "variant_pipelines_made": 13,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 4,
+        "commands_recorded.cmd_clear_color_image": 2,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 29,
+        "device_memory_allocated": 268435584,
+        "pooled_memory_blocks_made": 4,
+        "queues_sharing_a_vk_queue": 0,
+        "stage_entries_shared": 65
+      },
+      "per_state": {
+        "pipelines": 26,
+        "states": 13
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "discard-quad-sum-placement",
+        "calls": 25,
+        "in_calls": 34716082,
+        "on_cpu": 1769501,
+        "blocked": 32943250,
+        "elsewhere": 7917000,
+        "spend": 42489749,
+        "spend_least": 40717872,
+        "spend_most": 49100961,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 1833,
+            "on_cpu": 1916,
+            "blocked": 0,
+            "wall_least": 1625,
+            "wall_most": 1958,
+            "wall_total": 10875,
+            "on_cpu_total": 11458,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 25350500,
+            "on_cpu": 673708,
+            "blocked": 24687417,
+            "wall_least": 24399125,
+            "wall_most": 30352500,
+            "wall_total": 25350500,
+            "on_cpu_total": 673708,
+            "blocked_total": 24687417
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1125,
+            "on_cpu": 1333,
+            "blocked": 0,
+            "wall_least": 792,
+            "wall_most": 2167,
+            "wall_total": 1125,
+            "on_cpu_total": 1333,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8855459,
+            "on_cpu": 490959,
+            "blocked": 8354417,
+            "wall_least": 8173750,
+            "wall_most": 10743542,
+            "wall_total": 8855459,
+            "on_cpu_total": 490959,
+            "blocked_total": 8354417
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 13,
+            "most_calls": 13,
+            "wall": 27750,
+            "on_cpu": 27916,
+            "blocked": 0,
+            "wall_least": 27250,
+            "wall_most": 59333,
+            "wall_total": 514042,
+            "on_cpu_total": 516333,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 5625,
+            "on_cpu": 5708,
+            "blocked": 0,
+            "wall_least": 5125,
+            "wall_most": 8750,
+            "wall_total": 5625,
+            "on_cpu_total": 5708,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 30000,
+            "on_cpu": 30167,
+            "blocked": 0,
+            "wall_least": 23916,
+            "wall_most": 50375,
+            "wall_total": 30000,
+            "on_cpu_total": 30167,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 7167,
+            "on_cpu": 7291,
+            "blocked": 0,
+            "wall_least": 6875,
+            "wall_most": 12292,
+            "wall_total": 7167,
+            "on_cpu_total": 7291,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1833,
+            "on_cpu": 2000,
+            "blocked": 0,
+            "wall_least": 1541,
+            "wall_most": 2125,
+            "wall_total": 1833,
+            "on_cpu_total": 2000,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "discard-quad-sum-placement",
+        "calls": 25,
+        "in_calls": 33017375,
+        "on_cpu": 29160497,
+        "blocked": 3610666,
+        "elsewhere": 2818917,
+        "spend": 35836292,
+        "spend_least": 33901458,
+        "spend_most": 42109292,
+        "degraded": [
+          "metal2vulkan-degrade-quads-counted-before-discard"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 875,
+            "on_cpu": 1000,
+            "blocked": 0,
+            "wall_least": 792,
+            "wall_most": 958,
+            "wall_total": 6250,
+            "on_cpu_total": 6751,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 364917,
+            "on_cpu": 366958,
+            "blocked": 0,
+            "wall_least": 350125,
+            "wall_most": 416000,
+            "wall_total": 364917,
+            "on_cpu_total": 366958,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 542,
+            "on_cpu": 667,
+            "blocked": 0,
+            "wall_least": 375,
+            "wall_most": 1167,
+            "wall_total": 542,
+            "on_cpu_total": 667,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2498791,
+            "on_cpu": 398166,
+            "blocked": 2083917,
+            "wall_least": 2212875,
+            "wall_most": 2746250,
+            "wall_total": 2498791,
+            "on_cpu_total": 398166,
+            "blocked_total": 2083917
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 13,
+            "most_calls": 13,
+            "wall": 2195583,
+            "on_cpu": 2081625,
+            "blocked": 116875,
+            "wall_least": 2132333,
+            "wall_most": 2641625,
+            "wall_total": 30206169,
+            "on_cpu_total": 28338581,
+            "blocked_total": 1725041
+          },
+          {
+            "call": "sampler",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2125,
+            "on_cpu": 2250,
+            "blocked": 0,
+            "wall_least": 1917,
+            "wall_most": 3167,
+            "wall_total": 2125,
+            "on_cpu_total": 2250,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 26333,
+            "on_cpu": 26500,
+            "blocked": 0,
+            "wall_least": 23625,
+            "wall_most": 39375,
+            "wall_total": 26333,
+            "on_cpu_total": 26500,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 25375,
+            "on_cpu": 25584,
+            "blocked": 0,
+            "wall_least": 21167,
+            "wall_most": 30125,
+            "wall_total": 25375,
+            "on_cpu_total": 25584,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1083,
+            "on_cpu": 1208,
+            "blocked": 0,
+            "wall_least": 1000,
+            "wall_most": 1208,
+            "wall_total": 1083,
+            "on_cpu_total": 1208,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

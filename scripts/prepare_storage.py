@@ -18,7 +18,7 @@ def main():
     args=parser.parse_args();cache=args.cache.resolve();cache.mkdir(parents=True,exist_ok=True)
     if args.size_gib <= 0:
         parser.error('--size-gib must be positive')
-    linker=Path(__file__).resolve().parents[2]/'marble_hackios/bin/ld.lld'
+    linker=Path(__file__).resolve().parents[1]/'firmware/bin/ld.lld'
     subprocess.run(['clang','--target=aarch64-linux-gnu','-O2','-ffreestanding','-fno-stack-protector',
                     '-nostdlib','-static','-fuse-ld='+str(linker),str(Path(__file__).with_name('f2fs_resize.c')),
                     '-o',str(cache/'f2fs_resize')],check=True)

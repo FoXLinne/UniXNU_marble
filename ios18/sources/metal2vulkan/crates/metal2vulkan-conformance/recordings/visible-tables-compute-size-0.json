@@ -1,0 +1,639 @@
+{
+  "format": 1,
+  "case": "visible-tables-compute-size-0",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "visible_table_caller.ll",
+      "entry": "visible_table_dispatch",
+      "source_sha256": "948168a8fe7df7d16ad89c9b5dd6bd6013b8aa10632f71ff318cd05d57f29590"
+    },
+    {
+      "fixture": "visible_table_caller.air.ll",
+      "entry": "visible_table_dispatch",
+      "source_sha256": "5c8d6370ee20afca5837d955c212b056568725d1164a7ee544e629764396509a"
+    },
+    {
+      "fixture": "visible_table_functions.ll",
+      "entry": "visible_table_functions",
+      "source_sha256": "f8484e8c7fa3e0eeb3b812a22ffd727068cd811109a23e29363e0eff535470f0"
+    },
+    {
+      "fixture": "visible_table_functions.air.ll",
+      "entry": "visible_table_functions",
+      "source_sha256": "3f009dfc20260ffbd454841e8c4c5a1a3c6d4eb0bb317f9eecd5be1e25eb1483"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "caller-air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "948168a8fe7df7d16ad89c9b5dd6bd6013b8aa10632f71ff318cd05d57f29590"
+                        }
+                      }
+                    },
+                    {
+                      "name": "caller-air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5c8d6370ee20afca5837d955c212b056568725d1164a7ee544e629764396509a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "functions-air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f8484e8c7fa3e0eeb3b812a22ffd727068cd811109a23e29363e0eff535470f0"
+                        }
+                      }
+                    },
+                    {
+                      "name": "functions-air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3f009dfc20260ffbd454841e8c4c5a1a3c6d4eb0bb317f9eecd5be1e25eb1483"
+                        }
+                      }
+                    },
+                    {
+                      "name": "table",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "74834737c1cffcc9f16ab90ffd15e178b2e7d9120a735b85773e3691e595599d"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "caller_library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "functions_library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "outcome",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "handle/table_add",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "name",
+                          "observed": {
+                            "value": {
+                              "lines": [
+                                "table_add"
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "name": "device_is_the_cases",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "handle/table_mul",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "name",
+                          "observed": {
+                            "value": {
+                              "lines": [
+                                "table_mul"
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "name": "device_is_the_cases",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "handle/table_sub",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "name",
+                          "observed": {
+                            "value": {
+                              "lines": [
+                                "table_sub"
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "name": "device_is_the_cases",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "handle/table_half",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "name",
+                          "observed": {
+                            "value": {
+                              "lines": [
+                                "table_half"
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "name": "device_is_the_cases",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "function_type/table_add",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLFunctionTypeVisible"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 5
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "function_type/table_mul",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLFunctionTypeVisible"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 5
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "function_type/table_sub",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLFunctionTypeVisible"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 5
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "function_type/table_half",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLFunctionTypeVisible"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 5
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "descriptor_function_count",
+                      "observed": {
+                        "value": {
+                          "uint": 0
+                        }
+                      }
+                    },
+                    {
+                      "name": "table",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "resource_id_is_non_zero",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        },
+                        {
+                          "name": "device_is_the_cases",
+                          "observed": {
+                            "value": {
+                              "bool": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "entries_written",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "words",
+                      "observed": {
+                        "value": {
+                          "list": [
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            },
+                            {
+                              "uint": 4294967294
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 2,
+        "argument_tables_retained": 1,
+        "bare_starts": 1,
+        "batches_held_past_a_look": 1,
+        "batches_with_none_pending": 1,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_submitted": 5,
+        "commands_recorded.begin_command_buffer": 5,
+        "commands_recorded.cmd_bind_descriptor_sets": 1,
+        "commands_recorded.cmd_bind_pipeline": 1,
+        "commands_recorded.cmd_clear_color_image": 9,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_pipeline_barrier": 4,
+        "commands_recorded.cmd_push_constants": 1,
+        "commands_recorded.end_command_buffer": 5,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "device_memory_allocated": 201326592,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 3,
+        "fence_waits": 1,
+        "finales_apart": 1,
+        "functions_translated": 1,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "heads_held_for_host_steps": 3,
+        "heap_tables_worked_out": 1,
+        "host_steps_recorded": 1,
+        "new_buffer_bytes_cleared": 64,
+        "object_churn.buffers_evicted": 22,
+        "object_churn.buffers_parked": 2,
+        "object_churn.vk_buffer_bindings": 2,
+        "object_churn.vk_buffers_destroyed": 22,
+        "object_churn.vk_buffers_made": 2,
+        "pipeline_layouts_made": 1,
+        "pipeline_layouts_shared": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 4,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 3,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 2,
+        "shader_modules_made": 1,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 2,
+        "submit_stalls_on_work": 1,
+        "trail_waits": 1,
+        "variant_pipelines_made": 1,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 8
+      },
+      "composed": {
+        "command_buffers_begun": 4,
+        "command_buffers_begun_batch_work": 0,
+        "command_buffers_submitted": 4,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_copy_buffer": 0,
+        "commands_recorded.cmd_pipeline_barrier": 1,
+        "commands_recorded.end_command_buffer": 4,
+        "device_memory_allocated": 201326592,
+        "queues_sharing_a_vk_queue": 0
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3
+      },
+      "per_state": {
+        "pipelines": 1,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "visible-tables-compute-size-0",
+        "calls": 3,
+        "in_calls": 47896291,
+        "on_cpu": 1502668,
+        "blocked": 46307082,
+        "elsewhere": 3046500,
+        "spend": 50906625,
+        "spend_least": 49702166,
+        "spend_most": 52401749,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 21336375,
+            "on_cpu": 570583,
+            "blocked": 20765792,
+            "wall_least": 21018333,
+            "wall_most": 22379667,
+            "wall_total": 43792292,
+            "on_cpu_total": 1175667,
+            "blocked_total": 42598834
+          },
+          {
+            "call": "visible_function_table",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4023334,
+            "on_cpu": 335458,
+            "blocked": 3677167,
+            "wall_least": 3874791,
+            "wall_most": 4570500,
+            "wall_total": 4023334,
+            "on_cpu_total": 335458,
+            "blocked_total": 3677167
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "visible-tables-compute-size-0",
+        "calls": 3,
+        "in_calls": 7096291,
+        "on_cpu": 2166250,
+        "blocked": 4948499,
+        "elsewhere": 4525542,
+        "spend": 11621833,
+        "spend_least": 10474750,
+        "spend_most": 13441166,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 69000,
+            "on_cpu": 69208,
+            "blocked": 0,
+            "wall_least": 66666,
+            "wall_most": 78250,
+            "wall_total": 178125,
+            "on_cpu_total": 181750,
+            "blocked_total": 0
+          },
+          {
+            "call": "visible_function_table",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 6917208,
+            "on_cpu": 1974042,
+            "blocked": 4948499,
+            "wall_least": 6384334,
+            "wall_most": 7860750,
+            "wall_total": 6917208,
+            "on_cpu_total": 1974042,
+            "blocked_total": 4948499
+          }
+        ]
+      }
+    }
+  ]
+}

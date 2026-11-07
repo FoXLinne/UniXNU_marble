@@ -1,0 +1,87 @@
+# cargo-nextest configuration (https://nexte.st/docs/configuration/).
+#
+# A hung test must never block a gate run: nextest terminates any test still
+# running after 20 minutes and reports it as a timeout. The slowest passing test in the
+# 2026-09-30 gate runs took 334 s (debug, a loaded host), so the limit leaves more than 3x
+# headroom. A test that reaches it is a hang or a regression to diagnose, not a limit to raise.
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 20 }
+
+# The ignored `soak_` tests enumerate whole structurizer families and run for up to an hour
+# alone; outside the gate they get two hours.
+[[profile.default.overrides]]
+filter = 'test(/::soak_/)'
+slow-timeout = { period = "300s", terminate-after = 24 }
+
+# The exit lanes' timing checks each run alone. Each measures a child process's exit, from its
+# last line to the end of its exit handlers, less the exiting thread's wait for a CPU, against
+# 1.5 s: below the exit hook's own bound, so a hook that waited it out fails. That time holds the
+# driver's device destruction, which the runtime does not set: on an RTX 3090 (NVIDIA 615.71.09)
+# `vkDestroyDevice` took 54 ms alone (63 devices, at most 57 ms) and up to 2 s while other lane
+# processes used the GPU (over 500 ms for 39 of 72 beside `runtime_lane::framebuffer_fetch`);
+# exits that took 87 to 97 ms alone took 0.3 to 3.1 s beside other lanes there, and 1.8 to 2 s in
+# an RTX 5080 Laptop GPU's whole suite.
+[[profile.default.overrides]]
+filter = 'package(metal2vulkan-validation) & test(/^runtime_lane::exits::(pending_work_stays_pending_at_exit|exits_from_the_runtime_s_threads_are_clean|an_exit_while_a_host_step_waits_is_clean|an_exit_runs_no_handler_beside_a_cpu_device_s_work|an_exit_while_submitting_is_clean|exits_right_after_learning_of_completion_are_clean|an_exit_handler_registered_before_an_instance_runs_after_the_hook)$/)'
+threads-required = 'num-test-threads'
+
+# The lanes that fault the GPU on purpose (a GPU write into read-only host pages; they make GPU work
+# on MoltenVK alone) compile on a GPU only under `--cfg m2v_gpu_hazards` (docs/VALIDATION.md), and
+# run alone on macOS. Metal's recovery from a GPU fault fails command buffers of other processes
+# the GPU runs then, as `MTLCommandBufferErrorInternal` ("Discarded (victim of GPU error/recovery)
+# (00000005:kIOGPUCommandBufferCallbackErrorInnocentVictim)", the encoder
+# `Affected`), and completes some with wrong results and no error: a plain Metal probe on the M3
+# Max (macOS 27.0.1), the lane's texture round in one process beside processes that each fault
+# once, failed 19 of 52,592 rounds beside 160 faults that way and completed 4 more with wrong
+# bytes, and none of 12,270 rounds alone. `runtime_lane::host_copied_textures` failed with `Execution(1)` in 4 batches,
+# each beside `a_gpu_fault_fails_its_command_buffer_and_the_queue_runs_on`; in 100 runs alone and
+# 100 beside the other `host_*` lanes it never failed.
+[[profile.default.overrides]]
+platform = 'cfg(target_os = "macos")'
+filter = 'package(metal2vulkan-validation) & test(/^runtime_lane::host_memory::(a_gpu_fault_fails_its_command_buffer_and_the_queue_runs_on|a_lost_device_s_command_buffers_let_go_of_their_pools_after_the_driver_s_completion)$/)'
+threads-required = 'num-test-threads'
+
+# The queue storm runs alone on macOS. Beside the runtime lane's other tests on the M3 Max (macOS
+# 27.0.1, MoltenVK 1.4.1, load average 18 to 24) the runtime passed 1 storm of 4: its light bursts'
+# 99th percentile was 1.6 to 5.6 busy command buffers above Metal's under MoltenVK's fences, against
+# a margin of 1, and its median within 0.1. That tail is MoltenVK's completion path into the
+# runtime's queue waiter: from a burst's submission to its completion as the runtime saw it, 25.9
+# to 73.4 ms at the 99th percentile, where Metal's to its GPU end took 8.5 to 18.1 ms. The
+# runtime's wake from there, 6.0 to 30.0 ms, was at or below Metal's 13.4 to 45.9 ms in every
+# storm. Alone it still catches the runtime's own delays: it passed 5 storms of 5 on a quiet host,
+# and failed 3 of 3 with 10 ms spun in each of the runtime's completion turns (a probe build), its
+# bursts' median 3.53 busy command buffers against 2.03.
+[[profile.default.overrides]]
+platform = 'cfg(target_os = "macos")'
+filter = 'package(metal2vulkan-validation) & test(/^runtime_lane::queue_storms::four_queues_storm_as_metal_s_do$/)'
+threads-required = 'num-test-threads'
+
+# The object-grid lane runs alone. Its cases are Metal's own grids, up to millions of object
+# threadgroups each; those past 2^20 run on a GPU only under `--cfg m2v_gpu_hazards`, and a device
+# without Apple's watchdog runs them to the end: an RTX 5080 Laptop GPU (NVIDIA 615.71.09) takes
+# 2.4 to 2.7 microseconds over each, so 4,587,520 of them is
+# 12.0 s with the GPU to itself. The test measures that cost and skips a case past half its wait,
+# but the measurement comes from the smaller cases before it, and a GPU shared with other lane
+# processes stretches the larger ones past the wait whatever the measurement said: that case took
+# 12.0 s alone, over 60 s beside one other GPU test, and the test failed at
+# `--test-threads 4` as well as at the default. Alone it passes in 50.7 s.
+[[profile.default.overrides]]
+filter = 'package(metal2vulkan-validation) & test(/^runtime_lane::mesh_draws::object_grids_run_as_metal_runs_them$/)'
+threads-required = 'num-test-threads'
+
+# The runtime's isolation tests of command queues sharing `VkQueue`s run alone. Each holds a
+# compositor's 99th percentile of commit-to-completion latency under 5 ms, and its stalls over
+# 10 ms to at most one, beside an application's 30 ms command buffers: a bound of the GPU's time,
+# which other test processes' work on the same GPU spends too.
+[[profile.default.overrides]]
+filter = 'package(metal2vulkan-runtime) & test(/^tests::queue_share_device::(a_compositor_beside_a_long_queue_keeps_its_latency_once_that_queue_went_long|an_unshared_compositor_beside_a_long_queue_never_stalls)$/)'
+threads-required = 'num-test-threads'
+
+# The runtime's teardown test of the queue-switch check runs alone. It holds the teardown's wait
+# for the check (its stop at the next step, its release of its Vulkan objects and of its shares)
+# under the 16 ms the owner allows a wait. On an RTX 5080 Laptop GPU (NVIDIA 615.71.09) that wait
+# took 1.12 to 1.23 ms in 3 runs with the GPU to itself (the objects' release 0.79 to 0.93 ms, the
+# shares' 2 us), and 26.5 and 42.4 ms in runs where other test processes used the GPU.
+[[profile.default.overrides]]
+filter = 'package(metal2vulkan-runtime) & test(/^tests::teardown_threads::a_running_queue_switch_check_leaves_the_device_to_the_program_s_thread$/)'
+threads-required = 'num-test-threads'

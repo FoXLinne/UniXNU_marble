@@ -1,0 +1,19 @@
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -1096,6 +1096,16 @@
+ 				native_owner_root_checkpoint(autherr, owner, device);
+ 			}
+ #endif
++			extern int native_root_block_authorized(dev_t) __attribute__((weak_import));
++			if (autherr && &native_root_block_authorized) {
++				mount_t root_mount = vnode_mount(rootvnode);
++				vnode_t device_vnode = vfs_devvp(root_mount);
++				if (device_vnode) {
++					owner_authorized = (vfs_flags(root_mount) & MNT_RDONLY) &&
++					    native_root_block_authorized(vnode_specrdev(device_vnode));
++					vnode_put(device_vnode);
++				}
++			}
+ 			if (autherr && !owner_authorized) {
+ 				panic("rootvp not authenticated after mounting");
+ 			}

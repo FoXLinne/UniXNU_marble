@@ -1,0 +1,12 @@
+--- a/pexpert/arm/pe_bootargs.c
++++ b/pexpert/arm/pe_bootargs.c
+@@ -8,5 +8,9 @@
+ PE_boot_args(
+ 	void)
+ {
++#if defined(XNU_ROOT_STAGE_CACHE) && XNU_ROOT_STAGE_CACHE
++	extern char *native_root_block_boot_args;
++	if (native_root_block_boot_args) return native_root_block_boot_args;
++#endif
+ 	return (char *)((boot_args *)PE_state.bootArgs)->CommandLine;
+ }

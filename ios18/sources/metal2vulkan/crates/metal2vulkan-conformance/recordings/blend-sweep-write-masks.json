@@ -1,0 +1,3924 @@
+{
+  "format": 1,
+  "case": "blend-sweep-write-masks",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_samples.ll",
+      "entry": "rt6_fill_vertex",
+      "source_sha256": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+    },
+    {
+      "fixture": "rt6_samples.air.ll",
+      "entry": "rt6_fill_vertex",
+      "source_sha256": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+    },
+    {
+      "fixture": "rt6_samples.ll",
+      "entry": "rt6_fill_rgba32float",
+      "source_sha256": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+    },
+    {
+      "fixture": "rt6_samples.air.ll",
+      "entry": "rt6_fill_rgba32float",
+      "source_sha256": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "program:air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "program:air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "63d2e3f4a17d021a2ca10a50eea35ce51e27af2b9e95df0093825e2cc58d199a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:source",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "47eabc26e865cc2f2493452c7eb7a91c3b564cbe6e4e503e946302de520797b2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:shape",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "db49223a2cf9616171322e5325816a7a579582ebdce91c2f89df8df7aa8aac01"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:destination",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f95df6e441bedfbd180de3104b14123620da981cb80468f53a714564ccf7a15d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-none",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2fbc1dc3166bcc21c56c763e815dc6935bc1271b8cd7309f7dacd1695642e42a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-r",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ea1d8e6fc492d5150a3a3ccab81ad4cd5ba6ce7fc1d6205c0fb47daf56785a2d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-g",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0e76c9bb827ea35199e2433b842d563306668764abd66f4c2d061ee0c5d4660c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-rg",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3164c3686f64321ca41f54f298984d321279d13ee828a3830d864a94eacf93da"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-b",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a8773fa1929f232bb86b268400da3e16da0ac0defd53a85075fba323c23001d8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-rb",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "43224bc70afd4f4e65df9cc575009327e87f6d1eaf2b4116cbd5b8aa8da52bd1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-gb",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b6338890b5a434c8bdafbbc7bdcbd0ca4f4409e6da58773e9dd50fe33e445a76"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-rgb",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "53d3ae2605458e9c542cf9466cd5080be29828a2944a1c36bb928a3f31b48882"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-a",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "4919815eaa2045489ff90e5118c3c555a31fc64f530d00e279888ae777f96b08"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-ra",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c42951c3f448d181942613176dc90697723581dbef14b58334b464fb23168110"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-ga",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9406af5259693eab9ace783769d1ab867fe1f8f7afabb0db9185d4ac947d92bf"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-rga",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6868230000b32633eff048e0a2094685e84c7898b4e4d5bf84282ee1ac9d8604"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-ba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "8bfad86e88a2c15fe56f0d7da657954b80a03ecc1f2fa73582ad17a343b922c2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-rba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0c1ac58257381f93c75bf2c0c4969b3deeff5c360879815a7e4faa26573df46f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-gba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0f97f5cd8837278dcb6547a2eb43b82ff1cf4b4bc7d03f695b0a66b091c8624c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:plain-rgba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "270d3e1cef10bf2751651568d896c1a30f93e664bcc805d1bf47e7fe1cb614b8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-none",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b191c67db57e1d5030ed9bc1b0e153db605f4a2f355d365815f610e1db33fd85"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-r",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "367b65a6e00d10a1f2b2417228a95a1ac017e4cfa3749110051d079b3ca6e342"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-g",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5e6e4b0d6dbdeb1c096bb53fa1620603c54a5c4b702379ba9e11d1e2b889dbe4"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-rg",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ffcff0d9269af864437041f6d6ab5707c42afee0c97a340734ae9fb707f31d60"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-b",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "1e9d4b6bb8ad61f00b3102e56c443e450cbd7256f678009953f84c3a06450867"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-rb",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3e8cfe08ed09058bb13f4f4a763ffe5a0497c90202ef7a1c9c8df4e09ee7745b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-gb",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "392231acb3fd1c27160d2ddc8f7790c429f38da16dce2c4fb96564354e9eea1e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-rgb",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "93edfface4a6ae9e2c4bda461134eb185535bfbdd2ce6d5a0c949ef352fba162"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-a",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9da5b34c98477b999dc7940200445085d4e945b6c8d118bfd6759f383a485df0"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-ra",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3aa4bf82e0f59ae6c9fa67256e7c571eda426d080b7e84913812ca2d8be612e4"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-ga",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a53775c99705d3b92f96dbf3a4c9bc2c3472a991a4f34ddd8e0c48feda6f8867"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-rga",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "26ca915b7962d2a9ea95b68cd5109b2331314e21966978b2400187f3e63220d8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-ba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "75951c3c3cb90d904730fc5f85e215a7414cffb1f18eb1c28582030634e88015"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-rba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "74e26a5642d69c6e9e0c8f226fdc95e2a81540f1a5e8e657a4e4274fa84fccfc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-gba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2713edc8ae32f34b27270705337f6d6a445cf80686932df0081f2b9d797e29ac"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:blend-rgba",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e30d81b7a24324c7e6e0fd242dba410d4aca0bdb0435b65e4f973a5fa874aada"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/source",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/shape",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/plain-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/plain-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/plain-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/plain-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/blend-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/blend-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/blend-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/blend-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back/plain-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/plain-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-none",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-r",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-g",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-rg",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-b",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-rb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-gb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-rgb",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-a",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-ra",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-ga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-rga",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-ba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-rba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-gba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/blend-rgba",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "blended",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "plain-none",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AAAAAAAAYD4AAPg+AAAgPwAAgDwAANg+AABwPwAAUD4AAAA9AAAgPwAAyD4AAEg/AABAPQAAVD8AAFg/AAC4PgAAgD0AAAA9AACYPgAAcD8AAKA9AABwPgAAQD8AAAQ/AADAPQAA4D4AAFA+AADAPQAA4D0AACQ/AAAoPwAALD8AAAA+AABYPwAA4D0AAIA+AAAQPgAAQD0AABA/AABUPwAAID4AAIA+AACAPAAA0D4AADA+AADoPgAA8D4AAHw/AABAPgAAKD8AAGw/AAAQPwAAUD4AAFw/AADAPgAAED4AAGA+AACAPQAAVD8AADg/AABwPgAAiD4AAJA+AACYPgAAgD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACQPgAAYD8AACQ/AAAAPQAAmD4AAKA9AADAPQAAHD8AAKA+AACQPgAADD8AAEA+AACoPgAA+D4AAAAAAABEPwAAsD4AADA/AADoPgAAsD4AALg+AABkPwAAaD8AAGw/AADAPgAAwD0AALg+AAAAPwAAyD4AAJg+AABQPwAAoD0AANA+AAAAPwAAiD4AACg/AADYPgAAND8AADg/AABwPgAA4D4AAGg/AAAwPgAAUD8AAOg+AADgPQAAID8AAMg+AADwPgAAoD4AAKA9AAB4PwAA+D4AAAQ/AAAIPwAADD8AAAA/AAA4PwAAfD8AAAA+AAAEPwAAbD8AAOA+AAA0PwAACD8AAAA+AABkPwAAkD4AAAw/AACoPgAAsD4AAFw/AAAQPwAACD8AAEw/AADgPgAAFD8AADw/AACAPgAAgDwAABg/AABwPwAAND8AABg/AAAcPwAAED4AACA+AAAwPgAAID8AALA+AAAcPwAAQD8AACQ/AAAMPwAAgD0AAKg+AAAoPwAAQD8AAAQ/AABoPwAALD8AAHQ/AAB4PwAA+D4AADA/AAAgPgAA2D4AAIA9AAA0PwAAuD4AAGA/AAAkPwAAOD8AABA/AACoPgAAYD4AADw/AABEPwAASD8AAEw/AABAPwAAeD8AAHA+AADAPgAARD8AADA+AAAwPwAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABg/AADgPQAAUD8AAEg/AABAPQAAMD8AAFQ/AAB8PwAAAD8AAIg+AABYPwAAQD4AAHQ/AABYPwAAXD8AAMg+AADQPgAA2D4AAGA/AAAYPwAAXD8AAAAAAABkPwAATD8AAKA+AAAUPwAAaD8AAAAAAABEPwAAID4AAGw/AABQPgAAYD4AADw/AABwPwAA0D4AACw/AACgPgAAdD8AABw/AAAAPgAAZD8AAHg/AABQPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-r",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAAD0AAEA9AAAAAAAAoD0AAPg+AAAgPwAAgDwAAKA9AABwPwAAUD4AAAA9AACgPQAAyD4AAEg/AABAPQAAoD0AAFg/AAC4PgAAgD0AAKA9AACYPgAAcD8AAKA9AACgPQAAQD8AAAQ/AADAPQAAoD0AAFA+AADAPQAA4D0AAKA9AAAoPwAALD8AAAA+AACgPQAA4D0AAIA+AAAQPgAAoD0AABA/AABUPwAAID4AAKA9AACAPAAA0D4AADA+AACgPQAA8D4AAHw/AABAPgAAoD0AAGw/AAAQPwAAUD4AAKA9AADAPgAAED4AAGA+AACgPQAAVD8AADg/AABwPgAAoD0AAJA+AACYPgAAgD4AAKA9AAA8PwAAYD8AAIg+AACgPQAAQD4AAOg+AACQPgAAoD0AACQ/AAAAPQAAmD4AAKA9AADAPQAAHD8AAKA+AACgPQAADD8AAEA+AACoPgAAoD0AAAAAAABEPwAAsD4AAKA9AADoPgAAsD4AALg+AACgPQAAaD8AAGw/AADAPgAAoD0AALg+AAAAPwAAyD4AAKA9AABQPwAAoD0AANA+AACgPQAAiD4AACg/AADYPgAAoD0AADg/AABwPgAA4D4AAKA9AAAwPgAAUD8AAOg+AACgPQAAID8AAMg+AADwPgAAoD0AAKA9AAB4PwAA+D4AAKA9AAAIPwAADD8AAAA/AACgPQAAfD8AAAA+AAAEPwAAoD0AAOA+AAA0PwAACD8AAKA9AABkPwAAkD4AAAw/AACgPQAAsD4AAFw/AAAQPwAAoD0AAEw/AADgPgAAFD8AAKA9AACAPgAAgDwAABg/AACgPQAAND8AABg/AAAcPwAAoD0AACA+AAAwPgAAID8AAKA9AAAcPwAAQD8AACQ/AACgPQAAgD0AAKg+AAAoPwAAoD0AAAQ/AABoPwAALD8AAKA9AAB4PwAA+D4AADA/AACgPQAA2D4AAIA9AAA0PwAAoD0AAGA/AAAkPwAAOD8AAKA9AACoPgAAYD4AADw/AACgPQAASD8AAEw/AABAPwAAoD0AAHA+AADAPgAARD8AAKA9AAAwPwAAdD8AAEg/AACgPQAAED4AAAg/AABMPwAAoD0AABg/AADgPQAAUD8AAKA9AABAPQAAMD8AAFQ/AACgPQAAAD8AAIg+AABYPwAAoD0AAHQ/AABYPwAAXD8AAKA9AADQPgAA2D4AAGA/AACgPQAAXD8AAAAAAABkPwAAoD0AAKA+AAAUPwAAaD8AAKA9AABEPwAAID4AAGw/AACgPQAAYD4AADw/AABwPwAAoD0AACw/AACgPgAAdD8AAKA9AAAAPgAAZD8AAHg/AACgPQAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-g",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAED4AAEA9AAAAAAAAYD4AABA+AAAgPwAAgDwAANg+AAAQPgAAUD4AAAA9AAAgPwAAED4AAEg/AABAPQAAVD8AABA+AAC4PgAAgD0AAAA9AAAQPgAAcD8AAKA9AABwPgAAED4AAAQ/AADAPQAA4D4AABA+AADAPQAA4D0AACQ/AAAQPgAALD8AAAA+AABYPwAAED4AAIA+AAAQPgAAQD0AABA+AABUPwAAID4AAIA+AAAQPgAA0D4AADA+AADoPgAAED4AAHw/AABAPgAAKD8AABA+AAAQPwAAUD4AAFw/AAAQPgAAED4AAGA+AACAPQAAED4AADg/AABwPgAAiD4AABA+AACYPgAAgD4AAPA+AAAQPgAAYD8AAIg+AAAsPwAAED4AAOg+AACQPgAAYD8AABA+AAAAPQAAmD4AAKA9AAAQPgAAHD8AAKA+AACQPgAAED4AAEA+AACoPgAA+D4AABA+AABEPwAAsD4AADA/AAAQPgAAsD4AALg+AABkPwAAED4AAGw/AADAPgAAwD0AABA+AAAAPwAAyD4AAJg+AAAQPgAAoD0AANA+AAAAPwAAED4AACg/AADYPgAAND8AABA+AABwPgAA4D4AAGg/AAAQPgAAUD8AAOg+AADgPQAAED4AAMg+AADwPgAAoD4AABA+AAB4PwAA+D4AAAQ/AAAQPgAADD8AAAA/AAA4PwAAED4AAAA+AAAEPwAAbD8AABA+AAA0PwAACD8AAAA+AAAQPgAAkD4AAAw/AACoPgAAED4AAFw/AAAQPwAACD8AABA+AADgPgAAFD8AADw/AAAQPgAAgDwAABg/AABwPwAAED4AABg/AAAcPwAAED4AABA+AAAwPgAAID8AALA+AAAQPgAAQD8AACQ/AAAMPwAAED4AAKg+AAAoPwAAQD8AABA+AABoPwAALD8AAHQ/AAAQPgAA+D4AADA/AAAgPgAAED4AAIA9AAA0PwAAuD4AABA+AAAkPwAAOD8AABA/AAAQPgAAYD4AADw/AABEPwAAED4AAEw/AABAPwAAeD8AABA+AADAPgAARD8AADA+AAAQPgAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABA+AADgPQAAUD8AAEg/AAAQPgAAMD8AAFQ/AAB8PwAAED4AAIg+AABYPwAAQD4AABA+AABYPwAAXD8AAMg+AAAQPgAA2D4AAGA/AAAYPwAAED4AAAAAAABkPwAATD8AABA+AAAUPwAAaD8AAAAAAAAQPgAAID4AAGw/AABQPgAAED4AADw/AABwPwAA0D4AABA+AACgPgAAdD8AABw/AAAQPgAAZD8AAHg/AABQPwAAED4AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-rg",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAEA9AAAAAAAAoD0AABA+AAAgPwAAgDwAAKA9AAAQPgAAUD4AAAA9AACgPQAAED4AAEg/AABAPQAAoD0AABA+AAC4PgAAgD0AAKA9AAAQPgAAcD8AAKA9AACgPQAAED4AAAQ/AADAPQAAoD0AABA+AADAPQAA4D0AAKA9AAAQPgAALD8AAAA+AACgPQAAED4AAIA+AAAQPgAAoD0AABA+AABUPwAAID4AAKA9AAAQPgAA0D4AADA+AACgPQAAED4AAHw/AABAPgAAoD0AABA+AAAQPwAAUD4AAKA9AAAQPgAAED4AAGA+AACgPQAAED4AADg/AABwPgAAoD0AABA+AACYPgAAgD4AAKA9AAAQPgAAYD8AAIg+AACgPQAAED4AAOg+AACQPgAAoD0AABA+AAAAPQAAmD4AAKA9AAAQPgAAHD8AAKA+AACgPQAAED4AAEA+AACoPgAAoD0AABA+AABEPwAAsD4AAKA9AAAQPgAAsD4AALg+AACgPQAAED4AAGw/AADAPgAAoD0AABA+AAAAPwAAyD4AAKA9AAAQPgAAoD0AANA+AACgPQAAED4AACg/AADYPgAAoD0AABA+AABwPgAA4D4AAKA9AAAQPgAAUD8AAOg+AACgPQAAED4AAMg+AADwPgAAoD0AABA+AAB4PwAA+D4AAKA9AAAQPgAADD8AAAA/AACgPQAAED4AAAA+AAAEPwAAoD0AABA+AAA0PwAACD8AAKA9AAAQPgAAkD4AAAw/AACgPQAAED4AAFw/AAAQPwAAoD0AABA+AADgPgAAFD8AAKA9AAAQPgAAgDwAABg/AACgPQAAED4AABg/AAAcPwAAoD0AABA+AAAwPgAAID8AAKA9AAAQPgAAQD8AACQ/AACgPQAAED4AAKg+AAAoPwAAoD0AABA+AABoPwAALD8AAKA9AAAQPgAA+D4AADA/AACgPQAAED4AAIA9AAA0PwAAoD0AABA+AAAkPwAAOD8AAKA9AAAQPgAAYD4AADw/AACgPQAAED4AAEw/AABAPwAAoD0AABA+AADAPgAARD8AAKA9AAAQPgAAdD8AAEg/AACgPQAAED4AAAg/AABMPwAAoD0AABA+AADgPQAAUD8AAKA9AAAQPgAAMD8AAFQ/AACgPQAAED4AAIg+AABYPwAAoD0AABA+AABYPwAAXD8AAKA9AAAQPgAA2D4AAGA/AACgPQAAED4AAAAAAABkPwAAoD0AABA+AAAUPwAAaD8AAKA9AAAQPgAAID4AAGw/AACgPQAAED4AADw/AABwPwAAoD0AABA+AACgPgAAdD8AAKA9AAAQPgAAZD8AAHg/AACgPQAAED4AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-b",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAFA+AAAAAAAAYD4AAPg+AABQPgAAgDwAANg+AABwPwAAUD4AAAA9AAAgPwAAyD4AAFA+AABAPQAAVD8AAFg/AABQPgAAgD0AAAA9AACYPgAAUD4AAKA9AABwPgAAQD8AAFA+AADAPQAA4D4AAFA+AABQPgAA4D0AACQ/AAAoPwAAUD4AAAA+AABYPwAA4D0AAFA+AAAQPgAAQD0AABA/AABQPgAAID4AAIA+AACAPAAAUD4AADA+AADoPgAA8D4AAFA+AABAPgAAKD8AAGw/AABQPgAAUD4AAFw/AADAPgAAUD4AAGA+AACAPQAAVD8AAFA+AABwPgAAiD4AAJA+AABQPgAAgD4AAPA+AAA8PwAAUD4AAIg+AAAsPwAAQD4AAFA+AACQPgAAYD8AACQ/AABQPgAAmD4AAKA9AADAPQAAUD4AAKA+AACQPgAADD8AAFA+AACoPgAA+D4AAAAAAABQPgAAsD4AADA/AADoPgAAUD4AALg+AABkPwAAaD8AAFA+AADAPgAAwD0AALg+AABQPgAAyD4AAJg+AABQPwAAUD4AANA+AAAAPwAAiD4AAFA+AADYPgAAND8AADg/AABQPgAA4D4AAGg/AAAwPgAAUD4AAOg+AADgPQAAID8AAFA+AADwPgAAoD4AAKA9AABQPgAA+D4AAAQ/AAAIPwAAUD4AAAA/AAA4PwAAfD8AAFA+AAAEPwAAbD8AAOA+AABQPgAACD8AAAA+AABkPwAAUD4AAAw/AACoPgAAsD4AAFA+AAAQPwAACD8AAEw/AABQPgAAFD8AADw/AACAPgAAUD4AABg/AABwPwAAND8AAFA+AAAcPwAAED4AACA+AABQPgAAID8AALA+AAAcPwAAUD4AACQ/AAAMPwAAgD0AAFA+AAAoPwAAQD8AAAQ/AABQPgAALD8AAHQ/AAB4PwAAUD4AADA/AAAgPgAA2D4AAFA+AAA0PwAAuD4AAGA/AABQPgAAOD8AABA/AACoPgAAUD4AADw/AABEPwAASD8AAFA+AABAPwAAeD8AAHA+AABQPgAARD8AADA+AAAwPwAAUD4AAEg/AADAPgAAED4AAFA+AABMPwAAFD8AABg/AABQPgAAUD8AAEg/AABAPQAAUD4AAFQ/AAB8PwAAAD8AAFA+AABYPwAAQD4AAHQ/AABQPgAAXD8AAMg+AADQPgAAUD4AAGA/AAAYPwAAXD8AAFA+AABkPwAATD8AAKA+AABQPgAAaD8AAAAAAABEPwAAUD4AAGw/AABQPgAAYD4AAFA+AABwPwAA0D4AACw/AABQPgAAdD8AABw/AAAAPgAAUD4AAHg/AABQPwAAFD8AAFA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-rb",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAAD0AAFA+AAAAAAAAoD0AAPg+AABQPgAAgDwAAKA9AABwPwAAUD4AAAA9AACgPQAAyD4AAFA+AABAPQAAoD0AAFg/AABQPgAAgD0AAKA9AACYPgAAUD4AAKA9AACgPQAAQD8AAFA+AADAPQAAoD0AAFA+AABQPgAA4D0AAKA9AAAoPwAAUD4AAAA+AACgPQAA4D0AAFA+AAAQPgAAoD0AABA/AABQPgAAID4AAKA9AACAPAAAUD4AADA+AACgPQAA8D4AAFA+AABAPgAAoD0AAGw/AABQPgAAUD4AAKA9AADAPgAAUD4AAGA+AACgPQAAVD8AAFA+AABwPgAAoD0AAJA+AABQPgAAgD4AAKA9AAA8PwAAUD4AAIg+AACgPQAAQD4AAFA+AACQPgAAoD0AACQ/AABQPgAAmD4AAKA9AADAPQAAUD4AAKA+AACgPQAADD8AAFA+AACoPgAAoD0AAAAAAABQPgAAsD4AAKA9AADoPgAAUD4AALg+AACgPQAAaD8AAFA+AADAPgAAoD0AALg+AABQPgAAyD4AAKA9AABQPwAAUD4AANA+AACgPQAAiD4AAFA+AADYPgAAoD0AADg/AABQPgAA4D4AAKA9AAAwPgAAUD4AAOg+AACgPQAAID8AAFA+AADwPgAAoD0AAKA9AABQPgAA+D4AAKA9AAAIPwAAUD4AAAA/AACgPQAAfD8AAFA+AAAEPwAAoD0AAOA+AABQPgAACD8AAKA9AABkPwAAUD4AAAw/AACgPQAAsD4AAFA+AAAQPwAAoD0AAEw/AABQPgAAFD8AAKA9AACAPgAAUD4AABg/AACgPQAAND8AAFA+AAAcPwAAoD0AACA+AABQPgAAID8AAKA9AAAcPwAAUD4AACQ/AACgPQAAgD0AAFA+AAAoPwAAoD0AAAQ/AABQPgAALD8AAKA9AAB4PwAAUD4AADA/AACgPQAA2D4AAFA+AAA0PwAAoD0AAGA/AABQPgAAOD8AAKA9AACoPgAAUD4AADw/AACgPQAASD8AAFA+AABAPwAAoD0AAHA+AABQPgAARD8AAKA9AAAwPwAAUD4AAEg/AACgPQAAED4AAFA+AABMPwAAoD0AABg/AABQPgAAUD8AAKA9AABAPQAAUD4AAFQ/AACgPQAAAD8AAFA+AABYPwAAoD0AAHQ/AABQPgAAXD8AAKA9AADQPgAAUD4AAGA/AACgPQAAXD8AAFA+AABkPwAAoD0AAKA+AABQPgAAaD8AAKA9AABEPwAAUD4AAGw/AACgPQAAYD4AAFA+AABwPwAAoD0AACw/AABQPgAAdD8AAKA9AAAAPgAAUD4AAHg/AACgPQAAFD8AAFA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-gb",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAED4AAFA+AAAAAAAAYD4AABA+AABQPgAAgDwAANg+AAAQPgAAUD4AAAA9AAAgPwAAED4AAFA+AABAPQAAVD8AABA+AABQPgAAgD0AAAA9AAAQPgAAUD4AAKA9AABwPgAAED4AAFA+AADAPQAA4D4AABA+AABQPgAA4D0AACQ/AAAQPgAAUD4AAAA+AABYPwAAED4AAFA+AAAQPgAAQD0AABA+AABQPgAAID4AAIA+AAAQPgAAUD4AADA+AADoPgAAED4AAFA+AABAPgAAKD8AABA+AABQPgAAUD4AAFw/AAAQPgAAUD4AAGA+AACAPQAAED4AAFA+AABwPgAAiD4AABA+AABQPgAAgD4AAPA+AAAQPgAAUD4AAIg+AAAsPwAAED4AAFA+AACQPgAAYD8AABA+AABQPgAAmD4AAKA9AAAQPgAAUD4AAKA+AACQPgAAED4AAFA+AACoPgAA+D4AABA+AABQPgAAsD4AADA/AAAQPgAAUD4AALg+AABkPwAAED4AAFA+AADAPgAAwD0AABA+AABQPgAAyD4AAJg+AAAQPgAAUD4AANA+AAAAPwAAED4AAFA+AADYPgAAND8AABA+AABQPgAA4D4AAGg/AAAQPgAAUD4AAOg+AADgPQAAED4AAFA+AADwPgAAoD4AABA+AABQPgAA+D4AAAQ/AAAQPgAAUD4AAAA/AAA4PwAAED4AAFA+AAAEPwAAbD8AABA+AABQPgAACD8AAAA+AAAQPgAAUD4AAAw/AACoPgAAED4AAFA+AAAQPwAACD8AABA+AABQPgAAFD8AADw/AAAQPgAAUD4AABg/AABwPwAAED4AAFA+AAAcPwAAED4AABA+AABQPgAAID8AALA+AAAQPgAAUD4AACQ/AAAMPwAAED4AAFA+AAAoPwAAQD8AABA+AABQPgAALD8AAHQ/AAAQPgAAUD4AADA/AAAgPgAAED4AAFA+AAA0PwAAuD4AABA+AABQPgAAOD8AABA/AAAQPgAAUD4AADw/AABEPwAAED4AAFA+AABAPwAAeD8AABA+AABQPgAARD8AADA+AAAQPgAAUD4AAEg/AADAPgAAED4AAFA+AABMPwAAFD8AABA+AABQPgAAUD8AAEg/AAAQPgAAUD4AAFQ/AAB8PwAAED4AAFA+AABYPwAAQD4AABA+AABQPgAAXD8AAMg+AAAQPgAAUD4AAGA/AAAYPwAAED4AAFA+AABkPwAATD8AABA+AABQPgAAaD8AAAAAAAAQPgAAUD4AAGw/AABQPgAAED4AAFA+AABwPwAA0D4AABA+AABQPgAAdD8AABw/AAAQPgAAUD4AAHg/AABQPwAAED4AAFA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-rgb",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AAAAAAAAoD0AABA+AABQPgAAgDwAAKA9AAAQPgAAUD4AAAA9AACgPQAAED4AAFA+AABAPQAAoD0AABA+AABQPgAAgD0AAKA9AAAQPgAAUD4AAKA9AACgPQAAED4AAFA+AADAPQAAoD0AABA+AABQPgAA4D0AAKA9AAAQPgAAUD4AAAA+AACgPQAAED4AAFA+AAAQPgAAoD0AABA+AABQPgAAID4AAKA9AAAQPgAAUD4AADA+AACgPQAAED4AAFA+AABAPgAAoD0AABA+AABQPgAAUD4AAKA9AAAQPgAAUD4AAGA+AACgPQAAED4AAFA+AABwPgAAoD0AABA+AABQPgAAgD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACQPgAAoD0AABA+AABQPgAAmD4AAKA9AAAQPgAAUD4AAKA+AACgPQAAED4AAFA+AACoPgAAoD0AABA+AABQPgAAsD4AAKA9AAAQPgAAUD4AALg+AACgPQAAED4AAFA+AADAPgAAoD0AABA+AABQPgAAyD4AAKA9AAAQPgAAUD4AANA+AACgPQAAED4AAFA+AADYPgAAoD0AABA+AABQPgAA4D4AAKA9AAAQPgAAUD4AAOg+AACgPQAAED4AAFA+AADwPgAAoD0AABA+AABQPgAA+D4AAKA9AAAQPgAAUD4AAAA/AACgPQAAED4AAFA+AAAEPwAAoD0AABA+AABQPgAACD8AAKA9AAAQPgAAUD4AAAw/AACgPQAAED4AAFA+AAAQPwAAoD0AABA+AABQPgAAFD8AAKA9AAAQPgAAUD4AABg/AACgPQAAED4AAFA+AAAcPwAAoD0AABA+AABQPgAAID8AAKA9AAAQPgAAUD4AACQ/AACgPQAAED4AAFA+AAAoPwAAoD0AABA+AABQPgAALD8AAKA9AAAQPgAAUD4AADA/AACgPQAAED4AAFA+AAA0PwAAoD0AABA+AABQPgAAOD8AAKA9AAAQPgAAUD4AADw/AACgPQAAED4AAFA+AABAPwAAoD0AABA+AABQPgAARD8AAKA9AAAQPgAAUD4AAEg/AACgPQAAED4AAFA+AABMPwAAoD0AABA+AABQPgAAUD8AAKA9AAAQPgAAUD4AAFQ/AACgPQAAED4AAFA+AABYPwAAoD0AABA+AABQPgAAXD8AAKA9AAAQPgAAUD4AAGA/AACgPQAAED4AAFA+AABkPwAAoD0AABA+AABQPgAAaD8AAKA9AAAQPgAAUD4AAGw/AACgPQAAED4AAFA+AABwPwAAoD0AABA+AABQPgAAdD8AAKA9AAAQPgAAUD4AAHg/AACgPQAAED4AAFA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-a",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AACIPgAAYD4AAPg+AAAgPwAAiD4AANg+AABwPwAAUD4AAIg+AAAgPwAAyD4AAEg/AACIPgAAVD8AAFg/AAC4PgAAiD4AAAA9AACYPgAAcD8AAIg+AABwPgAAQD8AAAQ/AACIPgAA4D4AAFA+AADAPQAAiD4AACQ/AAAoPwAALD8AAIg+AABYPwAA4D0AAIA+AACIPgAAQD0AABA/AABUPwAAiD4AAIA+AACAPAAA0D4AAIg+AADoPgAA8D4AAHw/AACIPgAAKD8AAGw/AAAQPwAAiD4AAFw/AADAPgAAED4AAIg+AACAPQAAVD8AADg/AACIPgAAiD4AAJA+AACYPgAAiD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACIPgAAYD8AACQ/AAAAPQAAiD4AAKA9AADAPQAAHD8AAIg+AACQPgAADD8AAEA+AACIPgAA+D4AAAAAAABEPwAAiD4AADA/AADoPgAAsD4AAIg+AABkPwAAaD8AAGw/AACIPgAAwD0AALg+AAAAPwAAiD4AAJg+AABQPwAAoD0AAIg+AAAAPwAAiD4AACg/AACIPgAAND8AADg/AABwPgAAiD4AAGg/AAAwPgAAUD8AAIg+AADgPQAAID8AAMg+AACIPgAAoD4AAKA9AAB4PwAAiD4AAAQ/AAAIPwAADD8AAIg+AAA4PwAAfD8AAAA+AACIPgAAbD8AAOA+AAA0PwAAiD4AAAA+AABkPwAAkD4AAIg+AACoPgAAsD4AAFw/AACIPgAACD8AAEw/AADgPgAAiD4AADw/AACAPgAAgDwAAIg+AABwPwAAND8AABg/AACIPgAAED4AACA+AAAwPgAAiD4AALA+AAAcPwAAQD8AAIg+AAAMPwAAgD0AAKg+AACIPgAAQD8AAAQ/AABoPwAAiD4AAHQ/AAB4PwAA+D4AAIg+AAAgPgAA2D4AAIA9AACIPgAAuD4AAGA/AAAkPwAAiD4AABA/AACoPgAAYD4AAIg+AABEPwAASD8AAEw/AACIPgAAeD8AAHA+AADAPgAAiD4AADA+AAAwPwAAdD8AAIg+AADAPgAAED4AAAg/AACIPgAAFD8AABg/AADgPQAAiD4AAEg/AABAPQAAMD8AAIg+AAB8PwAAAD8AAIg+AACIPgAAQD4AAHQ/AABYPwAAiD4AAMg+AADQPgAA2D4AAIg+AAAYPwAAXD8AAAAAAACIPgAATD8AAKA+AAAUPwAAiD4AAAAAAABEPwAAID4AAIg+AABQPgAAYD4AADw/AACIPgAA0D4AACw/AACgPgAAiD4AABw/AAAAPgAAZD8AAIg+AABQPwAAFD8AAPA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-ra",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAAD0AAEA9AACIPgAAoD0AAPg+AAAgPwAAiD4AAKA9AABwPwAAUD4AAIg+AACgPQAAyD4AAEg/AACIPgAAoD0AAFg/AAC4PgAAiD4AAKA9AACYPgAAcD8AAIg+AACgPQAAQD8AAAQ/AACIPgAAoD0AAFA+AADAPQAAiD4AAKA9AAAoPwAALD8AAIg+AACgPQAA4D0AAIA+AACIPgAAoD0AABA/AABUPwAAiD4AAKA9AACAPAAA0D4AAIg+AACgPQAA8D4AAHw/AACIPgAAoD0AAGw/AAAQPwAAiD4AAKA9AADAPgAAED4AAIg+AACgPQAAVD8AADg/AACIPgAAoD0AAJA+AACYPgAAiD4AAKA9AAA8PwAAYD8AAIg+AACgPQAAQD4AAOg+AACIPgAAoD0AACQ/AAAAPQAAiD4AAKA9AADAPQAAHD8AAIg+AACgPQAADD8AAEA+AACIPgAAoD0AAAAAAABEPwAAiD4AAKA9AADoPgAAsD4AAIg+AACgPQAAaD8AAGw/AACIPgAAoD0AALg+AAAAPwAAiD4AAKA9AABQPwAAoD0AAIg+AACgPQAAiD4AACg/AACIPgAAoD0AADg/AABwPgAAiD4AAKA9AAAwPgAAUD8AAIg+AACgPQAAID8AAMg+AACIPgAAoD0AAKA9AAB4PwAAiD4AAKA9AAAIPwAADD8AAIg+AACgPQAAfD8AAAA+AACIPgAAoD0AAOA+AAA0PwAAiD4AAKA9AABkPwAAkD4AAIg+AACgPQAAsD4AAFw/AACIPgAAoD0AAEw/AADgPgAAiD4AAKA9AACAPgAAgDwAAIg+AACgPQAAND8AABg/AACIPgAAoD0AACA+AAAwPgAAiD4AAKA9AAAcPwAAQD8AAIg+AACgPQAAgD0AAKg+AACIPgAAoD0AAAQ/AABoPwAAiD4AAKA9AAB4PwAA+D4AAIg+AACgPQAA2D4AAIA9AACIPgAAoD0AAGA/AAAkPwAAiD4AAKA9AACoPgAAYD4AAIg+AACgPQAASD8AAEw/AACIPgAAoD0AAHA+AADAPgAAiD4AAKA9AAAwPwAAdD8AAIg+AACgPQAAED4AAAg/AACIPgAAoD0AABg/AADgPQAAiD4AAKA9AABAPQAAMD8AAIg+AACgPQAAAD8AAIg+AACIPgAAoD0AAHQ/AABYPwAAiD4AAKA9AADQPgAA2D4AAIg+AACgPQAAXD8AAAAAAACIPgAAoD0AAKA+AAAUPwAAiD4AAKA9AABEPwAAID4AAIg+AACgPQAAYD4AADw/AACIPgAAoD0AACw/AACgPgAAiD4AAKA9AAAAPgAAZD8AAIg+AACgPQAAFD8AAPA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-ga",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAED4AAEA9AACIPgAAYD4AABA+AAAgPwAAiD4AANg+AAAQPgAAUD4AAIg+AAAgPwAAED4AAEg/AACIPgAAVD8AABA+AAC4PgAAiD4AAAA9AAAQPgAAcD8AAIg+AABwPgAAED4AAAQ/AACIPgAA4D4AABA+AADAPQAAiD4AACQ/AAAQPgAALD8AAIg+AABYPwAAED4AAIA+AACIPgAAQD0AABA+AABUPwAAiD4AAIA+AAAQPgAA0D4AAIg+AADoPgAAED4AAHw/AACIPgAAKD8AABA+AAAQPwAAiD4AAFw/AAAQPgAAED4AAIg+AACAPQAAED4AADg/AACIPgAAiD4AABA+AACYPgAAiD4AAPA+AAAQPgAAYD8AAIg+AAAsPwAAED4AAOg+AACIPgAAYD8AABA+AAAAPQAAiD4AAKA9AAAQPgAAHD8AAIg+AACQPgAAED4AAEA+AACIPgAA+D4AABA+AABEPwAAiD4AADA/AAAQPgAAsD4AAIg+AABkPwAAED4AAGw/AACIPgAAwD0AABA+AAAAPwAAiD4AAJg+AAAQPgAAoD0AAIg+AAAAPwAAED4AACg/AACIPgAAND8AABA+AABwPgAAiD4AAGg/AAAQPgAAUD8AAIg+AADgPQAAED4AAMg+AACIPgAAoD4AABA+AAB4PwAAiD4AAAQ/AAAQPgAADD8AAIg+AAA4PwAAED4AAAA+AACIPgAAbD8AABA+AAA0PwAAiD4AAAA+AAAQPgAAkD4AAIg+AACoPgAAED4AAFw/AACIPgAACD8AABA+AADgPgAAiD4AADw/AAAQPgAAgDwAAIg+AABwPwAAED4AABg/AACIPgAAED4AABA+AAAwPgAAiD4AALA+AAAQPgAAQD8AAIg+AAAMPwAAED4AAKg+AACIPgAAQD8AABA+AABoPwAAiD4AAHQ/AAAQPgAA+D4AAIg+AAAgPgAAED4AAIA9AACIPgAAuD4AABA+AAAkPwAAiD4AABA/AAAQPgAAYD4AAIg+AABEPwAAED4AAEw/AACIPgAAeD8AABA+AADAPgAAiD4AADA+AAAQPgAAdD8AAIg+AADAPgAAED4AAAg/AACIPgAAFD8AABA+AADgPQAAiD4AAEg/AAAQPgAAMD8AAIg+AAB8PwAAED4AAIg+AACIPgAAQD4AABA+AABYPwAAiD4AAMg+AAAQPgAA2D4AAIg+AAAYPwAAED4AAAAAAACIPgAATD8AABA+AAAUPwAAiD4AAAAAAAAQPgAAID4AAIg+AABQPgAAED4AADw/AACIPgAA0D4AABA+AACgPgAAiD4AABw/AAAQPgAAZD8AAIg+AABQPwAAED4AAPA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-rga",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAEA9AACIPgAAoD0AABA+AAAgPwAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAEg/AACIPgAAoD0AABA+AAC4PgAAiD4AAKA9AAAQPgAAcD8AAIg+AACgPQAAED4AAAQ/AACIPgAAoD0AABA+AADAPQAAiD4AAKA9AAAQPgAALD8AAIg+AACgPQAAED4AAIA+AACIPgAAoD0AABA+AABUPwAAiD4AAKA9AAAQPgAA0D4AAIg+AACgPQAAED4AAHw/AACIPgAAoD0AABA+AAAQPwAAiD4AAKA9AAAQPgAAED4AAIg+AACgPQAAED4AADg/AACIPgAAoD0AABA+AACYPgAAiD4AAKA9AAAQPgAAYD8AAIg+AACgPQAAED4AAOg+AACIPgAAoD0AABA+AAAAPQAAiD4AAKA9AAAQPgAAHD8AAIg+AACgPQAAED4AAEA+AACIPgAAoD0AABA+AABEPwAAiD4AAKA9AAAQPgAAsD4AAIg+AACgPQAAED4AAGw/AACIPgAAoD0AABA+AAAAPwAAiD4AAKA9AAAQPgAAoD0AAIg+AACgPQAAED4AACg/AACIPgAAoD0AABA+AABwPgAAiD4AAKA9AAAQPgAAUD8AAIg+AACgPQAAED4AAMg+AACIPgAAoD0AABA+AAB4PwAAiD4AAKA9AAAQPgAADD8AAIg+AACgPQAAED4AAAA+AACIPgAAoD0AABA+AAA0PwAAiD4AAKA9AAAQPgAAkD4AAIg+AACgPQAAED4AAFw/AACIPgAAoD0AABA+AADgPgAAiD4AAKA9AAAQPgAAgDwAAIg+AACgPQAAED4AABg/AACIPgAAoD0AABA+AAAwPgAAiD4AAKA9AAAQPgAAQD8AAIg+AACgPQAAED4AAKg+AACIPgAAoD0AABA+AABoPwAAiD4AAKA9AAAQPgAA+D4AAIg+AACgPQAAED4AAIA9AACIPgAAoD0AABA+AAAkPwAAiD4AAKA9AAAQPgAAYD4AAIg+AACgPQAAED4AAEw/AACIPgAAoD0AABA+AADAPgAAiD4AAKA9AAAQPgAAdD8AAIg+AACgPQAAED4AAAg/AACIPgAAoD0AABA+AADgPQAAiD4AAKA9AAAQPgAAMD8AAIg+AACgPQAAED4AAIg+AACIPgAAoD0AABA+AABYPwAAiD4AAKA9AAAQPgAA2D4AAIg+AACgPQAAED4AAAAAAACIPgAAoD0AABA+AAAUPwAAiD4AAKA9AAAQPgAAID4AAIg+AACgPQAAED4AADw/AACIPgAAoD0AABA+AACgPgAAiD4AAKA9AAAQPgAAZD8AAIg+AACgPQAAED4AAPA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-ba",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAFA+AACIPgAAYD4AAPg+AABQPgAAiD4AANg+AABwPwAAUD4AAIg+AAAgPwAAyD4AAFA+AACIPgAAVD8AAFg/AABQPgAAiD4AAAA9AACYPgAAUD4AAIg+AABwPgAAQD8AAFA+AACIPgAA4D4AAFA+AABQPgAAiD4AACQ/AAAoPwAAUD4AAIg+AABYPwAA4D0AAFA+AACIPgAAQD0AABA/AABQPgAAiD4AAIA+AACAPAAAUD4AAIg+AADoPgAA8D4AAFA+AACIPgAAKD8AAGw/AABQPgAAiD4AAFw/AADAPgAAUD4AAIg+AACAPQAAVD8AAFA+AACIPgAAiD4AAJA+AABQPgAAiD4AAPA+AAA8PwAAUD4AAIg+AAAsPwAAQD4AAFA+AACIPgAAYD8AACQ/AABQPgAAiD4AAKA9AADAPQAAUD4AAIg+AACQPgAADD8AAFA+AACIPgAA+D4AAAAAAABQPgAAiD4AADA/AADoPgAAUD4AAIg+AABkPwAAaD8AAFA+AACIPgAAwD0AALg+AABQPgAAiD4AAJg+AABQPwAAUD4AAIg+AAAAPwAAiD4AAFA+AACIPgAAND8AADg/AABQPgAAiD4AAGg/AAAwPgAAUD4AAIg+AADgPQAAID8AAFA+AACIPgAAoD4AAKA9AABQPgAAiD4AAAQ/AAAIPwAAUD4AAIg+AAA4PwAAfD8AAFA+AACIPgAAbD8AAOA+AABQPgAAiD4AAAA+AABkPwAAUD4AAIg+AACoPgAAsD4AAFA+AACIPgAACD8AAEw/AABQPgAAiD4AADw/AACAPgAAUD4AAIg+AABwPwAAND8AAFA+AACIPgAAED4AACA+AABQPgAAiD4AALA+AAAcPwAAUD4AAIg+AAAMPwAAgD0AAFA+AACIPgAAQD8AAAQ/AABQPgAAiD4AAHQ/AAB4PwAAUD4AAIg+AAAgPgAA2D4AAFA+AACIPgAAuD4AAGA/AABQPgAAiD4AABA/AACoPgAAUD4AAIg+AABEPwAASD8AAFA+AACIPgAAeD8AAHA+AABQPgAAiD4AADA+AAAwPwAAUD4AAIg+AADAPgAAED4AAFA+AACIPgAAFD8AABg/AABQPgAAiD4AAEg/AABAPQAAUD4AAIg+AAB8PwAAAD8AAFA+AACIPgAAQD4AAHQ/AABQPgAAiD4AAMg+AADQPgAAUD4AAIg+AAAYPwAAXD8AAFA+AACIPgAATD8AAKA+AABQPgAAiD4AAAAAAABEPwAAUD4AAIg+AABQPgAAYD4AAFA+AACIPgAA0D4AACw/AABQPgAAiD4AABw/AAAAPgAAUD4AAIg+AABQPwAAFD8AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-rba",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAAD0AAFA+AACIPgAAoD0AAPg+AABQPgAAiD4AAKA9AABwPwAAUD4AAIg+AACgPQAAyD4AAFA+AACIPgAAoD0AAFg/AABQPgAAiD4AAKA9AACYPgAAUD4AAIg+AACgPQAAQD8AAFA+AACIPgAAoD0AAFA+AABQPgAAiD4AAKA9AAAoPwAAUD4AAIg+AACgPQAA4D0AAFA+AACIPgAAoD0AABA/AABQPgAAiD4AAKA9AACAPAAAUD4AAIg+AACgPQAA8D4AAFA+AACIPgAAoD0AAGw/AABQPgAAiD4AAKA9AADAPgAAUD4AAIg+AACgPQAAVD8AAFA+AACIPgAAoD0AAJA+AABQPgAAiD4AAKA9AAA8PwAAUD4AAIg+AACgPQAAQD4AAFA+AACIPgAAoD0AACQ/AABQPgAAiD4AAKA9AADAPQAAUD4AAIg+AACgPQAADD8AAFA+AACIPgAAoD0AAAAAAABQPgAAiD4AAKA9AADoPgAAUD4AAIg+AACgPQAAaD8AAFA+AACIPgAAoD0AALg+AABQPgAAiD4AAKA9AABQPwAAUD4AAIg+AACgPQAAiD4AAFA+AACIPgAAoD0AADg/AABQPgAAiD4AAKA9AAAwPgAAUD4AAIg+AACgPQAAID8AAFA+AACIPgAAoD0AAKA9AABQPgAAiD4AAKA9AAAIPwAAUD4AAIg+AACgPQAAfD8AAFA+AACIPgAAoD0AAOA+AABQPgAAiD4AAKA9AABkPwAAUD4AAIg+AACgPQAAsD4AAFA+AACIPgAAoD0AAEw/AABQPgAAiD4AAKA9AACAPgAAUD4AAIg+AACgPQAAND8AAFA+AACIPgAAoD0AACA+AABQPgAAiD4AAKA9AAAcPwAAUD4AAIg+AACgPQAAgD0AAFA+AACIPgAAoD0AAAQ/AABQPgAAiD4AAKA9AAB4PwAAUD4AAIg+AACgPQAA2D4AAFA+AACIPgAAoD0AAGA/AABQPgAAiD4AAKA9AACoPgAAUD4AAIg+AACgPQAASD8AAFA+AACIPgAAoD0AAHA+AABQPgAAiD4AAKA9AAAwPwAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABg/AABQPgAAiD4AAKA9AABAPQAAUD4AAIg+AACgPQAAAD8AAFA+AACIPgAAoD0AAHQ/AABQPgAAiD4AAKA9AADQPgAAUD4AAIg+AACgPQAAXD8AAFA+AACIPgAAoD0AAKA+AABQPgAAiD4AAKA9AABEPwAAUD4AAIg+AACgPQAAYD4AAFA+AACIPgAAoD0AACw/AABQPgAAiD4AAKA9AAAAPgAAUD4AAIg+AACgPQAAFD8AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-gba",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAED4AAFA+AACIPgAAYD4AABA+AABQPgAAiD4AANg+AAAQPgAAUD4AAIg+AAAgPwAAED4AAFA+AACIPgAAVD8AABA+AABQPgAAiD4AAAA9AAAQPgAAUD4AAIg+AABwPgAAED4AAFA+AACIPgAA4D4AABA+AABQPgAAiD4AACQ/AAAQPgAAUD4AAIg+AABYPwAAED4AAFA+AACIPgAAQD0AABA+AABQPgAAiD4AAIA+AAAQPgAAUD4AAIg+AADoPgAAED4AAFA+AACIPgAAKD8AABA+AABQPgAAiD4AAFw/AAAQPgAAUD4AAIg+AACAPQAAED4AAFA+AACIPgAAiD4AABA+AABQPgAAiD4AAPA+AAAQPgAAUD4AAIg+AAAsPwAAED4AAFA+AACIPgAAYD8AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACQPgAAED4AAFA+AACIPgAA+D4AABA+AABQPgAAiD4AADA/AAAQPgAAUD4AAIg+AABkPwAAED4AAFA+AACIPgAAwD0AABA+AABQPgAAiD4AAJg+AAAQPgAAUD4AAIg+AAAAPwAAED4AAFA+AACIPgAAND8AABA+AABQPgAAiD4AAGg/AAAQPgAAUD4AAIg+AADgPQAAED4AAFA+AACIPgAAoD4AABA+AABQPgAAiD4AAAQ/AAAQPgAAUD4AAIg+AAA4PwAAED4AAFA+AACIPgAAbD8AABA+AABQPgAAiD4AAAA+AAAQPgAAUD4AAIg+AACoPgAAED4AAFA+AACIPgAACD8AABA+AABQPgAAiD4AADw/AAAQPgAAUD4AAIg+AABwPwAAED4AAFA+AACIPgAAED4AABA+AABQPgAAiD4AALA+AAAQPgAAUD4AAIg+AAAMPwAAED4AAFA+AACIPgAAQD8AABA+AABQPgAAiD4AAHQ/AAAQPgAAUD4AAIg+AAAgPgAAED4AAFA+AACIPgAAuD4AABA+AABQPgAAiD4AABA/AAAQPgAAUD4AAIg+AABEPwAAED4AAFA+AACIPgAAeD8AABA+AABQPgAAiD4AADA+AAAQPgAAUD4AAIg+AADAPgAAED4AAFA+AACIPgAAFD8AABA+AABQPgAAiD4AAEg/AAAQPgAAUD4AAIg+AAB8PwAAED4AAFA+AACIPgAAQD4AABA+AABQPgAAiD4AAMg+AAAQPgAAUD4AAIg+AAAYPwAAED4AAFA+AACIPgAATD8AABA+AABQPgAAiD4AAAAAAAAQPgAAUD4AAIg+AABQPgAAED4AAFA+AACIPgAA0D4AABA+AABQPgAAiD4AABw/AAAQPgAAUD4AAIg+AABQPwAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "plain-rgba",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-none",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AAAAAAAAYD4AAPg+AAAgPwAAgDwAANg+AABwPwAAUD4AAAA9AAAgPwAAyD4AAEg/AABAPQAAVD8AAFg/AAC4PgAAgD0AAAA9AACYPgAAcD8AAKA9AABwPgAAQD8AAAQ/AADAPQAA4D4AAFA+AADAPQAA4D0AACQ/AAAoPwAALD8AAAA+AABYPwAA4D0AAIA+AAAQPgAAQD0AABA/AABUPwAAID4AAIA+AACAPAAA0D4AADA+AADoPgAA8D4AAHw/AABAPgAAKD8AAGw/AAAQPwAAUD4AAFw/AADAPgAAED4AAGA+AACAPQAAVD8AADg/AABwPgAAiD4AAJA+AACYPgAAgD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACQPgAAYD8AACQ/AAAAPQAAmD4AAKA9AADAPQAAHD8AAKA+AACQPgAADD8AAEA+AACoPgAA+D4AAAAAAABEPwAAsD4AADA/AADoPgAAsD4AALg+AABkPwAAaD8AAGw/AADAPgAAwD0AALg+AAAAPwAAyD4AAJg+AABQPwAAoD0AANA+AAAAPwAAiD4AACg/AADYPgAAND8AADg/AABwPgAA4D4AAGg/AAAwPgAAUD8AAOg+AADgPQAAID8AAMg+AADwPgAAoD4AAKA9AAB4PwAA+D4AAAQ/AAAIPwAADD8AAAA/AAA4PwAAfD8AAAA+AAAEPwAAbD8AAOA+AAA0PwAACD8AAAA+AABkPwAAkD4AAAw/AACoPgAAsD4AAFw/AAAQPwAACD8AAEw/AADgPgAAFD8AADw/AACAPgAAgDwAABg/AABwPwAAND8AABg/AAAcPwAAED4AACA+AAAwPgAAID8AALA+AAAcPwAAQD8AACQ/AAAMPwAAgD0AAKg+AAAoPwAAQD8AAAQ/AABoPwAALD8AAHQ/AAB4PwAA+D4AADA/AAAgPgAA2D4AAIA9AAA0PwAAuD4AAGA/AAAkPwAAOD8AABA/AACoPgAAYD4AADw/AABEPwAASD8AAEw/AABAPwAAeD8AAHA+AADAPgAARD8AADA+AAAwPwAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABg/AADgPQAAUD8AAEg/AABAPQAAMD8AAFQ/AAB8PwAAAD8AAIg+AABYPwAAQD4AAHQ/AABYPwAAXD8AAMg+AADQPgAA2D4AAGA/AAAYPwAAXD8AAAAAAABkPwAATD8AAKA+AAAUPwAAaD8AAAAAAABEPwAAID4AAGw/AABQPgAAYD4AADw/AABwPwAA0D4AACw/AACgPgAAdD8AABw/AAAAPgAAZD8AAHg/AABQPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-r",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAAD0AAEA9AAAAAAAAmD4AAPg+AAAgPwAAgDwAAAA/AABwPwAAUD4AAAA9AAA0PwAAyD4AAEg/AABAPQAAaD8AAFg/AAC4PgAAgD0AAOA9AACYPgAAcD8AAKA9AACgPgAAQD8AAAQ/AADAPQAABD8AAFA+AADAPQAA4D0AADg/AAAoPwAALD8AAAA+AABsPwAA4D0AAIA+AAAQPgAAAD4AABA/AABUPwAAID4AAKg+AACAPAAA0D4AADA+AAAIPwAA8D4AAHw/AABAPgAAPD8AAGw/AAAQPwAAUD4AAHA/AADAPgAAED4AAGA+AAAQPgAAVD8AADg/AABwPgAAsD4AAJA+AACYPgAAgD4AAAw/AAA8PwAAYD8AAIg+AABAPwAAQD4AAOg+AACQPgAAdD8AACQ/AAAAPQAAmD4AACA+AADAPQAAHD8AAKA+AAC4PgAADD8AAEA+AACoPgAAED8AAAAAAABEPwAAsD4AAEQ/AADoPgAAsD4AALg+AAB4PwAAaD8AAGw/AADAPgAAMD4AALg+AAAAPwAAyD4AAMA+AABQPwAAoD0AANA+AAAUPwAAiD4AACg/AADYPgAASD8AADg/AABwPgAA4D4AAHw/AAAwPgAAUD8AAOg+AABAPgAAID8AAMg+AADwPgAAyD4AAKA9AAB4PwAA+D4AABg/AAAIPwAADD8AAAA/AABMPwAAfD8AAAA+AAAEPwAAgD8AAOA+AAA0PwAACD8AAFA+AABkPwAAkD4AAAw/AADQPgAAsD4AAFw/AAAQPwAAHD8AAEw/AADgPgAAFD8AAFA/AACAPgAAgDwAABg/AACCPwAAND8AABg/AAAcPwAAYD4AACA+AAAwPgAAID8AANg+AAAcPwAAQD8AACQ/AAAgPwAAgD0AAKg+AAAoPwAAVD8AAAQ/AABoPwAALD8AAIQ/AAB4PwAA+D4AADA/AABwPgAA2D4AAIA9AAA0PwAA4D4AAGA/AAAkPwAAOD8AACQ/AACoPgAAYD4AADw/AABYPwAASD8AAEw/AABAPwAAhj8AAHA+AADAPgAARD8AAIA+AAAwPwAAdD8AAEg/AADoPgAAED4AAAg/AABMPwAAKD8AABg/AADgPQAAUD8AAFw/AABAPQAAMD8AAFQ/AACIPwAAAD8AAIg+AABYPwAAiD4AAHQ/AABYPwAAXD8AAPA+AADQPgAA2D4AAGA/AAAsPwAAXD8AAAAAAABkPwAAYD8AAKA+AAAUPwAAaD8AAKA9AABEPwAAID4AAGw/AACQPgAAYD4AADw/AABwPwAA+D4AACw/AACgPgAAdD8AADA/AAAAPgAAZD8AAHg/AABkPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-g",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAMD4AAEA9AAAAAAAAYD4AACA/AAAgPwAAgDwAANg+AACKPwAAUD4AAAA9AAAgPwAACD8AAEg/AABAPQAAVD8AAHw/AAC4PgAAgD0AAAA9AADgPgAAcD8AAKA9AABwPgAAZD8AAAQ/AADAPQAA4D4AALA+AADAPQAA4D0AACQ/AABMPwAALD8AAAA+AABYPwAAgD4AAIA+AAAQPgAAQD0AADQ/AABUPwAAID4AAIA+AAAgPgAA0D4AADA+AADoPgAAHD8AAHw/AABAPgAAKD8AAIg/AAAQPwAAUD4AAFw/AAAEPwAAED4AAGA+AACAPQAAeD8AADg/AABwPgAAiD4AANg+AACYPgAAgD4AAPA+AABgPwAAYD8AAIg+AAAsPwAAqD4AAOg+AACQPgAAYD8AAEg/AAAAPQAAmD4AAKA9AABwPgAAHD8AAKA+AACQPgAAMD8AAEA+AACoPgAA+D4AABA+AABEPwAAsD4AADA/AAAYPwAAsD4AALg+AABkPwAAhj8AAGw/AADAPgAAwD0AAAA/AAAAPwAAyD4AAJg+AAB0PwAAoD0AANA+AAAAPwAA0D4AACg/AADYPgAAND8AAFw/AABwPgAA4D4AAGg/AACgPgAAUD8AAOg+AADgPQAARD8AAMg+AADwPgAAoD4AAGA+AAB4PwAA+D4AAAQ/AAAsPwAADD8AAAA/AAA4PwAAkD8AAAA+AAAEPwAAbD8AABQ/AAA0PwAACD8AAAA+AACEPwAAkD4AAAw/AACoPgAA+D4AAFw/AAAQPwAACD8AAHA/AADgPgAAFD8AADw/AADIPgAAgDwAABg/AABwPwAAWD8AABg/AAAcPwAAED4AAJg+AAAwPgAAID8AALA+AABAPwAAQD8AACQ/AAAMPwAAUD4AAKg+AAAoPwAAQD8AACg/AABoPwAALD8AAHQ/AACOPwAA+D4AADA/AAAgPgAAED8AAIA9AAA0PwAAuD4AAII/AAAkPwAAOD8AABA/AADwPgAAYD4AADw/AABEPwAAbD8AAEw/AABAPwAAeD8AAMA+AADAPgAARD8AADA+AABUPwAAdD8AAEg/AADAPgAAkD4AAAg/AABMPwAAFD8AADw/AADgPQAAUD8AAEg/AABAPgAAMD8AAFQ/AAB8PwAAJD8AAIg+AABYPwAAQD4AAIw/AABYPwAAXD8AAMg+AAAMPwAA2D4AAGA/AAAYPwAAgD8AAAAAAABkPwAATD8AAOg+AAAUPwAAaD8AAAAAAABoPwAAID4AAGw/AABQPgAAuD4AADw/AABwPwAA0D4AAFA/AACgPgAAdD8AABw/AACIPgAAZD8AAHg/AABQPwAAOD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-rg",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAMD4AAEA9AAAAAAAAmD4AACA/AAAgPwAAgDwAAAA/AACKPwAAUD4AAAA9AAA0PwAACD8AAEg/AABAPQAAaD8AAHw/AAC4PgAAgD0AAOA9AADgPgAAcD8AAKA9AACgPgAAZD8AAAQ/AADAPQAABD8AALA+AADAPQAA4D0AADg/AABMPwAALD8AAAA+AABsPwAAgD4AAIA+AAAQPgAAAD4AADQ/AABUPwAAID4AAKg+AAAgPgAA0D4AADA+AAAIPwAAHD8AAHw/AABAPgAAPD8AAIg/AAAQPwAAUD4AAHA/AAAEPwAAED4AAGA+AAAQPgAAeD8AADg/AABwPgAAsD4AANg+AACYPgAAgD4AAAw/AABgPwAAYD8AAIg+AABAPwAAqD4AAOg+AACQPgAAdD8AAEg/AAAAPQAAmD4AACA+AABwPgAAHD8AAKA+AAC4PgAAMD8AAEA+AACoPgAAED8AABA+AABEPwAAsD4AAEQ/AAAYPwAAsD4AALg+AAB4PwAAhj8AAGw/AADAPgAAMD4AAAA/AAAAPwAAyD4AAMA+AAB0PwAAoD0AANA+AAAUPwAA0D4AACg/AADYPgAASD8AAFw/AABwPgAA4D4AAHw/AACgPgAAUD8AAOg+AABAPgAARD8AAMg+AADwPgAAyD4AAGA+AAB4PwAA+D4AABg/AAAsPwAADD8AAAA/AABMPwAAkD8AAAA+AAAEPwAAgD8AABQ/AAA0PwAACD8AAFA+AACEPwAAkD4AAAw/AADQPgAA+D4AAFw/AAAQPwAAHD8AAHA/AADgPgAAFD8AAFA/AADIPgAAgDwAABg/AACCPwAAWD8AABg/AAAcPwAAYD4AAJg+AAAwPgAAID8AANg+AABAPwAAQD8AACQ/AAAgPwAAUD4AAKg+AAAoPwAAVD8AACg/AABoPwAALD8AAIQ/AACOPwAA+D4AADA/AABwPgAAED8AAIA9AAA0PwAA4D4AAII/AAAkPwAAOD8AACQ/AADwPgAAYD4AADw/AABYPwAAbD8AAEw/AABAPwAAhj8AAMA+AADAPgAARD8AAIA+AABUPwAAdD8AAEg/AADoPgAAkD4AAAg/AABMPwAAKD8AADw/AADgPQAAUD8AAFw/AABAPgAAMD8AAFQ/AACIPwAAJD8AAIg+AABYPwAAiD4AAIw/AABYPwAAXD8AAPA+AAAMPwAA2D4AAGA/AAAsPwAAgD8AAAAAAABkPwAAYD8AAOg+AAAUPwAAaD8AAKA9AABoPwAAID4AAGw/AACQPgAAuD4AADw/AABwPwAA+D4AAFA/AACgPgAAdD8AADA/AACIPgAAZD8AAHg/AABkPwAAOD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-b",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAIA+AAAAAAAAYD4AAPg+AABUPwAAgDwAANg+AABwPwAA0D4AAAA9AAAgPwAAyD4AAHw/AABAPQAAVD8AAFg/AAAQPwAAgD0AAAA9AACYPgAAkj8AAKA9AABwPgAAQD8AADg/AADAPQAA4D4AAFA+AACYPgAA4D0AACQ/AAAoPwAAYD8AAAA+AABYPwAA4D0AAOg+AAAQPgAAQD0AABA/AACEPwAAID4AAIA+AACAPAAAHD8AADA+AADoPgAA8D4AAJg/AABAPgAAKD8AAGw/AABEPwAAUD4AAFw/AADAPgAAsD4AAGA+AACAPQAAVD8AAGw/AABwPgAAiD4AAJA+AAAAPwAAgD4AAPA+AAA8PwAAij8AAIg+AAAsPwAAQD4AACg/AACQPgAAYD8AACQ/AABwPgAAmD4AAKA9AADAPQAAUD8AAKA+AACQPgAADD8AAMg+AACoPgAA+D4AAAAAAAB4PwAAsD4AADA/AADoPgAADD8AALg+AABkPwAAaD8AAJA/AADAPgAAwD0AALg+AAA0PwAAyD4AAJg+AABQPwAAkD4AANA+AAAAPwAAiD4AAFw/AADYPgAAND8AADg/AADgPgAA4D4AAGg/AAAwPgAAgj8AAOg+AADgPQAAID8AABg/AADwPgAAoD4AAKA9AACWPwAA+D4AAAQ/AAAIPwAAQD8AAAA/AAA4PwAAfD8AAKg+AAAEPwAAbD8AAOA+AABoPwAACD8AAAA+AABkPwAA+D4AAAw/AACoPgAAsD4AAIg/AAAQPwAACD8AAEw/AAAkPwAAFD8AADw/AACAPgAAYD4AABg/AABwPwAAND8AAEw/AAAcPwAAED4AACA+AADAPgAAID8AALA+AAAcPwAAdD8AACQ/AAAMPwAAgD0AAAg/AAAoPwAAQD8AAAQ/AACOPwAALD8AAHQ/AAB4PwAAMD8AADA/AAAgPgAA2D4AAIg+AAA0PwAAuD4AAGA/AABYPwAAOD8AABA/AACoPgAA2D4AADw/AABEPwAASD8AAIA/AABAPwAAeD8AAHA+AAAUPwAARD8AADA+AAAwPwAAlD8AAEg/AADAPgAAED4AADw/AABMPwAAFD8AABg/AACgPgAAUD8AAEg/AABAPQAAZD8AAFQ/AAB8PwAAAD8AAPA+AABYPwAAQD4AAHQ/AACGPwAAXD8AAMg+AADQPgAAID8AAGA/AAAYPwAAXD8AAFA+AABkPwAATD8AAKA+AABIPwAAaD8AAAAAAABEPwAAuD4AAGw/AABQPgAAYD4AAHA/AABwPwAA0D4AACw/AAAEPwAAdD8AABw/AAAAPgAAjD8AAHg/AABQPwAAFD8AACw/AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-rb",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAAD0AAIA+AAAAAAAAmD4AAPg+AABUPwAAgDwAAAA/AABwPwAA0D4AAAA9AAA0PwAAyD4AAHw/AABAPQAAaD8AAFg/AAAQPwAAgD0AAOA9AACYPgAAkj8AAKA9AACgPgAAQD8AADg/AADAPQAABD8AAFA+AACYPgAA4D0AADg/AAAoPwAAYD8AAAA+AABsPwAA4D0AAOg+AAAQPgAAAD4AABA/AACEPwAAID4AAKg+AACAPAAAHD8AADA+AAAIPwAA8D4AAJg/AABAPgAAPD8AAGw/AABEPwAAUD4AAHA/AADAPgAAsD4AAGA+AAAQPgAAVD8AAGw/AABwPgAAsD4AAJA+AAAAPwAAgD4AAAw/AAA8PwAAij8AAIg+AABAPwAAQD4AACg/AACQPgAAdD8AACQ/AABwPgAAmD4AACA+AADAPQAAUD8AAKA+AAC4PgAADD8AAMg+AACoPgAAED8AAAAAAAB4PwAAsD4AAEQ/AADoPgAADD8AALg+AAB4PwAAaD8AAJA/AADAPgAAMD4AALg+AAA0PwAAyD4AAMA+AABQPwAAkD4AANA+AAAUPwAAiD4AAFw/AADYPgAASD8AADg/AADgPgAA4D4AAHw/AAAwPgAAgj8AAOg+AABAPgAAID8AABg/AADwPgAAyD4AAKA9AACWPwAA+D4AABg/AAAIPwAAQD8AAAA/AABMPwAAfD8AAKg+AAAEPwAAgD8AAOA+AABoPwAACD8AAFA+AABkPwAA+D4AAAw/AADQPgAAsD4AAIg/AAAQPwAAHD8AAEw/AAAkPwAAFD8AAFA/AACAPgAAYD4AABg/AACCPwAAND8AAEw/AAAcPwAAYD4AACA+AADAPgAAID8AANg+AAAcPwAAdD8AACQ/AAAgPwAAgD0AAAg/AAAoPwAAVD8AAAQ/AACOPwAALD8AAIQ/AAB4PwAAMD8AADA/AABwPgAA2D4AAIg+AAA0PwAA4D4AAGA/AABYPwAAOD8AACQ/AACoPgAA2D4AADw/AABYPwAASD8AAIA/AABAPwAAhj8AAHA+AAAUPwAARD8AAIA+AAAwPwAAlD8AAEg/AADoPgAAED4AADw/AABMPwAAKD8AABg/AACgPgAAUD8AAFw/AABAPQAAZD8AAFQ/AACIPwAAAD8AAPA+AABYPwAAiD4AAHQ/AACGPwAAXD8AAPA+AADQPgAAID8AAGA/AAAsPwAAXD8AAFA+AABkPwAAYD8AAKA+AABIPwAAaD8AAKA9AABEPwAAuD4AAGw/AACQPgAAYD4AAHA/AABwPwAA+D4AACw/AAAEPwAAdD8AADA/AAAAPgAAjD8AAHg/AABkPwAAFD8AACw/AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-gb",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAMD4AAIA+AAAAAAAAYD4AACA/AABUPwAAgDwAANg+AACKPwAA0D4AAAA9AAAgPwAACD8AAHw/AABAPQAAVD8AAHw/AAAQPwAAgD0AAAA9AADgPgAAkj8AAKA9AABwPgAAZD8AADg/AADAPQAA4D4AALA+AACYPgAA4D0AACQ/AABMPwAAYD8AAAA+AABYPwAAgD4AAOg+AAAQPgAAQD0AADQ/AACEPwAAID4AAIA+AAAgPgAAHD8AADA+AADoPgAAHD8AAJg/AABAPgAAKD8AAIg/AABEPwAAUD4AAFw/AAAEPwAAsD4AAGA+AACAPQAAeD8AAGw/AABwPgAAiD4AANg+AAAAPwAAgD4AAPA+AABgPwAAij8AAIg+AAAsPwAAqD4AACg/AACQPgAAYD8AAEg/AABwPgAAmD4AAKA9AABwPgAAUD8AAKA+AACQPgAAMD8AAMg+AACoPgAA+D4AABA+AAB4PwAAsD4AADA/AAAYPwAADD8AALg+AABkPwAAhj8AAJA/AADAPgAAwD0AAAA/AAA0PwAAyD4AAJg+AAB0PwAAkD4AANA+AAAAPwAA0D4AAFw/AADYPgAAND8AAFw/AADgPgAA4D4AAGg/AACgPgAAgj8AAOg+AADgPQAARD8AABg/AADwPgAAoD4AAGA+AACWPwAA+D4AAAQ/AAAsPwAAQD8AAAA/AAA4PwAAkD8AAKg+AAAEPwAAbD8AABQ/AABoPwAACD8AAAA+AACEPwAA+D4AAAw/AACoPgAA+D4AAIg/AAAQPwAACD8AAHA/AAAkPwAAFD8AADw/AADIPgAAYD4AABg/AABwPwAAWD8AAEw/AAAcPwAAED4AAJg+AADAPgAAID8AALA+AABAPwAAdD8AACQ/AAAMPwAAUD4AAAg/AAAoPwAAQD8AACg/AACOPwAALD8AAHQ/AACOPwAAMD8AADA/AAAgPgAAED8AAIg+AAA0PwAAuD4AAII/AABYPwAAOD8AABA/AADwPgAA2D4AADw/AABEPwAAbD8AAIA/AABAPwAAeD8AAMA+AAAUPwAARD8AADA+AABUPwAAlD8AAEg/AADAPgAAkD4AADw/AABMPwAAFD8AADw/AACgPgAAUD8AAEg/AABAPgAAZD8AAFQ/AAB8PwAAJD8AAPA+AABYPwAAQD4AAIw/AACGPwAAXD8AAMg+AAAMPwAAID8AAGA/AAAYPwAAgD8AAFA+AABkPwAATD8AAOg+AABIPwAAaD8AAAAAAABoPwAAuD4AAGw/AABQPgAAuD4AAHA/AABwPwAA0D4AAFA/AAAEPwAAdD8AABw/AACIPgAAjD8AAHg/AABQPwAAOD8AACw/AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-rgb",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAMD4AAIA+AAAAAAAAmD4AACA/AABUPwAAgDwAAAA/AACKPwAA0D4AAAA9AAA0PwAACD8AAHw/AABAPQAAaD8AAHw/AAAQPwAAgD0AAOA9AADgPgAAkj8AAKA9AACgPgAAZD8AADg/AADAPQAABD8AALA+AACYPgAA4D0AADg/AABMPwAAYD8AAAA+AABsPwAAgD4AAOg+AAAQPgAAAD4AADQ/AACEPwAAID4AAKg+AAAgPgAAHD8AADA+AAAIPwAAHD8AAJg/AABAPgAAPD8AAIg/AABEPwAAUD4AAHA/AAAEPwAAsD4AAGA+AAAQPgAAeD8AAGw/AABwPgAAsD4AANg+AAAAPwAAgD4AAAw/AABgPwAAij8AAIg+AABAPwAAqD4AACg/AACQPgAAdD8AAEg/AABwPgAAmD4AACA+AABwPgAAUD8AAKA+AAC4PgAAMD8AAMg+AACoPgAAED8AABA+AAB4PwAAsD4AAEQ/AAAYPwAADD8AALg+AAB4PwAAhj8AAJA/AADAPgAAMD4AAAA/AAA0PwAAyD4AAMA+AAB0PwAAkD4AANA+AAAUPwAA0D4AAFw/AADYPgAASD8AAFw/AADgPgAA4D4AAHw/AACgPgAAgj8AAOg+AABAPgAARD8AABg/AADwPgAAyD4AAGA+AACWPwAA+D4AABg/AAAsPwAAQD8AAAA/AABMPwAAkD8AAKg+AAAEPwAAgD8AABQ/AABoPwAACD8AAFA+AACEPwAA+D4AAAw/AADQPgAA+D4AAIg/AAAQPwAAHD8AAHA/AAAkPwAAFD8AAFA/AADIPgAAYD4AABg/AACCPwAAWD8AAEw/AAAcPwAAYD4AAJg+AADAPgAAID8AANg+AABAPwAAdD8AACQ/AAAgPwAAUD4AAAg/AAAoPwAAVD8AACg/AACOPwAALD8AAIQ/AACOPwAAMD8AADA/AABwPgAAED8AAIg+AAA0PwAA4D4AAII/AABYPwAAOD8AACQ/AADwPgAA2D4AADw/AABYPwAAbD8AAIA/AABAPwAAhj8AAMA+AAAUPwAARD8AAIA+AABUPwAAlD8AAEg/AADoPgAAkD4AADw/AABMPwAAKD8AADw/AACgPgAAUD8AAFw/AABAPgAAZD8AAFQ/AACIPwAAJD8AAPA+AABYPwAAiD4AAIw/AACGPwAAXD8AAPA+AAAMPwAAID8AAGA/AAAsPwAAgD8AAFA+AABkPwAAYD8AAOg+AABIPwAAaD8AAKA9AABoPwAAuD4AAGw/AACQPgAAuD4AAHA/AABwPwAA+D4AAFA/AAAEPwAAdD8AADA/AACIPgAAjD8AAHg/AABkPwAAOD8AACw/AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-a",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AACIPgAAYD4AAPg+AAAgPwAAkD4AANg+AABwPwAAUD4AAJg+AAAgPwAAyD4AAEg/AACgPgAAVD8AAFg/AAC4PgAAqD4AAAA9AACYPgAAcD8AALA+AABwPgAAQD8AAAQ/AAC4PgAA4D4AAFA+AADAPQAAwD4AACQ/AAAoPwAALD8AAMg+AABYPwAA4D0AAIA+AADQPgAAQD0AABA/AABUPwAA2D4AAIA+AACAPAAA0D4AAOA+AADoPgAA8D4AAHw/AADoPgAAKD8AAGw/AAAQPwAA8D4AAFw/AADAPgAAED4AAPg+AACAPQAAVD8AADg/AAAAPwAAiD4AAJA+AACYPgAABD8AAPA+AAA8PwAAYD8AAAg/AAAsPwAAQD4AAOg+AAAMPwAAYD8AACQ/AAAAPQAAED8AAKA9AADAPQAAHD8AABQ/AACQPgAADD8AAEA+AAAYPwAA+D4AAAAAAABEPwAAHD8AADA/AADoPgAAsD4AACA/AABkPwAAaD8AAGw/AAAkPwAAwD0AALg+AAAAPwAAKD8AAJg+AABQPwAAoD0AACw/AAAAPwAAiD4AACg/AAAwPwAAND8AADg/AABwPgAAND8AAGg/AAAwPgAAUD8AADg/AADgPQAAID8AAMg+AAA8PwAAoD4AAKA9AAB4PwAAQD8AAAQ/AAAIPwAADD8AAEQ/AAA4PwAAfD8AAAA+AABIPwAAbD8AAOA+AAA0PwAATD8AAAA+AABkPwAAkD4AAFA/AACoPgAAsD4AAFw/AABUPwAACD8AAEw/AADgPgAAWD8AADw/AACAPgAAgDwAAFw/AABwPwAAND8AABg/AABgPwAAED4AACA+AAAwPgAAZD8AALA+AAAcPwAAQD8AAGg/AAAMPwAAgD0AAKg+AABsPwAAQD8AAAQ/AABoPwAAcD8AAHQ/AAB4PwAA+D4AAHQ/AAAgPgAA2D4AAIA9AAB4PwAAuD4AAGA/AAAkPwAAfD8AABA/AACoPgAAYD4AAIA/AABEPwAASD8AAEw/AACCPwAAeD8AAHA+AADAPgAAhD8AADA+AAAwPwAAdD8AAIY/AADAPgAAED4AAAg/AACIPwAAFD8AABg/AADgPQAAij8AAEg/AABAPQAAMD8AAIw/AAB8PwAAAD8AAIg+AACOPwAAQD4AAHQ/AABYPwAAkD8AAMg+AADQPgAA2D4AAJI/AAAYPwAAXD8AAAAAAACUPwAATD8AAKA+AAAUPwAAlj8AAAAAAABEPwAAID4AAJg/AABQPgAAYD4AADw/AACaPwAA0D4AACw/AACgPgAAnD8AABw/AAAAPgAAZD8AAJ4/AABQPwAAFD8AAPA+AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-ra",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAAD0AAEA9AACIPgAAmD4AAPg+AAAgPwAAkD4AAAA/AABwPwAAUD4AAJg+AAA0PwAAyD4AAEg/AACgPgAAaD8AAFg/AAC4PgAAqD4AAOA9AACYPgAAcD8AALA+AACgPgAAQD8AAAQ/AAC4PgAABD8AAFA+AADAPQAAwD4AADg/AAAoPwAALD8AAMg+AABsPwAA4D0AAIA+AADQPgAAAD4AABA/AABUPwAA2D4AAKg+AACAPAAA0D4AAOA+AAAIPwAA8D4AAHw/AADoPgAAPD8AAGw/AAAQPwAA8D4AAHA/AADAPgAAED4AAPg+AAAQPgAAVD8AADg/AAAAPwAAsD4AAJA+AACYPgAABD8AAAw/AAA8PwAAYD8AAAg/AABAPwAAQD4AAOg+AAAMPwAAdD8AACQ/AAAAPQAAED8AACA+AADAPQAAHD8AABQ/AAC4PgAADD8AAEA+AAAYPwAAED8AAAAAAABEPwAAHD8AAEQ/AADoPgAAsD4AACA/AAB4PwAAaD8AAGw/AAAkPwAAMD4AALg+AAAAPwAAKD8AAMA+AABQPwAAoD0AACw/AAAUPwAAiD4AACg/AAAwPwAASD8AADg/AABwPgAAND8AAHw/AAAwPgAAUD8AADg/AABAPgAAID8AAMg+AAA8PwAAyD4AAKA9AAB4PwAAQD8AABg/AAAIPwAADD8AAEQ/AABMPwAAfD8AAAA+AABIPwAAgD8AAOA+AAA0PwAATD8AAFA+AABkPwAAkD4AAFA/AADQPgAAsD4AAFw/AABUPwAAHD8AAEw/AADgPgAAWD8AAFA/AACAPgAAgDwAAFw/AACCPwAAND8AABg/AABgPwAAYD4AACA+AAAwPgAAZD8AANg+AAAcPwAAQD8AAGg/AAAgPwAAgD0AAKg+AABsPwAAVD8AAAQ/AABoPwAAcD8AAIQ/AAB4PwAA+D4AAHQ/AABwPgAA2D4AAIA9AAB4PwAA4D4AAGA/AAAkPwAAfD8AACQ/AACoPgAAYD4AAIA/AABYPwAASD8AAEw/AACCPwAAhj8AAHA+AADAPgAAhD8AAIA+AAAwPwAAdD8AAIY/AADoPgAAED4AAAg/AACIPwAAKD8AABg/AADgPQAAij8AAFw/AABAPQAAMD8AAIw/AACIPwAAAD8AAIg+AACOPwAAiD4AAHQ/AABYPwAAkD8AAPA+AADQPgAA2D4AAJI/AAAsPwAAXD8AAAAAAACUPwAAYD8AAKA+AAAUPwAAlj8AAKA9AABEPwAAID4AAJg/AACQPgAAYD4AADw/AACaPwAA+D4AACw/AACgPgAAnD8AADA/AAAAPgAAZD8AAJ4/AABkPwAAFD8AAPA+AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-ga",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAMD4AAEA9AACIPgAAYD4AACA/AAAgPwAAkD4AANg+AACKPwAAUD4AAJg+AAAgPwAACD8AAEg/AACgPgAAVD8AAHw/AAC4PgAAqD4AAAA9AADgPgAAcD8AALA+AABwPgAAZD8AAAQ/AAC4PgAA4D4AALA+AADAPQAAwD4AACQ/AABMPwAALD8AAMg+AABYPwAAgD4AAIA+AADQPgAAQD0AADQ/AABUPwAA2D4AAIA+AAAgPgAA0D4AAOA+AADoPgAAHD8AAHw/AADoPgAAKD8AAIg/AAAQPwAA8D4AAFw/AAAEPwAAED4AAPg+AACAPQAAeD8AADg/AAAAPwAAiD4AANg+AACYPgAABD8AAPA+AABgPwAAYD8AAAg/AAAsPwAAqD4AAOg+AAAMPwAAYD8AAEg/AAAAPQAAED8AAKA9AABwPgAAHD8AABQ/AACQPgAAMD8AAEA+AAAYPwAA+D4AABA+AABEPwAAHD8AADA/AAAYPwAAsD4AACA/AABkPwAAhj8AAGw/AAAkPwAAwD0AAAA/AAAAPwAAKD8AAJg+AAB0PwAAoD0AACw/AAAAPwAA0D4AACg/AAAwPwAAND8AAFw/AABwPgAAND8AAGg/AACgPgAAUD8AADg/AADgPQAARD8AAMg+AAA8PwAAoD4AAGA+AAB4PwAAQD8AAAQ/AAAsPwAADD8AAEQ/AAA4PwAAkD8AAAA+AABIPwAAbD8AABQ/AAA0PwAATD8AAAA+AACEPwAAkD4AAFA/AACoPgAA+D4AAFw/AABUPwAACD8AAHA/AADgPgAAWD8AADw/AADIPgAAgDwAAFw/AABwPwAAWD8AABg/AABgPwAAED4AAJg+AAAwPgAAZD8AALA+AABAPwAAQD8AAGg/AAAMPwAAUD4AAKg+AABsPwAAQD8AACg/AABoPwAAcD8AAHQ/AACOPwAA+D4AAHQ/AAAgPgAAED8AAIA9AAB4PwAAuD4AAII/AAAkPwAAfD8AABA/AADwPgAAYD4AAIA/AABEPwAAbD8AAEw/AACCPwAAeD8AAMA+AADAPgAAhD8AADA+AABUPwAAdD8AAIY/AADAPgAAkD4AAAg/AACIPwAAFD8AADw/AADgPQAAij8AAEg/AABAPgAAMD8AAIw/AAB8PwAAJD8AAIg+AACOPwAAQD4AAIw/AABYPwAAkD8AAMg+AAAMPwAA2D4AAJI/AAAYPwAAgD8AAAAAAACUPwAATD8AAOg+AAAUPwAAlj8AAAAAAABoPwAAID4AAJg/AABQPgAAuD4AADw/AACaPwAA0D4AAFA/AACgPgAAnD8AABw/AACIPgAAZD8AAJ4/AABQPwAAOD8AAPA+AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-rga",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAMD4AAEA9AACIPgAAmD4AACA/AAAgPwAAkD4AAAA/AACKPwAAUD4AAJg+AAA0PwAACD8AAEg/AACgPgAAaD8AAHw/AAC4PgAAqD4AAOA9AADgPgAAcD8AALA+AACgPgAAZD8AAAQ/AAC4PgAABD8AALA+AADAPQAAwD4AADg/AABMPwAALD8AAMg+AABsPwAAgD4AAIA+AADQPgAAAD4AADQ/AABUPwAA2D4AAKg+AAAgPgAA0D4AAOA+AAAIPwAAHD8AAHw/AADoPgAAPD8AAIg/AAAQPwAA8D4AAHA/AAAEPwAAED4AAPg+AAAQPgAAeD8AADg/AAAAPwAAsD4AANg+AACYPgAABD8AAAw/AABgPwAAYD8AAAg/AABAPwAAqD4AAOg+AAAMPwAAdD8AAEg/AAAAPQAAED8AACA+AABwPgAAHD8AABQ/AAC4PgAAMD8AAEA+AAAYPwAAED8AABA+AABEPwAAHD8AAEQ/AAAYPwAAsD4AACA/AAB4PwAAhj8AAGw/AAAkPwAAMD4AAAA/AAAAPwAAKD8AAMA+AAB0PwAAoD0AACw/AAAUPwAA0D4AACg/AAAwPwAASD8AAFw/AABwPgAAND8AAHw/AACgPgAAUD8AADg/AABAPgAARD8AAMg+AAA8PwAAyD4AAGA+AAB4PwAAQD8AABg/AAAsPwAADD8AAEQ/AABMPwAAkD8AAAA+AABIPwAAgD8AABQ/AAA0PwAATD8AAFA+AACEPwAAkD4AAFA/AADQPgAA+D4AAFw/AABUPwAAHD8AAHA/AADgPgAAWD8AAFA/AADIPgAAgDwAAFw/AACCPwAAWD8AABg/AABgPwAAYD4AAJg+AAAwPgAAZD8AANg+AABAPwAAQD8AAGg/AAAgPwAAUD4AAKg+AABsPwAAVD8AACg/AABoPwAAcD8AAIQ/AACOPwAA+D4AAHQ/AABwPgAAED8AAIA9AAB4PwAA4D4AAII/AAAkPwAAfD8AACQ/AADwPgAAYD4AAIA/AABYPwAAbD8AAEw/AACCPwAAhj8AAMA+AADAPgAAhD8AAIA+AABUPwAAdD8AAIY/AADoPgAAkD4AAAg/AACIPwAAKD8AADw/AADgPQAAij8AAFw/AABAPgAAMD8AAIw/AACIPwAAJD8AAIg+AACOPwAAiD4AAIw/AABYPwAAkD8AAPA+AAAMPwAA2D4AAJI/AAAsPwAAgD8AAAAAAACUPwAAYD8AAOg+AAAUPwAAlj8AAKA9AABoPwAAID4AAJg/AACQPgAAuD4AADw/AACaPwAA+D4AAFA/AACgPgAAnD8AADA/AACIPgAAZD8AAJ4/AABkPwAAOD8AAPA+AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-ba",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAIA+AACIPgAAYD4AAPg+AABUPwAAkD4AANg+AABwPwAA0D4AAJg+AAAgPwAAyD4AAHw/AACgPgAAVD8AAFg/AAAQPwAAqD4AAAA9AACYPgAAkj8AALA+AABwPgAAQD8AADg/AAC4PgAA4D4AAFA+AACYPgAAwD4AACQ/AAAoPwAAYD8AAMg+AABYPwAA4D0AAOg+AADQPgAAQD0AABA/AACEPwAA2D4AAIA+AACAPAAAHD8AAOA+AADoPgAA8D4AAJg/AADoPgAAKD8AAGw/AABEPwAA8D4AAFw/AADAPgAAsD4AAPg+AACAPQAAVD8AAGw/AAAAPwAAiD4AAJA+AAAAPwAABD8AAPA+AAA8PwAAij8AAAg/AAAsPwAAQD4AACg/AAAMPwAAYD8AACQ/AABwPgAAED8AAKA9AADAPQAAUD8AABQ/AACQPgAADD8AAMg+AAAYPwAA+D4AAAAAAAB4PwAAHD8AADA/AADoPgAADD8AACA/AABkPwAAaD8AAJA/AAAkPwAAwD0AALg+AAA0PwAAKD8AAJg+AABQPwAAkD4AACw/AAAAPwAAiD4AAFw/AAAwPwAAND8AADg/AADgPgAAND8AAGg/AAAwPgAAgj8AADg/AADgPQAAID8AABg/AAA8PwAAoD4AAKA9AACWPwAAQD8AAAQ/AAAIPwAAQD8AAEQ/AAA4PwAAfD8AAKg+AABIPwAAbD8AAOA+AABoPwAATD8AAAA+AABkPwAA+D4AAFA/AACoPgAAsD4AAIg/AABUPwAACD8AAEw/AAAkPwAAWD8AADw/AACAPgAAYD4AAFw/AABwPwAAND8AAEw/AABgPwAAED4AACA+AADAPgAAZD8AALA+AAAcPwAAdD8AAGg/AAAMPwAAgD0AAAg/AABsPwAAQD8AAAQ/AACOPwAAcD8AAHQ/AAB4PwAAMD8AAHQ/AAAgPgAA2D4AAIg+AAB4PwAAuD4AAGA/AABYPwAAfD8AABA/AACoPgAA2D4AAIA/AABEPwAASD8AAIA/AACCPwAAeD8AAHA+AAAUPwAAhD8AADA+AAAwPwAAlD8AAIY/AADAPgAAED4AADw/AACIPwAAFD8AABg/AACgPgAAij8AAEg/AABAPQAAZD8AAIw/AAB8PwAAAD8AAPA+AACOPwAAQD4AAHQ/AACGPwAAkD8AAMg+AADQPgAAID8AAJI/AAAYPwAAXD8AAFA+AACUPwAATD8AAKA+AABIPwAAlj8AAAAAAABEPwAAuD4AAJg/AABQPgAAYD4AAHA/AACaPwAA0D4AACw/AAAEPwAAnD8AABw/AAAAPgAAjD8AAJ4/AABQPwAAFD8AACw/AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-rba",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAAD0AAIA+AACIPgAAmD4AAPg+AABUPwAAkD4AAAA/AABwPwAA0D4AAJg+AAA0PwAAyD4AAHw/AACgPgAAaD8AAFg/AAAQPwAAqD4AAOA9AACYPgAAkj8AALA+AACgPgAAQD8AADg/AAC4PgAABD8AAFA+AACYPgAAwD4AADg/AAAoPwAAYD8AAMg+AABsPwAA4D0AAOg+AADQPgAAAD4AABA/AACEPwAA2D4AAKg+AACAPAAAHD8AAOA+AAAIPwAA8D4AAJg/AADoPgAAPD8AAGw/AABEPwAA8D4AAHA/AADAPgAAsD4AAPg+AAAQPgAAVD8AAGw/AAAAPwAAsD4AAJA+AAAAPwAABD8AAAw/AAA8PwAAij8AAAg/AABAPwAAQD4AACg/AAAMPwAAdD8AACQ/AABwPgAAED8AACA+AADAPQAAUD8AABQ/AAC4PgAADD8AAMg+AAAYPwAAED8AAAAAAAB4PwAAHD8AAEQ/AADoPgAADD8AACA/AAB4PwAAaD8AAJA/AAAkPwAAMD4AALg+AAA0PwAAKD8AAMA+AABQPwAAkD4AACw/AAAUPwAAiD4AAFw/AAAwPwAASD8AADg/AADgPgAAND8AAHw/AAAwPgAAgj8AADg/AABAPgAAID8AABg/AAA8PwAAyD4AAKA9AACWPwAAQD8AABg/AAAIPwAAQD8AAEQ/AABMPwAAfD8AAKg+AABIPwAAgD8AAOA+AABoPwAATD8AAFA+AABkPwAA+D4AAFA/AADQPgAAsD4AAIg/AABUPwAAHD8AAEw/AAAkPwAAWD8AAFA/AACAPgAAYD4AAFw/AACCPwAAND8AAEw/AABgPwAAYD4AACA+AADAPgAAZD8AANg+AAAcPwAAdD8AAGg/AAAgPwAAgD0AAAg/AABsPwAAVD8AAAQ/AACOPwAAcD8AAIQ/AAB4PwAAMD8AAHQ/AABwPgAA2D4AAIg+AAB4PwAA4D4AAGA/AABYPwAAfD8AACQ/AACoPgAA2D4AAIA/AABYPwAASD8AAIA/AACCPwAAhj8AAHA+AAAUPwAAhD8AAIA+AAAwPwAAlD8AAIY/AADoPgAAED4AADw/AACIPwAAKD8AABg/AACgPgAAij8AAFw/AABAPQAAZD8AAIw/AACIPwAAAD8AAPA+AACOPwAAiD4AAHQ/AACGPwAAkD8AAPA+AADQPgAAID8AAJI/AAAsPwAAXD8AAFA+AACUPwAAYD8AAKA+AABIPwAAlj8AAKA9AABEPwAAuD4AAJg/AACQPgAAYD4AAHA/AACaPwAA+D4AACw/AAAEPwAAnD8AADA/AAAAPgAAjD8AAJ4/AABkPwAAFD8AACw/AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-gba",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAMD4AAIA+AACIPgAAYD4AACA/AABUPwAAkD4AANg+AACKPwAA0D4AAJg+AAAgPwAACD8AAHw/AACgPgAAVD8AAHw/AAAQPwAAqD4AAAA9AADgPgAAkj8AALA+AABwPgAAZD8AADg/AAC4PgAA4D4AALA+AACYPgAAwD4AACQ/AABMPwAAYD8AAMg+AABYPwAAgD4AAOg+AADQPgAAQD0AADQ/AACEPwAA2D4AAIA+AAAgPgAAHD8AAOA+AADoPgAAHD8AAJg/AADoPgAAKD8AAIg/AABEPwAA8D4AAFw/AAAEPwAAsD4AAPg+AACAPQAAeD8AAGw/AAAAPwAAiD4AANg+AAAAPwAABD8AAPA+AABgPwAAij8AAAg/AAAsPwAAqD4AACg/AAAMPwAAYD8AAEg/AABwPgAAED8AAKA9AABwPgAAUD8AABQ/AACQPgAAMD8AAMg+AAAYPwAA+D4AABA+AAB4PwAAHD8AADA/AAAYPwAADD8AACA/AABkPwAAhj8AAJA/AAAkPwAAwD0AAAA/AAA0PwAAKD8AAJg+AAB0PwAAkD4AACw/AAAAPwAA0D4AAFw/AAAwPwAAND8AAFw/AADgPgAAND8AAGg/AACgPgAAgj8AADg/AADgPQAARD8AABg/AAA8PwAAoD4AAGA+AACWPwAAQD8AAAQ/AAAsPwAAQD8AAEQ/AAA4PwAAkD8AAKg+AABIPwAAbD8AABQ/AABoPwAATD8AAAA+AACEPwAA+D4AAFA/AACoPgAA+D4AAIg/AABUPwAACD8AAHA/AAAkPwAAWD8AADw/AADIPgAAYD4AAFw/AABwPwAAWD8AAEw/AABgPwAAED4AAJg+AADAPgAAZD8AALA+AABAPwAAdD8AAGg/AAAMPwAAUD4AAAg/AABsPwAAQD8AACg/AACOPwAAcD8AAHQ/AACOPwAAMD8AAHQ/AAAgPgAAED8AAIg+AAB4PwAAuD4AAII/AABYPwAAfD8AABA/AADwPgAA2D4AAIA/AABEPwAAbD8AAIA/AACCPwAAeD8AAMA+AAAUPwAAhD8AADA+AABUPwAAlD8AAIY/AADAPgAAkD4AADw/AACIPwAAFD8AADw/AACgPgAAij8AAEg/AABAPgAAZD8AAIw/AAB8PwAAJD8AAPA+AACOPwAAQD4AAIw/AACGPwAAkD8AAMg+AAAMPwAAID8AAJI/AAAYPwAAgD8AAFA+AACUPwAATD8AAOg+AABIPwAAlj8AAAAAAABoPwAAuD4AAJg/AABQPgAAuD4AAHA/AACaPwAA0D4AAFA/AAAEPwAAnD8AABw/AACIPgAAjD8AAJ4/AABQPwAAOD8AACw/AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend-rgba",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAMD4AAIA+AACIPgAAmD4AACA/AABUPwAAkD4AAAA/AACKPwAA0D4AAJg+AAA0PwAACD8AAHw/AACgPgAAaD8AAHw/AAAQPwAAqD4AAOA9AADgPgAAkj8AALA+AACgPgAAZD8AADg/AAC4PgAABD8AALA+AACYPgAAwD4AADg/AABMPwAAYD8AAMg+AABsPwAAgD4AAOg+AADQPgAAAD4AADQ/AACEPwAA2D4AAKg+AAAgPgAAHD8AAOA+AAAIPwAAHD8AAJg/AADoPgAAPD8AAIg/AABEPwAA8D4AAHA/AAAEPwAAsD4AAPg+AAAQPgAAeD8AAGw/AAAAPwAAsD4AANg+AAAAPwAABD8AAAw/AABgPwAAij8AAAg/AABAPwAAqD4AACg/AAAMPwAAdD8AAEg/AABwPgAAED8AACA+AABwPgAAUD8AABQ/AAC4PgAAMD8AAMg+AAAYPwAAED8AABA+AAB4PwAAHD8AAEQ/AAAYPwAADD8AACA/AAB4PwAAhj8AAJA/AAAkPwAAMD4AAAA/AAA0PwAAKD8AAMA+AAB0PwAAkD4AACw/AAAUPwAA0D4AAFw/AAAwPwAASD8AAFw/AADgPgAAND8AAHw/AACgPgAAgj8AADg/AABAPgAARD8AABg/AAA8PwAAyD4AAGA+AACWPwAAQD8AABg/AAAsPwAAQD8AAEQ/AABMPwAAkD8AAKg+AABIPwAAgD8AABQ/AABoPwAATD8AAFA+AACEPwAA+D4AAFA/AADQPgAA+D4AAIg/AABUPwAAHD8AAHA/AAAkPwAAWD8AAFA/AADIPgAAYD4AAFw/AACCPwAAWD8AAEw/AABgPwAAYD4AAJg+AADAPgAAZD8AANg+AABAPwAAdD8AAGg/AAAgPwAAUD4AAAg/AABsPwAAVD8AACg/AACOPwAAcD8AAIQ/AACOPwAAMD8AAHQ/AABwPgAAED8AAIg+AAB4PwAA4D4AAII/AABYPwAAfD8AACQ/AADwPgAA2D4AAIA/AABYPwAAbD8AAIA/AACCPwAAhj8AAMA+AAAUPwAAhD8AAIA+AABUPwAAlD8AAIY/AADoPgAAkD4AADw/AACIPwAAKD8AADw/AACgPgAAij8AAFw/AABAPgAAZD8AAIw/AACIPwAAJD8AAPA+AACOPwAAiD4AAIw/AACGPwAAkD8AAPA+AAAMPwAAID8AAJI/AAAsPwAAgD8AAFA+AACUPwAAYD8AAOg+AABIPwAAlj8AAKA9AABoPwAAuD4AAJg/AACQPgAAuD4AAHA/AACaPwAA+D4AAFA/AAAEPwAAnD8AADA/AACIPgAAjD8AAJ4/AABkPwAAOD8AACw/AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 64,
+        "argument_samplers_taken": 8,
+        "argument_tables_retained": 32,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 32,
+        "command_buffers_begun": 106,
+        "command_buffers_begun_batch_barriers": 32,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_encoders": 64,
+        "command_buffers_submitted": 97,
+        "commands_recorded.begin_command_buffer": 96,
+        "commands_recorded.cmd_begin_render_pass": 32,
+        "commands_recorded.cmd_bind_descriptor_sets": 32,
+        "commands_recorded.cmd_bind_pipeline": 32,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 32,
+        "commands_recorded.cmd_draw": 32,
+        "commands_recorded.cmd_end_render_pass": 32,
+        "commands_recorded.cmd_pipeline_barrier": 35,
+        "commands_recorded.cmd_push_constants": 32,
+        "commands_recorded.cmd_set_blend_constants": 32,
+        "commands_recorded.cmd_set_cull_mode": 32,
+        "commands_recorded.cmd_set_depth_bias": 32,
+        "commands_recorded.cmd_set_depth_compare_op": 32,
+        "commands_recorded.cmd_set_depth_test_enable": 32,
+        "commands_recorded.cmd_set_depth_write_enable": 32,
+        "commands_recorded.cmd_set_front_face": 32,
+        "commands_recorded.cmd_set_primitive_restart_enable": 32,
+        "commands_recorded.cmd_set_primitive_topology": 32,
+        "commands_recorded.cmd_set_scissor": 32,
+        "commands_recorded.cmd_set_stencil_compare_mask": 32,
+        "commands_recorded.cmd_set_stencil_op": 32,
+        "commands_recorded.cmd_set_stencil_reference": 32,
+        "commands_recorded.cmd_set_stencil_test_enable": 32,
+        "commands_recorded.cmd_set_stencil_write_mask": 32,
+        "commands_recorded.cmd_set_viewport": 32,
+        "commands_recorded.end_command_buffer": 97,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 32,
+        "creation_pipelines_made": 32,
+        "creation_render_pipelines_drawn": 32,
+        "creation_render_pipelines_made": 32,
+        "descriptor_keys_built": 32,
+        "device_memory_allocated": 268436480,
+        "draw_shapes_made": 8,
+        "draw_states_recorded": 608,
+        "draws_settled": 32,
+        "driver_diagnostics_withheld": 32,
+        "encoder_command_buffers_begun": 64,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 62,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 32,
+        "heap_tables_worked_out": 64,
+        "host_texel_copies": 32,
+        "images_started_on_the_host": 32,
+        "inline_passes": 32,
+        "linked_use_questions_asked": 64,
+        "new_buffer_bytes_cleared": 33808,
+        "object_churn.buffers_parked": 34,
+        "object_churn.buffers_recycled": 32,
+        "object_churn.images_own_memory": 32,
+        "object_churn.textures_image": 32,
+        "object_churn.vk_buffer_bindings": 2,
+        "object_churn.vk_buffers_made": 2,
+        "object_churn.vk_image_bindings": 32,
+        "object_churn.vk_image_views_made": 32,
+        "object_churn.vk_images_destroyed": 32,
+        "object_churn.vk_images_made": 32,
+        "pipeline_layouts_made": 3,
+        "pipeline_layouts_shared": 32,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 32,
+        "render_passes_begun_inline": 32,
+        "render_passes_made": 4,
+        "resident_textures_looked_at": 32,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "set_zero_sets_found": 31,
+        "shader_modules_made": 4,
+        "shader_modules_shared": 64,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 190,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 128,
+        "storage_placeholders_made": 1,
+        "submit_infos": 1,
+        "trail_waits": 1,
+        "variant_pipelines_made": 32,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "arena_pools_made": 1,
+        "argument_samplers_taken": 8,
+        "command_buffers_begun": 97,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_submitted": 97,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 35,
+        "commands_recorded.end_command_buffer": 97,
+        "device_memory_allocated": 268435456,
+        "draw_shapes_made": 8,
+        "functions_translated": 2,
+        "linked_use_questions_asked": 64,
+        "pipeline_layouts_made": 1,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 2,
+        "shader_modules_made": 2,
+        "stage_entries_shared": 160,
+        "stage_entries_specialized": 2,
+        "storage_placeholders_made": 0
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "pipeline_layouts_made": 3,
+        "pooled_memory_blocks_made": 4,
+        "shader_modules_made": 4
+      },
+      "per_state": {
+        "pipelines": 64,
+        "states": 32
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "blend-sweep-write-masks",
+        "calls": 164,
+        "in_calls": 39304408,
+        "on_cpu": 2609045,
+        "blocked": 36553001,
+        "elsewhere": 8545167,
+        "spend": 47733533,
+        "spend_least": 45963710,
+        "spend_most": 53026338,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2292,
+            "on_cpu": 2375,
+            "blocked": 0,
+            "wall_least": 2042,
+            "wall_most": 2625,
+            "wall_total": 23624,
+            "on_cpu_total": 24083,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 26937083,
+            "on_cpu": 674458,
+            "blocked": 26267666,
+            "wall_least": 25709875,
+            "wall_most": 28973584,
+            "wall_total": 26937083,
+            "on_cpu_total": 674458,
+            "blocked_total": 26267666
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 84,
+            "on_cpu": 209,
+            "blocked": 0,
+            "wall_least": 83,
+            "wall_most": 166,
+            "wall_total": 6460,
+            "on_cpu_total": 15413,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 11166875,
+            "on_cpu": 853584,
+            "blocked": 10260458,
+            "wall_least": 10878167,
+            "wall_most": 12585375,
+            "wall_total": 11166875,
+            "on_cpu_total": 853584,
+            "blocked_total": 10260458
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 22542,
+            "on_cpu": 22708,
+            "blocked": 0,
+            "wall_least": 22042,
+            "wall_most": 26375,
+            "wall_total": 867710,
+            "on_cpu_total": 873373,
+            "blocked_total": 0
+          },
+          {
+            "call": "replace_region",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 167,
+            "on_cpu": 292,
+            "blocked": 0,
+            "wall_least": 167,
+            "wall_most": 208,
+            "wall_total": 7543,
+            "on_cpu_total": 11503,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 3125,
+            "on_cpu": 3208,
+            "blocked": 0,
+            "wall_least": 3042,
+            "wall_most": 3416,
+            "wall_total": 113998,
+            "on_cpu_total": 118208,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 1541,
+            "on_cpu": 1667,
+            "blocked": 0,
+            "wall_least": 1459,
+            "wall_most": 1666,
+            "wall_total": 51087,
+            "on_cpu_total": 54668,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "blend-sweep-write-masks",
+        "calls": 164,
+        "in_calls": 68916710,
+        "on_cpu": 61990589,
+        "blocked": 6871578,
+        "elsewhere": 5055583,
+        "spend": 74006786,
+        "spend_least": 70002748,
+        "spend_most": 77522776,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 833,
+            "on_cpu": 917,
+            "blocked": 0,
+            "wall_least": 708,
+            "wall_most": 1000,
+            "wall_total": 3291,
+            "on_cpu_total": 3542,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 380083,
+            "on_cpu": 383750,
+            "blocked": 0,
+            "wall_least": 369500,
+            "wall_most": 459375,
+            "wall_total": 380083,
+            "on_cpu_total": 383750,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 83,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 42,
+            "wall_most": 83,
+            "wall_total": 2791,
+            "on_cpu_total": 6748,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3821083,
+            "on_cpu": 603084,
+            "blocked": 3185500,
+            "wall_least": 3672250,
+            "wall_most": 4092166,
+            "wall_total": 3821083,
+            "on_cpu_total": 603084,
+            "blocked_total": 3185500
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 1996416,
+            "on_cpu": 1903833,
+            "blocked": 101833,
+            "wall_least": 1924458,
+            "wall_most": 2140375,
+            "wall_total": 64018959,
+            "on_cpu_total": 60549877,
+            "blocked_total": 3469082
+          },
+          {
+            "call": "replace_region",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 542,
+            "on_cpu": 667,
+            "blocked": 0,
+            "wall_least": 458,
+            "wall_most": 750,
+            "wall_total": 19835,
+            "on_cpu_total": 23541,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 11667,
+            "on_cpu": 11833,
+            "blocked": 0,
+            "wall_least": 10000,
+            "wall_most": 16209,
+            "wall_total": 436376,
+            "on_cpu_total": 441330,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 32,
+            "most_calls": 32,
+            "wall": 958,
+            "on_cpu": 1125,
+            "blocked": 0,
+            "wall_least": 834,
+            "wall_most": 1292,
+            "wall_total": 34957,
+            "on_cpu_total": 39090,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

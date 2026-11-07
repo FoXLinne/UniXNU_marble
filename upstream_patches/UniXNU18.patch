@@ -43,7 +43,7 @@ index 5da2f5c..b91a168 100644
 +
 +`NativeAdrenoParamsTaskCpuMap` 发布连接内的 BO CPU 映射能力。驱动校验所属 task、BO 句柄、token 和映射地址，连接关闭时解除映射并释放 backing。
 diff --git a/scripts/build-adreno-metal-bridge.py b/scripts/build-adreno-metal-bridge.py
-index c89881a..d468487 100644
+index c89881a..2cb7923 100644
 --- a/scripts/build-adreno-metal-bridge.py
 +++ b/scripts/build-adreno-metal-bridge.py
 @@ -1,7 +1,7 @@
@@ -119,7 +119,7 @@ index c89881a..d468487 100644
 -    # Spare image blocks have no byte limit (they age, go when a block cannot be made and on memory pressure), and the room keeper takes
 -    # a spare block before it makes a new one: the limit freed spares the render server made again within seconds, each a fresh wiring.
 -    '0030-spare-image-blocks-give-room.patch']]
-+PATCHES = [Path('/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/metal2vulkan/ios18-runtime.patch')]
++PATCHES = [Path('/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/metal2vulkan/ios18-runtime-963f0e64.patch')]
  
  
  def git_tree(*steps):
@@ -313,7 +313,7 @@ index 7720acd..6f57e94 100644
    "integer_fma_reference": {
      "repository": "https://github.com/ucb-bar/berkeley-softfloat-3",
 diff --git a/scripts/data/gpu-metal-vulkan-inputs.json b/scripts/data/gpu-metal-vulkan-inputs.json
-index 895ca16..9b31950 100644
+index 895ca16..62ae354 100644
 --- a/scripts/data/gpu-metal-vulkan-inputs.json
 +++ b/scripts/data/gpu-metal-vulkan-inputs.json
 @@ -11,14 +11,7 @@
@@ -328,7 +328,7 @@ index 895ca16..9b31950 100644
 -      "Cargo.toml": "e2fc374386d6ee10854f9c2996a8c3858cbb4f86f549f15c93dacf20cc4db439",
 -      "crates/metal2vulkan/src/device/policy.rs": "1e07afdb2952046d13f593922fae6a27b6f26939912b6abf542645c60653a5e6"
 -    }
-+    "commit": "bf3ce3813c029c96d02594f8568f2ee8343c0ed8"
++    "commit": "963f0e64f103d2e682cd0cc454a8fe50f52c8cbb"
    },
    "mesa": {
      "repository": "https://gitlab.freedesktop.org/mesa/mesa",

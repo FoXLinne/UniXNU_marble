@@ -1,0 +1,359 @@
+{
+  "format": 1,
+  "case": "fresh-chain-16x256-private",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "shape-and-bytes",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "07bca7e0c4440dc21838e61f871d00cb0aa08fb6b4f8a61af3241558f93df244"
+                        }
+                      }
+                    },
+                    {
+                      "name": "work/resource:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "bb565a4c43e4ed2bf4d5539855fb7a4ca811d48219bafd86ccec9ba8f281490a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "work/buffer:1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5cc21dd602c63f1edf660d82d3947cae936f15a17fafbf6ec706eade03679a2e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "work/buffer:2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d0f129598254c9519ce8a34dc43f92c9bc4a0ed83f19ebd97ad4cd1e2b4c8170"
+                        }
+                      }
+                    },
+                    {
+                      "name": "work/buffer:3",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d0f129598254c9519ce8a34dc43f92c9bc4a0ed83f19ebd97ad4cd1e2b4c8170"
+                        }
+                      }
+                    },
+                    {
+                      "name": "work/steps",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "691333e00444c87eeac0d6d10f94dce9dc1cc511b19034055beeb4ba3652bf8e"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "work",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "written",
+                  "observed": {
+                    "value": {
+                      "list": [
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 0
+                            },
+                            "texel": {
+                              "bytes": "paWlpQ=="
+                            },
+                            "texels": {
+                              "uint": 5471
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "fresh",
+                  "observed": {
+                    "value": {
+                      "list": [
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 0
+                            },
+                            "texel": {
+                              "bytes": "/wD//w=="
+                            },
+                            "texels": {
+                              "uint": 4096
+                            }
+                          }
+                        },
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 4096
+                            },
+                            "texel": {
+                              "bytes": "AAAAAA=="
+                            },
+                            "texels": {
+                              "uint": 1375
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "statuses",
+                  "observed": {
+                    "value": {
+                      "lines": [
+                        "Completed",
+                        "Completed",
+                        "Completed"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "bare_starts": 3,
+        "batches_submitted_by_waiters": 3,
+        "batches_with_none_pending": 3,
+        "command_buffers_begun": 5,
+        "command_buffers_begun_batch_work": 2,
+        "command_buffers_begun_encoders": 3,
+        "command_buffers_deferred": 3,
+        "command_buffers_submitted": 5,
+        "commands_recorded.begin_command_buffer": 5,
+        "commands_recorded.cmd_clear_color_image": 4,
+        "commands_recorded.cmd_copy_buffer_to_image": 9,
+        "commands_recorded.cmd_copy_image_to_buffer": 18,
+        "commands_recorded.cmd_pipeline_barrier": 7,
+        "commands_recorded.end_command_buffer": 5,
+        "commits_handed_off": 3,
+        "commits_taken_in": 3,
+        "completed_waits": 6,
+        "completed_where_seen": 3,
+        "completion_arms": 3,
+        "completion_arms_after_a_wake": 3,
+        "completion_waiter_parks": 3,
+        "device_memory_allocated": 201326592,
+        "encoder_command_buffers_begun": 3,
+        "fence_waits": 3,
+        "finales_folded": 3,
+        "gate_waits": 3,
+        "gate_waits_slept": 3,
+        "new_buffer_bytes_cleared": 60160,
+        "object_churn.buffers_parked": 3,
+        "object_churn.buffers_recycled": 1,
+        "object_churn.images_own_memory": 2,
+        "object_churn.images_parked": 2,
+        "object_churn.images_recycled": 1,
+        "object_churn.textures_image": 2,
+        "object_churn.vk_buffer_bindings": 2,
+        "object_churn.vk_buffers_made": 2,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_images_destroyed": 2,
+        "object_churn.vk_images_made": 3,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 3,
+        "queues_sharing_a_vk_queue": 1,
+        "scheduled_where_submitted": 3,
+        "scheduler_passes_by_waiters": 3,
+        "scheduler_sleeps": 3,
+        "scheduler_wakes_commit": 3,
+        "slot_returns": 3,
+        "spare_command_pools_taken": 3,
+        "submit_infos": 3,
+        "trail_waits": 3,
+        "wakes_completion_waiters": 3,
+        "wakes_spared": 21
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 1,
+        "gate_waits_slept": 2
+      },
+      "composed": {
+        "command_buffers_deferred": 0,
+        "commands_recorded.cmd_clear_color_image": 0,
+        "commands_recorded.cmd_copy_buffer_to_image": 0,
+        "commands_recorded.cmd_copy_image_to_buffer": 0,
+        "commands_recorded.cmd_pipeline_barrier": 0,
+        "commands_recorded.end_command_buffer": 0,
+        "device_memory_allocated": 201326592,
+        "queues_sharing_a_vk_queue": 0
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pooled_memory_blocks_made": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "fresh-chain-16x256-private",
+        "calls": 1,
+        "in_calls": 4435708,
+        "on_cpu": 162541,
+        "blocked": 4258958,
+        "elsewhere": 3769292,
+        "spend": 8205000,
+        "spend_least": 8029208,
+        "spend_most": 8965083,
+        "per_call": [
+          {
+            "call": "work",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4435708,
+            "on_cpu": 162541,
+            "blocked": 4258958,
+            "wall_least": 4337291,
+            "wall_most": 5023791,
+            "wall_total": 4435708,
+            "on_cpu_total": 162541,
+            "blocked_total": 4258958
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "fresh-chain-16x256-private",
+        "calls": 1,
+        "in_calls": 1912875,
+        "on_cpu": 98166,
+        "blocked": 1820125,
+        "elsewhere": 638292,
+        "spend": 2504208,
+        "spend_least": 2446250,
+        "spend_most": 3048666,
+        "per_call": [
+          {
+            "call": "work",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1912875,
+            "on_cpu": 98166,
+            "blocked": 1820125,
+            "wall_least": 1830625,
+            "wall_most": 2392000,
+            "wall_total": 1912875,
+            "on_cpu_total": 98166,
+            "blocked_total": 1820125
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,277 @@
+{
+  "format": 1,
+  "case": "event-signal-before-a-wait",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 5,
+      "outcomes": [
+        {
+          "runs": 5,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "scratch-bytes",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2e22fd435060cd5d3cf5e3ef39f79e198b35bd2c4af31974db36601b3a2f4c91"
+                        }
+                      }
+                    },
+                    {
+                      "name": "wait-bounds-millis",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "15974581de1a64a38d73ffa2754e6c85bcf978e607026240ebb64d1cbac16ca1"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "order",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "before/host-wait-answered-while-the-gate-was-unsignalled",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    },
+                    {
+                      "name": "after/value-while-the-gate-was-unsignalled",
+                      "observed": {
+                        "value": {
+                          "uint": 0
+                        }
+                      }
+                    },
+                    {
+                      "name": "status-while-the-gate-was-unsignalled",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Committed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "after/value-once-the-host-raised-the-gate",
+                      "observed": {
+                        "value": {
+                          "uint": 1
+                        }
+                      }
+                    },
+                    {
+                      "name": "status-at-the-end",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "bare_starts": 2,
+        "batches_held_past_a_look": 1,
+        "batches_with_none_pending": 2,
+        "command_buffers_begun": 3,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_encoders": 2,
+        "command_buffers_submitted": 3,
+        "commands_recorded.begin_command_buffer": 3,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 4,
+        "commands_recorded.cmd_update_buffer": 2,
+        "commands_recorded.end_command_buffer": 3,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 5,
+        "completed_where_seen": 1,
+        "completion_arms": 2,
+        "completion_arms_after_a_wake": 2,
+        "completion_waiter_parks": 2,
+        "device_memory_allocated": 201326592,
+        "encoder_command_buffers_begun": 2,
+        "event_waits_met": 1,
+        "fence_waits": 2,
+        "fills_by_transfers": 2,
+        "finales_folded": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "heads_held_for_event_values": 2,
+        "object_churn.buffers_evicted": 37,
+        "object_churn.buffers_parked": 1,
+        "object_churn.buffers_recycled": 1,
+        "object_churn.vk_buffers_destroyed": 37,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 2,
+        "queues_sharing_a_vk_queue": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 4,
+        "scheduler_sleep_slices": 1,
+        "scheduler_sleeps": 5,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 3,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "wakes_completion_waiters": 2,
+        "wakes_event_waiters": 1,
+        "wakes_spared": 11
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "device_memory_allocated": 201326592,
+        "pooled_memory_blocks_made": 3,
+        "queues_sharing_a_vk_queue": 0
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "event-signal-before-a-wait",
+        "calls": 1,
+        "in_calls": 166903250,
+        "on_cpu": 865500,
+        "blocked": 165802375,
+        "elsewhere": 4991334,
+        "spend": 171794084,
+        "spend_least": 169396625,
+        "spend_most": 181754417,
+        "per_call": [
+          {
+            "call": "signal_before_a_wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 166903250,
+            "on_cpu": 865500,
+            "blocked": 165802375,
+            "wall_least": 165418083,
+            "wall_most": 173822500,
+            "wall_total": 166903250,
+            "on_cpu_total": 865500,
+            "blocked_total": 165802375
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "event-signal-before-a-wait",
+        "calls": 1,
+        "in_calls": 161261667,
+        "on_cpu": 115125,
+        "blocked": 161185959,
+        "elsewhere": 1280208,
+        "spend": 161719250,
+        "spend_least": 154667501,
+        "spend_most": 169042625,
+        "per_call": [
+          {
+            "call": "signal_before_a_wait",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 161261667,
+            "on_cpu": 115125,
+            "blocked": 161185959,
+            "wall_least": 154219792,
+            "wall_most": 164991166,
+            "wall_total": 161261667,
+            "on_cpu_total": 115125,
+            "blocked_total": 161185959
+          }
+        ]
+      }
+    }
+  ]
+}

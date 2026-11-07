@@ -1,0 +1,1058 @@
+{
+  "format": 1,
+  "case": "pixel-samplers-rgba16f-linear-edge",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "xr_samples.ll",
+      "entry": "xr_sample_runtime",
+      "source_sha256": "ea925b19feda68c261f8ac9f406a525999757ef4ca50de08ec5d4018192b1a06"
+    },
+    {
+      "fixture": "xr_samples.air.ll",
+      "entry": "xr_sample_runtime",
+      "source_sha256": "3b790c44719c78270cde27fb25cb6386615ffed8a34ffb73bcb6637142e3d997"
+    },
+    {
+      "fixture": "px_samplers.ll",
+      "entry": "px_sample_argument",
+      "source_sha256": "8c4a0024c9ba10e25d2487017101ff9a6437a48c58602537d0a41ee693e32f20"
+    },
+    {
+      "fixture": "px_samplers.air.ll",
+      "entry": "px_sample_argument",
+      "source_sha256": "5cedd165bee51449aaab252183a73661902625d2ddf8aa9fa5582f605ea564b1"
+    },
+    {
+      "fixture": "px_samplers.ll",
+      "entry": "px_const_linear_edge",
+      "source_sha256": "8c4a0024c9ba10e25d2487017101ff9a6437a48c58602537d0a41ee693e32f20"
+    },
+    {
+      "fixture": "px_samplers.air.ll",
+      "entry": "px_const_linear_edge",
+      "source_sha256": "5cedd165bee51449aaab252183a73661902625d2ddf8aa9fa5582f605ea564b1"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air:slot",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ea925b19feda68c261f8ac9f406a525999757ef4ca50de08ec5d4018192b1a06"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:slot",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3b790c44719c78270cde27fb25cb6386615ffed8a34ffb73bcb6637142e3d997"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air:pixel",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "8c4a0024c9ba10e25d2487017101ff9a6437a48c58602537d0a41ee693e32f20"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:pixel",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5cedd165bee51449aaab252183a73661902625d2ddf8aa9fa5582f605ea564b1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "format",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "52e9e3add38bf08350e260942004423cf95fce71609ae1a46b260442db2608bb"
+                        }
+                      }
+                    },
+                    {
+                      "name": "sampler:pixel",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6f9c839842fc9b302aeecd093f334469e20cef47b83aa7d00f054cd5802bc1b3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "sampler:normalized",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6d413ec292af95e5dd58f0dac97a9e00b4e0e0eda297e61980dd2f4e3eecef57"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:texels",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "37c0c39ebdc220ee63179eb046c9210883a648c4b7b5b88715aa43be373dbee2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "coordinates:pixel",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "10064f01ccb480a13ee9b0853ba41bbc5e2dfa3d490ffaef9cbcc987f75249b9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "coordinates:normalized",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5d65df50fe7b4b9b254cf9099710e9727985e6a33cac2a842608a350104b1a15"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:blank",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "087d80f7f182dd44f184aa86ca34488853ebcc04f0c60d5294919a466b463831"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library/slot",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/slot",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "library/pixel",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/argument",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "coordinates/pixel",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "coordinates/normalized",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sampler/pixel",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "sampler/normalized",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "argument-buffer/pixel",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "argument-buffer/normalized",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "slot/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "slot/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "slot/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "slot/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "arg/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "arg/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "arg/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "arg/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "norm/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "norm/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "norm/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "norm/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/constexpr",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "const/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "const/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "const/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "const/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "output",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "slot",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAUwAAAiL8AAEA+AAC4PwDg8L8AwCG/AEAePwAg7z8AAPC/AAAgvwAAID8AAPA/AADwvwAAIL8AACA/AADwPwAA8L8AACC/AAAgPwAA8D8AIO+/AEAevwDAIT8A4PA/AAC4vwAAQL4AAIg/AAAUQAAAgL8AAIA+AADAPwAAMEAAAIC/AACAPgAAwD8AADBAAACAvwAAgD4AAMA/AAAwQAAAEL8AADA/AAD4PwAAsD8AAAe+ACCPPwCgF0AAALA8AAAAvgAAkD8AABhAAAAAAAAAAL4AAJA/AAAYQAAAAAAAAAC+AACQPwAAGEAAAAAAAADyvQDgkD8AgBhAAACwvAAAoD4AAMg/AAA0QAAAsL8AAEA/AAAAQAAAUEAAADDAAABAPwAAAEAAAFBAAAAwwAAAQD8AAABAAABQQAAAMMAAAJg/AAAgPwAA8D8AABTAACDPPwCAOr8AgAU/AODwvwAA0D8AAEC/AAAAPwAA8L8AANA/AABAvwAAAD8AAPC/AADQPwAAQL8AAAA/AADwvwDg0D8AgEW/AAD1PgAg778AAARAAAAIwAAAYL8AALi/AAAgQAAAYMAAABDAAACAvwAAIEAAAGDAAAAQwAAAgL8AACBAAABgwAAAEMAAAIC/AACQPwAARMAAAOi/AAAQvwAAar4AgCjAAOCwvwAAB74AAIC+AAAowAAAsL8AAAC+AACAvgAAKMAAALC/AAAAvgAAgL4AACjAAACwvwAAAL4AAIu+AKAnwAAgr78AAPK9AADQvwAADMAAAHC/AACgPgAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AABTAAACIvwAAQD4AALg/AODwvwDAIb8AQB4/ACDvPwAA8L8AACC/AAAgPwAA8D8AAPC/AAAgvwAAID8AAPA/AADwvwAAIL8AACA/AADwPwAg778AQB6/AMAhPwDg8D8AALi/AABAvgAAiD8AABRAAACAvwAAgD4AAMA/AAAwQAAAgL8AAIA+AADAPwAAMEAAAIC/AACAPgAAwD8AADBAAAAQvwAAMD8AAPg/AACwPwAAB74AII8/AKAXQAAAsDwAAAC+AACQPwAAGEAAAAAAAAAAvgAAkD8AABhAAAAAAAAAAL4AAJA/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AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AAAwvwAAED8AAGg/AAAQvwCAg74AQH4/AMDjPgAAB74AAIC+AACAPwAA4D4AAAC+AACAvgAAgD8AAOA+AAAAvgAAgL4AAIA/AADgPgAAAL4AAHm+AOCAPwBA3D4AAPK9AABAPgAAuD8AAAC9AACgPgAAID8AAPA/AAAAvwAAQD8AACA/AADwPwAAAL8AAEA/AAAgPwAA8D8AAAC/AABAPwAAID4AALQ/AACAvQAAkD4AQJy+AOBxPwCAvD4AgDi+AACgvgAAcD8AAMA+AABAvgAAoL4AAHA/AADAPgAAQL4AAKC+AABwPwAAwD4AAEC+AMCjvgAgbj8AgMM+AIBHvgAASL8AAPA+AABQPwAAKL8AAKC/AAAAAAAAoD8AAJC/AACgvwAAAAAAAKA/AACQvwAAoL8AAAAAAACgPwAAkL8AAFC/AADwvgAASD8AADC/AIDDvgAgbr8AwKM+AICDvgAAwL4AAHC/AACgPgAAgL4AAMC+AABwvwAAoD4AAIC+AADAvgAAcL8AAKA+AACAvgCAvL4A4HG/AECcPgAAeb4AAIA9AAC0vwAAIL4AAEA+AAAAPwAA8L8AACC/AAAgPwAAAD8AAPC/AAAgvwAAID8AAAA/AADwvwAAIL8AACA/AAAAPQAAuL8AAEC+AAAgPgBA3L4A4IC/AAB5PgBAnL4AAOC+AACAvwAAgD4AAKC+AADgvgAAgL8AAIA+AACgvgAA4L4AAIC/AACAPgAAoL4AwOO+AEB+vwCAgz4AwKO+AABovwAAEL8AADA/AABIvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AADC/AAAQPwAAaD8AABC/AICDvgBAfj8AwOM+AAAHvgAAgL4AAIA/AADgPgAAAL4AAIC+AACAPwAA4D4AAAC+AACAvgAAgD8AAOA+AAAAvgAAeb4A4IA/AEDcPgAA8r0AAEA+AAC4PwAAAL0AAKA+AAAgPwAA8D8AAAC/AABAPwAAID8AAPA/AAAAvwAAQD8AACA/AADwPwAAAL8AAEA/AAAgPgAAtD8AAIC9AACQPgBAnL4A4HE/AIC8PgCAOL4AAKC+AABwPwAAwD4AAEC+AACgvgAAcD8AAMA+AABAvgAAoL4AAHA/AADAPgAAQL4AwKO+ACBuPwCAwz4AgEe+AABIvwAA8D4AAFA/AAAovwAAoL8AAAAAAACgPwAAkL8AAKC/AAAAAAAAoD8AAJC/AACgvwAAAAAAAKA/AACQvwAAUL8AAPC+AABIPwAAML8AgMO+ACBuvwDAoz4AgIO+AADAvgAAcL8AAKA+AACAvgAAwL4AAHC/AACgPgAAgL4AAMC+AABwvwAAoD4AAIC+AIC8vgDgcb8AQJw+AAB5vgAAgD0AALS/AAAgvgAAQD4AAAA/AADwvwAAIL8AACA/AAAAPwAA8L8AACC/AAAgPwAAAD8AAPC/AAAgvwAAID8AAAA9AAC4vwAAQL4AACA+AEDcvgDggL8AAHk+AECcvgAA4L4AAIC/AACAPgAAoL4AAOC+AACAvwAAgD4AAKC+AADgvgAAgL8AAIA+AACgvgDA474AQH6/AICDPgDAo74AAGi/AAAQvwAAMD8AAEi/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAAD4AALA/AACiPwAAyL8AQA4/ACDnPwBgtz4A4JC/AAAQPwAA6D8AALA+AACQvwAAED8AAOg/AACwPgAAkL8AABA/AADoPwAAsD4AAJC/AMARPwDg6D8AoKg+ACCPvwAAgD8AABBAAAAUvwAAML8AALg/AAAsQAAAwL8AAIC+AAC4PwAALEAAAMC/AACAvgAAuD8AACxAAADAvwAAgL4AAAQ/AADiPwAAiL8AAIi+AKDIvgDAWz8AwCG/AOCPvgAA0L4AAFg/AAAgvwAAkL4AANC+AABYPwAAIL8AAJC+AADQvgAAWD8AACC/AACQvgBg174AYFQ/AEAevwAgkL4AAKq/AACgvQAAQL4AAJi+AAAQwAAAgL8AAIA+AACgvgAAEMAAAIC/AACAPgAAoL4AABDAAACAvwAAgD4AAKC+AADovwAAgr8AAHA+AAAAPgDgsL8AAIS/AEBgPgBADj8AALC/AACEvwAAYD4AABA/AACwvwAAhL8AAGA+AAAQPwAAsL8AAIS/AABgPgAAED8AIK+/AACEvwDAXz4AwBE/AABwvwAAhr8AAFA+AACAPwAAAL8AAIi/AABAPgAAuD8AAAC/AACIvwAAQD4AALg/AAAAvwAAiL8AAEA+AAC4PwAABL8AACC/AAAgPwAABD8AAAi/AABHvgAghz8AoMi+AAAIvwAAQL4AAIg/AADQvgAACL8AAEC+AACIPwAA0L4AAAi/AABAvgAAiD8AANC+ACAIvwAAOb4A4Ig/AGDXvgAADL8AAIA+AADAPwAAqr8AABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAABwPwAADEAAANA/AAAkwAAgrz8AoCdAAACLPgCACMAAALA/AAAoQAAAgD4AAAjAAACwPwAAKEAAAIA+AAAIwAAAsD8AAChAAACAPgAACMAA4LA/AIAoQAAAaj4AoAfAAADoPwAAREAAAJC/AADYvwAAEEAAAGBAAAAgwAAAoL8AABBAAABgQAAAIMAAAKC/AAAQQAAAYEAAACDAAACgvwAAYD8AAAhAAAAEwAAAUL8AAPW+AIBFPwDg0L8AgMO+AAAAvwAAQD8AANC/AADAvgAAAL8AAEA/AADQvwAAwL4AAAC/AABAPwAA0L8AAMC+AIAFvwCAOj8AIM+/AIC8vgAA8L8AACC/AACYvwAAgD0AAFDAAAAAwAAAQL8AAAA/AABQwAAAAMAAAEC/AAAAPwAAUMAAAADAAABAvwAAAD8AADTAAADIvwAAoL4AAHA/AIAYwADgkL8AAPI9ACCvPwAAGMAAAJC/AAAAPgAAsD8AABjAAACQvwAAAD4AALA/AAAYwAAAkL8AAAA+AACwPwCgF8AAII+/AAAHPgDgsD8AAPi/AAAwvwAAED8AAOg/AADAvwAAgL4AAIA/AAAQQAAAwL8AAIC+AACAPwAAEEAAAMC/AACAvgAAgD8AABBAAACIvwAAQD4AALg/AABgPwDAIb8AQB4/ACDvPwAA9b4AACC/AAAgPwAA8D8AAAC/AAAgvwAAID8AAPA/AAAAvwAAIL8AACA/AADwPwAAAL8AQB6/AMAhPwDg8D8AgAW/AABAvgAAiD8AABRAAADwvwAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDA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AAAAAAAAoD8AACBAAABgwAAAAAAAAKA/AAAgQAAAYMAAAAAAAACgPwAAIEAAAGDAAADgPgAA2D8AAJA/AABEwABAXj8AoAdAAABqvgCAKMAAAGA/AAAIQAAAgL4AACjAAABgPwAACEAAAIC+AAAowAAAYD8AAAhAAACAvgAAKMAAwGE/AIAIQAAAi74AoCfAAACoPwAAJEAAANC/AAAMwAAA4D8AAEBAAABAwAAA4L8AAOA/AABAQAAAQMAAAOC/AADgPwAAQEAAAEDAAADgvwAADEAAANA/AAAkwAAAqL8AoCdAAACLPgCACMAAwGG/AAAoQAAAgD4AAAjAAABgvwAAKEAAAIA+AAAIwAAAYL8AAChAAACAPgAACMAAAGC/AIAoQAAAaj4AoAfAAEBevwAAREAAAJC/AADYvwAA4L4AAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABEwAAA6L8AABC/AAAwPwCAKMAA4LC/AAAHvgAgjz8AACjAAACwvwAAAL4AAJA/AAAowAAAsL8AAAC+AACQPwAAKMAAALC/AAAAvgAAkD8AoCfAACCvvwAA8r0A4JA/AAAMwAAAcL8AAKA+AADIPwAA4L8AAAC/AABAPwAAAEAAAOC/AAAAvwAAQD8AAABAAADgvwAAAL8AAEA/AAAAQAAAqL8AAIC9AACYPwAAID8AwGG/AIC8PgAgzz8AgDq/AABgvwAAwD4AANA/AABAvwAAYL8AAMA+AADQPwAAQL8AAGC/AADAPgAA0D8AAEC/AEBevwCAwz4A4NA/AIBFvwAA4L4AAFA/AAAEQAAACMAAAAAAAACgPwAAIEAAAGDAAAAAAAAAoD8AACBAAABgwAAAAAAAAKA/AAAgQAAAYMAAAOA+AADYPwAAkD8AAETAAEBePwCgB0AAAGq+AIAowAAAYD8AAAhAAACAvgAAKMAAAGA/AAAIQAAAgL4AACjAAABgPwAACEAAAIC+AAAowADAYT8AgAhAAACLvgCgJ8AAAKg/AAAkQAAA0L8AAAzAAADgPwAAQEAAAEDAAADgvwAA4D8AAEBAAABAwAAA4L8AAOA/AABAQAAAQMAAAOC/AAAMQAAA0D8AACTAAACovwCgJ0AAAIs+AIAIwADAYb8AAChAAACAPgAACMAAAGC/AAAoQAAAgD4AAAjAAABgvwAAKEAAAIA+AAAIwAAAYL8AgChAAABqPgCgB8AAQF6/AABEQAAAkL8AANi/AADgvgAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAA="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 12800
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 800,
+                            "image_pitch": 12800,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        },
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7a6a5f64bc4531517ba0d4d4912c2d687ee0779777af9376c02b5e09f4af2421"
+                        }
+                      }
+                    },
+                    {
+                      "name": "arg",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAUwAAAiL8AAEA+AAC4PwDg8L8AwCG/AEAePwAg7z8AAPC/AAAgvwAAID8AAPA/AADwvwAAIL8AACA/AADwPwAA8L8AACC/AAAgPwAA8D8AIO+/AEAevwDAIT8A4PA/AAC4vwAAQL4AAIg/AAAUQAAAgL8AAIA+AADAPwAAMEAAAIC/AACAPgAAwD8AADBAAACAvwAAgD4AAMA/AAAwQAAAEL8AADA/AAD4PwAAsD8AAAe+ACCPPwCgF0AAALA8AAAAvgAAkD8AABhAAAAAAAAAAL4AAJA/AAAYQAAAAAAAAAC+AACQPwAAGEAAAAAAAADyvQDgkD8AgBhAAACwvAAAoD4AAMg/AAA0QAAAsL8AAEA/AAAAQAAAUEAAADDAAABAPwAAAEAAAFBAAAAwwAAAQD8AAABAAABQQAAAMMAAAJg/AAAgPwAA8D8AABTAACDPPwCAOr8AgAU/AODwvwAA0D8AAEC/AAAAPwAA8L8AANA/AABAvwAAAD8AAPC/AADQPwAAQL8AAAA/AADwvwDg0D8AgEW/AAD1PgAg778AAARAAAAIwAAAYL8AALi/AAAgQAAAYMAAABDAAACAvwAAIEAAAGDAAAAQwAAAgL8AACBAAABgwAAAEMAAAIC/AACQPwAARMAAAOi/AAAQvwAAar4AgCjAAOCwvwAAB74AAIC+AAAowAAAsL8AAAC+AACAvgAAKMAAALC/AAAAvgAAgL4AACjAAACwvwAAAL4AAIu+AKAnwAAgr78AAPK9AADQvwAADMAAAHC/AACgPgAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AABTAAACIvwAAQD4AALg/AODwvwDAIb8AQB4/ACDvPwAA8L8AACC/AAAgPwAA8D8AAPC/AAAgvwAAID8AAPA/AADwvwAAIL8AACA/AADwPwAg778AQB6/AMAhPwDg8D8AALi/AABAvgAAiD8AABRAAACAvwAAgD4AAMA/AAAwQAAAgL8AAIA+AADAPwAAMEAAAIC/AACAPgAAwD8AADBAAAAQvwAAMD8AAPg/AACwPwAAB74AII8/AKAXQAAAsDwAAAC+AACQPwAAGEAAAAAAAAAAvgAAkD8AABhAAAAAAAAAAL4AAJA/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AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AAAwvwAAED8AAGg/AAAQvwCAg74AQH4/AMDjPgAAB74AAIC+AACAPwAA4D4AAAC+AACAvgAAgD8AAOA+AAAAvgAAgL4AAIA/AADgPgAAAL4AAHm+AOCAPwBA3D4AAPK9AABAPgAAuD8AAAC9AACgPgAAID8AAPA/AAAAvwAAQD8AACA/AADwPwAAAL8AAEA/AAAgPwAA8D8AAAC/AABAPwAAID4AALQ/AACAvQAAkD4AQJy+AOBxPwCAvD4AgDi+AACgvgAAcD8AAMA+AABAvgAAoL4AAHA/AADAPgAAQL4AAKC+AABwPwAAwD4AAEC+AMCjvgAgbj8AgMM+AIBHvgAASL8AAPA+AABQPwAAKL8AAKC/AAAAAAAAoD8AAJC/AACgvwAAAAAAAKA/AACQvwAAoL8AAAAAAACgPwAAkL8AAFC/AADwvgAASD8AADC/AIDDvgAgbr8AwKM+AICDvgAAwL4AAHC/AACgPgAAgL4AAMC+AABwvwAAoD4AAIC+AADAvgAAcL8AAKA+AACAvgCAvL4A4HG/AECcPgAAeb4AAIA9AAC0vwAAIL4AAEA+AAAAPwAA8L8AACC/AAAgPwAAAD8AAPC/AAAgvwAAID8AAAA/AADwvwAAIL8AACA/AAAAPQAAuL8AAEC+AAAgPgBA3L4A4IC/AAB5PgBAnL4AAOC+AACAvwAAgD4AAKC+AADgvgAAgL8AAIA+AACgvgAA4L4AAIC/AACAPgAAoL4AwOO+AEB+vwCAgz4AwKO+AABovwAAEL8AADA/AABIvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AADC/AAAQPwAAaD8AABC/AICDvgBAfj8AwOM+AAAHvgAAgL4AAIA/AADgPgAAAL4AAIC+AACAPwAA4D4AAAC+AACAvgAAgD8AAOA+AAAAvgAAeb4A4IA/AEDcPgAA8r0AAEA+AAC4PwAAAL0AAKA+AAAgPwAA8D8AAAC/AABAPwAAID8AAPA/AAAAvwAAQD8AACA/AADwPwAAAL8AAEA/AAAgPgAAtD8AAIC9AACQPgBAnL4A4HE/AIC8PgCAOL4AAKC+AABwPwAAwD4AAEC+AACgvgAAcD8AAMA+AABAvgAAoL4AAHA/AADAPgAAQL4AwKO+ACBuPwCAwz4AgEe+AABIvwAA8D4AAFA/AAAovwAAoL8AAAAAAACgPwAAkL8AAKC/AAAAAAAAoD8AAJC/AACgvwAAAAAAAKA/AACQvwAAUL8AAPC+AABIPwAAML8AgMO+ACBuvwDAoz4AgIO+AADAvgAAcL8AAKA+AACAvgAAwL4AAHC/AACgPgAAgL4AAMC+AABwvwAAoD4AAIC+AIC8vgDgcb8AQJw+AAB5vgAAgD0AALS/AAAgvgAAQD4AAAA/AADwvwAAIL8AACA/AAAAPwAA8L8AACC/AAAgPwAAAD8AAPC/AAAgvwAAID8AAAA9AAC4vwAAQL4AACA+AEDcvgDggL8AAHk+AECcvgAA4L4AAIC/AACAPgAAoL4AAOC+AACAvwAAgD4AAKC+AADgvgAAgL8AAIA+AACgvgDA474AQH6/AICDPgDAo74AAGi/AAAQvwAAMD8AAEi/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAAD4AALA/AACiPwAAyL8AQA4/ACDnPwBgtz4A4JC/AAAQPwAA6D8AALA+AACQvwAAED8AAOg/AACwPgAAkL8AABA/AADoPwAAsD4AAJC/AMARPwDg6D8AoKg+ACCPvwAAgD8AABBAAAAUvwAAML8AALg/AAAsQAAAwL8AAIC+AAC4PwAALEAAAMC/AACAvgAAuD8AACxAAADAvwAAgL4AAAQ/AADiPwAAiL8AAIi+AKDIvgDAWz8AwCG/AOCPvgAA0L4AAFg/AAAgvwAAkL4AANC+AABYPwAAIL8AAJC+AADQvgAAWD8AACC/AACQvgBg174AYFQ/AEAevwAgkL4AAKq/AACgvQAAQL4AAJi+AAAQwAAAgL8AAIA+AACgvgAAEMAAAIC/AACAPgAAoL4AABDAAACAvwAAgD4AAKC+AADovwAAgr8AAHA+AAAAPgDgsL8AAIS/AEBgPgBADj8AALC/AACEvwAAYD4AABA/AACwvwAAhL8AAGA+AAAQPwAAsL8AAIS/AABgPgAAED8AIK+/AACEvwDAXz4AwBE/AABwvwAAhr8AAFA+AACAPwAAAL8AAIi/AABAPgAAuD8AAAC/AACIvwAAQD4AALg/AAAAvwAAiL8AAEA+AAC4PwAABL8AACC/AAAgPwAABD8AAAi/AABHvgAghz8AoMi+AAAIvwAAQL4AAIg/AADQvgAACL8AAEC+AACIPwAA0L4AAAi/AABAvgAAiD8AANC+ACAIvwAAOb4A4Ig/AGDXvgAADL8AAIA+AADAPwAAqr8AABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAABwPwAADEAAANA/AAAkwAAgrz8AoCdAAACLPgCACMAAALA/AAAoQAAAgD4AAAjAAACwPwAAKEAAAIA+AAAIwAAAsD8AAChAAACAPgAACMAA4LA/AIAoQAAAaj4AoAfAAADoPwAAREAAAJC/AADYvwAAEEAAAGBAAAAgwAAAoL8AABBAAABgQAAAIMAAAKC/AAAQQAAAYEAAACDAAACgvwAAYD8AAAhAAAAEwAAAUL8AAPW+AIBFPwDg0L8AgMO+AAAAvwAAQD8AANC/AADAvgAAAL8AAEA/AADQvwAAwL4AAAC/AABAPwAA0L8AAMC+AIAFvwCAOj8AIM+/AIC8vgAA8L8AACC/AACYvwAAgD0AAFDAAAAAwAAAQL8AAAA/AABQwAAAAMAAAEC/AAAAPwAAUMAAAADAAABAvwAAAD8AADTAAADIvwAAoL4AAHA/AIAYwADgkL8AAPI9ACCvPwAAGMAAAJC/AAAAPgAAsD8AABjAAACQvwAAAD4AALA/AAAYwAAAkL8AAAA+AACwPwCgF8AAII+/AAAHPgDgsD8AAPi/AAAwvwAAED8AAOg/AADAvwAAgL4AAIA/AAAQQAAAwL8AAIC+AACAPwAAEEAAAMC/AACAvgAAgD8AABBAAACIvwAAQD4AALg/AABgPwDAIb8AQB4/ACDvPwAA9b4AACC/AAAgPwAA8D8AAAC/AAAgvwAAID8AAPA/AAAAvwAAIL8AACA/AADwPwAAAL8AQB6/AMAhPwDg8D8AgAW/AABAvgAAiD8AABRAAADwvwAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDA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AAAAAAAAoD8AACBAAABgwAAAAAAAAKA/AAAgQAAAYMAAAAAAAACgPwAAIEAAAGDAAADgPgAA2D8AAJA/AABEwABAXj8AoAdAAABqvgCAKMAAAGA/AAAIQAAAgL4AACjAAABgPwAACEAAAIC+AAAowAAAYD8AAAhAAACAvgAAKMAAwGE/AIAIQAAAi74AoCfAAACoPwAAJEAAANC/AAAMwAAA4D8AAEBAAABAwAAA4L8AAOA/AABAQAAAQMAAAOC/AADgPwAAQEAAAEDAAADgvwAADEAAANA/AAAkwAAAqL8AoCdAAACLPgCACMAAwGG/AAAoQAAAgD4AAAjAAABgvwAAKEAAAIA+AAAIwAAAYL8AAChAAACAPgAACMAAAGC/AIAoQAAAaj4AoAfAAEBevwAAREAAAJC/AADYvwAA4L4AAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABEwAAA6L8AABC/AAAwPwCAKMAA4LC/AAAHvgAgjz8AACjAAACwvwAAAL4AAJA/AAAowAAAsL8AAAC+AACQPwAAKMAAALC/AAAAvgAAkD8AoCfAACCvvwAA8r0A4JA/AAAMwAAAcL8AAKA+AADIPwAA4L8AAAC/AABAPwAAAEAAAOC/AAAAvwAAQD8AAABAAADgvwAAAL8AAEA/AAAAQAAAqL8AAIC9AACYPwAAID8AwGG/AIC8PgAgzz8AgDq/AABgvwAAwD4AANA/AABAvwAAYL8AAMA+AADQPwAAQL8AAGC/AADAPgAA0D8AAEC/AEBevwCAwz4A4NA/AIBFvwAA4L4AAFA/AAAEQAAACMAAAAAAAACgPwAAIEAAAGDAAAAAAAAAoD8AACBAAABgwAAAAAAAAKA/AAAgQAAAYMAAAOA+AADYPwAAkD8AAETAAEBePwCgB0AAAGq+AIAowAAAYD8AAAhAAACAvgAAKMAAAGA/AAAIQAAAgL4AACjAAABgPwAACEAAAIC+AAAowADAYT8AgAhAAACLvgCgJ8AAAKg/AAAkQAAA0L8AAAzAAADgPwAAQEAAAEDAAADgvwAA4D8AAEBAAABAwAAA4L8AAOA/AABAQAAAQMAAAOC/AAAMQAAA0D8AACTAAACovwCgJ0AAAIs+AIAIwADAYb8AAChAAACAPgAACMAAAGC/AAAoQAAAgD4AAAjAAABgvwAAKEAAAIA+AAAIwAAAYL8AgChAAABqPgCgB8AAQF6/AABEQAAAkL8AANi/AADgvgAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAA="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 12800
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 800,
+                            "image_pitch": 12800,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        },
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7a6a5f64bc4531517ba0d4d4912c2d687ee0779777af9376c02b5e09f4af2421"
+                        }
+                      }
+                    },
+                    {
+                      "name": "norm",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAUwAAAiL8AAEA+AAC4PwDg8L8AwCG/AEAePwAg7z8AAPC/AAAgvwAAID8AAPA/AADwvwAAIL8AACA/AADwPwAA8L8AACC/AAAgPwAA8D8AIO+/AEAevwDAIT8A4PA/AAC4vwAAQL4AAIg/AAAUQAAAgL8AAIA+AADAPwAAMEAAAIC/AACAPgAAwD8AADBAAACAvwAAgD4AAMA/AAAwQAAAEL8AADA/AAD4PwAAsD8AAAe+ACCPPwCgF0AAALA8AAAAvgAAkD8AABhAAAAAAAAAAL4AAJA/AAAYQAAAAAAAAAC+AACQPwAAGEAAAAAAAADyvQDgkD8AgBhAAACwvAAAoD4AAMg/AAA0QAAAsL8AAEA/AAAAQAAAUEAAADDAAABAPwAAAEAAAFBAAAAwwAAAQD8AAABAAABQQAAAMMAAAJg/AAAgPwAA8D8AABTAACDPPwCAOr8AgAU/AODwvwAA0D8AAEC/AAAAPwAA8L8AANA/AABAvwAAAD8AAPC/AADQPwAAQL8AAAA/AADwvwDg0D8AgEW/AAD1PgAg778AAARAAAAIwAAAYL8AALi/AAAgQAAAYMAAABDAAACAvwAAIEAAAGDAAAAQwAAAgL8AACBAAABgwAAAEMAAAIC/AACQPwAARMAAAOi/AAAQvwAAar4AgCjAAOCwvwAAB74AAIC+AAAowAAAsL8AAAC+AACAvgAAKMAAALC/AAAAvgAAgL4AACjAAACwvwAAAL4AAIu+AKAnwAAgr78AAPK9AADQvwAADMAAAHC/AACgPgAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AABTAAACIvwAAQD4AALg/AODwvwDAIb8AQB4/ACDvPwAA8L8AACC/AAAgPwAA8D8AAPC/AAAgvwAAID8AAPA/AADwvwAAIL8AACA/AADwPwAg778AQB6/AMAhPwDg8D8AALi/AABAvgAAiD8AABRAAACAvwAAgD4AAMA/AAAwQAAAgL8AAIA+AADAPwAAMEAAAIC/AACAPgAAwD8AADBAAAAQvwAAMD8AAPg/AACwPwAAB74AII8/AKAXQAAAsDwAAAC+AACQPwAAGEAAAAAAAAAAvgAAkD8AABhAAAAAAAAAAL4AAJA/AAAYQAAAAAAAAPK9AOCQPwCAGEAAALC8AACgPgAAyD8AADRAAACwvwAAQD8AAABAAABQQAAAMMAAAEA/AAAAQAAAUEAAADDAAABAPwAAAEAAAFBAAAAwwAAAmD8AACA/AADwPwAAFMAAIM8/AIA6vwCABT8A4PC/AADQPwAAQL8AAAA/AADwvwAA0D8AAEC/AAAAPwAA8L8AANA/AABAvwAAAD8AAPC/AODQPwCARb8AAPU+ACDvvwAABEAAAAjAAABgvwAAuL8AACBAAABgwAAAEMAAAIC/AAAgQAAAYMAAABDAAACAvwAAIEAAAGDAAAAQwAAAgL8AAJA/AABEwAAA6L8AABC/AABqvgCAKMAA4LC/AAAHvgAAgL4AACjAAACwvwAAAL4AAIC+AAAowAAAsL8AAAC+AACAvgAAKMAAALC/AAAAvgAAi74AoCfAACCvvwAA8r0AANC/AAAMwAAAcL8AAKA+AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAFMAAAIi/AABAPgAAuD8A4PC/AMAhvwBAHj8AIO8/AADwvwAAIL8AACA/AADwPwAA8L8AACC/AAAgPwAA8D8AAPC/AAAgvwAAID8AAPA/ACDvvwBAHr8AwCE/AODwPwAAuL8AAEC+AACIPwAAFEAAAIC/AACAPgAAwD8AADBAAACAvwAAgD4AAMA/AAAwQAAAgL8AAIA+AADAPwAAMEAAABC/AAAwPwAA+D8AALA/AAAHvgAgjz8AoBdAAACwPAAAAL4AAJA/AAAYQAAAAAAAAAC+AACQPwAAGEAAAAAAAAAAvgAAkD8AABhAAAAAAAAA8r0A4JA/AIAYQAAAsLwAAKA+AADIPwAANEAAALC/AABAPwAAAEAAAFBAAAAwwAAAQD8AAABAAABQQAAAMMAAAEA/AAAAQAAAUEAAADDAAACYPwAAID8AAPA/AAAUwAAgzz8AgDq/AIAFPwDg8L8AANA/AABAvwAAAD8AAPC/AADQPwAAQL8AAAA/AADwvwAA0D8AAEC/AAAAPwAA8L8A4NA/AIBFvwAA9T4AIO+/AAAEQAAACMAAAGC/AAC4vwAAIEAAAGDAAAAQwAAAgL8AACBAAABgwAAAEMAAAIC/AAAgQAAAYMAAABDAAACAvwAAkD8AAETAAADovwAAEL8AAGq+AIAowADgsL8AAAe+AACAvgAAKMAAALC/AAAAvgAAgL4AACjAAACwvwAAAL4AAIC+AAAowAAAsL8AAAC+AACLvgCgJ8AAIK+/AADyvQAA0L8AAAzAAABwvwAAoD4AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AAAwvwAAED8AAGg/AAAQvwCAg74AQH4/AMDjPgAAB74AAIC+AACAPwAA4D4AAAC+AACAvgAAgD8AAOA+AAAAvgAAgL4AAIA/AADgPgAAAL4AAHm+AOCAPwBA3D4AAPK9AABAPgAAuD8AAAC9AACgPgAAID8AAPA/AAAAvwAAQD8AACA/AADwPwAAAL8AAEA/AAAgPwAA8D8AAAC/AABAPwAAID4AALQ/AACAvQAAkD4AQJy+AOBxPwCAvD4AgDi+AACgvgAAcD8AAMA+AABAvgAAoL4AAHA/AADAPgAAQL4AAKC+AABwPwAAwD4AAEC+AMCjvgAgbj8AgMM+AIBHvgAASL8AAPA+AABQPwAAKL8AAKC/AAAAAAAAoD8AAJC/AACgvwAAAAAAAKA/AACQvwAAoL8AAAAAAACgPwAAkL8AAFC/AADwvgAASD8AADC/AIDDvgAgbr8AwKM+AICDvgAAwL4AAHC/AACgPgAAgL4AAMC+AABwvwAAoD4AAIC+AADAvgAAcL8AAKA+AACAvgCAvL4A4HG/AECcPgAAeb4AAIA9AAC0vwAAIL4AAEA+AAAAPwAA8L8AACC/AAAgPwAAAD8AAPC/AAAgvwAAID8AAAA/AADwvwAAIL8AACA/AAAAPQAAuL8AAEC+AAAgPgBA3L4A4IC/AAB5PgBAnL4AAOC+AACAvwAAgD4AAKC+AADgvgAAgL8AAIA+AACgvgAA4L4AAIC/AACAPgAAoL4AwOO+AEB+vwCAgz4AwKO+AABovwAAEL8AADA/AABIvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AADC/AAAQPwAAaD8AABC/AICDvgBAfj8AwOM+AAAHvgAAgL4AAIA/AADgPgAAAL4AAIC+AACAPwAA4D4AAAC+AACAvgAAgD8AAOA+AAAAvgAAeb4A4IA/AEDcPgAA8r0AAEA+AAC4PwAAAL0AAKA+AAAgPwAA8D8AAAC/AABAPwAAID8AAPA/AAAAvwAAQD8AACA/AADwPwAAAL8AAEA/AAAgPgAAtD8AAIC9AACQPgBAnL4A4HE/AIC8PgCAOL4AAKC+AABwPwAAwD4AAEC+AACgvgAAcD8AAMA+AABAvgAAoL4AAHA/AADAPgAAQL4AwKO+ACBuPwCAwz4AgEe+AABIvwAA8D4AAFA/AAAovwAAoL8AAAAAAACgPwAAkL8AAKC/AAAAAAAAoD8AAJC/AACgvwAAAAAAAKA/AACQvwAAUL8AAPC+AABIPwAAML8AgMO+ACBuvwDAoz4AgIO+AADAvgAAcL8AAKA+AACAvgAAwL4AAHC/AACgPgAAgL4AAMC+AABwvwAAoD4AAIC+AIC8vgDgcb8AQJw+AAB5vgAAgD0AALS/AAAgvgAAQD4AAAA/AADwvwAAIL8AACA/AAAAPwAA8L8AACC/AAAgPwAAAD8AAPC/AAAgvwAAID8AAAA9AAC4vwAAQL4AACA+AEDcvgDggL8AAHk+AECcvgAA4L4AAIC/AACAPgAAoL4AAOC+AACAvwAAgD4AAKC+AADgvgAAgL8AAIA+AACgvgDA474AQH6/AICDPgDAo74AAGi/AAAQvwAAMD8AAEi/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAAD4AALA/AACiPwAAyL8AQA4/ACDnPwBgtz4A4JC/AAAQPwAA6D8AALA+AACQvwAAED8AAOg/AACwPgAAkL8AABA/AADoPwAAsD4AAJC/AMARPwDg6D8AoKg+ACCPvwAAgD8AABBAAAAUvwAAML8AALg/AAAsQAAAwL8AAIC+AAC4PwAALEAAAMC/AACAvgAAuD8AACxAAADAvwAAgL4AAAQ/AADiPwAAiL8AAIi+AKDIvgDAWz8AwCG/AOCPvgAA0L4AAFg/AAAgvwAAkL4AANC+AABYPwAAIL8AAJC+AADQvgAAWD8AACC/AACQvgBg174AYFQ/AEAevwAgkL4AAKq/AACgvQAAQL4AAJi+AAAQwAAAgL8AAIA+AACgvgAAEMAAAIC/AACAPgAAoL4AABDAAACAvwAAgD4AAKC+AADovwAAgr8AAHA+AAAAPgDgsL8AAIS/AEBgPgBADj8AALC/AACEvwAAYD4AABA/AACwvwAAhL8AAGA+AAAQPwAAsL8AAIS/AABgPgAAED8AIK+/AACEvwDAXz4AwBE/AABwvwAAhr8AAFA+AACAPwAAAL8AAIi/AABAPgAAuD8AAAC/AACIvwAAQD4AALg/AAAAvwAAiL8AAEA+AAC4PwAABL8AACC/AAAgPwAABD8AAAi/AABHvgAghz8AoMi+AAAIvwAAQL4AAIg/AADQvgAACL8AAEC+AACIPwAA0L4AAAi/AABAvgAAiD8AANC+ACAIvwAAOb4A4Ig/AGDXvgAADL8AAIA+AADAPwAAqr8AABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAABwPwAADEAAANA/AAAkwAAgrz8AoCdAAACLPgCACMAAALA/AAAoQAAAgD4AAAjAAACwPwAAKEAAAIA+AAAIwAAAsD8AAChAAACAPgAACMAA4LA/AIAoQAAAaj4AoAfAAADoPwAAREAAAJC/AADYvwAAEEAAAGBAAAAgwAAAoL8AABBAAABgQAAAIMAAAKC/AAAQQAAAYEAAACDAAACgvwAAYD8AAAhAAAAEwAAAUL8AAPW+AIBFPwDg0L8AgMO+AAAAvwAAQD8AANC/AADAvgAAAL8AAEA/AADQvwAAwL4AAAC/AABAPwAA0L8AAMC+AIAFvwCAOj8AIM+/AIC8vgAA8L8AACC/AACYvwAAgD0AAFDAAAAAwAAAQL8AAAA/AABQwAAAAMAAAEC/AAAAPwAAUMAAAADAAABAvwAAAD8AADTAAADIvwAAoL4AAHA/AIAYwADgkL8AAPI9ACCvPwAAGMAAAJC/AAAAPgAAsD8AABjAAACQvwAAAD4AALA/AAAYwAAAkL8AAAA+AACwPwCgF8AAII+/AAAHPgDgsD8AAPi/AAAwvwAAED8AAOg/AADAvwAAgL4AAIA/AAAQQAAAwL8AAIC+AACAPwAAEEAAAMC/AACAvgAAgD8AABBAAACIvwAAQD4AALg/AABgPwDAIb8AQB4/ACDvPwAA9b4AACC/AAAgPwAA8D8AAAC/AAAgvwAAID8AAPA/AAAAvwAAIL8AACA/AADwPwAAAL8AQB6/AMAhPwDg8D8AgAW/AABAvgAAiD8AABRAAADwvwAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDA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AAAAAAAAoD8AACBAAABgwAAAAAAAAKA/AAAgQAAAYMAAAAAAAACgPwAAIEAAAGDAAADgPgAA2D8AAJA/AABEwABAXj8AoAdAAABqvgCAKMAAAGA/AAAIQAAAgL4AACjAAABgPwAACEAAAIC+AAAowAAAYD8AAAhAAACAvgAAKMAAwGE/AIAIQAAAi74AoCfAAACoPwAAJEAAANC/AAAMwAAA4D8AAEBAAABAwAAA4L8AAOA/AABAQAAAQMAAAOC/AADgPwAAQEAAAEDAAADgvwAADEAAANA/AAAkwAAAqL8AoCdAAACLPgCACMAAwGG/AAAoQAAAgD4AAAjAAABgvwAAKEAAAIA+AAAIwAAAYL8AAChAAACAPgAACMAAAGC/AIAoQAAAaj4AoAfAAEBevwAAREAAAJC/AADYvwAA4L4AAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABEwAAA6L8AABC/AAAwPwCAKMAA4LC/AAAHvgAgjz8AACjAAACwvwAAAL4AAJA/AAAowAAAsL8AAAC+AACQPwAAKMAAALC/AAAAvgAAkD8AoCfAACCvvwAA8r0A4JA/AAAMwAAAcL8AAKA+AADIPwAA4L8AAAC/AABAPwAAAEAAAOC/AAAAvwAAQD8AAABAAADgvwAAAL8AAEA/AAAAQAAAqL8AAIC9AACYPwAAID8AwGG/AIC8PgAgzz8AgDq/AABgvwAAwD4AANA/AABAvwAAYL8AAMA+AADQPwAAQL8AAGC/AADAPgAA0D8AAEC/AEBevwCAwz4A4NA/AIBFvwAA4L4AAFA/AAAEQAAACMAAAAAAAACgPwAAIEAAAGDAAAAAAAAAoD8AACBAAABgwAAAAAAAAKA/AAAgQAAAYMAAAOA+AADYPwAAkD8AAETAAEBePwCgB0AAAGq+AIAowAAAYD8AAAhAAACAvgAAKMAAAGA/AAAIQAAAgL4AACjAAABgPwAACEAAAIC+AAAowADAYT8AgAhAAACLvgCgJ8AAAKg/AAAkQAAA0L8AAAzAAADgPwAAQEAAAEDAAADgvwAA4D8AAEBAAABAwAAA4L8AAOA/AABAQAAAQMAAAOC/AAAMQAAA0D8AACTAAACovwCgJ0AAAIs+AIAIwADAYb8AAChAAACAPgAACMAAAGC/AAAoQAAAgD4AAAjAAABgvwAAKEAAAIA+AAAIwAAAYL8AgChAAABqPgCgB8AAQF6/AABEQAAAkL8AANi/AADgvgAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAA="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 12800
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 800,
+                            "image_pitch": 12800,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        },
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7a6a5f64bc4531517ba0d4d4912c2d687ee0779777af9376c02b5e09f4af2421"
+                        }
+                      }
+                    },
+                    {
+                      "name": "const",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAUwAAAiL8AAEA+AAC4PwDg8L8AwCG/AEAePwAg7z8AAPC/AAAgvwAAID8AAPA/AADwvwAAIL8AACA/AADwPwAA8L8AACC/AAAgPwAA8D8AIO+/AEAevwDAIT8A4PA/AAC4vwAAQL4AAIg/AAAUQAAAgL8AAIA+AADAPwAAMEAAAIC/AACAPgAAwD8AADBAAACAvwAAgD4AAMA/AAAwQAAAEL8AADA/AAD4PwAAsD8AAAe+ACCPPwCgF0AAALA8AAAAvgAAkD8AABhAAAAAAAAAAL4AAJA/AAAYQAAAAAAAAAC+AACQPwAAGEAAAAAAAADyvQDgkD8AgBhAAACwvAAAoD4AAMg/AAA0QAAAsL8AAEA/AAAAQAAAUEAAADDAAABAPwAAAEAAAFBAAAAwwAAAQD8AAABAAABQQAAAMMAAAJg/AAAgPwAA8D8AABTAACDPPwCAOr8AgAU/AODwvwAA0D8AAEC/AAAAPwAA8L8AANA/AABAvwAAAD8AAPC/AADQPwAAQL8AAAA/AADwvwDg0D8AgEW/AAD1PgAg778AAARAAAAIwAAAYL8AALi/AAAgQAAAYMAAABDAAACAvwAAIEAAAGDAAAAQwAAAgL8AACBAAABgwAAAEMAAAIC/AACQPwAARMAAAOi/AAAQvwAAar4AgCjAAOCwvwAAB74AAIC+AAAowAAAsL8AAAC+AACAvgAAKMAAALC/AAAAvgAAgL4AACjAAACwvwAAAL4AAIu+AKAnwAAgr78AAPK9AADQvwAADMAAAHC/AACgPgAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AADDAAADAvwAAgL4AAIA/AAAwwAAAwL8AAIC+AACAPwAAMMAAAMC/AACAvgAAgD8AABTAAACIvwAAQD4AALg/AODwvwDAIb8AQB4/ACDvPwAA8L8AACC/AAAgPwAA8D8AAPC/AAAgvwAAID8AAPA/AADwvwAAIL8AACA/AADwPwAg778AQB6/AMAhPwDg8D8AALi/AABAvgAAiD8AABRAAACAvwAAgD4AAMA/AAAwQAAAgL8AAIA+AADAPwAAMEAAAIC/AACAPgAAwD8AADBAAAAQvwAAMD8AAPg/AACwPwAAB74AII8/AKAXQAAAsDwAAAC+AACQPwAAGEAAAAAAAAAAvgAAkD8AABhAAAAAAAAAAL4AAJA/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AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AABAwAAA4L8AAAC/AABAPwAAQMAAAOC/AAAAvwAAQD8AAEDAAADgvwAAAL8AAEA/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AAAwvwAAED8AAGg/AAAQvwCAg74AQH4/AMDjPgAAB74AAIC+AACAPwAA4D4AAAC+AACAvgAAgD8AAOA+AAAAvgAAgL4AAIA/AADgPgAAAL4AAHm+AOCAPwBA3D4AAPK9AABAPgAAuD8AAAC9AACgPgAAID8AAPA/AAAAvwAAQD8AACA/AADwPwAAAL8AAEA/AAAgPwAA8D8AAAC/AABAPwAAID4AALQ/AACAvQAAkD4AQJy+AOBxPwCAvD4AgDi+AACgvgAAcD8AAMA+AABAvgAAoL4AAHA/AADAPgAAQL4AAKC+AABwPwAAwD4AAEC+AMCjvgAgbj8AgMM+AIBHvgAASL8AAPA+AABQPwAAKL8AAKC/AAAAAAAAoD8AAJC/AACgvwAAAAAAAKA/AACQvwAAoL8AAAAAAACgPwAAkL8AAFC/AADwvgAASD8AADC/AIDDvgAgbr8AwKM+AICDvgAAwL4AAHC/AACgPgAAgL4AAMC+AABwvwAAoD4AAIC+AADAvgAAcL8AAKA+AACAvgCAvL4A4HG/AECcPgAAeb4AAIA9AAC0vwAAIL4AAEA+AAAAPwAA8L8AACC/AAAgPwAAAD8AAPC/AAAgvwAAID8AAAA/AADwvwAAIL8AACA/AAAAPQAAuL8AAEC+AAAgPgBA3L4A4IC/AAB5PgBAnL4AAOC+AACAvwAAgD4AAKC+AADgvgAAgL8AAIA+AACgvgAA4L4AAIC/AACAPgAAoL4AwOO+AEB+vwCAgz4AwKO+AABovwAAEL8AADA/AABIvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AAJC/AAAAPgAAsD8AAIC/AACQvwAAAD4AALA/AACAvwAAkL8AAAA+AACwPwAAgL8AADC/AAAQPwAAaD8AABC/AICDvgBAfj8AwOM+AAAHvgAAgL4AAIA/AADgPgAAAL4AAIC+AACAPwAA4D4AAAC+AACAvgAAgD8AAOA+AAAAvgAAeb4A4IA/AEDcPgAA8r0AAEA+AAC4PwAAAL0AAKA+AAAgPwAA8D8AAAC/AABAPwAAID8AAPA/AAAAvwAAQD8AACA/AADwPwAAAL8AAEA/AAAgPgAAtD8AAIC9AACQPgBAnL4A4HE/AIC8PgCAOL4AAKC+AABwPwAAwD4AAEC+AACgvgAAcD8AAMA+AABAvgAAoL4AAHA/AADAPgAAQL4AwKO+ACBuPwCAwz4AgEe+AABIvwAA8D4AAFA/AAAovwAAoL8AAAAAAACgPwAAkL8AAKC/AAAAAAAAoD8AAJC/AACgvwAAAAAAAKA/AACQvwAAUL8AAPC+AABIPwAAML8AgMO+ACBuvwDAoz4AgIO+AADAvgAAcL8AAKA+AACAvgAAwL4AAHC/AACgPgAAgL4AAMC+AABwvwAAoD4AAIC+AIC8vgDgcb8AQJw+AAB5vgAAgD0AALS/AAAgvgAAQD4AAAA/AADwvwAAIL8AACA/AAAAPwAA8L8AACC/AAAgPwAAAD8AAPC/AAAgvwAAID8AAAA9AAC4vwAAQL4AACA+AEDcvgDggL8AAHk+AECcvgAA4L4AAIC/AACAPgAAoL4AAOC+AACAvwAAgD4AAKC+AADgvgAAgL8AAIA+AACgvgDA474AQH6/AICDPgDAo74AAGi/AAAQvwAAMD8AAEi/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAsL8AAAC+AACQPwAAoL8AALC/AAAAvgAAkD8AAKC/AACwvwAAAL4AAJA/AACgvwAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAoL4AAHA/AAAMQAAAAMAAAKC+AABwPwAADEAAAADAAACgvgAAcD8AAAxAAAAAwAAAAD4AALA/AACiPwAAyL8AQA4/ACDnPwBgtz4A4JC/AAAQPwAA6D8AALA+AACQvwAAED8AAOg/AACwPgAAkL8AABA/AADoPwAAsD4AAJC/AMARPwDg6D8AoKg+ACCPvwAAgD8AABBAAAAUvwAAML8AALg/AAAsQAAAwL8AAIC+AAC4PwAALEAAAMC/AACAvgAAuD8AACxAAADAvwAAgL4AAAQ/AADiPwAAiL8AAIi+AKDIvgDAWz8AwCG/AOCPvgAA0L4AAFg/AAAgvwAAkL4AANC+AABYPwAAIL8AAJC+AADQvgAAWD8AACC/AACQvgBg174AYFQ/AEAevwAgkL4AAKq/AACgvQAAQL4AAJi+AAAQwAAAgL8AAIA+AACgvgAAEMAAAIC/AACAPgAAoL4AABDAAACAvwAAgD4AAKC+AADovwAAgr8AAHA+AAAAPgDgsL8AAIS/AEBgPgBADj8AALC/AACEvwAAYD4AABA/AACwvwAAhL8AAGA+AAAQPwAAsL8AAIS/AABgPgAAED8AIK+/AACEvwDAXz4AwBE/AABwvwAAhr8AAFA+AACAPwAAAL8AAIi/AABAPgAAuD8AAAC/AACIvwAAQD4AALg/AAAAvwAAiL8AAEA+AAC4PwAABL8AACC/AAAgPwAABD8AAAi/AABHvgAghz8AoMi+AAAIvwAAQL4AAIg/AADQvgAACL8AAEC+AACIPwAA0L4AAAi/AABAvgAAiD8AANC+ACAIvwAAOb4A4Ig/AGDXvgAADL8AAIA+AADAPwAAqr8AABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAQvwAAMD8AAPg/AAAQwAAAEL8AADA/AAD4PwAAEMAAABC/AAAwPwAA+D8AABDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAAAAPwAA4D8AAEBAAABAwAAAAD8AAOA/AABAQAAAQMAAAAA/AADgPwAAQEAAAEDAAABwPwAADEAAANA/AAAkwAAgrz8AoCdAAACLPgCACMAAALA/AAAoQAAAgD4AAAjAAACwPwAAKEAAAIA+AAAIwAAAsD8AAChAAACAPgAACMAA4LA/AIAoQAAAaj4AoAfAAADoPwAAREAAAJC/AADYvwAAEEAAAGBAAAAgwAAAoL8AABBAAABgQAAAIMAAAKC/AAAQQAAAYEAAACDAAACgvwAAYD8AAAhAAAAEwAAAUL8AAPW+AIBFPwDg0L8AgMO+AAAAvwAAQD8AANC/AADAvgAAAL8AAEA/AADQvwAAwL4AAAC/AABAPwAA0L8AAMC+AIAFvwCAOj8AIM+/AIC8vgAA8L8AACC/AACYvwAAgD0AAFDAAAAAwAAAQL8AAAA/AABQwAAAAMAAAEC/AAAAPwAAUMAAAADAAABAvwAAAD8AADTAAADIvwAAoL4AAHA/AIAYwADgkL8AAPI9ACCvPwAAGMAAAJC/AAAAPgAAsD8AABjAAACQvwAAAD4AALA/AAAYwAAAkL8AAAA+AACwPwCgF8AAII+/AAAHPgDgsD8AAPi/AAAwvwAAED8AAOg/AADAvwAAgL4AAIA/AAAQQAAAwL8AAIC+AACAPwAAEEAAAMC/AACAvgAAgD8AABBAAACIvwAAQD4AALg/AABgPwDAIb8AQB4/ACDvPwAA9b4AACC/AAAgPwAA8D8AAAC/AAAgvwAAID8AAPA/AAAAvwAAIL8AACA/AADwPwAAAL8AQB6/AMAhPwDg8D8AgAW/AABAvgAAiD8AABRAAADwvwAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAIA+AADAPwAAMEAAAFDAAACAPgAAwD8AADBAAABQwAAAgD4AAMA/AAAwQAAAUMAAAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDA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AAAAAAAAoD8AACBAAABgwAAAAAAAAKA/AAAgQAAAYMAAAAAAAACgPwAAIEAAAGDAAADgPgAA2D8AAJA/AABEwABAXj8AoAdAAABqvgCAKMAAAGA/AAAIQAAAgL4AACjAAABgPwAACEAAAIC+AAAowAAAYD8AAAhAAACAvgAAKMAAwGE/AIAIQAAAi74AoCfAAACoPwAAJEAAANC/AAAMwAAA4D8AAEBAAABAwAAA4L8AAOA/AABAQAAAQMAAAOC/AADgPwAAQEAAAEDAAADgvwAADEAAANA/AAAkwAAAqL8AoCdAAACLPgCACMAAwGG/AAAoQAAAgD4AAAjAAABgvwAAKEAAAIA+AAAIwAAAYL8AAChAAACAPgAACMAAAGC/AIAoQAAAaj4AoAfAAEBevwAAREAAAJC/AADYvwAA4L4AAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABgwAAAEMAAAIC/AACAPgAAYMAAABDAAACAvwAAgD4AAGDAAAAQwAAAgL8AAIA+AABEwAAA6L8AABC/AAAwPwCAKMAA4LC/AAAHvgAgjz8AACjAAACwvwAAAL4AAJA/AAAowAAAsL8AAAC+AACQPwAAKMAAALC/AAAAvgAAkD8AoCfAACCvvwAA8r0A4JA/AAAMwAAAcL8AAKA+AADIPwAA4L8AAAC/AABAPwAAAEAAAOC/AAAAvwAAQD8AAABAAADgvwAAAL8AAEA/AAAAQAAAqL8AAIC9AACYPwAAID8AwGG/AIC8PgAgzz8AgDq/AABgvwAAwD4AANA/AABAvwAAYL8AAMA+AADQPwAAQL8AAGC/AADAPgAA0D8AAEC/AEBevwCAwz4A4NA/AIBFvwAA4L4AAFA/AAAEQAAACMAAAAAAAACgPwAAIEAAAGDAAAAAAAAAoD8AACBAAABgwAAAAAAAAKA/AAAgQAAAYMAAAOA+AADYPwAAkD8AAETAAEBePwCgB0AAAGq+AIAowAAAYD8AAAhAAACAvgAAKMAAAGA/AAAIQAAAgL4AACjAAABgPwAACEAAAIC+AAAowADAYT8AgAhAAACLvgCgJ8AAAKg/AAAkQAAA0L8AAAzAAADgPwAAQEAAAEDAAADgvwAA4D8AAEBAAABAwAAA4L8AAOA/AABAQAAAQMAAAOC/AAAMQAAA0D8AACTAAACovwCgJ0AAAIs+AIAIwADAYb8AAChAAACAPgAACMAAAGC/AAAoQAAAgD4AAAjAAABgvwAAKEAAAIA+AAAIwAAAYL8AgChAAABqPgCgB8AAQF6/AABEQAAAkL8AANi/AADgvgAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAAAAGBAAAAgwAAAoL8AAAAAAABgQAAAIMAAAKC/AAAAAAAAYEAAACDAAACgvwAAAAA="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "buffer": {
+                                "offset": 0,
+                                "length": 12800
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 800,
+                            "image_pitch": 12800,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        },
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7a6a5f64bc4531517ba0d4d4912c2d687ee0779777af9376c02b5e09f4af2421"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-argument-pixel-sampler-scaling",
+        "metal2vulkan-degrade-pixel-sampler-scaling",
+        "metal2vulkan-degrade-set-past-layout-support"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 13,
+        "argument_tables_retained": 4,
+        "bare_starts": 4,
+        "batches_submitted_by_waiters": 4,
+        "batches_with_none_pending": 4,
+        "bound_notices_made": 3,
+        "command_buffers_begun": 14,
+        "command_buffers_begun_batch_barriers": 3,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 3,
+        "command_buffers_begun_encoders": 4,
+        "command_buffers_begun_segments": 3,
+        "command_buffers_deferred": 10,
+        "command_buffers_submitted": 14,
+        "commands_recorded.begin_command_buffer": 4,
+        "commands_recorded.cmd_bind_descriptor_sets": 6,
+        "commands_recorded.cmd_bind_pipeline": 4,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_dispatch": 4,
+        "commands_recorded.cmd_pipeline_barrier": 7,
+        "commands_recorded.cmd_push_constants": 4,
+        "commands_recorded.end_command_buffer": 14,
+        "commits_handed_off": 4,
+        "commits_taken_in": 4,
+        "completed_waits": 7,
+        "completed_where_seen": 4,
+        "completion_arms": 4,
+        "completion_arms_after_a_wake": 4,
+        "completion_waiter_parks": 4,
+        "creation_pipelines_made": 3,
+        "device_memory_allocated": 268435584,
+        "dispatch_pipelines_pooled": 3,
+        "dispatch_shapes_made": 3,
+        "dispatch_used_resources_listed": 4,
+        "dispatches_planned_as_before": 1,
+        "encoder_command_buffers_begun": 10,
+        "fence_waits": 4,
+        "finales_folded": 4,
+        "functions_shared": 3,
+        "functions_translated": 3,
+        "gate_waits": 4,
+        "gate_waits_slept": 4,
+        "heap_tables_worked_out": 3,
+        "host_steps_recorded": 3,
+        "host_texel_copies": 1,
+        "images_started_on_the_host": 1,
+        "new_buffer_bytes_cleared": 64032,
+        "object_churn.buffers_evicted": 2,
+        "object_churn.buffers_parked": 10,
+        "object_churn.buffers_recycled": 10,
+        "object_churn.images_own_memory": 1,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_buffers_destroyed": 2,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_image_views_made": 1,
+        "object_churn.vk_images_destroyed": 1,
+        "object_churn.vk_images_made": 1,
+        "pipeline_layouts_made": 3,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 4,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 6,
+        "sampler_sets_made": 1,
+        "scheduled_where_submitted": 4,
+        "scheduler_passes": 3,
+        "scheduler_passes_by_waiters": 4,
+        "scheduler_sleeps": 4,
+        "scheduler_wakes_commit": 4,
+        "shader_modules_made": 3,
+        "slot_returns": 4,
+        "spare_command_pools_taken": 4,
+        "stage_entries_specialized": 3,
+        "submit_infos": 7,
+        "trail_waits": 4,
+        "variant_pipelines_made": 6,
+        "variants_taken_back": 3,
+        "wakes_completion_waiters": 4,
+        "wakes_spared": 28
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 1,
+        "gate_waits_slept": 3
+      },
+      "composed": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "batches_submitted_by_waiters": 1,
+        "command_buffers_begun": 14,
+        "command_buffers_begun_batch_barriers": 3,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 3,
+        "command_buffers_begun_segments": 3,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 14,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 7,
+        "commands_recorded.end_command_buffer": 14,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 268435584,
+        "dispatch_pipelines_pooled": 3,
+        "encoder_command_buffers_begun": 10,
+        "functions_translated": 3,
+        "host_steps_recorded": 3,
+        "pipeline_layouts_made": 3,
+        "pooled_memory_blocks_made": 4,
+        "queues_sharing_a_vk_queue": 0,
+        "sampler_sets_made": 1,
+        "shader_modules_made": 3,
+        "stage_entries_specialized": 3,
+        "submit_infos": 7,
+        "variant_pipelines_made": 3
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "pixel-samplers-rgba16f-linear-edge",
+        "calls": 28,
+        "in_calls": 51043293,
+        "on_cpu": 1683253,
+        "blocked": 49328333,
+        "elsewhere": 3310292,
+        "spend": 54331501,
+        "spend_least": 52131291,
+        "spend_most": 56407125,
+        "per_call": [
+          {
+            "call": "argument_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 1709,
+            "on_cpu": 1833,
+            "blocked": 0,
+            "wall_least": 1584,
+            "wall_most": 2042,
+            "wall_total": 4458,
+            "on_cpu_total": 4667,
+            "blocked_total": 0
+          },
+          {
+            "call": "buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 3833,
+            "on_cpu": 3959,
+            "blocked": 0,
+            "wall_least": 3416,
+            "wall_most": 4708,
+            "wall_total": 29208,
+            "on_cpu_total": 29917,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 65375,
+            "on_cpu": 65625,
+            "blocked": 0,
+            "wall_least": 58291,
+            "wall_most": 70250,
+            "wall_total": 179208,
+            "on_cpu_total": 179875,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 7917,
+            "on_cpu": 8083,
+            "blocked": 0,
+            "wall_least": 6917,
+            "wall_most": 12625,
+            "wall_total": 154708,
+            "on_cpu_total": 155250,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 22855792,
+            "on_cpu": 596583,
+            "blocked": 22276792,
+            "wall_least": 21711167,
+            "wall_most": 23385041,
+            "wall_total": 46201750,
+            "on_cpu_total": 1230125,
+            "blocked_total": 44971625
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 541,
+            "on_cpu": 792,
+            "blocked": 0,
+            "wall_least": 375,
+            "wall_most": 750,
+            "wall_total": 3750,
+            "on_cpu_total": 5041,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 750,
+            "on_cpu": 875,
+            "blocked": 0,
+            "wall_least": 666,
+            "wall_most": 917,
+            "wall_total": 5375,
+            "on_cpu_total": 5583,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 39125,
+            "on_cpu": 39291,
+            "blocked": 0,
+            "wall_least": 34500,
+            "wall_most": 47625,
+            "wall_total": 39125,
+            "on_cpu_total": 39291,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 185375,
+            "on_cpu": 2792,
+            "blocked": 182834,
+            "wall_least": 165416,
+            "wall_most": 203250,
+            "wall_total": 4383042,
+            "on_cpu_total": 21499,
+            "blocked_total": 4360250
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "pixel-samplers-rgba16f-linear-edge",
+        "calls": 28,
+        "in_calls": 3426791,
+        "on_cpu": 641543,
+        "blocked": 2788375,
+        "elsewhere": 643167,
+        "spend": 4071709,
+        "spend_least": 3883124,
+        "spend_most": 4464582,
+        "per_call": [
+          {
+            "call": "argument_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 542,
+            "on_cpu": 666,
+            "blocked": 0,
+            "wall_least": 541,
+            "wall_most": 667,
+            "wall_total": 1333,
+            "on_cpu_total": 1542,
+            "blocked_total": 0
+          },
+          {
+            "call": "buffer",
+            "least_calls": 6,
+            "most_calls": 6,
+            "wall": 1333,
+            "on_cpu": 1458,
+            "blocked": 0,
+            "wall_least": 1125,
+            "wall_most": 1542,
+            "wall_total": 9332,
+            "on_cpu_total": 10250,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 17042,
+            "on_cpu": 17250,
+            "blocked": 0,
+            "wall_least": 14709,
+            "wall_most": 22042,
+            "wall_total": 63750,
+            "on_cpu_total": 64375,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 22125,
+            "on_cpu": 22292,
+            "blocked": 0,
+            "wall_least": 17250,
+            "wall_most": 25042,
+            "wall_total": 200166,
+            "on_cpu_total": 200751,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 140000,
+            "on_cpu": 140292,
+            "blocked": 0,
+            "wall_least": 132417,
+            "wall_most": 143500,
+            "wall_total": 281459,
+            "on_cpu_total": 282333,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 542,
+            "on_cpu": 792,
+            "blocked": 0,
+            "wall_least": 500,
+            "wall_most": 1500,
+            "wall_total": 4292,
+            "on_cpu_total": 5750,
+            "blocked_total": 0
+          },
+          {
+            "call": "sampler",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 458,
+            "on_cpu": 625,
+            "blocked": 0,
+            "wall_least": 458,
+            "wall_most": 500,
+            "wall_total": 2375,
+            "on_cpu_total": 2625,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture_2d_in_role",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 40708,
+            "on_cpu": 40917,
+            "blocked": 0,
+            "wall_least": 34500,
+            "wall_most": 48334,
+            "wall_total": 40708,
+            "on_cpu_total": 40917,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 665917,
+            "on_cpu": 2625,
+            "blocked": 663376,
+            "wall_least": 650833,
+            "wall_most": 720542,
+            "wall_total": 2814751,
+            "on_cpu_total": 18416,
+            "blocked_total": 2788375
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,3720 @@
+{
+  "format": 1,
+  "case": "blend-sweep-operations",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_samples.ll",
+      "entry": "rt6_fill_vertex",
+      "source_sha256": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+    },
+    {
+      "fixture": "rt6_samples.air.ll",
+      "entry": "rt6_fill_vertex",
+      "source_sha256": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+    },
+    {
+      "fixture": "rt6_samples.ll",
+      "entry": "rt6_fill_rgba32float",
+      "source_sha256": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+    },
+    {
+      "fixture": "rt6_samples.air.ll",
+      "entry": "rt6_fill_rgba32float",
+      "source_sha256": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "program:air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "program:air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "63d2e3f4a17d021a2ca10a50eea35ce51e27af2b9e95df0093825e2cc58d199a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:source",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "47eabc26e865cc2f2493452c7eb7a91c3b564cbe6e4e503e946302de520797b2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:shape",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "db49223a2cf9616171322e5325816a7a579582ebdce91c2f89df8df7aa8aac01"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:destination",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f95df6e441bedfbd180de3104b14123620da981cb80468f53a714564ccf7a15d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-zero-add",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "469491a32c048ba84dbc7a9e8b2bc35828c222b00a7d514661b5cbea71bb4c79"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-zero-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6a9477c00d3d01e956f21b067d23287aa73f7a283a9611216377cd30b3d020c5"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-zero-reverse-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b5e45a25c91eb9456b40b4b6fbfa9a2bf50a341e54116bc1d2f7e43ef0ab2954"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-zero-min",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c5063f20b3ae1caa0273633e9f13fba85ff4b7309b343a22a236fc42c0570df9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-zero-max",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d8148c64595d7889ee464a9c24968cddb509b79376583f9133e0822aced5b05f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-one-add",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f3a280156c21754a44a06f472739be0101d56b4961b3ab2d568dd7911cec415f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-one-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f2c09db391802ab17e4e31c26dae555ee4aa88818b6033727de50d4d500ac550"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-one-reverse-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c1123662a711209afc332925c24178d3e8cef475b25f753cfcd09891ee174af7"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-one-min",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "065049d5080a3e7e98a263c6567198a120cc909e664202b0bb150dd0c62f3f3d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:one-one-max",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f63409b27f61e4c7cc7b3afc286c8aedd596d66ac10a6b98b6ac16d4e791d0fd"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sa-1msa-add",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6be5f462c8cec52656f6bad2d76ace6fe9b65ca6a4186016694c4870c733b427"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sa-1msa-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "569349b14d6515cfdf21b4cc98a9b23925d36be1467efc39c080bf624de4177c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sa-1msa-reverse-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e1ddcda9a78011b30bc60e52e5af7c34a59d675f54e750b98049c5bbf7674ac7"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sa-1msa-min",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7e1aa2da8acd8c1d74e99a1d24d1a1f47e84702a24383223ea0461e05cac8c5e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sa-1msa-max",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "190ea0dd52ab1775f22e252a92f29a5b7353c119e02e5880a44b0d79d76d30a1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:dc-1mdc-add",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "8cc95dea0c1f6d50c9578d969c0e7b736161ddafa250904a5fede3edee483153"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:dc-1mdc-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e6afd1e7cbc67b8c97882e349def494476f8576df5bbe242976541df86dcb872"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:dc-1mdc-reverse-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "83c98df819d9aa755781e1e2453d4b27f60c0b575c4fc3bfeae844f9bced6386"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:dc-1mdc-min",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "85fa3efde99d89f2df32be4f35d33b2ba77d9f90b517dde049df4cbe0b6780a6"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:dc-1mdc-max",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "49ba1d8b33ab37c93a57d22513e96a00068cf495171d55382a638b695d8ff996"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:bc-1mbc-add",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fb574fb1dfae64f2e187b9a29a549bcb6df4cafdc31474f0726f0326a78132a3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:bc-1mbc-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "96c378e3a33684a17425d76d2286575122eb646647c534172657d6ee3588fe27"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:bc-1mbc-reverse-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b87a67665b3bc27498341d7a6b859a086e70e376587a724bd981d6b200b86f90"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:bc-1mbc-min",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "77c5f3b02dd40b45205c0913f2d144b2b41732a077ee40d5c1fb15b1166e3dfd"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:bc-1mbc-max",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5d2621f55d9d69f4f2b4287410e56b71ec0da4d85ab52882047d6dd56572bb4d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sas-da-add",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "425a0a00219638e518d7341a671f086e62c16911b38c952673b19d5d1e7eed11"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sas-da-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f13da2c6d2f21bafb979ce8b16a7bfd37db4328533b5f98e51f4cf9fcb0149e3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sas-da-reverse-subtract",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "8a9c4a7ad95bc7f17e88e132b7abac7bc36eb590c41f7bb58bbb040d101b4faa"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sas-da-min",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e68caccaab9d665803c5c505dab4419ca87a12067877fa29dc48a95748b8d9d9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "variant:sas-da-max",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3409d431a4c26088e3a725272eaac52ce1e88d25753d4bc2685c0a7b970e4c8e"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/source",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/shape",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-zero-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-zero-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-zero-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-zero-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-zero-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-zero-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-zero-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-zero-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-zero-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-zero-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-zero-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-zero-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-zero-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-zero-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-zero-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-zero-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-zero-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-zero-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-zero-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-zero-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-one-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-one-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-one-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-one-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-one-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-one-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-one-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-one-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-one-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-one-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-one-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-one-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-one-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-one-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-one-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-one-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/one-one-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/one-one-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/one-one-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/one-one-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sa-1msa-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sa-1msa-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sa-1msa-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sa-1msa-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sa-1msa-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sa-1msa-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sa-1msa-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sa-1msa-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sa-1msa-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sa-1msa-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sa-1msa-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sa-1msa-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sa-1msa-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sa-1msa-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sa-1msa-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sa-1msa-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sa-1msa-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sa-1msa-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sa-1msa-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sa-1msa-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/dc-1mdc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/dc-1mdc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/dc-1mdc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/dc-1mdc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/dc-1mdc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/dc-1mdc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/dc-1mdc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/dc-1mdc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/dc-1mdc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/dc-1mdc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/dc-1mdc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/dc-1mdc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/dc-1mdc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/dc-1mdc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/dc-1mdc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/dc-1mdc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/dc-1mdc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/dc-1mdc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/dc-1mdc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/dc-1mdc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/bc-1mbc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/bc-1mbc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/bc-1mbc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/bc-1mbc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/bc-1mbc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/bc-1mbc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/bc-1mbc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/bc-1mbc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/bc-1mbc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/bc-1mbc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/bc-1mbc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/bc-1mbc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/bc-1mbc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/bc-1mbc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/bc-1mbc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/bc-1mbc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/bc-1mbc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/bc-1mbc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/bc-1mbc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/bc-1mbc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sas-da-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sas-da-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sas-da-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sas-da-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sas-da-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sas-da-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sas-da-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sas-da-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sas-da-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sas-da-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sas-da-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sas-da-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sas-da-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sas-da-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sas-da-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sas-da-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/sas-da-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target/sas-da-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "replace-region/sas-da-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels/sas-da-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back/one-zero-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-zero-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-zero-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-zero-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-zero-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-one-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-one-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-one-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-one-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/one-one-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sa-1msa-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sa-1msa-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sa-1msa-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sa-1msa-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sa-1msa-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/dc-1mdc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/dc-1mdc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/dc-1mdc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/dc-1mdc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/dc-1mdc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/bc-1mbc-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/bc-1mbc-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/bc-1mbc-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/bc-1mbc-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/bc-1mbc-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sas-da-add",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sas-da-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sas-da-reverse-subtract",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sas-da-min",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back/sas-da-max",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "blended",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "one-zero-add",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-zero-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-zero-reverse-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvgAAoL0AABC+AABQvgAAiL4AAKC9AAAQvgAAUL4AAIi+AACgvQAAEL4AAFC+AACIvg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-zero-min",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AAAAAAAAoD0AABA+AABQPgAAgDwAAKA9AAAQPgAAUD4AAAA9AACgPQAAED4AAFA+AABAPQAAoD0AABA+AABQPgAAgD0AAAA9AAAQPgAAUD4AAKA9AACgPQAAED4AAFA+AADAPQAAoD0AABA+AADAPQAA4D0AAKA9AAAQPgAAUD4AAAA+AACgPQAA4D0AAFA+AAAQPgAAQD0AABA+AABQPgAAID4AAKA9AACAPAAAUD4AADA+AACgPQAAED4AAFA+AABAPgAAoD0AABA+AABQPgAAUD4AAKA9AAAQPgAAED4AAGA+AACAPQAAED4AAFA+AABwPgAAoD0AABA+AABQPgAAgD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAAPQAAiD4AAKA9AADAPQAAUD4AAIg+AACgPQAAED4AAEA+AACIPgAAoD0AAAAAAABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAoD0AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AAKA9AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAgDwAAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAwPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAgD0AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAIA9AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AADgPQAAiD4AAKA9AABAPQAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAAAAACIPgAAoD0AABA+AABQPgAAiD4AAAAAAAAQPgAAID4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAAPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-zero-max",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAYD4AAPg+AAAgPwAAiD4AANg+AABwPwAAUD4AAIg+AAAgPwAAyD4AAEg/AACIPgAAVD8AAFg/AAC4PgAAiD4AAKA9AACYPgAAcD8AAIg+AABwPgAAQD8AAAQ/AACIPgAA4D4AAFA+AABQPgAAiD4AACQ/AAAoPwAALD8AAIg+AABYPwAAED4AAIA+AACIPgAAoD0AABA/AABUPwAAiD4AAIA+AAAQPgAA0D4AAIg+AADoPgAA8D4AAHw/AACIPgAAKD8AAGw/AAAQPwAAiD4AAFw/AADAPgAAUD4AAIg+AACgPQAAVD8AADg/AACIPgAAiD4AAJA+AACYPgAAiD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACQPgAAYD8AACQ/AABQPgAAmD4AAKA9AAAQPgAAHD8AAKA+AACQPgAADD8AAFA+AACoPgAA+D4AABA+AABEPwAAsD4AADA/AADoPgAAsD4AALg+AABkPwAAaD8AAGw/AADAPgAAwD0AALg+AAAAPwAAyD4AAJg+AABQPwAAUD4AANA+AAAAPwAAiD4AACg/AADYPgAAND8AADg/AABwPgAA4D4AAGg/AAAwPgAAUD8AAOg+AADgPQAAID8AAMg+AADwPgAAoD4AABA+AAB4PwAA+D4AAAQ/AAAIPwAADD8AAAA/AAA4PwAAfD8AAFA+AAAEPwAAbD8AAOA+AAA0PwAACD8AAAA+AABkPwAAkD4AAAw/AACoPgAAsD4AAFw/AAAQPwAACD8AAEw/AADgPgAAFD8AADw/AACAPgAAUD4AABg/AABwPwAAND8AABg/AAAcPwAAED4AACA+AABQPgAAID8AALA+AAAcPwAAQD8AACQ/AAAMPwAAED4AAKg+AAAoPwAAQD8AAAQ/AABoPwAALD8AAHQ/AAB4PwAA+D4AADA/AAAgPgAA2D4AAFA+AAA0PwAAuD4AAGA/AAAkPwAAOD8AABA/AACoPgAAYD4AADw/AABEPwAASD8AAEw/AABAPwAAeD8AAHA+AADAPgAARD8AADA+AAAwPwAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABg/AABQPgAAUD8AAEg/AAAQPgAAMD8AAFQ/AAB8PwAAAD8AAIg+AABYPwAAQD4AAHQ/AABYPwAAXD8AAMg+AADQPgAA2D4AAGA/AAAYPwAAXD8AAFA+AABkPwAATD8AAKA+AAAUPwAAaD8AAKA9AABEPwAAUD4AAGw/AABQPgAAYD4AADw/AABwPwAA0D4AACw/AACgPgAAdD8AABw/AAAQPgAAZD8AAHg/AABQPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-one-add",
+                      "observed": {
+                        "value": {
+                          "bytes": "AADAPQAAMD4AAIA+AACIPgAAmD4AACA/AABUPwAAkD4AAAA/AACKPwAA0D4AAJg+AAA0PwAACD8AAHw/AACgPgAAaD8AAHw/AAAQPwAAqD4AAOA9AADgPgAAkj8AALA+AACgPgAAZD8AADg/AAC4PgAABD8AALA+AACYPgAAwD4AADg/AABMPwAAYD8AAMg+AABsPwAAgD4AAOg+AADQPgAAAD4AADQ/AACEPwAA2D4AAKg+AAAgPgAAHD8AAOA+AAAIPwAAHD8AAJg/AADoPgAAPD8AAIg/AABEPwAA8D4AAHA/AAAEPwAAsD4AAPg+AAAQPgAAeD8AAGw/AAAAPwAAsD4AANg+AAAAPwAABD8AAAw/AABgPwAAij8AAAg/AABAPwAAqD4AACg/AAAMPwAAdD8AAEg/AABwPgAAED8AACA+AABwPgAAUD8AABQ/AAC4PgAAMD8AAMg+AAAYPwAAED8AABA+AAB4PwAAHD8AAEQ/AAAYPwAADD8AACA/AAB4PwAAhj8AAJA/AAAkPwAAMD4AAAA/AAA0PwAAKD8AAMA+AAB0PwAAkD4AACw/AAAUPwAA0D4AAFw/AAAwPwAASD8AAFw/AADgPgAAND8AAHw/AACgPgAAgj8AADg/AABAPgAARD8AABg/AAA8PwAAyD4AAGA+AACWPwAAQD8AABg/AAAsPwAAQD8AAEQ/AABMPwAAkD8AAKg+AABIPwAAgD8AABQ/AABoPwAATD8AAFA+AACEPwAA+D4AAFA/AADQPgAA+D4AAIg/AABUPwAAHD8AAHA/AAAkPwAAWD8AAFA/AADIPgAAYD4AAFw/AACCPwAAWD8AAEw/AABgPwAAYD4AAJg+AADAPgAAZD8AANg+AABAPwAAdD8AAGg/AAAgPwAAUD4AAAg/AABsPwAAVD8AACg/AACOPwAAcD8AAIQ/AACOPwAAMD8AAHQ/AABwPgAAED8AAIg+AAB4PwAA4D4AAII/AABYPwAAfD8AACQ/AADwPgAA2D4AAIA/AABYPwAAbD8AAIA/AACCPwAAhj8AAMA+AAAUPwAAhD8AAIA+AABUPwAAlD8AAIY/AADoPgAAkD4AADw/AACIPwAAKD8AADw/AACgPgAAij8AAFw/AABAPgAAZD8AAIw/AACIPwAAJD8AAPA+AACOPwAAiD4AAIw/AACGPwAAkD8AAPA+AAAMPwAAID8AAJI/AAAsPwAAgD8AAFA+AACUPwAAYD8AAOg+AABIPwAAlj8AAKA9AABoPwAAuD4AAJg/AACQPgAAuD4AAHA/AACaPwAA+D4AAFA/AAAEPwAAnD8AADA/AACIPgAAjD8AAJ4/AABkPwAAOD8AACw/AACgPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-one-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPQAA4D0AACA+AACIPgAAEL4AALC+AADYvgAAgD4AALC+AABMvwAAAAAAAHA+AAAMvwAAgL4AABS/AABgPgAAQL8AADS/AAAgvgAAUD4AAEA9AAAgvgAAPL8AAEA+AAAgvgAAHL8AAKC+AAAwPgAAuL4AAIC9AADgPQAAID4AABC/AAAEvwAA8L4AABA+AABEvwAAAD0AAEC9AAAAPgAAAD0AANi+AAAgvwAA4D0AADC+AAAAPgAAUL4AAMA9AADAvgAAqL4AAEi/AACgPQAAFL8AAEi/AAC4vgAAgD0AAEi/AABwvgAAgD0AAEA9AACAPAAAML8AAAS/AAAAPQAAQL4AABC+AADAvQAAgDwAAMi+AAAYvwAALL8AAAAAAAAYvwAAQL0AAIC+AACAvAAATL8AAAC/AAAwPgAAAL0AAAAAAABAPQAA0L4AAEC9AABQvgAA0L4AAIA8AACAvQAA0L4AABA+AAAQvwAAoL0AABy/AACgvgAAEL4AAMC9AABQvwAARL8AADi/AADgvQAAgLwAAGC+AACYvgAAAL4AAGC+AAAsvwAAAD4AABC+AADYvgAAAL4AAOi+AAAgvgAAIL8AABS/AAAAvQAAML4AAFS/AAAAvQAAHL8AAEC+AAAAvQAA+L4AAEC+AABQvgAAcL4AAIA9AABEvwAAYL4AAOC+AADIvgAAsL4AAHC+AAAkvwAAWL8AAKA9AACAvgAAWL8AAJi+AAAAvwAAiL4AAEC9AABAvwAAoL0AAJC+AACAvgAAUL4AACi/AACYvgAA6L4AACi/AABwvgAAoL4AACi/AADgvQAAQD4AAKi+AABcvwAAEL8AAMi+AACwvgAAgL0AAIC8AAAAPQAAuL4AAIi+AADwvgAADL8AAMC+AADwvgAAoD0AAAC+AADIvgAALL8AAMC+AAA0vwAA0L4AAGC/AABUvwAAkL4AANi+AACgvQAAkL4AABA+AADgvgAAkL4AADy/AADgvgAA6L4AAPi+AABAvgAAgLwAAPC+AAAwvwAAJL8AABi/AAD4vgAAZL8AAMC9AAAwvgAAAL8AAMC9AAAMvwAAQL8AAAS/AACYvgAAAAAAAKi+AAAIvwAAAL8AAOi+AADAPQAADL8AADS/AADAPQAA+L4AABC/AABovwAAuL4AAIC9AAAUvwAA4L0AAFC/AAAkvwAAGL8AAKC+AACIvgAAYL4AABy/AAAEvwAAOL8AAFA+AAAgvwAAOL8AADC+AADAvgAAJL8AAKA9AAAgvwAAQD0AACi/AAAAvgAAoL0AAAi/AAAsvwAAqL4AAAi/AADgvQAAML8AAAi/AACAPAAAML8AADS/AAA8vwAA4L4AAIi+AAA4vw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-one-reverse-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAvQAA4L0AACC+AACIvgAAED4AALA+AADYPgAAgL4AALA+AABMPwAAAAAAAHC+AAAMPwAAgD4AABQ/AABgvgAAQD8AADQ/AAAgPgAAUL4AAEC9AAAgPgAAPD8AAEC+AAAgPgAAHD8AAKA+AAAwvgAAuD4AAIA9AADgvQAAIL4AABA/AAAEPwAA8D4AABC+AABEPwAAAL0AAEA9AAAAvgAAAL0AANg+AAAgPwAA4L0AADA+AAAAvgAAUD4AAMC9AADAPgAAqD4AAEg/AACgvQAAFD8AAEg/AAC4PgAAgL0AAEg/AABwPgAAgL0AAEC9AACAvAAAMD8AAAQ/AAAAvQAAQD4AABA+AADAPQAAgLwAAMg+AAAYPwAALD8AAAAAAAAYPwAAQD0AAIA+AACAPAAATD8AAAA/AAAwvgAAAD0AAAAAAABAvQAA0D4AAEA9AABQPgAA0D4AAIC8AACAPQAA0D4AABC+AAAQPwAAoD0AABw/AACgPgAAED4AAMA9AABQPwAARD8AADg/AADgPQAAgDwAAGA+AACYPgAAAD4AAGA+AAAsPwAAAL4AABA+AADYPgAAAD4AAOg+AAAgPgAAID8AABQ/AAAAPQAAMD4AAFQ/AAAAPQAAHD8AAEA+AAAAPQAA+D4AAEA+AABQPgAAcD4AAIC9AABEPwAAYD4AAOA+AADIPgAAsD4AAHA+AAAkPwAAWD8AAKC9AACAPgAAWD8AAJg+AAAAPwAAiD4AAEA9AABAPwAAoD0AAJA+AACAPgAAUD4AACg/AACYPgAA6D4AACg/AABwPgAAoD4AACg/AADgPQAAQL4AAKg+AABcPwAAED8AAMg+AACwPgAAgD0AAIA8AAAAvQAAuD4AAIg+AADwPgAADD8AAMA+AADwPgAAoL0AAAA+AADIPgAALD8AAMA+AAA0PwAA0D4AAGA/AABUPwAAkD4AANg+AACgPQAAkD4AABC+AADgPgAAkD4AADw/AADgPgAA6D4AAPg+AABAPgAAgDwAAPA+AAAwPwAAJD8AABg/AAD4PgAAZD8AAMA9AAAwPgAAAD8AAMA9AAAMPwAAQD8AAAQ/AACYPgAAAAAAAKg+AAAIPwAAAD8AAOg+AADAvQAADD8AADQ/AADAvQAA+D4AABA/AABoPwAAuD4AAIA9AAAUPwAA4D0AAFA/AAAkPwAAGD8AAKA+AACIPgAAYD4AABw/AAAEPwAAOD8AAFC+AAAgPwAAOD8AADA+AADAPgAAJD8AAKC9AAAgPwAAQL0AACg/AAAAPgAAoD0AAAg/AAAsPwAAqD4AAAg/AADgPQAAMD8AAAg/AACAvAAAMD8AADQ/AAA8PwAA4D4AAIg+AAA4Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-one-min",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AAAAAAAAoD0AABA+AABQPgAAgDwAAKA9AAAQPgAAUD4AAAA9AACgPQAAED4AAFA+AABAPQAAoD0AABA+AABQPgAAgD0AAAA9AAAQPgAAUD4AAKA9AACgPQAAED4AAFA+AADAPQAAoD0AABA+AADAPQAA4D0AAKA9AAAQPgAAUD4AAAA+AACgPQAA4D0AAFA+AAAQPgAAQD0AABA+AABQPgAAID4AAKA9AACAPAAAUD4AADA+AACgPQAAED4AAFA+AABAPgAAoD0AABA+AABQPgAAUD4AAKA9AAAQPgAAED4AAGA+AACAPQAAED4AAFA+AABwPgAAoD0AABA+AABQPgAAgD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAAPQAAiD4AAKA9AADAPQAAUD4AAIg+AACgPQAAED4AAEA+AACIPgAAoD0AAAAAAABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAoD0AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AAKA9AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAgDwAAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAwPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAgD0AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAIA9AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AADgPQAAiD4AAKA9AABAPQAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAAAAACIPgAAoD0AABA+AABQPgAAiD4AAAAAAAAQPgAAID4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAAPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "one-one-max",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAYD4AAPg+AAAgPwAAiD4AANg+AABwPwAAUD4AAIg+AAAgPwAAyD4AAEg/AACIPgAAVD8AAFg/AAC4PgAAiD4AAKA9AACYPgAAcD8AAIg+AABwPgAAQD8AAAQ/AACIPgAA4D4AAFA+AABQPgAAiD4AACQ/AAAoPwAALD8AAIg+AABYPwAAED4AAIA+AACIPgAAoD0AABA/AABUPwAAiD4AAIA+AAAQPgAA0D4AAIg+AADoPgAA8D4AAHw/AACIPgAAKD8AAGw/AAAQPwAAiD4AAFw/AADAPgAAUD4AAIg+AACgPQAAVD8AADg/AACIPgAAiD4AAJA+AACYPgAAiD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACQPgAAYD8AACQ/AABQPgAAmD4AAKA9AAAQPgAAHD8AAKA+AACQPgAADD8AAFA+AACoPgAA+D4AABA+AABEPwAAsD4AADA/AADoPgAAsD4AALg+AABkPwAAaD8AAGw/AADAPgAAwD0AALg+AAAAPwAAyD4AAJg+AABQPwAAUD4AANA+AAAAPwAAiD4AACg/AADYPgAAND8AADg/AABwPgAA4D4AAGg/AAAwPgAAUD8AAOg+AADgPQAAID8AAMg+AADwPgAAoD4AABA+AAB4PwAA+D4AAAQ/AAAIPwAADD8AAAA/AAA4PwAAfD8AAFA+AAAEPwAAbD8AAOA+AAA0PwAACD8AAAA+AABkPwAAkD4AAAw/AACoPgAAsD4AAFw/AAAQPwAACD8AAEw/AADgPgAAFD8AADw/AACAPgAAUD4AABg/AABwPwAAND8AABg/AAAcPwAAED4AACA+AABQPgAAID8AALA+AAAcPwAAQD8AACQ/AAAMPwAAED4AAKg+AAAoPwAAQD8AAAQ/AABoPwAALD8AAHQ/AAB4PwAA+D4AADA/AAAgPgAA2D4AAFA+AAA0PwAAuD4AAGA/AAAkPwAAOD8AABA/AACoPgAAYD4AADw/AABEPwAASD8AAEw/AABAPwAAeD8AAHA+AADAPgAARD8AADA+AAAwPwAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABg/AABQPgAAUD8AAEg/AAAQPgAAMD8AAFQ/AAB8PwAAAD8AAIg+AABYPwAAQD4AAHQ/AABYPwAAXD8AAMg+AADQPgAA2D4AAGA/AAAYPwAAXD8AAFA+AABkPwAATD8AAKA+AAAUPwAAaD8AAKA9AABEPwAAUD4AAGw/AABQPgAAYD4AADw/AABwPwAA0D4AACw/AACgPgAAdD8AABw/AAAQPgAAZD8AAHg/AABQPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sa-1msa-add",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAEPQAAdz0AALU9AICQPQDAOT4AQMk+AFADPwAAqD0AQKk+ANA5PwAAUD4AgL89AKD1PgAApj4AsCA/AADXPQAAIT8AMCg/AMCiPgCA7j0AADM9AMCCPgAQPj8AAAM+AIBFPgCQFj8AgN0+AMAOPgAgrz4AAD8+AID7PQCAGj4AgPs+APAEPwAgDD8AQCY+APAjPwAA8T0AQHM+AAAyPgAAYj0AoOY+AIApPwDAPT4AQFE+AABIPQBgtD4AgEk+AAC1PgBgwz4A4EY/AEBVPgCwAD8A4DY/ACDvPgAAYT4A4CY/ACCgPgAAIT4AwGw+AICIPQBAJT8A8BQ/AIB4PgAAXT4AwHk+AECLPgAggj4A4Lo+AKATPwBQMj8AAIg+AKADPwBAMz4AAMY+AOCNPgDQKT8AAAI/AICdPQDAkz4AAKA9AIDZPQBgAD8AoJk+AMBoPgDA4D4AQEQ+AICfPgDAwD4AABk9AMAdPwBgpT4AkAY/AIC9PgDgnD4AQKs+AMAsPwDwMz8AIDs/ACCxPgCAtz0AQJo+AKDXPgAAtz4AgHQ+AFAiPwAA5D0A4Lw+AKDGPgAAbj4AMAk/AMDCPgCACT8AsBA/AIBnPgCgyD4AsC8/AIAnPgCQJj8AgM4+AADPPQAg/j4AgK4+AGDUPgAggD4AAMI9APBDPwBA2j4AgMw+AODaPgBA6T4AIOA+AHAMPwCgQj8AQBU+AADmPgCgMj8AoLc+AAASPwDg6z4AgOY9AAAxPwBghT4AwPE+AACGPgBglD4AYC8/AKD3PgBg0j4AYB8/ACDAPgCA/T4AYA8/AEBiPgAAhj0AsAE/AJA1PwDADT8A4Po+AKAEPwAA/j0AwBs+AIA4PgCQBz8A4Is+AED4PgDQGj8AgAo/AEDYPgCAqj0AAJc+AHANPwBQEj8AANU+ADA4PwBgED8AgDg/ALA/PwDA0T4AUBM/AMAKPgDAsT4AgMw9AEAWPwDAkT4AEC4/AEAGPwAwGT8AIN4+AICOPgDAWz4AIBw/AEAVPwBwHD8AoCM/ABAfPwBwOz8AgFY+AKCoPgAAIj8AgBY+ANAKPwAAQT8A8CQ/AKCXPgAAED4AYOM+AOAnPwAA5D4AYPI+AIAJPgDQKj8AMBg/AACTPQAQDz8AwC0/AGA+PwAgzz4AAH8+ALAwPwBAIj4AwDw/AHAsPwCgMz8AgJ0+AOCrPgBAuj4AkDY/AODpPgAgKz8AAF09AIA5PwAgGz8AoIg+AAD1PgBwPD8AAKo8AIAZPwDALD4AYD8/AAAuPgDASj4A4Bc/AFBCPwBgoz4A4Ac/ACCRPgBART8AwO8+AEAEPgBANT8AMEg/ABAePwCA7D4A4Ms+ACBLPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sa-1msa-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAYPAAAbDwAAKA8AICQPQBAD74AAKO+AGDPvgAAcj0AAJS+ALAmvwAAw70AAEM9AGDgvgCAf74AEAW/AAAUPQBgFr8AEBW/AABXvgAAyjwAABC7AAA5vgBwIr8AAFg8AAAbvgBwA78AQKa+AADgOgDgmb4AAOW9AAB0vAAAILwAQOa+AKDjvgAA4b4AAK68AFAZvwAAML0AwAS+AAAGvQAAYLwAYMC+AOANvwAANb0AwCa+AADUPABAer4AAGS9AMCfvgAgnb4AQCu/AICJvQAg7L4AwCO/AOC3vgAAob0AQBy/AMBzvgAASr0AgLi9AADOvAAgEr8AoPK+AADQvQCAMr4AQC2+AAAovgCA570AoKW+AIAAvwCwFr8AAP+9AADyvgCAzb0AwI6+AEALvgAwH78AwN2+AAD+PAAAF74AABa9AAABvQCAyb4AwCK+AEA+vgCAur4AgKu9AIAuvgCAq74AABk9ACACvwBAOr4A4Pe+AECXvgBAS74AAEa+ACAivwDQIL8AgB+/AMBRvgAARb0AAGi+AGCgvgCAXb4AAEq+ADAPvwAAYLsAQGm+AGCxvgCAIb4AINu+AAB1vgDA/b4AIPu+AADyvQBggL4AECW/AAC2vQDwCr8AQIa+AAB0vQDg174AgG6+ACCMvgDAVb4AAKS8AFAovwAAkr4AQLe+AKC0vgAAsr4A4Je+ANABvwCAL78AABu9AMCdvgAAKL8AYJG+AMDsvgCgo74AgJG9AOAdvwBAHL4AgKm+AIBhvgBAXL4AwBO/AGCvvgAgvb4AQAy/AOCIvgBAtb4AwAS/AMAVvgAALj0AILu+APAqvwBA9b4AoMO+AADBvgAAqb0AgJ69AACUvQDgxr4AQG2+AADSvgBg/r4AwMy+AADDvgAADLwAgD++AKDSvgCwB78AwK6+AJAcvwCA2L4A4C2/AJAsvwCAmr4AYN6+AIDAvQCAi74AAAQ8AEDkvgAAeb4A8Bq/AEDVvgAg6r4A4Mi+AIBQvgCA2r0AAPC+AKAKvwBQCb8AAAi/AOD1vgDQML8AAAq+AMBivgDA+74AANi9AGDvvgBgJb8A0AC/AGCCvgAAh70AIKy+AMADvwDAzr4AIMy+AADYvACwBr8AkA2/AABAOwDg5r4AoAm/AMAzvwDgqL4AgBC+AJAMvwCA770AoCm/ANAQvwCAD78AQIi+AKCFvgAAg74AcBK/AKDUvgAAGL8AAF09AGAVvwCAEL8AwES+AMC9vgBQGL8AAKo8AGAGvwAAeb0AQBu/AIADvgCA/L0AgPi+ADAevwAgjr4AgOm+AMAzvgAgIb8AgNq+AABfvQCgGb8AECS/AHATvwBAxr4AoJS+AAAnvw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sa-1msa-reverse-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAYvAAAbLwAAKC8AICQvQBADz4AAKM+AGDPPgAAcr0AAJQ+ALAmPwAAwz0AAEO9AGDgPgCAfz4AEAU/AAAUvQBgFj8AEBU/AABXPgAAyrwAABA7AAA5PgBwIj8AAFi8AAAbPgBwAz8AQKY+AADgugDgmT4AAOU9AAB0PAAAIDwAQOY+AKDjPgAA4T4AAK48AFAZPwAAMD0AwAQ+AAAGPQAAYDwAYMA+AOANPwAANT0AwCY+AADUvABAej4AAGQ9AMCfPgAgnT4AQCs/AICJPQAg7D4AwCM/AOC3PgAAoT0AQBw/AMBzPgAASj0AgLg9AADOPAAgEj8AoPI+AADQPQCAMj4AQC0+AAAoPgCA5z0AoKU+AIAAPwCwFj8AAP89AADyPgCAzT0AwI4+AEALPgAwHz8AwN0+AAD+vAAAFz4AABY9AAABPQCAyT4AwCI+AEA+PgCAuj4AgKs9AIAuPgCAqz4AABm9ACACPwBAOj4A4Pc+AECXPgBASz4AAEY+ACAiPwDQID8AgB8/AMBRPgAART0AAGg+AGCgPgCAXT4AAEo+ADAPPwAAYDsAQGk+AGCxPgCAIT4AINs+AAB1PgDA/T4AIPs+AADyPQBggD4AECU/AAC2PQDwCj8AQIY+AAB0PQDg1z4AgG4+ACCMPgDAVT4AAKQ8AFAoPwAAkj4AQLc+AKC0PgAAsj4A4Jc+ANABPwCALz8AABs9AMCdPgAAKD8AYJE+AMDsPgCgoz4AgJE9AOAdPwBAHD4AgKk+AIBhPgBAXD4AwBM/AGCvPgAgvT4AQAw/AOCIPgBAtT4AwAQ/AMAVPgAALr0AILs+APAqPwBA9T4AoMM+AADBPgAAqT0AgJ49AACUPQDgxj4AQG0+AADSPgBg/j4AwMw+AADDPgAADDwAgD8+AKDSPgCwBz8AwK4+AJAcPwCA2D4A4C0/AJAsPwCAmj4AYN4+AIDAPQCAiz4AAAS8AEDkPgAAeT4A8Bo/AEDVPgAg6j4A4Mg+AIBQPgCA2j0AAPA+AKAKPwBQCT8AAAg/AOD1PgDQMD8AAAo+AMBiPgDA+z4AANg9AGDvPgBgJT8A0AA/AGCCPgAAhz0AIKw+AMADPwDAzj4AIMw+AADYPACwBj8AkA0/AABAuwDg5j4AoAk/AMAzPwDgqD4AgBA+AJAMPwCA7z0AoCk/ANAQPwCADz8AQIg+AKCFPgAAgz4AcBI/AKDUPgAAGD8AAF29AGAVPwCAED8AwEQ+AMC9PgBQGD8AAKq8AGAGPwAAeT0AQBs/AIADPgCA/D0AgPg+ADAePwAgjj4AgOk+AMAzPgAgIT8AgNo+AABfPQCgGT8AECQ/AHATPwBAxj4AoJQ+AAAnPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sa-1msa-min",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AAAAAAAAoD0AABA+AABQPgAAgDwAAKA9AAAQPgAAUD4AAAA9AACgPQAAED4AAFA+AABAPQAAoD0AABA+AABQPgAAgD0AAAA9AAAQPgAAUD4AAKA9AACgPQAAED4AAFA+AADAPQAAoD0AABA+AADAPQAA4D0AAKA9AAAQPgAAUD4AAAA+AACgPQAA4D0AAFA+AAAQPgAAQD0AABA+AABQPgAAID4AAKA9AACAPAAAUD4AADA+AACgPQAAED4AAFA+AABAPgAAoD0AABA+AABQPgAAUD4AAKA9AAAQPgAAED4AAGA+AACAPQAAED4AAFA+AABwPgAAoD0AABA+AABQPgAAgD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAAPQAAiD4AAKA9AADAPQAAUD4AAIg+AACgPQAAED4AAEA+AACIPgAAoD0AAAAAAABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAoD0AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AAKA9AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAgDwAAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAwPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAgD0AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAIA9AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AADgPQAAiD4AAKA9AABAPQAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAAAAACIPgAAoD0AABA+AABQPgAAiD4AAAAAAAAQPgAAID4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAAPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sa-1msa-max",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAYD4AAPg+AAAgPwAAiD4AANg+AABwPwAAUD4AAIg+AAAgPwAAyD4AAEg/AACIPgAAVD8AAFg/AAC4PgAAiD4AAKA9AACYPgAAcD8AAIg+AABwPgAAQD8AAAQ/AACIPgAA4D4AAFA+AABQPgAAiD4AACQ/AAAoPwAALD8AAIg+AABYPwAAED4AAIA+AACIPgAAoD0AABA/AABUPwAAiD4AAIA+AAAQPgAA0D4AAIg+AADoPgAA8D4AAHw/AACIPgAAKD8AAGw/AAAQPwAAiD4AAFw/AADAPgAAUD4AAIg+AACgPQAAVD8AADg/AACIPgAAiD4AAJA+AACYPgAAiD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACQPgAAYD8AACQ/AABQPgAAmD4AAKA9AAAQPgAAHD8AAKA+AACQPgAADD8AAFA+AACoPgAA+D4AABA+AABEPwAAsD4AADA/AADoPgAAsD4AALg+AABkPwAAaD8AAGw/AADAPgAAwD0AALg+AAAAPwAAyD4AAJg+AABQPwAAUD4AANA+AAAAPwAAiD4AACg/AADYPgAAND8AADg/AABwPgAA4D4AAGg/AAAwPgAAUD8AAOg+AADgPQAAID8AAMg+AADwPgAAoD4AABA+AAB4PwAA+D4AAAQ/AAAIPwAADD8AAAA/AAA4PwAAfD8AAFA+AAAEPwAAbD8AAOA+AAA0PwAACD8AAAA+AABkPwAAkD4AAAw/AACoPgAAsD4AAFw/AAAQPwAACD8AAEw/AADgPgAAFD8AADw/AACAPgAAUD4AABg/AABwPwAAND8AABg/AAAcPwAAED4AACA+AABQPgAAID8AALA+AAAcPwAAQD8AACQ/AAAMPwAAED4AAKg+AAAoPwAAQD8AAAQ/AABoPwAALD8AAHQ/AAB4PwAA+D4AADA/AAAgPgAA2D4AAFA+AAA0PwAAuD4AAGA/AAAkPwAAOD8AABA/AACoPgAAYD4AADw/AABEPwAASD8AAEw/AABAPwAAeD8AAHA+AADAPgAARD8AADA+AAAwPwAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABg/AABQPgAAUD8AAEg/AAAQPgAAMD8AAFQ/AAB8PwAAAD8AAIg+AABYPwAAQD4AAHQ/AABYPwAAXD8AAMg+AADQPgAA2D4AAGA/AAAYPwAAXD8AAFA+AABkPwAATD8AAKA+AAAUPwAAaD8AAKA9AABEPwAAUD4AAGw/AABQPgAAYD4AADw/AABwPwAA0D4AACw/AACgPgAAdD8AABw/AAAQPgAAZD8AAHg/AABQPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dc-1mdc-add",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACIPAAADj0AAF49AAAAAACAQD4AwKI+AAC5PgAAoDwAwI0+AABDPgAAUD4AAB49AACRPgAAlj4AwKg+AABqPQAAVD4AQIA+AECbPgAAmj0AAAY9AECAPgAAfz4AAL49AIBKPgAAlj4AgLU+AADhPQCAjz4AAEM+AADVPQCAAT4AgI8+AMCiPgDAtj4AABI+AIBKPgAA5z0AAHQ+AAAiPgAARj0AgKY+AACfPgCAMT4AAFQ+AACQPADApT4AgEA+AACRPgBAoT4AgFw+AABPPgDAjT4AgE4+AIC4PgAAXT4AgEA+AACTPgAAGT4AgGo+AACCPQCAhD4AQLI+AIB3PgAAXT4AgHc+AMCJPgAAgj4AQJI+AMCYPgAAkz4AAIg+AMCLPgAANz4AAK4+AMCNPgAANj4AAKQ+AAAWPQBAkz4AAKA9AADJPQBAuT4AgJg+AIBlPgBApj4AAEM+AICdPgBAkz4AAAAAAICrPgBAoj4AgIk+AICfPgBAlz4AwKY+AAArPgCAWT4AwIQ+AACrPgAAvT0AwI8+AAC0PgAArz4AgG0+AICIPgAAtD0AwLI+AACUPgAAbj4AwLc+AEC2PgAAhz4AQJs+AIBoPgCAuT4AgB8+AIAqPgCAoj4AgLw+AADZPQAApT4AgKI+AEC/PgAAdT4AAKo9AIBoPgDAwT4AgJQ+AMClPgDAtz4AAMQ+AECEPgCAHT4AAAo+AADGPgCAEz4AgJ0+AAC0PgDAxz4AAPQ9AABkPgDAhD4AQMk+AAB8PgBAjD4AQJc+AIDKPgDAlD4AQIw+AICrPgCAyz4AQIE+AABkPgAAmDwAQMw+AAAHPgCAnT4AQLk+AMDMPgAABz4AgB0+AIA1PgAAzT4AQIE+AMClPgAArj4AAM0+AMCUPgAAij0AAJM+AMDMPgAAfD4AAKU+AMCJPgBAzD4AAPQ9AIAqPgBAsj4AgMs+AIATPgBAmz4AAJI9AIDKPgBAhD4AAG4+AIC4PgBAyT4AgJQ+AICIPgCAXD4AwMc+AAB1PgDAjz4AwKU+AADGPgAA2T0AgFk+AACfPgAAxD4AgB8+AICfPgAAdD4AwME+AACHPgAAED4AwLY+AEC/PgAAlD4AQKY+AAD1PQCAvD4AgG0+AABSPQCAtT4AgLk+AAC9PQAApD4AAH8+AEC2PgAAKz4AADc+AECbPgDAsj4AgIk+AMCYPgDAqD4AAK8+AECTPgCAdz4AAAAAAACrPgCAZT4AgIQ+AAC5PgDApj4AAAAAAACTPgCAJz4AQKI+AAA2PgCATj4AQLA+AICdPgDAiz4AQKE+AICOPgCAmD4AQJI+AAACPgCAjj4AQJM+AABdPgCApj4AQLA+AMCNPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dc-1mdc-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AABovAAA1LwAABC9AAAAgACAHb4AADq+AADcvQAAOLwAAFi+AACWPQAA970AALS8AAA+vgCAO74AAEi8AAAEvQAAn70AAFi8AAAhvgAALL0AAOS8AAArvgAABz4AAFK9AAAlvgAAqL0AgBS+AAB2vQAAWb4AgAi+AACHvQAAjL0AgDi+AIAIvgAArL0AAJy9AACHvQAAqL0AAAy+AACrvQAAKL0AACu+AADUPAAAub0AACy+AABYvACAIr4AAMa9AIBZvgCAO74AAD0+AADSvQCAMr4AAGw9AAAHvgAA3b0AAFy9AAA6vgAAvb0AAOe9AABcvQAA1LwAAGa9AADwvQCAMr4AgCa+AAAYvgAA+L0AgFm+AAC8vQAAjD0AAP+9AAAsvgAAAb4AgB++AIACvgAAKL0AgA++AADEvAAABb4AAIe9AACTvQAA6r0AAAe+AIA4vgAAL74AAOq9AIAIvgAAWb4AAACAAADEvACACb4AACW+AIA8vgCAH74AAAq+AADkvAAALj0AAOw9AAAKvgAAn70AADi+AAAYvgCACb4AAD6+AAAcvQAAZr0AgAi+AABYvgCAIb4AAL29AAAHvgCAHb4AAM+9AAAHvgAABb4AAGi8AADyvQAAUDwAgAK+AAC2vQAAFr4AgCK+AAD/vQAAQ74AAHq9AIAqPgAA+L0AgFa+AIAyvgAADL4AAPC9AIAVvgAA/D0AAKy9AADnvQAAAAAAAD2+AACHvQAA3b0AAMy9AADkPACAFL4AANK9AIBHvgCANb4AAFw9AADGvQCAVL4AAEy9AAAhvgAAub0AAA2+AAAcvgAASLwAAKu9AABwPAAA4b0AAPe9AACcvQAA4b0AAOG9AADcvQAAjL0AgEu+AAAcvgAAEL0AAHa9AABSvgAATL0AgB2+AABSvQAABL4AgDW+AADLPQAALL0AAPQ8AADZPQAAG74AAAS9AAD1vQAAPb4AADy9AAC0vAAAT74AAGA8AADNvQAAOLwAAE++AIAyvgCAAb4AAAAAAAD1vQAAer0AAAAAAABAPAAAOj0AABa+AAAivgAAxDwAAAS+AADyvQCAGD4AABY9AABSvgAAz70AgBC+AABMPQCAS74AgCG+AACavQAAgj0AAOG9AAAcvQAAmr0AAJ89AAB8PQAAOL4AgBC+AAC9PQAADb4AALc9AAAiPQAA3D0AgFS+AIA8vgAAIr4AAPw9AIBHvgAAAAAAAACAAIAOPgAAzL0AAC++AIABvgCAHz4AAACAAACTvQAAzb0AADE+AIAVvgCAD74AADy9AABDPgCAVr4AAAG+AAAbvgCAVT4AAEO+AAC8vQAAqz0AgGg+AAC2vQCAJr4AgB2+AAB8Pg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dc-1mdc-reverse-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AABoPAAA1DwAABA9AAAAAACAHT4AADo+AADcPQAAODwAAFg+AACWvQAA9z0AALQ8AAA+PgCAOz4AAEg8AAAEPQAAnz0AAFg8AAAhPgAALD0AAOQ8AAArPgAAB74AAFI9AAAlPgAAqD0AgBQ+AAB2PQAAWT4AgAg+AACHPQAAjD0AgDg+AIAIPgAArD0AAJw9AACHPQAAqD0AAAw+AACrPQAAKD0AACs+AADUvAAAuT0AACw+AABYPACAIj4AAMY9AIBZPgCAOz4AAD2+AADSPQCAMj4AAGy9AAAHPgAA3T0AAFw9AAA6PgAAvT0AAOc9AABcPQAA1DwAAGY9AADwPQCAMj4AgCY+AAAYPgAA+D0AgFk+AAC8PQAAjL0AAP89AAAsPgAAAT4AgB8+AIACPgAAKD0AgA8+AADEPAAABT4AAIc9AACTPQAA6j0AAAc+AIA4PgAALz4AAOo9AIAIPgAAWT4AAAAAAADEPACACT4AACU+AIA8PgCAHz4AAAo+AADkPAAALr0AAOy9AAAKPgAAnz0AADg+AAAYPgCACT4AAD4+AAAcPQAAZj0AgAg+AABYPgCAIT4AAL09AAAHPgCAHT4AAM89AAAHPgAABT4AAGg8AADyPQAAULwAgAI+AAC2PQAAFj4AgCI+AAD/PQAAQz4AAHo9AIAqvgAA+D0AgFY+AIAyPgAADD4AAPA9AIAVPgAA/L0AAKw9AADnPQAAAAAAAD0+AACHPQAA3T0AAMw9AADkvACAFD4AANI9AIBHPgCANT4AAFy9AADGPQCAVD4AAEw9AAAhPgAAuT0AAA0+AAAcPgAASDwAAKs9AABwvAAA4T0AAPc9AACcPQAA4T0AAOE9AADcPQAAjD0AgEs+AAAcPgAAED0AAHY9AABSPgAATD0AgB0+AABSPQAABD4AgDU+AADLvQAALD0AAPS8AADZvQAAGz4AAAQ9AAD1PQAAPT4AADw9AAC0PAAATz4AAGC8AADNPQAAODwAAE8+AIAyPgCAAT4AAAAAAAD1PQAAej0AAAAAAABAvAAAOr0AABY+AAAiPgAAxLwAAAQ+AADyPQCAGL4AABa9AABSPgAAzz0AgBA+AABMvQCASz4AgCE+AACaPQAAgr0AAOE9AAAcPQAAmj0AAJ+9AAB8vQAAOD4AgBA+AAC9vQAADT4AALe9AAAivQAA3L0AgFQ+AIA8PgAAIj4AAPy9AIBHPgAAAAAAAAAAAIAOvgAAzD0AAC8+AIABPgCAH74AAAAAAACTPQAAzT0AADG+AIAVPgCADz4AADw9AABDvgCAVj4AAAE+AAAbPgCAVb4AAEM+AAC8PQAAq70AgGi+AAC2PQCAJj4AgB0+AAB8vg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dc-1mdc-min",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AAAAAAAAoD0AABA+AABQPgAAgDwAAKA9AAAQPgAAUD4AAAA9AACgPQAAED4AAFA+AABAPQAAoD0AABA+AABQPgAAgD0AAAA9AAAQPgAAUD4AAKA9AACgPQAAED4AAFA+AADAPQAAoD0AABA+AADAPQAA4D0AAKA9AAAQPgAAUD4AAAA+AACgPQAA4D0AAFA+AAAQPgAAQD0AABA+AABQPgAAID4AAKA9AACAPAAAUD4AADA+AACgPQAAED4AAFA+AABAPgAAoD0AABA+AABQPgAAUD4AAKA9AAAQPgAAED4AAGA+AACAPQAAED4AAFA+AABwPgAAoD0AABA+AABQPgAAgD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAAPQAAiD4AAKA9AADAPQAAUD4AAIg+AACgPQAAED4AAEA+AACIPgAAoD0AAAAAAABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAoD0AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AAKA9AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAgDwAAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAwPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAgD0AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAIA9AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AADgPQAAiD4AAKA9AABAPQAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAAAAACIPgAAoD0AABA+AABQPgAAiD4AAAAAAAAQPgAAID4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAAPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "dc-1mdc-max",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAYD4AAPg+AAAgPwAAiD4AANg+AABwPwAAUD4AAIg+AAAgPwAAyD4AAEg/AACIPgAAVD8AAFg/AAC4PgAAiD4AAKA9AACYPgAAcD8AAIg+AABwPgAAQD8AAAQ/AACIPgAA4D4AAFA+AABQPgAAiD4AACQ/AAAoPwAALD8AAIg+AABYPwAAED4AAIA+AACIPgAAoD0AABA/AABUPwAAiD4AAIA+AAAQPgAA0D4AAIg+AADoPgAA8D4AAHw/AACIPgAAKD8AAGw/AAAQPwAAiD4AAFw/AADAPgAAUD4AAIg+AACgPQAAVD8AADg/AACIPgAAiD4AAJA+AACYPgAAiD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACQPgAAYD8AACQ/AABQPgAAmD4AAKA9AAAQPgAAHD8AAKA+AACQPgAADD8AAFA+AACoPgAA+D4AABA+AABEPwAAsD4AADA/AADoPgAAsD4AALg+AABkPwAAaD8AAGw/AADAPgAAwD0AALg+AAAAPwAAyD4AAJg+AABQPwAAUD4AANA+AAAAPwAAiD4AACg/AADYPgAAND8AADg/AABwPgAA4D4AAGg/AAAwPgAAUD8AAOg+AADgPQAAID8AAMg+AADwPgAAoD4AABA+AAB4PwAA+D4AAAQ/AAAIPwAADD8AAAA/AAA4PwAAfD8AAFA+AAAEPwAAbD8AAOA+AAA0PwAACD8AAAA+AABkPwAAkD4AAAw/AACoPgAAsD4AAFw/AAAQPwAACD8AAEw/AADgPgAAFD8AADw/AACAPgAAUD4AABg/AABwPwAAND8AABg/AAAcPwAAED4AACA+AABQPgAAID8AALA+AAAcPwAAQD8AACQ/AAAMPwAAED4AAKg+AAAoPwAAQD8AAAQ/AABoPwAALD8AAHQ/AAB4PwAA+D4AADA/AAAgPgAA2D4AAFA+AAA0PwAAuD4AAGA/AAAkPwAAOD8AABA/AACoPgAAYD4AADw/AABEPwAASD8AAEw/AABAPwAAeD8AAHA+AADAPgAARD8AADA+AAAwPwAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABg/AABQPgAAUD8AAEg/AAAQPgAAMD8AAFQ/AAB8PwAAAD8AAIg+AABYPwAAQD4AAHQ/AABYPwAAXD8AAMg+AADQPgAA2D4AAGA/AAAYPwAAXD8AAFA+AABkPwAATD8AAKA+AAAUPwAAaD8AAKA9AABEPwAAUD4AAGw/AABQPgAAYD4AADw/AABwPwAA0D4AACw/AACgPgAAdD8AABw/AAAQPgAAZD8AAHg/AABQPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "bc-1mbc-add",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAAUPQCAlz0AAPE9AEAMPgDAMD4AQLM+ACDePgAAFD4AQJ4+AFAgPwAAUD4AwBs+ACDkPgAAlj4A8AQ/AIAjPgAAFT8AsBE/AMCTPgBAKz4AAD89AIBxPgDQGj8AADM+AIA7PgAQAz8AgL8+AMA6PgCgoz4AADc+AMASPgCAQj4AgOk+AODoPgBA6z4AQEo+ALAXPwAA+T0AQGo+AABSPgAAaj0AoMs+AIALPwDAWT4AQEY+AACEPQDgoD4AgGE+AACpPgBgrj4AYCE/AEBpPgDg7j4A4B0/AKDMPgAAcT4AYBo/ACCRPgAALT4AwHg+AICKPQBADz8AYPg+AECAPgAAUT4AwGc+AECCPgAghD4AYK4+AKAAPwAQEj8AAIg+AED0PgBALT4AAK4+AOCLPgAQHT8AAOQ+AIDfPQDAjz4AAKA9AIDlPQDA2T4AoJM+AMBbPgDAxj4AQEc+AICXPgDAsz4AAGE9AMACPwBgmz4AoPk+AICpPgBgjz4AQJ8+AMAfPwBwGz8AoBg/ACCjPgCAtT0AQIw+ACC7PgAApz4AgGY+ANAMPwAACj4A4Ko+ACC5PgAAXj4A4OY+AMCuPgAA/z4AYPw+AIBhPgCgsj4AcCI/AIAjPgBQCT8AgLY+AADLPQAg3z4AgJw+AGC6PgBAcT4AANI9ADAfPwBAvj4AgL4+AODBPgBAyD4AIMI+ADACPwCgJz8AQCQ+AADGPgAgJT8AoKQ+AAD0PgDgyT4AgOA9AAAZPwDAez4AwM0+AAB8PgBghz4A4A8/AKDRPgDgwz4AYAo/AKCpPgCA1T4A4AQ/AEBUPgAAzj0AYNk+ANAnPwCA9z4AYNU+AEDdPgAA9j0AwBk+AIA+PgAg4T4AYIM+AEDaPgCQAD8AAOU+AEDJPgCAvj0AAIs+AODoPgCQBz8AAL0+AHAWPwDA7D4AgCo/ADAlPwDAtj4AoPA+AMAFPgDAnz4AQAE+AID0PgDAiD4AkBY/AIDiPgBg+D4AoM4+AICCPgDAWD4AQPw+AEAKPwDwBz8AIAc/ABAAPwAwLT8AgEo+ACCYPgAAAj8AgBA+AKDyPgAAHT8A8AM/ACCOPgAAED4A4MM+AOAFPwAA1D4AYNU+AIAbPgDQBz8A8Aw/AACrPQCg7z4AwAk/AOAvPwAguD4AAHM+ALALPwBAGz4AwCI/ALANPwCgDT8AgJM+AOCaPgBApT4AkA8/AGDZPgAgFD8AgLw9AIARPwCgDz8AQHs+AADRPgBwEz8AANI8AIAFPwDANT4AYBU/AAAmPgDAQD4AwPw+AFAXPwDgmD4AwO0+AKCGPgBAGT8AwN4+AEAGPgBAFD8AMBs/AFASPwCA0D4AYLI+ACAdPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "bc-1mbc-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAB4PAAAEz0AAIg9AEAMPgCA+L0AAHa+AMB/vgCABD4AAIS+ADAEvwAAnLwAgPk9AODJvgCAO74AoKu+AADqPQDgB78AIOu+AADWvQCA2j0AAJg7AAABvgBg174AAMs9AAAHvgDgzb4AgEK+AIC7PQBgib4AAI29AAAnPQAArD0AQM++AKCwvgAAjb4AgJw9AJAKvwAAQLwAADe9AACNPQAAwLsAYJO+AMC4vgAAez0AwBG+AAA6PQBABb4AAFw9AMCOvgBAbL4AgOS+AAA9PQCg1L4AwAG/AMBcvgAAHj0AQA2/AMAxvgAAeDwAAP48AACGvABA5r4AIJq+AADAPACAHL4AgO69AACQvQAAgjwAIJS+AADJvgDgxb4AAAg8AADavgAAc70AgB++AABAOgDwD78AwKu+AICZPQAA4LsAANy8AAAQuwAAd74AAGy8AEAnvgCAjr4AACy8AAC0vACAmb4AAGE9AECnvgAA8rwAYN++AIBivgCAxL0AABi9AKASvwCg/r4AANO+AAA3vQAAGb0AACi+AMA5vgAAVr0AADK+AGDhvgAASj0AAHW9AOCevgAA270AoIi+AACKvQDA5L4AIMS+AAAUvQCAmb0AUBW/AABMvQBgtL4AAKm9AABEvQDgpr4AAPm9AIC4vQDAPL4AAPA7ACDgvgAAyL0AQKS+AKCJvgAAVL4AgNe9ACDqvgCAC78AAMI8AADnvQAAGL8AwFi+AMCVvgCA9r0AAG+9AMD5vgAAfb0AAAO+AIBHvgBAHr4AgMG+AMAKvgCgqb4AgNy+AMAWvgCAEr4AgO++AIDHvQAAqz0AQBq+ALAavwBAv74AQG6+AAAivgAAjb0AACW9AAAAuwDAKb4AQFK+AACivgDgor4AgDG+AACvvgAAijwAALO9AEA5vgDg9L4AwIS+AKDOvgAAQb4AYB2/ABAJvwAAMb4AwEi+AICivQAAT74AAG09AIBQvgAAXb4A4PS+AECEvgBAWL4AYLS+AIAUvgAA4rwAAGC+AED6vgCg174AALC+AMBnvgAQIL8AALS9AIDnvQCAb74AALi9AGC6vgDA274AQHe+AMBnvgAA/LwAQEu+AAB/vgDAub4AIJ2+AAAEPQBgg74AoP++AADYPABgkb4AQIe+AMAivwDAf74AAFq9ACCLvgCAzb0AoAa/ACC9vgAAj74AgHK+AEBFvgAADr4A4JK+ACC/vgAA8L4AgLw9AMCWvgCAAr8AwAq+AIBlvgCgmr4AANI8AMDSvgAA2DsAgJ6+AADjvQCAoL0AgJ6+AGCivgBAfb4AgLW+AIChvQBApr4AgMS+AACuvABAyr4AIKq+ADAFvwBAmL4AQCi+AACuvg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "bc-1mbc-reverse-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AAB4vAAAE70AAIi9AEAMvgCA+D0AAHY+AMB/PgCABL4AAIQ+ADAEPwAAnDwAgPm9AODJPgCAOz4AoKs+AADqvQDgBz8AIOs+AADWPQCA2r0AAJi7AAABPgBg1z4AAMu9AAAHPgDgzT4AgEI+AIC7vQBgiT4AAI09AAAnvQAArL0AQM8+AKCwPgAAjT4AgJy9AJAKPwAAQDwAADc9AACNvQAAwDsAYJM+AMC4PgAAe70AwBE+AAA6vQBABT4AAFy9AMCOPgBAbD4AgOQ+AAA9vQCg1D4AwAE/AMBcPgAAHr0AQA0/AMAxPgAAeLwAAP68AACGPABA5j4AIJo+AADAvACAHD4AgO49AACQPQAAgrwAIJQ+AADJPgDgxT4AAAi8AADaPgAAcz0AgB8+AABAugDwDz8AwKs+AICZvQAA4DsAANw8AAAQOwAAdz4AAGw8AEAnPgCAjj4AACw8AAC0PACAmT4AAGG9AECnPgAA8jwAYN8+AIBiPgCAxD0AABg9AKASPwCg/j4AANM+AAA3PQAAGT0AACg+AMA5PgAAVj0AADI+AGDhPgAASr0AAHU9AOCePgAA2z0AoIg+AACKPQDA5D4AIMQ+AAAUPQCAmT0AUBU/AABMPQBgtD4AAKk9AABEPQDgpj4AAPk9AIC4PQDAPD4AAPC7ACDgPgAAyD0AQKQ+AKCJPgAAVD4AgNc9ACDqPgCACz8AAMK8AADnPQAAGD8AwFg+AMCVPgCA9j0AAG89AMD5PgAAfT0AAAM+AIBHPgBAHj4AgME+AMAKPgCgqT4AgNw+AMAWPgCAEj4AgO8+AIDHPQAAq70AQBo+ALAaPwBAvz4AQG4+AAAiPgAAjT0AACU9AAAAOwDAKT4AQFI+AACiPgDgoj4AgDE+AACvPgAAirwAALM9AEA5PgDg9D4AwIQ+AKDOPgAAQT4AYB0/ABAJPwAAMT4AwEg+AICiPQAATz4AAG29AIBQPgAAXT4A4PQ+AECEPgBAWD4AYLQ+AIAUPgAA4jwAAGA+AED6PgCg1z4AALA+AMBnPgAQID8AALQ9AIDnPQCAbz4AALg9AGC6PgDA2z4AQHc+AMBnPgAA/DwAQEs+AAB/PgDAuT4AIJ0+AAAEvQBggz4AoP8+AADYvABgkT4AQIc+AMAiPwDAfz4AAFo9ACCLPgCAzT0AoAY/ACC9PgAAjz4AgHI+AEBFPgAADj4A4JI+ACC/PgAA8D4AgLy9AMCWPgCAAj8AwAo+AIBlPgCgmj4AANK8AMDSPgAA2LsAgJ4+AADjPQCAoD0AgJ4+AGCiPgBAfT4AgLU+AIChPQBApj4AgMQ+AACuPABAyj4AIKo+ADAFPwBAmD4AQCg+AACuPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "bc-1mbc-min",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AAAAAAAAoD0AABA+AABQPgAAgDwAAKA9AAAQPgAAUD4AAAA9AACgPQAAED4AAFA+AABAPQAAoD0AABA+AABQPgAAgD0AAAA9AAAQPgAAUD4AAKA9AACgPQAAED4AAFA+AADAPQAAoD0AABA+AADAPQAA4D0AAKA9AAAQPgAAUD4AAAA+AACgPQAA4D0AAFA+AAAQPgAAQD0AABA+AABQPgAAID4AAKA9AACAPAAAUD4AADA+AACgPQAAED4AAFA+AABAPgAAoD0AABA+AABQPgAAUD4AAKA9AAAQPgAAED4AAGA+AACAPQAAED4AAFA+AABwPgAAoD0AABA+AABQPgAAgD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAAPQAAiD4AAKA9AADAPQAAUD4AAIg+AACgPQAAED4AAEA+AACIPgAAoD0AAAAAAABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAoD0AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AAKA9AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAgDwAAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAwPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAgD0AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAIA9AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AADgPQAAiD4AAKA9AABAPQAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAAAAACIPgAAoD0AABA+AABQPgAAiD4AAAAAAAAQPgAAID4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAAPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "bc-1mbc-max",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAYD4AAPg+AAAgPwAAiD4AANg+AABwPwAAUD4AAIg+AAAgPwAAyD4AAEg/AACIPgAAVD8AAFg/AAC4PgAAiD4AAKA9AACYPgAAcD8AAIg+AABwPgAAQD8AAAQ/AACIPgAA4D4AAFA+AABQPgAAiD4AACQ/AAAoPwAALD8AAIg+AABYPwAAED4AAIA+AACIPgAAoD0AABA/AABUPwAAiD4AAIA+AAAQPgAA0D4AAIg+AADoPgAA8D4AAHw/AACIPgAAKD8AAGw/AAAQPwAAiD4AAFw/AADAPgAAUD4AAIg+AACgPQAAVD8AADg/AACIPgAAiD4AAJA+AACYPgAAiD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACQPgAAYD8AACQ/AABQPgAAmD4AAKA9AAAQPgAAHD8AAKA+AACQPgAADD8AAFA+AACoPgAA+D4AABA+AABEPwAAsD4AADA/AADoPgAAsD4AALg+AABkPwAAaD8AAGw/AADAPgAAwD0AALg+AAAAPwAAyD4AAJg+AABQPwAAUD4AANA+AAAAPwAAiD4AACg/AADYPgAAND8AADg/AABwPgAA4D4AAGg/AAAwPgAAUD8AAOg+AADgPQAAID8AAMg+AADwPgAAoD4AABA+AAB4PwAA+D4AAAQ/AAAIPwAADD8AAAA/AAA4PwAAfD8AAFA+AAAEPwAAbD8AAOA+AAA0PwAACD8AAAA+AABkPwAAkD4AAAw/AACoPgAAsD4AAFw/AAAQPwAACD8AAEw/AADgPgAAFD8AADw/AACAPgAAUD4AABg/AABwPwAAND8AABg/AAAcPwAAED4AACA+AABQPgAAID8AALA+AAAcPwAAQD8AACQ/AAAMPwAAED4AAKg+AAAoPwAAQD8AAAQ/AABoPwAALD8AAHQ/AAB4PwAA+D4AADA/AAAgPgAA2D4AAFA+AAA0PwAAuD4AAGA/AAAkPwAAOD8AABA/AACoPgAAYD4AADw/AABEPwAASD8AAEw/AABAPwAAeD8AAHA+AADAPgAARD8AADA+AAAwPwAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABg/AABQPgAAUD8AAEg/AAAQPgAAMD8AAFQ/AAB8PwAAAD8AAIg+AABYPwAAQD4AAHQ/AABYPwAAXD8AAMg+AADQPgAA2D4AAGA/AAAYPwAAXD8AAFA+AABkPwAATD8AAKA+AAAUPwAAaD8AAKA9AABEPwAAUD4AAGw/AABQPgAAYD4AADw/AABwPwAA0D4AACw/AACgPgAAdD8AABw/AAAQPgAAZD8AAHg/AABQPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sas-da-add",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACqPAAAGT0AAF09AACIPgAAxjwAADg9AICCPQAgiD4AAAs9AICIPQAAdz0AgIg+AABNPQAAZD0AgLk9ACCJPgCAlD0AgLg9AICcPQAAij4AAL48AAB4PQBAAj4AIIs+AAAvPQCA3D0AgNE9AICMPgCAjD0AAHQ9AICDPQAgjj4AgM49AID0PQBADT4AAJA+AMAOPgAAWD0AgLY9ACCSPgAA5jwAQAA+AMA7PgCAlD4AgII9AAAkPQCA/T0AIJc+AIDYPQBAAD4AQHQ+AACaPgDAHT4AAGY+AEAsPgAgnT4AwFU+AID0PQCArT0AgKA+AAARPQAAbT4AwGM+ACCkPgCAsj0AgNw9AEADPgAAqD4AwBQ+AABuPgCgkj4AIKw+AMBWPgCAuD0AwDk+AICwPgCgjz4AAGk+AICBPQAgtT4AADk9AICIPQBAej4AALo+AIDnPQAAXj4AgOw9ACC/PgDAPz4AABk9AGCiPgCAxD4AIIk+AABNPgDANT4AIMo+AKC1PgAgwT4AoMw+AADQPgAAaz0AADY+AEB/PgAg1j4AwBA+ACC8PgCArz0AgNw+AEBtPgAAGT4AYKk+ACDjPgAgqD4AILQ+AEAgPgAA6j4A4Nw+AADsPQAg2D4AIPE+AICTPQAgqT4AwHI+AID4PgBAMD4AAJo9APAFPwAQAD8AoI4+ACCbPgCgpz4AAAQ/AGDIPgCACz8AgPI9ABAIPwCwAj8AIIo+AODaPgBADD8AgLY9AEAGPwDAVD4AkBA/AEBSPgBAbD4AkAk/AAAVPwDgpz4AAP8+ACCdPgCQGT8A4Ok+AEA+PgCAgT0AQB4/AJAXPwCA7j4A4NQ+ABAjPwCA3j0AQAo+AEAlPgAAKD8AwHY+AADbPgDQCD8AEC0/AGDCPgCAoD0A4Ik+AEAyPwBQBj8AgMQ+ALApPwCQNz8AEC0/ABA0PwAgxj4AAD0/AMAFPgAAqz4AgMg9AJBCPwDgjj4AkCo/ALADPwBASD8AIN4+AICOPgDAWz4AEE4/AAAYPwAAHz8AACY/AABUPwCQQj8AgFk+AGCrPgAQWj8AABs+AGARPwAASj8AQGA/ACChPgAAED4A4O0+AJBmPwAA+D4AQAI/AAACPgAAbT8AECk/AACBPQCwGj8AkHM/AMBXPwBA4z4AAIM+AEB6PwBAMD4AwFY/APBAPwCIgD8AALQ+AAC/PgAAyj4AAIQ/AJAJPwDgRz8AALY8AIiHPwDAOj8AwJc+AAALPwAgiz8AAMg7AIA3PwDAIz4AyI4/AABIPgAAWz4AgDM/AICSPwAgyD4AoCU/AGCdPgBIlj8AwBc/AIAAPgCAXj8AIJo/ABBNPwBAEj8A4O0+AAiePw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sas-da-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACqPAAAGT0AAF09AACIPgAAjjwAAPQ8AAA1PQDghz4AAPg7AAAEPAAAQz0AgIc+AAAMvAAAnDwAAI48AOCGPgAA/rwAAHy8AAABPQAAhj4AAJY8AABoPAAAnrwA4IQ+AACgugAAB70AALg7AICDPgAA3rwAAHg8AAAzPQDggT4AAHO9AAA3vQAA9rwAAIA+AIDIvQAAtDwAAJo8AMB7PgAAXDwAAE+9AICavQAAdz4AALa8AAAOPQAAgrwAwHE+AICDvQAAT70AwAW+AABsPgCA5r0AgBm+AAB3vQDAZT4AQCu+AAA3vQAAvjwAAF8+AADIOwCAIL4AgOq9AMBXPgAAO70AAAe9AACmvAAAUD4AgNS9AIAhvgDANr4AwEc+AEAsvgAAfLwAgJa9AAA/PgDAdL4AgBy+AAA3PQDANT4AAHC7AAAEPADAC74AACw+AICSvQCAEb4AAPi7AMAhPgBAFb4AABk9AEBWvgAAFz4AwGe+AIAAvgCAjr0AwAs+AGCgvgDgmr4AYJW+AAAAPgAAgrwAANO9AMAQvgCA5z0AgMy9AOCVvgAAtjwAAM49AMBCvgAAmb0AQGS+AICzPQDgkr4A4I2+AABHvQAAmD0AoMe+AAAmvQDgoL4AAHc9AAD6vADggr4AQAS+AAA8PQDABb4AAAC6AKDUvgAA/jwAwHK+AMBpvgDAYL4AAIA8ACCzvgDA8L4AACy8AACAuQAg8L4AwEe+AKCjvgAAiLwAAEO9AEDmvgCAzL0AAAm9AMAnvgDAH74A4Nu+AABQvQCgkr4AwNi+AMBLvgCAjL0AoNS+AIDjvQAANz0AALK9APAMvwBAyL4AoJ2+AIDYvQCAib0AAHe9AABbvQAAAL4AQEy+AMC0vgBg2r4AQBS+ACCtvgAAcLsAQCW+AAApvgBg974AQJ6+ABAOvwBAPr4AcCK/APAgvwDgjr4AAFS+AIC2vQDAhL4AACQ8AEBqvgBAc74AcBe/ACDQvgCAgL4A4Mi+AIBQvgCA2r0AIIy+AAAOvwAADb8AAAy/AACYvgAwOb8AABa+AEB1vgAgpL4AAPC9AKABvwBAM78AgLC+AOCQvgAAq70AoMO+ACC9vgAA6b4AgOm+AABQvQAAyr4AMCK/AABwvADQCL8AINe+AIBRvwDAzL4AAEW+AIDkvgDAGb4AoEy/AFAyvwAg8r4AAKq+AACtvgAAsL4AAAC/ADAFvwAAQL8AALY8ABAHvwAAN78AQIq+AEABvwBADr8AAMg7AOAxvwBAA74AkBW/AAA+vgAASb4AAC2/AAAdvwBgxL4AQCK/AKCTvgCQJL8AgBa/AADvvQBAW78AQCy/AHBMvwAgEb8AoOq+ABA0vw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sas-da-reverse-subtract",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACqvAAAGb0AAF29AACIvgAAjrwAAPS8AAA1vQDgh74AAPi7AAAEvAAAQ70AgIe+AAAMPAAAnLwAAI68AOCGvgAA/jwAAHw8AAABvQAAhr4AAJa8AABovAAAnjwA4IS+AACgOgAABz0AALi7AICDvgAA3jwAAHi8AAAzvQDggb4AAHM9AAA3PQAA9jwAAIC+AIDIPQAAtLwAAJq8AMB7vgAAXLwAAE89AICaPQAAd74AALY8AAAOvQAAgjwAwHG+AICDPQAATz0AwAU+AABsvgCA5j0AgBk+AAB3PQDAZb4AQCs+AAA3PQAAvrwAAF++AADIuwCAID4AgOo9AMBXvgAAOz0AAAc9AACmPAAAUL4AgNQ9AIAhPgDANj4AwEe+AEAsPgAAfDwAgJY9AAA/vgDAdD4AgBw+AAA3vQDANb4AAHA7AAAEvADACz4AACy+AICSPQCAET4AAPg7AMAhvgBAFT4AABm9AEBWPgAAF74AwGc+AIAAPgCAjj0AwAu+AGCgPgDgmj4AYJU+AAAAvgAAgjwAANM9AMAQPgCA570AgMw9AOCVPgAAtrwAAM69AMBCPgAAmT0AQGQ+AICzvQDgkj4A4I0+AABHPQAAmL0AoMc+AAAmPQDgoD4AAHe9AAD6PADggj4AQAQ+AAA8vQDABT4AAAA6AKDUPgAA/rwAwHI+AMBpPgDAYD4AAIC8ACCzPgDA8D4AACw8AACAOQAg8D4AwEc+AKCjPgAAiDwAAEM9AEDmPgCAzD0AAAk9AMAnPgDAHz4A4Ns+AABQPQCgkj4AwNg+AMBLPgCAjD0AoNQ+AIDjPQAAN70AALI9APAMPwBAyD4AoJ0+AIDYPQCAiT0AAHc9AABbPQAAAD4AQEw+AMC0PgBg2j4AQBQ+ACCtPgAAcDsAQCU+AAApPgBg9z4AQJ4+ABAOPwBAPj4AcCI/APAgPwDgjj4AAFQ+AIC2PQDAhD4AACS8AEBqPgBAcz4AcBc/ACDQPgCAgD4A4Mg+AIBQPgCA2j0AIIw+AAAOPwAADT8AAAw/AACYPgAwOT8AABY+AEB1PgAgpD4AAPA9AKABPwBAMz8AgLA+AOCQPgAAqz0AoMM+ACC9PgAA6T4AgOk+AABQPQAAyj4AMCI/AABwPADQCD8AINc+AIBRPwDAzD4AAEU+AIDkPgDAGT4AoEw/AFAyPwAg8j4AAKo+AACtPgAAsD4AAAA/ADAFPwAAQD8AALa8ABAHPwAANz8AQIo+AEABPwBADj8AAMi7AOAxPwBAAz4AkBU/AAA+PgAAST4AAC0/AAAdPwBgxD4AQCI/AKCTPgCQJD8AgBY/AADvPQBAWz8AQCw/AHBMPwAgET8AoOo+ABA0Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sas-da-min",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACAPAAAAD0AAEA9AAAAAAAAoD0AABA+AABQPgAAgDwAAKA9AAAQPgAAUD4AAAA9AACgPQAAED4AAFA+AABAPQAAoD0AABA+AABQPgAAgD0AAAA9AAAQPgAAUD4AAKA9AACgPQAAED4AAFA+AADAPQAAoD0AABA+AADAPQAA4D0AAKA9AAAQPgAAUD4AAAA+AACgPQAA4D0AAFA+AAAQPgAAQD0AABA+AABQPgAAID4AAKA9AACAPAAAUD4AADA+AACgPQAAED4AAFA+AABAPgAAoD0AABA+AABQPgAAUD4AAKA9AAAQPgAAED4AAGA+AACAPQAAED4AAFA+AABwPgAAoD0AABA+AABQPgAAgD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAAPQAAiD4AAKA9AADAPQAAUD4AAIg+AACgPQAAED4AAEA+AACIPgAAoD0AAAAAAABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAoD0AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AAKA9AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAgDwAAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AAAwPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAgD0AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAIA9AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AADgPQAAiD4AAKA9AABAPQAAUD4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAQPgAAUD4AAIg+AACgPQAAED4AAAAAAACIPgAAoD0AABA+AABQPgAAiD4AAAAAAAAQPgAAID4AAIg+AACgPQAAED4AAFA+AACIPgAAoD0AABA+AABQPgAAiD4AAKA9AAAAPgAAUD4AAIg+AACgPQAAED4AAFA+AACIPg=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "sas-da-max",
+                      "observed": {
+                        "value": {
+                          "bytes": "AACgPQAAED4AAFA+AACIPgAAYD4AAPg+AAAgPwAAiD4AANg+AABwPwAAUD4AAIg+AAAgPwAAyD4AAEg/AACIPgAAVD8AAFg/AAC4PgAAiD4AAKA9AACYPgAAcD8AAIg+AABwPgAAQD8AAAQ/AACIPgAA4D4AAFA+AABQPgAAiD4AACQ/AAAoPwAALD8AAIg+AABYPwAAED4AAIA+AACIPgAAoD0AABA/AABUPwAAiD4AAIA+AAAQPgAA0D4AAIg+AADoPgAA8D4AAHw/AACIPgAAKD8AAGw/AAAQPwAAiD4AAFw/AADAPgAAUD4AAIg+AACgPQAAVD8AADg/AACIPgAAiD4AAJA+AACYPgAAiD4AAPA+AAA8PwAAYD8AAIg+AAAsPwAAQD4AAOg+AACQPgAAYD8AACQ/AABQPgAAmD4AAKA9AAAQPgAAHD8AAKA+AACQPgAADD8AAFA+AACoPgAA+D4AABA+AABEPwAAsD4AADA/AADoPgAAsD4AALg+AABkPwAAaD8AAGw/AADAPgAAwD0AALg+AAAAPwAAyD4AAJg+AABQPwAAUD4AANA+AAAAPwAAiD4AACg/AADYPgAAND8AADg/AABwPgAA4D4AAGg/AAAwPgAAUD8AAOg+AADgPQAAID8AAMg+AADwPgAAoD4AABA+AAB4PwAA+D4AAAQ/AAAIPwAADD8AAAA/AAA4PwAAfD8AAFA+AAAEPwAAbD8AAOA+AAA0PwAACD8AAAA+AABkPwAAkD4AAAw/AACoPgAAsD4AAFw/AAAQPwAACD8AAEw/AADgPgAAFD8AADw/AACAPgAAUD4AABg/AABwPwAAND8AABg/AAAcPwAAED4AACA+AABQPgAAID8AALA+AAAcPwAAQD8AACQ/AAAMPwAAED4AAKg+AAAoPwAAQD8AAAQ/AABoPwAALD8AAHQ/AAB4PwAA+D4AADA/AAAgPgAA2D4AAFA+AAA0PwAAuD4AAGA/AAAkPwAAOD8AABA/AACoPgAAYD4AADw/AABEPwAASD8AAEw/AABAPwAAeD8AAHA+AADAPgAARD8AADA+AAAwPwAAdD8AAEg/AADAPgAAED4AAAg/AABMPwAAFD8AABg/AABQPgAAUD8AAEg/AAAQPgAAMD8AAFQ/AAB8PwAAAD8AAIg+AABYPwAAQD4AAHQ/AABYPwAAXD8AAMg+AADQPgAA2D4AAGA/AAAYPwAAXD8AAFA+AABkPwAATD8AAKA+AAAUPwAAaD8AAKA9AABEPwAAUD4AAGw/AABQPgAAYD4AADw/AABwPwAA0D4AACw/AACgPgAAdD8AABw/AAAQPgAAZD8AAHg/AABQPwAAFD8AAPA+AAB8Pw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  8,
+                                  8,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 4,
+                            "row_pitch": 16,
+                            "rows": 64,
+                            "image_pitch": 1024,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 60,
+        "argument_samplers_taken": 8,
+        "argument_tables_retained": 30,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 30,
+        "command_buffers_begun": 108,
+        "command_buffers_begun_batch_barriers": 30,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_encoders": 60,
+        "command_buffers_submitted": 91,
+        "commands_recorded.begin_command_buffer": 90,
+        "commands_recorded.cmd_begin_render_pass": 30,
+        "commands_recorded.cmd_bind_descriptor_sets": 30,
+        "commands_recorded.cmd_bind_pipeline": 30,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 30,
+        "commands_recorded.cmd_draw": 30,
+        "commands_recorded.cmd_end_render_pass": 30,
+        "commands_recorded.cmd_pipeline_barrier": 33,
+        "commands_recorded.cmd_push_constants": 30,
+        "commands_recorded.cmd_set_blend_constants": 30,
+        "commands_recorded.cmd_set_cull_mode": 30,
+        "commands_recorded.cmd_set_depth_bias": 30,
+        "commands_recorded.cmd_set_depth_compare_op": 30,
+        "commands_recorded.cmd_set_depth_test_enable": 30,
+        "commands_recorded.cmd_set_depth_write_enable": 30,
+        "commands_recorded.cmd_set_front_face": 30,
+        "commands_recorded.cmd_set_primitive_restart_enable": 30,
+        "commands_recorded.cmd_set_primitive_topology": 30,
+        "commands_recorded.cmd_set_scissor": 30,
+        "commands_recorded.cmd_set_stencil_compare_mask": 30,
+        "commands_recorded.cmd_set_stencil_op": 30,
+        "commands_recorded.cmd_set_stencil_reference": 30,
+        "commands_recorded.cmd_set_stencil_test_enable": 30,
+        "commands_recorded.cmd_set_stencil_write_mask": 30,
+        "commands_recorded.cmd_set_viewport": 30,
+        "commands_recorded.end_command_buffer": 91,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 30,
+        "creation_pipelines_made": 30,
+        "creation_render_pipelines_drawn": 30,
+        "creation_render_pipelines_made": 30,
+        "descriptor_keys_built": 30,
+        "device_memory_allocated": 268436480,
+        "draw_shapes_made": 8,
+        "draw_states_recorded": 570,
+        "draws_settled": 30,
+        "driver_diagnostics_withheld": 30,
+        "encoder_command_buffers_begun": 60,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 58,
+        "functions_translated": 2,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 30,
+        "heap_tables_worked_out": 60,
+        "host_texel_copies": 30,
+        "images_started_on_the_host": 30,
+        "inline_passes": 30,
+        "linked_use_questions_asked": 60,
+        "new_buffer_bytes_cleared": 31760,
+        "object_churn.buffers_evicted": 2,
+        "object_churn.buffers_parked": 32,
+        "object_churn.buffers_recycled": 17,
+        "object_churn.images_own_memory": 30,
+        "object_churn.textures_image": 30,
+        "object_churn.vk_buffer_bindings": 15,
+        "object_churn.vk_buffers_destroyed": 2,
+        "object_churn.vk_buffers_made": 15,
+        "object_churn.vk_image_bindings": 30,
+        "object_churn.vk_image_views_made": 30,
+        "object_churn.vk_images_destroyed": 30,
+        "object_churn.vk_images_made": 30,
+        "pipeline_layouts_made": 2,
+        "pipeline_layouts_shared": 30,
+        "pooled_memory_blocks_made": 4,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 30,
+        "render_passes_begun_inline": 30,
+        "render_passes_made": 4,
+        "resident_textures_looked_at": 30,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "set_zero_sets_found": 29,
+        "shader_modules_made": 9,
+        "shader_modules_shared": 60,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 167,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 120,
+        "storage_placeholders_made": 1,
+        "submit_infos": 1,
+        "trail_waits": 1,
+        "variant_pipelines_made": 30,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "arena_pools_made": 1,
+        "argument_samplers_taken": 8,
+        "command_buffers_begun": 91,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_submitted": 91,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 33,
+        "commands_recorded.end_command_buffer": 91,
+        "device_memory_allocated": 268435456,
+        "draw_shapes_made": 8,
+        "functions_translated": 2,
+        "linked_use_questions_asked": 60,
+        "pipeline_layouts_made": 1,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 2,
+        "shader_modules_made": 2,
+        "stage_entries_shared": 150,
+        "stage_entries_specialized": 2,
+        "storage_placeholders_made": 0
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 4,
+        "shader_modules_made": 9
+      },
+      "per_state": {
+        "pipelines": 60,
+        "states": 30
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "blend-sweep-operations",
+        "calls": 154,
+        "in_calls": 38416045,
+        "on_cpu": 2523126,
+        "blocked": 36030501,
+        "elsewhere": 8297834,
+        "spend": 46546754,
+        "spend_least": 45490172,
+        "spend_most": 52174630,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2375,
+            "on_cpu": 2459,
+            "blocked": 0,
+            "wall_least": 1917,
+            "wall_most": 2667,
+            "wall_total": 25125,
+            "on_cpu_total": 25376,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 26807042,
+            "on_cpu": 675542,
+            "blocked": 26159834,
+            "wall_least": 25720791,
+            "wall_most": 28912000,
+            "wall_total": 26807042,
+            "on_cpu_total": 675542,
+            "blocked_total": 26159834
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 83,
+            "on_cpu": 209,
+            "blocked": 0,
+            "wall_least": 42,
+            "wall_most": 125,
+            "wall_total": 6004,
+            "on_cpu_total": 10499,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 10618000,
+            "on_cpu": 775917,
+            "blocked": 9821709,
+            "wall_least": 10525833,
+            "wall_most": 12482542,
+            "wall_total": 10618000,
+            "on_cpu_total": 775917,
+            "blocked_total": 9821709
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 23041,
+            "on_cpu": 23209,
+            "blocked": 0,
+            "wall_least": 22542,
+            "wall_most": 28166,
+            "wall_total": 826788,
+            "on_cpu_total": 831707,
+            "blocked_total": 0
+          },
+          {
+            "call": "replace_region",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 167,
+            "on_cpu": 292,
+            "blocked": 0,
+            "wall_least": 167,
+            "wall_most": 208,
+            "wall_total": 6878,
+            "on_cpu_total": 10785,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 3208,
+            "on_cpu": 3292,
+            "blocked": 0,
+            "wall_least": 3166,
+            "wall_most": 3333,
+            "wall_total": 108918,
+            "on_cpu_total": 112786,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 1583,
+            "on_cpu": 1708,
+            "blocked": 0,
+            "wall_least": 1458,
+            "wall_most": 1625,
+            "wall_total": 48998,
+            "on_cpu_total": 52543,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "blend-sweep-operations",
+        "calls": 154,
+        "in_calls": 53352921,
+        "on_cpu": 46649873,
+        "blocked": 6332292,
+        "elsewhere": 4873250,
+        "spend": 58238246,
+        "spend_least": 56758128,
+        "spend_most": 59614831,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 750,
+            "on_cpu": 916,
+            "blocked": 0,
+            "wall_least": 625,
+            "wall_most": 958,
+            "wall_total": 3083,
+            "on_cpu_total": 3374,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 369167,
+            "on_cpu": 372459,
+            "blocked": 0,
+            "wall_least": 360208,
+            "wall_most": 453334,
+            "wall_total": 369167,
+            "on_cpu_total": 372459,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 42,
+            "on_cpu": 167,
+            "blocked": 0,
+            "wall_least": 42,
+            "wall_most": 83,
+            "wall_total": 2419,
+            "on_cpu_total": 6663,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3664166,
+            "on_cpu": 534375,
+            "blocked": 3132000,
+            "wall_least": 3517209,
+            "wall_most": 3991167,
+            "wall_total": 3664166,
+            "on_cpu_total": 534375,
+            "blocked_total": 3132000
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 1619625,
+            "on_cpu": 1512875,
+            "blocked": 96792,
+            "wall_least": 1571916,
+            "wall_most": 1660125,
+            "wall_total": 48895959,
+            "on_cpu_total": 45296251,
+            "blocked_total": 3217251
+          },
+          {
+            "call": "replace_region",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 459,
+            "on_cpu": 584,
+            "blocked": 0,
+            "wall_least": 417,
+            "wall_most": 583,
+            "wall_total": 16083,
+            "on_cpu_total": 19749,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 10083,
+            "on_cpu": 10208,
+            "blocked": 0,
+            "wall_least": 9166,
+            "wall_most": 11333,
+            "wall_total": 354627,
+            "on_cpu_total": 359123,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 30,
+            "most_calls": 30,
+            "wall": 1125,
+            "on_cpu": 1250,
+            "blocked": 0,
+            "wall_least": 1042,
+            "wall_most": 1250,
+            "wall_total": 51500,
+            "on_cpu_total": 55333,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

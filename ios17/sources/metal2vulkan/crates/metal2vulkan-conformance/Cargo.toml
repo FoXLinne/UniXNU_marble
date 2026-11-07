@@ -1,0 +1,72 @@
+[package]
+name = "metal2vulkan-conformance"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "The Metal conformance suite: one case run on Metal and on metal2vulkan-runtime, recorded and compared"
+# Never publish this workspace member to crates.io.
+publish = false
+readme = "README.md"
+
+[dependencies]
+# The translator's public API, with the feature set `cargo test -p metal2vulkan --all-features`
+# builds, so one target directory builds the product (and the runtime on it) once for every suite
+# rather than once per feature set.
+metal2vulkan = { path = "../metal2vulkan", features = ["serde", "ash", "cli"] }
+metal2vulkan-runtime = { path = "../metal2vulkan-runtime" }
+# Fixture paths, `llvm_assemble` and the scratch root: the suite's shaders are the owned public
+# fixtures.
+metal2vulkan-devtools = { path = "../metal2vulkan-devtools" }
+ash = { workspace = true, features = ["loaded"] }
+base64 = "0.22"
+# The two CPU clocks the cost table reads: the calling thread's and the whole process's
+# (`src/clocks.rs`). `std` exposes neither.
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# The command-buffer handler blocks the event cases add: `addScheduledHandler:` and
+# `addCompletedHandler:` take Objective-C blocks, which is how a probe bounds a wait Metal has no
+# bounded form of. Already objc2-metal's own dependency; named here so the suite can build one.
+block2 = "0.6"
+# `newLibraryWithData:error:` takes a `dispatch_data_t`, which `objc2-metal` binds as
+# `dispatch2::DispatchData`. Already that crate's own dependency; named here so the suite can
+# build one ([`metal2vulkan_conformance::archives`]).
+dispatch2 = "0.3"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-metal = "0.3"
+
+# The suite's command. It has no unit tests, so `test = false` keeps `cargo test`, nextest and
+# `clippy --all-targets` from building and linking a test harness of it.
+[[bin]]
+name = "conformance"
+path = "src/bin/conformance.rs"
+test = false
+
+# The run `tests/killed_scratch.rs` kills, to prove that a killed run's scratch directory is swept
+# and a live run's is not. A binary rather than a test so the test can find it by path
+# (`CARGO_BIN_EXE_scratch-holder`); `test = false` keeps any runner from executing it directly,
+# since it waits to be killed.
+[[bin]]
+name = "scratch-holder"
+path = "src/bin/scratch-holder.rs"
+test = false
+
+# A reading of which side holds a `compute_pipeline_with_stage_input` call's cost: our translation,
+# the driver's compile, or the rest of the call. A probe rather than a test -- it wants one process
+# per cache arrangement and prints a table -- so `test = false`.
+[[bin]]
+name = "stage-input-split"
+path = "src/bin/stage-input-split.rs"
+test = false
+
+# Device-executing tests are gated on non-default cfgs rather than features, because the ordinary
+# gate builds with `--all-features`: `--cfg m2v_gpu` (a real GPU) and `--cfg m2v_cpu_icd` (a CPU
+# Vulkan ICD such as lavapipe). See docs/VALIDATION.md.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(m2v_gpu)", "cfg(m2v_cpu_icd)"] }

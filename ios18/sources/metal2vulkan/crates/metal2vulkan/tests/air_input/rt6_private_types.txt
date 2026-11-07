@@ -1,0 +1,239 @@
+target triple = "air64_v28-apple-macosx26.0.0"
+source_filename = "-"
+; datalayout DataLayout { endian: Little, pointers: {0: PointerSpec { size_bits: 64, abi_bits: 64, pref_bits: 64, index_bits: 64 }}, ints: {1: AlignSpec { abi_bits: 8, pref_bits: 8 }, 8: AlignSpec { abi_bits: 8, pref_bits: 8 }, 16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }}, floats: {16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }, 128: AlignSpec { abi_bits: 128, pref_bits: 128 }}, vectors: {16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 24: AlignSpec { abi_bits: 32, pref_bits: 32 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 48: AlignSpec { abi_bits: 64, pref_bits: 64 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }, 96: AlignSpec { abi_bits: 128, pref_bits: 128 }, 128: AlignSpec { abi_bits: 128, pref_bits: 128 }, 192: AlignSpec { abi_bits: 256, pref_bits: 256 }, 256: AlignSpec { abi_bits: 256, pref_bits: 256 }, 512: AlignSpec { abi_bits: 512, pref_bits: 512 }, 1024: AlignSpec { abi_bits: 1024, pref_bits: 1024 }}, aggregate: AlignSpec { abi_bits: 0, pref_bits: 64 }, native_ints: [8, 16, 32], stack_align_bits: None, alloca_space: 0, program_space: 0, globals_space: 0, mangling: None, fn_ptr_align: None, non_integral: [] }
+%t5 = type <{ <4 x float>, <4 x float>, <4 x i32> }>
+%t7 = type %t5 (i32, i32, i32, i32, ptr addrspace(1), ptr addrspace(1))
+%t8 = type float (i32)
+%t9 = type <{ <4 x float>, <4 x float>, <4 x i32>, <4 x i32> }>
+%t12 = type %t9 (<4 x float>, <4 x float>, <4 x i32>, <3 x float>, i32, i1)
+%t13 = type %t9 (<4 x float>, <4 x float>, <4 x i32>, <3 x float>, i1)
+%t14 = type %t9 (<4 x float>, <4 x float>, <4 x i32>, i32)
+%t15 = type %t9 (<4 x float>, <4 x float>, <4 x i32>, i1)
+%t16 = type i32 (i32, i32)
+%t18 = type [2 x i32]
+c10 = %t18 [27, 0]
+c24 = <2 x i32> [3, 3]
+c26 = <2 x i32> [0, 1]
+c29 = <4 x i32> [0, 1, poison, poison]
+c30 = <4 x i32> [0, 1, 6, 7]
+c32 = <4 x i32> [0, 1, 4, 5]
+c38 = <4 x i32> [0, 1, 2, poison]
+c40 = <4 x i32> [poison, poison, 0, 1]
+c42 = <4 x i32> [0, poison, 0, 1]
+c44 = <4 x i32> [poison, 0, 0, 1]
+c45 = <4 x float> [0x0, 0x0, 0x0, 0x3F800000]
+c46 = %t9 [c45, undef, undef, undef]
+
+define %t7 @f0 "pt_vertex" memory(Ref, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="0" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" %a4( Ref nocapture "air-buffer-no-alias"="" ) %a5( Ref nocapture "air-buffer-no-alias"="" ) {
+bb0:
+  %i0 = tail call i32 @f6 [air Math(Math { f: IMin(Unsigned), precision: Precise, ty: NumTy { elem: I32, lanes: 1 } })](%a0, i32 65535)
+  %i1 = zext %i0 to i64
+  %i2 = getelementptr inbounds <4 x float>, %a4, %i1
+  %i3 = load <4 x float>, %i2, align 16
+  %i4 = tail call i32 @f6 [air Math(Math { f: IMin(Unsigned), precision: Precise, ty: NumTy { elem: I32, lanes: 1 } })](%a1, i32 3)
+  %i5 = zext %i4 to i64
+  %i6 = getelementptr inbounds <2 x float>, %a5, %i5
+  %i7 = load <2 x float>, %i6, align 8
+  %i8 = shufflevector <2 x float> %i3, <4 x float> undef, <3, 3>
+  %i9 = fmul reassoc nnan ninf nsz arcp contract afn <2 x float> %i7, %i8
+  %i10 = shufflevector <2 x float> %i3, <4 x float> poison, <0, 1>
+  %i11 = fadd reassoc nnan ninf nsz arcp contract afn <2 x float> %i9, %i10
+  %i12 = shufflevector <4 x float> %i11, <2 x float> poison, <0, 1, poison, poison>
+  %i13 = shufflevector <4 x float> %i12, %i3, <0, 1, 6, 7>
+  %i14 = and i32 %a0, i32 65535
+  %i15 = tail call reassoc nnan ninf nsz arcp contract afn float @f1 [air Convert(Convert { dst: NumTy { elem: F32, lanes: 1 }, dst_kind: Float, src: NumTy { elem: I32, lanes: 1 }, src_kind: Unsigned, src_fp8: None })](%i14)
+  %i16 = insertelement <4 x float> undef, %i15, i64 0
+  %i17 = lshr i32 %a0, i32 16
+  %i18 = tail call reassoc nnan ninf nsz arcp contract afn float @f1 [air Convert(Convert { dst: NumTy { elem: F32, lanes: 1 }, dst_kind: Float, src: NumTy { elem: I32, lanes: 1 }, src_kind: Unsigned, src_fp8: None })](%i17)
+  %i19 = insertelement %i16, %i18, i64 1
+  %i20 = shufflevector <4 x float> %i19, %i12, <0, 1, 4, 5>
+  %i21 = insertelement <4 x i32> undef, %a0, i64 0
+  %i22 = insertelement %i21, %a2, i64 1
+  %i23 = insertelement %i22, %a1, i64 2
+  %i24 = insertelement %i23, %a3, i64 3
+  %i25 = insertvalue %t5 undef %i13, 0
+  %i26 = insertvalue %i25 %i20, 1
+  %i27 = insertvalue %i26 %i24, 2
+  ret %i27
+}
+
+declare %t8 @f1 "air.convert.f.f32.u.i32" memory(NoModRef, NoModRef, NoModRef)
+
+define %t12 @f2 "pt_full" memory(NoModRef, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = shufflevector <4 x float> %a3, <3 x float> poison, <0, 1, 2, poison>
+  %i1 = insertelement %i0, float 0x3F800000, i64 3
+  %i2 = zext %a5 to i32
+  %i3 = insertelement <4 x i32> c40, %a4, i64 0
+  %i4 = insertelement %i3, %i2, i64 1
+  %i5 = insertvalue %t9 undef %i1, 0
+  %i6 = insertvalue %i5 %a1, 1
+  %i7 = insertvalue %i6 %a2, 2
+  %i8 = insertvalue %i7 %i4, 3
+  ret %i8
+}
+
+define %t13 @f3 "pt_weights" memory(NoModRef, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = shufflevector <4 x float> %a3, <3 x float> poison, <0, 1, 2, poison>
+  %i1 = insertelement %i0, float 0x3F800000, i64 3
+  %i2 = zext %a4 to i32
+  %i3 = insertelement <4 x i32> c42, %i2, i64 1
+  %i4 = insertvalue %t9 undef %i1, 0
+  %i5 = insertvalue %i4 %a1, 1
+  %i6 = insertvalue %i5 %a2, 2
+  %i7 = insertvalue %i6 %i3, 3
+  ret %i7
+}
+
+define %t14 @f4 "pt_primitive" memory(NoModRef, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = insertelement <4 x i32> c44, %a3, i64 0
+  %i1 = insertvalue %t9 c46 %a1, 1
+  %i2 = insertvalue %i1 %a2, 2
+  %i3 = insertvalue %i2 %i0, 3
+  ret %i3
+}
+
+define %t15 @f5 "pt_plain" memory(NoModRef, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" {
+bb0:
+  %i0 = zext %a3 to i32
+  %i1 = insertelement <4 x i32> c42, %i0, i64 1
+  %i2 = insertvalue %t9 c46 %a1, 1
+  %i3 = insertvalue %i2 %a2, 2
+  %i4 = insertvalue %i3 %i1, 3
+  ret %i4
+}
+
+declare %t16 @f6 "air.min.u.i32" memory(NoModRef, NoModRef, NoModRef)
+!md0 = !"SDK Version"
+!md1 = !"wchar_size"
+!md2 = !"frame-pointer"
+!md3 = !"air.max_device_buffers"
+!md4 = !"air.max_constant_buffers"
+!md5 = !"air.max_threadgroup_buffers"
+!md6 = !"air.max_textures"
+!md7 = !"air.max_read_write_textures"
+!md8 = !"air.max_samplers"
+!md9 = !"air.position"
+!md10 = !"air.arg_type_name"
+!md11 = !"float4"
+!md12 = !"air.arg_name"
+!md13 = !"position"
+!md14 = !"air.vertex_output"
+!md15 = !"generated(9smooth_idDv4_f)"
+!md16 = !"smooth_id"
+!md17 = !"generated(4tagsDv4_j)"
+!md18 = !"uint4"
+!md19 = !"tags"
+!md20 = !"air.vertex_id"
+!md21 = !"uint"
+!md22 = !"vid"
+!md23 = !"air.instance_id"
+!md24 = !"iid"
+!md25 = !"air.base_vertex"
+!md26 = !"base_vertex"
+!md27 = !"air.base_instance"
+!md28 = !"base_instance"
+!md29 = !"air.buffer"
+!md30 = !"air.location_index"
+!md31 = !"air.read"
+!md32 = !"air.address_space"
+!md33 = !"air.arg_type_size"
+!md34 = !"air.arg_type_align_size"
+!md35 = !"positions"
+!md36 = !"float2"
+!md37 = !"offsets"
+!md38 = !"air.render_target"
+!md39 = !"weights"
+!md40 = !"primitive"
+!md41 = !"air.center"
+!md42 = !"air.no_perspective"
+!md43 = !"air.arg_unused"
+!md44 = !"air.fragment_input"
+!md45 = !"air.perspective"
+!md46 = !"air.flat"
+!md47 = !"air.barycentric_coord"
+!md48 = !"float3"
+!md49 = !"air.primitive_id"
+!md50 = !"air.front_facing"
+!md51 = !"bool"
+!md52 = !"front"
+!md53 = !"air.compile.denorms_disable"
+!md54 = !"air.compile.fast_math_enable"
+!md55 = !"air.compile.framebuffer_fetch_enable"
+!md56 = !"Apple metal version 32023.921 (metalfe-32023.921.6)"
+!md57 = !"Metal"
+!md58 = i32 2
+!md59 = %t18 c10
+!md60 = i32 1
+!md61 = i32 4
+!md62 = i32 7
+!md63 = i32 31
+!md64 = i32 128
+!md65 = i32 8
+!md66 = i32 16
+!md67 = ptr addrspace(0) @f0
+!md68 = i32 0
+!md69 = i32 3
+!md70 = i32 5
+!md71 = ptr addrspace(0) @f2
+!md72 = ptr addrspace(0) @f3
+!md73 = ptr addrspace(0) @f4
+!md74 = ptr addrspace(0) @f5
+!md75 = !{!md58, !md0, !md59}
+!md76 = !{!md60, !md1, !md61}
+!md77 = !{!md62, !md2, !md58}
+!md78 = !{!md62, !md3, !md63}
+!md79 = !{!md62, !md4, !md63}
+!md80 = !{!md62, !md5, !md63}
+!md81 = !{!md62, !md6, !md64}
+!md82 = !{!md62, !md7, !md65}
+!md83 = !{!md62, !md8, !md66}
+!md84 = !{!md9, !md10, !md11, !md12, !md13}
+!md85 = !{!md14, !md15, !md10, !md11, !md12, !md16}
+!md86 = !{!md14, !md17, !md10, !md18, !md12, !md19}
+!md87 = !{!md84, !md85, !md86}
+!md88 = !{!md68, !md20, !md10, !md21, !md12, !md22}
+!md89 = !{!md60, !md23, !md10, !md21, !md12, !md24}
+!md90 = !{!md58, !md25, !md10, !md21, !md12, !md26}
+!md91 = !{!md69, !md27, !md10, !md21, !md12, !md28}
+!md92 = !{!md61, !md29, !md30, !md68, !md60, !md31, !md32, !md60, !md33, !md66, !md34, !md66, !md10, !md11, !md12, !md35}
+!md93 = !{!md70, !md29, !md30, !md60, !md60, !md31, !md32, !md60, !md33, !md65, !md34, !md65, !md10, !md36, !md12, !md37}
+!md94 = !{!md88, !md89, !md90, !md91, !md92, !md93}
+!md95 = !{!md67, !md87, !md94}
+!md96 = !{!md38, !md68, !md68, !md10, !md11, !md12, !md39}
+!md97 = !{!md38, !md60, !md68, !md10, !md11, !md12, !md16}
+!md98 = !{!md38, !md58, !md68, !md10, !md18, !md12, !md19}
+!md99 = !{!md38, !md69, !md68, !md10, !md18, !md12, !md40}
+!md100 = !{!md96, !md97, !md98, !md99}
+!md101 = !{!md68, !md9, !md41, !md42, !md10, !md11, !md12, !md13, !md43}
+!md102 = !{!md60, !md44, !md15, !md41, !md45, !md10, !md11, !md12, !md16}
+!md103 = !{!md58, !md44, !md17, !md46, !md10, !md18, !md12, !md19}
+!md104 = !{!md69, !md47, !md41, !md45, !md10, !md48, !md12, !md39}
+!md105 = !{!md61, !md49, !md10, !md21, !md12, !md40}
+!md106 = !{!md70, !md50, !md10, !md51, !md12, !md52}
+!md107 = !{!md101, !md102, !md103, !md104, !md105, !md106}
+!md108 = !{!md71, !md100, !md107}
+!md109 = !{!md61, !md50, !md10, !md51, !md12, !md52}
+!md110 = !{!md101, !md102, !md103, !md104, !md109}
+!md111 = !{!md72, !md100, !md110}
+!md112 = !{!md69, !md49, !md10, !md21, !md12, !md40}
+!md113 = !{!md101, !md102, !md103, !md112}
+!md114 = !{!md73, !md100, !md113}
+!md115 = !{!md69, !md50, !md10, !md51, !md12, !md52}
+!md116 = !{!md101, !md102, !md103, !md115}
+!md117 = !{!md74, !md100, !md116}
+!md118 = !{!md53}
+!md119 = !{!md54}
+!md120 = !{!md55}
+!md121 = !{!md56}
+!md122 = !{!md58, !md65, !md68}
+!md123 = !{!md57, !md61, !md68, !md68}
+!"llvm.module.flags" = !{!md75, !md76, !md77, !md78, !md79, !md80, !md81, !md82, !md83}
+!"air.vertex" = !{!md95}
+!"air.fragment" = !{!md108, !md111, !md114, !md117}
+!"air.compile_options" = !{!md118, !md119, !md120}
+!"llvm.ident" = !{!md121}
+!"air.version" = !{!md122}
+!"air.language_version" = !{!md123}

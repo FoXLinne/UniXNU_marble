@@ -1,0 +1,2400 @@
+{
+  "format": 1,
+  "case": "heap-purgeable-states",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "heaps",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "eb0b92944c7fa2dc1d74e08e39171c7cc2d691ff543dd3fa110dc12e4c03d4d0"
+                        }
+                      }
+                    },
+                    {
+                      "name": "asks",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "29eab7e8b1f3901542b97964442ecfcfb61e525b2d8b29bc7c837e8cd5d15269"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "automatic-1048576-shared-default-cache-hazard-default",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "purgeable/non-volatile-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/non-volatile-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/non-volatile-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "automatic-1048576-private-default-cache-hazard-default",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "purgeable/non-volatile-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/non-volatile-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/non-volatile-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "placement-1048576-shared-default-cache-hazard-default",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "purgeable/non-volatile-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/non-volatile-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/non-volatile-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "placement-1048576-private-default-cache-hazard-default",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "purgeable/non-volatile-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/non-volatile-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/non-volatile-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/volatile-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 3
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-non-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-volatile",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "purgeable/empty-then-empty",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "fresh",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "from",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 2
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "to",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "name": "read-back",
+                          "observed": {
+                            "value": {
+                              "variant": {
+                                "name": "Ok",
+                                "payload": {
+                                  "uint": 4
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "device_memory_allocated": 201326592,
+        "new_buffer_bytes_cleared": 18874368,
+        "object_churn.vk_buffer_bindings": 36,
+        "object_churn.vk_buffers_destroyed": 36,
+        "object_churn.vk_buffers_made": 36,
+        "pooled_memory_blocks_made": 3
+      },
+      "composed": {
+        "device_memory_allocated": 201326592
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "pooled_memory_blocks_made": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "heap-purgeable-states",
+        "calls": 180,
+        "in_calls": 149543,
+        "on_cpu": 169457,
+        "blocked": 0,
+        "elsewhere": 500,
+        "spend": 150502,
+        "spend_least": 135376,
+        "spend_most": 183661,
+        "per_call": [
+          {
+            "call": "heap",
+            "least_calls": 36,
+            "most_calls": 36,
+            "wall": 3167,
+            "on_cpu": 3250,
+            "blocked": 0,
+            "wall_least": 2583,
+            "wall_most": 3500,
+            "wall_total": 116082,
+            "on_cpu_total": 120165,
+            "blocked_total": 0
+          },
+          {
+            "call": "heap_purgeable_state",
+            "least_calls": 144,
+            "most_calls": 144,
+            "wall": 208,
+            "on_cpu": 333,
+            "blocked": 0,
+            "wall_least": 208,
+            "wall_most": 209,
+            "wall_total": 34495,
+            "on_cpu_total": 50878,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "heap-purgeable-states",
+        "calls": 180,
+        "in_calls": 209248,
+        "on_cpu": 230290,
+        "blocked": 0,
+        "elsewhere": 209,
+        "spend": 209457,
+        "spend_least": 194585,
+        "spend_most": 232415,
+        "per_call": [
+          {
+            "call": "heap",
+            "least_calls": 36,
+            "most_calls": 36,
+            "wall": 1083,
+            "on_cpu": 1167,
+            "blocked": 0,
+            "wall_least": 958,
+            "wall_most": 1125,
+            "wall_total": 151459,
+            "on_cpu_total": 155582,
+            "blocked_total": 0
+          },
+          {
+            "call": "heap_purgeable_state",
+            "least_calls": 144,
+            "most_calls": 144,
+            "wall": 41,
+            "on_cpu": 125,
+            "blocked": 0,
+            "wall_least": 41,
+            "wall_most": 42,
+            "wall_total": 56499,
+            "on_cpu_total": 73830,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

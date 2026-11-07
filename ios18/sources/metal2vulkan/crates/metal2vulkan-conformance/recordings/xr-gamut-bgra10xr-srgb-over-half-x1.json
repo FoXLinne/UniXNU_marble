@@ -1,0 +1,753 @@
+{
+  "format": 1,
+  "case": "xr-gamut-bgra10xr-srgb-over-half-x1",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "rt6_samples.ll",
+      "entry": "rt6_fill_vertex",
+      "source_sha256": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+    },
+    {
+      "fixture": "rt6_samples.air.ll",
+      "entry": "rt6_fill_vertex",
+      "source_sha256": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+    },
+    {
+      "fixture": "rt6_samples.ll",
+      "entry": "rt6_fill_rgba16float",
+      "source_sha256": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+    },
+    {
+      "fixture": "rt6_samples.air.ll",
+      "entry": "rt6_fill_rgba16float",
+      "source_sha256": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "fills:air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "857adcbb6951b3d5348087377c099c2b2b4733fe56cc754501b605496cb30fb9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "fills:air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "50449c6cad01f47ad3407cbf3bbbdfa4405c43f2cae14639e56d71b307a41d2c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "format",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "864c40623b03145ce67869dafdfddff484cb6b6922763d6acdcdcef5a33a6f1e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "4e4c7eacf3c90cb6bcbb1b319f4974ca3753209e44cdb2e941e37a4722aaae40"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pipeline",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3313356b079523ab07e8b9f489c9b18e07adc88f785dc7173bfc70e4726a2b21"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ec44df352bb02c5dc2b4b6db7ef93098c6ba8b5e36b118abc23818827857eaaf"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9b379a0cc4cc709fe1347fbd87d3851bacaf03d381ab36c62ccb2c702ea323bf"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:values-0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "58cc23993f5ad8a41c202bc82f117315c1dc5abc08e9ad079bf76e740a518ca9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:values-1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "7cfcda71fbff955e51b020fa8ee90ed849b6cc6cb7eda7d4de0b6fc653d5e485"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:shape",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "77e90905067e9de41b0ceac40a2b316362c400e828a946ecdf5033b8e51935e0"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library/fills",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/values-0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/values-1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/shape",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texels",
+                  "observed": {
+                    "value": {
+                      "bytes": "gKAA5YApgNwA0UC9gL1AzMDZgMUAusC9wNfAzsCnwM4AuIDSAA6A3wDQwLlAp4ClABQAv0DUgNdAowCTANXA3oDMANcAuYDQALpAZ0DEQNxA0sCrQK8ArUDagNCASMDIgO+AskDdgNmA3MCuQJsA1oDMgL3AQcC+wN9AxMB2AM4AzADigCdAz0C+wLwAuoC3gNqApYCcgMIA4sBqgLeA30DWQL/AvICwANZAmwDJwLsAyoC0gLTAswC6gLTA1wDHgK7AwsCHgLjA5YDogNQA0QCvAO+Ay8DbgMlASEC+gMsA0UDFwJqAsMDSAMLAK0DHAOzACkDKAN7A3cDMANGA3wDoAJeA2ADTgDeAz8AOgN8A0wDGAKjAqwCdQBrA1IDZAORA0wC3AMmAx8CqwFdA2IAuwMiA4gDSQKSAw4DVgN8A3IDqwEAA2sCvAOdAGoDfAOaAiMDNwM/AuQDJQKQAxEC+gOuAcIDfQNlAe0CIgNFA0YCjgLJAuECNAKbAvEDNwNqA7UDSAN1A3cDIgI7AvoDRgMfAwEDagMWAnEDKQMnA88AggDeA38CewMCAu0DZQIpAIoBNANTAfoCnAOoA1QAzwI1AHIDSgIoARoDOgNGAuoDVQKqAyoDQwMSAuQC3gNAAxYC5wMJAxADCwKYA2EDtAKJAtQDcQM0Au4CkQKkA04CogMNA1ICGgMCA24DcAKdA1UDQQNFA3YDNQKxAxYDWQK/AuEDfgM8AoEClQL2A34C3AOEA3EDiQGoA0gDJQONAKsAIgNuA5QDhgL8A1YB6QKvArYDIAMUAq0DPwL5AqwDrAB4A1UC3QLYAmIC7QM9AxQCngLuAzIDEQJ2Ap0DLAMNA4EDMQNAAxECHANGA4cCpwLhA2wCVgM8AosDagMyAuMClAK0AvsCZwOeA2YDBwLgArUDRAKpA4gDFwMXArMCtgMdA2QDvALhAm0DWgMuA00CoAL5Ax8C8AMuA2AC2QMeArYDBgHhA38AfgNjApEDWQKfA14C1gKOAsMDPgM5AwkCswKXAvQDKgD1A2IDkgAWA3YDfwLOALcDYgN+AyMDKgJCAyYDRAMoAyMDBANBAqYDSwNEAkkBEAA7A3YDAANVAy0DGgF8A5kDCwNkA0QCwQLeAxAB7QM7AtQDSAO3A2UCsgN3A2sCyQO0A2EDHQL4AOYDQgJbAjMDUwMnA6EDIwMkA1oCbQFYA10DLwOIAx4C5wLvApUDYQDPAvQDnANVA1EDfgN8AVIDCANmAusC4QLQAz0C7wM8AzgC+AJNAmkDPgMMAtgC0QCuAzwCQgLpAqsDCAJAAvUCxANkA20C7gJ+AzADCwDAA7UDfQNtAuUD1gN/AxcDMwLGAtcAlwO+AsUDdAOEAbgDBwMkAzkDUgKfAwICSgM/AjEDNwNtA14DkAM/A1kCKgNOA3wDHAMMAuQDFANNAwsBQgLiAN4CGQKnA1sDXwOrA3EDWwM2A0gCvgL2ArwDPgDEAyYDagN+AYMDbQOOAKoDfgNQA3YDEgMYAt8AuwAxA4QDeALtAxACdwMIAksDBwNbA14DRgCmA7YDfQNLA0sDMwMCAywC8QKhAuQDHwMrAHMDUADmA1sCGQNQAtUBpAPVA3sDaQNCAqMDAgI1A4ACXwN7AmIArANhA1IC9gJfAu8DIgNwArYA2QMfApsCcwK8AyEDxQJoAzIDegLtA1sAswNcAvQBNAKOA38CxgMvArUDPAKxA14DhQN7A4MCgwNSA0oC6gL0AmQC+QL1AGQAcAN6A3QDEwMeAx8C6ACOAKYDfwKKArgB9wM4AuUDEAA9A3cCygDoAyQDfgMXAgwDHgM1A4gDhgLjA1ACuwNFAQMDUgI1AvIC3QN1A0UCqQJHAzEDXgOpAL4DfgMCAyYCFgMuAgwAbAOUA2IDZgORA0kDUAMMAqMDUwM0AzYCUgL5A3sDBQN4Ai4C/wMuAt4DMwNcAzwCnAIWAv0DewNQAzsDPwNHAsoCugLUAzQC7gK/Aq0CFwN7A14DbgNqAzQCxgNeAoEDjwMtAyEDIwLaArwCtgPSAJEA+wNsAGwDvgJsA2gCvAK1Am4DNQEuAKIDaAN7AtUDRgIqAx4CQQNhA1gDbgLSA0MCcQL/An4CvwL3AwoAKwAyAhoDfQMzAvoDEgM2AFwCRwMqA3oDTQDRAwcDJQIsAu0CmQNtAg0BBgOdA0cDCwJ8Ay4C/wIOAucDPgN8AKEA0ABaA2QAigD0A10DdAJ+AzYDiQM/AlkDIwL8A1YCdAMIAk4DZAM9AwoDGwNbApIDEwJXAz0CaAAyA60DcgMUAzAC/gNsAjADGQNBAyEDKgCEAhsDXAEHAi8DIgNeAs4DUwJwAtsAnAMmAEYDVgMmAmECQgMPANoCJgLYA14CugLuAvIC2wMWAuEC/wMtALoDDgOnA1ADUQLKApcCpANIAxgCXwLDAt8DKwC6A34CNQMvAukDGQKsAvADiANYA0kDIwIBAvUC0wMPAxUC6QNMAzMC7gLfAz8CgAIGA0ICzQMmA0oDLAN5AzwC4QL/AxcB0wCYA1cDUQLRAq4DFAEuA0cCswNOA5kAfgNgA3QDTgOUA7sDWwKgA1QC2gMJAIIDiQHiA3YD3QPNADYDfQOCAOgDJwMzA5sBmALcA20C2AJFA28DYANLA2ECJANYAlwDGQNVA1EC7wL6AtoC9gN9AyoC/wNNAsYC+gLrAt0AzgCmAHYDfwPIAoUDcQNyAm8CHwMSA38DOgL3AvsC4gNyA0YDBQNOAgYDigMIA2wDbAOLAv8DQgMZAq8DIgLgA6kC/AKKAx4CvQKjAzIDLwLbAucDawNfAqoC6wA/A2oDQwKjAlsCwQK7A1ABmgNIArIDMACUAykC2gM9ApQDDANTAugCqQKmAykDswOZA3oDiQLsAyADZANgAxUCyANbAiQCUQKrA2ADZgOrA2cDaQO5AqIATANpAx8CmQBgA2MC7wIyALgDbQKvAt0CJwNUA58DMgOrA3UDugEIAtADfAMTAw0CzAK8A6sDigGpA1oDIQNRAtUDGwNqAq0DvwNpA2YC4AOBA3MDTQMsAqEDKwOqAMcChQMxAt0DRQMxA38DYwIhAywDfQNTAvsC1wLsAtUDugNuA34DgwKAAzcDAgLWA2YDGQNYASsDJANKA2YC9wKgAuYDBQN9AzkDVQMhANQCUgClA34DxgL4Ad8DbwMlAxMCygKlAukCbQMgAycDIALXA0IDQQHYA3oDXgNBAysAugCVA3gCTwPGA4ADeQLXAaEDGQNOAG4DHQN/A2YBlQKaA0ADXwJvAvUDWQNpAtkBhQJJAz0C7gILAL0DTABuAdECkAN5AIICGQNSA38C3ALHAqcDWgNdA2wB1gMTAv4C1QKQAvAC+ADLANYDPwNTAzEDDALPA2UCCQCJA1AA+gLxAeUDPQM9AvACawMmAs0A6wMMA3UC7gMEAxUDegLRAr8CogMEAzcC/AKaApUDGAKXAxcC+QMZAyICtQK2A5sCrQMoA0QCzQOsAvMDYgHTA4ACMQM+AqgC9gOCA1gAgQLzA0sDYgOfAw0DLgN7AvACYwOIA38DaQJsA7oDWQIlA2QAewNuA10CQgMBA2EA0wMuA08DbANxAsMC6wLuAzUCzwLbAsEB9wMjA6ADewMTAwoCdwLsA2MCkgMlA10CawLNA1QDLQJMAyIC0gMEAvQC/wMVAxQBPgKCAYQDagK5ArcCoQNjA20C8QLiAtgDEgLSAhQC1QNSAvQDZAN6A3UCoQNkAxoCzQOsAQ4DewNtANkA9AN2AlsCdwMCA34DEQAeAooDdAMuAw0CcgKkAygDAwLeAvgB3wM5AFMDVwM3AgoDkQNqAy8AwQD9A0cCnwEYAicDOQOAAiMCiANxAJkASgOxA2oDNAIqAugDJwMxAucCjgKfAvYDHQKPAuEC3QJ8AlEC8AMUAw0CRQNSAM0DlQCAA30DnQKdA1YDZgKmAkIDJgNgANkDiAAvA2kC7wKuAw8DCAAhAzkDqAN7Ax8DGgNYAx8CxANdAo4DRQKQAmEB8gM/A8MCxwMaA30DQgM5AegDPwNRAHMCZgN/AL8DvANDA2kDgQNoAy8C/QMhA0YDFgNTAusBAANUA3kC5AN0A2IDVgLaAxUCpALWAvwCvAHkAvsCkwN1A10DXgMBAlYBCANwA44CZgM7AwoC0QMlAoUDPwMOAtICZwK2Ag8BxABCA14DUwJjAz0DLgKIAjQDZANtA3wCswLbA3YA6ABCAG0DWQMxAyQC7QLLA4wCegFRA3ADJQMKAqUCrQNCAvUCcgKWAxcCdQKXAtYBugN4A6YDaQMfAuACcwLlAqYCHANMA38DegKtAz8DGwL1AqYA2ANJAwkCiQMQA3gDRALJAucCtAM6AqoDcgMPAyEAsAMeA3wCmwCYA4EDQAD5AykCTgN6AzYC3wJ6Ay0DZAL/ApMC1QNSAfUCQwMyAz4DDAKnApQDjgKMAScC7AMLA6UAWgNZAzEC0gNvA1wDbgMfAC0DeAOUAwYCjgM0ApkDRgNSAyQDMQLfAksC1AEYAe8CxwNqAyAAfQNPA3gC9QOCANIDaQEYA5sC0QNEAxQCwAJ3AqUDSgK3AoAC0wN2AzADfwNjAyMDRwJQAxEDKwDZAzkDMQLnAwkDNALwAwQDZgDKAycDaQM5AxoDbAN+AygDRQNZA1EC9AOCA1sC0gMEAm8CyQM3AEUDcgN+A04CsgMEA3UDTgJ0AvsC3ALtAxUCdQLJA3ICjAK8A3gC7AO/A6UDdgMeAxYCiAK3AwgDQwMAAz8DDQLXA2ADDAMpAvYCSgLuA2QDdwLhAx0DNwMbAkwC/QL9ApACoAMTA5ECIQNDAzwDLAKsAyIDDAMIAvQDCQMDAt0CgwMlAzwC+gEiAiIDMAKJAVkDRgMJA4EDbAEbAyYAawOhAB4DeQMtA8kCOgN/AzAC6wNaA00DjwDHAxgDOgJgAsMBVANvA6kCpwNeA0MDVQM5AvUDNwNGAvMCnQKtAIEDVwHuA14DJgL5AyUC9ANEAJQDQgNaA6MC0ACCA1IC7ANoAt4DfANdAcsDaAN4AyADQQIOAz8CLQLXAxQDJwGCAaQB0gN4AzgDCgKnAo0DZgLpAx8DLgNDAxAB9ANkA6EDqAC5A3gDOALDAn4C2gMnAkQCJQMQAvkC0gJ2AzcDFwMjAqsCvgNSAXgDmANiAncDjwA6A3YDMALuAncCnAOAAywDDANEA3IC0AMMAw8DLQL2AtYC/AKdAloDYANXA0QDAgKxAq4DcQMcAjYDKwM1A0QBCgMPA4UDAwOIA24DJADBALIDUQMtA0UCzALmAs0BtAKWAwgDpANSAssDagMDAyUDRQMpA1sDIgKUArQDMQMsAKADYwK0A3MCDgNzA6ADJQO2A3IDeALJAwEDNQMpAwUCiAK1A3YDMwJgAt4C6wPaA7QDeQNwA1MCyALvA6oCogNTAzoDdwLdAd8DRQM4AqUC0wLMAxcDAAJfAq0DmQMgAwQDdgO3AmoDqwNgA3gCaQEeA14C6wNjA1ADbAO4A6AAhQNyAjgAowPBA3gCSQL5AmoDDgDGA04A3wNOAt4DXAEKA3UAnQNaAFIDdANgATACzAN7AzgCwwMUAw4DMAL+AloCwgNiAwYDEQMhA6EBPwMjA1MBqAIeAJADVgL5AdkDIAN+A1kDPQKLA0YC8AHHAF0DdQLhAuoDAgNIA3wDSwOlA1MDGQMFAqYDLgJPAk4DVgN7A8kC/wNRA3kCXgCKA0YDeAMPAywCogM1As0DPQOCA0sCbwMDAxkDcANLAwsCagNNAiwCyQMGA1YDrgOqAtIDSAOmAscCcANYAnADtQONA2kDOgN9Av4DaQPGAP8C5AN3AucC9gKtA04DNANaAugDXAKrAKkBHgNWAtsDTAKZAwcC5wMSAx0DJwNaAw4CjwL5A2wDPgLQA1QBzAPGAigDbQNXAuoDogNTAwMDFwMAAxEAXQKKA4YDXQL0As8DXANrAtoDggKQAyEDvwLnA2UDeQHmAvkDNgNBAwoDGQI1AwcC+AItAvEDHwM8AxMDuANwA1MC0ALNAqYC3QMEA4oDUAOMAqICUANLAykCegMUAxkD2gOmAvsDewMSAtkCxQKvA18CbQOqA1kB9AJEA4kDcwOSA1sDJwMxArYAogOEA18DdAMTAs0DWwLdAyoB9wLxAkkDkwOiA2gDtANSAoQDTAK1Aq0CuQLcASQBxAOnA2MC4wMYAtkDbAM+AhwCkQMcA38DiQMkA3gCpQLiAhgC5wBVA6sDigNXArsDYgKKAxsDKgBSA1gDYgNgAw8CwQLrAuUCiANaAzkCywLFAnwC/gEuAvMDTgNBArwBGwMnA0sDaANnAO4DRANBArgCJAM7AtwDDQLzAwgDtgErAw4DSwAcA0YCWAN3AMkCtQJwA3oDewKtAekDdwK0AtAC7ANGA7gDoABiA3kCcwBlA1gDdALPAmcC/gMKAxsCmgI7AtYDugHfAuYDSQLeAnkCFQM9A3YC+QJ+A1wCyQKfAH4DfwM2AvUDVgN6AgsCsgNjA2oCVgLNAM0DZwNuA5QCggNQAyQCQwNGA0gChAMFAxoDOgJUAtIDIAMmAwECUgKfA0wDOwNIAuwDIgMCAgkCrQNvAysDdAKxAygDogMuAVwDXAOZAw0A1QNdAzQCmwN5A3oDSgO/ApsDcgO1ApsA1QN/AlwDKgNdAx0DNAL1ARMDdwMRAoICxwLPAPADQwNwA3ADBwLkAoUCvQNUApUDAgLYAo8AeANlA2EDQgMYAtcC7gNPArsCaQLxAycCPQMYA2IDfwLXAt4DDQCPA3cAMAN5AjsBbwJ8A3QDBQLxApYCwgDRAyoArgN6A2IBPwOOA3MDDgNCAqAC2QM+ArMDZgNKAlECvwJNA3QDbgLzAiMC1gLtAuMDEwLNAbUDBAN3A2wAsQNzAtoDRQMqA2YDugN8A5IAKwMYA3gDWALSAtIDWANaAoQDRgMxA5YDBAKGA3wDJAI+AnYDVwOsA5oDPgM+AmUC7AL8A10DNAMEAycC8QM0A08C/QMRA38B6AJ1A3sC/gKfAmkDAgMtAvgCzQLQAyEDwgNgA28AIwOTAwIDfQPXAJ4D0QN3AzMDBAJ+A1wDGALxAkgDOwM3Av4ChwKFAygCuwKNAuEDLAMLApcDGgLuA1EDcwNrAe8CggLmA20DAQK0ANADVgM/AOYCpAMsAywDggL9A3ECxQM+A2UDawNdAvgDyQNtAloCjgLBA2MC+wIhA1YDdANDA1oCrgNLALAC6wNBA30CoAJEALsDPAKWAnIAYAN4AFQDggAxA28DOAJeAnkDKAOdAs4CWAN2A34DlwIqAz0CwgLZAlIDeABnA9kDtgN8AxQBuANtA1IC3gLhAL0DFAJnA5kCJQN0ALMBIQC9A2gDBQNwAy0DIwL/AwACeAK2A3UCyALwAyIDBwNJA3cDOAOKAxMDewNrAmQCQACaA2cDbQKrAucDCQOpAasAWwN6AzcDLAK3AuMDKAK6A00DIQDOArYB4gNkA2IDJgO1A2wDTAL6As4CnAB1AqwDJQNyA1UDgAOvA2ADOAMtA0MDBQO6AI0B/QNlAy0DlwCeA38DhQK/A60DaQNDAtcDGwNNAz0C5ALdArwCcQLiABoDegM1AH4BygNbANoAZANVA08DiALFAo4DAQNsAuMCmwLiAnoCqQM0A28DZAMRAwYC1QOxAHEDSwN1AuACigCQA0wCzQN4AuwDAQNxAwACawN2AK4DhQOBA2wCnAKuAwIDBgMjArIDNwNoApYDTwJTAzYDagNCAOMC8QNfAsMCtwLcAwYC4wIvAwMDQAChA2QDOgOOA08BFQM4AGsDaAL8A18DIwEiApEDaALRAmYC6ALxA48C3wIVAxkDQAKJAisDJwNgAsUDDALNAr4DZgJSA1UDWQOyAWIDfQNgA04DWQNdA2ACZQLkA3kDCANQAoEDHAN6A7AA2wNQAx0DDgMPAtcCkwJZAzEDIgNdA0UC1QMEArsDkwNLAzADbwNuARIDDALwA0YCzgLaAwQCRwMnA2MDkwNdA1oDGgDYA4oAZgN/Aw4CegMCA38DhQBmAhwDfQMKAocDCQMCALkAcAM+A3ICLAIkAwoDfwM5ApwC/gLaAiwAUACeA30DgQNQA1MDPQI8Ar8DcwN4AroDFABqA1ECTALKAiQDIgMvAxkC2QMmA0wDVgNpAxIDeQDeAy0DYQMGAv4CqwKsAxkCzQKyA38CzwMAAukC6QLxAekCjgL/ApgDAAMvA08DHwLsAQcDTANlA1cCkwNqAv4ChwMeAxEDSgNGAIcDVQDwA5UCJgNuA4oDZAEcA0gCmwN0AnIDSgNuAy0CaQL2AzIAZAKAA3sCzAO0Ax0DeANJAxsCBwLrA1QDCALHArgDywKaA2EDeAKbAvsDOANrAycDbQM1Ay8DOwIzAlwC/QNdA48AmQNsAboAoQNwA3IDSgLYApoCnQL6ArEDWgN5AqgDWwNEAw0DkQLdAtQDegL/AzICvALeAv8DQQItAuoDawD/AsIDOwKBA1MAXQNVArwDLgM+A2kDXAM+AmADRQOMAjsDAANUA48C4AMKA2IDWwNbAj0DYALsAyYC1QMVA74DJANIA34DHQDyA1cDZwO+A9MCyQN7Au4DAQMKA0ACtQOVAv0DIALFAtICQgMxAv8C8wKeA3IDrwK3AyMDSALxAjECYAN0A18CswMyAwYDcgM/AqgDXAL9Au4CnQLGAuQDnQCuA20CnwDBA4YDcQL+ASUAyAMyAxgDHwMZAvQC4ALMAuQC2wNAAg8AiQNxAg8C1gCcA1oDRQI4AzADfgNCAu0CqgKUA0cDAQKrAo4C7gL9AiADGAISA4IAsANwA0gC4wKXAqYDLwLDAv0DZgNKA3cBJQMTAvkDWgK6AxkDEgKPA64DfwLtA2MDFQNlAJYDpQEGA3MDuQLQAMIDagOiA00ClANXA2wDGQNKAzUD0AKJA7YDfAKfArUA6gNUA0QC/wKbAocAzgNMArgDbQNlA2MDQgMRA6IDHQNPA0QCyQMeARIDUQPRAjoDegN4ACcDmwC2A3QCJAKrAwgDJQKZAsEDewNGAyUCtwLUArwDaACZA3ADYwKgAL4C6QN9A0wAvAIxA28CowBaAOgDcgNFAwYClAK2A38CVQFSA3wDJgOEAzkDYwBrAoMC+gNnA2wCuAHQA2sDggLlAzEDRAMoAwUCogNkAt4DHwNmA24COgNTAo8DJAMzA7sDrgNvAHsBQwOJA3gDHwKHAcYDaQCxA7EDKgN8AnsDYQOIA2wC/gMqAi4C/QN/AzkDdQM9A08DLAN9A0cDdgKEA0wDMwL8AuECvwMjAzAC7QKaApUDWAL3AsgC/gKPAzoCwQMYA1IDMAMoA3gCnAKXAzwDJgO6At4CRANqAxIBAwJ8A2sC7QKVALcDUgNXAvcDNQM+AuMDzAL6A3YDRQLuApcChALLAvAC0gM1A4YDbgKgA10AdABbAtYDfgMuA0QCdQLIAkwCrwOWA2ADuwMeALYDYQHpAMwD3gN9AwADGgN0A2MCAgCaAvwDQgNAAtEDiwM9Au8AxwMyA0gDUwM6AvMDRgM6A1sDJALmArkChALdA0wDagLQAKADJwKOAz8DoANWAGQDegNjA1cCyAG5AiQDYAMsAWUDqwNwA1sDfwLqA3wDqgIjAoMDYQM0AzECXQLTA50CbgM1A0wC2QOPAsIDKwKtAzIDRAMlAjYAZwKMA2gDVQKoAqQCvwObA7gDBgNjAtkBDwJiAy4DDwKmAkADZQOxADgDbwN4AzADAAMvAyAAwALKAgkDWQLeArQByQN0AusA5wBAA34DDwNQA1QDYgNNA6ADBgNHAHQDGgOeA1UDUQNNAnYDWANXAjYCnANqA1cC9QD/AvAC5gN2AOEDXgMdAr4CiAK+A0AC5gJ/ApQDgAMEAlsDaQNJAuECZALwAcgCrANLA3sCfwOpAkMDeQNgAHACSANrA3IDYwNXAzkDkgKFA40DRQO2AykDjgN8A1IC3gKnA04CGgNXAzEDfQMgAxACeQMVAzQC6ALOAp0C5wNSA1wDCQNfAs8CqgMVAsIAWgH8A3oDhAMDAH0DbAL5A4UAjwNTAdEDnwAlA20DkwOwA3UDUgDGA3YDXAN2Ao4DvQMuA3UDjQLmAsoDfAPRA7UC3wNpA4cC/QKxA3sDUAMkAxADMQEdApgAlQNQAz0DCwJ3As4CwwCKAyIDaQO6AM8DFAN8AvgDEwMHA28CagKQA3oDdQMJAPgAvgNTA2IAgAK6A20CCAOnApMDdQJtAnUDTAMMA5sC3QKNA2EDKQMKAI4DQwB9AkEDJANsAt8DDwMWA04DqgNwAm4DSQM4ApYDCQN6A5YCuAJ3A0ICfAM+A14DCwOqAv4C4gNNAP0DVQOgA3MDPgKfArYC6QNpAwgCcwLzAtEAPQImA2oC9wKvAd8DdQPCA0UDyQN4AsoBUgOYA2QDNwKjA1IDGAL4AwkC8wK9A0sDIAJpAuIDTQDBAUgDVAMBAvoAogNpAxgCTwOeA3wAdAN9AmIDfwK4AVwDfgNiAyQDdAMeA2IDOgLhAyMC4AK2AwYCvQNGAugCegKoA2gCrwLFALEDZANPAx0BSgMoA0sBLgCUAyUDnQJpAuoDRQItAgQDkgNFA1oDLQMQA3YCkgMAA00DHAMGAxUC2QLkAO4DdALKA0UAtQDnAtYDTABeA7cC5QNyA4wCzAOCA2UC9gLFAeoDEAMTAzMCYQMWA28C3QMDA3cDKQM+AoEDAQL5ANgC8ANbAyQDZgM/AvICVADHA2oDcADJAtwCmQNqA44ArAF3A3ADIwOFAKIDSALOA3AAzgNuArADCwMZA1IDLwMCAosCjwJGAxkC4gN+A1wC/gJeAu8DOAMjAH8DXwMkArUCjAMM="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              32,
+                              32,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u16",
+                        "row_offset": 0,
+                        "row_elements": 128,
+                        "row_pitch": 256,
+                        "rows": 32,
+                        "image_pitch": 8192,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "render",
+          "message": "Set Render Pipeline State Validation\nredundant setRenderPipelineState.\nredundant setting of <AGXG15XFamilyBuffer: 0xADDR>\n    label = <none>\n    length = 8\n    cpuCacheMode = MTLCPUCacheModeDefaultCache\n    storageMode = MTLStorageModeShared\n    hazardTrackingMode = MTLHazardTrackingModeTracked\n    resourceOptions = MTLResourceCPUCacheModeDefaultCache MTLResourceStorageModeShared MTLResourceHazardTrackingModeTracked\n    purgeableState = MTLPurgeableStateNonVolatile\n    label = <none>."
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-half-output-fast-math-blend"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 3,
+        "argument_samplers_taken": 1,
+        "argument_tables_retained": 2,
+        "bare_starts": 1,
+        "batches_held_past_a_look": 1,
+        "batches_with_none_pending": 1,
+        "bound_notices_made": 1,
+        "bound_offsets_moved": 1,
+        "command_barriers": 1,
+        "command_buffers_begun": 13,
+        "command_buffers_begun_batch_barriers": 2,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 2,
+        "command_buffers_begun_secondaries": 6,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_submitted": 7,
+        "commands_recorded.begin_command_buffer": 13,
+        "commands_recorded.cmd_begin_render_pass": 1,
+        "commands_recorded.cmd_bind_descriptor_sets": 3,
+        "commands_recorded.cmd_bind_pipeline": 3,
+        "commands_recorded.cmd_clear_color_image": 2,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_buffer_to_image": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_draw": 2,
+        "commands_recorded.cmd_end_render_pass": 1,
+        "commands_recorded.cmd_execute_commands": 1,
+        "commands_recorded.cmd_pipeline_barrier": 13,
+        "commands_recorded.cmd_push_constants": 3,
+        "commands_recorded.cmd_set_blend_constants": 2,
+        "commands_recorded.cmd_set_cull_mode": 2,
+        "commands_recorded.cmd_set_depth_bias": 2,
+        "commands_recorded.cmd_set_depth_compare_op": 2,
+        "commands_recorded.cmd_set_depth_test_enable": 2,
+        "commands_recorded.cmd_set_depth_write_enable": 2,
+        "commands_recorded.cmd_set_front_face": 2,
+        "commands_recorded.cmd_set_primitive_restart_enable": 2,
+        "commands_recorded.cmd_set_primitive_topology": 2,
+        "commands_recorded.cmd_set_scissor": 2,
+        "commands_recorded.cmd_set_stencil_compare_mask": 2,
+        "commands_recorded.cmd_set_stencil_op": 2,
+        "commands_recorded.cmd_set_stencil_reference": 2,
+        "commands_recorded.cmd_set_stencil_test_enable": 2,
+        "commands_recorded.cmd_set_stencil_write_mask": 2,
+        "commands_recorded.cmd_set_viewport": 2,
+        "commands_recorded.end_command_buffer": 13,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_made": 1,
+        "creation_render_pipelines_made": 1,
+        "descriptor_keys_built": 1,
+        "device_memory_allocated": 201334784,
+        "draw_shapes_made": 1,
+        "draw_states_recorded": 38,
+        "draws_settled": 1,
+        "driver_diagnostics_withheld": 2,
+        "encoder_command_buffers_begun": 10,
+        "fence_waits": 1,
+        "finales_apart": 1,
+        "functions_shared": 1,
+        "functions_translated": 3,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 2,
+        "heads_held_for_host_steps": 3,
+        "heap_tables_worked_out": 4,
+        "host_steps_recorded": 1,
+        "linked_use_questions_asked": 2,
+        "live_tables_uploaded": 1,
+        "new_buffer_bytes_cleared": 24752,
+        "object_churn.buffers_evicted": 11,
+        "object_churn.buffers_parked": 5,
+        "object_churn.buffers_recycled": 5,
+        "object_churn.images_evicted": 26,
+        "object_churn.images_own_memory": 2,
+        "object_churn.images_parked": 2,
+        "object_churn.images_recycled": 1,
+        "object_churn.textures_image": 2,
+        "object_churn.vk_buffers_destroyed": 11,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_image_views_made": 2,
+        "object_churn.vk_images_destroyed": 28,
+        "object_churn.vk_images_made": 3,
+        "owned_descriptor_pools": 1,
+        "owned_kernel_spirv_bytes": 1288,
+        "owned_kernels_made": 1,
+        "passes_not_inline_layouts": 1,
+        "pipeline_layouts_made": 2,
+        "pipeline_layouts_shared": 2,
+        "pipelines_pooled": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 1,
+        "render_passes_begun_instances": 1,
+        "render_passes_made": 3,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 4,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 3,
+        "scheduler_wakes_commit": 1,
+        "scheduler_wakes_host": 2,
+        "shader_modules_made": 3,
+        "shader_modules_shared": 2,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 12,
+        "stage_entries_specialized": 2,
+        "stage_tables_read": 5,
+        "stage_tables_read_in_part": 1,
+        "storage_placeholder_attachments": 1,
+        "storage_placeholders_made": 1,
+        "submit_infos": 2,
+        "trail_waits": 1,
+        "unrun_instances_ended": 1,
+        "variant_pipelines_made": 2,
+        "wakes_completion_waiters": 1,
+        "wakes_handler_threads": 1,
+        "wakes_spared": 9
+      },
+      "composed": {
+        "argument_samplers_taken": 1,
+        "command_buffers_begun": 11,
+        "command_buffers_begun_secondaries": 4,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 13,
+        "commands_recorded.end_command_buffer": 11,
+        "device_memory_allocated": 201334784,
+        "encoder_command_buffers_begun": 8,
+        "functions_translated": 3,
+        "host_steps_recorded": 0,
+        "linked_use_questions_asked": 2,
+        "owned_kernel_spirv_bytes": 1288,
+        "owned_kernels_made": 1,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 3,
+        "stage_entries_shared": 5,
+        "stage_entries_specialized": 2,
+        "storage_placeholders_made": 1
+      },
+      "ceilings": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 3
+      },
+      "per_state": {
+        "pipelines": 3,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 15.90 and ours at 21.08; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 317,
+      "times": {
+        "case": "xr-gamut-bgra10xr-srgb-over-half-x1",
+        "calls": 9,
+        "in_calls": 61014458,
+        "on_cpu": 1782458,
+        "blocked": 59250793,
+        "elsewhere": 8884209,
+        "spend": 70031708,
+        "spend_least": 58266375,
+        "spend_most": 83413000,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 11042,
+            "on_cpu": 11250,
+            "blocked": 0,
+            "wall_least": 8833,
+            "wall_most": 18667,
+            "wall_total": 59750,
+            "on_cpu_total": 60459,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 50907584,
+            "on_cpu": 1005625,
+            "blocked": 49916834,
+            "wall_least": 39718292,
+            "wall_most": 58699834,
+            "wall_total": 50907584,
+            "on_cpu_total": 1005625,
+            "blocked_total": 49916834
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 9625,
+            "on_cpu": 9917,
+            "blocked": 0,
+            "wall_least": 8291,
+            "wall_most": 17042,
+            "wall_total": 9625,
+            "on_cpu_total": 9917,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 9331500,
+            "on_cpu": 383458,
+            "blocked": 8944375,
+            "wall_least": 8534834,
+            "wall_most": 10690208,
+            "wall_total": 9331500,
+            "on_cpu_total": 383458,
+            "blocked_total": 8944375
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 239625,
+            "on_cpu": 240000,
+            "blocked": 0,
+            "wall_least": 223542,
+            "wall_most": 5717750,
+            "wall_total": 239625,
+            "on_cpu_total": 240000,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 33458,
+            "on_cpu": 33666,
+            "blocked": 0,
+            "wall_least": 31542,
+            "wall_most": 55875,
+            "wall_total": 33458,
+            "on_cpu_total": 33666,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 6167,
+            "on_cpu": 6333,
+            "blocked": 0,
+            "wall_least": 5708,
+            "wall_most": 11875,
+            "wall_total": 6167,
+            "on_cpu_total": 6333,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 15.90 and ours at 21.08; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 284,
+      "times": {
+        "case": "xr-gamut-bgra10xr-srgb-over-half-x1",
+        "calls": 9,
+        "in_calls": 15451874,
+        "on_cpu": 11781876,
+        "blocked": 3244708,
+        "elsewhere": 5637084,
+        "spend": 21636749,
+        "spend_least": 18089750,
+        "spend_most": 49028249,
+        "degraded": [
+          "metal2vulkan-degrade-half-output-fast-math-blend"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 8333,
+            "on_cpu": 8542,
+            "blocked": 0,
+            "wall_least": 7959,
+            "wall_most": 59291,
+            "wall_total": 48624,
+            "on_cpu_total": 49333,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4179041,
+            "on_cpu": 3456417,
+            "blocked": 45459,
+            "wall_least": 2850292,
+            "wall_most": 15387625,
+            "wall_total": 4179041,
+            "on_cpu_total": 3456417,
+            "blocked_total": 45459
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2958,
+            "on_cpu": 3208,
+            "blocked": 0,
+            "wall_least": 2083,
+            "wall_most": 3917,
+            "wall_total": 2958,
+            "on_cpu_total": 3208,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 5347125,
+            "on_cpu": 3122875,
+            "blocked": 1829000,
+            "wall_least": 4726458,
+            "wall_most": 9699333,
+            "wall_total": 5347125,
+            "on_cpu_total": 3122875,
+            "blocked_total": 1829000
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 4123834,
+            "on_cpu": 3122750,
+            "blocked": 1068958,
+            "wall_least": 3903583,
+            "wall_most": 18466792,
+            "wall_total": 4123834,
+            "on_cpu_total": 3122750,
+            "blocked_total": 1068958
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 179792,
+            "on_cpu": 180125,
+            "blocked": 0,
+            "wall_least": 174666,
+            "wall_most": 369167,
+            "wall_total": 179792,
+            "on_cpu_total": 180125,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8958,
+            "on_cpu": 9125,
+            "blocked": 0,
+            "wall_least": 8542,
+            "wall_most": 19625,
+            "wall_total": 8958,
+            "on_cpu_total": 9125,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

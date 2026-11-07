@@ -1,0 +1,859 @@
+{
+  "format": 1,
+  "case": "xr-clears-planes",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "xr_two_planes.ll",
+      "entry": "xr2p_read_float",
+      "source_sha256": "305db9bdf0064ff785c347dd6208391a9c302c284cac61ecae4fbc7128877844"
+    },
+    {
+      "fixture": "xr_two_planes.air.ll",
+      "entry": "xr2p_read_float",
+      "source_sha256": "ae50a7261f3dc11bc2b8e6b9ccce82e0907b13e8183e3474239452f538d397a7"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "planes:air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "305db9bdf0064ff785c347dd6208391a9c302c284cac61ecae4fbc7128877844"
+                        }
+                      }
+                    },
+                    {
+                      "name": "planes:air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ae50a7261f3dc11bc2b8e6b9ccce82e0907b13e8183e3474239452f538d397a7"
+                        }
+                      }
+                    },
+                    {
+                      "name": "format",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5c09817a86d6dce28033e2fa3b6c2d9b292548f8ad06121032a187647eaf1150"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d9f2c15aaab9843cc77c4a6786d80cf177ef8e7b06b7144ffb44466aa8d822f1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear-colors",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "16a7eb817c76471220b35440d069c7c9fe1adcf78bfa7fe1b75999bbe668c9a0"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:shape",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "64ed86b909d6d0502b64b28db0ea1272ffb358e20e9b1d88b63ccb07fa900cf5"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library/planes",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/read",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/shape",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/reads",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render/0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program/0",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "render/1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program/1",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "render/2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program/2",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "render/3",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program/3",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "render/4",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program/4",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "render/5",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program/5",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "render/6",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program/6",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "render/7",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program/7",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back/reads",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "reads",
+                  "observed": {
+                    "value": {
+                      "bytes": "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k5ISPpOSEj6TkhI+kZAQPpOSEj6TkhI+k5ISPpGQED6TkhI+k5ISPpOSEj6RkBA+k5ISPpOSEj6TkhI+kZAQPrOyMj6zsjI+s7IyPrGwMD6zsjI+s7IyPrOyMj6xsDA+s7IyPrOyMj6zsjI+sbAwPrOyMj6zsjI+s7IyPrGwMD6zsjI+s7IyPrOyMj6xsDA+09JSPtPSUj7T0lI+0dBQPtPSUj7T0lI+09JSPtHQUD7T0lI+09JSPtPSUj7R0FA+09JSPtPSUj7T0lI+0dBQPtPSUj7T0lI+09JSPtHQUD7z8nI+8/JyPvPycj7x8HA+8/JyPvPycj7z8nI+8fBwPvPycj7z8nI+8/JyPvHwcD7z8nI+8/JyPvPycj7x8HA+8/JyPvPycj7z8nI+8fBwPomIiD6JiIg+iYiIPomIiD6JiIg+iYiIPomIiD6JiIg+iYiIPomIiD6JiIg+iYiIPomIiD6JiIg+iYiIPomIiD6JiIg+iYiIPomIiD6JiIg+mpmZPpqZmT6amZk+mZiYPpqZmT6amZk+mpmZPpmYmD6amZk+mpmZPpqZmT6ZmJg+mpmZPpqZmT6amZk+mZiYPpqZmT6amZk+mpmZPpmYmD6pqKg+qaioPqmoqD6pqKg+qaioPqmoqD6pqKg+qaioPqmoqD6pqKg+qaioPqmoqD6pqKg+qaioPqmoqD6pqKg+qaioPqmoqD6pqKg+qaioPrq5uT66ubk+urm5Prm4uD66ubk+urm5Prq5uT65uLg+urm5Prq5uT66ubk+ubi4Prq5uT66ubk+urm5Prm4uD66ubk+urm5Prq5uT65uLg+ycjIPsnIyD7JyMg+ycjIPsnIyD7JyMg+ycjIPsnIyD7JyMg+ycjIPsnIyD7JyMg+ycjIPsnIyD7JyMg+ycjIPsnIyD7JyMg+ycjIPsnIyD7a2dk+2tnZPtrZ2T7Z2Ng+2tnZPtrZ2T7a2dk+2djYPtrZ2T7a2dk+2tnZPtnY2D7a2dk+2tnZPtrZ2T7Z2Ng+2tnZPtrZ2T7a2dk+2djYPuno6D7p6Og+6ejoPuno6D7p6Og+6ejoPuno6D7p6Og+6ejoPuno6D7p6Og+6ejoPuno6D7p6Og+6ejoPuno6D7p6Og+6ejoPuno6D7p6Og++vn5Pvr5+T76+fk++fj4Pvr5+T76+fk++vn5Pvn4+D76+fk++vn5Pvr5+T75+Pg++vn5Pvr5+T76+fk++fj4Pvr5+T76+fk++vn5Pvn4+D6FhAQ/hYQEP4WEBD+FhAQ/hYQEP4WEBD+FhAQ/hYQEP4WEBD+FhAQ/hYQEP4WEBD+FhAQ/hYQEP4WEBD+FhAQ/hYQEP4WEBD+FhAQ/hYQEP42MDD+NjAw/jYwMP42MDD+NjAw/jYwMP42MDD+NjAw/jYwMP42MDD+NjAw/jYwMP42MDD+NjAw/jYwMP42MDD+NjAw/jYwMP42MDD+NjAw/FRUVPxUVFT8VFRU/lZQUPxUVFT8VFRU/FRUVP5WUFD8VFRU/FRUVPxUVFT+VlBQ/FRUVPxUVFT8VFRU/lZQUPxUVFT8VFRU/FRUVP5WUFD8dHR0/HR0dPx0dHT+dnBw/HR0dPx0dHT8dHR0/nZwcPx0dHT8dHR0/HR0dP52cHD8dHR0/HR0dPx0dHT+dnBw/HR0dPx0dHT8dHR0/nZwcP6WkJD+lpCQ/paQkP6WkJD+lpCQ/paQkP6WkJD+lpCQ/paQkP6WkJD+lpCQ/paQkP6WkJD+lpCQ/paQkP6WkJD+lpCQ/paQkP6WkJD+lpCQ/rawsP62sLD+trCw/rawsP62sLD+trCw/rawsP62sLD+trCw/rawsP62sLD+trCw/rawsP62sLD+trCw/rawsP62sLD+trCw/rawsP62sLD81NTU/NTU1PzU1NT+1tDQ/NTU1PzU1NT81NTU/tbQ0PzU1NT81NTU/NTU1P7W0ND81NTU/NTU1PzU1NT+1tDQ/NTU1PzU1NT81NTU/tbQ0Pz09PT89PT0/PT09P728PD89PT0/PT09Pz09PT+9vDw/PT09Pz09PT89PT0/vbw8Pz09PT89PT0/PT09P728PD89PT0/PT09Pz09PT+9vDw/xcREP8XERD/FxEQ/xcREP8XERD/FxEQ/xcREP8XERD/FxEQ/xcREP8XERD/FxEQ/xcREP8XERD/FxEQ/xcREP8XERD/FxEQ/xcREP8XERD/NzEw/zcxMP83MTD/NzEw/zcxMP83MTD/NzEw/zcxMP83MTD/NzEw/zcxMP83MTD/NzEw/zcxMP83MTD/NzEw/zcxMP83MTD/NzEw/zcxMP1VVVT9VVVU/VVVVP9XUVD9VVVU/VVVVP1VVVT/V1FQ/VVVVP1VVVT9VVVU/1dRUP1VVVT9VVVU/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FRUVPxUVFT8VFRU/lpUVPxUVFT8VFRU/FRUVP5aVFT8VFRU/FRUVPxUVFT+WlRU/FRUVPxUVFT8VFRU/lpUVPyUlJT8lJSU/JSUlP6WkJD8lJSU/JSUlPyUlJT+lpCQ/JSUlPyUlJT8lJSU/paQkPyUlJT8lJSU/JSUlP6WkJD8lJSU/JSUlPyUlJT+lpCQ/NTU1PzU1NT81NTU/trU1PzU1NT81NTU/NTU1P7a1NT81NTU/NTU1PzU1NT+2tTU/NTU1PzU1NT81NTU/trU1PzU1NT81NTU/NTU1P7a1NT9FRUU/RUVFP0VFRT/FxEQ/RUVFP0VFRT9FRUU/xcREP0VFRT9FRUU/RUVFP8XERD9FRUU/RUVFP0VFRT/FxEQ/RUVFP0VFRT9FRUU/xcREP1VVVT9VVVU/VVVVP9bVVT9VVVU/VVVVP1VVVT/W1VU/VVVVP1VVVT9VVVU/1tVVP1VVVT9VVVU/VVVVP9bVVT9VVVU/VVVVP1VVVT/W1VU/ZWVlP2VlZT9lZWU/5eRkP2VlZT9lZWU/ZWVlP+XkZD9lZWU/ZWVlP2VlZT/l5GQ/ZWVlP2VlZT9lZWU/5eRkP2VlZT9lZWU/ZWVlP+XkZD91dXU/dXV1P3V1dT/29XU/dXV1P3V1dT91dXU/9vV1P3V1dT91dXU/dXV1P/b1dT91dXU/dXV1P3V1dT/29XU/dXV1P3V1dT91dXU/9vV1Pw=="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "buffer": {
+                            "offset": 0,
+                            "length": 7744
+                          }
+                        },
+                        "element": "f32",
+                        "row_offset": 0,
+                        "row_elements": 4,
+                        "row_pitch": 16,
+                        "rows": 484,
+                        "image_pitch": 7744,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 3,
+        "argument_objects_retained": 1452,
+        "argument_tables_retained": 484,
+        "bare_starts": 8,
+        "batches_held_past_a_look": 1,
+        "batches_submitted_by_waiters": 7,
+        "batches_with_none_pending": 8,
+        "bound_notices_made": 1,
+        "command_buffers_begun": 2542,
+        "command_buffers_begun_batch_barriers": 961,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 64,
+        "command_buffers_begun_encoders": 968,
+        "command_buffers_begun_secondaries": 484,
+        "command_buffers_begun_segments": 64,
+        "command_buffers_deferred": 1580,
+        "command_buffers_submitted": 2058,
+        "commands_recorded.begin_command_buffer": 2542,
+        "commands_recorded.cmd_begin_render_pass": 484,
+        "commands_recorded.cmd_bind_descriptor_sets": 484,
+        "commands_recorded.cmd_bind_pipeline": 484,
+        "commands_recorded.cmd_clear_color_image": 2,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_dispatch": 484,
+        "commands_recorded.cmd_end_render_pass": 484,
+        "commands_recorded.cmd_execute_commands": 484,
+        "commands_recorded.cmd_pipeline_barrier": 971,
+        "commands_recorded.cmd_push_constants": 484,
+        "commands_recorded.end_command_buffer": 2542,
+        "commits_handed_off": 8,
+        "commits_taken_in": 8,
+        "completed_waits": 11,
+        "completed_where_seen": 8,
+        "completion_arms": 8,
+        "completion_arms_after_a_wake": 8,
+        "completion_waiter_parks": 8,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 201326848,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "dispatches_planned_as_before": 483,
+        "encoder_command_buffers_begun": 1580,
+        "fence_waits": 8,
+        "finales_apart": 1,
+        "finales_folded": 7,
+        "functions_shared": 2,
+        "functions_translated": 2,
+        "gate_waits": 8,
+        "gate_waits_slept": 8,
+        "heads_held_for_host_steps": 5,
+        "heap_tables_worked_out": 1,
+        "host_steps_recorded": 1,
+        "new_buffer_bytes_cleared": 9696,
+        "object_churn.buffers_evicted": 17,
+        "object_churn.buffers_parked": 3,
+        "object_churn.buffers_recycled": 3,
+        "object_churn.images_evicted": 2,
+        "object_churn.images_own_memory": 1,
+        "object_churn.images_parked": 1,
+        "object_churn.textures_image": 1,
+        "object_churn.vk_buffers_destroyed": 17,
+        "object_churn.vk_image_bindings": 1,
+        "object_churn.vk_image_views_made": 2,
+        "object_churn.vk_images_destroyed": 4,
+        "object_churn.vk_images_made": 3,
+        "passes_not_inline_layouts": 484,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 8,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 484,
+        "render_passes_begun_instances": 484,
+        "render_passes_made": 2,
+        "resident_textures_looked_at": 484,
+        "scheduled_where_submitted": 8,
+        "scheduler_passes": 7,
+        "scheduler_passes_by_waiters": 8,
+        "scheduler_sleeps": 12,
+        "scheduler_wakes_commit": 8,
+        "scheduler_wakes_host": 4,
+        "set_zero_sets_found": 476,
+        "shader_modules_made": 2,
+        "slot_returns": 8,
+        "spare_command_pools_taken": 8,
+        "stage_entries_shared": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 9,
+        "trail_waits": 8,
+        "variant_pipelines_made": 2,
+        "variants_taken_back": 2,
+        "wakes_completion_waiters": 8,
+        "wakes_spared": 118
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 4,
+        "command_buffers_begun": 2416,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 1454,
+        "command_buffers_submitted": 1932,
+        "commands_recorded.end_command_buffer": 1454,
+        "encoder_command_buffers_begun": 1454,
+        "gate_waits_slept": 7,
+        "host_steps_recorded": 0
+      },
+      "composed": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 1,
+        "command_buffers_begun": 2416,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 1932,
+        "commands_recorded.cmd_clear_color_image": 2,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 971,
+        "commands_recorded.end_command_buffer": 2416,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 201326720,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 1454,
+        "functions_translated": 2,
+        "host_steps_recorded": 0,
+        "pipeline_layouts_made": 1,
+        "pooled_memory_blocks_made": 3,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 2,
+        "shader_modules_made": 2,
+        "stage_entries_shared": 1,
+        "stage_entries_specialized": 1,
+        "variant_pipelines_made": 1
+      },
+      "ceilings": {
+        "pipeline_layouts_made": 2
+      },
+      "per_state": {
+        "pipelines": 1,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "xr-clears-planes",
+        "calls": 15,
+        "in_calls": 63924461,
+        "on_cpu": 5019626,
+        "blocked": 58953250,
+        "elsewhere": 15754209,
+        "spend": 79515086,
+        "spend_least": 77468374,
+        "spend_most": 81259000,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 21500,
+            "on_cpu": 21625,
+            "blocked": 0,
+            "wall_least": 19416,
+            "wall_most": 29208,
+            "wall_total": 21500,
+            "on_cpu_total": 21625,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 81375,
+            "on_cpu": 81542,
+            "blocked": 0,
+            "wall_least": 72708,
+            "wall_most": 91458,
+            "wall_total": 81375,
+            "on_cpu_total": 81542,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23007000,
+            "on_cpu": 662708,
+            "blocked": 22367375,
+            "wall_least": 22896834,
+            "wall_most": 24072291,
+            "wall_total": 23007000,
+            "on_cpu_total": 662708,
+            "blocked_total": 22367375
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1000,
+            "on_cpu": 1167,
+            "blocked": 0,
+            "wall_least": 667,
+            "wall_most": 1792,
+            "wall_total": 1000,
+            "on_cpu_total": 1167,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 4090542,
+            "on_cpu": 449209,
+            "blocked": 3626708,
+            "wall_least": 3641084,
+            "wall_most": 4262667,
+            "wall_total": 40607082,
+            "on_cpu_total": 4228460,
+            "blocked_total": 36324040
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 21000,
+            "on_cpu": 21125,
+            "blocked": 0,
+            "wall_least": 19042,
+            "wall_most": 25000,
+            "wall_total": 21000,
+            "on_cpu_total": 21125,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2000,
+            "on_cpu": 2125,
+            "blocked": 0,
+            "wall_least": 1708,
+            "wall_most": 2542,
+            "wall_total": 4375,
+            "on_cpu_total": 4541,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "xr-clears-planes",
+        "calls": 15,
+        "in_calls": 39207125,
+        "on_cpu": 4311541,
+        "blocked": 34803123,
+        "elsewhere": 14955583,
+        "spend": 54132581,
+        "spend_least": 52045165,
+        "spend_most": 63233830,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3750,
+            "on_cpu": 3916,
+            "blocked": 0,
+            "wall_least": 2208,
+            "wall_most": 18250,
+            "wall_total": 3750,
+            "on_cpu_total": 3916,
+            "blocked_total": 0
+          },
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 46458,
+            "on_cpu": 46750,
+            "blocked": 0,
+            "wall_least": 37333,
+            "wall_most": 60583,
+            "wall_total": 46458,
+            "on_cpu_total": 46750,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 149584,
+            "on_cpu": 153333,
+            "blocked": 0,
+            "wall_least": 140625,
+            "wall_most": 175125,
+            "wall_total": 149584,
+            "on_cpu_total": 153333,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 625,
+            "on_cpu": 791,
+            "blocked": 0,
+            "wall_least": 458,
+            "wall_most": 917,
+            "wall_total": 625,
+            "on_cpu_total": 791,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 8,
+            "most_calls": 8,
+            "wall": 4963084,
+            "on_cpu": 497792,
+            "blocked": 4421250,
+            "wall_least": 4528333,
+            "wall_most": 5975250,
+            "wall_total": 38980625,
+            "on_cpu_total": 4036292,
+            "blocked_total": 34803123
+          },
+          {
+            "call": "target",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 25750,
+            "on_cpu": 25916,
+            "blocked": 0,
+            "wall_least": 21375,
+            "wall_most": 34666,
+            "wall_total": 25750,
+            "on_cpu_total": 25916,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 708,
+            "on_cpu": 834,
+            "blocked": 0,
+            "wall_least": 625,
+            "wall_most": 958,
+            "wall_total": 1791,
+            "on_cpu_total": 2041,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,1075 @@
+{
+  "format": 1,
+  "case": "pass-start-barrier-new-texture-chain",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "psb_reads.ll",
+      "entry": "psb_rect+psb_solid+psb_read+psb_sample+psb_masked+psb_under",
+      "source_sha256": "6233968f3935bb2b18bc3addaa89eef1ece4c1e4482306dcbc80a1b330bb1f2b"
+    },
+    {
+      "fixture": "psb_reads.air.ll",
+      "entry": "psb_rect+psb_solid+psb_read+psb_sample+psb_masked+psb_under",
+      "source_sha256": "acdac26065af4bc16e6066e9e9c15ab715e49682d40b9d9100470f5e914f1d9a"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air:psb_reads",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6233968f3935bb2b18bc3addaa89eef1ece4c1e4482306dcbc80a1b330bb1f2b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed:psb_reads",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "acdac26065af4bc16e6066e9e9c15ab715e49682d40b9d9100470f5e914f1d9a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pipeline:psb_read",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ebb52f7e5891201601b69e03ba26e07f387c7c5f741165c6d3481450100c4d09"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pipeline:psb_masked",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "258370be8469e7539c7c0b47e499f61b06505542d73d008e35d05514ff279c1d"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pipeline:psb_under",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ea7a95ec0e937e69975b4f5d1c06879369eee6413489407a6288be42c60c4b44"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "dab42a33337b3c696f7060f7b7b4fcb946d10bce477803c577432c3d7982a9cc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "dab42a33337b3c696f7060f7b7b4fcb946d10bce477803c577432c3d7982a9cc"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target:2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "86044356327684e040f048549243421b15465924a5f8c3b0aab8559568857e4f"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "59b65efad5571ab025ff821a9f738c6d4f41adf12502b08441751aeb688ffb51"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:0",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ece1a834901fad1d0e78392a4b0470638a29fb20f9e45c3c14c31de7f7df45b6"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:1",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ffcfc7b034c9c51117d7f06fb019524f9a283505d1a48ece4113b20d30857421"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pass:2",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f4e895b574eed0e2bfc1d1b593bbbcacd209c41225246ee069e2fd2a3a5a5004"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline:psb_read",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline:psb_masked",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline:psb_under",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back:0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back:1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer:2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target:2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "read-back:2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pieces",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "0-renderCommandEncoder",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "1-renderCommandEncoder",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "2-renderCommandEncoder",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "3-copyFromTextureToBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "4-copyFromTextureToBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "5-copyFromTextureToBuffer",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Ok",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read:0",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texels-0",
+                  "observed": {
+                    "value": {
+                      "list": [
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 0
+                            },
+                            "rows": {
+                              "uint": 521
+                            },
+                            "texels": {
+                              "list": [
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 0
+                                    },
+                                    "texel": {
+                                      "bytes": "AP///w=="
+                                    },
+                                    "texels": {
+                                      "uint": 841
+                                    }
+                                  }
+                                },
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 841
+                                    },
+                                    "texel": {
+                                      "bytes": "AAAAAA=="
+                                    },
+                                    "texels": {
+                                      "uint": 55
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 521
+                            },
+                            "rows": {
+                              "uint": 55
+                            },
+                            "texels": {
+                              "list": [
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 0
+                                    },
+                                    "texel": {
+                                      "bytes": "AAAAAA=="
+                                    },
+                                    "texels": {
+                                      "uint": 896
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "read:1",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texels-1",
+                  "observed": {
+                    "value": {
+                      "list": [
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 0
+                            },
+                            "rows": {
+                              "uint": 521
+                            },
+                            "texels": {
+                              "list": [
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 0
+                                    },
+                                    "texel": {
+                                      "bytes": "AP///w=="
+                                    },
+                                    "texels": {
+                                      "uint": 841
+                                    }
+                                  }
+                                },
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 841
+                                    },
+                                    "texel": {
+                                      "bytes": "AAAAAA=="
+                                    },
+                                    "texels": {
+                                      "uint": 55
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 521
+                            },
+                            "rows": {
+                              "uint": 55
+                            },
+                            "texels": {
+                              "list": [
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 0
+                                    },
+                                    "texel": {
+                                      "bytes": "AAAAAA=="
+                                    },
+                                    "texels": {
+                                      "uint": 896
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "read:2",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texels-2",
+                  "observed": {
+                    "value": {
+                      "list": [
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 0
+                            },
+                            "rows": {
+                              "uint": 521
+                            },
+                            "texels": {
+                              "list": [
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 0
+                                    },
+                                    "texel": {
+                                      "bytes": "//8AwA=="
+                                    },
+                                    "texels": {
+                                      "uint": 841
+                                    }
+                                  }
+                                },
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 841
+                                    },
+                                    "texel": {
+                                      "bytes": "UGBwwA=="
+                                    },
+                                    "texels": {
+                                      "uint": 55
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "fields": {
+                            "at": {
+                              "uint": 521
+                            },
+                            "rows": {
+                              "uint": 55
+                            },
+                            "texels": {
+                              "list": [
+                                {
+                                  "fields": {
+                                    "at": {
+                                      "uint": 0
+                                    },
+                                    "texel": {
+                                      "bytes": "UGBwwA=="
+                                    },
+                                    "texels": {
+                                      "uint": 896
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": {
+        "stopped": {
+          "call": "render",
+          "message": "Memory Barrier With Scope Validation\nscope (0x4) cannot contain MTLBarrierScopeRenderTargets on this device\nafterStages (0x2) can not contain MTLRenderStageTile or MTLRenderStageFragment on this device\nFragment Function(psb_read): uses Texture binding at index 0 for t[0] which is also a color attachment at index 0. This may be a conflict as the color attachment's storeAction == MTLStoreActionStore and writeMask != MTLColorWriteMaskNone.\nMemory Barrier With Scope Validation\nscope (0x4) cannot contain MTLBarrierScopeRenderTargets on this device\nafterStages (0x2) can not contain MTLRenderStageTile or MTLRenderStageFragment on this device\nFragment Function(psb_masked): uses Texture binding at index 0 for t[0] which is also a color attachment at index 0. This may be a conflict as the color attachment's storeAction == MTLStoreActionStore and writeMask != MTLColorWriteMaskNone.\nMemory Barrier With Scope Validation\nscope (0x4) cannot contain MTLBarrierScopeRenderTargets on this device\nafterStages (0x2) can not contain MTLRenderStageTile or MTLRenderStageFragment on this device\nFragment Function(psb_under): uses Texture binding at index 0 for t[0] which is also a color attachment at index 0. This may be a conflict as the color attachment's storeAction == MTLStoreActionStore and writeMask != MTLColorWriteMaskNone."
+        }
+      }
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 5,
+        "argument_samplers_taken": 3,
+        "argument_tables_retained": 3,
+        "attachment_read_clears": 2,
+        "attachment_reads_through_copies": 3,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "bind_views_worked_out": 5,
+        "command_buffers_begun": 15,
+        "command_buffers_begun_batch_barriers": 5,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_continuations": 3,
+        "command_buffers_begun_encoders": 6,
+        "command_buffers_submitted": 15,
+        "commands_recorded.begin_command_buffer": 15,
+        "commands_recorded.cmd_begin_render_pass": 3,
+        "commands_recorded.cmd_bind_descriptor_sets": 3,
+        "commands_recorded.cmd_bind_pipeline": 3,
+        "commands_recorded.cmd_clear_color_image": 5,
+        "commands_recorded.cmd_copy_buffer": 2,
+        "commands_recorded.cmd_copy_buffer_to_image": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 2,
+        "commands_recorded.cmd_draw": 3,
+        "commands_recorded.cmd_end_render_pass": 3,
+        "commands_recorded.cmd_pipeline_barrier": 15,
+        "commands_recorded.cmd_push_constants": 3,
+        "commands_recorded.cmd_set_blend_constants": 3,
+        "commands_recorded.cmd_set_cull_mode": 3,
+        "commands_recorded.cmd_set_depth_bias": 3,
+        "commands_recorded.cmd_set_depth_compare_op": 3,
+        "commands_recorded.cmd_set_depth_test_enable": 3,
+        "commands_recorded.cmd_set_depth_write_enable": 3,
+        "commands_recorded.cmd_set_front_face": 3,
+        "commands_recorded.cmd_set_primitive_restart_enable": 3,
+        "commands_recorded.cmd_set_primitive_topology": 3,
+        "commands_recorded.cmd_set_scissor": 3,
+        "commands_recorded.cmd_set_stencil_compare_mask": 3,
+        "commands_recorded.cmd_set_stencil_op": 3,
+        "commands_recorded.cmd_set_stencil_reference": 3,
+        "commands_recorded.cmd_set_stencil_test_enable": 3,
+        "commands_recorded.cmd_set_stencil_write_mask": 3,
+        "commands_recorded.cmd_set_viewport": 3,
+        "commands_recorded.end_command_buffer": 15,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 3,
+        "creation_pipelines_made": 3,
+        "creation_render_pipelines_drawn": 3,
+        "creation_render_pipelines_made": 3,
+        "descriptor_keys_built": 3,
+        "device_memory_allocated": 201326720,
+        "draw_shapes_made": 3,
+        "draw_states_recorded": 57,
+        "draws_settled": 3,
+        "driver_diagnostics_withheld": 3,
+        "encoder_command_buffers_begun": 9,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 1,
+        "functions_translated": 4,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 3,
+        "heap_tables_worked_out": 6,
+        "inline_passes": 3,
+        "linked_use_questions_asked": 6,
+        "new_buffer_bytes_cleared": 8257536,
+        "object_churn.buffers_evicted": 4,
+        "object_churn.buffers_parked": 5,
+        "object_churn.buffers_recycled": 1,
+        "object_churn.images_evicted": 5,
+        "object_churn.images_in_buffers": 1,
+        "object_churn.images_other": 2,
+        "object_churn.images_own_memory": 3,
+        "object_churn.images_parked": 5,
+        "object_churn.making_sites_dropped": 2,
+        "object_churn.textures_alias": 1,
+        "object_churn.textures_image": 2,
+        "object_churn.vk_buffer_bindings": 4,
+        "object_churn.vk_buffers_destroyed": 4,
+        "object_churn.vk_buffers_made": 4,
+        "object_churn.vk_image_bindings": 6,
+        "object_churn.vk_image_views_made": 8,
+        "object_churn.vk_images_destroyed": 8,
+        "object_churn.vk_images_made": 8,
+        "own_pixel_reads": 3,
+        "pipeline_layouts_made": 2,
+        "pipeline_layouts_shared": 1,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 3,
+        "render_passes_begun_inline": 3,
+        "render_passes_made": 3,
+        "resident_textures_looked_at": 3,
+        "row_copies": 1,
+        "row_copy_regions": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "shader_modules_made": 4,
+        "shader_modules_shared": 1,
+        "shadow_copies": 1,
+        "shadow_texels_copied_in": 439524,
+        "shadow_texels_first_copied_in": 439524,
+        "shadow_texels_first_copied_in_mapped_buffers": 439524,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 15,
+        "stage_entries_specialized": 4,
+        "stage_tables_read": 12,
+        "submit_infos": 1,
+        "trail_waits": 1,
+        "variant_pipelines_made": 3,
+        "variants_taken_back": 2,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0
+      },
+      "composed": {
+        "argument_samplers_taken": 3,
+        "commands_recorded.cmd_clear_color_image": 5,
+        "commands_recorded.cmd_copy_buffer": 2,
+        "commands_recorded.cmd_pipeline_barrier": 15,
+        "creation_pipelines_drawn": 3,
+        "creation_render_pipelines_drawn": 3,
+        "creation_render_pipelines_made": 3,
+        "device_memory_allocated": 201326720,
+        "driver_diagnostics_withheld": 3,
+        "functions_translated": 4,
+        "linked_use_questions_asked": 6,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 3,
+        "stage_entries_shared": 15,
+        "stage_entries_specialized": 4
+      },
+      "ceilings": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 1,
+        "creation_pipelines_made": 3,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 4,
+        "variant_pipelines_made": 3
+      },
+      "per_state": {
+        "pipelines": 2,
+        "states": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 182.91 and ours at 178.06; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 358,
+      "times": {
+        "case": "pass-start-barrier-new-texture-chain",
+        "calls": 17,
+        "in_calls": 68593125,
+        "on_cpu": 4186499,
+        "blocked": 63965583,
+        "elsewhere": 11171500,
+        "spend": 79043125,
+        "spend_least": 69298627,
+        "spend_most": 112809293,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 301542,
+            "on_cpu": 302458,
+            "blocked": 0,
+            "wall_least": 152916,
+            "wall_most": 435750,
+            "wall_total": 301542,
+            "on_cpu_total": 302458,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 54382708,
+            "on_cpu": 1169833,
+            "blocked": 53222000,
+            "wall_least": 45697542,
+            "wall_most": 86490250,
+            "wall_total": 54382708,
+            "on_cpu_total": 1169833,
+            "blocked_total": 53222000
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 225792,
+            "on_cpu": 226917,
+            "blocked": 0,
+            "wall_least": 123583,
+            "wall_most": 285167,
+            "wall_total": 696792,
+            "on_cpu_total": 699667,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 12330250,
+            "on_cpu": 816292,
+            "blocked": 11458083,
+            "wall_least": 11543917,
+            "wall_most": 14318542,
+            "wall_total": 12330250,
+            "on_cpu_total": 816292,
+            "blocked_total": 11458083
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 144458,
+            "on_cpu": 145000,
+            "blocked": 0,
+            "wall_least": 68625,
+            "wall_most": 186708,
+            "wall_total": 974667,
+            "on_cpu_total": 978582,
+            "blocked_total": 10208
+          },
+          {
+            "call": "target",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 38958,
+            "on_cpu": 39500,
+            "blocked": 0,
+            "wall_least": 16792,
+            "wall_most": 55500,
+            "wall_total": 178542,
+            "on_cpu_total": 159916,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 33167,
+            "on_cpu": 33792,
+            "blocked": 0,
+            "wall_least": 10333,
+            "wall_most": 40459,
+            "wall_total": 98167,
+            "on_cpu_total": 99750,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 182.91 and ours at 178.06; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 358,
+      "times": {
+        "case": "pass-start-barrier-new-texture-chain",
+        "calls": 17,
+        "in_calls": 7094539,
+        "on_cpu": 5214791,
+        "blocked": 1888083,
+        "elsewhere": 514167,
+        "spend": 7608706,
+        "spend_least": 6876959,
+        "spend_most": 14154124,
+        "degraded": [
+          "metal2vulkan-degrade-render-pass-split"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 127459,
+            "on_cpu": 127708,
+            "blocked": 0,
+            "wall_least": 117750,
+            "wall_most": 153791,
+            "wall_total": 127459,
+            "on_cpu_total": 127708,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1271208,
+            "on_cpu": 1226791,
+            "blocked": 47958,
+            "wall_least": 1189250,
+            "wall_most": 3504125,
+            "wall_total": 1271208,
+            "on_cpu_total": 1226791,
+            "blocked_total": 47958
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 38125,
+            "on_cpu": 35250,
+            "blocked": 0,
+            "wall_least": 29708,
+            "wall_most": 105833,
+            "wall_total": 153291,
+            "on_cpu_total": 129333,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3909375,
+            "on_cpu": 2198334,
+            "blocked": 1525291,
+            "wall_least": 3541208,
+            "wall_most": 6368959,
+            "wall_total": 3909375,
+            "on_cpu_total": 2198334,
+            "blocked_total": 1525291
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 5,
+            "most_calls": 5,
+            "wall": 99167,
+            "on_cpu": 99458,
+            "blocked": 0,
+            "wall_least": 94375,
+            "wall_most": 344750,
+            "wall_total": 834790,
+            "on_cpu_total": 836668,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 57833,
+            "on_cpu": 58125,
+            "blocked": 0,
+            "wall_least": 56209,
+            "wall_most": 397750,
+            "wall_total": 309042,
+            "on_cpu_total": 310043,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 3,
+            "most_calls": 3,
+            "wall": 89250,
+            "on_cpu": 89459,
+            "blocked": 0,
+            "wall_least": 85792,
+            "wall_most": 188666,
+            "wall_total": 284625,
+            "on_cpu_total": 285333,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,707 @@
+{
+  "format": 1,
+  "case": "etc2-rgb8-srgb",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "format_scout.ll",
+      "entry": "scout_read_f",
+      "source_sha256": "3d6a9f693cb8eaa851e08e12bcce2afce2890bf3973e9b47312f5e18f2157cb9"
+    },
+    {
+      "fixture": "format_scout.air.ll",
+      "entry": "scout_read_f",
+      "source_sha256": "3631bf570501999cd192eacf86330e5c45cc74b914cdda669586ada3838dc110"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3d6a9f693cb8eaa851e08e12bcce2afce2890bf3973e9b47312f5e18f2157cb9"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "3631bf570501999cd192eacf86330e5c45cc74b914cdda669586ada3838dc110"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:zero-blocks",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e147c4e4a63bde5f8121e3411851dff9b638b6b3b87d9caf82f37cc410b46ae0"
+                        }
+                      }
+                    },
+                    {
+                      "name": "texture:seeded-blocks",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fd3bfeef1589854420c92a7085abcfdab28d32058e10da31407bb49a278837d1"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "zero-blocks/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "zero-blocks/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "zero-blocks/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "zero-blocks/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "zero-blocks/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "zero-blocks",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPwEIADoBCAA6AQgAOgAAgD8BCAA6AQgAOgEIADoAAIA/AQgAOgEIADoBCAA6AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "seeded-blocks/texture",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "seeded-blocks/buffer",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "seeded-blocks/dispatch",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "seeded-blocks/status",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "seeded-blocks/read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "seeded-blocks",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "texels",
+                      "observed": {
+                        "value": {
+                          "bytes": "vLgLP7y4Cz8/7uM+AACAP7y4Cz+8uAs/P+7jPgAAgD8AAIA/Z2u2PgAAgD8AAIA/GHohPzmJEz4YeiE/AACAPwEJEDsBCRA7gQooPQAAgD9hDdY9YQ3WPYdoiD4AAIA/+Y7vPTMpkz7dzM0+AACAPwAAAADhC7488Q1fPQAAgD8/7uM+vLgLPzELMz0AAIA/My3TPiVIAj8hCRI9AACAPzMt0z4lSAI/IQkSPQAAgD8/7uM+vLgLPzELMz0AAIA/IyiCPoEMyD0BDuA6AACAP5uu6T5JjmQ+IQ/yPAAAgD/9yi8/NUzDPlmLtT0AAIA//covPzVMwz5Zi7U9AACAP4dv+D6Hb/g+h2zIPgAAgD9tzuY+bc7mPpELuT4AAIA/GHohPzmJEz4YeiE/AACAP23O5j6BCZg9bc7mPgAAgD9hDdY9YQ3WPYdoiD4AAIA/YQ3WPWEN1j2HaIg+AACAP/mO7z0zKZM+3czNPgAAgD8AAAAA4Qu+PPENXz0AAIA/h2zIPodv+D7BD/w8AACAPzMt0z4lSAI/IQkSPQAAgD+HbMg+h2/4PsEP/DwAAIA/My3TPiVIAj8hCRI9AACAPyMogj6BDMg9AQ7gOgAAgD/9yi8/NUzDPlmLtT0AAIA/m67pPkmOZD4hD/I8AACAP/3KLz81TMM+WYu1PQAAgD+8uAs/vLgLPz/u4z4AAIA/JUgCPyVIAj8zLdM+AACAPxh6IT85iRM+GHohPwAAgD8AAIA/Z2u2PgAAgD8AAIA/UQxFPVEMRT1hCiY+AACAP2EN1j1hDdY9h2iIPgAAgD8AAAAAAAAAAAEMQDsAAIA/4QquPBmN0T3FSiw+AACAPz/u4z5na7Y+AAAAAAAAgD8AAIA/0P1cP6EIijwAAIA/dDs3P4/pGD8AAAAAAACAPwAAgD/Q/Vw/oQiKPAAAgD+Lrdg+n+mZPvENXz0AAIA/AACAP7dvez/dzM0+AACAPwAAgD+3b3s/3czNPgAAgD+Zizk+AQ7gPQEMQDsAAIA/vLgLP7y4Cz8/7uM+AACAP4dv+D6Hb/g+h2zIPgAAgD8qnVI/xU5sPiqdUj8AAIA/bc7mPoEJmD1tzuY+AACAP1EMRT1RDEU9YQomPgAAgD9hDdY9YQ3WPYdoiD4AAIA/AAAAAAAAAAABDEA7AACAP+EKrjwZjdE9xUosPgAAgD8/7uM+Z2u2PgAAAAAAAIA/AACAPwAAgD+BCZg9AACAPwAAgD8AAIA/gQmYPQAAgD8AAIA/0P1cP6EIijwAAIA/i63YPp/pmT7xDV89AACAP5mLOT4BDuA9AQxAOwAAgD+Lrdg+n+mZPvENXz0AAIA/i63YPp/pmT7xDV89AACAPwAAAAAAAAAAAAAAAAAAgD8AAIA/KH9yP1ZYBT8AAIA/wQ/8PMEIjD0BCiA8AACAPzELMz1Zi7U9oQiKPAAAgD8BCiA7wQ/8PIEKqDsAAIA/gQzIOzELMz2BCig8AACAPwAAAADBD/w8AAAAAAAAgD+BD3g8+YovPoEKKD0AAIA/4Qu+PEEJlD0AAAAAAACAP0mKpD3FSiw+gQxIPAAAgD/hC748QQmUPQAAAAAAAIA/QQgEPCEKIj0AAAAAAACAP8VKLD57qZc+UQ/1PQAAgD8AAAAAAAAAAAAAAAAAAIA/D+mQPoEJmD0tyiI+AACAP33Kpz4xDMM9PcxDPgAAgD8NzmA+kQopPsEJHD0AAIA/oQiKPIEN2DsAAAAAAACAPzELMz1Zi7U9oQiKPAAAgD+BDVg9GY3RPWELtjwAAIA/QQkUPIENWD3BDmw8AACAP4EMyDsxCzM9gQooPAAAgD+BD3g8+YovPoEKKD0AAIA/OYkTPgy4AD9JjmQ+AACAP+ELvjxBCZQ9AAAAAAAAgD+RCzk9UQ7lPQELMDsAAIA/kQs5PVEO5T0BCzA7AACAP5ELOT1RDuU9AQswOwAAgD/RCi09sQ3bPWELtjwAAIA/xUosPnuplz5RD/U9AACAP33Kpz4xDMM9PcxDPgAAgD/naZ4+EQuxPWELNj4AAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD+BDVg9GY3RPWELtjwAAIA/gQ1YPRmN0T1hC7Y8AACAPwEJkDvBCRw9QQgEPAAAgD8BCZA7wQkcPUEIBDwAAIA/gQ94PPmKLz6BCig9AACAPwAAAADBD/w8AAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAADRCA09AACAPwAAAAAAAAAA0QgNPQAAgD8AAAAAAAAAAAAAAAAAAIA/0QotPbEN2z1hC7Y8AACAPwAAAAAAAAAAAAAAAAAAgD8P6ZA+gQmYPS3KIj4AAIA/Z2u2PgEO4D2VTVk+AACAPw3OYD6RCik+wQkcPQAAgD8NzmA+kQopPsEJHD0AAIA/wQ/8PMEIjD0BCiA8AACAP8EJHD1JiqQ9AQ5gPAAAgD8BCZA7wQkcPUEIBDwAAIA/QQkUPIENWD3BDmw8AACAPwAAAADBD/w8AAAAAAAAgD+BD3g8+YovPoEKKD0AAIA/rcxKPjmJEz5WWAU/AACAP63MSj45iRM+VlgFPwAAgD8AAAAAAAAAANEIDT0AAIA/AAAAAAAAAADRCA09AACAP8VKLD57qZc+UQ/1PQAAgD8AAAAAAAAAAAAAAAAAAIA/fcqnPjEMwz09zEM+AACAP2drtj4BDuA9lU1ZPgAAgD8AAAAAgQ/4O8EJHD0AAIA/AAAAAIEP+DvBCRw9AACAP5mLOT6P6Rg/DcqgPgAAgD+Zizk+j+kYPw3KoD4AAIA/IQoiPQAAAABpiRY+AACAP2EKJj5BCzQ8uYu7PgAAgD8hCiI9AAAAAGmJFj4AAIA/IQoiPQAAAABpiRY+AACAP6EIijyZizk+WY1VPgAAgD8AAIA/AACAPwAAgD8AAIA/3czNPmqcRj9svVY/AACAP/ENXz3lTE4+xU5sPgAAgD8BDEA8z+s8P0usRD8AAIA/oQu6PfmO7z4JiRA/AACAP6mIij6piIo+h2zIPgAAgD8JiRA/VUgFPkMohD4AAIA/AAAAAIEP+DvBCRw9AACAP8mMzD3Lqqw+VlgFPwAAgD/RCA09AQiAPumLvj0AAIA/VlgFPwAAgD8MvEA/AACAP0ELtD4BCZA9bcomPwAAgD9BC7Q+AQmQPW3KJj8AAIA//covP4VOaD4AAIA/AACAP2EKJj5BCzQ8uYu7PgAAgD8AAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAACAP8VKLD4zLdM+m67pPgAAgD/FSiw+My3TPpuu6T4AAIA/AQ5gPBEO4T5tzuY+AACAP4EMyD0BCIA+wymcPgAAgD8P6ZA++Y7vPQVMQD4AAIA/WYkVP8EJHD1hDdY9AACAP8mMzD3Lqqw+VlgFPwAAgD/JjMw9y6qsPlZYBT8AAIA/VlgFPwAAgD8MvEA/AACAP9EIDT0BCIA+6Yu+PQAAgD+JiIg9IQoiPWmJFj4AAIA/iYiIPSEKIj1piRY+AACAPxEO4T5BC7Q+bcomPwAAgD8RDuE+QQu0Pm3KJj8AAIA/Dc5gPomKKD90Ozc/AACAPwAAAAAAAAAAAAAAAAAAgD/dzM0+apxGP2y9Vj8AAIA/8Q1fPeVMTj7FTmw+AACAP0EIhDzFTmw+xU5sPgAAgD9hDdY9YQ3WPYEICD4AAIA/e6mXPjEIAz2JiIg9AACAP6qZGj8BCzA7YQzGPAAAgD8nb/I+b+92PwAAgD8AAIA/AAAAAIEP+DvBCRw9AACAPwAAAAAhDVI9AQiAOwAAgD8AAAAAIQ1SPQEIgDsAAIA/Cp1QP/3KLz8AAIA/AACAPwqdUD/9yi8/AACAPwAAgD8NzmA+YQomPrmLuz4AAIA/Cp1QP/3KLz8AAIA/AACAPw3OYD6Jiig/dDs3PwAAgD+hCIo8mYs5PlmNVT4AAIA/3czNPmqcRj9svVY/AACAP/ENXz3lTE4+xU5sPgAAgD+BCZg86Yu+PVmLtT0AAIA/UQ7lPWEN1jxxCRc9AACAP+dpnj4BCqA6AQogPAAAgD/8uR8/AAAAAAAAAAAAAIA/AAAAAAAAAABJiIQ9AACAPwAAAAAAAAAASYiEPQAAgD/JjMw94QmePBh6IT8AAIA/AAAAAAAAAABJiIQ9AACAP6Mqqj6tzEo+IQ/yPAAAgD/RCA09gQ3YOwAAAAAAAIA/0QgNPYEN2DsAAAAAAACAP4mKKD9tzuY+3cgNPgAAgD+piIo+jc1YPyEP8jwAAIA/LcsyPnD4Bj/JjMw9AACAP8mMzD1XaZU+SY5kPgAAgD/BDEw9VUgFPt3MzT4AAIA/gQ1YPQEJEDtDKIQ+AACAP5/pmT5hDdY9z+s8PwAAgD8AAAAAAAAAAAEO4DoAAIA/AAAAAAAAAAABDuA6AACAPydv8j7FTmw+AACAPwAAgD8nb/I+xU5sPgAAgD8AAIA/AACAPwAAgD8AAIA/AACAPydv8j7FTmw+AACAPwAAgD+ZiRk+AQmQPQAAAAAAAIA/mYkZPgEJkD0AAAAAAACAP5mJGT4BCZA9AAAAAAAAgD+Jiig/bc7mPt3IDT4AAIA/IyiCPhh6IT8hDVI9AACAPy3KIj65i7s+CYkQPgAAgD+hC7o9YQs2PjMpkz4AAIA/0QotPUmIhD3nb/4+AACAP5/pmT5hDdY9z+s8PwAAgD+BDVg9AQkQO0MohD4AAIA/AAAAAAAAAAABDuA6AACAPwAAgD/xDV8/AACAPwAAgD+RCzk9AACAPwAAgD8AAIA/AAAAALy4Cz9na7Y+AACAP4EMyDsAAIA/0P1cPwAAgD8AAAAAjc1YP4/pGD8AAIA/sQ97PbEPez0BD3A7AACAPxmN0T0ZjdE9wQ5sPAAAgD8ZjdE9GY3RPcEObDwAAIA/GY3RPRmN0T3BDmw8AACAP0EPdD5tzuY+iYqoPQAAgD9piRY+AQ9wPj3MQz4AAIA/iYqoPYEMyD2RC7k+AACAP3EJFz1hDMY8j+kYPwAAgD9RDuU9AQmQPIdsyD4AAIA/n+mZPmEN1j3P6zw/AACAPwAAAAAAAAAAAQ7gOgAAgD9hDMY8AQxAO6mIij4AAIA/AAAAAI3NWD+P6Rg/AACAPwAAAAC8uAs/Z2u2PgAAgD+BDMg7AACAP9D9XD8AAIA/gQzIOwAAgD/Q/Vw/AACAPxmN0T0ZjdE9wQ5sPAAAgD+xD3s9sQ97PQEPcDsAAIA/0Q1dPtENXT6xD3s9AACAP9ENXT7RDV0+sQ97PQAAgD8NzmA+n+mZPlEP9T0AAIA/rcgKPt3IDT4jKII+AACAP0EJlD0xCzM9P+7jPgAAgD8xCAM9AQmQO1ZbNT8AAIA/BUxAPlEMRT2iGAo/AACAP1EO5T0BCZA8h2zIPgAAgD8AAIA/8Q1fPwAAgD8AAIA/AACAP/ENXz8AAIA/AACAPw=="
+                        },
+                        "shape": {
+                          "bytes": {
+                            "region": {
+                              "texture": {
+                                "level": 0,
+                                "slice": 0,
+                                "aspect": "color",
+                                "sample": 0,
+                                "origin": [
+                                  0,
+                                  0,
+                                  0
+                                ],
+                                "size": [
+                                  16,
+                                  16,
+                                  1
+                                ]
+                              }
+                            },
+                            "element": "f32",
+                            "row_offset": 0,
+                            "row_elements": 64,
+                            "row_pitch": 256,
+                            "rows": 16,
+                            "image_pitch": 4096,
+                            "images": 1,
+                            "gaps": "ignored"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "argument_objects_retained": 4,
+        "argument_tables_retained": 2,
+        "bare_starts": 2,
+        "batches_submitted_by_waiters": 2,
+        "batches_with_none_pending": 2,
+        "command_buffers_begun": 9,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 2,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_encoders": 2,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 4,
+        "command_buffers_submitted": 9,
+        "commands_recorded.begin_command_buffer": 4,
+        "commands_recorded.cmd_bind_descriptor_sets": 2,
+        "commands_recorded.cmd_bind_pipeline": 2,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_copy_buffer_to_image": 4,
+        "commands_recorded.cmd_dispatch": 2,
+        "commands_recorded.cmd_pipeline_barrier": 10,
+        "commands_recorded.cmd_push_constants": 2,
+        "commands_recorded.end_command_buffer": 7,
+        "commits_handed_off": 2,
+        "commits_taken_in": 2,
+        "completed_waits": 5,
+        "completed_where_seen": 2,
+        "completion_arms": 2,
+        "completion_arms_after_a_wake": 2,
+        "completion_waiter_parks": 2,
+        "creation_pipelines_made": 1,
+        "device_memory_allocated": 201326848,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_shapes_made": 1,
+        "dispatch_used_resources_listed": 1,
+        "dispatches_planned_as_before": 1,
+        "encoder_command_buffers_begun": 4,
+        "fence_waits": 2,
+        "finales_folded": 2,
+        "functions_shared": 1,
+        "functions_translated": 1,
+        "gate_waits": 2,
+        "gate_waits_slept": 2,
+        "heap_tables_worked_out": 1,
+        "new_buffer_bytes_cleared": 8448,
+        "object_churn.buffers_parked": 4,
+        "object_churn.buffers_recycled": 4,
+        "object_churn.images_evicted": 2,
+        "object_churn.images_own_memory": 2,
+        "object_churn.images_parked": 2,
+        "object_churn.textures_image": 2,
+        "object_churn.vk_image_bindings": 2,
+        "object_churn.vk_image_views_made": 2,
+        "object_churn.vk_images_destroyed": 2,
+        "object_churn.vk_images_made": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 2,
+        "queues_sharing_a_vk_queue": 1,
+        "resident_textures_looked_at": 2,
+        "scheduled_where_submitted": 2,
+        "scheduler_passes": 1,
+        "scheduler_passes_by_waiters": 2,
+        "scheduler_sleeps": 2,
+        "scheduler_wakes_commit": 2,
+        "shader_modules_made": 2,
+        "slot_returns": 2,
+        "spare_command_pools_taken": 2,
+        "stage_entries_specialized": 1,
+        "submit_infos": 3,
+        "trail_waits": 2,
+        "variant_pipelines_made": 2,
+        "variants_taken_back": 1,
+        "wakes_completion_waiters": 2,
+        "wakes_spared": 14
+      },
+      "moving": {
+        "batches_submitted_by_waiters": 0,
+        "gate_waits_slept": 1
+      },
+      "composed": {
+        "batches_submitted_by_waiters": 1,
+        "command_buffers_begun": 7,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_continuations": 1,
+        "command_buffers_begun_segments": 1,
+        "command_buffers_deferred": 0,
+        "command_buffers_submitted": 7,
+        "commands_recorded.cmd_clear_color_image": 1,
+        "commands_recorded.cmd_pipeline_barrier": 1,
+        "commands_recorded.end_command_buffer": 7,
+        "creation_pipelines_made": 0,
+        "device_memory_allocated": 201326720,
+        "dispatch_pipelines_pooled": 1,
+        "dispatch_used_resources_listed": 1,
+        "encoder_command_buffers_begun": 4,
+        "functions_translated": 1,
+        "pipeline_layouts_made": 1,
+        "queues_sharing_a_vk_queue": 0,
+        "shader_modules_made": 1,
+        "stage_entries_specialized": 1,
+        "submit_infos": 3,
+        "variant_pipelines_made": 1
+      },
+      "ceilings": {
+        "addressable_buffers_made": 2,
+        "arena_pools_made": 1,
+        "creation_pipelines_made": 1,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 2,
+        "variant_pipelines_made": 2
+      },
+      "per_state": {
+        "pipelines": 0,
+        "states": 1
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "etc2-rgb8-srgb",
+        "calls": 12,
+        "in_calls": 28306915,
+        "on_cpu": 904290,
+        "blocked": 27402375,
+        "elsewhere": 3180916,
+        "spend": 31496165,
+        "spend_least": 31187250,
+        "spend_most": 32361127,
+        "per_call": [
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 68792,
+            "on_cpu": 69000,
+            "blocked": 0,
+            "wall_least": 63584,
+            "wall_most": 75542,
+            "wall_total": 68792,
+            "on_cpu_total": 69000,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 11083,
+            "on_cpu": 11250,
+            "blocked": 0,
+            "wall_least": 7375,
+            "wall_most": 16542,
+            "wall_total": 116083,
+            "on_cpu_total": 116416,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23907709,
+            "on_cpu": 639750,
+            "blocked": 23264043,
+            "wall_least": 23755292,
+            "wall_most": 24784000,
+            "wall_total": 23907709,
+            "on_cpu_total": 639750,
+            "blocked_total": 23264043
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 500,
+            "on_cpu": 625,
+            "blocked": 0,
+            "wall_least": 375,
+            "wall_most": 1125,
+            "wall_total": 2167,
+            "on_cpu_total": 3000,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 21292,
+            "on_cpu": 21625,
+            "blocked": 0,
+            "wall_least": 7833,
+            "wall_most": 24834,
+            "wall_total": 52417,
+            "on_cpu_total": 52958,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 494083,
+            "on_cpu": 3875,
+            "blocked": 489917,
+            "wall_least": 156709,
+            "wall_most": 693791,
+            "wall_total": 4122541,
+            "on_cpu_total": 18375,
+            "blocked_total": 4102958
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 2125,
+            "on_cpu": 2292,
+            "blocked": 0,
+            "wall_least": 1916,
+            "wall_most": 2625,
+            "wall_total": 5209,
+            "on_cpu_total": 5542,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "etc2-rgb8-srgb",
+        "calls": 12,
+        "in_calls": 1870500,
+        "on_cpu": 412249,
+        "blocked": 1463042,
+        "elsewhere": 357167,
+        "spend": 2242793,
+        "spend_least": 2107457,
+        "spend_most": 2365581,
+        "per_call": [
+          {
+            "call": "compute_pipeline",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 20875,
+            "on_cpu": 21084,
+            "blocked": 0,
+            "wall_least": 18083,
+            "wall_most": 26583,
+            "wall_total": 20875,
+            "on_cpu_total": 21084,
+            "blocked_total": 0
+          },
+          {
+            "call": "dispatch_threads",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 17750,
+            "on_cpu": 17917,
+            "blocked": 0,
+            "wall_least": 16333,
+            "wall_most": 28958,
+            "wall_total": 72999,
+            "on_cpu_total": 73291,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 269333,
+            "on_cpu": 271667,
+            "blocked": 0,
+            "wall_least": 237208,
+            "wall_most": 297459,
+            "wall_total": 269333,
+            "on_cpu_total": 271667,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 333,
+            "on_cpu": 500,
+            "blocked": 0,
+            "wall_least": 250,
+            "wall_most": 416,
+            "wall_total": 1499,
+            "on_cpu_total": 2083,
+            "blocked_total": 0
+          },
+          {
+            "call": "texture",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 11000,
+            "on_cpu": 11166,
+            "blocked": 0,
+            "wall_least": 8834,
+            "wall_most": 22625,
+            "wall_total": 29499,
+            "on_cpu_total": 29833,
+            "blocked_total": 0
+          },
+          {
+            "call": "wait",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 637625,
+            "on_cpu": 2125,
+            "blocked": 635625,
+            "wall_least": 618625,
+            "wall_most": 808583,
+            "wall_total": 1471625,
+            "on_cpu_total": 8583,
+            "blocked_total": 1463042
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 834,
+            "on_cpu": 959,
+            "blocked": 0,
+            "wall_least": 667,
+            "wall_most": 1125,
+            "wall_total": 1792,
+            "on_cpu_total": 2042,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

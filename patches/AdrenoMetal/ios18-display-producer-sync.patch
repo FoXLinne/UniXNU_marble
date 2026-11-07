@@ -1,0 +1,10 @@
+diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
+--- a/NativeBridgeMetalFrontend.mm
++++ b/NativeBridgeMetalFrontend.mm
+@@ -3283,6 +3283,5 @@
+ // The scanout client: before it copies an offered frame, the GPU work committed up to then must be done.
+ extern "C" void NBWaitInFlight(uint64_t beforeUs) {
+- if(!earlyOn())return;
+  NSArray *pending;@synchronized(gInFlight){pending=gInFlight.allObjects;}
+  for(NBCommandBuffer *commandBuffer in pending)
+   if(commandBuffer.committed && !commandBuffer.failedLocally && commandBuffer.committedUs<=beforeUs)nmb_command_buffer_wait(commandBuffer.handle,0);
