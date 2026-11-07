@@ -10,6 +10,7 @@
 
 STATIC ROOT_STAGE_TABLE *mStorage;
 VOID MarbleRtcPrepare(ROOT_STAGE_TABLE *Stage);
+VOID MarbleDisplayPrepare(ROOT_STAGE_TABLE *Stage);
 VOID MarbleRtcLoadOffset(CONST VOID *Header);
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsbPoll(VOID);
@@ -112,6 +113,7 @@ EFI_STATUS MarbleRootStorage(VOID *TemporaryKernel, UINTN TemporaryKernelBytes) 
     if (!EFI_ERROR(Status)) {
       MarbleRtcLoadOffset(Header);
       MarbleRtcPrepare(mStorage);
+      MarbleDisplayPrepare(mStorage);
     }
     Print(L"UniXNU UFS boot\r\n");
   }

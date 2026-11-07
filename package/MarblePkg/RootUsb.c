@@ -14,6 +14,7 @@
 #include "GunyahWatchdog.h"
 #include "MarbleCpuOwnership.h"
 #include "../MarbleUsbHealth.h"
+#include "../MarbleScanoutWire.h"
 
 BOOLEAN MarbleRootReadMemory(VOID *Destination, CONST VOID *Source, UINTN Bytes, UINT64 *Fault);
 BOOLEAN MarbleRootReadRegister(UINT32 *Destination, CONST VOID *Source, UINTN Reserved, UINT64 *Fault);
@@ -184,7 +185,9 @@ STATIC UINT64 RootCounter(VOID)
 STATIC VOID ServiceWatchdog(VOID)
 {
   extern VOID MarbleRtcService(VOID);
+  extern VOID MarbleDisplayService(VOID);
   MarbleRtcService();
+  MarbleDisplayService();
   if (!mWatchdogService) return;
   UINT64 Counter=RootCounter();
   if (Counter-mWatchdogLastPet<mWatchdogFrequency) return;
@@ -628,6 +631,22 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
     }
     else if (!AsciiStrCmp(Command,"getvar:display-timing")) {
       Reply("OKAY","kernel");
+    }
+    else if (!AsciiStrCmp(Command,"getvar:display-latch")) {
+      extern CONST volatile MARBLE_SCANOUT *MarbleDisplayState(VOID);
+      CONST volatile MARBLE_SCANOUT *Display=MarbleDisplayState();
+      if (!Display) {Reply("OKAY","pending");continue;}
+      CHAR8 Text[52];
+      Hex(Text,Display->ready,8);Text[8]=':';Hex(Text+9,Display->error,8);Text[17]=':';
+      Hex(Text+18,Display->pipe_mask,8);Text[26]=':';Hex(Text+27,Display->checkpoint,8);Text[35]=':';
+      Hex(Text+36,Display->presented,15);Reply("OKAY",Text);
+    }
+    else if (!AsciiStrCmp(Command,"getvar:display-clock")) {
+      extern BOOLEAN MarbleDisplayClock(UINT32 [8]);
+      UINT32 Values[8];CHAR8 Text[72];
+      if (!MarbleDisplayClock(Values)) {Reply("OKAY","pending");continue;}
+      for (UINTN I=0;I<8;I++) {Hex(Text+I*9,Values[I],8);if(I<7)Text[I*9+8]=':';}
+      Reply("OKAY",Text);
     }
     else if (!AsciiStrCmp(Command,"getvar:kernel-ready")) {
       __asm__ volatile("dc civac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");
