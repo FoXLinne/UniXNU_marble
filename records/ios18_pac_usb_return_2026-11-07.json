@@ -1,0 +1,120 @@
+{
+  "date": "2026-11-07",
+  "device": "marble / 556fdfe",
+  "os": "iOS 18.7.11 22H384",
+  "revision": "a0a46d48a2b639e4c45755100e79c553040ef0ad",
+  "image": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-07/hardware/pac-usb-return/marble_temporary_boot.img",
+    "kernel_sha256": "ed72c4d00fe105808b28b6aed95c71fc711c928e38bd69775cd9d3e316ec68fa",
+    "native_sha256": "f3826ad55aec0a194fa3e4e93d9c7bb65f5ce1dbc46c0474af81a54e4919fa37",
+    "kernel_source": "boot-image",
+    "system_source": "ufs",
+    "exit_boot_services": false,
+    "resident_usb": true,
+    "runtime_usb_mode": 3,
+    "enabled_cpu_affinities": [
+      0,
+      512,
+      768,
+      1024,
+      1280,
+      1536,
+      1792
+    ],
+    "firmware_usb_affinity": 256,
+    "display_scale": 3,
+    "ui_identity": {
+      "product": "iPhone16,2",
+      "name": "iPhone 15 Pro Max",
+      "target_type": "D84",
+      "artwork_device_subtype": 2796,
+      "compatible_device_fallback": "iPhone15,3",
+      "generation": 1602
+    },
+    "data_logical_bytes": 68719476736,
+    "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+    "storage_profile_sha256": "2f439c20ac2a30cd6f3b979ff2f590fb3c0e1b04b55b8edfb7806be238b08f56",
+    "logical_size": [
+      360,
+      800
+    ],
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-preempt=2 sheng-gpu-ttbr=2 cpus=7 sheng-smp=1 armcpu-self-ipi=1 marble-display-scale=3 marble-ui-identity=1602 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd marble-skip-setup=1",
+    "gpu_addon_sha256": "2680d5ae481fe8534e114a7064becd536d1e19994604cca86b3b8854b25c3be7",
+    "gpu_sources": {
+      "UniXNU": "e2fdae4312d0acc3d8a52bc457101e7918095e6a",
+      "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
+      "AdrenoMetal": "e82788dd367753802ec2e00476ab27addfb46834",
+      "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+    },
+    "owner_trust_cache_sha256": "6ac20c2c4eca174c95334147c134fb828f7df89ef18e35e879c2fd1ec612b680"
+  },
+  "image_sha256": "7f9fe0b8991a14e7f0d2f062a617d0db3213660de103ff727eb4293ccaece430",
+  "reported_failure": {
+    "pc": "0xfffffff0085ab798",
+    "lr": "0xfffffff0085ab784",
+    "operation": "AUTDA x16, x17",
+    "function": "native_marble_ui_dyld_policy",
+    "field": "proc.p_textvp",
+    "board_object_offset": "0x5b0",
+    "release_kernel_offset": "0x548",
+    "cause": "DEVELOPMENT proc layout in a board object linked into the RELEASE kernel"
+  },
+  "repair": {
+    "vnode_access": "proc_getexecutablevnode; vnode_put",
+    "compile_record": "RELEASE kern_exec.o.json",
+    "usb_return": "Resident USB owner stops its controller session, clears pending transfer state and starts enumeration when consuming the returned stage",
+    "old_wait": "WaitTransfer leaves its previous endpoint wait after consuming the returned stage"
+  },
+  "usb_boot": [
+    {
+      "elapsed": 2.5544274579999637,
+      "error": "[Errno 5] Input/Output Error"
+    },
+    {
+      "elapsed": 32.56175233299996,
+      "version": "RootStage2",
+      "phase": "kernel",
+      "returns": "0000000000000000",
+      "return-usb-status": "8000000000000013"
+    }
+  ],
+  "usb_return": {
+    "before": {
+      "version": "RootStage2",
+      "phase": "kernel",
+      "returns": "0000000000000000"
+    },
+    "interrupt": "interrupt requested",
+    "samples": [
+      {
+        "elapsed": 10.006706165999958,
+        "version": "RootStage2",
+        "phase": "firmware",
+        "returns": "0000000000000001",
+        "return-usb-status": "0000000000000000"
+      }
+    ]
+  },
+  "retained_disks": {
+    "version": "RootStage2",
+    "phase": "firmware",
+    "returns": "0000000000000001",
+    "return-usb-status": "0000000000000000",
+    "kernel-memory": "000000097fc00000:0000000200000000",
+    "handoff-translation": "0000000986685000:00080022a5192519",
+    "received": "000000000457d000:000000000457d000",
+    "retained_log_bytes": 1048576
+  },
+  "retry": {
+    "command": "oem retry",
+    "phase": "kernel",
+    "communication": "RootStage2",
+    "returns": 1
+  },
+  "evidence_directory": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios18_gpu_v1_2026-11-07/hardware/pac-usb-return",
+  "acceptance": {
+    "kernel_panic_fix": "boot passed the reported path; launchd, SpringBoard and backboardd started",
+    "kernel_return_usb": "RootStage2 firmware phase, return count 1, restart status 0, retained log upload 1048576 bytes",
+    "gpu_scene_acceptance": "pending"
+  }
+}
