@@ -692,10 +692,10 @@ index 8e8b499..341cd8f 100644
      unittest.main()
 diff --git a/fixtures/fileset-22H384-symbols.json b/fixtures/fileset-22H384-symbols.json
 new file mode 100644
-index 0000000..53bad03
+index 0000000..e5fb911
 --- /dev/null
 +++ b/fixtures/fileset-22H384-symbols.json
-@@ -0,0 +1,2665 @@
+@@ -0,0 +1,2672 @@
 +{
 +  "inputs": {
 +    "kernelcache_sha256": "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70",
@@ -3088,6 +3088,13 @@ index 0000000..53bad03
 +      "original_sha256": "c994a1e68d059d8ea6c85fc2a7d30449a0d1c94c82f3f109fad742a9c4c732e2",
 +      "native_symbol": "_complete_security_boot_mode",
 +      "evidence": "Stores the uint32_t boot mode into security_boot_mode_complete and returns. Native has the same ADRP/STR/RET body after BTI. Source: bsd/kern/kern_codesigning.c complete_security_boot_mode; the selected non-monitor configuration inlines the empty monitor completion."
++    },
++    {
++      "original": "0xfffffff00842b858",
++      "original_size": 180,
++      "original_sha256": "eeefed206a101013a49fb23197a27f5c665566a83e82ac6d8ab8c9a8ec69cc44",
++      "native_symbol": "__ZN7OSArray12withCapacityEj",
++      "evidence": "OSArray metaclass allocation at vtable +0x68 (PAC 0x1601), initWithCapacity at +0xd0 (PAC 0xa292) with preserved unsigned capacity, and release at +0x28 (PAC 0x3a87) on initialization failure. Compared instruction-by-instruction with current named native function; identical allocation/init/release control flow and return semantics, with compiler-specific authenticated-call register copies. Source: libkern/c++/OSArray.cpp OSArray::withCapacity. Earlier complete maps independently matched this original address to the same native symbol."
 +    }
 +  ],
 +  "data": [

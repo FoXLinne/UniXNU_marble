@@ -457,245 +457,12 @@ index d9397b0..af87000 100644
 +                return None
 +    body, _, _, _ = checked_shape(code, pc)
 +    return tuple(body) if body and body[-1] in returns else None
-diff --git a/test_fileset_match.py b/test_fileset_match.py
-index 281e52f..32777e1 100644
---- a/test_fileset_match.py
-+++ b/test_fileset_match.py
-@@ -145,6 +145,23 @@ class MetaclassIdentityTests(unittest.TestCase):
-         matcher.bind(0x9010,0xa010,'reference-shape')
-         return matcher
- 
-+    def test_landing_pad_difference_preserves_getter_and_table_identity(self):
-+        matcher = self.make_matcher()
-+        matcher.original.functions[0x9010]['digest'] = 'original-entry'
-+        matcher.native.functions[0xa010]['digest'] = 'native-entry'
-+        matcher.original.checked_functions = {0x9010: {
-+            'digest': 'canonical', 'refs': [(0, 0x3000)], 'calls': [], 'length': 3}}
-+        matcher.native.checked_functions = {0xa010: {
-+            'digest': 'canonical', 'refs': [(0, 0x4000)], 'calls': [], 'length': 3}}
-+        matcher.pairs.clear()
-+        matcher.reverse.clear()
-+        matcher.how.clear()
-+        known = {0x3000: (0x4000, 'refs')}
-+        self.assertEqual(matcher.pair_metaclass_getters(known), 1)
-+        self.assertEqual(matcher.pairs[0x9010], 0xa010)
-+        self.assertEqual(matcher.pair_metaclass_vtables(known), 1)
-+        self.assertEqual(known[0x1000], (0x2000, 'metaclass-vtable'))
-+
-     def test_class_specific_getter_identifies_table_without_generic_method_anchors(self):
-         matcher = self.make_matcher()
-         known = {0x3000:(0x4000,'refs')}
-@@ -164,3 +181,141 @@ class MetaclassIdentityTests(unittest.TestCase):
-         self.assertEqual(matcher.pairs[0x9000],0xa000)
-         self.assertNotIn(0xb000,matcher.reverse)
-         self.assertEqual(matcher.conflicts[-1]['kind'],'vtable-correction')
-+
-+
-+class PplFunctionTests(unittest.TestCase):
-+    def test_ppl_function_is_scanned_as_executable(self):
-+        import struct
-+        from fileset_match import Side
-+        image = SimpleNamespace(
-+            segments=[{'name': '__PPLTEXT', 'va': 0x1000, 'size': 8, 'filesize': 8}],
-+            function_starts=lambda: [0x1000],
-+            read=lambda address, length: struct.pack('<2I', 0xd2800000, 0xd65f03c0)[:length],
-+            symbols=lambda: {},
-+            section=lambda address: None)
-+        result = Side(image, {}, [(0x1000, 0x1008)])
-+        self.assertTrue(result.in_exec(0x1000))
-+        self.assertEqual(result.functions[0x1000]['end'], 0x1008)
-+
-+
-+class NormalizedReferenceTests(unittest.TestCase):
-+    def matcher(self, left, right):
-+        from collections import defaultdict
-+        def side(functions):
-+            return SimpleNamespace(functions=functions, checked_functions=functions,
-+                symbol_names={}, image=SimpleNamespace(cstring=lambda address: None))
-+        return Matcher(side(left), side(right))
-+
-+    def function(self, refs=(), calls=(), end=0x100):
-+        return {'digest': 'body', 'length': 4, 'refs': list(refs), 'calls': list(calls), 'end': end}
-+
-+    def test_normalized_data_operands_disambiguate_shared_bodies(self):
-+        matcher = self.matcher({1: self.function([(4, 1000)])},
-+            {10: self.function([(4, 2000)]), 20: self.function([(4, 3000)])})
-+        self.assertEqual(matcher.pair_reference_shapes({1000: (2000, 'refs')}), 1)
-+        self.assertEqual(matcher.pairs, {1: 10})
-+
-+    def test_external_call_identifies_a_tail_wrapper_without_data_operands(self):
-+        matcher = self.matcher({1: self.function(calls=[(0, 1000)])},
-+            {10: self.function(calls=[(0, 2000)]), 20: self.function(calls=[(0, 3000)])})
-+        matcher.bind(1000, 2000, 'reviewed')
-+        self.assertEqual(matcher.pair_reference_shapes({}), 1)
-+        self.assertEqual(matcher.pairs[1], 10)
-+
-+    def test_unresolved_operand_and_duplicate_candidates_remain_unpaired(self):
-+        matcher = self.matcher({1: self.function([(4, 1000), (8, 1100)])},
-+            {10: self.function([(4, 2000), (8, 2100)])})
-+        self.assertEqual(matcher.pair_reference_shapes({1000: (2000, 'refs')}), 0)
-+        matcher = self.matcher({1: self.function([(4, 1000)])},
-+            {10: self.function([(4, 2000)]), 20: self.function([(4, 2000)])})
-+        self.assertEqual(matcher.pair_reference_shapes({1000: (2000, 'refs')}), 0)
-+
-+
-+class CombinedAnchorTests(unittest.TestCase):
-+    def test_data_anchor_and_known_call_select_the_joint_user(self):
-+        from collections import defaultdict
-+        def side(functions, callees):
-+            return SimpleNamespace(functions=functions, callees=callees, symbol_names={})
-+        left = side({1: {'refs': [(0, 100)]}}, defaultdict(set, {1: {5}}))
-+        right = side({10: {'refs': [(4, 200)]}, 20: {'refs': [(8, 200)]}},
-+                     defaultdict(set, {10: {50}, 20: {60}}))
-+        matcher = Matcher(left, right)
-+        matcher.bind(5, 50, 'reviewed')
-+        self.assertEqual(matcher.pair_data_users({100: (200, 'refs')}), 1)
-+        self.assertEqual(matcher.pairs[1], 10)
-+
-+    def test_single_data_anchor_requires_a_known_callee(self):
-+        from collections import defaultdict
-+        left = SimpleNamespace(functions={1: {'refs': [(0, 100)]}},
-+                               callees=defaultdict(set), symbol_names={})
-+        right = SimpleNamespace(functions={10: {'refs': [(0, 200)]}},
-+                                callees=defaultdict(set), symbol_names={})
-+        matcher = Matcher(left, right)
-+        self.assertEqual(matcher.pair_data_users({100: (200, 'refs')}), 0)
-+
-+
-+class LeafBodyPairingTests(unittest.TestCase):
-+    def test_kext_target_has_priority_and_native_addresses_remain_distinct(self):
-+        import struct
-+        code = struct.pack('<2I', 0xf9407000, 0xd65f03c0)
-+        def side(addresses):
-+            return SimpleNamespace(functions={a: {'end': a + len(code)} for a in addresses},
-+                symbol_names={}, image=SimpleNamespace(read=lambda a, size: code))
-+        matcher = Matcher(side([0x1000, 0x2000]), side([0x3000]))
-+        self.assertEqual(matcher.pair_leaf_bodies({0x2000}), 1)
-+        self.assertEqual(matcher.pairs, {0x2000: 0x3000})
-+        self.assertEqual(matcher.pair_leaf_bodies({0x1000}), 0)
-+
-+
-+class TailBodyPairingTests(unittest.TestCase):
-+    def matcher(self, *, native_target=0x4000, native_prefix=()):
-+        import struct
-+        def side(start, target, prefix):
-+            branch = 0x14000000 | (((target - start - len(prefix) * 4) // 4) & 0x3ffffff)
-+            code = struct.pack('<' + 'I' * (len(prefix) + 1), *prefix, branch)
-+            return SimpleNamespace(functions={start: {'end': start + len(code)}}, symbol_names={},
-+                image=SimpleNamespace(read=lambda a, size: code))
-+        return Matcher(side(0x1000, 0x3000, ()), side(0x2000, native_target, native_prefix))
-+
-+    def test_bound_callee_and_identical_prefix_bind_the_wrapper(self):
-+        matcher = self.matcher()
-+        matcher.bind(0x3000, 0x4000, 'reviewed')
-+        self.assertEqual(matcher.pair_tail_bodies({0x1000}), 1)
-+        self.assertEqual(matcher.pairs[0x1000], 0x2000)
-+
-+    def test_unknown_or_different_callee_and_changed_arguments_are_rejected(self):
-+        matcher = self.matcher()
-+        self.assertEqual(matcher.pair_tail_bodies({0x1000}), 0)
-+        for matcher in (self.matcher(native_target=0x5000), self.matcher(native_prefix=(0xd2800000,))):
-+            matcher.bind(0x3000, 0x4000, 'reviewed')
-+            self.assertEqual(matcher.pair_tail_bodies({0x1000}), 0)
-+
-+
-+class AllocationViewTests(unittest.TestCase):
-+    def side(self, base, *, size=4, signature=b'', count=1):
-+        import struct
-+        data = bytearray(0x6000)
-+        data[0x5000:0x5000 + len(signature) + 1] = signature + b'\0'
-+        fixups = {}
-+        for i in range(count):
-+            at = base + i * 64
-+            struct.pack_into('<I', data, at + 44, size)
-+            fixups[at + 16] = (0x4000, 0, None, None, None)
-+            fixups[at + 32] = (0x5000, 0, None, None, None)
-+        image = SimpleNamespace(data=data, offset=lambda address: address,
-+            read=lambda address, length: data[address:address + length],
-+            cstring=lambda address: 'site.example' if address == 0x4000 else None,
-+            sections=[{'name': '__kalloc_type', 'va': base, 'size': count * 64}])
-+        return SimpleNamespace(image=image, fixups=fixups)
-+
-+    def test_unique_name_signature_and_size_bind_the_descriptor(self):
-+        matcher = Matcher(self.side(0x1000), self.side(0x2000))
-+        known = {}
-+        self.assertEqual(matcher.pair_allocation_views(known), 1)
-+        self.assertEqual(known, {0x1000: (0x2000, 'allocation-view')})
-+
-+    def test_duplicate_name_changed_signature_or_changed_size_are_rejected(self):
-+        for native in (self.side(0x2000, count=2), self.side(0x2000, signature=b'1'), self.side(0x2000, size=8)):
-+            matcher = Matcher(self.side(0x1000), native)
-+            self.assertEqual(matcher.pair_allocation_views({}), 0)
-+
-diff --git a/test_fileset_shape.py b/test_fileset_shape.py
-index 8e8b499..341cd8f 100644
---- a/test_fileset_shape.py
-+++ b/test_fileset_shape.py
-@@ -9,6 +9,30 @@ def shape(words):
- 
- 
- class CheckedShapeTests(unittest.TestCase):
-+    def test_authenticated_call_discriminator_copies(self):
-+        copied = [0xf8468e08, 0xaa1003e9, 0xaa0003f6, 0xaa0903f1, 0xf2e2c031, 0xd73f0911]
-+        reused = [0xf8468e08, 0xaa0003f6, 0xf2e2c030, 0xd73f0910]
-+        self.assertEqual(shape(copied)[0], shape(reused)[0])
-+        self.assertEqual(shape(copied)[1][20], 12)
-+
-+    def test_discriminator_copy_with_intervening_operand_use_is_kept(self):
-+        code = [0xf8468e08, 0xaa1003e9, 0xaa1003e0, 0xaa0903f1, 0xf2e2c031, 0xd73f0911]
-+        self.assertEqual(len(shape(code)[0]), len(code))
-+
-+    def test_leading_bti_preserves_internal_branches_and_reference_positions(self):
-+        body = [0xb4000040, 0x90000008, 0xf9400900, 0xd65f03c0]
-+        first, second = shape(body), shape([0xd503245f, *body])
-+        self.assertEqual(first[0], second[0])
-+        self.assertEqual(second[1][8], 4)
-+        self.assertEqual(second[1][12], 8)
-+
-+    def test_branch_to_entry_keeps_the_landing_pad(self):
-+        code = [0xd503245f, 0x17ffffff]
-+        self.assertEqual(len(shape(code)[0]), 2)
-+
-+    def test_internal_bti_is_kept(self):
-+        self.assertEqual(len(shape([0xd503201f, 0xd503245f, 0xd65f03c0])[0]), 3)
-+
-     def test_authentication_check_preserves_branch_geometry_and_reference_sites(self):
-         # cbz x1,end; autda x16,x17; [check]; mov x0,x16; ret
-         check = [0xaa1003f1,0xdac147f1,0xeb11021f,0x54000040,0xd4388e40]
-@@ -39,5 +63,27 @@ class CheckedShapeTests(unittest.TestCase):
-         self.assertEqual(len(shape([*check,0xd65f03c0])[0]),4)
- 
- 
-+class LeafBodyTests(unittest.TestCase):
-+    def leaf(self, words):
-+        from fileset_shape import relocation_free_leaf
-+        return relocation_free_leaf(struct.pack('<' + 'I' * len(words), *words), 0x10000)
-+
-+    def test_memory_accessor_is_identical_with_a_native_landing_pad(self):
-+        body = [0xf9407000, 0xd65f03c0]
-+        self.assertEqual(self.leaf(body), self.leaf([0xd503245f, *body]))
-+        self.assertIsNotNone(self.leaf(body))
-+        self.assertNotEqual(self.leaf(body), self.leaf([0xf9407400, 0xd65f03c0]))
-+
-+    def test_pc_relative_operands_and_calls_are_rejected(self):
-+        for word in (0x90000008, 0x10000000, 0x58000000, 0x94000001, 0xd63f0100):
-+            self.assertIsNone(self.leaf([word, 0xd65f03c0]))
-+
-+    def test_internal_conditional_branch_keeps_its_geometry(self):
-+        body = [0xb4000040, 0xf9400c00, 0xd65f03c0]
-+        self.assertEqual(self.leaf(body), self.leaf([0xd503245f, *body]))
-+        self.assertIsNone(self.leaf([0xb4000080, 0xd65f03c0]))
-+        self.assertIsNone(self.leaf([0x14000002, 0xd65f03c0]))
-+
-+
- if __name__ == '__main__':
-     unittest.main()
 diff --git a/fixtures/fileset-22H384-symbols.json b/fixtures/fileset-22H384-symbols.json
 new file mode 100644
-index 0000000..53bad03
+index 0000000..e5fb911
 --- /dev/null
 +++ b/fixtures/fileset-22H384-symbols.json
-@@ -0,0 +1,2665 @@
+@@ -0,0 +1,2672 @@
 +{
 +  "inputs": {
 +    "kernelcache_sha256": "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70",
@@ -3088,6 +2855,13 @@ index 0000000..53bad03
 +      "original_sha256": "c994a1e68d059d8ea6c85fc2a7d30449a0d1c94c82f3f109fad742a9c4c732e2",
 +      "native_symbol": "_complete_security_boot_mode",
 +      "evidence": "Stores the uint32_t boot mode into security_boot_mode_complete and returns. Native has the same ADRP/STR/RET body after BTI. Source: bsd/kern/kern_codesigning.c complete_security_boot_mode; the selected non-monitor configuration inlines the empty monitor completion."
++    },
++    {
++      "original": "0xfffffff00842b858",
++      "original_size": 180,
++      "original_sha256": "eeefed206a101013a49fb23197a27f5c665566a83e82ac6d8ab8c9a8ec69cc44",
++      "native_symbol": "__ZN7OSArray12withCapacityEj",
++      "evidence": "OSArray metaclass allocation at vtable +0x68 (PAC 0x1601), initWithCapacity at +0xd0 (PAC 0xa292) with preserved unsigned capacity, and release at +0x28 (PAC 0x3a87) on initialization failure. Compared instruction-by-instruction with current named native function; identical allocation/init/release control flow and return semantics, with compiler-specific authenticated-call register copies. Source: libkern/c++/OSArray.cpp OSArray::withCapacity. Earlier complete maps independently matched this original address to the same native symbol."
 +    }
 +  ],
 +  "data": [
@@ -3361,3 +3135,236 @@ index 0000000..53bad03
 +    }
 +  ]
 +}
+diff --git a/test_fileset_match.py b/test_fileset_match.py
+index 281e52f..32777e1 100644
+--- a/test_fileset_match.py
++++ b/test_fileset_match.py
+@@ -145,6 +145,23 @@ class MetaclassIdentityTests(unittest.TestCase):
+         matcher.bind(0x9010,0xa010,'reference-shape')
+         return matcher
+ 
++    def test_landing_pad_difference_preserves_getter_and_table_identity(self):
++        matcher = self.make_matcher()
++        matcher.original.functions[0x9010]['digest'] = 'original-entry'
++        matcher.native.functions[0xa010]['digest'] = 'native-entry'
++        matcher.original.checked_functions = {0x9010: {
++            'digest': 'canonical', 'refs': [(0, 0x3000)], 'calls': [], 'length': 3}}
++        matcher.native.checked_functions = {0xa010: {
++            'digest': 'canonical', 'refs': [(0, 0x4000)], 'calls': [], 'length': 3}}
++        matcher.pairs.clear()
++        matcher.reverse.clear()
++        matcher.how.clear()
++        known = {0x3000: (0x4000, 'refs')}
++        self.assertEqual(matcher.pair_metaclass_getters(known), 1)
++        self.assertEqual(matcher.pairs[0x9010], 0xa010)
++        self.assertEqual(matcher.pair_metaclass_vtables(known), 1)
++        self.assertEqual(known[0x1000], (0x2000, 'metaclass-vtable'))
++
+     def test_class_specific_getter_identifies_table_without_generic_method_anchors(self):
+         matcher = self.make_matcher()
+         known = {0x3000:(0x4000,'refs')}
+@@ -164,3 +181,141 @@ class MetaclassIdentityTests(unittest.TestCase):
+         self.assertEqual(matcher.pairs[0x9000],0xa000)
+         self.assertNotIn(0xb000,matcher.reverse)
+         self.assertEqual(matcher.conflicts[-1]['kind'],'vtable-correction')
++
++
++class PplFunctionTests(unittest.TestCase):
++    def test_ppl_function_is_scanned_as_executable(self):
++        import struct
++        from fileset_match import Side
++        image = SimpleNamespace(
++            segments=[{'name': '__PPLTEXT', 'va': 0x1000, 'size': 8, 'filesize': 8}],
++            function_starts=lambda: [0x1000],
++            read=lambda address, length: struct.pack('<2I', 0xd2800000, 0xd65f03c0)[:length],
++            symbols=lambda: {},
++            section=lambda address: None)
++        result = Side(image, {}, [(0x1000, 0x1008)])
++        self.assertTrue(result.in_exec(0x1000))
++        self.assertEqual(result.functions[0x1000]['end'], 0x1008)
++
++
++class NormalizedReferenceTests(unittest.TestCase):
++    def matcher(self, left, right):
++        from collections import defaultdict
++        def side(functions):
++            return SimpleNamespace(functions=functions, checked_functions=functions,
++                symbol_names={}, image=SimpleNamespace(cstring=lambda address: None))
++        return Matcher(side(left), side(right))
++
++    def function(self, refs=(), calls=(), end=0x100):
++        return {'digest': 'body', 'length': 4, 'refs': list(refs), 'calls': list(calls), 'end': end}
++
++    def test_normalized_data_operands_disambiguate_shared_bodies(self):
++        matcher = self.matcher({1: self.function([(4, 1000)])},
++            {10: self.function([(4, 2000)]), 20: self.function([(4, 3000)])})
++        self.assertEqual(matcher.pair_reference_shapes({1000: (2000, 'refs')}), 1)
++        self.assertEqual(matcher.pairs, {1: 10})
++
++    def test_external_call_identifies_a_tail_wrapper_without_data_operands(self):
++        matcher = self.matcher({1: self.function(calls=[(0, 1000)])},
++            {10: self.function(calls=[(0, 2000)]), 20: self.function(calls=[(0, 3000)])})
++        matcher.bind(1000, 2000, 'reviewed')
++        self.assertEqual(matcher.pair_reference_shapes({}), 1)
++        self.assertEqual(matcher.pairs[1], 10)
++
++    def test_unresolved_operand_and_duplicate_candidates_remain_unpaired(self):
++        matcher = self.matcher({1: self.function([(4, 1000), (8, 1100)])},
++            {10: self.function([(4, 2000), (8, 2100)])})
++        self.assertEqual(matcher.pair_reference_shapes({1000: (2000, 'refs')}), 0)
++        matcher = self.matcher({1: self.function([(4, 1000)])},
++            {10: self.function([(4, 2000)]), 20: self.function([(4, 2000)])})
++        self.assertEqual(matcher.pair_reference_shapes({1000: (2000, 'refs')}), 0)
++
++
++class CombinedAnchorTests(unittest.TestCase):
++    def test_data_anchor_and_known_call_select_the_joint_user(self):
++        from collections import defaultdict
++        def side(functions, callees):
++            return SimpleNamespace(functions=functions, callees=callees, symbol_names={})
++        left = side({1: {'refs': [(0, 100)]}}, defaultdict(set, {1: {5}}))
++        right = side({10: {'refs': [(4, 200)]}, 20: {'refs': [(8, 200)]}},
++                     defaultdict(set, {10: {50}, 20: {60}}))
++        matcher = Matcher(left, right)
++        matcher.bind(5, 50, 'reviewed')
++        self.assertEqual(matcher.pair_data_users({100: (200, 'refs')}), 1)
++        self.assertEqual(matcher.pairs[1], 10)
++
++    def test_single_data_anchor_requires_a_known_callee(self):
++        from collections import defaultdict
++        left = SimpleNamespace(functions={1: {'refs': [(0, 100)]}},
++                               callees=defaultdict(set), symbol_names={})
++        right = SimpleNamespace(functions={10: {'refs': [(0, 200)]}},
++                                callees=defaultdict(set), symbol_names={})
++        matcher = Matcher(left, right)
++        self.assertEqual(matcher.pair_data_users({100: (200, 'refs')}), 0)
++
++
++class LeafBodyPairingTests(unittest.TestCase):
++    def test_kext_target_has_priority_and_native_addresses_remain_distinct(self):
++        import struct
++        code = struct.pack('<2I', 0xf9407000, 0xd65f03c0)
++        def side(addresses):
++            return SimpleNamespace(functions={a: {'end': a + len(code)} for a in addresses},
++                symbol_names={}, image=SimpleNamespace(read=lambda a, size: code))
++        matcher = Matcher(side([0x1000, 0x2000]), side([0x3000]))
++        self.assertEqual(matcher.pair_leaf_bodies({0x2000}), 1)
++        self.assertEqual(matcher.pairs, {0x2000: 0x3000})
++        self.assertEqual(matcher.pair_leaf_bodies({0x1000}), 0)
++
++
++class TailBodyPairingTests(unittest.TestCase):
++    def matcher(self, *, native_target=0x4000, native_prefix=()):
++        import struct
++        def side(start, target, prefix):
++            branch = 0x14000000 | (((target - start - len(prefix) * 4) // 4) & 0x3ffffff)
++            code = struct.pack('<' + 'I' * (len(prefix) + 1), *prefix, branch)
++            return SimpleNamespace(functions={start: {'end': start + len(code)}}, symbol_names={},
++                image=SimpleNamespace(read=lambda a, size: code))
++        return Matcher(side(0x1000, 0x3000, ()), side(0x2000, native_target, native_prefix))
++
++    def test_bound_callee_and_identical_prefix_bind_the_wrapper(self):
++        matcher = self.matcher()
++        matcher.bind(0x3000, 0x4000, 'reviewed')
++        self.assertEqual(matcher.pair_tail_bodies({0x1000}), 1)
++        self.assertEqual(matcher.pairs[0x1000], 0x2000)
++
++    def test_unknown_or_different_callee_and_changed_arguments_are_rejected(self):
++        matcher = self.matcher()
++        self.assertEqual(matcher.pair_tail_bodies({0x1000}), 0)
++        for matcher in (self.matcher(native_target=0x5000), self.matcher(native_prefix=(0xd2800000,))):
++            matcher.bind(0x3000, 0x4000, 'reviewed')
++            self.assertEqual(matcher.pair_tail_bodies({0x1000}), 0)
++
++
++class AllocationViewTests(unittest.TestCase):
++    def side(self, base, *, size=4, signature=b'', count=1):
++        import struct
++        data = bytearray(0x6000)
++        data[0x5000:0x5000 + len(signature) + 1] = signature + b'\0'
++        fixups = {}
++        for i in range(count):
++            at = base + i * 64
++            struct.pack_into('<I', data, at + 44, size)
++            fixups[at + 16] = (0x4000, 0, None, None, None)
++            fixups[at + 32] = (0x5000, 0, None, None, None)
++        image = SimpleNamespace(data=data, offset=lambda address: address,
++            read=lambda address, length: data[address:address + length],
++            cstring=lambda address: 'site.example' if address == 0x4000 else None,
++            sections=[{'name': '__kalloc_type', 'va': base, 'size': count * 64}])
++        return SimpleNamespace(image=image, fixups=fixups)
++
++    def test_unique_name_signature_and_size_bind_the_descriptor(self):
++        matcher = Matcher(self.side(0x1000), self.side(0x2000))
++        known = {}
++        self.assertEqual(matcher.pair_allocation_views(known), 1)
++        self.assertEqual(known, {0x1000: (0x2000, 'allocation-view')})
++
++    def test_duplicate_name_changed_signature_or_changed_size_are_rejected(self):
++        for native in (self.side(0x2000, count=2), self.side(0x2000, signature=b'1'), self.side(0x2000, size=8)):
++            matcher = Matcher(self.side(0x1000), native)
++            self.assertEqual(matcher.pair_allocation_views({}), 0)
++
+diff --git a/test_fileset_shape.py b/test_fileset_shape.py
+index 8e8b499..341cd8f 100644
+--- a/test_fileset_shape.py
++++ b/test_fileset_shape.py
+@@ -9,6 +9,30 @@ def shape(words):
+ 
+ 
+ class CheckedShapeTests(unittest.TestCase):
++    def test_authenticated_call_discriminator_copies(self):
++        copied = [0xf8468e08, 0xaa1003e9, 0xaa0003f6, 0xaa0903f1, 0xf2e2c031, 0xd73f0911]
++        reused = [0xf8468e08, 0xaa0003f6, 0xf2e2c030, 0xd73f0910]
++        self.assertEqual(shape(copied)[0], shape(reused)[0])
++        self.assertEqual(shape(copied)[1][20], 12)
++
++    def test_discriminator_copy_with_intervening_operand_use_is_kept(self):
++        code = [0xf8468e08, 0xaa1003e9, 0xaa1003e0, 0xaa0903f1, 0xf2e2c031, 0xd73f0911]
++        self.assertEqual(len(shape(code)[0]), len(code))
++
++    def test_leading_bti_preserves_internal_branches_and_reference_positions(self):
++        body = [0xb4000040, 0x90000008, 0xf9400900, 0xd65f03c0]
++        first, second = shape(body), shape([0xd503245f, *body])
++        self.assertEqual(first[0], second[0])
++        self.assertEqual(second[1][8], 4)
++        self.assertEqual(second[1][12], 8)
++
++    def test_branch_to_entry_keeps_the_landing_pad(self):
++        code = [0xd503245f, 0x17ffffff]
++        self.assertEqual(len(shape(code)[0]), 2)
++
++    def test_internal_bti_is_kept(self):
++        self.assertEqual(len(shape([0xd503201f, 0xd503245f, 0xd65f03c0])[0]), 3)
++
+     def test_authentication_check_preserves_branch_geometry_and_reference_sites(self):
+         # cbz x1,end; autda x16,x17; [check]; mov x0,x16; ret
+         check = [0xaa1003f1,0xdac147f1,0xeb11021f,0x54000040,0xd4388e40]
+@@ -39,5 +63,27 @@ class CheckedShapeTests(unittest.TestCase):
+         self.assertEqual(len(shape([*check,0xd65f03c0])[0]),4)
+ 
+ 
++class LeafBodyTests(unittest.TestCase):
++    def leaf(self, words):
++        from fileset_shape import relocation_free_leaf
++        return relocation_free_leaf(struct.pack('<' + 'I' * len(words), *words), 0x10000)
++
++    def test_memory_accessor_is_identical_with_a_native_landing_pad(self):
++        body = [0xf9407000, 0xd65f03c0]
++        self.assertEqual(self.leaf(body), self.leaf([0xd503245f, *body]))
++        self.assertIsNotNone(self.leaf(body))
++        self.assertNotEqual(self.leaf(body), self.leaf([0xf9407400, 0xd65f03c0]))
++
++    def test_pc_relative_operands_and_calls_are_rejected(self):
++        for word in (0x90000008, 0x10000000, 0x58000000, 0x94000001, 0xd63f0100):
++            self.assertIsNone(self.leaf([word, 0xd65f03c0]))
++
++    def test_internal_conditional_branch_keeps_its_geometry(self):
++        body = [0xb4000040, 0xf9400c00, 0xd65f03c0]
++        self.assertEqual(self.leaf(body), self.leaf([0xd503245f, *body]))
++        self.assertIsNone(self.leaf([0xb4000080, 0xd65f03c0]))
++        self.assertIsNone(self.leaf([0x14000002, 0xd65f03c0]))
++
++
+ if __name__ == '__main__':
+     unittest.main()
