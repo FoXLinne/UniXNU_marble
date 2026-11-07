@@ -1,0 +1,82 @@
+diff --git a/GpuScanoutClient.h b/GpuScanoutClient.h
+index 7b259b5..b5764d6 100644
+--- a/GpuScanoutClient.h
++++ b/GpuScanoutClient.h
+@@ -47,20 +47,34 @@ public:
+         note(0x6710);
+         int status = transport_.call(transport_.context, NGP_METHOD_MODE, nullptr, 0, &mode, sizeof mode);
+         note(0x6711);
+-        if (status || mode.version != NGP_VERSION || mode.format != NGP_BGRX8888 || !mode.width || !mode.height ||
+-            mode.stride < mode.width * 4 || mode.bytes < mode.stride * mode.height) return fail(2, status);
++        if (status || (mode.version != NGP_VERSION && mode.version != NGP_VERSION_BUFFERED) ||
++            mode.format != NGP_BGRX8888 || !mode.width || !mode.height || mode.width > 16384 || mode.height > 16384 ||
++            mode.stride < mode.width * 4 || mode.stride > UINT64_MAX / mode.height ||
++            mode.bytes < mode.stride * mode.height) return fail(2, status);
+         const size_t page = (size_t)getpagesize();
++        if (mode.stride * mode.height > UINT64_MAX - (page - 1)) return fail(2, status);
++        const uint64_t span = (mode.stride * mode.height + page - 1) & ~(uint64_t)(page - 1);
++        buffered_ = mode.version == NGP_VERSION_BUFFERED;
++        if (buffered_ && (span > UINT64_MAX / NGP_MAX_SCANOUT_BUFFERS ||
++                         mode.bytes != span * NGP_MAX_SCANOUT_BUFFERS)) return fail(2, status);
+         uint64_t address = 0, length = 0;
+         note(0x6712);
+         status = transport_.mapScanout(transport_.context, &address, &length);
+         note(0x6713);
+-        if (status || !address || length < mode.bytes) return fail(3, status);
++        if (status || !address || length < mode.bytes || address > UINT64_MAX - length) return fail(3, status);
+         // The mapping covers whole pages; the framebuffer allocation ends on a page boundary, the copy never writes past the last row.
+-        gpupresent::Scanout scanout = {(void *)(uintptr_t)address, (size_t)((mode.bytes + page - 1) & ~(page - 1)), (size_t)mode.stride,
++        gpupresent::Scanout scanout = {(void *)(uintptr_t)address, (size_t)span, (size_t)mode.stride,
+                                        (uint32_t)mode.width, (uint32_t)mode.height};
+         note(0x6714);
+-        scanout_ = scanout;
+-        presenter_ = new gpupresent::Presenter(device, scanout);
++        const unsigned targets = buffered_ ? NGP_MAX_SCANOUT_BUFFERS : 1;
++        for (unsigned i = 0; i < targets; ++i) {
++            scanouts_[i] = scanout;
++            scanouts_[i].base = (void *)(uintptr_t)(address + i * span);
++            presenters_[i] = new gpupresent::Presenter(device, scanouts_[i]);
++            if (!presenters_[i]->ready()) return fail(3, 0);
++        }
++        scanout_ = scanouts_[0];
++        presenter_ = presenters_[0];
+         note(0x6715);
+         if (!presenter_->ready()) return fail(3, 0);
+         stats_->step = 4;
+@@ -70,15 +84,24 @@ public:
+     // protocol error that makes further serving pointless.
+     bool serveOne(uint64_t timeoutMs) {
+         NGPWait wait = {timeoutMs};
+-        NGPSwap swap = {};
++        NGPBufferedSwap buffered = {};
++        NGPSwap &swap = buffered.frame;
+         if (!stats_->timeouts && !stats_->frames) note(0x6720);   // first wait
+-        const int status = transport_.call(transport_.context, NGP_METHOD_WAIT_SWAP, &wait, sizeof wait, &swap, sizeof swap);
++        const int status = transport_.call(transport_.context, NGP_METHOD_WAIT_SWAP, &wait, sizeof wait,
++                                           &buffered, buffered_ ? sizeof buffered : sizeof swap);
+         if (status) {
+             if ((unsigned)status == 0xe00002d6u /* kIOReturnTimeout */) {++stats_->timeouts; return true;}
+             ++stats_->failures;
+             stats_->error = status;
+             return false;
+         }
++        if (buffered.target >= (buffered_ ? NGP_MAX_SCANOUT_BUFFERS : 1)) {
++            ++stats_->failures;
++            stats_->error = 0xe00002c2u;
++            return false;
++        }
++        presenter_ = presenters_[buffered.target];
++        scanout_ = scanouts_[buffered.target];
+         const size_t page = (size_t)getpagesize();
+         {   // measurement: the second half of the run copies half the rows
+             static uint64_t first = 0;
+@@ -127,6 +150,9 @@ private:
+     bool fail(int step, int error) {stats_->step = step; stats_->error = error; return false;}
+     Transport transport_ = {};
+     gpupresent::Presenter *presenter_ = nullptr;
++    gpupresent::Presenter *presenters_[NGP_MAX_SCANOUT_BUFFERS] = {};
++    gpupresent::Scanout scanouts_[NGP_MAX_SCANOUT_BUFFERS] = {};
++    bool buffered_ = false;
+     gpupresent::Scanout scanout_ = {};
+     Stats *stats_ = nullptr;
+ };

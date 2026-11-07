@@ -256,7 +256,7 @@ def build_board(tree, env):
     objects = []
     with (out / 'compile.log').open('w') as log:
         sources = [DEVICE / 'package' / filename for filename in
-                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp',
+                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp', 'MarbleScanout.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
                     'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'NativeResident.cpp',

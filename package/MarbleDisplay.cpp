@@ -29,6 +29,7 @@ extern "C" void marble_gop_static_init(void) __asm__("__GLOBAL__sub_I_NativeGOPP
 static IOService *gpuPresenter;
 extern "C" void native_keyevents_start(void);
 extern "C" void native_marble_touch_report(char *, unsigned);
+extern "C" void native_gop_scanout_restore(void);
 
 extern "C" {
 volatile uint32_t marble_display_stage, marble_display_registered, marble_display_clients;
@@ -207,7 +208,9 @@ void native_legacy_retirement_observed(IOService *) { ++marble_display_retiremen
 bool native_legacy_gpu_offer(void *display, IOMemoryDescriptor *memory, uint64_t stride,
                              uint32_t width, uint32_t height, uint32_t format)
 {
-    return gpuPresenter && native_gop_gpu_offer(gpuPresenter, display, memory, stride, width, height, format);
+    const bool offered = gpuPresenter && native_gop_gpu_offer(gpuPresenter, display, memory, stride, width, height, format);
+    if (!offered) native_gop_scanout_restore();
+    return offered;
 }
 void native_legacy_gpu_fallback_observed(int status) { native_legacy_direct[0] = status; }
 void native_legacy_vsync_observed(unsigned event, unsigned hz)

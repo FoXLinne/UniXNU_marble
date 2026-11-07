@@ -93,6 +93,13 @@ def source_tree(root):
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if applied.returncode:
         subprocess.run(['git', '-C', surface_tree, 'apply', surface_patch], check=True)
+    for component, checkout in [('GopFramebuffer', root / 'GopFramebuffer'),
+                                ('AdrenoMetal', gpu / 'AdrenoMetal')]:
+        patch = DEVICE / 'patches' / component / 'marble-buffered-scanout.patch'
+        applied = subprocess.run(['git', '-C', checkout, 'apply', '--reverse', '--check', patch],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if applied.returncode:
+            subprocess.run(['git', '-C', checkout, 'apply', patch], check=True)
     links = {
         gpu / 'GopFramebuffer': root / 'GopFramebuffer',
         tree / 'drivers/Adreno740': gpu / 'Adreno740',

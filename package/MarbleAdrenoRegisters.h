@@ -5,6 +5,9 @@
 #define GEN7_GBIF_HALT_ACK 0x3c46
 #define GEN7_RBBM_SW_RESET_CMD 0x00043
 #include <stdint.h>
+static constexpr uint32_t MarbleGpuPreemptInterrupt = 1U << 8;
+static constexpr uint32_t MarbleGpuFenceInterrupt = 1U << 20;
+static constexpr uint32_t MarbleGpuInterruptMask = MarbleGpuPreemptInterrupt | MarbleGpuFenceInterrupt;
 enum : uint32_t {
     GEN7_CP_APERTURE_CNTL_HOST = 0xa00,
     GEN7_CP_APRIV_CNTL = 0x844,

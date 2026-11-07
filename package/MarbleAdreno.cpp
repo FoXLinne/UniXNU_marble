@@ -5,6 +5,7 @@
 #include <kern/clock.h>
 #include <kern/task.h>
 #include <kern/thread.h>
+#include <kern/thread_call.h>
 #include <machine/machine_routines.h>
 #include <IOKit/IOService.h>
 #include <IOKit/IOPlatformExpert.h>
@@ -36,6 +37,9 @@ extern "C" int native_marble_gmu_write(uint32_t, uint32_t);
 extern "C" int get_preemption_level(void);
 extern "C" void native_adreno_set_restart(NativeAdrenoRestart, void *);
 extern "C" kmod_info_t g_kernel_kmod_info;
+// Interrupt count, observed sources, last source, fence IRQs, preemption IRQs,
+// waiter sleeps, timed-out sleeps and deferred preemption completions.
+extern "C" { volatile uint32_t marble_gpu_irq[8]; }
 
 namespace {
 class CommandProcessor {
@@ -47,6 +51,7 @@ class CommandProcessor {
     NativeAdrenoRing backgroundRing;
     bool irqAttached = false;
     volatile uint32_t interrupts = 0;
+    thread_call_t preemptCall = nullptr;
     unsigned preemptMode = 2;
     NativeAdrenoSubmit submit;
     NativeAdrenoTimer timer;
@@ -89,16 +94,32 @@ class CommandProcessor {
         if (self && self->irqAttached && ml_get_interrupts_enabled() &&
             !ml_at_interrupt_context() && get_preemption_level() == 0) {
             assert_wait_timeout(event_t(&self->interrupts), THREAD_UNINT, 1000, NSEC_PER_USEC);
-            thread_block(THREAD_CONTINUE_NULL);
+            const wait_result_t result = thread_block(THREAD_CONTINUE_NULL);
+            __atomic_fetch_add(&marble_gpu_irq[5], 1U, __ATOMIC_RELAXED);
+            if (result == THREAD_TIMED_OUT)
+                __atomic_fetch_add(&marble_gpu_irq[6], 1U, __ATOMIC_RELAXED);
         } else IODelay(20);
         return 0;
+    }
+    static void finishPreemption(thread_call_param_t, thread_call_param_t) {
+        (void)native_adreno_preempt_irq();
+        __atomic_fetch_add(&marble_gpu_irq[7], 1U, __ATOMIC_RELAXED);
     }
     static void interrupt(void *cookie) {
         auto *self = static_cast<CommandProcessor *>(cookie);
         const uint32_t status = self->read(GEN7_RBBM_INT_0_STATUS);
         if (status) self->write(GEN7_RBBM_INT_CLEAR_CMD, status);
         ++self->interrupts;
-        if (status & (1U << 8)) (void)native_adreno_preempt_irq();
+        marble_gpu_irq[0] = self->interrupts;
+        marble_gpu_irq[1] |= status;
+        marble_gpu_irq[2] = status;
+        if (status & MarbleGpuFenceInterrupt) ++marble_gpu_irq[3];
+        if (status & MarbleGpuPreemptInterrupt) {
+            ++marble_gpu_irq[4];
+            // The submission mutex can have a turnstile inheritor. Complete
+            // the switch on a thread, as in sheng's GPU interrupt handler.
+            if (self->preemptCall) thread_call_enter(self->preemptCall);
+        }
         thread_wakeup(event_t(&self->interrupts));
     }
     static int gmuWrite(void *, uint32_t reg, uint32_t value) {
@@ -161,7 +182,7 @@ class CommandProcessor {
         (void)self->read(GEN7_RBBM_SW_RESET_CMD);
         IODelay(1);
         status = self->configure(true, completed);
-        if (!status) self->write(GEN7_RBBM_INT_0_MASK, (1U << 8) | (1U << 15));
+        if (!status) self->write(GEN7_RBBM_INT_0_MASK, MarbleGpuInterruptMask);
         IOLog("MarbleGPU: restart fence=%u status=%x\n", completed, status);
         return status;
     }
@@ -442,11 +463,14 @@ class CommandProcessor {
         if (!status) status = native_adreno_publish(vm, &submit, &ring, &clock, &timer, &publishedInfo, inputBits, outputBits);
         if (status) return status;
         native_adreno_set_restart(restart, this);
+        preemptCall = thread_call_allocate_with_options(finishPreemption, this,
+            THREAD_CALL_PRIORITY_HIGH, THREAD_CALL_OPTIONS_ONCE);
+        if (!preemptCall) return kIOReturnNoMemory;
         status = armcpu_spi_attach(32 + 300, false, interrupt, this, nullptr, nullptr);
         if (status) return status;
         irqAttached = true;
         write(GEN7_RBBM_INT_CLEAR_CMD, 0xffffffff);
-        write(GEN7_RBBM_INT_0_MASK, (1U << 8) | (1U << 15));
+        write(GEN7_RBBM_INT_0_MASK, MarbleGpuInterruptMask);
         native_marble_gpu_checkpoint(MarbleGpuFamily);
         status = OSKextLoadKextWithIdentifier("com.apple.iokit.IOGPUFamily");
         if (status) return status;

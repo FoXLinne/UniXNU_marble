@@ -102,15 +102,6 @@ index b56848c..5bbe5e1 100644
  // A no-copy import keeps its pages until the runtime frees it, which can be after the buffer object goes (a command buffer still using
  // it). The owner's release (Metal's deallocator, an IOSurface's mapping) waits for that, as Metal's does: run earlier, the owner could
  // unmap or reuse pages the GPU still reads or writes.
-@@ -1120,7 +1120,7 @@ static size_t pvrtcLevelBytes(uint32_t width,uint32_t height,bool twoBit) {
- static bool singleSample() {
-  static const bool enabled=[] {
-   if(const char *value=getenv("NATIVE_METAL_SINGLE_SAMPLE"))return strcmp(value,"0")!=0;
--  return true;
-+  return false;
-  }();
-  return enabled;
- }
 @@ -1155,7 +1155,7 @@ - (MTLTextureSwizzleChannels)swizzle {
   return MTLTextureSwizzleChannelsMake((MTLTextureSwizzle)(s&255),(MTLTextureSwizzle)((s>>8)&255),(MTLTextureSwizzle)((s>>16)&255),(MTLTextureSwizzle)((s>>24)&255));
  }
@@ -214,8 +205,7 @@ index dc090ab..9459dab 100644
  
  The frontend uses metal2vulkan and Turnip with the kernel GPU interface and selected OS ABI. GPU composition has been verified on sheng with A740.
  
--All clients use single-sample rendering by default. `NATIVE_METAL_SINGLE_SAMPLE=0` preserves a process's requested sample counts; `1` forces single-sample rendering. Texture types, pipeline sample counts and resolve outputs follow the selected policy. Same-user clients share writable shader caches. Resource aliasing, swizzles, range copies, function constants, specialized link names and allocation queries reach the runtime. Queue priorities aggregate current live requests without a process-name policy.
-+Clients preserve requested sample counts by default. `NATIVE_METAL_SINGLE_SAMPLE=0` preserves a process's requested sample counts; `1` forces single-sample rendering. Texture types, pipeline sample counts and resolve outputs follow the selected policy. Same-user clients share writable shader caches. Resource aliasing, swizzles, range copies, function constants, specialized link names and allocation queries reach the runtime. Queue priorities aggregate current live requests without a process-name policy.
+ All clients use single-sample rendering by default. `NATIVE_METAL_SINGLE_SAMPLE=0` preserves a process's requested sample counts; `1` forces single-sample rendering. Texture types, pipeline sample counts and resolve outputs follow the selected policy. Same-user clients share writable shader caches. Resource aliasing, swizzles, range copies, function constants, specialized link names and allocation queries reach the runtime. Queue priorities aggregate current live requests without a process-name policy.
  
  Build and interface details: [documentation](https://unixnu.com/drivers/adreno-metal). Component sources and dependencies: [catalog](https://unixnu.com/reference/components).
  

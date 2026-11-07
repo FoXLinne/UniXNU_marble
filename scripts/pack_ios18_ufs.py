@@ -91,7 +91,8 @@ def main():
                  'offline-key-events=1 sheng-aks=1 '
                  'rootstage-runtime-usb=3 marble-ufs=1 owner-staged-apps=1 '
                  'marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 '
-                 'sheng-gpu-preempt=2 sheng-gpu-ttbr=2')
+                 'sheng-gpu-preempt=2 sheng-gpu-ttbr=2 '
+                 'sheng-early-retire=0 marble-display-flip=1')
     for value in args.kernel_arg:
         if not value or any(ch.isspace() for ch in value) or '\0' in value:
             parser.error('--kernel-arg requires one NAME=VALUE token')
