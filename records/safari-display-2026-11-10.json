@@ -1,0 +1,81 @@
+{
+  "device": "marble",
+  "build": "22H384",
+  "candidate": "wifi-completion-native-20261110",
+  "observations": {
+    "network": "HTTP 200 and completed WebKit resource loads; Safari network data counters active",
+    "composition": "backboardd Metal committed/completed counters advance",
+    "web_content": "user reports black page content",
+    "gpu_role": "runningboardd reports nil IOGPU device ref",
+    "layer_lifetime": "WebKit reports failure to mark all layers volatile"
+  },
+  "next_capture": "safari-display-20261110 log-gpu=1; same kernel and plugin",
+  "wifi_user_correction": [
+    "Password entry freezes for seconds",
+    "Long spinner before Wi-Fi status icon",
+    "Network not remembered across system restart"
+  ],
+  "user_observation": "Webpage briefly appears; most frames black, corrupted, or solid color",
+  "framework_version": "8621.10.1.10.5",
+  "frameworks": {
+    "WebCore": "44f1875f7b9f3c2bd18b220a2988e3d5073cc8fc187c2bb31714526f75df39a8",
+    "CoreGraphics": "0fcda38721f229aa95f1cd381bac94c1158b4e06b57818d92ee79d88d9da8ca3",
+    "QuartzCore": "7899dc3795d57c9f303e0944679d5ebb08f28bb70d1a2d8955a7175cf724b6c5"
+  },
+  "qualified_call_path": [
+    {
+      "symbol": "WebCore::IOSurface::createPlatformContext",
+      "address": "0x196c3b398"
+    },
+    {
+      "symbol": "CGIOSurfaceContextCreate",
+      "address": "0x184d77348"
+    },
+    {
+      "symbol": "CGIOSurfaceContextCreateWithOptions",
+      "address": "0x184d78ad4"
+    },
+    {
+      "symbol": "load_iosurface_context_vtable",
+      "address": "0x184d84dcc",
+      "target": "QuartzCore CAIOSurfaceContextVTable"
+    },
+    {
+      "symbol": "CA::CG::IOSurfaceContext::create_delegate",
+      "address": "0x184880e68"
+    },
+    {
+      "symbol": "CA::CG::AccelRenderer::acquire",
+      "address": "0x184867328",
+      "metal_context_create_call": "0x18486761c"
+    }
+  ],
+  "source_findings": {
+    "accelerator": "AGXAccelerator exposes MetalPluginName and MetalPluginClassName",
+    "original_iogpu_connection": "NativeAdrenoPublish.cpp returns kIOReturnUnsupported for original IOGPU open types; plugin type 0x4147 is handled",
+    "publication": "NBCommandBuffer::submit calls flushImports(resources,false) before runtime submission",
+    "completion": "NBCommandBuffer::finish calls flushImports(resources,true) before completion handlers",
+    "views": "NBTexture::view keeps parent, buffer, surface and plane references",
+    "diagnostic_limitation": "Captured frontend messages cover backboardd, SpringBoard and renderer services; webpage producer surface bytes and cross-process ownership timeline require capture"
+  },
+  "analysis": {
+    "priority": "shared IOSurface production, ownership and compositor sampling",
+    "reason": "Webpage can appear briefly; resource loads complete; compositor submission/completion counters advance",
+    "candidates": [
+      "Producer/compositor synchronization and cache visibility",
+      "Surface format, row layout and reuse across imports",
+      "IOSurface purgeability and render-target lifetime"
+    ],
+    "status": "root cause under investigation; display behavior unchanged"
+  },
+  "inputs": {
+    "runtime_image": "outputs/UniXNU_marble/safari-display-20261110/boot/marble_temporary_boot.img",
+    "logs": [
+      "outputs/UniXNU_marble/safari-display-20261110/display-syslog.txt",
+      "outputs/UniXNU_marble/safari-display-20261110/page-syslog.txt",
+      "outputs/UniXNU_marble/safari-display-20261110/safari-launch-syslog.txt"
+    ],
+    "assembly": "outputs/UniXNU_marble/safari-display-20261110/frameworks"
+  },
+  "hardware_interruption": "External Extra volume disconnected and remounted during research; source tree remained readable after remount"
+}
