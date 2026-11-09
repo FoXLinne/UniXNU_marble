@@ -76,6 +76,7 @@ pub(crate) struct Directory {
     root: PathBuf,
     build: Hash256,
     capacity: u64,
+    writable: bool,
 }
 
 impl Directory {
@@ -88,10 +89,11 @@ impl Directory {
     /// WebKit's GPU process) still gets its device, and every read and write of the cache is a
     /// miss, as after any later failure.
     pub(crate) fn open(root: PathBuf, build: Hash256, capacity: u64) -> Result<Directory, Failed> {
-        let directory = Directory {
+        let mut directory = Directory {
             root,
             build,
             capacity,
+            writable: true,
         };
         let failed = |path: &Path| {
             let path = path.to_path_buf();
@@ -107,7 +109,10 @@ impl Directory {
             written.and(removed).map_err(failed(&directory.root))
         })();
         match made {
-            Err(_) if std::env::var_os("METAL2VULKAN_SHADER_CACHE_OPTIONAL").is_some() => Ok(directory),
+            Err(_) if std::env::var_os("METAL2VULKAN_SHADER_CACHE_OPTIONAL").is_some() => {
+                directory.writable = false;
+                Ok(directory)
+            }
             Err(failed) => Err(failed),
             Ok(()) => Ok(directory),
         }
@@ -548,6 +553,7 @@ impl Store {
     /// The contents a decoder accepted: a hit from `file` makes its entry the most recently used;
     /// a hit from the queue (no file) is counted as one the directory had not written yet.
     fn accepted(&self, file: Option<&fs::File>) {
+        if !self.directory.writable { return; }
         match file {
             Some(file) => timed(&self.counters.read_nanos, || touch(file)),
             None => count(&self.counters.queued_hits),
@@ -557,6 +563,7 @@ impl Store {
     /// The contents a decoder refused, at `path`: the entry is removed, and a write of it the
     /// cache thread has not made is dropped rather than put in its place.
     fn refused(&self, path: &Path) {
+        if !self.directory.writable { return; }
         if let Some(asked) = &self.asked {
             asked.discard(path);
         }
@@ -616,6 +623,9 @@ impl Store {
 
     /// [`Store::write_soon`] of the file at `path`, named `name`.
     fn write_soon_at(&self, path: PathBuf, name: &str, bytes: Vec<u8>) -> io::Result<u64> {
+        if !self.directory.writable || self.warnings.write_failed.load(Ordering::Relaxed) {
+            return Ok(0);
+        }
         let length = bytes.len() as u64;
         // An entry the queue could never hold whole is written here, as one past a bound is.
         let takeable = length <= QUEUED_BYTES && length <= self.entry_limit();
@@ -659,6 +669,9 @@ impl Store {
     /// file beside it, flushed and renamed over it. The bytes written, or the failure (the
     /// temporary file is removed). An entry larger than [`Store::entry_limit`] fails.
     fn write_at(&self, path: &Path, name: &str, bytes: &[u8]) -> io::Result<u64> {
+        if !self.directory.writable || self.warnings.write_failed.load(Ordering::Relaxed) {
+            return Ok(0);
+        }
         let length = bytes.len() as u64;
         if length > self.entry_limit() {
             return Err(io::Error::other("the entry is larger than the cache takes"));
@@ -709,6 +722,9 @@ impl Store {
 
     /// [`Store::sweep`] (with `unused_builds`) or [`Store::evict`].
     fn scan(&self, stop: &AtomicBool, unused_builds: bool) {
+        if !self.directory.writable || self.warnings.write_failed.load(Ordering::Relaxed) {
+            return;
+        }
         let now = SystemTime::now();
         let own = hex(&self.directory.build);
         let Ok(builds) = fs::read_dir(self.directory.layout_dir()) else {

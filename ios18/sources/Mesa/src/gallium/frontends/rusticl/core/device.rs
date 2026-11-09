@@ -1,4 +1,5 @@
 // Copyright 2020 Red Hat.
+// Copyright 2026 NXP
 // SPDX-License-Identifier: MIT
 
 use crate::api::icd::*;
@@ -8,6 +9,7 @@ use crate::core::platform::*;
 use crate::core::util::*;
 use crate::core::version::*;
 use crate::impl_cl_type_trait_base;
+use crate::rusticl_warn_once;
 
 use mesa_rust::compiler::clc::spirv::SPIRVToNirOptions;
 use mesa_rust::compiler::clc::*;
@@ -31,6 +33,7 @@ use std::convert::TryInto;
 use std::env;
 use std::ffi::CStr;
 use std::fmt::Debug;
+use std::mem::size_of;
 use std::num::NonZeroU64;
 use std::ops::Deref;
 use std::os::raw::*;
@@ -253,6 +256,11 @@ impl HelperContextWrapper for HelperContext<'_> {
 }
 
 impl_cl_type_trait_base!(cl_device_id, Device, [Device], CL_INVALID_DEVICE);
+
+pub enum DeviceFillBuffer {
+    Clear(Vec<u8>),
+    Meta(Vec<u8>),
+}
 
 impl DeviceBase {
     fn fill_format_tables(&mut self) {
@@ -810,6 +818,11 @@ impl DeviceBase {
             }
         }
 
+        if self.memory_sharing_supported() {
+            add_ext(1, 1, 0, "cl_arm_import_memory");
+            add_ext(1, 1, 0, "cl_arm_import_memory_dma_buf");
+        }
+
         if self.svm_supported() {
             add_ext(1, 0, 0, "cl_arm_shared_virtual_memory");
         }
@@ -824,6 +837,31 @@ impl DeviceBase {
                 add_ext(1, 0, 1, "cl_khr_external_semaphore_sync_fd");
             }
             add_ext(1, 0, 1, "cl_khr_semaphore");
+            // Technically we could support this without semaphores, but all the testing requires
+            // them so to be safe we just require both.
+            if self.memory_sharing_supported() {
+                add_ext(1, 0, 1, "cl_khr_external_memory");
+                add_ext(1, 0, 0, "cl_khr_external_memory_dma_buf");
+                add_ext(1, 0, 0, "cl_khr_external_memory_opaque_fd");
+            }
+        }
+
+        if self.has_atomic_float() {
+            add_ext(1, 0, 0, "cl_ext_float_atomics");
+
+            if self.has_atomic_float_add() {
+                add_cap(SpvCapability::SpvCapabilityAtomicFloat32AddEXT);
+                add_feat(1, 0, 0, "__opencl_c_ext_fp32_global_atomic_add");
+                add_feat(1, 0, 0, "__opencl_c_ext_fp32_local_atomic_add");
+                add_spirv(c"SPV_EXT_shader_atomic_float_add");
+            }
+
+            if self.has_atomic_float_minmax() {
+                add_cap(SpvCapability::SpvCapabilityAtomicFloat32MinMaxEXT);
+                add_feat(1, 0, 0, "__opencl_c_ext_fp32_global_atomic_min_max");
+                add_feat(1, 0, 0, "__opencl_c_ext_fp32_local_atomic_min_max");
+                add_spirv(c"SPV_EXT_shader_atomic_float_min_max");
+            }
         }
 
         self.extensions = exts;
@@ -934,13 +972,20 @@ impl DeviceBase {
         Platform::features().intel && self.subgroups_supported()
     }
 
-    pub fn is_gl_sharing_supported(&self) -> bool {
-        self.screen.caps().cl_gl_sharing
-            && self.screen.caps().dmabuf != 0
+    fn can_import_memory(&self) -> bool {
+        self.screen.caps().dmabuf != 0
             && !self.is_device_software()
             && self.screen.is_res_handle_supported()
-            && self.screen.device_uuid().is_some()
+    }
+
+    pub fn memory_sharing_supported(&self) -> bool {
+        self.can_import_memory()
+            && self.screen.caps().cl_gl_sharing
             && self.caps.has_create_fence_fd
+    }
+
+    pub fn is_gl_sharing_supported(&self) -> bool {
+        self.memory_sharing_supported() && self.screen.device_uuid().is_some()
     }
 
     pub fn is_device_software(&self) -> bool {
@@ -984,10 +1029,9 @@ impl DeviceBase {
     }
 
     pub fn fp64_is_softfp(&self) -> bool {
-        bit_check(
-            self.get_nir_options().lower_doubles_options as u32,
-            nir_lower_doubles_options::nir_lower_fp64_full_software as u32,
-        )
+        self.get_nir_options()
+            .lower_doubles_options
+            .are_all_bits_set(nir_lower_doubles_options::nir_lower_fp64_full_software)
     }
 
     pub fn int64_supported(&self) -> bool {
@@ -1351,6 +1395,8 @@ impl DeviceBase {
     pub fn cl_features(&self) -> clc_optional_features {
         let subgroups_supported = self.subgroups_supported();
         clc_optional_features {
+            atomic_fp32_add: self.has_atomic_float_add(),
+            atomic_fp32_minmax: self.has_atomic_float_minmax(),
             extended_bit_ops: true,
             fp16: self.fp16_supported(),
             fp64: self.fp64_supported(),
@@ -1388,6 +1434,19 @@ impl DeviceBase {
         self.screen().device_uuid().is_some() && self.screen().driver_uuid().is_some()
     }
 
+    pub fn has_atomic_float(&self) -> bool {
+        self.has_atomic_float_add() || self.has_atomic_float_minmax()
+    }
+
+    pub fn has_atomic_float_add(&self) -> bool {
+        // This also enables atomics on buffers
+        self.screen().caps().image_atomic_float_add
+    }
+
+    pub fn has_atomic_float_minmax(&self) -> bool {
+        self.screen().caps().atomic_float_minmax
+    }
+
     pub fn spirv_to_nir_opts(&self) -> SPIRVToNirOptions {
         let mut spirv_float_controls = float_controls::FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP32
             | float_controls::FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP16
@@ -1406,12 +1465,68 @@ impl DeviceBase {
             float_controls: spirv_float_controls,
         }
     }
+
+    pub fn optimize_buffer_fill(
+        &self,
+        pattern: &[u8],
+        address: usize,
+        len: usize,
+    ) -> DeviceFillBuffer {
+        debug_assert!(pattern.len().is_power_of_two());
+        debug_assert!(pattern.len() <= 128);
+
+        // somehow ilog2 panics on this value, due to a negative input?!?
+        let pattern_len = pattern.len() as u32;
+        let hw_clear_buffer_sizes = u32::from(self.screen().caps().hw_clear_buffer_sizes);
+        let min_input_pot = pattern.len().trailing_zeros();
+
+        // Fast path
+        if pattern_len & hw_clear_buffer_sizes != 0 {
+            return DeviceFillBuffer::Clear(pattern.to_vec());
+        }
+
+        // We do not support bigger than 64/128 byte fills.
+        let max_pot = if self.int64_supported() { 7 } else { 6 };
+        let max_input_pot = address
+            .trailing_zeros()
+            .min(len.trailing_zeros())
+            .min(max_pot);
+
+        let mut size_pot = max_input_pot;
+        for new_size_pot in (min_input_pot..=max_input_pot).rev() {
+            if (1 << new_size_pot) & hw_clear_buffer_sizes != 0 {
+                size_pot = new_size_pot;
+                break;
+            }
+        }
+
+        let size = 1u32 << size_pot;
+        // Replicate the pattern to the new size
+        let pattern = pattern
+            .iter()
+            .copied()
+            .cycle()
+            .take(size as usize)
+            .collect();
+
+        if size & hw_clear_buffer_sizes != 0 {
+            DeviceFillBuffer::Clear(pattern)
+        } else {
+            DeviceFillBuffer::Meta(pattern)
+        }
+    }
 }
 
 impl Device {
     pub fn mem_base_addr_align_bytes(&self) -> usize {
-        // TODO: proper retrieval from the underlying device/screen
-        0x200
+        // CL spec: the minimum value is the size of the largest OpenCL built-in data type
+        // supported by the device (long16 in FULL profile, long16 or int16 in EMBEDDED profile).
+        // Sub-buffers are simply offsets internally, so no additional hardware alignment is needed.
+        if self.int64_supported() {
+            size_of::<[u64; 16]>()
+        } else {
+            size_of::<[u32; 16]>()
+        }
     }
 
     pub fn mem_base_addr_align_bits(&self) -> u32 {
@@ -1470,8 +1585,21 @@ impl Device {
         spirv_to_nir_opts.caps = &spirv_caps;
 
         let lib_clc = spirv::SPIRVBin::get_lib_clc(dev_base.screen(), spirv_to_nir_opts);
-        if lib_clc.is_none() {
-            eprintln!("Libclc failed to load. Please make sure it is installed and provides spirv-mesa3d-.spv and/or spirv64-mesa3d-.spv");
+        match &lib_clc {
+            None => eprintln!(
+                "Libclc failed to load. Please make sure it is installed and provides
+                spirv-mesa3d-.spv and/or spirv64-mesa3d-.spv"
+            ),
+            Some(libclc) => {
+                if !libclc.has_function(c"__clc_mesa_libclc_version") {
+                    rusticl_warn_once!(
+                        "Patched Mesa libclc not detected. Upstream libclc may contain known bugs \
+                        or breaking changes and isn't guaranteed to work reliably. Please visit \
+                        https://gitlab.freedesktop.org/karolherbst/mesa-libclc for more \
+                        information."
+                    );
+                }
+            }
         }
 
         Some(Device {

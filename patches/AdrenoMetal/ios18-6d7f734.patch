@@ -81,10 +81,9 @@ index ba7cd54..52087d8 100644
          }
          gpu->mark(0x6802);
 diff --git a/NativeBridgeMetalFrontend.mm b/NativeBridgeMetalFrontend.mm
-index fcf4dbd..1438942 100644
 --- a/NativeBridgeMetalFrontend.mm
 +++ b/NativeBridgeMetalFrontend.mm
-@@ -912,6 +912,7 @@ - (void)replacePvrtcRegion:(MTLRegion)r mipmapLevel:(NSUInteger)level slice:(NSU
+@@ -912,6 +912,7 @@
  @property(nonatomic) NmbTextureDescriptor descriptor;
  @property(nonatomic,strong) NBBuffer *buffer;
  @property(nonatomic) IOSurfaceRef surface;
@@ -92,26 +91,7 @@ index fcf4dbd..1438942 100644
  @property(nonatomic) NSUInteger offset,rowBytes;
  @property(nonatomic,strong) id<MTLTexture> parent;
  @property(nonatomic,strong) id<MTLHeap> parentHeap;
-@@ -919,8 +920,7 @@ - (void)replacePvrtcRegion:(MTLRegion)r mipmapLevel:(NSUInteger)level slice:(NSU
- @property(nonatomic) BOOL counted;   // its surface counted in use (countUse)
- - (void)countUse;
- @end
--// The render server counts the surfaces it textures in use while the textures live (countUse).
--static const bool gCountsSurfaceUse=!strcmp(getprogname(),"backboardd");
-+// Each texture and view keeps its imported surface in use until the texture is released.
- // A no-copy import keeps its pages until the runtime frees it, which can be after the buffer object goes (a command buffer still using
- // it). The owner's release (Metal's deallocator, an IOSurface's mapping) waits for that, as Metal's does: run earlier, the owner could
- // unmap or reuse pages the GPU still reads or writes.
-@@ -1156,7 +1156,7 @@ - (MTLTextureSwizzleChannels)swizzle {
-  return MTLTextureSwizzleChannelsMake((MTLTextureSwizzle)(s&255),(MTLTextureSwizzle)((s>>8)&255),(MTLTextureSwizzle)((s>>16)&255),(MTLTextureSwizzle)((s>>24)&255));
- }
- - (void)dealloc {DetailSpan timing(5,(uintptr_t)_handle);nmb_texture_release(_handle);if(_surface){if(_counted)IOSurfaceDecrementUseCount(_surface);CFRelease(_surface);}}
--- (void)countUse {if(_surface && !_counted && gCountsSurfaceUse){IOSurfaceIncrementUseCount(_surface);_counted=YES;}}
-+- (void)countUse {if(_surface && !_counted){IOSurfaceIncrementUseCount(_surface);_counted=YES;}}
- - (MTLTextureType)textureType {return (MTLTextureType)_descriptor.type;}
- - (MTLPixelFormat)pixelFormat {return (MTLPixelFormat)(_pvrtc?_pvrtc:_descriptor.format);}
- - (NSUInteger)width {return _descriptor.width;}
-@@ -1172,7 +1172,7 @@ - (MTLCPUCacheMode)cpuCacheMode {return (MTLCPUCacheMode)((_descriptor.options&M
+@@ -1172,7 +1173,7 @@
  - (BOOL)isFramebufferOnly {return _descriptor.framebuffer_only!=0;}
  - (BOOL)isDrawable {return _descriptor.is_drawable!=0;}
  - (IOSurfaceRef)iosurface {return _surface;}
@@ -120,7 +100,7 @@ index fcf4dbd..1438942 100644
  - (id<MTLBuffer>)buffer {return _surface?nil:(id<MTLBuffer>)_buffer;}
  - (NSUInteger)bufferOffset {return _offset;}
  - (NSUInteger)bufferBytesPerRow {return _rowBytes;}
-@@ -1188,7 +1188,7 @@ - (MTLPurgeableState)setPurgeableState:(MTLPurgeableState)state {
+@@ -1188,7 +1189,7 @@
   if(!handle){NBLOG(@"native-metal: texture view refused: %@",lastError());return nil;}
   NBTexture *view=[NBTexture new];view.handle=handle;NmbTextureDescriptor descriptor;nmb_texture_describe(handle,&descriptor);view.descriptor=descriptor;
   view.parent=(id<MTLTexture>)self;view.buffer=_buffer;view.offset=_offset;view.rowBytes=_rowBytes;
@@ -129,7 +109,29 @@ index fcf4dbd..1438942 100644
   return (id<MTLTexture>)view;
  }
  - (id<MTLTexture>)newTextureViewWithPixelFormat:(MTLPixelFormat)format {
-@@ -4063,9 +4063,31 @@ - (BOOL)supportsFeatureSet:(MTLFeatureSet)set {
+@@ -1270,7 +1271,21 @@
+  uint64_t flushed=0;
+  for(auto it=ranges.begin();it!=last;++it) {
+   const uint64_t began=nowUs();
++#if defined(__aarch64__) && defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180000 && __IPHONE_OS_VERSION_MIN_REQUIRED < 190000
++  // SM7475 cores use 64-byte data cache lines. XNU enables SCTLR_EL1.UCI,
++  // allowing EL0 CIVAC. The 22H384 libSystem flush is only DSB ISH.
++  // Before submission, publish CPU pixels and remove their cached aliases.
++  // After the GPU fence, remove clean speculative reads before CPU callbacks.
++  // The command retains these IOSurface allocations through both phases.
++  constexpr uintptr_t line=64;
++  const uintptr_t first=it->first&~(line-1),end=it->first+it->second;
++  __asm__ volatile("dsb sy":::"memory");
++  for(uintptr_t address=first;address<end;address+=line)
++   __asm__ volatile("dc civac, %0"::"r"(address):"memory");
++  __asm__ volatile("dsb sy":::"memory");
++#else
+   sys_dcache_flush(reinterpret_cast<void *>(it->first),it->second);
++#endif
+   gSurfaceFlushBytes+=it->second;gTimeSurfaceFlush.add(began);flushed+=it->second;
+  }
+  return flushed;
+@@ -4063,9 +4078,31 @@
  }
  // The original discovery (_MTLAddDevice) runs these four on every device it registers. The target's own versions fill the base class's limits
  // and feature tables from a hardware profile (`featureProfile`, `indirectArgumentBufferCapabilities`, a table of Apple GPUs) that this device
@@ -164,7 +166,7 @@ index fcf4dbd..1438942 100644
  - (void)initFeatureQueries {}
  - (void)initGPUFamilySupport {}
  - (void)initWorkarounds {}
-@@ -4217,7 +4239,7 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -4217,7 +4254,7 @@
   NBTexture *texture=planes>=2?textureOnSurface(buffer,d,surface,plane,start-(uintptr_t)base,row):textureOnBuffer(buffer,d,start-(uintptr_t)base,row,true);
   if(!texture){refuseSurface(5,surface,d,plane,start-(uintptr_t)base,row);return nil;}
   if(gLogTextures)logTexture("iosurface",d,surface,plane,base,start-(uintptr_t)base,row,texture!=nil);
@@ -173,7 +175,7 @@ index fcf4dbd..1438942 100644
  }
  - (id<MTLLibrary>)newLibraryWithData:(dispatch_data_t)data error:(NSError **)error {
   const void *bytes=nullptr;size_t size=0;dispatch_data_t mapped=dispatch_data_create_map(data,&bytes,&size);
-@@ -4228,7 +4250,14 @@ - (id)newTextureLayoutWithDescriptor:(MTLTextureDescriptor *)d isHeapOrBufferBac
+@@ -4228,7 +4265,14 @@
   if(error)*error=nil;return (id<MTLLibrary>)library;
  }
  - (id<MTLLibrary>)newLibraryWithFile:(NSString *)path error:(NSError **)error {
@@ -189,7 +191,7 @@ index fcf4dbd..1438942 100644
   const uint64_t libraryBegan=nowUs();
   NmbLibrary *handle=nmb_library_new(gDevice,bytes.bytes,bytes.length,false);gTimeLibrary.add(libraryBegan);
   if(!handle)return failWith<id<MTLLibrary>>(error,@"library",nil);
-@@ -4618,6 +4647,7 @@ static void logFlowCounts() {
+@@ -4618,6 +4662,7 @@
    for(const auto &c:conformances){Class k=objc_getClass(c[0]);Protocol *pr=objc_getProtocol(c[1]);if(k&&pr)class_addProtocol(k,pr);}}
   objc_registerClassPair(cls);
   gDeviceObject=[cls new];

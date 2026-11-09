@@ -45,16 +45,15 @@ struct pipe_fence_handle;
  */
 struct pipe_video_codec
 {
+   struct pipe_reference reference;
    struct pipe_context *context;
 
    enum pipe_video_profile profile;
    unsigned level;
    enum pipe_video_entrypoint entrypoint;
-   enum pipe_video_chroma_format chroma_format;
    unsigned width;
    unsigned height;
    unsigned max_references;
-   bool expect_chunked_decode;
    struct pipe_enc_two_pass_encoder_config two_pass;
 
    /**
@@ -279,6 +278,16 @@ struct pipe_video_buffer
     */
    void *statistics_data;
 };
+
+static inline void
+pipe_video_codec_reference(struct pipe_video_codec **dst, struct pipe_video_codec *src)
+{
+   struct pipe_video_codec *old_dst = *dst;
+
+   if (pipe_reference(old_dst ? &old_dst->reference : NULL, src ? &src->reference : NULL))
+      old_dst->destroy(old_dst);
+   *dst = src;
+}
 
 #ifdef __cplusplus
 }

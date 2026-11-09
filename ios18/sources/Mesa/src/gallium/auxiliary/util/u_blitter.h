@@ -72,13 +72,11 @@ struct blitter_context
     *
     * \param type   Semantics of the attributes "attrib".
     *               If type is UTIL_BLITTER_ATTRIB_NONE, ignore them.
-    *               If type is UTIL_BLITTER_ATTRIB_COLOR, the attributes
-    *               make up a constant RGBA color, and should go
-    *               to the GENERIC0 varying slot of a fragment shader.
-    *               If type is UTIL_BLITTER_ATTRIB_TEXCOORD, {a1, a2} and
-    *               {a3, a4} specify top-left and bottom-right texture
-    *               coordinates of the rectangle, respectively, and should go
-    *               to the GENERIC0 varying slot of a fragment shader.
+    *               If type is UTIL_BLITTER_ATTRIB_TEXCOORD_XY or
+    *               UTIL_BLITTER_ATTRIB_TEXCOORD_XYZW, attrib stores the
+    *               2-component or 4-component texture coordinates of the
+    *               rectangle, and should go to the GENERIC0 varying slot of a
+    *               fragment shader.
     *
     * \param attrib See type.
     *
@@ -117,6 +115,10 @@ struct blitter_context
    bool is_sample_mask_saved;
    unsigned saved_sample_mask;
    unsigned saved_min_samples;
+
+   bool is_sample_coverage_saved;
+   float saved_sample_coverage;
+   bool saved_sample_coverage_invert;
 
    unsigned saved_num_sampler_states;
    void *saved_sampler_states[PIPE_MAX_SAMPLERS];
@@ -294,7 +296,8 @@ void util_blitter_generate_mipmap(struct blitter_context *blitter,
                                   struct pipe_resource *tex,
                                   enum pipe_format format,
                                   unsigned base_level, unsigned last_level,
-                                  unsigned first_layer, unsigned last_layer);
+                                  unsigned first_layer, unsigned last_layer,
+                                  unsigned num_downscales);
 
 /**
  * Helper function to initialize a view for copy_texture_view.
@@ -589,6 +592,24 @@ util_blitter_save_sample_mask(struct blitter_context *blitter,
    blitter->is_sample_mask_saved = true;
    blitter->saved_sample_mask = sample_mask;
    blitter->saved_min_samples = min_samples;
+}
+
+/* Drivers implementing pipe_context::set_sample_coverage have to save the
+ * coverage here, the blitter draws with it disabled otherwise. Calling this
+ * without the hook is harmless, so a driver that only offers it on some
+ * hardware does not have to repeat the condition.
+ */
+static inline void
+util_blitter_save_sample_coverage(struct blitter_context *blitter,
+                                  float sample_coverage,
+                                  bool sample_coverage_invert)
+{
+   if (!blitter->pipe->set_sample_coverage)
+      return;
+
+   blitter->is_sample_coverage_saved = true;
+   blitter->saved_sample_coverage = sample_coverage;
+   blitter->saved_sample_coverage_invert = sample_coverage_invert;
 }
 
 static inline void

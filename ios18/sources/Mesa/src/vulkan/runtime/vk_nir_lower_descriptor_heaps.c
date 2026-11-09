@@ -220,7 +220,7 @@ load_indirect(nir_builder *b, unsigned bit_size, nir_def *addr, unsigned offset)
 {
    assert(bit_size % 8 == 0);
    assert(offset % (bit_size / 8) == 0);
-   addr = nir_iadd_imm(b, addr, offset);
+   addr = nir_iadd_imm_nuw(b, addr, offset);
    return nir_load_global_constant(b, 1, bit_size, addr);
 }
 
@@ -229,7 +229,7 @@ load_shader_record(nir_builder *b, unsigned bit_size, unsigned offset)
 {
    assert(bit_size % 8 == 0);
    assert(offset % (bit_size / 8) == 0);
-   nir_def *addr = nir_iadd_imm(b, nir_load_shader_record_ptr(b), offset);
+   nir_def *addr = nir_iadd_imm_nuw(b, nir_load_shader_record_ptr(b), offset);
    return nir_load_global_constant(b, 1, bit_size, addr);
 }
 
@@ -277,7 +277,7 @@ vk_build_descriptor_heap_offset(nir_builder *b,
    assert(binding >= mapping->firstBinding);
    const uint32_t rel_binding = binding - mapping->firstBinding;
    assert(rel_binding < mapping->bindingCount);
-   nir_def *shader_index = nir_iadd_imm(b, index, rel_binding);
+   nir_def *shader_index = nir_iadd_imm_nuw(b, index, rel_binding);
 
    const bool is_sampled_image = resource_type == nir_resource_type_combined_sampled_image;
 
@@ -296,8 +296,8 @@ vk_build_descriptor_heap_offset(nir_builder *b,
          heap_offset = data->heapOffset;
       }
 
-      return nir_iadd_imm(b, nir_imul_imm(b, shader_index, array_stride),
-                             heap_offset);
+      return nir_iadd_imm_nuw(b, nir_imul_imm_nuw(b, shader_index, array_stride),
+                              heap_offset);
    }
 
    case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT: {
@@ -320,16 +320,16 @@ vk_build_descriptor_heap_offset(nir_builder *b,
       if (is_sampled_image && is_sampler) {
          array_stride = data->samplerHeapArrayStride;
          nir_def *push_offset =
-            nir_imul_imm(b, push_index, data->samplerHeapIndexStride);
-         offset = nir_iadd_imm(b, push_offset, data->samplerHeapOffset);
+            nir_imul_imm_nuw(b, push_index, data->samplerHeapIndexStride);
+         offset = nir_iadd_imm_nuw(b, push_offset, data->samplerHeapOffset);
       } else {
          array_stride = data->heapArrayStride;
          nir_def *push_offset =
-            nir_imul_imm(b, push_index, data->heapIndexStride);
-         offset = nir_iadd_imm(b, push_offset, data->heapOffset);
+            nir_imul_imm_nuw(b, push_index, data->heapIndexStride);
+         offset = nir_iadd_imm_nuw(b, push_offset, data->heapOffset);
       }
 
-      return nir_iadd(b, offset, nir_imul_imm(b, shader_index, array_stride));
+      return nir_iadd_nuw(b, offset, nir_imul_imm_nuw(b, shader_index, array_stride));
    }
 
    case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_INDIRECT_INDEX_EXT: {
@@ -357,22 +357,22 @@ vk_build_descriptor_heap_offset(nir_builder *b,
       if (is_sampled_image && is_sampler) {
          array_stride = data->samplerHeapArrayStride;
          nir_def *indirect_offset =
-            nir_imul_imm(b, indirect_index, data->samplerHeapIndexStride);
-         offset = nir_iadd_imm(b, indirect_offset, data->samplerHeapOffset);
+            nir_imul_imm_nuw(b, indirect_index, data->samplerHeapIndexStride);
+         offset = nir_iadd_imm_nuw(b, indirect_offset, data->samplerHeapOffset);
       } else {
          array_stride = data->heapArrayStride;
          nir_def *indirect_offset =
-            nir_imul_imm(b, indirect_index, data->heapIndexStride);
-         offset = nir_iadd_imm(b, indirect_offset, data->heapOffset);
+            nir_imul_imm_nuw(b, indirect_index, data->heapIndexStride);
+         offset = nir_iadd_imm_nuw(b, indirect_offset, data->heapOffset);
       }
 
-      return nir_iadd(b, offset, nir_imul_imm(b, shader_index, array_stride));
+      return nir_iadd_nuw(b, offset, nir_imul_imm_nuw(b, shader_index, array_stride));
    }
 
    case VK_DESCRIPTOR_MAPPING_SOURCE_RESOURCE_HEAP_DATA_EXT: {
       const VkDescriptorMappingSourceHeapDataEXT *data =
          &mapping->sourceData.heapData;
-      return nir_iadd_imm(b, load_push(b, 32, data->pushOffset),
+      return nir_iadd_imm_nuw(b, load_push(b, 32, data->pushOffset),
                           data->heapOffset);
    }
 
@@ -392,8 +392,8 @@ vk_build_descriptor_heap_offset(nir_builder *b,
       }
 
       /* The shader index goes into the indirect. */
-      indirect_addr = nir_iadd(b, indirect_addr,
-                               nir_u2u64(b, nir_imul_imm(b, shader_index, 4)));
+      indirect_addr = nir_iadd_nuw(b, indirect_addr,
+                                   nir_u2u64(b, nir_imul_imm_nuw(b, shader_index, 4)));
       nir_def *indirect_index = load_indirect(b, 32, indirect_addr,
                                              addr_offset);
 
@@ -403,12 +403,12 @@ vk_build_descriptor_heap_offset(nir_builder *b,
 
       if (is_sampled_image && is_sampler) {
          nir_def *indirect_offset =
-            nir_imul_imm(b, indirect_index, data->samplerHeapIndexStride);
-         return nir_iadd_imm(b, indirect_offset, data->samplerHeapOffset);
+            nir_imul_imm_nuw(b, indirect_index, data->samplerHeapIndexStride);
+         return nir_iadd_imm_nuw(b, indirect_offset, data->samplerHeapOffset);
       } else {
          nir_def *indirect_offset =
-            nir_imul_imm(b, indirect_index, data->heapIndexStride);
-         return nir_iadd_imm(b, indirect_offset, data->heapOffset);
+            nir_imul_imm_nuw(b, indirect_index, data->heapIndexStride);
+         return nir_iadd_imm_nuw(b, indirect_offset, data->heapOffset);
       }
    }
 
@@ -433,16 +433,16 @@ vk_build_descriptor_heap_offset(nir_builder *b,
       if (is_sampled_image && is_sampler) {
          array_stride = data->samplerHeapArrayStride;
          nir_def *record_offset =
-            nir_imul_imm(b, record_index, data->samplerHeapIndexStride);
-         offset = nir_iadd_imm(b, record_offset, data->samplerHeapOffset);
+            nir_imul_imm_nuw(b, record_index, data->samplerHeapIndexStride);
+         offset = nir_iadd_imm_nuw(b, record_offset, data->samplerHeapOffset);
       } else {
          array_stride = data->heapArrayStride;
          nir_def *record_offset =
-            nir_imul_imm(b, record_index, data->heapIndexStride);
-         offset = nir_iadd_imm(b, record_offset, data->heapOffset);
+            nir_imul_imm_nuw(b, record_index, data->heapIndexStride);
+         offset = nir_iadd_imm_nuw(b, record_offset, data->heapOffset);
       }
 
-      return nir_iadd(b, offset, nir_imul_imm(b, shader_index, array_stride));
+      return nir_iadd_nuw(b, offset, nir_imul_imm_nuw(b, shader_index, array_stride));
    }
 
    default:
@@ -467,8 +467,8 @@ vk_build_descriptor_heap_address(nir_builder *b,
    }
 
    case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_DATA_EXT:
-      return nir_iadd_imm(b, nir_load_shader_record_ptr(b),
-                          mapping->sourceData.shaderRecordDataOffset);
+      return nir_iadd_imm_nuw(b, nir_load_shader_record_ptr(b),
+                              mapping->sourceData.shaderRecordDataOffset);
 
    case VK_DESCRIPTOR_MAPPING_SOURCE_SHADER_RECORD_ADDRESS_EXT:
       return load_shader_record(b, 64,
@@ -586,12 +586,12 @@ build_buffer_resource_index(nir_builder *b, nir_intrinsic_instr *desc_load)
 
    nir_def *index = nir_imm_int(b, 0);
    while (idx_intrin->intrinsic == nir_intrinsic_vulkan_resource_reindex) {
-      index = nir_iadd(b, index, idx_intrin->src[1].ssa);
+      index = nir_iadd_nuw(b, index, idx_intrin->src[1].ssa);
       idx_intrin = nir_src_as_intrinsic(idx_intrin->src[0]);
    }
 
    assert(idx_intrin->intrinsic == nir_intrinsic_vulkan_resource_index);
-   return nir_iadd(b, index, idx_intrin->src[0].ssa);
+   return nir_iadd_nuw(b, index, idx_intrin->src[0].ssa);
 }
 
 /** Builds a buffer address for deref chain
@@ -677,6 +677,49 @@ get_deref_embedded_sampler(nir_deref_instr *sampler,
 }
 
 static bool
+lower_heaps_tex_deref(nir_builder *b, nir_tex_instr *tex, unsigned src_idx,
+                      nir_tex_src_type new_type, bool *non_uniform_out,
+                      struct heap_mapping_ctx *ctx)
+{
+   bool non_uniform = false;
+   bool is_sampler = new_type == nir_tex_src_sampler_heap_offset;
+   nir_deref_instr *deref = nir_src_as_deref(tex->src[src_idx].src);
+   nir_def *heap_offset = build_deref_heap_offset(b, deref, is_sampler, ctx,
+                                                  &non_uniform);
+   if (heap_offset != NULL) {
+      nir_src_rewrite(&tex->src[src_idx].src, heap_offset);
+      tex->src[src_idx].src_type = new_type;
+      *non_uniform_out |= non_uniform;
+      return true;
+   }
+
+   return false;
+}
+
+static bool
+lower_heaps_samp_deref(nir_builder *b, nir_tex_instr *tex, unsigned src_idx,
+                       nir_tex_src_type new_type, bool *non_uniform_out,
+                       bool *embedded_sampler_out,
+                       unsigned *sampler_index_out,
+                       struct heap_mapping_ctx *ctx)
+{
+   nir_deref_instr *sampler = nir_src_as_deref(tex->src[src_idx].src);
+
+   const VkSamplerCreateInfo *embedded_sampler =
+      get_deref_embedded_sampler(sampler, ctx);
+   if (embedded_sampler == NULL) {
+      return lower_heaps_tex_deref(b, tex, src_idx, new_type, non_uniform_out,
+                                   ctx);
+   } else {
+      nir_tex_instr_remove_src(tex, src_idx);
+      *embedded_sampler_out = true;
+      *sampler_index_out = add_embedded_sampler(ctx, embedded_sampler);
+      b->shader->info.uses_embedded_samplers = true;
+      return true;
+   }
+}
+
+static bool
 lower_heaps_tex(nir_builder *b, nir_tex_instr *tex,
                 struct heap_mapping_ctx *ctx)
 {
@@ -686,47 +729,36 @@ lower_heaps_tex(nir_builder *b, nir_tex_instr *tex,
       nir_tex_instr_src_index(tex, nir_tex_src_sampler_deref);
    bool progress = false;
 
-   nir_deref_instr *texture = nir_src_as_deref(tex->src[texture_src_idx].src);
-   assert(texture != NULL);
-
-   {
-      bool texture_non_uniform = false;
-      nir_def *heap_offset = build_deref_heap_offset(b, texture, false, ctx,
-                                                     &texture_non_uniform);
-      if (heap_offset != NULL) {
-         nir_src_rewrite(&tex->src[texture_src_idx].src, heap_offset);
-         tex->src[texture_src_idx].src_type = nir_tex_src_texture_heap_offset;
-         tex->texture_non_uniform |= texture_non_uniform;
-         progress = true;
-      }
-   }
+   progress |=
+      lower_heaps_tex_deref(b, tex, texture_src_idx,
+                           nir_tex_src_texture_heap_offset,
+                           &tex->texture_non_uniform, ctx);
 
    if (nir_tex_instr_need_sampler(tex)) {
-      /* If this is a combined image/sampler, we may only have an image deref
-       * source and it's also the sampler deref.
-       */
-      nir_deref_instr *sampler = sampler_src_idx < 0 ? texture :
-                                 nir_src_as_deref(tex->src[sampler_src_idx].src);
+      progress |=
+         lower_heaps_samp_deref(b, tex, sampler_src_idx,
+                                nir_tex_src_sampler_heap_offset,
+                                &tex->sampler_non_uniform,
+                                &tex->embedded_sampler,
+                                &tex->sampler_index, ctx);
+   }
 
-      const VkSamplerCreateInfo *embedded_sampler =
-         get_deref_embedded_sampler(sampler, ctx);
-      if (embedded_sampler == NULL) {
-         bool sampler_non_uniform = false;
-         nir_def *heap_offset = build_deref_heap_offset(b, sampler, true, ctx,
-                                                        &sampler_non_uniform);
-         if (heap_offset != NULL) {
-            nir_src_rewrite(&tex->src[sampler_src_idx].src, heap_offset);
-            tex->src[sampler_src_idx].src_type = nir_tex_src_sampler_heap_offset;
-            tex->sampler_non_uniform |= sampler_non_uniform;
-            progress = true;
-         }
-      } else {
-         nir_tex_instr_remove_src(tex, sampler_src_idx);
-         tex->embedded_sampler = true;
-         tex->sampler_index = add_embedded_sampler(ctx, embedded_sampler);
-         b->shader->info.uses_embedded_samplers = true;
-         progress = true;
-      }
+   if (nir_tex_instr_need_texture_2(tex)) {
+      const int texture_2_src_idx =
+         nir_tex_instr_src_index(tex, nir_tex_src_texture_2_deref);
+      const int sampler_2_src_idx =
+         nir_tex_instr_src_index(tex, nir_tex_src_sampler_2_deref);
+
+      progress |=
+         lower_heaps_tex_deref(b, tex, texture_2_src_idx,
+                              nir_tex_src_texture_2_heap_offset,
+                              &tex->texture_2_non_uniform, ctx);
+      progress |=
+         lower_heaps_samp_deref(b, tex, sampler_2_src_idx,
+                                nir_tex_src_sampler_2_heap_offset,
+                                &tex->sampler_2_non_uniform,
+                                &tex->embedded_sampler_2,
+                                &tex->sampler_2_index, ctx);
    }
 
    /* Remove unused sampler sources so we don't accidentally reference things
@@ -1009,6 +1041,9 @@ lower_heaps_intrin(nir_builder *b, nir_intrinsic_instr *intrin,
 {
    switch (intrin->intrinsic) {
    case nir_intrinsic_image_deref_load:
+   case nir_intrinsic_image_deref_input_attachment_load:
+   case nir_intrinsic_image_deref_depth_input_attachment_load:
+   case nir_intrinsic_image_deref_stencil_input_attachment_load:
    case nir_intrinsic_image_deref_sparse_load:
    case nir_intrinsic_image_deref_store:
    case nir_intrinsic_image_deref_atomic:
@@ -1021,6 +1056,9 @@ lower_heaps_intrin(nir_builder *b, nir_intrinsic_instr *intrin,
    case nir_intrinsic_image_deref_store_block_agx:
       return lower_heaps_image(b, intrin, ctx, true);
    case nir_intrinsic_image_heap_load:
+   case nir_intrinsic_image_heap_input_attachment_load:
+   case nir_intrinsic_image_heap_depth_input_attachment_load:
+   case nir_intrinsic_image_heap_stencil_input_attachment_load:
    case nir_intrinsic_image_heap_sparse_load:
    case nir_intrinsic_image_heap_store:
    case nir_intrinsic_image_heap_atomic:
@@ -1042,6 +1080,7 @@ lower_heaps_intrin(nir_builder *b, nir_intrinsic_instr *intrin,
    case nir_intrinsic_store_deref_block_intel:
    case nir_intrinsic_deref_atomic:
    case nir_intrinsic_deref_atomic_swap:
+   case nir_intrinsic_deref_buffer_address:
       return try_lower_heaps_deref_access(b, intrin, ctx);
 
    case nir_intrinsic_load_buffer_ptr_deref:

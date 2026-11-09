@@ -12,10 +12,6 @@ extern "C" {int (*native_adreno_dram_read32)(uint64_t,uint32_t *);int (*native_a
  * coherent mappings at map, unmap, submission and completion. */
 extern "C" {volatile uint32_t native_adreno_io_coherent;volatile uint32_t native_adreno_coherent_skips[4];}
 static bool coherentMapping(unsigned writeback) {return writeback && native_adreno_io_coherent;}
-/* GPU-written imports (render targets) are mapped non-coherent (the GPU stopped inside its end-of-pass clean writing them through
- * write-back mappings), and the CPU never touches their pixels while the GPU owns them: they were cleaned when mapped and need no
- * maintenance per submission, which cost about 60 ms per frame. */
-static bool importedUntouched(const NativeAdrenoMemory *memory) {return memory->imported() && native_adreno_io_coherent;}
 /* Mappings of one cache/shareability/privilege class may share pages; only pages shared across classes refuse. */
 static unsigned aliasClass(unsigned permissions,unsigned writeback,unsigned shareability)
 {return writeback|(shareability<<1)|((permissions&ArmSmmu4KPrivileged)?8u:0u);}
@@ -294,7 +290,7 @@ bool NativeAdrenoVm::erase(Mapping *record)
     return true;
 }
 IOReturn NativeAdrenoVm::map(NativeAdrenoMemory *memory,unsigned upper,uint64_t iova,
-    unsigned permissions,unsigned writeback,unsigned shareability,uint64_t *handle)
+    unsigned permissions,unsigned writeback,unsigned shareability,uint64_t *handle,bool client_maintained)
 {
     if(!handle)return kIOReturnBadArgument;*handle=0;result_={};
     if(!attached_ || poisoned_)return kIOReturnNotReady;
@@ -318,7 +314,7 @@ IOReturn NativeAdrenoVm::map(NativeAdrenoMemory *memory,unsigned upper,uint64_t 
         if(record || !growMappings())break;
     }
     if(!record) {memory->quarantine();return fail(ArmSmmu4KStateMismatch);}
-    *record={memory,0,iova,memory->spanCount(),0,permissions,writeback,shareability,0,upper};++objects_;
+    *record={memory,0,iova,memory->spanCount(),0,permissions,writeback,shareability,0,upper,client_maintained && memory->imported()};++objects_;
     if(coherentMapping(writeback))native_adreno_coherent_skips[0]=native_adreno_coherent_skips[0]+1;
     else {
         checked=memory->publishForDevice(0,memory->bytes(),permissions&ArmSmmu4KWrite,distrust_write_combined_);
@@ -373,7 +369,7 @@ IOReturn NativeAdrenoVm::unmap(uint64_t handle)
     if(status)return fail(status);
     clock.lap(1,1);
     const unsigned upper=record->upper;
-    if(coherentMapping(record->writeback))native_adreno_coherent_skips[1]=native_adreno_coherent_skips[1]+1;
+    if(coherentMapping(record->writeback) || record->client_maintained)native_adreno_coherent_skips[1]=native_adreno_coherent_skips[1]+1;
     else if(record->permissions&ArmSmmu4KWrite) {
         if(record->memory->acquireDeviceWrites(0,record->memory->bytes())!=kIOReturnSuccess)
             return fail(ArmSmmu4KIoError);
@@ -442,7 +438,7 @@ IOReturn NativeAdrenoVm::publishMapped()
     for(size_t i=0;i<high_;++i) {
         const Mapping &m=mappings_[i];
         if(!m.memory)continue;
-        if(coherentMapping(m.writeback) || importedUntouched(m.memory)) {native_adreno_coherent_skips[2]=native_adreno_coherent_skips[2]+1;continue;}
+        if(coherentMapping(m.writeback) || m.client_maintained) {native_adreno_coherent_skips[2]=native_adreno_coherent_skips[2]+1;continue;}
         if(m.memory->publishForDevice(0,m.memory->bytes(),true,distrust_write_combined_,NativeAdrenoPhaseSubmit))return fail(ArmSmmu4KIoError);
     }
     return kIOReturnSuccess;
@@ -453,7 +449,7 @@ IOReturn NativeAdrenoVm::acquireImported()
     for(size_t i=0;i<high_;++i) {
         const Mapping &m=mappings_[i];
         if(!m.memory || !m.memory->imported() || !(m.permissions&ArmSmmu4KWrite))continue;
-        if(coherentMapping(m.writeback) || importedUntouched(m.memory)) {native_adreno_coherent_skips[3]=native_adreno_coherent_skips[3]+1;continue;}
+        if(coherentMapping(m.writeback) || m.client_maintained) {native_adreno_coherent_skips[3]=native_adreno_coherent_skips[3]+1;continue;}
         if(m.memory->acquireDeviceWrites(0,m.memory->bytes(),NativeAdrenoPhaseComplete))return fail(ArmSmmu4KIoError);
     }
     return kIOReturnSuccess;

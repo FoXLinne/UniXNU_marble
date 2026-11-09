@@ -13,6 +13,7 @@ extern volatile uint32_t armcpu_gic_boot[8];
 extern unsigned int vm_page_free_count;
 }
 static unsigned domainFrequency[3], domainState[3];
+extern "C" { volatile uint32_t marble_cpu_l3[4]; }
 
 extern "C" void native_marble_cpu_start(void) {
     auto *memory = IODeviceMemory::withRange(0x17d90000, 0x4000);
@@ -57,6 +58,22 @@ extern "C" void native_marble_cpu_start(void) {
         IOLog("MarbleCPU: domain=%u state=%u->%u frequency_khz=%u readback=%u\n",
             domain, previous, selected, best, registers[0x320 / 4]);
     }
+    // marble-s-oss dcvs_epss.c: the L3 LUT starts at 0x100 and the
+    // shared vote is at 0x90 in the same EPSS block as the CPU domains.
+    unsigned l3Index=0,l3Frequency=0,l3Previous=0;
+    for (unsigned index=0;index<40;++index) {
+        const uint32_t row=base[0x100/4+index];
+        const unsigned frequency=row>>30 ? (row&255)*19200 : 300000;
+        if (index && frequency==l3Previous) break;
+        l3Previous=frequency;
+        if (frequency>l3Frequency) {l3Frequency=frequency;l3Index=index;}
+    }
+    marble_cpu_l3[0]=base[0x90/4];
+    base[0x90/4]=l3Index;
+    __asm__ volatile("dsb sy":::"memory");
+    marble_cpu_l3[1]=l3Index;marble_cpu_l3[2]=l3Frequency;marble_cpu_l3[3]=base[0x90/4];
+    IOLog("MarbleCPU: L3 state=%u->%u frequency_khz=%u readback=%u\n",
+        marble_cpu_l3[0],l3Index,l3Frequency,marble_cpu_l3[3]);
     OSSafeReleaseNULL(mapping);
     OSSafeReleaseNULL(voteMap);
 }

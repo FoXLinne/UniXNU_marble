@@ -51,7 +51,6 @@ struct loader_dri3_blit_context {
    simple_mtx_t mtx;
    struct dri_context *ctx;
    struct dri_screen *cur_screen;
-   const __DRIcoreExtension *core;
 };
 
 /* For simplicity we maintain the cache only for a single screen at a time */
@@ -561,7 +560,11 @@ dri3_handle_present_event(struct loader_dri3_drawable *draw,
       for (b = 0; b < ARRAY_SIZE(draw->buffers); b++) {
          struct loader_dri3_buffer *buf = draw->buffers[b];
 
-         if (buf && buf->pixmap == ie->pixmap)
+         /* Match both client pixmap and our fence so we handle disconnects
+          * correctly
+          */
+         if (buf && buf->pixmap == ie->pixmap &&
+             buf->sync_fence == ie->idle_fence)
             buf->busy = 0;
       }
       break;
@@ -1092,7 +1095,6 @@ loader_dri3_swap_buffers_msc(struct loader_dri3_drawable *draw,
        * request. target_msc=divisor=remainder=0 means "Use glXSwapBuffers()
        * semantic"
        */
-      ++draw->send_sbc;
       if (target_msc == 0 && divisor == 0 && remainder == 0) {
          /* Wait for previous send present request gets its complete event
           * to update the window msc before send next present request.
@@ -1114,13 +1116,12 @@ loader_dri3_swap_buffers_msc(struct loader_dri3_drawable *draw,
           * Nth request at the next vblank. [1 .. N-1] requests are skipped.
           */
          if (draw->swap_interval != 0) {
-            while (draw->recv_sbc + 1 != draw->send_sbc) {
+            while (draw->recv_sbc != draw->send_sbc) {
                if (!dri3_wait_for_event_locked(draw, NULL))
                   break;
             }
          }
-         target_msc = draw->msc + abs(draw->swap_interval) *
-                      (draw->send_sbc - draw->recv_sbc);
+         target_msc = draw->msc + abs(draw->swap_interval);
       } else if (divisor == 0 && remainder > 0) {
          /* From the GLX_OML_sync_control spec:
           *     "If <divisor> = 0, the swap will occur when MSC becomes
@@ -1132,6 +1133,8 @@ loader_dri3_swap_buffers_msc(struct loader_dri3_drawable *draw,
           */
          remainder = 0;
       }
+
+      ++draw->send_sbc;
 
       /* From the GLX_EXT_swap_control spec
        * and the EGL 1.4 spec (page 53):
@@ -1500,14 +1503,15 @@ dri3_alloc_render_buffer(struct loader_dri3_drawable *draw, unsigned int fourcc,
 
          free(mod_reply);
       }
-      buffer->image = dri_create_image_with_modifiers(draw->dri_screen_render_gpu,
-                                              width, height, format,
-                                              __DRI_IMAGE_USE_SHARE |
-                                              __DRI_IMAGE_USE_SCANOUT |
-                                              __DRI_IMAGE_USE_BACKBUFFER |
-                                              (draw->is_protected_content ?
-                                               __DRI_IMAGE_USE_PROTECTED : 0),
-                                              modifiers, count, buffer);
+      buffer->image = dri_create_image(draw->dri_screen_render_gpu,
+                                       width, height, format,
+                                       modifiers, count,
+                                       __DRI_IMAGE_USE_SHARE |
+                                       __DRI_IMAGE_USE_SCANOUT |
+                                       __DRI_IMAGE_USE_BACKBUFFER |
+                                       (draw->is_protected_content ?
+                                        __DRI_IMAGE_USE_PROTECTED : 0),
+                                       buffer);
       free(modifiers);
 
       pixmap_buffer = buffer->image;

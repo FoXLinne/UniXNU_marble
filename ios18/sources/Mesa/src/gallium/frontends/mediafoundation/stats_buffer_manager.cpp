@@ -74,6 +74,8 @@ PipeFormatToD3D12Format( enum pipe_format pipeFormat )
          return DXGI_FORMAT_R32_UINT;
       case PIPE_FORMAT_R8_SINT:
          return DXGI_FORMAT_R8_SINT;
+      case PIPE_FORMAT_R16_SINT:
+         return DXGI_FORMAT_R16_SINT;
       case PIPE_FORMAT_Y8_U8V8_420_UNORM:
          return DXGI_FORMAT_NV12;
       default:
@@ -262,7 +264,7 @@ stats_buffer_manager::stats_buffer_manager( void *logId,
    {
       if( buffer_count < initial_pool_size )
       {
-         HRESULT hr = stats_buffer_manager::CreateSample( entry );
+         hr = stats_buffer_manager::CreateSample( entry );
          if( FAILED( hr ) )
          {
             MFE_ERROR( "[dx12 hmft 0x%p] CreateSample failed", m_logId );

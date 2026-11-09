@@ -32,6 +32,7 @@ pass(nir_builder *b, nir_instr *instr, void *data)
       case nir_intrinsic_ssbo_atomic:
       case nir_intrinsic_ssbo_atomic_swap:
       case nir_intrinsic_get_ssbo_size:
+      case nir_intrinsic_load_ssbo_address:
          lower_buffer(b, intr, 0);
          return true;
 
@@ -119,7 +120,7 @@ pass(nir_builder *b, nir_instr *instr, void *data)
 }
 
 bool
-lvp_nir_lower_desciptor_heaps(nir_shader *shader, const VkShaderDescriptorSetAndBindingMappingInfoEXT *mapping)
+lvp_nir_lower_descriptor_heaps(nir_shader *shader)
 {
    // nir_print_shader(shader, stdout);
    return nir_shader_instructions_pass(shader, pass, nir_metadata_control_flow, NULL);

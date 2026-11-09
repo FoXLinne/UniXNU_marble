@@ -71,10 +71,13 @@ def dependency_closure(cache, roots):
         return None
     _, metadata = prelink_info(cache)
     entries = {e['CFBundleIdentifier']: e for e in metadata['_PrelinkInfoDictionary']}
-    closure, pending = set(), list(roots)
+    # A root written !bundle.id leaves that dependency out, for a kext that only names it in a metaclass comparison: its
+    # OSDynamicCast finds nothing, and rebase_collection takes it off the retained kexts' library lists.
+    excluded = {root[1:] for root in roots if root.startswith('!')}
+    closure, pending = set(), [root for root in roots if not root.startswith('!')]
     while pending:
         identifier = pending.pop()
-        if identifier in closure:
+        if identifier in closure or identifier in excluded:
             continue
         if identifier not in entries:
             raise ValueError(f'Missing prelink dependency: {identifier}')
@@ -138,6 +141,9 @@ def rebase_collection(cache, base, closure=None, early_security_init=None, roots
             # A dependency is loaded for its code. Its drivers would match this board's device tree
             # (cpu, pmgr, platform expert) and start against hardware they were not written for.
             dropped_personalities.append(entry['CFBundleIdentifier'])
+        for root in roots or ():
+            if root.startswith('!') and root[1:] in (entry.get('OSBundleLibraries') or {}):
+                del entry['OSBundleLibraries'][root[1:]]
         entry.pop('_NativePrelinkEarlySecurityInit', None)
         if entry['CFBundleIdentifier'] in (early_security_init or {}):
             # native-security-init.patch: OSKext calls this original registration routine after start.
@@ -686,7 +692,8 @@ def validate_map(raw, native_data, payload):
     return expected
 
 
-def emit_images(raw, native_data, payload, roots, stub_symbol=None, early_security_init=None):
+def emit_images(raw, native_data, payload, roots, stub_symbol=None, early_security_init=None,
+                base_cache_data=None):
     inputs = validate_map(raw, native_data, payload)
     from fileset_match import MATCHER_VERSION, matcher_signature
     if payload.get('matcher_version') != MATCHER_VERSION or payload.get('matcher_signature') != matcher_signature():
@@ -706,7 +713,30 @@ def emit_images(raw, native_data, payload, roots, stub_symbol=None, early_securi
     pairs = {(address + collection_slide) & MASK64: target for address, target in pairs.items()}
     from fileset_segmented import SegmentedEmit
     emit = SegmentedEmit(cache, native, pairs, closure)
-    emit.site_pairs = reviewed_sites(inputs, native, collection_slide)
+    site_inputs = inputs
+    if base_cache_data is not None:
+        # A board can add a missing controller component while retaining its
+        # version-pinned kernel. Reviewed kernel sites keep their identities
+        # after the original executable/data segments compare byte for byte.
+        base_cache = Image(base_cache_data)
+        base_kernel = Image(base_cache_data, base_cache.entries['com.apple.kernel'][1])
+        original_kernel = Image(raw, Image(raw).entries['com.apple.kernel'][1])
+        source_fixups, imported_fixups = base_cache.fixups(), Image(raw).fixups()
+        for segment in base_kernel.segments:
+            if segment['name'] in ('__TEXT', '__LINKEDIT') or not segment['filesize']:
+                continue
+            left = bytearray(base_cache.read(segment['va'], segment['filesize']))
+            right = bytearray(Image(raw).read(segment['va'], segment['filesize']))
+            for site, pointer in source_fixups.items():
+                if segment['va'] <= site and site + 8 <= segment['va'] + segment['filesize']:
+                    if imported_fixups.get(site) != pointer:
+                        raise ValueError('Component import changed an original kernel pointer')
+                    offset = site - segment['va']
+                    left[offset:offset + 8] = right[offset:offset + 8] = bytes(8)
+            if left != right:
+                raise ValueError('Component import changed the original kernel')
+        site_inputs = dict(inputs, kernelcache_sha256=hashlib.sha256(base_cache_data).hexdigest())
+    emit.site_pairs = reviewed_sites(site_inputs, native, collection_slide)
     emit.stub, emit.stubbed = None, defaultdict(Counter)
     emit.old_starts = set(emit.old.function_starts())
     if stub_symbol:

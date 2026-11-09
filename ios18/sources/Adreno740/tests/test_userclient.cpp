@@ -113,8 +113,8 @@ int main()
         CHECK(p.client.submitPriority()==-1);
         CHECK(p.client.setPriority(0,2)==kIOReturnSuccess);
         fixture.gpu_role=6;CHECK(p.client.submitPriority()==0);
-        fixture.gpu_role=3;CHECK(p.client.submitPriority()==2);
-        fixture.gpu_role=4;CHECK(p.client.submitPriority()==2);
+        fixture.gpu_role=3;CHECK(p.client.submitPriority()==0);
+        fixture.gpu_role=4;CHECK(p.client.submitPriority()==0);
         fixture.gpu_role=7;CHECK(p.client.submitPriority()==0);
         CHECK(p.client.setPriority(1,3)==kIOReturnSuccess && p.client.submitPriority()==1);
         CHECK(p.client.setPriority(3,3)==kIOReturnBadArgument && p.client.submitPriority()==1);

@@ -23,11 +23,15 @@ STATIC UINT8 *mVolume;
 STATIC UINTN mVolumeSize;
 STATIC BOOLEAN mRootStage, mRootStorage;
 STATIC BOOLEAN mResidentUsb;
+STATIC BOOLEAN mNativeUsb;
 STATIC VOID *mTemporaryKernel;
 STATIC UINTN mTemporaryKernelBytes;
 EFI_STATUS MarbleRootUsbEnableResident(VOID);
+EFI_STATUS MarbleRootUsbEnableNative(VOID);
 EFI_STATUS MarbleRootUsbStartResident(VOID);
 EFI_STATUS MarbleRootStorage(VOID *TemporaryKernel, UINTN TemporaryKernelBytes);
+VOID MarbleDisplayPrepare(ROOT_STAGE_TABLE *Stage);
+VOID MarbleRtcPrepare(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsb(VOID);
 EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsbContinue(VOID);
@@ -88,7 +92,7 @@ BootReturn(EFI_STATUS Status, UINTN Checkpoint)
   STATIC ROOT_STAGE_TABLE Report;
   ZeroMem(&Report, sizeof(Report));
   Report.Magic = ROOT_STAGE_MAGIC;
-  Report.Version = 2;
+  Report.Version = ROOT_STAGE_VERSION;
   Report.KernelBase = Checkpoint;
   Report.ReturnCount = Status;
   ROOT_STAGE_TABLE *Resident = NULL;
@@ -97,7 +101,7 @@ BootReturn(EFI_STATUS Status, UINTN Checkpoint)
     if (CompareGuid(&StageGuid, &gST->ConfigurationTable[Index].VendorGuid))
       Resident = gST->ConfigurationTable[Index].VendorTable;
   }
-  if (Resident && Resident->Magic == ROOT_STAGE_MAGIC && Resident->Version == 2) {
+  if (Resident && Resident->Magic == ROOT_STAGE_MAGIC && Resident->Version == ROOT_STAGE_VERSION) {
     CopyMem(&Report, Resident, sizeof(Report));
     Report.ReturnCount = Status;
     for (UINTN Index = 0; Index < Resident->Disks[2].Count; Index++) {
@@ -132,6 +136,8 @@ BootReturn(EFI_STATUS Status, UINTN Checkpoint)
 EFI_STATUS
 MarbleRootStorageReturn(ROOT_STAGE_TABLE *Stage)
 {
+  MarbleRtcPrepare(Stage);
+  MarbleDisplayPrepare(Stage);
   ZeroMem(mFirmwareLog,sizeof(mFirmwareLog));
   CopyMem(mFirmwareLog,mBootText,mBootTextUsed*sizeof(CHAR16));
   CaptureBootScreen(mFirmwareLog+65536,sizeof(mFirmwareLog)-65536);
@@ -218,6 +224,7 @@ FindVolume(VOID)
     if (!Blob->Name[0] || Blob->Size > (UINTN)(End - Cursor - sizeof(*Blob))) break;
     if (CompareMem(Blob->Name, "root.storage", sizeof("root.storage")) == 0) mRootStorage = TRUE;
     if (CompareMem(Blob->Name, "root.usb", sizeof("root.usb")) == 0) mResidentUsb = TRUE;
+    if (CompareMem(Blob->Name, "root.nativeusb", sizeof("root.nativeusb")) == 0) mNativeUsb = TRUE;
     if (CompareMem(Blob->Name, "root.stage", sizeof("root.stage")) == 0) mRootStage = TRUE;
     if (CompareMem(Blob->Name, "kernel.seed", sizeof("kernel.seed")) == 0) {
       mTemporaryKernel = Blob + 1;
@@ -254,13 +261,19 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   ZeroMem((VOID *)(UINTN)0xB7000000, 0x100000);
   if (mRootStorage) {
     if (mResidentUsb) {
-      Status=MarbleRootUsbEnableResident();
+      Status=mNativeUsb?MarbleRootUsbEnableNative():MarbleRootUsbEnableResident();
       if (EFI_ERROR(Status)) return BootReturn(Status,9);
     }
     Status=MarbleRootUsbPrepare(NULL);
     if (EFI_ERROR(Status)) Print(L"RootStage USB: %r\r\n",Status);
     Status=MarbleRootStorage(mTemporaryKernel,mTemporaryKernelBytes);
     if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
+    if (mRootStage) {
+      // Service the preboot session on the boot CPU before starting its AP owner.
+      Status=MarbleRootUsbContinue();
+      if (EFI_ERROR(Status)) return BootReturn(Status,10);
+      mRootStage=FALSE;
+    }
     Status=MarbleRootUsbStartResident();
     if (EFI_ERROR(Status)) return BootReturn(Status,10);
     for (UINTN Tick=0;Tick<500;Tick++) {

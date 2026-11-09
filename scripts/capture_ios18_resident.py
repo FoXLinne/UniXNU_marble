@@ -66,7 +66,7 @@ class RetainedKernel:
             size = min(count - len(data), 4096 - (current & 4095))
             physical = self.translate(current, root, bits)
             while size < min(count - len(data), 1024 * 1024):
-                next_size = min(count - len(data) - size, 4096)
+                next_size = min(count - len(data) - size, 4096, 1024 * 1024 - size)
                 if self.translate(current + size, root, bits) != physical + size:
                     break
                 size += next_size
@@ -122,8 +122,8 @@ def capture_data(memory, symbols, output):
     return dict(path=str(path), **metadata)
 
 
-def kernel_symbols(kernel):
-    tools = next(parent / 'XnuPrelink' for parent in kernel.parents
+def kernel_symbols(kernel, tools=None):
+    tools = Path(tools) if tools is not None else next(parent / 'XnuPrelink' for parent in kernel.parents
                  if (parent / 'XnuPrelink/kc_image.py').is_file())
     sys.path.insert(0, str(tools))
     from kc_image import Image
@@ -334,6 +334,7 @@ def capture(channel, kernel, output, data_snapshot=False):
                            ('_marble_display_swap_stage', 4), ('_marble_display_validation', 4),
                            ('_marble_display_rejections', 4), ('_marble_display_mapping', 8),
                            ('_marble_hid_stage', 4), ('_marble_hid_ticks', 4),
+                           ('_marble_haptics_stage', 4), ('_marble_haptics_play_count', 4),
                            ('_num_static_trust_caches', 4), ('_num_engineering_trust_caches', 4),
                            ('_cs_native4k_ready_blobs', 8), ('_cs_native4k_bytes', 8),
                            ('_cs_native4k_full_blocks', 8), ('_cs_native4k_page_checks', 8),

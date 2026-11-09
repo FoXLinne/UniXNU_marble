@@ -63,26 +63,33 @@ def sign(path, identifier=None, entitlement_file=None):
     run('codesign', '--verify', '--strict', path)
 
 
-def build(os_root, output):
+def build(os_root, output, profile=None):
+    spec = json.loads(Path(profile).read_text()) if profile else {}
+    pins = spec.get('pins', PINS)
+    os_target = spec.get('target', 'ios27')
+    os_build = spec.get('build', '24A446')
+    deployment = spec.get('deployment_target', 'arm64e-apple-ios27.0')
     output.mkdir(parents=True, exist_ok=True)
     (output / 'report.json').unlink(missing_ok=True)
     # Preflight every input before creating executable outputs.
     patched = {dest: add_dylib((os_root / source).read_bytes(), DYLIB, pin)
-               for source, (dest, pin) in PINS.items()}
+               for source, (dest, pin) in pins.items()}
     with tempfile.TemporaryDirectory(prefix='build-', dir=output) as temporary:
         work = Path(temporary)
         for directory in ('lib', 'libexec', 'helper', SPRINGBOARD_COPY):
             (work / directory).mkdir(parents=True)
         sdk = run('xcrun', '--sdk', 'iphoneos', '--show-sdk-path', capture=True).stdout.strip()
-        flags = ['-target', 'arm64e-apple-ios27.0', '-isysroot', sdk, '-fobjc-arc', '-O2',
+        flags = ['-target', deployment, '-isysroot', sdk, '-fobjc-arc', '-O2',
                  '-Wall', '-Wextra', '-Werror', '-framework', 'Foundation']
-        run('xcrun', 'clang', *flags, '-dynamiclib', ROOT / 'AppSync.m', ROOT / 'Signing.m', ROOT / 'BacklightMode.m', '-install_name', DYLIB,
+        extras = [ROOT / 'BacklightMode.m'] if os_target == 'ios27' else []
+        run('xcrun', 'clang', *flags, '-dynamiclib', ROOT / 'AppSync.m', ROOT / 'Signing.m', *extras, '-install_name', DYLIB,
             '-Wl,-reexport_framework,Foundation', '-Wl,-compatibility_version,3000',
             '-Wl,-current_version,5027.0.69',
             '-o', work / 'lib/UniXNUAppSync.dylib')
         sign(work / 'lib/UniXNUAppSync.dylib', 'org.unixnu.appsync')
-        signing = signer.build(work / 'libexec/unixnu-ldid')
-        sign(work / 'libexec/unixnu-ldid', 'org.unixnu.ldid')
+        # installd may not start processes: the signer is a library it loads.
+        signing = signer.build(work / 'lib' / signer.LIBRARY, target=deployment)
+        sign(work / 'lib' / signer.LIBRARY, 'org.unixnu.ldid')
         shutil.copytree(Path(signing['cache']) / 'licenses', work / 'libexec/appsync-licenses')
         run('xcrun', 'clang', *flags, ROOT / 'appinst.m', '-o', work / 'libexec/unixnu-appinst')
         entitlement_file = work / 'appinst-entitlements.plist'
@@ -95,9 +102,9 @@ def build(os_root, output):
         # consistent when the copies appear at their original system paths.
         for source, dest in ((HELPER, 'helper'), (SPRINGBOARD, SPRINGBOARD_COPY)):
             shutil.copytree(os_root / source, work / dest, dirs_exist_ok=True)
-            (work / dest / 'UniXNUAppSync.runtime').write_text('24A446\n')
+            (work / dest / 'UniXNUAppSync.runtime').write_text(os_build + '\n')
         originals = {}
-        for source, (dest, pin) in PINS.items():
+        for source, (dest, pin) in pins.items():
             original, target = os_root / source, work / dest
             before = entitlements(original)
             identity = details(original)['identifier']
@@ -108,7 +115,7 @@ def build(os_root, output):
                 raise ValueError('OS entitlements or identifier changed: ' + source)
             originals[source] = dict(sha256=pin, entitlements_preserved=True)
         files = {}
-        for relative in ['lib/UniXNUAppSync.dylib', 'libexec/unixnu-appinst', 'libexec/unixnu-ldid', *patched]:
+        for relative in ['lib/UniXNUAppSync.dylib', 'lib/' + signer.LIBRARY, 'libexec/unixnu-appinst', *patched]:
             path = work / relative
             files[relative] = dict(details(path), sha256=sha(path))
         system_executables = {}
@@ -123,7 +130,7 @@ def build(os_root, output):
                     if sha(path) != sha(original):
                         raise ValueError('nested system executable changed')
                     system_executables['appsync/' + path.relative_to(work).as_posix()] = sha(original)
-        report = dict(target='ios27', build='24A446', hardware_verified=False, originals=originals,
+        report = dict(target=os_target, build=os_build, hardware_verified=False, originals=originals,
                       files=files, scope="all-user-bundles", dynamic_user_trust=True, signature_repair=True, signer=signing,
                       system_executables=system_executables,
                       directories={f'appsync/{name}': name for name in ('lib', 'libexec', 'helper', 'coreservices')})
@@ -133,12 +140,13 @@ def build(os_root, output):
                 shutil.rmtree(previous)
             shutil.move(work / directory, previous)
         (output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(f'Built AppSync 24A446 adapter: all user bundles; {output}')
+    print(f'Built AppSync {os_build} adapter: all user bundles; {output}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--os-root', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--profile', type=Path)
     args = parser.parse_args()
-    build(args.os_root.resolve(), args.output.resolve())
+    build(args.os_root.resolve(), args.output.resolve(), args.profile)

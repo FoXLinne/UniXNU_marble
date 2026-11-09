@@ -49,7 +49,7 @@ bool nmb_device_shader_cache_detail(const NmbDevice *, uint64_t out[24]);
 const char *nmb_runtime_build(void);
 // Linear images made/refused/refused again, shadowed textures, shadow copies, texels copied back, linear passes in place/through copies.
 bool nmb_device_texture_counts(const NmbDevice *, uint64_t out[8]);
-// Records warmed, failed and unread, driver bytes the warm pass added; scheduler passes and batches submitted on the committing thread;
+// Records warmed, failed and unread, driver bytes the warm pass added; scheduler passes and batches submitted by waiting threads;
 // render log waits, and encoder ends the lowering thread lowered.
 bool nmb_device_flow_counts(const NmbDevice *, uint64_t out[8]);
 // Passes begun as instances, split inline; instance splits for a barrier, tile memory, a memoryless write, a pending pipeline; stand-ins
@@ -101,6 +101,8 @@ void nmb_buffer_release(NmbBuffer *);
 void *nmb_buffer_contents(const NmbBuffer *);
 uint64_t nmb_buffer_length(const NmbBuffer *);
 uint64_t nmb_buffer_gpu_address(const NmbBuffer *);
+typedef bool (*NmbImportSync)(uint64_t memory, uint64_t offset, uint64_t bytes, bool acquire);
+bool nmb_buffer_sync_import(const NmbBuffer *, bool acquire, NmbImportSync);
 
 struct NmbTextureDescriptor {
     uint64_t type, format, width, height, depth, levels, samples, array_length, usage, options;
@@ -267,6 +269,7 @@ size_t nmb_command_buffer_error(const NmbCommandBuffer *, char *out, size_t size
 // Metal's MTLCommandBufferError code, or 0 for no error / a translation-runtime refusal.
 uint64_t nmb_command_buffer_metal_error_code(const NmbCommandBuffer *);
 double nmb_command_buffer_gpu_time(const NmbCommandBuffer *, bool end);
+double nmb_command_buffer_kernel_time(const NmbCommandBuffer *, bool end);
 
 /* Events: an MTLEvent (shared false) or an MTLSharedEvent within this process. */
 NmbEvent *nmb_event_new(NmbDevice *, bool shared);

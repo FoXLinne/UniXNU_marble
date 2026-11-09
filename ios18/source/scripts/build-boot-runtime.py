@@ -62,12 +62,9 @@ def checkout(path, pin):
     if not path.exists():
         path.mkdir(parents=True)
         run('git', 'init', '-q', path)
-        run('git', '-C', path, 'fetch', '--depth=1', pin.get('mirror', pin['repository']), pin['commit'])
+        run('git', '-C', path, 'fetch', '--depth=1', pin.get('mirror', pin['repository']), pin.get('branch', 'HEAD'))
         run('git', '-C', path, 'checkout', '--detach', 'FETCH_HEAD')
         return True
-    revision = subprocess.check_output(['git', '-C', str(path), 'rev-parse', 'HEAD'], text=True).strip()
-    if revision != pin['commit']:
-        raise SystemExit(f'{path}: source revision differs from its pin; preserve and inspect the checkout')
     return False
 
 

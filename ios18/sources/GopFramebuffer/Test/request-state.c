@@ -3,6 +3,18 @@
 #include <assert.h>
 #include <string.h>
 int main(void) {
+    {
+        const uint32_t source[4]={0,0,880,1956}, destination[4]={0,0,1080,2400};
+        assert(native_legacy_full_frame_rects(source,destination,1080,2400,880,1956));
+        assert(native_legacy_full_frame_rects(source,destination,1080,2400,896,1968));
+        assert(native_legacy_surface_bounds(880,1956,3584,7012352,7012352));
+        assert(native_legacy_full_frame_rects(destination,destination,1080,2400,1080,2400));
+        assert(!native_legacy_full_frame_rects(source,destination,1080,2400,879,1956));
+        assert(!native_legacy_full_frame_rects(source,destination,1080,2400,880,1955));
+        uint32_t cropped[4]={1,0,880,1956};
+        assert(!native_legacy_full_frame_rects(cropped,destination,1080,2400,896,1968));
+        assert(!native_legacy_full_frame_rects(source,source,1080,2400,880,1956));
+    }
     assert(native_legacy_single_layer_state(1,0,0));
     assert(native_legacy_single_layer_state(0x80000007U,0x80000006U,0xff000000U));
     // Exhaust the four-layer masks: exactly layer zero may remain active.

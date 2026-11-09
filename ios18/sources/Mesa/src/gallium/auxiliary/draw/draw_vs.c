@@ -47,7 +47,6 @@
 
 #include "tgsi/tgsi_dump.h"
 #include "tgsi/tgsi_exec.h"
-#include "tgsi/tgsi_ureg.h"
 
 DEBUG_GET_ONCE_BOOL_OPTION(gallium_dump_vs, "GALLIUM_DUMP_VS", false)
 
@@ -137,7 +136,7 @@ draw_delete_vertex_shader(struct draw_context *draw,
 
    dvs->nr_variants = 0;
 
-   dvs->delete(dvs);
+   dvs->delete(draw, dvs);
 }
 
 
@@ -179,7 +178,8 @@ draw_vs_destroy(struct draw_context *draw)
 
 
 struct draw_vs_variant *
-draw_vs_lookup_variant(struct draw_vertex_shader *vs,
+draw_vs_lookup_variant(struct draw_context *draw,
+                       struct draw_vertex_shader *vs,
                        const struct draw_vs_variant_key *key)
 {
    /* Lookup existing variant:
@@ -190,7 +190,7 @@ draw_vs_lookup_variant(struct draw_vertex_shader *vs,
 
    /* Else have to create a new one:
     */
-   struct draw_vs_variant *variant = vs->create_variant(vs, key);
+   struct draw_vs_variant *variant = vs->create_variant(draw, vs, key);
    if (!variant)
       return NULL;
 

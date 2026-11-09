@@ -423,7 +423,6 @@ clone_tex(clone_state *state, const nir_tex_instr *tex)
 
    ntex->texture_non_uniform = tex->texture_non_uniform;
    ntex->sampler_non_uniform = tex->sampler_non_uniform;
-   ntex->offset_non_uniform = tex->offset_non_uniform;
    ntex->embedded_sampler = tex->embedded_sampler;
 
    ntex->backend_flags = tex->backend_flags;
@@ -855,6 +854,7 @@ nir_shader_clone(void *mem_ctx, const nir_shader *s)
    ns->info.name = ralloc_strdup(ns, ns->info.name);
    if (ns->info.label)
       ns->info.label = ralloc_strdup(ns, ns->info.label);
+   ns->info.spec = ralloc_strdup(ns, ns->info.spec);
 
    ns->num_inputs = s->num_inputs;
    ns->num_uniforms = s->num_uniforms;

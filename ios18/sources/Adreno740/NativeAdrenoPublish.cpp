@@ -65,6 +65,7 @@ enum : UInt32 {NativeAdrenoExportMethod=0x7100,NativeAdrenoExportMaxPiece=3968};
 extern "C" int boot_log_export_put(uint32_t generation,uint32_t total,uint32_t offset,const void *data,uint32_t size) __attribute__((weak_import));
 extern "C" {volatile uint32_t native_adreno_export_stats[4];}   /* [0] pieces taken, [1] refused, [2] last generation, [3] its total bytes */
 extern "C" IOMemoryDescriptor *native_gop_handoff_memory(void);
+extern "C" void native_gop_handoff_close(task_t);
 
 /* Mailbox: a last-resort command channel for a sandbox that admits no external-method selector at all. It is one shared page (memory
  * type NativeAdrenoMailboxType through IOConnectMapMemory64, which the selector filter does not cover) and a kernel poller that runs
@@ -431,6 +432,7 @@ bool AGXDeviceUserClient::growViews(uint32_t token)
 IOReturn AGXDeviceUserClient::clientClose()
 {
     IOLockLock(g.lock);closing_=true;IOLockUnlock(g.lock);
+    if(handoffOnly_)native_gop_handoff_close(cpuTask_);
     dropViews(0);
     IOLockLock(g.lock);
     IOReturn status=kIOReturnSuccess;
@@ -960,7 +962,8 @@ IOReturn AGXDeviceUserClient::externalMethod(uint32_t selector,IOExternalMethodA
         {&action,0,sizeof(NativeAdrenoAbiPriority),0,0},
         {&action,0,sizeof(NativeAdrenoAbiNote),0,0},
         {&action,0,sizeof(NativeAdrenoAbiBoCpuMapTask),0,sizeof(NativeAdrenoAbiBoCpuMapTaskReply)},
-        {&action,0,sizeof(NativeAdrenoAbiBoCpuUnmapTask),0,0}};
+        {&action,0,sizeof(NativeAdrenoAbiBoCpuUnmapTask),0,0},
+        {&action,0,sizeof(NativeAdrenoAbiBoSync),0,0}};
     native_adreno_metal_diag.ext_entries=native_adreno_metal_diag.ext_entries+1;
     if(selector<256)native_adreno_metal_diag.sel_bits[selector>>5]|=1u<<(selector&31);
     /* Tunnel. The sandbox resolves a filter policy for this class at open time and then admits only the selectors its profile lists,
@@ -1269,6 +1272,15 @@ extern "C" bool native_adreno_fences_detail(uint32_t *submitted,uint32_t *retire
 extern "C" bool native_adreno_fences(uint32_t *submitted,uint32_t *retired)
 {
     return native_adreno_fences_detail(submitted,retired,nullptr);
+}
+extern "C" bool native_adreno_owner_fences(int32_t owner,uint32_t *submitted,uint32_t *retired,uint32_t *detail)
+{
+    if(detail){detail[0]=detail[1]=detail[2]=0;}
+    if(!g.published || !g.submit || !submitted || !retired)return false;
+    if(!IOLockTryLock(g.lock)){if(detail)detail[2]=1;return false;}
+    const bool known=g.submit->ownerFenceProgress(owner,submitted,retired,detail);
+    if(detail)detail[2]=known?2:3;
+    IOLockUnlock(g.lock);return known;
 }
 /* Publishes the service once. Everything passed in must outlive the system (the board probe keeps them in statics) and
  * the VM, submit object and ring must already be attached to the live GPU context. The core must not be open. */

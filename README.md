@@ -67,6 +67,10 @@ CPU 归属定义位于 `package/MarblePkg/MarbleCpuOwnership.h`。驻留 USB 服
 
 `scripts/observe_ios18_boot.py --once --skip-threads` 保存进程列表、异常退出、GPU 状态与内核日志。`scripts/capture_ios18_gpu_trace.py --swipes 6` 记录滑动窗口、提交到退役时序与交换间隔，输出 `events.json` 和 `summary.json`。交换退役时序与面板刷新时序分别记录。
 
+marble 的通话状态采用空闲策略：22H384 的通话数量与桌面通话查询返回空闲，通话初始状态获取和刷新入口立即返回。内核在签名校验后的页面核对原始指令并应用七处修补，启动策略关闭 CommCenter 辅助服务、callservicesd、语音信箱及通话记录同步服务。来源与运行记录见 `CURRENT.json` 的“通话空闲策略”。
+
+RootStage 保存初始显示管线和显示 SMMU 状态，内核返回时恢复 GOP 扫描输出。USB 替换 KernelSeed 期间暂停旧显示、RTC 共享区访问，启动前绑定新共享区。`scripts/test_root_display_handoff.py` 检查共享区迁移、管线与 SMMU 恢复、呈现超时和恢复。基线打包可通过 `pack_ios18_ufs.py --firmware-binaries PATH` 选择本轮构建的 MarbleBoot 应用。
+
 iOS 18 用户态构建携带 arm64e `MarblePhoneUI.dylib` 和配套 owner trust cache。`build_ios18_gpu.py ui` 为用户态产物构建屏幕适配器。Metal 的 2D 纹理能力查询填充 22H384 的内嵌 `limits` 表，供 Tungsten 与 PhotosUICore 读取。
 
 显示寄存器采样需要显式启动参数 `marble-display-mmio=1`。发行镜像采用默认关闭配置，操作 5 返回权限状态。采样路径使用内核 IOKit 映射，显示电源与时钟归属验证属于启用前提。帧提交与交换间隔观测读取 RAM 中的事件记录。

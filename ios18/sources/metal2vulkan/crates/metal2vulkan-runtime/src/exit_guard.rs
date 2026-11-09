@@ -912,6 +912,59 @@ where
 /// of them starts (the reaper a pipeline state's last release
 /// starts on a handler thread, a program's thread made in a handler) does not take either: it
 /// starts at the default class on macOS ([`spawn`]), and with no floor on Linux.
+#[cfg(target_os = "ios")]
+#[derive(Clone, Default)]
+struct InteractiveStartup(std::sync::Arc<std::sync::Mutex<InteractiveStartupState>>);
+
+#[cfg(target_os = "ios")]
+#[derive(Default)]
+struct InteractiveStartupState {
+    entered: bool,
+    token: usize,
+}
+
+#[cfg(target_os = "ios")]
+unsafe extern "C" {
+    fn pthread_override_qos_class_start_np(
+        thread: libc::pthread_t,
+        class: libc::qos_class_t,
+        relative: libc::c_int,
+    ) -> *mut libc::c_void;
+    fn pthread_override_qos_class_end_np(token: *mut libc::c_void) -> libc::c_int;
+}
+
+#[cfg(target_os = "ios")]
+impl InteractiveStartup {
+    fn boost<T>(&self, thread: &std::thread::JoinHandle<T>) {
+        use std::os::unix::thread::JoinHandleExt;
+        let mut state = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !state.entered {
+            // The owned JoinHandle keeps the pthread valid; the state lock
+            // orders this temporary override with the child's first entry.
+            state.token = unsafe {
+                pthread_override_qos_class_start_np(
+                    thread.as_pthread_t(),
+                    libc::qos_class_t::QOS_CLASS_USER_INTERACTIVE,
+                    0,
+                )
+            } as usize;
+        }
+    }
+
+    fn entered(&self) {
+        let token = {
+            let mut state = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            state.entered = true;
+            std::mem::take(&mut state.token)
+        };
+        if token != 0 {
+            // The thread has requested its own class. End the override before
+            // running work or program handlers, so their children inherit none.
+            unsafe { pthread_override_qos_class_end_np(token as *mut libc::c_void) };
+        }
+    }
+}
+
 pub(crate) fn spawn_user_interactive<F, T>(
     builder: std::thread::Builder,
     f: F,
@@ -922,14 +975,23 @@ where
 {
     #[cfg(test)]
     let on_start = ON_START.with(|on_start| on_start.borrow().clone());
-    spawn(builder, move || {
+    #[cfg(target_os = "ios")]
+    let startup = InteractiveStartup::default();
+    #[cfg(target_os = "ios")]
+    let child_startup = startup.clone();
+    let thread = spawn(builder, move || {
         run_at_user_interactive();
+        #[cfg(target_os = "ios")]
+        child_startup.entered();
         #[cfg(test)]
         if let Some(on_start) = on_start {
             on_start();
         }
         f()
-    })
+    })?;
+    #[cfg(target_os = "ios")]
+    startup.boost(&thread);
+    Ok(thread)
 }
 
 /// A test's step between the guard's two counts, run once: between a section's end and its

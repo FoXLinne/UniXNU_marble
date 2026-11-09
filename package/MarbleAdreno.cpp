@@ -17,6 +17,7 @@
 #include "AdrenoPM4.h"
 #include "MarbleAdrenoRegisters.h"
 #include "MarbleGpu.h"
+#include "NativeGpuTrace.h"
 
 extern "C" volatile uint32_t native_adreno_io_coherent;
 extern "C" volatile uint32_t native_adreno_cp_aperture[4];
@@ -34,12 +35,17 @@ extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" IOReturn armcpu_spi_attach(uint32_t, bool, void (*)(void *), void *, uint32_t *, uint64_t *);
 extern "C" bool native_adreno_preempt_irq(void);
 extern "C" int native_marble_gmu_write(uint32_t, uint32_t);
+extern "C" int native_marble_gmu_read(uint32_t, uint32_t *);
 extern "C" int get_preemption_level(void);
 extern "C" void native_adreno_set_restart(NativeAdrenoRestart, void *);
 extern "C" kmod_info_t g_kernel_kmod_info;
 // Interrupt count, observed sources, last source, fence IRQs, preemption IRQs,
 // waiter sleeps, timed-out sleeps and deferred preemption completions.
 extern "C" { volatile uint32_t marble_gpu_irq[8]; }
+// Context-switch writes, AHB-fenced retries, exhausted retries, last fence status.
+extern "C" { volatile uint32_t marble_gpu_preempt_writes[4]; }
+extern "C" { volatile uint32_t marble_gpu_system_cache[20]; }
+extern "C" { volatile uint64_t marble_gpu_clock[64][4]; volatile uint32_t marble_gpu_clock_count; }
 
 namespace {
 class CommandProcessor {
@@ -72,6 +78,53 @@ class CommandProcessor {
         registers[word] = value;
         __asm__ volatile("dsb sy" ::: "memory");
     }
+    void configureSystemCache() {
+        // marble-s-oss llcc_qcom.c: ukee_data, four LLCC v2.1 banks.
+        // adreno_gen7.c assigns the GPU slice to the six GBIF clients.
+        auto *mapping=map(0x19a00000,0x42000,kIOMapInhibitCache);
+        if (!mapping) {marble_gpu_system_cache[0]=0x80000001;return;}
+        auto *cache=reinterpret_cast<volatile uint32_t *>(mapping->getVirtualAddress());
+        auto store=[&](uint32_t offset,uint32_t value) {
+            cache[offset/4]=value;__asm__ volatile("dsb sy":::"memory");
+        };
+        constexpr uint32_t slices[2]={11,12},capacityKiB[2]={256,1024};
+        constexpr uint32_t mask=(1U<<11)|(1U<<12);
+        marble_gpu_system_cache[0]=1;
+        for (unsigned i=0;i<2;++i) {
+            const uint32_t slice=slices[i],at=1+i*3;
+            marble_gpu_system_cache[at]=cache[(slice*4096+4)/4];
+            marble_gpu_system_cache[at+1]=cache[(0x21000+slice*8)/4];
+            marble_gpu_system_cache[at+2]=cache[(0x21004+slice*8)/4];
+            store(0x21004+slice*8,((capacityKiB[i]*1024/4/64)<<16)|0x18);
+            store(0x21000+slice*8,0x00ff0000);
+        }
+        store(0x21f20,(cache[0x21f20/4]&~mask)|(1U<<12));
+        store(0x21f2c,cache[0x21f2c/4]&~mask);
+        store(0x21f00,cache[0x21f00/4]&~mask);
+        store(0x21f04,cache[0x21f04/4]|mask);
+        for (unsigned i=0;i<2;++i) {
+            const uint32_t slice=slices[i],at=7+i*3;
+            store(slice*4096,3);store(slice*4096,2);
+            for (unsigned turn=0;turn<100 && (cache[(slice*4096+4)/4]&2);++turn) IODelay(1);
+            marble_gpu_system_cache[at]=cache[(slice*4096+4)/4];
+            marble_gpu_system_cache[at+1]=cache[(0x21000+slice*8)/4];
+            marble_gpu_system_cache[at+2]=cache[(0x21004+slice*8)/4];
+        }
+        if (!(marble_gpu_system_cache[10]&2)) {
+            uint32_t clients=0;
+            for (unsigned block=0;block<6;++block) clients|=12U<<(block*5);
+            write(0x3c02,clients);write(0x3c01,(12U<<10)|(1U<<8));
+        }
+        marble_gpu_system_cache[13]=read(0x3c01);marble_gpu_system_cache[14]=read(0x3c02);
+        marble_gpu_system_cache[15]=cache[0x21f20/4];marble_gpu_system_cache[16]=cache[0x21f2c/4];
+        marble_gpu_system_cache[17]=cache[0x21f00/4];marble_gpu_system_cache[18]=cache[0x21f04/4];
+        marble_gpu_system_cache[0]=2;
+        IOLog("MarbleGPU: LLCC gpu=%x/%x/%x htw=%x/%x/%x gbif=%x/%x\n",
+            marble_gpu_system_cache[10],marble_gpu_system_cache[11],marble_gpu_system_cache[12],
+            marble_gpu_system_cache[7],marble_gpu_system_cache[8],marble_gpu_system_cache[9],
+            marble_gpu_system_cache[13],marble_gpu_system_cache[14]);
+        mapping->release();
+    }
     void write64(uint32_t word, uint64_t value) {
         write(word, uint32_t(value)); write(word + 1, uint32_t(value >> 32));
     }
@@ -80,6 +133,23 @@ class CommandProcessor {
     }
     static int writeRegister(void *cookie, uint32_t word, uint32_t value) {
         static_cast<CommandProcessor *>(cookie)->write(word, value); return 0;
+    }
+    // UniXNU-sheng GpuPowerProbe.cpp preemptWrite: the keepalive vote owns
+    // the power transition while AHB-fenced context-switch writes are retried.
+    static int preemptWrite(void *cookie, uint32_t word, uint32_t value) {
+        ++marble_gpu_preempt_writes[0];
+        for (unsigned attempt = 0; attempt < 200; ++attempt) {
+            if (writeRegister(cookie, word, value)) return 1;
+            barrier(nullptr);
+            uint32_t status = 0;
+            if (native_marble_gmu_read(0x23b13, &status)) return 1;
+            marble_gpu_preempt_writes[3] = status;
+            if (!(status & 2)) return 0;
+            ++marble_gpu_preempt_writes[1];
+            IODelay(10);
+        }
+        ++marble_gpu_preempt_writes[2];
+        return 1;
     }
     static int barrier(void *) { __asm__ volatile("dsb sy" ::: "memory"); return 0; }
     static int publish(void *, const volatile uint32_t *, size_t) { return barrier(nullptr); }
@@ -101,6 +171,9 @@ class CommandProcessor {
         } else IODelay(20);
         return 0;
     }
+    static uint32_t preemptCompletion(void *) {
+        return __atomic_load_n(&marble_gpu_irq[4], __ATOMIC_ACQUIRE);
+    }
     static void finishPreemption(thread_call_param_t, thread_call_param_t) {
         (void)native_adreno_preempt_irq();
         __atomic_fetch_add(&marble_gpu_irq[7], 1U, __ATOMIC_RELAXED);
@@ -113,9 +186,23 @@ class CommandProcessor {
         marble_gpu_irq[0] = self->interrupts;
         marble_gpu_irq[1] |= status;
         marble_gpu_irq[2] = status;
-        if (status & MarbleGpuFenceInterrupt) ++marble_gpu_irq[3];
+        if (status & MarbleGpuFenceInterrupt) {
+            ++marble_gpu_irq[3];
+            if (!(self->interrupts&63) && native_gpu_trace_enabled()) {
+                const uint32_t sequence=marble_gpu_clock_count+1;
+                volatile uint64_t *sample=marble_gpu_clock[sequence&63];
+                auto counter=[&](uint32_t reg) {
+                    uint32_t high,low;
+                    do {high=self->read(reg+1);low=self->read(reg);} while (high!=self->read(reg+1));
+                    return (uint64_t(high)<<32)|low;
+                };
+                sample[0]=sequence;sample[1]=mach_absolute_time();
+                sample[2]=counter(0x31c);sample[3]=counter(0x980);
+                __atomic_store_n(&marble_gpu_clock_count,sequence,__ATOMIC_RELEASE);
+            }
+        }
         if (status & MarbleGpuPreemptInterrupt) {
-            ++marble_gpu_irq[4];
+            __atomic_fetch_add(&marble_gpu_irq[4], 1U, __ATOMIC_RELEASE);
             // The submission mutex can have a turnstile inheritor. Complete
             // the switch on a thread, as in sheng's GPU interrupt handler.
             if (self->preemptCall) thread_call_enter(self->preemptCall);
@@ -181,6 +268,14 @@ class CommandProcessor {
         self->write(GEN7_RBBM_SW_RESET_CMD, 0);
         (void)self->read(GEN7_RBBM_SW_RESET_CMD);
         IODelay(1);
+        // SQE bootstrap runs before recover() replays the process tables.
+        // Install the kernel mapping while CP is stopped, including its SQE,
+        // ring and power-up list, through the existing SMMU switch operation.
+        auto *context = NativeAdrenoGpuContextObject();
+        auto *kernelVm = NativeAdrenoGpuContextVm();
+        if (!context || !kernelVm) return kIOReturnNotReady;
+        status = context->writeTtbr0(kernelVm->ttbr0());
+        if (status) return status;
         status = self->configure(true, completed);
         if (!status) self->write(GEN7_RBBM_INT_0_MASK, MarbleGpuInterruptMask);
         IOLog("MarbleGPU: restart fence=%u status=%x\n", completed, status);
@@ -215,11 +310,13 @@ class CommandProcessor {
         // gen7_4_0 does not program a UCHE GMEM range (uche_gmem_alignment is zero).
         write(GEN7_UCHE_CACHE_WAYS, 0x800000);
         write(GEN7_RBBM_PERFCTR_CNTL, 1);
+        write(0x507,0); // RBBM_ALWAYS_COUNT: core cycles beside the 19.2 MHz CP counter.
         write(GEN7_RBBM_INTERFACE_HANG_INT_CNTL, 0x40cfffff);
         write(GEN7_UCHE_CLIENT_PF, 0x81);
         native_marble_gpu_checkpoint(MarbleGpuProtect);
         write(GEN7_CP_PROTECT_CNTL, 0xb);
         for (const auto &entry : MarbleProtect) write(entry[0], entry[1]);
+        configureSystemCache();
         native_marble_gpu_checkpoint(MarbleGpuNoncoherent);
         write(GEN7_UCHE_CMDQ_CONFIG, 0x6690e);
         write(GEN7_CP_APRIV_CNTL, 0x6f);
@@ -254,11 +351,16 @@ class CommandProcessor {
             ring.attach(&io, &cache, const_cast<uint8_t *>(cpu[1]), buffers[1].bytes,
                         buffers[1].iova, const_cast<uint8_t *>(cpu[2]), buffers[2].bytes, buffers[2].iova);
         if (status) return -5;
+        unsigned timeline=0,diag=0;
+        PE_parse_boot_argn("sheng-diag",&diag,sizeof(diag));
+        if(!PE_parse_boot_argn("sheng-gpu-timeline",&timeline,sizeof(timeline)))timeline=diag==1;
+        ring.setTimeline(timeline!=0);
         PE_parse_boot_argn("sheng-gpu-preempt", &preemptMode, sizeof(preemptMode));
         if (preemptMode && !restarting) {
             backgroundRing.setTableUpdateWords(3);
             status = backgroundRing.attachSecondary(&io, &cache, const_cast<uint8_t *>(cpu[9]),
                 buffers[9].bytes, buffers[9].iova, const_cast<uint8_t *>(cpu[10]), buffers[10].bytes, buffers[10].iova);
+            if (!status) backgroundRing.setTimeline(timeline!=0);
             if (!status) status = ring.setPreempt(buffers[5].iova, buffers[7].iova, buffers[2].iova + 8);
             if (!status) status = backgroundRing.setPreempt(buffers[6].iova, buffers[8].iova, buffers[10].iova + 8);
             if (status) return status;
@@ -442,7 +544,7 @@ class CommandProcessor {
         IOReturn status = submit.attach(vm, &ring);
         if (!status && preemptMode) {
             NativeAdrenoSubmit::PreemptSetup setup{};
-            setup.io = {this, writeRegister, readRegister, barrier, this, gmuWrite};
+            setup.io = {this, preemptWrite, readRegister, barrier, this, gmuWrite, preemptCompletion};
             for (unsigned i = 0; i < 2; ++i) {
                 setup.pages.record[i] = buffers[5 + i].iova;
                 setup.pages.smmu_info[i] = buffers[7 + i].iova;

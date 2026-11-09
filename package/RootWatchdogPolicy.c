@@ -12,7 +12,10 @@
 static const char policy_head[] =
  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
  "<plist version=\"1.0\"><dict>";
-static char policy[2048], jobs[200];
+static char policy[4096], jobs[200];
+static const char cellular_jobs[] =
+ "com.apple.CommCenterMobileHelper,com.apple.CommCenterRootHelper,"
+ "com.apple.telephonyutilities.callservicesd,com.apple.voicemail.vmd,com.apple.CallHistorySyncHelper";
 volatile int sheng_watchdog_policy_status=-1;
 
 static int append_job(const char **cursor) {
@@ -39,6 +42,7 @@ int sheng_boot_watchdog_policy(void *process, uint64_t scratch) {
  strlcpy(policy,policy_head,sizeof(policy));
  if(enabled==1)strlcat(policy,"<key>com.apple.watchdogd</key><true/>",sizeof(policy));
  for(const char *cursor=jobs;*cursor;)if((error=append_job(&cursor)))return error;
+ for(const char *cursor=cellular_jobs;*cursor;)if((error=append_job(&cursor)))return error;
  if(strlcat(policy,"</dict></plist>\n",sizeof(policy))>=sizeof(policy))return EINVAL;
  const char *directory="/private/var/db/com.apple.xpc.launchd";
  const char *path="/private/var/db/com.apple.xpc.launchd/disabled.plist";

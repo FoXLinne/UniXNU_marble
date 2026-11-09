@@ -12,12 +12,14 @@
 #include <mach/kmod.h>
 #include <pexpert/pexpert.h>
 #include <kern/thread.h>
+#include "MarbleInputLatency.h"
 
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" kmod_info_t g_kernel_kmod_info;
 extern "C" void native_marble_display_init(void) __asm__("__GLOBAL__sub_I_NativeLegacyDisplay.cpp");
 extern "C" IOService *native_legacy_display_allocate(void);
 extern "C" void native_marble_charging_start(void);
+extern "C" void native_marble_backlight_start(void);
 extern "C" void native_marble_hid_start(void);
 extern "C" void native_marble_gpu_start(void);
 extern "C" int native_marble_gpu_wait(void);
@@ -32,11 +34,19 @@ static IOService *gpuPresenter;
 extern "C" void native_keyevents_start(void);
 extern "C" void native_marble_touch_report(char *, unsigned);
 extern "C" void native_gop_scanout_restore(void);
+extern "C" void native_legacy_direct_snapshot(void);
+extern "C" uint64_t native_legacy_surface_width(OSObject *), native_legacy_surface_height(OSObject *);
+extern "C" uint64_t native_legacy_surface_stride(OSObject *), native_legacy_surface_allocation(OSObject *);
+extern "C" uint32_t native_legacy_surface_format(OSObject *), native_legacy_surface_planes(OSObject *);
+#ifdef MARBLE_IOS18_GPU
+extern "C" void native_marble_panel_refresh_request(unsigned);
+#endif
 
 extern "C" {
 volatile uint32_t marble_display_stage, marble_display_registered, marble_display_clients;
 volatile uint32_t marble_display_transfers, marble_display_retirements, marble_display_frames;
 volatile uint32_t marble_display_swap_stage, marble_display_validation, marble_display_rejections;
+uint32_t marble_display_rejected_request[24];
 extern volatile uint32_t native_legacy_surfaces[14], native_legacy_direct[14];
 volatile uint64_t marble_display_mapping, marble_display_bytes, marble_display_copy_ticks;
 uint32_t *marble_display_pixels;
@@ -48,7 +58,6 @@ char marble_touch_status[256];
 volatile uint64_t marble_display_frame[6], marble_display_surface[7];
 volatile uint32_t marble_display_pm[3], marble_display_vsync[2];
 volatile int marble_display_client_status, marble_display_transfer_status;
-volatile uint32_t native_ufs_dpu_state;
 struct MarbleDisplayTrace { uint32_t event, pid, count; uint64_t values[12]; };
 MarbleDisplayTrace marble_display_trace[256];
 uint32_t marble_display_trace_count;
@@ -65,7 +74,6 @@ void native_gpu_trace_record(uint32_t event, uint32_t pid, const uint64_t *value
 bool native_adreno_fences(uint32_t *, uint32_t *) { return false; }
 bool native_adreno_fences_detail(uint32_t *, uint32_t *, uint32_t *) { return false; }
 #endif
-uint32_t native_ufs_dpu_map(unsigned, const uint64_t *, unsigned) { return 0; }
 
 __attribute__((noreturn)) void native_legacy_backend_guard(unsigned slot, void *object, void *caller)
 {
@@ -88,10 +96,17 @@ bool native_legacy_gop_mapping_observed(IOService *, IOMemoryMap *mapping, uint3
     return true;
 }
 
+extern "C" bool native_gop_scanout_snapshot(void *, uint64_t);
+extern "C" bool native_gop_scanout_active(void);
 void native_marble_display_snapshot(void)
 {
     native_marble_touch_report(marble_touch_status, sizeof(marble_touch_status));
     if (!marble_display_mapping || !marble_display_pixels) return;
+    if (native_gop_scanout_snapshot(marble_display_pixels, marble_display_bytes)) {
+        marble_display_snapshot_ready = 1;
+        return;
+    }
+    native_legacy_direct_snapshot();
     const volatile uint32_t *source = reinterpret_cast<const volatile uint32_t *>(marble_display_mapping);
     for (uint64_t i = 0; i < marble_display_bytes / 4; ++i) marble_display_pixels[i] = source[i];
     marble_display_snapshot_ready = 1;
@@ -100,7 +115,7 @@ void native_marble_display_snapshot(void)
 static void displayTimingWorker(void *, wait_result_t)
 {
     // Marble's DT places the two DSI interfaces at MDSS+0x36000/0x37000.
-    // A live frame transfer establishes the display path before this request.
+    // A copied or directly scanned frame establishes the display path.
     auto *memory = IODeviceMemory::withRange(0xae00000, 0x38000);
     auto *mapping = memory ? memory->map(kIOMapAnywhere | kIOMapInhibitCache) : nullptr;
     OSSafeReleaseNULL(memory);
@@ -132,7 +147,7 @@ void native_marble_display_timing_request(void)
         __atomic_store_n(&marble_display_timing_state, 3U, __ATOMIC_RELEASE);
         return;
     }
-    if (!marble_display_transfers) {
+    if (!marble_display_transfers && !native_legacy_direct[0] && !native_gop_scanout_active()) {
         marble_display_timing_error = kIOReturnNotReady;
         __atomic_store_n(&marble_display_timing_state, 3U, __ATOMIC_RELEASE);
         return;
@@ -182,10 +197,34 @@ void native_legacy_frame_colors_observed(const uint32_t *colors, const uint64_t 
     IOLog("MarbleDisplay: frame %u color %x pixels %llu other %llu\n",
           marble_display_frames, colors[0], counts[0], other);
 }
-void native_legacy_swap_validation_observed(bool accepted, unsigned reason, const void *, const void *)
+void native_legacy_swap_validation_observed(bool accepted, unsigned reason, const void *request, const void *surface)
 {
+    if(accepted)native_marble_input_swap_begin(request);
     marble_display_validation = reason;
-    if (!accepted) ++marble_display_rejections;
+    if (!accepted) {
+        ++marble_display_rejections;
+        if (request && marble_display_rejections <= 3) {
+            const auto *bytes = static_cast<const uint8_t *>(request);
+            const unsigned offsets[] = {17,21,25,29,81,85,89,93,792,796,800,804,808,812,816,820};
+            marble_display_rejected_request[0] = reason;
+            for (unsigned i = 0; i < 16; ++i) memcpy(&marble_display_rejected_request[i+1], bytes+offsets[i], 4);
+            if (surface) {
+                OSObject *object = const_cast<OSObject *>(static_cast<const OSObject *>(surface));
+                marble_display_rejected_request[17] = static_cast<uint32_t>(native_legacy_surface_width(object));
+                marble_display_rejected_request[18] = static_cast<uint32_t>(native_legacy_surface_height(object));
+                marble_display_rejected_request[19] = native_legacy_surface_format(object);
+                marble_display_rejected_request[20] = native_legacy_surface_planes(object);
+                marble_display_rejected_request[21] = static_cast<uint32_t>(native_legacy_surface_stride(object));
+                marble_display_rejected_request[22] = static_cast<uint32_t>(native_legacy_surface_allocation(object));
+            }
+            IOLog("MarbleDisplay: geometry reason=%u rect0=%u,%u,%u,%u rect1=%u,%u,%u,%u masks=%x/%x/%x options=%x/%x/%x size=%ux%u surface=%p\n",
+                reason, marble_display_rejected_request[1], marble_display_rejected_request[2], marble_display_rejected_request[3], marble_display_rejected_request[4],
+                marble_display_rejected_request[5], marble_display_rejected_request[6], marble_display_rejected_request[7], marble_display_rejected_request[8],
+                marble_display_rejected_request[9], marble_display_rejected_request[10], marble_display_rejected_request[11],
+                marble_display_rejected_request[12], marble_display_rejected_request[13], marble_display_rejected_request[14],
+                marble_display_rejected_request[15], marble_display_rejected_request[16], surface);
+        }
+    }
 }
 void native_legacy_surface_rejected(uint64_t width, uint64_t height, uint32_t format, uint32_t planes,
                                     uint64_t stride, uint64_t allocation, uint64_t bytes)
@@ -257,6 +296,10 @@ void native_marble_display_start(void)
     if (!nub || !parent || !memory || !ranges || !nub->init()) panic("MarbleDisplay: provider allocation");
     ranges->setObject(memory); nub->setDeviceMemory(ranges); nub->setName("NativeGOPFramebuffer");
     ranges->release(); memory->release();
+    IORegistryEntry *chosen = IORegistryEntry::fromPath("/chosen", gIODTPlane);
+    OSData *pitch = chosen ? OSDynamicCast(OSData, chosen->getProperty("dot-pitch")) : nullptr;
+    if (pitch && pitch->getLength() == sizeof(uint32_t)) nub->setProperty("dot-pitch", pitch);
+    OSSafeReleaseNULL(chosen);
     if (!nub->attach(parent) || !nub->start(parent)) panic("MarbleDisplay: provider start");
     IORegistryEntry *armio = IORegistryEntry::fromPath("/arm-io", gIODTPlane);
     const char type[] = "display-subsystem";
@@ -290,6 +333,7 @@ void native_marble_display_start(void)
     native_marble_gpu_start();
     int gpuStatus = native_marble_gpu_wait();
     if (gpuStatus) panic("MarbleGPU: accelerator startup status=%x", gpuStatus);
+    native_marble_backlight_start();
     native_keyevents_start();
     native_marble_charging_start();
     native_marble_hid_start();

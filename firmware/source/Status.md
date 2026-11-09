@@ -418,14 +418,47 @@
 | Feature            | Description | State |
 |:-------------------|:------------|:-----:|
 | Display            |             | ✅    |
-| Internal Storage   |             | ❌    |
+| Internal Storage   |             | ✅    |
 | Side Buttons       |             | ✅    |
 | USB Host Mode      |             | ❌    |
 | USB Device Mode    |             | ❌    |
 | USB Power Delivery |             | ❌    |
 | SD Card            |             | ❌    |
-| Windows Boot       |             | ❌    |
+| Windows Boot       |             | ✅    |
 | Linux Boot         |             | ❌    |
+
+> [!IMPORTANT]
+> Only Windows PE boots.
+
+| Feature              | Description  | State |
+|:---------------------|:-------------|:-----:|
+| Internal Storage     |              | ❌    |
+| Side Buttons         |              | ❌    |
+| Proximity Sensor     |              | ❌    |
+| Light Sensor         |              | ❌    |
+| Accelerometer Sensor |              | ❌    |
+| Compass Sensor       |              | ❌    | 
+| Gyroscope Sensor     |              | ❌    |
+| Fingerprint Sensor   |              | ❌    |
+| NFC Sensor           |              | ❌    |
+| Temperature Sensor   |              | ❌    |
+| Battery              |              | ❌    |
+| USB Host Mode        |              | ❌    |
+| USB Device Mode      |              | ❌    |
+| USB Power Delivery   |              | ❌    |
+| Charging             |              | ❌    |
+| WLAN                 |              | ❌    |
+| CPU                  | Only 1 Core  | ⚠️    |
+| Touchscreen          |              | ❌    |
+| Bluetooth            |              | ❌    |
+| GPS                  |              | ❌    |
+| Speakers             |              | ❌    |
+| Microphone           |              | ❌    |
+| GPU                  |              | ❌    |
+| Camera               |              | ❌    |
+| Mobile Data          |              | ❌    |
+| Display              |              | ✅    | 
+| Vibration            |              | ❌    |
 
 ## Samsung Galaxy A7 (2018)
 
@@ -910,6 +943,34 @@
 
 </td></tr>
 </table>
+</details>
+
+<details>
+<summary><b><strong>Xiaomi Devices</strong></b></summary>
+
+## Xiaomi Redmi K90
+
+<img align="right" src="Resources/Pictures/Xiaomi-Redmi-K90.png" width="500" alt="Preview">
+
+**State:** Active <br>
+**Codename:** annibale
+
+**Contributors:** [wljf817](https://github.com/wljf817/)
+
+### UEFI Status
+
+| Feature            | Description | State |
+|:-------------------|:------------|:-----:|
+| Display            |             | ✅    |
+| Internal Storage   |             | ✅    |
+| Side Buttons       |             | ✅    |
+| USB Host Mode      |             | ❌    |
+| USB Device Mode    |             | ✅    |
+| USB Power Delivery |             | ❌    |
+| Mass Storage       |             | ✅    |
+| Windows Boot       |             | ❌    |
+| Linux Boot         |             | ❌    |
+
 </details>
 
 ---
@@ -1577,10 +1638,10 @@
 
 <img align="right" src="Resources/Pictures/Xiaomi-13-Pro.png" width="350" alt="Preview">
 
-**State:** Inactive <br>
+**State:** Active <br>
 **Codename:** nuwa
 
-**Contributors:** [Robotix](https://github.com/Robotix22/), [Alfa](https://github.com/alfaonyt/)
+**Contributors:** [Alfa](https://github.com/alfaonyt/), [Robotix](https://github.com/Robotix22/)
 
 ### UEFI Status
 
@@ -1611,11 +1672,11 @@
 | Side Buttons         |                         | ✅    |
 | Proximity Sensor     |                         | ❌    |
 | Light Sensor         |                         | ❌    |
-| Accelerometer Sensor |                         | ❌    |
-| Gyroscope Sensor     |                         | ❌    |
+| Accelerometer Sensor |                         | ✅    |
+| Gyroscope Sensor     |                         | ✅    |
 | Magnetometer Sensor  |                         | ❌    |
 | Fingerprint Sensor   |                         | ❌    |
-| NFC Sensor           |                         | ❌    |
+| NFC Sensor           | Expected to work; untested | ❔ |
 | Temperature Sensor   |                         | ❌    |
 | Battery              |                         | ✅    |
 | USB Host Mode        |                         | ✅    |
@@ -1624,16 +1685,17 @@
 | Charging             |                         | ✅    |
 | WLAN                 |                         | ✅    |
 | CPU                  |                         | ✅    |
-| Touchscreen          |                         | ❌    |
+| Touchscreen          |                         | ✅    |
 | Bluetooth            |                         | ✅    |
 | GPS                  |                         | ❌    |
 | Speakers             |                         | ✅    |
 | Microphone           |                         | ❌    |
 | GPU                  |                         | ✅    |
-| Camera               |                         | ❌    |
-| Mobile Data          |                         | ✅    |
+| Camera               | Ultrawide reported working but reversed; untested | ⚠️ |
+| Mobile Data          | SIM and networks detected; not fully tested | ⚠️ |
 | Display              |                         | ✅    | 
-| Vibration            |                         | ❌    |
+| Vibration            |                         | ✅    |
+| IR Blaster           |                         | ✅    |
 
 </td></tr>
 </table>
@@ -5330,12 +5392,12 @@
 | NFC Sensor           |              | ❌    |
 | Temperature Sensor   |              | ❌    |
 | Battery              |              | ❌    |
-| USB Host Mode        |              | ❌    |
-| USB Device Mode      |              | ❔    |
-| USB Power Delivery   |              | ❌    |
+| USB Host Mode        |              | ✅    |
+| USB Device Mode      |              | ❌    |
+| USB Power Delivery   |              | ✅    |
 | Charging             |              | ❌    |
 | WLAN                 |              | ❌    |
-| CPU                  | 4 Cores only | ⚠️    |
+| CPU                  |              | ✅    |
 | Touchscreen          |              | ❌    |
 | Bluetooth            |              | ❌    |
 | GPS                  |              | ❌    |

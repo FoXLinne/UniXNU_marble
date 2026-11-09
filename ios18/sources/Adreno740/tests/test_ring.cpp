@@ -35,7 +35,7 @@ static int barrier(void *cookie){CHECK(cookie==&peer);++peer.barriers;
     if(peer.log_order)peer.order.push_back("barrier");return 0;}
 static int publish(void *cookie,const volatile uint32_t *words,size_t bytes)
 {
-    CHECK(cookie==&peer && words && (bytes==32768 || bytes==4096));++peer.publish;
+    CHECK(cookie==&peer && words && (bytes==32768 || bytes==8192 || bytes==4096));++peer.publish;
     if(peer.log_order)peer.order.push_back("publish");
     return peer.publish==peer.fail_publish;
 }
@@ -115,6 +115,23 @@ int main()
             observed==1 && r.outstanding()==0 && r.completedFence()==1);
         CHECK(r.wait(2,&clock_,5000,&observed)==NativeAdrenoRingFenceArgument);
         CHECK(r.detach()==kIOReturnSuccess);
+    }
+    {
+        reset();NativeAdrenoRing r;
+        CHECK(r.attach(&io,&cache,ring,8192,0x100000,fence,sizeof(fence),0x108000)==kIOReturnSuccess);
+        r.setTimeline(true);
+        CHECK(r.setPreempt(0x300000,0x400000,0x108008)==kIOReturnSuccess);
+        uint32_t words[128*4]={},number=0,issued=0;
+        IOReturn status=kIOReturnSuccess;
+        for(unsigned i=0;i<16 && status==kIOReturnSuccess;++i) {
+            status=r.submitFramed(words,128*4,&issued);
+            if(status==kIOReturnSuccess)number=issued;
+        }
+        CHECK(number>=2 && status==kIOReturnNoResources && !issued && r.lastSubmitted()==number);
+        peer.regs[0x0806]=r.writePointer();fence[0]=r.writePointer();fence[1]=number;
+        CHECK(r.wait(number,&clock_,0,nullptr)==NativeAdrenoRingFenceComplete);
+        CHECK(r.submitFramed(words,128*4,&issued)==kIOReturnSuccess && issued==number+1 && r.writePointer()<8192/4);
+        std::puts("PASS 8 KiB ring capacity, full-ring retry and wrapped submission");
     }
     /* Timeline stamps: the CP's always-on counter is read into the fence page before the user words and after them, and read back by fence. */
     {

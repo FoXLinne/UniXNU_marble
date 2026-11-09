@@ -30,8 +30,14 @@ class RootUsb:
         backend = usb.backend.libusb1.get_backend(find_library=lambda _: str(library))
         self.device = device if device is not None else usb.core.find(idVendor=0x18d1, idProduct=0xd00d, backend=backend)
         if self.device is None:
+            self.device=usb.core.find(idVendor=0x18d1,idProduct=0xd00e,backend=backend)
+        if self.device is None:
             raise RuntimeError('Marble RootStage USB is unavailable')
         self.device.default_timeout = timeout_ms
+        self.native=self.device.idProduct==0xd00e
+        if self.native:
+            try:self.device.get_active_configuration()
+            except usb.core.USBError:self.device.set_configuration(1)
         if self.command('getvar:version') != 'RootStage2':
             raise RuntimeError('Unexpected RootStage USB protocol')
 
@@ -39,19 +45,37 @@ class RootUsb:
         usb.util.dispose_resources(self.device)
 
     def reply(self):
-        value = self.device.read(0x81, 512).tobytes()
+        value = (self.device.ctrl_transfer(0xc0,0x31,0,0,512) if self.native else
+                 self.device.read(0x81,512)).tobytes()
         if value[:4] == b'FAIL':
             raise RuntimeError(value[4:].decode())
         return value
 
     def command(self, text):
-        self.device.write(0x01, text.encode())
+        self.send_command(text)
         value = self.reply()
         if value[:4] != b'OKAY':
             raise RuntimeError(f'Unexpected command response: {value!r}')
         return value[4:].decode()
 
+    def send_command(self,text):
+        data=text.encode()
+        if not data or len(data)>64:
+            raise ValueError('RootStage commands require 1..64 bytes')
+        if self.native:
+            # DWC3 control OUT DMA uses one complete 64-byte packet.
+            packet=data+bytes(64-len(data))
+            count=self.device.ctrl_transfer(0x40,0x30,0,0,packet)
+            if count!=len(packet):raise RuntimeError('Short RootStage command')
+            return
+        else:
+            count=self.device.write(0x01,data)
+        if count!=len(data):
+            raise RuntimeError('Short RootStage command')
+
     def write(self, data):
+        if self.native:
+            raise RuntimeError('Kernel uploads require RootStage firmware phase')
         self.device.write(0x01, f'download:{len(data):08x}'.encode())
         response = self.reply()
         if response != f'DATA{len(data):08x}'.encode():
@@ -61,14 +85,21 @@ class RootUsb:
             raise RuntimeError('Incomplete USB download')
 
     def read_back(self):
-        self.device.write(0x01, b'upload')
+        self.send_command('upload')
         response = self.reply()
         if response[:4] != b'DATA':
             raise RuntimeError(f'Unexpected upload response: {response!r}')
         size = int(response[4:], 16)
         result = bytearray()
         while len(result) < size:
-            result.extend(self.device.read(0x81, size - len(result)))
+            if self.native:
+                offset=len(result)
+                chunk=self.device.ctrl_transfer(0xc0,0x32,offset&65535,offset>>16,min(4096,size-offset))
+            else:
+                chunk=self.device.read(0x81,size-len(result))
+            if not chunk:
+                raise RuntimeError('Short RootStage upload')
+            result.extend(chunk)
         if self.reply() != b'OKAY':
             raise RuntimeError('Incomplete USB upload')
         return bytes(result)

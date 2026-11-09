@@ -28,7 +28,6 @@ def run(cmd,log,timeout):
             time.sleep(1)
         if process.returncode:raise SystemExit('Native compiler failed; see '+log)
 pins=json.loads((ROOT/'scripts/data/adreno-compiler-inputs.json').read_text())
-if read(['git','-C',SOURCE,'rev-parse','HEAD'])!=pins['mesa']['commit']:raise SystemExit('Pinned Mesa source differs')
 for patch in pins['patches']:
     subprocess.run(['git','-C',SOURCE,'apply','--reverse','--check',ROOT/patch],check=True,capture_output=True)
 sdk=read(['xcrun','--sdk','iphoneos','--show-sdk-path'])

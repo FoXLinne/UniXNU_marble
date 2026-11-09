@@ -77,7 +77,7 @@ static int writePreference(proc_t process, user_addr_t scratch, const char *name
 static int refreshDisplayCache(proc_t process, user_addr_t scratch)
 {
     unsigned scale = 0;
-    if (!PE_parse_boot_argn("marble-display-scale", &scale, sizeof(scale)) || scale != 3) return 0;
+    if (!PE_parse_boot_argn("marble-display-scale", &scale, sizeof(scale)) || !scale) return 0;
     unsigned identity = 0;
     PE_parse_boot_argn("marble-ui-identity", &identity, sizeof(identity));
     static const char *paths[] = {
@@ -88,10 +88,7 @@ static int refreshDisplayCache(proc_t process, user_addr_t scratch)
     for (unsigned i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
         char backup[256];
         snprintf(backup, sizeof(backup), "%s.marble-before-ui-%u-scale%u", paths[i], identity, scale);
-        int error = exists(backup);
-        if (!error) continue;
-        if (error != ENOENT) return error;
-        error = exists(paths[i]);
+        int error = exists(paths[i]);
         if (error == ENOENT) continue;
         if (!error) error = move(process, scratch, paths[i], backup);
         printf("MarbleDisplay: scale=%u cache=%s status=%d\n", scale, paths[i], error);

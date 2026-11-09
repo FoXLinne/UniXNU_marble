@@ -1,0 +1,168 @@
+--- a/security/mac_vfs.c
++++ b/security/mac_vfs.c
+@@ -918,10 +918,44 @@
+ 	return result;
+ }
+ 
++/* Same-user shader artifacts use one persistent directory for every Metal client.
++ * Authorize that directory at the vnode boundary; ordinary UNIX ownership and
++ * mode checks still apply. Resolve vnodes rather than accepting a user path.
++ */
++static boolean_t
++native_metal_cache_path(vfs_context_t ctx, vnode_t vp, struct componentname *cnp)
++{
++	char path[MAXPATHLEN];
++	int length = sizeof(path);
++	uid_t uid = kauth_cred_getuid(vfs_context_ucred(ctx));
++	const char *root;
++	if (!vp || (uid != 0 && uid != 501) || vnode_vtype(vp) == VLNK) return FALSE;
++	if (vn_getpath(vp, path, &length)) return FALSE;
++	if (cnp) {
++		if (!cnp->cn_namelen || cnp->cn_namelen >= MAXPATHLEN ||
++		    memchr(cnp->cn_nameptr, '/', cnp->cn_namelen) ||
++		    (cnp->cn_namelen == 1 && cnp->cn_nameptr[0] == '.') ||
++		    (cnp->cn_namelen == 2 && !memcmp(cnp->cn_nameptr, "..", 2))) return FALSE;
++		size_t used = strlen(path);
++		if (used + 1 + cnp->cn_namelen >= sizeof(path)) return FALSE;
++		path[used++] = '/';
++		memcpy(path + used, cnp->cn_nameptr, cnp->cn_namelen);
++		path[used + cnp->cn_namelen] = 0;
++	}
++	const char *canonical = !strncmp(path, "/private/var/", 13) ? path + 8 : path;
++	root = uid == 501 ? "/var/mobile/Library/Caches/org.unixnu.metal" :
++	    "/var/root/Library/Caches/org.unixnu.metal";
++	size_t size = strlen(root);
++	return !strncmp(canonical, root, size) &&
++	    (!canonical[size] || canonical[size] == '/');
++}
++
+ int
+ mac_vnode_check_access(vfs_context_t ctx, struct vnode *vp,
+     int acc_mode)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 	int mask;
+@@ -1016,6 +1050,8 @@
+ mac_vnode_check_create(vfs_context_t ctx, struct vnode *dvp,
+     struct componentname *cnp, struct vnode_attr *vap)
+ {
++	if (native_metal_cache_path(ctx, dvp, cnp)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1039,6 +1075,9 @@
+ mac_vnode_check_unlink(vfs_context_t ctx, struct vnode *dvp, struct vnode *vp,
+     struct componentname *cnp)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL) &&
++	    native_metal_cache_path(ctx, dvp, cnp)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1158,6 +1197,8 @@
+ mac_vnode_check_getattr(vfs_context_t ctx, struct ucred *file_cred,
+     struct vnode *vp, struct vnode_attr *va)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1181,6 +1222,8 @@
+ mac_vnode_check_getattrlist(vfs_context_t ctx, struct vnode *vp,
+     struct attrlist *alist, uint64_t options)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1598,6 +1641,8 @@
+ mac_vnode_check_lookup(vfs_context_t ctx, struct vnode *dvp,
+     struct componentname *cnp)
+ {
++	if (native_metal_cache_path(ctx, dvp, cnp)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1620,6 +1665,8 @@
+ int
+ mac_vnode_check_open(vfs_context_t ctx, struct vnode *vp, int acc_mode)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1643,6 +1690,8 @@
+ mac_vnode_check_read(vfs_context_t ctx, struct ucred *file_cred,
+     struct vnode *vp)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1667,6 +1716,8 @@
+ int
+ mac_vnode_check_readdir(vfs_context_t ctx, struct vnode *dvp)
+ {
++	if (native_metal_cache_path(ctx, dvp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1737,6 +1788,11 @@
+     struct vnode *fvp, struct componentname *fcnp, struct vnode *tdvp,
+     struct vnode *tvp, struct componentname *tcnp)
+ {
++	if (native_metal_cache_path(ctx, fvp, NULL) &&
++	    native_metal_cache_path(ctx, fdvp, fcnp) &&
++	    native_metal_cache_path(ctx, tdvp, tcnp) &&
++	    (!tvp || native_metal_cache_path(ctx, tvp, NULL))) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -1980,6 +2036,8 @@
+ mac_vnode_check_setutimes(vfs_context_t ctx, struct vnode *vp,
+     struct timespec atime, struct timespec mtime)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -2004,6 +2062,8 @@
+ mac_vnode_check_stat(vfs_context_t ctx, struct ucred *file_cred,
+     struct vnode *vp)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -2051,6 +2111,8 @@
+ mac_vnode_check_truncate(vfs_context_t ctx, struct ucred *file_cred,
+     struct vnode *vp)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 
+@@ -2076,6 +2138,8 @@
+ mac_vnode_check_write(vfs_context_t ctx, struct ucred *file_cred,
+     struct vnode *vp)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 

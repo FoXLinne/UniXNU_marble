@@ -313,6 +313,19 @@ tu_darwin_frame_diagnostic(uint32_t method,const void *data,uint32_t bytes)
    return dw_call(method,data,bytes,NULL,0)==KERN_SUCCESS;
 }
 
+extern "C" bool tu_darwin_sync_import(uint64_t memory, uint64_t offset, uint64_t bytes, bool acquire);
+
+extern "C" __attribute__((visibility("default"))) bool
+tu_darwin_sync_import(uint64_t memory, uint64_t offset, uint64_t bytes, bool acquire)
+{
+   if (!dw.open || !memory || !bytes)
+      return false;
+   VK_FROM_HANDLE(tu_device_memory, mem, (VkDeviceMemory)(uintptr_t)memory);
+   NativeAdrenoAbiBoSync request = {.handle = mem->bo->darwin_handle,
+      .offset = offset, .bytes = bytes, .acquire = acquire, .reserved = 0};
+   return dw_call(NativeAdrenoMethodBoSync, &request, sizeof(request), NULL, 0) == KERN_SUCCESS;
+}
+
 static void
 dw_close_connection(void)
 {
@@ -549,7 +562,7 @@ darwin_va_free(struct darwin_va *va, uint64_t address, uint64_t size)
 }
 
 static VkResult
-darwin_allocate_iova(struct tu_device *dev, uint64_t size, uint64_t client_iova,
+darwin_allocate_iova(struct tu_device *dev, uint64_t size, uint64_t alignment, uint64_t client_iova,
                      enum tu_bo_alloc_flags flags, uint64_t *iova)
 {
    struct darwin_va *va = &((struct darwin_retire_state *)dev->darwin_retire)->va;
@@ -569,10 +582,10 @@ darwin_allocate_iova(struct tu_device *dev, uint64_t size, uint64_t client_iova,
             return VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS;
          }
       } else {
-         *iova = darwin_va_alloc(va, size, os_page_size, true);
+         *iova = darwin_va_alloc(va, size, MAX2(os_page_size, alignment), true);
       }
    } else {
-      *iova = darwin_va_alloc(va, size, os_page_size, false);
+      *iova = darwin_va_alloc(va, size, MAX2(os_page_size, alignment), false);
    }
    mtx_unlock(&dev->vma_mutex);
    return *iova ? VK_SUCCESS : VK_ERROR_OUT_OF_DEVICE_MEMORY;
@@ -684,14 +697,15 @@ darwin_cache_put(struct tu_device *dev, struct darwin_retire_state *retire, cons
 
 /* The most recently cached BO of a class (its pages are the warmest). A BO the caller needs zeroed must have a CPU view to zero it by. */
 static bool
-darwin_cache_get(struct darwin_retire_state *retire, uint64_t size, bool read_only, bool need_mapping, struct darwin_cached_bo *out)
+darwin_cache_get(struct darwin_retire_state *retire, uint64_t size, uint64_t alignment, bool read_only, bool need_mapping, struct darwin_cached_bo *out)
 {
    ++retire->cache_stats.lookups;
    int best = -1;
    for (unsigned i = 0; i < retire->cache_count; ++i) {
       const struct darwin_cached_bo *e = &retire->cache[i];
       /* The class asked for, or a BO up to a quarter larger (the smallest such, then the most recent). */
-      if (e->size >= size && e->size - size <= size / 4 && e->read_only == read_only && (!need_mapping || e->mapping) &&
+      if (!(e->iova & (MAX2(os_page_size, alignment) - 1)) &&
+          e->size >= size && e->size - size <= size / 4 && e->read_only == read_only && (!need_mapping || e->mapping) &&
           (best < 0 || e->size < retire->cache[best].size ||
            (e->size == retire->cache[best].size && e->stamp > retire->cache[best].stamp)))
          best = (int)i;
@@ -849,7 +863,7 @@ darwin_map_failure(struct tu_device *dev, uint64_t handle, uint64_t iova,
 
 static VkResult
 darwin_bo_init(struct tu_device *dev, struct vk_object_base *base,
-               struct tu_bo **out_bo, uint64_t size, uint64_t client_iova,
+               struct tu_bo **out_bo, uint64_t size, uint64_t alignment, uint64_t client_iova,
                VkMemoryPropertyFlags mem_property,
                enum tu_bo_alloc_flags flags, struct tu_sparse_vma *lazy_vma,
                const char *name)
@@ -874,7 +888,7 @@ darwin_bo_init(struct tu_device *dev, struct vk_object_base *base,
    if (cacheable) {
       struct darwin_cached_bo hit;
       pthread_mutex_lock(&retire->lock);
-      reused = darwin_cache_get(retire, alloc_size, read_only, !!(flags & TU_BO_ALLOC_INTERNAL_RESOURCE), &hit);
+      reused = darwin_cache_get(retire, alloc_size, alignment, read_only, !!(flags & TU_BO_ALLOC_INTERNAL_RESOURCE), &hit);
       pthread_mutex_unlock(&retire->lock);
       if (reused) {
          handle = hit.handle;
@@ -893,7 +907,7 @@ darwin_bo_init(struct tu_device *dev, struct vk_object_base *base,
       if (lazy_vma)
          iova = lazy_vma->msm.iova;
       else
-         result = darwin_allocate_iova(dev, alloc_size, client_iova, flags, &iova);
+         result = darwin_allocate_iova(dev, alloc_size, alignment, client_iova, flags, &iova);
       if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY && !flushed) {
          flushed = true;
          pthread_mutex_lock(&retire->lock);
@@ -989,7 +1003,7 @@ darwin_bo_init_host(struct tu_device *dev, struct tu_bo **out_bo, void *pointer,
    if (collected != VK_SUCCESS)
       return collected;
    uint64_t iova;
-   VkResult result = darwin_allocate_iova(dev, size, 0, TU_BO_ALLOC_NO_FLAGS, &iova);
+   VkResult result = darwin_allocate_iova(dev, size, 0, 0, TU_BO_ALLOC_NO_FLAGS, &iova);
    if (result != VK_SUCCESS)
       return result;
 
@@ -1030,7 +1044,7 @@ darwin_bo_init_host(struct tu_device *dev, struct tu_bo **out_bo, void *pointer,
 
 static VkResult
 darwin_bo_init_dmabuf(struct tu_device *dev, struct tu_bo **out_bo,
-                      uint64_t size, enum tu_bo_alloc_flags flags, int prime_fd)
+                      uint64_t size, uint64_t alignment, enum tu_bo_alloc_flags flags, int prime_fd)
 {
    /* Darwin has no dmabuf; the later equivalent is an IOSurface import. */
    return vk_error(dev, VK_ERROR_FEATURE_NOT_PRESENT);
@@ -1675,14 +1689,14 @@ darwin_device_check_status(struct tu_device *device)
 static VkResult
 darwin_sparse_vma_init(struct tu_device *dev, struct vk_object_base *base,
                        struct tu_sparse_vma *out_vma, uint64_t *out_iova,
-                       enum tu_sparse_vma_flags flags, uint64_t size, uint64_t client_iova)
+                       enum tu_sparse_vma_flags flags, uint64_t size, uint64_t alignment, uint64_t client_iova)
 {
    if (flags & TU_SPARSE_VMA_MAP_ZERO)
       return vk_error(dev, VK_ERROR_FEATURE_NOT_PRESENT);   /* no null mapping: sparse residency is not offered */
    out_vma->flags = flags;
    out_vma->msm.size = size;
    out_vma->msm.backs_lazy_bo = false;
-   VkResult result = darwin_allocate_iova(dev, size, client_iova,
+   VkResult result = darwin_allocate_iova(dev, size, alignment, client_iova,
                                           (flags & TU_SPARSE_VMA_REPLAYABLE) ? TU_BO_ALLOC_REPLAYABLE : TU_BO_ALLOC_NO_FLAGS,
                                           &out_vma->msm.iova);
    if (result != VK_SUCCESS)

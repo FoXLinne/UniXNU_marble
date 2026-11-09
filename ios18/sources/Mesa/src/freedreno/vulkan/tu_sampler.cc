@@ -24,8 +24,8 @@ tu_CreateSampler(VkDevice _device,
 
    assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO);
 
-   sampler = (struct tu_sampler *) vk_sampler_create(
-      &device->vk, pCreateInfo, pAllocator, sizeof(*sampler));
+   sampler = static_cast<struct tu_sampler *>(vk_sampler_create(
+      &device->vk, pCreateInfo, pAllocator, sizeof(*sampler)));
    if (!sampler)
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
@@ -34,13 +34,37 @@ tu_CreateSampler(VkDevice _device,
 
    const struct VkSamplerYcbcrConversionInfo *ycbcr_conversion =
       vk_find_struct_const(pCreateInfo->pNext,  SAMPLER_YCBCR_CONVERSION_INFO);
-   uint32_t border_color = (unsigned) pCreateInfo->borderColor;
+   uint32_t border_color = static_cast<unsigned>(pCreateInfo->borderColor);
    if (vk_border_color_is_custom(pCreateInfo->borderColor)) {
+      uint32_t border_color_index = 0;
+      bool replay = false;
+
+      const VkOpaqueCaptureDescriptorDataCreateInfoEXT *opaque_info =
+         vk_find_struct_const(pCreateInfo->pNext,
+                              OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT);
+      if (opaque_info && opaque_info->opaqueCaptureDescriptorData) {
+         replay = true;
+         border_color_index =
+            *static_cast<const uint32_t *>(opaque_info->opaqueCaptureDescriptorData);
+      }
+
       mtx_lock(&device->mutex);
-      border_color = BITSET_FFS(device->custom_border_color) - 1;
-      assert(border_color < TU_BORDER_COLOR_COUNT);
-      BITSET_CLEAR(device->custom_border_color, border_color);
+      if (replay) {
+         if (border_color_index >= TU_BORDER_COLOR_COUNT ||
+             !BITSET_TEST(device->custom_border_color, border_color_index)) {
+            mtx_unlock(&device->mutex);
+            vk_sampler_destroy(&device->vk, pAllocator, &sampler->vk);
+            return vk_error(device, VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS);
+         }
+      } else {
+         border_color_index = BITSET_FFS(device->custom_border_color) - 1;
+         assert(border_color_index < TU_BORDER_COLOR_COUNT);
+      }
+      BITSET_CLEAR(device->custom_border_color, border_color_index);
       mtx_unlock(&device->mutex);
+
+      sampler->custom_border_color = true;
+      sampler->border_color_index = border_color_index;
 
       VkClearColorValue color = sampler->vk.border_color_value;
       if (sampler->vk.format == VK_FORMAT_D24_UNORM_S8_UINT &&
@@ -56,9 +80,9 @@ tu_CreateSampler(VkDevice _device,
       }
 
       tu6_pack_border_color(
-         &device->global_bo_map->bcolor[border_color], &color,
+         &device->global_bo_map->bcolor[border_color_index], &color,
          pCreateInfo->borderColor == VK_BORDER_COLOR_INT_CUSTOM_EXT);
-      border_color += TU_BORDER_COLOR_BUILTIN;
+      border_color = border_color_index + TU_BORDER_COLOR_BUILTIN;
    } else if (sampler->vk.format != VK_FORMAT_UNDEFINED ||
               device->instance->drirc.misc.enable_fast_border_color_for_undefined_formats) {
       fast_border_color_enable = true;
@@ -81,7 +105,7 @@ tu_CreateSampler(VkDevice _device,
    }
 
    unsigned aniso = pCreateInfo->anisotropyEnable ?
-      util_last_bit(MIN2((uint32_t)pCreateInfo->maxAnisotropy >> 1, 8)) : 0;
+      util_last_bit(MIN2(static_cast<uint32_t>(pCreateInfo->maxAnisotropy) >> 1, 8)) : 0;
    bool miplinear = (pCreateInfo->mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR);
    float min_lod = CLAMP(pCreateInfo->minLod, 0.0f, 4095.0f / 256.0f);
    float max_lod = CLAMP(pCreateInfo->maxLod, 0.0f, 4095.0f / 256.0f);
@@ -98,7 +122,7 @@ tu_CreateSampler(VkDevice _device,
          A8XX_TEX_SAMP_0_WRAP_T(tu6_tex_wrap(pCreateInfo->addressModeV)) |
          A8XX_TEX_SAMP_0_WRAP_R(tu6_tex_wrap(pCreateInfo->addressModeW)) |
          A8XX_TEX_SAMP_0_LOD_BIAS(pCreateInfo->mipLodBias) |
-         A8XX_TEX_SAMP_0_ANISO((enum a6xx_tex_aniso)aniso);
+         A8XX_TEX_SAMP_0_ANISO(static_cast<enum a6xx_tex_aniso>(aniso));
 
       sampler->descriptor[1] =
          A8XX_TEX_SAMP_1_MAX_LOD(max_lod) |
@@ -127,7 +151,7 @@ tu_CreateSampler(VkDevice _device,
          COND(miplinear, A6XX_TEX_SAMP_0_MIPFILTER_LINEAR_NEAR) |
          A6XX_TEX_SAMP_0_XY_MAG(tu6_tex_filter(pCreateInfo->magFilter, aniso)) |
          A6XX_TEX_SAMP_0_XY_MIN(tu6_tex_filter(pCreateInfo->minFilter, aniso)) |
-         A6XX_TEX_SAMP_0_ANISO((enum a6xx_tex_aniso) aniso) |
+         A6XX_TEX_SAMP_0_ANISO(static_cast<enum a6xx_tex_aniso>(aniso)) |
          A6XX_TEX_SAMP_0_WRAP_S(tu6_tex_wrap(pCreateInfo->addressModeU)) |
          A6XX_TEX_SAMP_0_WRAP_T(tu6_tex_wrap(pCreateInfo->addressModeV)) |
          A6XX_TEX_SAMP_0_WRAP_R(tu6_tex_wrap(pCreateInfo->addressModeW)) |
@@ -179,30 +203,28 @@ tu_DestroySampler(VkDevice _device,
    if (!sampler)
       return;
 
-   bool fast_border_color;
-   uint32_t border_color;
-
-   if (CHIP >= A8XX) {
-      fast_border_color =
-         (sampler->descriptor[2] & A8XX_TEX_SAMP_2_FASTBORDERCOLOREN) != 0;
-      border_color =
-         pkt_field_get(A8XX_TEX_SAMP_2_BCOLOR, sampler->descriptor[2]);
-   } else {
-      fast_border_color =
-         (sampler->descriptor[2] & A6XX_TEX_SAMP_2_FASTBORDERCOLOREN) != 0;
-      border_color =
-         pkt_field_get(A6XX_TEX_SAMP_2_BCOLOR, sampler->descriptor[2]);
-   }
-
-   if (!fast_border_color && border_color >= TU_BORDER_COLOR_BUILTIN) {
-      border_color -= TU_BORDER_COLOR_BUILTIN;
+   if (sampler->custom_border_color) {
       /* if the sampler had a custom border color, free it. TODO: no lock */
       mtx_lock(&device->mutex);
-      assert(!BITSET_TEST(device->custom_border_color, border_color));
-      BITSET_SET(device->custom_border_color, border_color);
+      assert(!BITSET_TEST(device->custom_border_color, sampler->border_color_index));
+      BITSET_SET(device->custom_border_color, sampler->border_color_index);
       mtx_unlock(&device->mutex);
    }
 
    vk_sampler_destroy(&device->vk, pAllocator, &sampler->vk);
 }
 TU_GENX(tu_DestroySampler);
+
+VKAPI_ATTR VkResult VKAPI_CALL
+tu_GetSamplerOpaqueCaptureDescriptorDataEXT(
+   VkDevice _device,
+   const VkSamplerCaptureDescriptorDataInfoEXT *pInfo,
+   void *pData)
+{
+   VK_FROM_HANDLE(tu_sampler, sampler, pInfo->sampler);
+
+   *static_cast<uint32_t *>(pData) =
+      sampler->custom_border_color ? sampler->border_color_index : 0;
+
+   return VK_SUCCESS;
+}

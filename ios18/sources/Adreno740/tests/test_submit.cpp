@@ -324,11 +324,15 @@ int main()
         CHECK(p.submit.setTableSwitching(2,write,nullptr)==0);
         p.ring.tableInstalled(0xaaaa000);low.tableInstalled(0xbbbb000);p.ring.useContext(42);
         NativeAdrenoSubmitBuffer buffer{p.handle,0x800000,4096};uint32_t first=0,second=0;
-        clock_us=1;p.submit.nextPriority(1);CHECK(p.submit.submit(&p.vm,&buffer,1,7,&first,&ringclock)==0);
+        clock_us=1;p.submit.nextContext(84);p.submit.nextOwner(302);p.submit.nextPriority(1);CHECK(p.submit.submit(&p.vm,&buffer,1,7,&first,&ringclock)==0);
         CHECK(low.lastSubmitted()==first && p.ring.lastSubmitted()==0 && low.table()==p.vm.ttbr0() && p.ring.table()==0xaaaa000);
-        CHECK(low.context()==42 && cp.regs[0x08a0]==0x341);
+        CHECK(low.context()==84 && p.ring.context()==42 && cp.regs[0x08a0]==0x341);
         uint32_t overtaking=0;
-        p.submit.nextPriority(0);CHECK(p.submit.submit(&p.vm,&buffer,1,8,&overtaking,&ringclock)==0);
+        p.submit.nextContext(42);p.submit.nextOwner(60);p.submit.nextPriority(0);CHECK(p.submit.submit(&p.vm,&buffer,1,8,&overtaking,&ringclock)==0);
+        CHECK(p.ring.context()==42 && low.context()==84);
+        uint32_t ownerSubmitted=0,ownerRetired=0;
+        CHECK(p.submit.ownerFenceProgress(60,&ownerSubmitted,&ownerRetired) && ownerSubmitted==overtaking && ownerRetired<overtaking);
+        CHECK(p.submit.ownerFenceProgress(302,&ownerSubmitted,&ownerRetired) && ownerSubmitted==first && ownerRetired<first);
         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq());
         CHECK(cp.regs[0x08a0]==0x341 && p.submit.deadReason()==0); // immediately switch back for newly queued high work
         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq());
@@ -336,7 +340,11 @@ int main()
         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq() && cp.regs[0x08a0]==0x340); // aged low ring gets a time slice
         clock_us+=2001;CHECK(p.submit.retireCompleted()==0 && cp.regs[0x08a0]==0x341);
         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq() && cp.regs[0x08a0]==0x340); // no immediate aging ping-pong
-        fencemem[1]=overtaking;CHECK(p.submit.retireCompleted()==0);
+        fencemem[1]=overtaking;
+        CHECK(p.submit.ownerFenceProgress(60,&ownerSubmitted,&ownerRetired) && ownerSubmitted==overtaking && ownerRetired>=overtaking);
+        CHECK(p.submit.ownerFenceProgress(302,&ownerSubmitted,&ownerRetired) && ownerSubmitted==first && ownerRetired<first);
+        CHECK(p.submit.retireCompleted()==0);
+        CHECK(p.submit.ownerFenceProgress(60,&ownerSubmitted,&ownerRetired) && ownerSubmitted==0 && ownerRetired>=overtaking);
         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq());
         p.submit.nextPriority(0);CHECK(p.submit.submit(&p.vm,&buffer,1,7,&second,&ringclock)==0);
         CHECK(low.lastSubmitted()==second && p.ring.lastSubmitted()==overtaking); // own queue cannot overtake

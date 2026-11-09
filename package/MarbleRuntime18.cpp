@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <IOKit/IOLib.h>
 #include <kern/clock.h>
+#include <kern/thread_call.h>
 #include <sys/msgbuf.h>
 #include <sys/param.h>
 #include <IOKit/IODeviceTreeSupport.h>
@@ -22,6 +23,8 @@ extern volatile uint32_t marble_display_transfers;
 extern uint64_t marble_data_bytes;
 extern volatile uint64_t marble_ufs_reads, marble_ufs_writes;
 void marble_runtime18_start(void);
+void marble_runtime18_observe(unsigned);
+void marble_runtime18_observation_start(void);
 void native_marble_reboot_bootloader(void);
 void native_root_block_capture_log(void);
 void native_root_block_request_snapshot(void);
@@ -45,6 +48,31 @@ static RuntimeScreen *runtimeScreen;
 static IOLock *gpuExportLock;
 static uint8_t *gpuExport;
 static uint32_t gpuExportBytes, gpuExportFilled, gpuExportGeneration;
+static unsigned observationSeconds;
+static thread_call_t observationCall;
+
+static void observationExpired(thread_call_param_t, thread_call_param_t)
+{
+    native_marble_display_snapshot();
+    char status[256];
+    native_runtime_usb_report(status, sizeof(status));
+    panic("RootStage observation timeout after %u seconds: %s", observationSeconds, status);
+}
+
+extern "C" void marble_runtime18_observe(unsigned seconds)
+{
+    observationSeconds = seconds;
+}
+
+extern "C" void marble_runtime18_observation_start(void)
+{
+    if (!observationSeconds || observationCall) return;
+    observationCall = thread_call_allocate(observationExpired, nullptr);
+    if (!observationCall) panic("RootStage: observation timer allocation failed");
+    uint64_t deadline;
+    clock_interval_to_deadline(observationSeconds, NSEC_PER_SEC, &deadline);
+    thread_call_enter_delayed(observationCall, deadline);
+}
 
 extern "C" int boot_log_export_put(uint32_t generation, uint32_t total, uint32_t offset,
                                     const void *data, uint32_t size)

@@ -2850,19 +2850,25 @@ lp_build_sample_general(struct lp_build_sample_context *bld,
          }
          lp_build_endif(&if_ctx);
       } else {
-         LLVMValueRef need_linear, linear_mask;
-         unsigned mip_filter_for_nearest;
+         LLVMValueRef need_linear, need_nearest, linear_mask, nearest_mask;
+         unsigned mip_filter_for_nearest, mip_filter_for_linear;
          struct lp_build_if_state if_ctx;
 
          if (min_filter == PIPE_TEX_FILTER_LINEAR) {
             linear_mask = lod_positive;
+            nearest_mask = lp_build_not(&bld->lodi_bld, lod_positive);
             mip_filter_for_nearest = PIPE_TEX_MIPFILTER_NONE;
+            mip_filter_for_linear = mip_filter;
          } else {
+            nearest_mask = lod_positive;
             linear_mask = lp_build_not(&bld->lodi_bld, lod_positive);
             mip_filter_for_nearest = mip_filter;
+            mip_filter_for_linear = PIPE_TEX_MIPFILTER_NONE;
          }
          need_linear = lp_build_any_true_range(&bld->lodi_bld, bld->num_lods,
                                                linear_mask);
+         need_nearest = lp_build_any_true_range(&bld->lodi_bld, bld->num_lods,
+                                               nearest_mask);
          lp_build_name(need_linear, "need_linear");
 
          if (bld->num_lods != bld->coord_type.length) {
@@ -2882,12 +2888,55 @@ lp_build_sample_general(struct lp_build_sample_context *bld,
              * linear filter but the fixups required for the nearest pixels
              * aren't all that complicated so just always run a combined path
              * if at least some pixels require linear.
+             * However, if it's a cube map, do both paths separately - there are
+             * subtle bugs in the "nearest-as-linear" filtering path (due to
+             * wrapping issues around edges / corners) which seem very difficult
+             * to fix in this complex code.
              */
-            lp_build_sample_mipmap_both(bld, linear_mask, mip_filter,
-                                        coords, offsets,
-                                        ilevel0, ilevel1,
-                                        lod_fpart, lod_positive,
-                                        texels);
+            if (bld->static_texture_state->target == PIPE_TEXTURE_CUBE ||
+                 bld->static_texture_state->target == PIPE_TEXTURE_CUBE_ARRAY) {
+               
+               lp_build_sample_mipmap(bld, PIPE_TEX_FILTER_LINEAR,
+                                      mip_filter_for_linear, false,
+                                      coords, offsets,
+                                      ilevel0, ilevel1, lod_fpart,
+                                      texels);
+
+               struct lp_build_if_state ifnearest_ctx;
+               lp_build_if(&ifnearest_ctx, bld->gallivm, need_nearest);
+               {
+                  LLVMValueRef texels_nearest[4];
+                  for (chan = 0; chan < 4; ++chan) {
+                     texels_nearest[chan] = lp_build_alloca(bld->gallivm,
+                                                            bld->texel_bld.vec_type, "");
+                     lp_build_name(texels_nearest[chan], "sampler%u_texel_n_%c_var",
+                                   sampler_unit, "xyzw"[chan]);
+                  }
+
+                  lp_build_sample_mipmap(bld, PIPE_TEX_FILTER_NEAREST,
+                                         mip_filter_for_nearest, false,
+                                         coords, offsets,
+                                         ilevel0, ilevel1, lod_fpart,
+                                         texels_nearest);
+
+                  for (chan = 0; chan < 4; ++chan) {
+                     LLVMValueRef tmp = LLVMBuildLoad2(builder, bld->texel_bld.vec_type,
+                                                       texels[chan], "");
+                     LLVMValueRef tmpn = LLVMBuildLoad2(builder, bld->texel_bld.vec_type,
+                                                        texels_nearest[chan], "");
+                     LLVMBuildStore(builder, lp_build_select(&bld->texel_bld,
+                                                             linear_mask, tmp, tmpn),
+                                             texels[chan]);
+                  }
+               }
+               lp_build_endif(&ifnearest_ctx);
+            } else {
+               lp_build_sample_mipmap_both(bld, linear_mask, mip_filter,
+                                           coords, offsets,
+                                           ilevel0, ilevel1,
+                                           lod_fpart, lod_positive,
+                                           texels);
+            }
          }
          lp_build_else(&if_ctx);
          {
@@ -3390,7 +3439,9 @@ lp_build_sample_soa_code(struct gallivm_state *gallivm,
        * some (somewhat broken imho) tests (because per-pixel face selection
        * can cause derivatives to be different for pixels outside the primitive
        * due to the major axis division even if pre-project derivatives are
-       * looking normal).
+       * looking normal). Note that technically the same logic also applies
+       * when mip filter is NONE (when min/mag filter are different) however so
+       * far tests seem happy without requiring per pixel lod in this case.
        * For lodq, we do it to simply avoid scalar pack / unpack (albeit for
        * cube maps we do indeed get per-pixel lod values).
        */
@@ -4742,6 +4793,48 @@ lp_build_img_op_no_format(struct gallivm_state *gallivm,
 }
 
 
+/**
+ * Return the bound image's layout with the channel types of the shader's
+ * format qualifier if the two differ in pure integer-ness.
+ */
+static const struct util_format_description *
+lp_img_access_format_desc(const struct util_format_description *format_desc,
+                          enum pipe_format qualifier,
+                          struct util_format_description *tmp)
+{
+   if (qualifier == PIPE_FORMAT_NONE ||
+       format_desc->layout != UTIL_FORMAT_LAYOUT_PLAIN)
+      return format_desc;
+
+   const struct util_format_description *qual_desc =
+      util_format_description(qualifier);
+   if (!qual_desc || qual_desc->block.bits != format_desc->block.bits ||
+       util_format_is_pure_integer(qualifier) ==
+       util_format_is_pure_integer(format_desc->format))
+      return format_desc;
+
+   const struct util_format_channel_description *qual_chan =
+      &qual_desc->channel[util_format_get_first_non_void_channel(qualifier)];
+
+   *tmp = *format_desc;
+   for (unsigned i = 0; i < format_desc->nr_channels; i++) {
+      if (tmp->channel[i].type == UTIL_FORMAT_TYPE_VOID)
+         continue;
+
+      /* Bail out if a channel can't hold the qualifier's type. */
+      if (qual_chan->type == UTIL_FORMAT_TYPE_FLOAT &&
+          tmp->channel[i].size != 16 && tmp->channel[i].size != 32)
+         return format_desc;
+
+      tmp->channel[i].type = qual_chan->type;
+      tmp->channel[i].normalized = qual_chan->normalized;
+      tmp->channel[i].pure_integer = qual_chan->pure_integer;
+   }
+
+   return tmp;
+}
+
+
 void
 lp_build_img_op_soa(const struct lp_static_texture_state *static_texture_state,
                     struct lp_sampler_dynamic_state *dynamic_state,
@@ -4752,8 +4845,10 @@ lp_build_img_op_soa(const struct lp_static_texture_state *static_texture_state,
 {
    const enum pipe_texture_target target = params->target;
    const unsigned dims = texture_dims(target);
+   struct util_format_description access_desc;
    const struct util_format_description *format_desc =
-      util_format_description(static_texture_state->format);
+      lp_img_access_format_desc(util_format_description(static_texture_state->format),
+                                params->format, &access_desc);
    const struct util_format_description *res_format_desc =
       util_format_description(static_texture_state->res_format);
    LLVMValueRef x = params->coords[0], y = params->coords[1],

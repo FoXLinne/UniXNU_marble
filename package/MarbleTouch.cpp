@@ -7,6 +7,9 @@
 #include <IOKit/IOMemoryDescriptor.h>
 #include <kern/thread.h>
 #include <pexpert/pexpert.h>
+#include <kern/clock.h>
+#include "MarbleMicrosecondDelay.h"
+#include "MarbleInputLatency.h"
 extern "C" {
 #include "GeniSpi.h"
 #include "SmmuBypass.h"
@@ -15,16 +18,102 @@ void native_marble_touch_start(void);
 IOReturn armcpu_spi_attach(uint32_t, bool, void (*)(void *), void *, uint32_t *, uint64_t *);
 }
 
+extern "C" {
+volatile MarbleInputLatency marble_input_latency[128];
+volatile uint64_t marble_input_latency_count, marble_input_latency_unmatched;
+volatile uint64_t marble_input_timebase[2];
+volatile uint32_t marble_input_profile_enabled;
+volatile uint64_t marble_touch_retry_stats[6];
+}
+namespace {
+IOLock *inputProfileLock;
+uint64_t inputProfileActive;
+}
+extern "C" void native_marble_input_profile_init(void) {
+    unsigned enabled=0;PE_parse_boot_argn("marble-input-profile",&enabled,sizeof(enabled));
+    if(enabled)inputProfileLock=IOLockAlloc();
+    uint64_t nanoseconds=0;
+    absolutetime_to_nanoseconds(1ULL<<32,&nanoseconds);
+    marble_input_timebase[0]=1ULL<<32;marble_input_timebase[1]=nanoseconds;
+    __atomic_store_n(&marble_input_profile_enabled,inputProfileLock?1U:0U,__ATOMIC_RELEASE);
+}
+extern "C" void native_marble_input_begin(uint64_t irq,uint64_t began,uint64_t ended,uint32_t retries,uint32_t drops) {
+    if(!__atomic_load_n(&marble_input_profile_enabled,__ATOMIC_ACQUIRE))return;
+    IOLockLock(inputProfileLock);
+    if(inputProfileActive)++marble_input_latency_unmatched;
+    const uint64_t sequence=marble_input_latency_count+1;
+    MarbleInputLatency row={sequence,irq,began,ended,0,0,0,0,0,retries,drops,0,0};
+    memcpy((void *)&marble_input_latency[(sequence-1)%128],&row,sizeof(row));
+    marble_input_latency_count=sequence;
+    __atomic_store_n(&inputProfileActive,sequence,__ATOMIC_RELEASE);
+    IOLockUnlock(inputProfileLock);
+}
+extern "C" void native_marble_input_hid_begin(void) {
+    if(!__atomic_load_n(&inputProfileActive,__ATOMIC_ACQUIRE))return;
+    IOLockLock(inputProfileLock);
+    if(inputProfileActive) {
+        auto &row=marble_input_latency[(inputProfileActive-1)%128];
+        if(!row.hidBegin)row.hidBegin=mach_absolute_time();
+    }
+    IOLockUnlock(inputProfileLock);
+}
+extern "C" void native_marble_input_hid_end(uint32_t status) {
+    if(!__atomic_load_n(&inputProfileActive,__ATOMIC_ACQUIRE))return;
+    IOLockLock(inputProfileLock);
+    if(inputProfileActive) {
+        auto &row=marble_input_latency[(inputProfileActive-1)%128];
+        row.hidStatus=status;
+        if(!status && !row.hidEnd)row.hidEnd=mach_absolute_time();
+    }
+    IOLockUnlock(inputProfileLock);
+}
+extern "C" void native_marble_input_swap_begin(const void *request) {
+    if(!__atomic_load_n(&inputProfileActive,__ATOMIC_ACQUIRE))return;
+    IOLockLock(inputProfileLock);
+    if(inputProfileActive) {
+        auto &row=marble_input_latency[(inputProfileActive-1)%128];
+        if(row.hidEnd && !row.swap) {row.swap=mach_absolute_time();row.request=(uintptr_t)request;}
+    }
+    IOLockUnlock(inputProfileLock);
+}
+extern "C" void native_marble_input_swap_presented(const void *request) {
+    if(!__atomic_load_n(&inputProfileActive,__ATOMIC_ACQUIRE))return;
+    IOLockLock(inputProfileLock);
+    if(inputProfileActive) {
+        auto &row=marble_input_latency[(inputProfileActive-1)%128];
+        if(row.swap && row.request==(uintptr_t)request) {
+            row.present=mach_absolute_time();
+            __atomic_store_n(&inputProfileActive,0ULL,__ATOMIC_RELEASE);
+        }
+    }
+    IOLockUnlock(inputProfileLock);
+}
+
+extern "C" void native_marble_input_swap_cancelled(void) {
+    if(!__atomic_load_n(&inputProfileActive,__ATOMIC_ACQUIRE))return;
+    IOLockLock(inputProfileLock);
+    if(inputProfileActive) {
+        marble_input_latency[(inputProfileActive-1)%128].reserved=1;
+        ++marble_input_latency_unmatched;
+        __atomic_store_n(&inputProfileActive,0ULL,__ATOMIC_RELEASE);
+    }
+    IOLockUnlock(inputProfileLock);
+}
+
 namespace {
 unsigned touchStage, touchEvents, touchFrames, touchInvalid, touchIrq;
 uint32_t touchHeader;
 int touchResult;
 volatile uint32_t touchInterrupts;
+uint64_t touchPendingIrq;
 volatile uint32_t *touchPin;
 bool touchInterruptDriven;
 void touchInterrupt(void *) {
     auto *pin = touchPin;
     if (!pin || !(pin[3] & 1)) return;
+    uint64_t empty=0;
+    const uint64_t now=mach_absolute_time();
+    __atomic_compare_exchange_n(&touchPendingIrq,&empty,now,false,__ATOMIC_RELEASE,__ATOMIC_RELAXED);
     pin[3] = 0;
     __asm__ volatile("dsb sy" ::: "memory");
     __atomic_fetch_add(&touchInterrupts, 1, __ATOMIC_RELEASE);
@@ -49,7 +138,7 @@ void write32(void *cookie, uint32_t offset, uint32_t value) {
     *reinterpret_cast<volatile uint32_t *>(reinterpret_cast<uintptr_t>(cookie) + offset) = value;
     __asm__ volatile("dsb sy" ::: "memory");
 }
-void delay(void *, unsigned us) { IODelay(us); }
+void delay(void *, unsigned us) { marbleMicrosecondDelay(us); }
 void cacheRange(void *, void *data, size_t bytes) {
     uint64_t ctr;
     __asm__ volatile("mrs %0, ctr_el0" : "=r"(ctr));
@@ -309,7 +398,9 @@ struct Touch {
         touchInterruptDriven = armInterrupt();
         uint32_t seen = __atomic_load_n(&touchInterrupts, __ATOMIC_ACQUIRE);
         if (!(touchPin[1] & 1)) --seen;
-        bool retry = false;
+        bool retry = false, contactDown = false;
+        uint64_t firstRead=0, firstContactIrq=0;
+        uint32_t firstHeaderRetries=0, firstPayloadDrops=0;
         for (;;) {
             if (touchInterruptDriven && !retry) {
                 assert_wait((event_t)&touchInterrupts, THREAD_UNINT);
@@ -320,17 +411,21 @@ struct Touch {
             }
             touchIrq = read32(reinterpret_cast<void *>(pins.address), 0x5004) & 1;
             if (touchIrq) {
+                __atomic_store_n(&touchPendingIrq,0ULL,__ATOMIC_RELEASE);
+                if(!firstContactIrq) {firstRead=0;firstHeaderRetries=firstPayloadDrops=0;}
                 retry = false;
                 if (!touchInterruptDriven) IOSleep(1);
                 continue;
             }
             // Match the controller driver's two-contact pre-read; extend for additional contacts.
+            if(!firstRead)firstRead=mach_absolute_time();
             result = read(events, frame, 26);
-            if (result) return result;
+            if (result) {++marble_touch_retry_stats[2];return result;}
             touchEvents++;
             touchHeader = little32(frame);
             if (!checksum(frame, 8)) {
                 touchInvalid++;
+                ++marble_touch_retry_stats[0];++firstHeaderRetries;
                 retry = true;
                 IOSleep(1);
                 continue; // Preserve the pending event while its header is being updated.
@@ -338,24 +433,39 @@ struct Touch {
             retry = false;
             unsigned count = frame[2] & 15;
             bool touchEvent = (frame[0] & 0x80) && count <= 10;
+            if(touchEvent && count && !contactDown && !firstContactIrq)
+                firstContactIrq=__atomic_load_n(&touchPendingIrq,__ATOMIC_ACQUIRE);
             if (touchEvent && count > 2) {
                 result = read(events + 26, frame + 26, (count - 2) * 8);
-                if (result) return result;
+                if (result) {++marble_touch_retry_stats[2];return result;}
             }
             bool valid = touchEvent && (!count || checksum(frame + 8, count * 8 + 2));
+            const uint64_t readEnded=mach_absolute_time();
             // Release the controller before entering the HID work loop.
             result = acknowledge(events);
-            if (result) return result;
+            if (result) {++marble_touch_retry_stats[3];return result;}
+            __atomic_store_n(&touchPendingIrq,0ULL,__ATOMIC_RELEASE);
             if (valid) {
+                if(count && !contactDown) {
+                    ++marble_touch_retry_stats[4];
+                    native_marble_input_begin(firstContactIrq,firstRead,readEnded,firstHeaderRetries,firstPayloadDrops);
+                }
+                contactDown=count!=0;
                 touchFrames++;
                 native_touch_publish(count, frame + 8);
-            } else touchInvalid++;
+                firstRead=firstContactIrq=0;firstHeaderRetries=firstPayloadDrops=0;
+            } else {
+                touchInvalid++;
+                if(touchEvent) {++marble_touch_retry_stats[1];++firstPayloadDrops;}
+                else {++marble_touch_retry_stats[5];firstRead=firstContactIrq=0;firstHeaderRetries=firstPayloadDrops=0;}
+            }
         }
     }
 };
 void worker(void *, wait_result_t) {
     auto *touch = new Touch;
     int result = touch ? touch->run() : GENI_ERR_IO;
+    native_touch_publish(0, nullptr);
     if (touchPin) {
         touchPin[2] &= ~1u;
         touchPin[3] = 0;
@@ -372,6 +482,7 @@ void worker(void *, wait_result_t) {
 extern "C" void native_marble_touch_start(void) {
     static bool started;
     if (__atomic_exchange_n(&started, true, __ATOMIC_RELAXED)) return;
+    native_marble_input_profile_init();
     touchStage = 1;
     thread_t thread;
     kern_return_t result = kernel_thread_start(worker, nullptr, &thread);

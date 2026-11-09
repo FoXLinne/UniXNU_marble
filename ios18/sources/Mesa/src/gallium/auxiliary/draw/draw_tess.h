@@ -54,77 +54,75 @@ struct draw_tes_inputs {
 
 #endif
 
-struct draw_tess_ctrl_shader {
-   struct draw_context *draw;
+struct draw_tess_info {
+   enum mesa_prim prim_mode;
+   unsigned spacing;
+   unsigned vertex_order_ccw;
+   unsigned point_mode;
+};
 
+struct draw_tess_ctrl_shader {
    struct pipe_shader_state state;
    struct tgsi_shader_info info;
+
+   struct draw_tess_info tess_info;
 
    unsigned vector_length;
    unsigned vertices_out;
-
-   unsigned input_vertex_stride;
-   const float (*input)[4];
-   const struct tgsi_shader_info *input_info;
-#if DRAW_LLVM_AVAILABLE
-   struct draw_tcs_inputs *tcs_input;
-   struct draw_tcs_outputs *tcs_output;
-   struct lp_jit_resources *jit_resources;
-   struct draw_tcs_llvm_variant *current_variant;
-#endif
 };
 
 struct draw_tess_eval_shader {
-   struct draw_context *draw;
    struct pipe_shader_state state;
    struct tgsi_shader_info info;
 
-   enum mesa_prim prim_mode;
-   unsigned spacing;
-   unsigned vertex_order_cw;
-   unsigned point_mode;
+   struct draw_tess_info tess_info;
 
    unsigned position_output;
    unsigned viewport_index_output;
    unsigned clipvertex_output;
    unsigned ccdistance_output[PIPE_MAX_CLIP_OR_CULL_DISTANCE_ELEMENT_COUNT];
    unsigned vector_length;
-
-   unsigned input_vertex_stride;
-   const float (*input)[4];
-   const struct tgsi_shader_info *input_info;
-
-#if DRAW_LLVM_AVAILABLE
-   struct draw_tes_inputs *tes_input;
-   struct lp_jit_resources *jit_resources;
-   struct draw_tes_llvm_variant *current_variant;
-#endif
 };
 
-enum mesa_prim get_tes_output_prim(struct draw_tess_eval_shader *shader);
+static inline struct draw_tess_info
+draw_tess_info_merge(const struct draw_tess_ctrl_shader *tcs_shader, const struct draw_tess_eval_shader *tes_shader)
+{
+   struct draw_tess_info tess_info = {0};
+   if (tcs_shader)
+      memcpy(&tess_info, &tcs_shader->tess_info, sizeof(struct draw_tess_info));
+   if (tes_shader) {
+      tess_info.prim_mode |= tes_shader->tess_info.prim_mode;
+      tess_info.point_mode |= tes_shader->tess_info.point_mode;
+      tess_info.spacing |= tes_shader->tess_info.spacing;
+      tess_info.vertex_order_ccw |= tes_shader->tess_info.vertex_order_ccw;
+   }
+   return tess_info;
+}
 
-int draw_tess_ctrl_shader_run(struct draw_tess_ctrl_shader *shader,
+enum mesa_prim get_tes_output_prim(const struct draw_tess_info *tess_info);
+
+int draw_tess_ctrl_shader_run(struct draw_context *draw,
+                              const struct draw_tess_ctrl_shader *shader,
                               const struct draw_vertex_info *input_verts,
                               const struct draw_prim_info *input_prim,
                               const struct tgsi_shader_info *input_info,
                               struct draw_vertex_info *output_verts,
                               struct draw_prim_info *output_prims );
 
-int draw_tess_eval_shader_run(struct draw_tess_eval_shader *shader,
+int draw_tess_eval_shader_run(struct draw_context *draw,
+                              const struct draw_tess_eval_shader *shader,
                               unsigned num_input_vertices_per_patch,
                               const struct draw_vertex_info *input_verts,
                               const struct draw_prim_info *input_prim,
                               const struct tgsi_shader_info *input_info,
+                              const struct draw_tess_info *tess_info,
                               struct draw_vertex_info *output_verts,
                               struct draw_prim_info *output_prims,
                               uint32_t **patch_lengths,
                               uint16_t **elts_out);
 
-#if DRAW_LLVM_AVAILABLE
-void draw_tcs_set_current_variant(struct draw_tess_ctrl_shader *shader,
-                                  struct draw_tcs_llvm_variant *variant);
-void draw_tes_set_current_variant(struct draw_tess_eval_shader *shader,
-                                  struct draw_tes_llvm_variant *variant);
-#endif
+bool draw_tess_init(struct draw_context *draw);
+
+void draw_tess_destroy(struct draw_context *draw);
 
 #endif

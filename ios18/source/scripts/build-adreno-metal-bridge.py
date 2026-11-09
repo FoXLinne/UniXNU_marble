@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the native Metal bridge (drivers/AdrenoMetal/bridge/NativeMetalBridge.rs): the pinned metal2vulkan runtime behind a C ABI, as a static library.
+"""Build the native Metal bridge (drivers/AdrenoMetal/bridge/NativeMetalBridge.rs): the device-owned metal2vulkan runtime behind a C ABI, as a static library.
 
 --target ios (default) cross-builds for arm64-apple-ios17.0, --target ios27 for arm64e-apple-ios27.0 (nightly, std built from source), --target host for the macOS host simulation. The runtime's own example library
 (runtime_examples.ll) and its function-constant fixture are assembled to AIR with llvm-as and embedded for the self-tests. Only generated build files hold local paths; nothing here
@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = json.loads((ROOT / 'scripts/data/gpu-metal-vulkan-inputs.json').read_text())['translator']['commit']
+SOURCE_REVISION = json.loads((ROOT / 'scripts/data/gpu-metal-vulkan-inputs.json').read_text())['translator']['commit']
 SOURCE = ROOT / '.cache/gpu-reference/metal2vulkan'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--target', choices=['ios', 'ios27', 'host'], default='ios')
@@ -75,7 +75,7 @@ triple = {'ios': 'aarch64-apple-ios', 'ios27': 'arm64e-apple-ios', 'host': 'aarc
 cargo = ['cargo', '+1.98.0'] + (['-Z', 'build-std=std,panic_unwind'] if args.target == 'ios27' else [])
 # The translator source the runtime is built from (its pin and recorded patches), which keys the shader cache: shader priming keeps what it
 # finished while this stays the same (PrimeShaders.h).
-runtime_id = hashlib.sha256((PIN + '\n' + source_id).encode()).hexdigest()[:32]
+runtime_id = hashlib.sha256((SOURCE_REVISION + '\n' + source_id).encode()).hexdigest()[:32]
 env = dict(os.environ, NMB_RUNTIME_ID=runtime_id, NMB_FIXTURE_AIR=str(air), NMB_FC_AIR=str(fc_air), NMB_SCANOUT_AIR=str(scanout_air), IPHONEOS_DEPLOYMENT_TARGET='27.0' if args.target == 'ios27' else '17.0', MACOSX_DEPLOYMENT_TARGET='14.0')
 if args.target == 'ios27':
     env['RUSTC_BOOTSTRAP'] = '1'
@@ -90,4 +90,4 @@ library = target_dir / triple / 'release/libadreno_metal_bridge.a'
 final = out / args.target / 'libadreno_metal_bridge.a'
 final.parent.mkdir(exist_ok=True)
 shutil.copyfile(library, final)
-print('PASS: native Metal bridge static library for %s (%d bytes); translator %s' % (args.target, final.stat().st_size, PIN[:12]))
+print('PASS: native Metal bridge static library for %s (%d bytes); translator %s' % (args.target, final.stat().st_size, SOURCE_REVISION[:12]))

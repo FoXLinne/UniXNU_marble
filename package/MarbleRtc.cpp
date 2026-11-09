@@ -4,6 +4,7 @@
 #include <IOKit/IOPlatformExpert.h>
 #include <IOKit/IOMemoryDescriptor.h>
 #include <kern/clock.h>
+#include <pexpert/pexpert.h>
 #include <Protocol/RootStage.h>
 #include "MarbleRtc.h"
 #include "MarbleUfs.h"
@@ -104,4 +105,29 @@ extern "C" void native_marble_rtc_sync(void)
     __asm__ volatile("dc ivac, %0\n\tdsb sy" :: "r"(rtc) : "memory");
     clock_set_calendar_microtime(rtc->reserved[0],0);
     native_marble_rtc_observe();
+}
+
+extern "C" void native_marble_rtc_host_sync(uint64_t seconds)
+{
+    clock_set_calendar_microtime(seconds,0);
+    native_marble_rtc_observe();
+}
+
+extern "C" void native_marble_rtc_kernel_service(void)
+{
+    unsigned enabled=0;
+    if (!rtc || !PE_parse_boot_argn("marble-native-services",&enabled,sizeof(enabled)) || !enabled) return;
+    const uint32_t request=rtc->requested;
+    if ((request&1) || request==rtc->completed) return;
+    const uint64_t seconds=rtc->request_seconds,counter=rtc->request_counter;
+    const uint32_t nanoseconds=rtc->request_nanoseconds;
+    __asm__ volatile("dmb ishld":::"memory");
+    if (request!=rtc->requested) return;
+    ++rtc->sequence;
+    __asm__ volatile("dmb ishst":::"memory");
+    rtc->seconds=seconds;rtc->counter=counter;rtc->nanoseconds=nanoseconds;
+    rtc->completed=request;rtc->error=0;
+    __asm__ volatile("dmb ishst":::"memory");
+    ++rtc->sequence;
+    __asm__ volatile("dc cvac,%0\n\tdsb sy"::"r"(rtc):"memory");
 }

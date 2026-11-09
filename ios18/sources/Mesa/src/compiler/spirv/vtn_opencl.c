@@ -131,15 +131,18 @@ static nir_function *mangle_and_find(struct vtn_builder *b,
    /* try and find in current shader first. */
    nir_function *found = nir_shader_get_function_for_name(b->shader, mname);
 
-   /* if not found here find in clc shader and create a decl mirroring it */
-   if (!found && b->options->clc_shader && b->options->clc_shader != b->shader) {
-      found = nir_shader_get_function_for_name(b->options->clc_shader, mname);
+   if (!found) {
+      /* if not found here find in clc shader and create a decl mirroring it */
+      if (b->options->clc_shader)
+         found = nir_shader_get_function_for_name(b->options->clc_shader, mname);
 
       /* try upcasting fp16 */
       if (!found && try_fp16_lowering) {
+         /* We might actually be inside libclc in which case clc_shader is NULL */
+         const nir_shader *libclc = b->options->clc_shader ? b->options->clc_shader : b->shader;
          fp16_name = mname;
          vtn_opencl_mangle(name, const_mask, num_srcs, src_types, true, &mname);
-         found = nir_shader_get_function_for_name(b->options->clc_shader, mname);
+         found = nir_shader_get_function_for_name(libclc, mname);
       }
 
       if (found) {
@@ -307,7 +310,6 @@ nir_alu_op_for_opencl_opcode(struct vtn_builder *b,
    case OpenCLstd_SRhadd: return nir_op_irhadd;
    case OpenCLstd_URhadd: return nir_op_urhadd;
    case OpenCLstd_Rsqrt: return nir_op_frsq;
-   case OpenCLstd_Sign: return nir_op_fsign;
    case OpenCLstd_Sqrt: return nir_op_fsqrt;
    case OpenCLstd_SSub_sat: return nir_op_isub_sat;
    case OpenCLstd_USub_sat: return nir_op_usub_sat;
@@ -697,6 +699,50 @@ handle_special(struct vtn_builder *b, uint32_t opcode,
    }
    case OpenCLstd_Rotate:
       return nir_urol(nb, srcs[0], nir_u2u32(nb, srcs[1]));
+   case OpenCLstd_Log2:
+   case OpenCLstd_Log:
+   case OpenCLstd_Exp2:
+      /* Emit precise log2/log/exp2 as hardware transcendentals when the
+       * driver's hardware units meet the CL ULP budget. fp32 only; exp/pow
+       * are intentionally excluded (change-of-base exceeds ULP budget). */
+      if (b->shader->options->has_cl_log2_exp2 && srcs[0]->bit_size == 32) {
+         switch (cl_opcode) {
+         case OpenCLstd_Log2:
+            return nir_flog2(nb, srcs[0]);
+         case OpenCLstd_Log:
+            return nir_fmul_imm(nb, nir_flog2(nb, srcs[0]), log(2.0));
+         case OpenCLstd_Exp2:
+            return nir_fexp2(nb, srcs[0]);
+         default:
+            break;
+         }
+      }
+      break;
+   case OpenCLstd_Sign: {
+      if (!(nb->fp_math_ctrl & (nir_fp_preserve_signed_zero | nir_fp_preserve_nan)))
+         return nir_fsign(nb, srcs[0]);
+
+      /* Nirs fsign doesn't give us the necessary guarantees we need, namely:
+       *  - For NaN we need to return 0.0
+       *  - Zeroes are sign preserving, where fsign semantics allow 0.0.
+       */
+      unsigned bit_size = srcs[0]->bit_size;
+      nir_def *pone = nir_imm_floatN_t(nb, 1.0, bit_size);
+      nir_def *mone = nir_imm_floatN_t(nb, -1.0, bit_size);
+      nir_def *zero = nir_imm_floatN_t(nb, 0.0, bit_size);
+
+      nir_def *is_nan = nir_fisnan(nb, srcs[0]);
+      nir_def *is_zero = nir_feq_imm(nb, srcs[0], 0.0);
+      nir_def *is_pos = nir_fgt_imm(nb, srcs[0], 0.0);
+
+      /* For non zero values we need to return ±1.0 */
+      nir_def *res = nir_bcsel(nb, is_pos, pone, mone);
+      /* For ±0.0 we return the original value, but flushed to zero */
+      res = nir_bcsel(nb, is_zero, nir_fcanonicalize(nb, srcs[0]), res);
+      /* For NaN we have to return 0.0 */
+      res = nir_bcsel(nb, is_nan, zero, res);
+      return res;
+   }
    default:
       break;
    }
@@ -1129,7 +1175,6 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_SRhadd:
    case OpenCLstd_URhadd:
    case OpenCLstd_Rsqrt:
-   case OpenCLstd_Sign:
    case OpenCLstd_Sqrt:
    case OpenCLstd_SSub_sat:
    case OpenCLstd_USub_sat:
@@ -1230,6 +1275,7 @@ vtn_handle_opencl_instruction(struct vtn_builder *b, SpvOp ext_opcode,
    case OpenCLstd_Rootn:
    case OpenCLstd_Remainder:
    case OpenCLstd_Remquo:
+   case OpenCLstd_Sign:
    case OpenCLstd_Hypot:
    case OpenCLstd_Sincos:
    case OpenCLstd_Modf:

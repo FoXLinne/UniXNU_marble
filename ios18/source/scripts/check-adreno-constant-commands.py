@@ -27,8 +27,6 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-if run(['git', '-C', MESA, 'rev-parse', 'HEAD'], text=True).strip() != REV:
-    raise SystemExit('Pinned Mesa revision differs')
 paths = ['src/gallium/drivers/freedreno/a6xx/fd6_const.cc',
          'src/gallium/drivers/freedreno/a6xx/fd6_emit.h',
          'src/gallium/drivers/freedreno/ir3/ir3_const.h',

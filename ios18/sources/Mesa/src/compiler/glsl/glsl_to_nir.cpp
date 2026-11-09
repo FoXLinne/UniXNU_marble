@@ -50,19 +50,19 @@
  * pass.
  */
 
-static nir_variable_mode
+static nir_parameter_mode
 get_param_mode(ir_variable *param)
 {
    switch ((enum ir_variable_mode)(param->data.mode)) {
    case ir_var_const_in:
    case ir_var_function_in:
-      return nir_var_function_in;
+      return nir_parameter_in;
 
    case ir_var_function_out:
-      return nir_var_function_out;
+      return nir_parameter_out;
 
    case ir_var_function_inout:
-      return nir_var_function_inout;
+      return nir_parameter_inout;
 
    case ir_var_auto:
    case ir_var_uniform:
@@ -290,6 +290,7 @@ nir_visitor::constant_copy(ir_constant *ir, void *mem_ctx)
       break;
 
    case GLSL_TYPE_INT:
+   case GLSL_TYPE_YUV_CSC_STANDARD_EXT:
       /* Only float base types can be matrices. */
       assert(cols == 1);
 
@@ -475,6 +476,7 @@ nir_visitor::visit(ir_variable *ir)
    var->data.implicit_sized_array = ir->data.implicit_sized_array;
    var->data.from_ssbo_unsized_array = ir->data.from_ssbo_unsized_array;
    var->data.per_primitive = ir->data.per_primitive;
+   var->data.yuv = ir->data.yuv;
 
    switch(ir->data.mode) {
    case ir_var_auto:
@@ -561,8 +563,14 @@ nir_visitor::visit(ir_variable *ir)
       mem_access |= ACCESS_NON_READABLE;
    if (ir->data.memory_coherent)
       mem_access |= ACCESS_COHERENT;
+   /* From the GLSL spec, section 4.10 (Memory Qualifiers):
+    *
+    *    "Since the external source reading or writing a volatile variable
+    *    may be another shader invocation, variables declared as volatile are
+    *    automatically treated as coherent."
+    */
    if (ir->data.memory_volatile)
-      mem_access |= ACCESS_VOLATILE;
+      mem_access |= ACCESS_VOLATILE | ACCESS_COHERENT;
    if (ir->data.memory_restrict)
       mem_access |= ACCESS_RESTRICT;
 
@@ -585,7 +593,7 @@ nir_visitor::visit(ir_variable *ir)
             if (field->memory_coherent)
                mem_access |= ACCESS_COHERENT;
             if (field->memory_volatile)
-               mem_access |= ACCESS_VOLATILE;
+               mem_access |= ACCESS_VOLATILE | ACCESS_COHERENT;
             if (field->memory_restrict)
                mem_access |= ACCESS_RESTRICT;
 
@@ -715,7 +723,7 @@ nir_visitor::create_function(ir_function_signature *ir)
       func->params[np].bit_size = 32;
       func->params[np].type = ir->return_type;
       func->params[np].is_return = true;
-      func->params[np].mode = nir_var_function_out;
+      func->params[np].mode = nir_parameter_out;
       np++;
    }
 
@@ -930,7 +938,7 @@ deref_get_qualifier(nir_deref_instr *deref)
          if (field->memory_coherent)
             qualifiers |= ACCESS_COHERENT;
          if (field->memory_volatile)
-            qualifiers |= ACCESS_VOLATILE;
+            qualifiers |= ACCESS_VOLATILE | ACCESS_COHERENT;
          if (field->memory_restrict)
             qualifiers |= ACCESS_RESTRICT;
       }
@@ -2278,6 +2286,10 @@ nir_visitor::visit(ir_expression *ir)
    case ir_unop_round_even: result = nir_fround_even(&b, srcs[0]); break;
    case ir_unop_sin:   result = nir_fsin(&b, srcs[0]); break;
    case ir_unop_cos:   result = nir_fcos(&b, srcs[0]); break;
+   case ir_unop_tanh:
+      result = b.shader->options->has_tanh ? nir_ftanh(&b, srcs[0]) :
+                                             nir_tanh_emulated(&b, srcs[0]);
+      break;
    case ir_unop_dFdx:        result = nir_ddx(&b, srcs[0]); break;
    case ir_unop_dFdy:        result = nir_ddy(&b, srcs[0]); break;
    case ir_unop_dFdx_fine:   result = nir_ddx_fine(&b, srcs[0]); break;
@@ -2474,8 +2486,6 @@ nir_visitor::visit(ir_expression *ir)
       result = (out_type == GLSL_TYPE_INT) ? nir_imul_high(&b, srcs[0], srcs[1])
                                            : nir_umul_high(&b, srcs[0], srcs[1]);
       break;
-   case ir_binop_carry:  result = nir_uadd_carry(&b, srcs[0], srcs[1]);  break;
-   case ir_binop_borrow: result = nir_usub_borrow(&b, srcs[0], srcs[1]); break;
    case ir_binop_less:
       b.fp_math_ctrl |= nir_fp_preserve_inf;
       if (type_is_float(types[0]))

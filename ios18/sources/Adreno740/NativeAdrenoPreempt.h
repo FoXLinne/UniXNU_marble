@@ -40,6 +40,9 @@ struct NativeAdrenoPreemptIo {
      * as a6xx_gmu.xml writes it (0x1f8c4). */
     void *gmu_cookie;
     int (*gmu_write32)(void *, uint32_t dword_offset, uint32_t value);
+    // Hardware CP_SW notifications observed by the board interrupt handler.
+    // A completed switch consumes a notification issued after its trigger.
+    uint32_t (*completion_sequence)(void *)=nullptr;
 };
 
 struct NativeAdrenoPreemptStats {
@@ -71,6 +74,7 @@ class NativeAdrenoPreempt final {
     uint64_t (*now_us_)(void *)=nullptr;
     void *clock_cookie_=nullptr;
     uint64_t trigger_us_=0;
+    uint32_t trigger_sequence_=0;
     NativeAdrenoPreemptStats stats_{};
     volatile uint32_t *event_=nullptr;   /* the log row of the switch in flight */
     void snapshot(volatile uint32_t *row,unsigned first) const;

@@ -9,6 +9,7 @@ import shutil
 import struct
 import subprocess
 import zlib
+from marble_display_geometry import write_ui_header
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -57,9 +58,11 @@ def main():
     library = bundle / 'MarblePhoneUI.dylib'
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
     compiler_target = 'arm64e-apple-ios18.0' if args.target == 'ios18' else 'arm64-apple-ios17.0'
+    write_ui_header(args.output / 'MarbleScreenGeometryProfile.h', args.target)
     run('xcrun', 'clang', '-target', compiler_target, '-isysroot', sdk,
         '-O2', '-Wall', '-Wextra', '-Werror', '-fno-objc-arc', '-dynamiclib',
-        ROOT / 'package/MarblePhoneUI.m', '-lobjc', '-framework', 'CoreFoundation',
+        '-I', args.output, ROOT / 'package/MarblePhoneUI.m',
+        ROOT / 'package/MarbleScreenGeometry.m', '-lobjc', '-framework', 'CoreFoundation',
         '-Wl,-reexport_framework,Foundation', '-install_name', '@loader_path/MarblePhoneUI.dylib',
         '-compatibility_version', '300.0.0', '-current_version', '300.0.0', '-o', library)
     executable = bundle / 'NativeAdrenoMetal'

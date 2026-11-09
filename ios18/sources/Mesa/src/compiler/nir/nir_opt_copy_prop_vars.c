@@ -120,6 +120,8 @@ struct copy_prop_var_state {
    /* List of copy structures ready for reuse */
    struct list_head unused_copy_structs_list;
 
+   bool has_non_ssa_src_entries;
+
    bool progress;
 };
 
@@ -220,7 +222,7 @@ gather_vars_written(struct copy_prop_var_state *state,
          case nir_intrinsic_report_ray_intersection:
             written->modes |= nir_var_mem_ssbo |
                               nir_var_mem_global |
-                              nir_var_shader_call_data |
+                              nir_var_shader_call_data_in |
                               nir_var_ray_hit_attrib;
             break;
 
@@ -228,7 +230,14 @@ gather_vars_written(struct copy_prop_var_state *state,
          case nir_intrinsic_terminate_ray:
             written->modes |= nir_var_mem_ssbo |
                               nir_var_mem_global |
-                              nir_var_shader_call_data;
+                              nir_var_shader_call_data_in;
+            break;
+
+         case nir_intrinsic_cmat_store:
+            /* Be conservative: src[0] only refers to the base element, but
+             * cmat_store may write beyond it.
+             */
+            written->modes |= nir_src_as_deref(intrin->src[0])->modes;
             break;
 
          case nir_intrinsic_deref_atomic:
@@ -474,6 +483,22 @@ lookup_entry_for_deref(struct copy_prop_var_state *state,
 }
 
 static void
+kill_source_aliases_copy_array(struct copy_prop_var_state *state,
+                               struct util_dynarray *copies_array,
+                               nir_deref_and_path *deref)
+{
+   util_dynarray_foreach_reverse(copies_array, struct copy_entry, iter) {
+      if (iter->src.is_ssa)
+         continue;
+
+      nir_deref_compare_result src_comp =
+         nir_compare_derefs_and_paths(state->mem_ctx, &iter->src.deref, deref);
+      if (src_comp & nir_derefs_may_alias_bit)
+         copy_entry_remove(copies_array, iter, NULL);
+   }
+}
+
+static void
 lookup_entry_and_kill_aliases_copy_array(struct copy_prop_var_state *state,
                                          struct util_dynarray *copies_array,
                                          nir_deref_and_path *deref,
@@ -497,6 +522,11 @@ lookup_entry_and_kill_aliases_copy_array(struct copy_prop_var_state *state,
          }
       } else if (comp & nir_derefs_may_alias_bit) {
          copy_entry_remove(copies_array, iter, entry);
+      } else if (!iter->src.is_ssa) {
+        nir_deref_compare_result src_comp =
+           nir_compare_derefs_and_paths(state->mem_ctx, &iter->src.deref, deref);
+        if (src_comp & nir_derefs_may_alias_bit)
+           copy_entry_remove(copies_array, iter, entry);
       }
    }
 }
@@ -546,8 +576,15 @@ lookup_entry_and_kill_aliases(struct copy_prop_var_state *state,
                                                write_mask, remove_entry,
                                                &entry, &entry_removed);
    } else {
+      nir_variable *write_var = deref->_path->path[0]->var;
+
+      /*
+       * Fast path for regular variables: different variables can't alias
+       * each other's destinations, so only the same-variable bucket needs
+       * the full dst+src check.
+       */
       struct copies_dynarray *cpda =
-         copies_array_for_var(state, copies, deref->_path->path[0]->var);
+         copies_array_for_var(state, copies, write_var);
       struct util_dynarray *copies_array = &cpda->arr;
 
       lookup_entry_and_kill_aliases_copy_array(state, copies_array, deref,
@@ -557,6 +594,30 @@ lookup_entry_and_kill_aliases(struct copy_prop_var_state *state,
       if (copies_array->size == 0) {
          _mesa_hash_table_remove_key(&copies->ht, deref->_path->path[0]->var);
       }
+
+      /*
+       * Other same-mode variable buckets can't have aliasing destinations,
+       * but their sources might alias the write target. Use the cheaper
+       * source-only check rather than the full dst+src check.
+       */
+      if (state->has_non_ssa_src_entries) {
+         hash_table_foreach(&copies->ht, ht_entry) {
+            nir_variable *var = (nir_variable *)ht_entry->key;
+            if (var == write_var || var->data.mode != write_var->data.mode)
+               continue;
+
+            struct copies_dynarray *other_cpda =
+               get_copies_array_from_ht_entry(state, copies, ht_entry);
+
+            kill_source_aliases_copy_array(state, &other_cpda->arr, deref);
+
+            if (other_cpda->arr.size == 0)
+               _mesa_hash_table_remove(&copies->ht, ht_entry);
+         }
+      }
+
+      /* Non-variable entries (copies->arr) may also have stale sources. */
+      kill_source_aliases_copy_array(state, &copies->arr, deref);
    }
 
    return entry;
@@ -1035,6 +1096,14 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
             apply_barrier_for_modes(state, copies, nir_intrinsic_memory_modes(intrin));
          break;
 
+      case nir_intrinsic_cmat_store:
+         if (debug)
+            dump_instr(instr);
+
+         apply_barrier_for_modes(state, copies,
+                                 nir_src_as_deref(intrin->src[0])->modes);
+         break;
+
       case nir_intrinsic_emit_vertex:
       case nir_intrinsic_emit_vertex_with_counter:
          if (debug)
@@ -1044,12 +1113,12 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
          break;
 
       case nir_intrinsic_report_ray_intersection:
-         apply_barrier_for_modes(state, copies, nir_var_mem_ssbo | nir_var_mem_global | nir_var_shader_call_data | nir_var_ray_hit_attrib);
+         apply_barrier_for_modes(state, copies, nir_var_mem_ssbo | nir_var_mem_global | nir_var_shader_call_data_in | nir_var_ray_hit_attrib);
          break;
 
       case nir_intrinsic_ignore_ray_intersection:
       case nir_intrinsic_terminate_ray:
-         apply_barrier_for_modes(state, copies, nir_var_mem_ssbo | nir_var_mem_global | nir_var_shader_call_data);
+         apply_barrier_for_modes(state, copies, nir_var_mem_ssbo | nir_var_mem_global | nir_var_shader_call_data_in);
          break;
 
       case nir_intrinsic_load_deref: {
@@ -1314,6 +1383,7 @@ copy_prop_vars_block(struct copy_prop_var_state *state,
                .is_ssa = false,
                { .deref = src },
             };
+            state->has_non_ssa_src_entries = true;
          }
 
          nir_variable *src_var = nir_deref_instr_get_variable(src.instr);
@@ -1389,14 +1459,19 @@ static void
 clone_copies(struct copy_prop_var_state *state, struct copies *clones,
              struct copies *copies)
 {
-   /* Simply clone the entire hash table. This is much faster than trying to
-    * rebuild it and is needed to avoid slow compilation of very large shaders.
-    * If needed we will clone the data later if it is ever looked up.
+   /* Keep the backing storage when a copies structure is reused for a later
+    * control-flow node.  Deep shaders otherwise repeatedly allocate and free
+    * similarly-sized hash tables while walking sibling nodes.
     */
-   assert(clones->ht.table == NULL);
-   _mesa_hash_table_copy(&clones->ht, &copies->ht, state->mem_ctx);
+   if (clones->ht.table == NULL) {
+      _mesa_hash_table_init(&clones->ht, state->mem_ctx,
+                            _mesa_hash_pointer, _mesa_key_pointer_equal);
+   }
 
-   util_dynarray_clone(&clones->arr, state->mem_ctx, &copies->arr);
+   _mesa_hash_table_clone_into(&clones->ht, &copies->ht);
+
+   util_dynarray_clear(&clones->arr);
+   util_dynarray_append_dynarray(&clones->arr, &copies->arr);
 }
 
 /* Returns an existing struct for reuse or creates a new on if they are
@@ -1424,8 +1499,6 @@ static void
 clear_copies_structure(struct copy_prop_var_state *state,
                        struct copies *copies)
 {
-   _mesa_hash_table_fini(&copies->ht, NULL);
-
    list_add(&copies->node, &state->unused_copy_structs_list);
 }
 
@@ -1535,6 +1608,7 @@ nir_copy_prop_vars_impl(nir_function_impl *impl)
       .impl = impl,
       .mem_ctx = mem_ctx,
       .lin_ctx = linear_context(mem_ctx),
+      .has_non_ssa_src_entries = false,
    };
    _mesa_pointer_hash_table_init(&state.vars_written_map, mem_ctx);
    list_inithead(&state.unused_copy_structs_list);

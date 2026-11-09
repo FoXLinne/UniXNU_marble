@@ -13,6 +13,7 @@
 #include <IOKit/IOTimerEventSource.h>
 #include <IOKit/IODeviceMemory.h>
 #include <kern/clock.h>
+#include <sys/proc.h>
 #include <IOKit/pwr_mgt/IOPM.h>
 #include <IOKit/pwr_mgt/IOPMpowerState.h>
 #include <libkern/c++/OSData.h>
@@ -37,6 +38,7 @@ extern "C" void native_legacy_swap_validation_observed(bool,unsigned,const void 
 // The surface of a rejected swap, as the validator read it: width, height, format, planes, stride, allocation, descriptor length.
 extern "C" void native_legacy_surface_rejected(uint64_t,uint64_t,uint32_t,uint32_t,uint64_t,uint64_t,uint64_t);
 extern "C" bool native_legacy_prepare_scanout(void);
+extern "C" IOReturn native_legacy_panel_power(unsigned long) __attribute__((weak_import));
 extern "C" void native_legacy_transfer_observed(IOReturn,const void *,uint64_t);
 extern "C" void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes);
 extern "C" void native_legacy_retirement_observed(IOService *);
@@ -56,6 +58,7 @@ extern "C" {volatile uint32_t native_legacy_surfaces[14];}
 extern "C" {volatile uint32_t native_legacy_direct[14];}
 extern "C" bool native_adreno_fences(uint32_t *submitted,uint32_t *retired) __attribute__((weak_import));
 extern "C" bool native_adreno_fences_detail(uint32_t *,uint32_t *,uint32_t *) __attribute__((weak_import));
+extern "C" bool native_adreno_owner_fences(int32_t,uint32_t *,uint32_t *,uint32_t *) __attribute__((weak_import));
 // The swap lifecycle: native_legacy_ring holds the newest native_legacy_ring_cap events (allocated at start: a static array of this size no longer fits the kernel's data segment), {[0] microseconds since boot (64 bit), [1] event << 56 | slot + 1 << 48 |
 // swaps validated and not retired << 40 | GPU fences outstanding << 24 | the request's tag (24 bits)}. Events: 1 swap validated, 2 fence wait
 // begun, 3 fence passed, 4 flipped to a slot, 5 latched, 6 retired, 7 offered to the GPU copy, 8 blank frame. native_legacy_snap is the 64
@@ -67,6 +70,9 @@ extern "C" bool native_adreno_fences_detail(uint32_t *,uint32_t *,uint32_t *) __
 extern "C" {volatile uint64_t (*native_legacy_ring)[2]=nullptr;volatile uint32_t native_legacy_ring_cap=0;volatile uint32_t native_legacy_ring_count;volatile uint64_t native_legacy_snap[64][2];volatile uint32_t native_legacy_snap_count;volatile uint32_t native_legacy_swapstat[16];}
 extern "C" uint32_t native_ufs_dpu_map(unsigned slot,const uint64_t *pages,unsigned count) __attribute__((weak_import));
 extern "C" volatile uint32_t native_ufs_dpu_state __attribute__((weak_import));
+extern "C" void native_marble_input_swap_presented(const void *) __attribute__((weak_import));
+extern "C" void native_marble_input_swap_cancelled(void) __attribute__((weak_import));
+extern "C" bool native_gop_direct_config(uint32_t *,uint32_t *,uint32_t *,uint32_t *,uint32_t *,uint32_t *) __attribute__((weak_import));
 static void noteSurface(OSObject *surface,IOMemoryDescriptor *memory)
 {
     static OSObject *seen[4];
@@ -163,6 +169,14 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
     // (int-131: swap 3 was validated during swap 2's GPU copy and one remembered pointer lost swap 2, which then never retired and left
     // every wait on it busy), so more than one can be pending.
     const OriginalLegacySwapRequest *validated[8]={};
+    int32_t validatedOwners[8];
+    uint32_t validatedFences[8];
+    bool validatedFenceCaptured[8];
+    int32_t requestOwner(const OriginalLegacySwapRequest *request) const {
+        if(!request)return 0;
+        for(unsigned i=0;i<8;++i)if(validated[i]==request)return validatedOwners[i];
+        return 0;
+    }
     bool isValidated(const OriginalLegacySwapRequest *request) const {
         if(!request)return false;
         for(auto entry: validated)if(entry==request)return true;
@@ -184,7 +198,7 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
             uint64_t physical=0;
             // Validation precedes prepare(). Only a retained direct slot owns wired pages.
             for(const auto &wired:directSlots)if(wired.surface==surface && wired.memory==memory){physical=wired.physical;break;}
-            gpuTraceEvent(GpuTraceDisplay,0,traceId(request),event,uint64_t(uintptr_t(request)),uint64_t(uintptr_t(surface)),physical,
+            gpuTraceEvent(GpuTraceDisplay,requestOwner(request),traceId(request),event,uint64_t(uintptr_t(request)),uint64_t(uintptr_t(surface)),physical,
                           slot,shownSlot,pendingSlot,validatedCount());
             if(surface && (event==1 || event==4))gpuTraceEvent(GpuTraceDisplaySurface,0,traceId(request),physical,native_legacy_surface_width(surface),
                 native_legacy_surface_height(surface),native_legacy_surface_stride(surface),native_legacy_surface_format(surface),
@@ -222,8 +236,13 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
     }
     void addValidated(const OriginalLegacySwapRequest *request) {
         if(isValidated(request))return;
-        for(unsigned i=0;i<8;++i)if(!validated[i]){validated[i]=request;validatedAt[i]=nowUs();return;}
-        validated[0]=request;validatedAt[0]=nowUs();
+        unsigned slot=0;
+        for(unsigned i=0;i<8;++i)if(!validated[i]){slot=i;break;}
+        validated[slot]=request;validatedAt[slot]=nowUs();traceRequestIds[slot]=0;
+        validatedOwners[slot]=proc_selfpid();validatedFences[slot]=0;
+        uint32_t retired=0;
+        validatedFenceCaptured[slot]=validatedOwners[slot]>0 && &native_adreno_owner_fences &&
+            native_adreno_owner_fences(validatedOwners[slot],&validatedFences[slot],&retired,nullptr);
     }
     const OriginalLegacySwapRequest *gpuRequest=nullptr;
     uint64_t gpuTraceRequest=0;
@@ -256,6 +275,7 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
     IOTimerEventSource *latchTimer=nullptr;
     const OriginalLegacySwapRequest *latchRequest=nullptr;
     uint64_t latchStart=0,directClock=0;
+    bool latchSlow=false;
     int shownSlot=-1,pendingSlot=-1;
     uint32_t shownStride=0;
     // Keep the first successful fence snapshot for this request across pending and busy polls.
@@ -265,10 +285,14 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
     bool fenceCaptured=false,fenceSlow=false;
     IOTimerEventSource *fenceTimer=nullptr;
     bool directOn=false,directBoot=true;
-    static constexpr uint32_t kVig[2]={0x4000,0x6000},kCtlFlush=0x15018,kBootIova=0xb8000000U,kBootStride=0x2fa0;
+    static constexpr uint32_t kCtlFlush=0x15018;
+    uint32_t directPipes[8]={0x4000,0x6000},directOffsets[8]={};
+    uint32_t directMask=3,directFlush=3,bootIova=0xb8000000U,bootStride=0x2fa0;
     void startDirect() {
         unsigned mode=0;PE_parse_boot_argn("sheng-dpu-scanout",&mode,sizeof(mode));
-        if(mode<2 || !&native_ufs_dpu_map || !&native_ufs_dpu_state || !(native_ufs_dpu_state>>31) || !primary)return;
+        if(mode<2 || !primary)return;
+        if(&native_gop_direct_config && !native_gop_direct_config(directPipes,directOffsets,&directMask,&directFlush,&bootIova,&bootStride))return;
+        if(!&native_ufs_dpu_map || !&native_ufs_dpu_state || (native_ufs_dpu_state&0xffff0000U)!=0x80000000U)return;
         IODeviceMemory *memory=IODeviceMemory::withRange(0xae01000,0x8f000);
         mdpMap=memory?memory->map(kIOMapAnywhere|kIOMapInhibitCache):nullptr;
         if(memory)memory->release();
@@ -298,9 +322,13 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
     }
     void flip(uint32_t iova,uint32_t stride) {
         shownStride=stride;
-        for(uint32_t vig:kVig){mdp[(vig+0x14)/4]=iova;mdp[(vig+0x24)/4]=stride&0xffff;}
+        for(unsigned i=0;i<8;++i)if(directMask&(1U<<i)) {
+            const uint32_t offset=(directOffsets[i]/bootStride)*stride+directOffsets[i]%bootStride;
+            mdp[(directPipes[i]+0x14)/4]=iova+offset;
+            mdp[(directPipes[i]+0x24)/4]=stride&0xffff;
+        }
         __asm__ volatile("dsb sy" ::: "memory");
-        mdp[kCtlFlush/4]=0x3;
+        mdp[kCtlFlush/4]=directFlush;
         __asm__ volatile("dsb sy" ::: "memory");
     }
     // The slot that holds this surface, mapping it into a free one (never the one on screen or the one waiting to latch) the first time.
@@ -341,13 +369,18 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
         traceGpuComplete=false;
         if(fenceFor!=request) {
             fenceFor=request;fenceTarget=0;fenceSince=0;fenceCaptured=false;fenceSlow=false;
+            for(unsigned i=0;i<8;++i)if(validated[i]==request && validatedFenceCaptured[i]) {
+                fenceTarget=validatedFences[i];fenceCaptured=true;break;
+            }
         }
+        const int32_t owner=requestOwner(request);
         uint32_t submitted=0,retired=0,detail[3]={0,0,4};
         // Preserve the CPU-only backend when no GPU fence interface is linked.
         if(!&native_adreno_fences_detail && !&native_adreno_fences) {
             gpuTraceEvent(GpuTraceDisplayFence,0,traceId(request),0,0,0,0,0,0,0,4);return true;
         }
-        const bool known=&native_adreno_fences_detail?native_adreno_fences_detail(&submitted,&retired,detail):
+        const bool known=owner>0 && &native_adreno_owner_fences?native_adreno_owner_fences(owner,&submitted,&retired,detail):
+            &native_adreno_fences_detail?native_adreno_fences_detail(&submitted,&retired,detail):
             (&native_adreno_fences && native_adreno_fences(&submitted,&retired));
         if(known && !fenceCaptured) {
             fenceTarget=submitted;fenceCaptured=true;
@@ -380,23 +413,27 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
     void fenceTick() {transferred=false;kickSwapQueue();}
     static void latchFired(OSObject *owner,IOTimerEventSource *) {static_cast<NativeLegacyDisplay *>(owner)->latchTick();}
     void latchTick() {
-        if(!latchRequest)return;
+        if(pendingSlot<0)return;
         uint64_t ns=0;absolutetime_to_nanoseconds(mach_absolute_time()-latchStart,&ns);
-        gpuTraceEvent(GpuTraceDisplayLatch,0,traceId(latchRequest),mdp[kCtlFlush/4],ns,shownSlot,pendingSlot);
-        if((mdp[kCtlFlush/4]&0x3) && ns<50000000ull){latchTimer->setTimeoutUS(500);return;}
-        if(ns>=50000000ull)native_legacy_direct[3]=native_legacy_direct[3]+1;
+        const uint32_t pending=mdp[kCtlFlush/4]&directFlush;
+        gpuTraceEvent(GpuTraceDisplayLatch,0,latchRequest?traceId(latchRequest):0,pending,ns,shownSlot,pendingSlot);
+        if(pending) {
+            if(ns>=50000000ull && !latchSlow) {latchSlow=true;native_legacy_direct[3]=native_legacy_direct[3]+1;}
+            latchTimer->setTimeoutUS(latchSlow?8000:500);return;
+        }
         const uint32_t us=uint32_t(ns/1000);
         if(us>native_legacy_direct[4])native_legacy_direct[4]=us;
         native_legacy_direct[5]=native_legacy_direct[5]+us;
         shownSlot=pendingSlot;pendingSlot=-1;
-        stat(10);note(5,shownSlot,latchRequest);
+        stat(10);if(latchRequest)note(5,shownSlot,latchRequest);
         const OriginalLegacySwapRequest *request=latchRequest;latchRequest=nullptr;
-        finishTransfer(request,true);
+        if(request)finishTransfer(request,true);
+        else {transferred=false;kickSwapQueue();}
     }
     // Back to the boot loader's memory (the blank frame and the copy are drawn there).
     void directToBoot() {
         if(!directOn || directBoot)return;
-        flip(kBootIova,kBootStride);directBoot=true;shownSlot=-1;
+        flip(bootIova,bootStride);directBoot=true;shownSlot=-1;
         native_legacy_direct[8]=native_legacy_direct[8]+1;
     }
     bool vsyncWanted() const {
@@ -538,7 +575,13 @@ public:
         if(ordinal>1 || !bootMapping){native_legacy_pm_observed(3,kIOReturnUnsupported,ordinal);return kIOReturnUnsupported;}
         native_legacy_pm_observed(3,kIOReturnSuccess,ordinal);
         IOReturn status=IOMobileFramebufferLegacy::setPowerState(ordinal,device);
-        native_legacy_pm_observed(4,status,ordinal);return status;
+        native_legacy_pm_observed(4,status,ordinal);
+        if (&native_legacy_panel_power) {
+            const IOReturn panel=native_legacy_panel_power(ordinal);
+            native_legacy_pm_observed(5,panel,ordinal);
+            if (status==kIOReturnSuccess && panel!=kIOReturnUnsupported) status=panel;
+        }
+        return status;
     }
     // The explicit offline system-client experiment publishes only the real
     // GOP mode. Unknown backend calls retain their stop-with-caller guards.
@@ -591,6 +634,7 @@ public:
         if(transferred){stat(2);return;}
         const OriginalLegacySwapRequest *request=pendingSwapRequest();
         if(!request || !isValidated(request)){stat(4);return;}
+        if(pendingSlot>=0){transferred=true;return;}
         // This bounded first-frame transfer preserves the original queue's
         // resource ownership. Separately gated retirement follows the copy;
         // neither path signals a hardware fence, announces a vblank or
@@ -630,11 +674,15 @@ public:
         IOMemoryDescriptor *memory=native_legacy_surface_descriptor(surface);
         PE_Video video={};
         uint32_t width=0,height=0;getDisplayDimensions(&width,&height);
+        uint32_t sourceRect[4]={};
+        memcpy(sourceRect,reinterpret_cast<const unsigned char *>(request)+kRequestRect0,sizeof(sourceRect));
+        const uint32_t sourceWidth=sourceRect[2],sourceHeight=sourceRect[3];
+        const bool scaled=sourceWidth!=width || sourceHeight!=height;
         uint64_t length=(uint64_t)width*height*4;
         uint64_t sourceStride=native_legacy_surface_stride(surface);
         uint64_t allocation=native_legacy_surface_allocation(surface);
-        if(!memory || !memory->metaCast("IOMemoryDescriptor") || !native_legacy_surface_bounds(width,height,sourceStride,allocation,memory->getLength()) ||
-           native_legacy_surface_width(surface)<width || native_legacy_surface_height(surface)<height ||
+        if(!memory || !memory->metaCast("IOMemoryDescriptor") || !native_legacy_surface_bounds(sourceWidth,sourceHeight,sourceStride,allocation,memory->getLength()) ||
+           native_legacy_surface_width(surface)<sourceWidth || native_legacy_surface_height(surface)<sourceHeight ||
            !nativeScanoutFormat(native_legacy_surface_format(surface),native_legacy_surface_planes(surface)) ||
            PE_current_console(&video) || video.v_baseAddr!=bootMapping->getPhysicalAddress() ||
            video.v_width!=width || video.v_height!=height || video.v_depth!=32 || video.v_rotate ||
@@ -649,8 +697,8 @@ public:
         noteSurface(surface,memory);
         const bool half=nativeHalf(native_legacy_surface_format(surface),native_legacy_surface_planes(surface));
         if(!gpuBypass && fenceTimer && !gpuWrote(request)) {transferred=true;return;}
-        if(directOn && !half && !gpuBypass && latchRequest)stat(5);
-        if(directOn && !half && !gpuBypass && !latchRequest) {
+        if(directOn && !half && !scaled && !gpuBypass && latchRequest)stat(5);
+        if(directOn && !half && !scaled && !gpuBypass && !latchRequest) {
             const int slot=directSlot(surface,memory);
             if(slot>=0) {
                 native_legacy_swap_stage(1);
@@ -658,7 +706,7 @@ public:
                 native_legacy_direct[0]=native_legacy_direct[0]+1;
                 stat(9);note(4,slot,request);noteFlipDelay(request);
                 shadowValid=false;pendingSlot=slot;latchRequest=request;transferred=true;
-                latchStart=mach_absolute_time();latchTimer->setTimeoutUS(500);
+                latchStart=mach_absolute_time();latchSlow=false;latchTimer->setTimeoutUS(500);
                 return;
             }
             native_legacy_direct[7]=native_legacy_direct[7]+1;
@@ -666,8 +714,8 @@ public:
         directToBoot();
         stat(7);note(7,-1,request);
         const bool offered=!gpuBypass && (&native_legacy_gpu_offer_token?
-            native_legacy_gpu_offer_token(this,traceId(request),memory,sourceStride,width,height,half?halfOfferFormat():NGP_BGRX8888):
-            native_legacy_gpu_offer(this,memory,sourceStride,width,height,half?halfOfferFormat():NGP_BGRX8888));
+            native_legacy_gpu_offer_token(this,traceId(request),memory,sourceStride,sourceWidth,sourceHeight,half?halfOfferFormat():NGP_BGRX8888):
+            native_legacy_gpu_offer(this,memory,sourceStride,sourceWidth,sourceHeight,half?halfOfferFormat():NGP_BGRX8888));
         if(offered) {
             // The GPU writes the scanout memory behind the CPU's back: the differential copy's picture of it is stale from now on.
             native_legacy_swap_stage(1);
@@ -682,6 +730,7 @@ public:
             }
             return;
         }
+        if(scaled) {native_legacy_transfer_observed(kIOReturnNotReady,request,0);return;}
         // Surfaces may be write-combined (iPadOS 27 display surfaces are): reading them uncached costs seconds per frame. Read through
         // a cacheable view, after cleaning and invalidating it so lines from the previous frame are not reused.
         IOMemoryMap *source=memory->map(kIOMapAnywhere|kIOMapReadOnly|kIOMapCopybackCache);
@@ -775,6 +824,7 @@ public:
         if(fenceFor==request) {
             fenceFor=nullptr;fenceTarget=0;fenceSince=0;fenceCaptured=false;fenceSlow=false;
         }
+        if(&native_marble_input_swap_presented)native_marble_input_swap_presented(request);
         IOMobileFramebufferLegacy::completeCurrentSwap();
         native_legacy_retirement_observed(this);
         return true;
@@ -795,7 +845,11 @@ public:
     // request (finishGpuSwap), a request the family cancelled is no longer its queue's head, so nothing completes twice and the next
     // frame is not held behind the cancelled one. The family only logs the result; the slot used to be a guard that panicked.
     bool cancelSwapsAfterTimeout() override {
+        if(&native_marble_input_swap_cancelled)native_marble_input_swap_cancelled();
         native_legacy_swap_timeouts=native_legacy_swap_timeouts+1;
+        // Hardware owns the pending slot until CTL acknowledges it. Detach the
+        // canceled request; the latch timer releases page ownership on acknowledgment.
+        latchRequest=nullptr;
         if(fenceTimer)fenceTimer->cancelTimeout();
         fenceFor=nullptr;fenceTarget=0;fenceSince=0;fenceCaptured=false;fenceSlow=false;traceGpuComplete=false;
         for(auto &entry: validated)entry=nullptr;
@@ -823,22 +877,22 @@ public:
             uint32_t width=0,height=0;getDisplayDimensions(&width,&height);
             if(surface && surface->metaCast("IOSurface") && !surfaces[1] && !surfaces[2] && !surfaces[3] &&
                native_legacy_single_layer_state(word(kRequestMasks),word(kRequestMasks+4),word(kRequestMasks+8))) {
-                reason=3;bool rectangles=true;
-                const unsigned rectOffsets[]={kRequestRect0,kRequestRect1};
-                for(unsigned offset: rectOffsets) {
-                    uint32_t rect[4]={};memcpy(rect,bytes+offset,sizeof(rect));
-                    rectangles=rectangles && rect[0]==0 && rect[1]==0 && rect[2]==width && rect[3]==height;
-                }
+                reason=3;
+                uint32_t sourceRect[4]={},destinationRect[4]={};
+                memcpy(sourceRect,bytes+kRequestRect0,sizeof(sourceRect));
+                memcpy(destinationRect,bytes+kRequestRect1,sizeof(destinationRect));
+                const bool rectangles=native_legacy_full_frame_rects(sourceRect,destinationRect,width,height,
+                    (uint32_t)native_legacy_surface_width(surface),(uint32_t)native_legacy_surface_height(surface));
                 bool options=true;for(unsigned offset=kRequestOptions;offset<=kRequestOptions+8;offset+=4)options=options && word(offset)==0;
                 if(width && height && rectangles && options && word(kRequestDims)==width && word(kRequestDims+4)==height) {
                     reason=4;
                     IOMemoryDescriptor *memory=native_legacy_surface_descriptor(surface);
                     // A surface larger than the display (rows or lines padded to the GPU's alignment) is accepted: only the visible rectangle,
                     // which the request's rectangles already name as the whole display, is copied.
-                    if(native_legacy_surface_width(surface)>=width && native_legacy_surface_height(surface)>=height &&
+                    if(native_legacy_surface_width(surface)>=sourceRect[2] && native_legacy_surface_height(surface)>=sourceRect[3] &&
                        nativeScanoutFormat(native_legacy_surface_format(surface),native_legacy_surface_planes(surface)) &&
                        memory && memory->metaCast("IOMemoryDescriptor") &&
-                       native_legacy_surface_bounds(width,height,native_legacy_surface_stride(surface),
+                       native_legacy_surface_bounds(sourceRect[2],sourceRect[3],native_legacy_surface_stride(surface),
                            native_legacy_surface_allocation(surface),memory->getLength())) {
                         reason=0;accepted=true;
                     } else {
@@ -919,7 +973,16 @@ public:
 #undef LEAF
 };
 OSDefineMetaClassAndStructors(NativeLegacyDisplay,IOMobileFramebufferLegacy)
-extern "C" void native_legacy_direct_snapshot(void) {if(gDirectDisplay)gDirectDisplay->snapshot();}
+extern "C" void native_legacy_direct_snapshot(void) {
+    NativeLegacyDisplay *display=gDirectDisplay;
+    if(!display)return;
+    auto capture=[](OSObject *owner,void *,void *,void *,void *)->IOReturn {
+        static_cast<NativeLegacyDisplay *>(owner)->snapshot();
+        return kIOReturnSuccess;
+    };
+    if(IOWorkLoop *loop=display->getWorkLoop())loop->runAction(capture,display);
+    else capture(display,nullptr,nullptr,nullptr,nullptr);
+}
 IOService *native_legacy_display_allocate(void) {return new NativeLegacyDisplay;}
 extern "C" void native_legacy_gpu_copied(void *display,uint64_t tag) {
     if(display)static_cast<NativeLegacyDisplay *>(display)->gpuCopied(tag);

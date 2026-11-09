@@ -604,10 +604,10 @@ fetch_state(struct gl_context *ctx, const gl_state_index16 state[],
        * exp: 2^-(density/ln(2) * fogcoord)
        * exp2: 2^-((density/(sqrt(ln(2))) * fogcoord)^2)
        */
-      float val =  (ctx->Fog.End == ctx->Fog.Start)
+      float fogcoord =  (ctx->Fog.End == ctx->Fog.Start)
          ? 1.0f : (GLfloat)(-1.0F / (ctx->Fog.End - ctx->Fog.Start));
-      value[0] = val;
-      value[1] = ctx->Fog.End * -val;
+      value[0] = fogcoord;
+      value[1] = ctx->Fog.End * -fogcoord;
       value[2] = (GLfloat)(ctx->Fog.Density * M_LOG2E); /* M_LOG2E == 1/ln(2) */
       value[3] = (GLfloat)(ctx->Fog.Density * ONE_DIV_SQRT_LN2);
       return;
@@ -776,7 +776,7 @@ fetch_state(struct gl_context *ctx, const gl_state_index16 state[],
 
    case STATE_ADVANCED_BLENDING_MODE:
       val[0].i = _mesa_get_advanced_blend_sh_constant(
-                   ctx->Color.BlendEnabled, ctx->Color._AdvancedBlendMode);
+                   ctx, ctx->Color.BlendEnabled, ctx->Color._AdvancedBlendMode);
       return;
 
    case STATE_ALPHA_REF:

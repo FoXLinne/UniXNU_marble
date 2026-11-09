@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::api::icd::*;
+use crate::api::memory::*;
 use crate::api::types::IdpAccelProps;
 use crate::api::util::*;
 use crate::core::device::*;
@@ -64,6 +65,10 @@ unsafe impl CLInfo<cl_device_info> for cl_device_id {
             CL_DEVICE_DEVICE_MEM_CAPABILITIES_INTEL => {
                 v.write::<cl_device_unified_shared_memory_capabilities_intel>(0)
             }
+            // Provided by cl_ext_float_atomics
+            CL_DEVICE_DOUBLE_FP_ATOMIC_CAPABILITIES_EXT if dev.has_atomic_float() => {
+                v.write::<cl_device_fp_atomic_capabilities_ext>(0)
+            }
             CL_DEVICE_DOUBLE_FP_CONFIG => v.write::<cl_device_fp_config>(
                 if dev.fp64_supported() {
                     let mut fp64_config = CL_FP_FMA
@@ -88,15 +93,37 @@ unsafe impl CLInfo<cl_device_info> for cl_device_id {
             }
             CL_DEVICE_EXTENSIONS => v.write::<&str>(&dev.extension_string),
             CL_DEVICE_EXTENSIONS_WITH_VERSION => v.write::<&[cl_name_version]>(&dev.extensions),
+            CL_DEVICE_EXTERNAL_MEMORY_IMPORT_ASSUME_LINEAR_IMAGES_HANDLE_TYPES_KHR
+                if dev.memory_sharing_supported() =>
+            {
+                v.write::<&[cl_external_memory_handle_type_khr]>(SUPPORTED_EXTERNAL_MEMORY_TYPES)
+            }
+            CL_DEVICE_EXTERNAL_MEMORY_IMPORT_HANDLE_TYPES_KHR if dev.memory_sharing_supported() => {
+                v.write::<&[cl_external_memory_handle_type_khr]>(SUPPORTED_EXTERNAL_MEMORY_TYPES)
+            }
             CL_DEVICE_GENERIC_ADDRESS_SPACE_SUPPORT => v.write::<bool>(false),
             CL_DEVICE_GLOBAL_MEM_CACHE_TYPE => v.write::<cl_device_mem_cache_type>(CL_NONE),
             CL_DEVICE_GLOBAL_MEM_CACHE_SIZE => v.write::<cl_ulong>(0),
             CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE => v.write::<cl_uint>(0),
             CL_DEVICE_GLOBAL_MEM_SIZE => v.write::<cl_ulong>(dev.global_mem_size()),
             CL_DEVICE_GLOBAL_VARIABLE_PREFERRED_TOTAL_SIZE => v.write::<usize>(0),
+            // Provided by cl_ext_float_atomics
+            CL_DEVICE_HALF_FP_ATOMIC_CAPABILITIES_EXT if dev.has_atomic_float() => {
+                v.write::<cl_device_fp_atomic_capabilities_ext>(0)
+            }
             // Provided by the cl_khr_fp16 extension.
             CL_DEVICE_HALF_FP_CONFIG if dev.fp16_supported() => {
-                v.write::<cl_device_fp_config>((CL_FP_ROUND_TO_NEAREST | CL_FP_INF_NAN).into())
+                let mut flags = CL_FP_ROUND_TO_NEAREST | CL_FP_INF_NAN;
+
+                if dev
+                    .get_nir_options()
+                    .float_mul_add16
+                    .are_all_bits_set(nir_float_muladd_support::nir_float_muladd_support_has_ffma)
+                {
+                    flags |= CL_FP_FMA;
+                }
+
+                v.write::<cl_device_fp_config>(flags.into())
             }
             CL_DEVICE_HOST_MEM_CAPABILITIES_INTEL => {
                 v.write::<cl_device_unified_shared_memory_capabilities_intel>(0)
@@ -208,7 +235,9 @@ unsafe impl CLInfo<cl_device_info> for cl_device_id {
             CL_DEVICE_NATIVE_VECTOR_WIDTH_FLOAT => v.write::<cl_uint>(1),
             CL_DEVICE_NATIVE_VECTOR_WIDTH_HALF => v.write::<cl_uint>(dev.fp16_supported().into()),
             CL_DEVICE_NATIVE_VECTOR_WIDTH_INT => v.write::<cl_uint>(1),
-            CL_DEVICE_NATIVE_VECTOR_WIDTH_LONG => v.write::<cl_uint>(1),
+            CL_DEVICE_NATIVE_VECTOR_WIDTH_LONG => {
+                v.write::<cl_uint>(if dev.int64_supported() { 1 } else { 0 })
+            }
             CL_DEVICE_NATIVE_VECTOR_WIDTH_SHORT => v.write::<cl_uint>(1),
             CL_DEVICE_NODE_MASK => {
                 v.write::<cl_uint>(dev.screen().device_node_mask().unwrap_or_default())
@@ -249,7 +278,9 @@ unsafe impl CLInfo<cl_device_info> for cl_device_id {
                 v.write::<cl_uint>(dev.fp16_supported().into())
             }
             CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT => v.write::<cl_uint>(1),
-            CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG => v.write::<cl_uint>(1),
+            CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG => {
+                v.write::<cl_uint>(if dev.int64_supported() { 1 } else { 0 })
+            }
             CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT => v.write::<cl_uint>(1),
             CL_DEVICE_PREFERRED_WORK_GROUP_SIZE_MULTIPLE => {
                 v.write::<usize>(dev.subgroup_sizes().next().unwrap())
@@ -293,9 +324,36 @@ unsafe impl CLInfo<cl_device_info> for cl_device_id {
             CL_DEVICE_SINGLE_DEVICE_SHARED_MEM_CAPABILITIES_INTEL => {
                 v.write::<cl_device_unified_shared_memory_capabilities_intel>(0)
             }
-            CL_DEVICE_SINGLE_FP_CONFIG => v.write::<cl_device_fp_config>(
-                (CL_FP_ROUND_TO_NEAREST | CL_FP_INF_NAN) as cl_device_fp_config,
-            ),
+            // Provided by cl_ext_float_atomics
+            CL_DEVICE_SINGLE_FP_ATOMIC_CAPABILITIES_EXT if dev.has_atomic_float() => {
+                // Always supported
+                let mut flags = CL_DEVICE_GLOBAL_FP_ATOMIC_LOAD_STORE_EXT
+                    | CL_DEVICE_LOCAL_FP_ATOMIC_LOAD_STORE_EXT;
+
+                if dev.has_atomic_float_add() {
+                    flags |= CL_DEVICE_GLOBAL_FP_ATOMIC_ADD_EXT | CL_DEVICE_LOCAL_FP_ATOMIC_ADD_EXT;
+                }
+
+                if dev.has_atomic_float_minmax() {
+                    flags |= CL_DEVICE_GLOBAL_FP_ATOMIC_MIN_MAX_EXT
+                        | CL_DEVICE_LOCAL_FP_ATOMIC_MIN_MAX_EXT;
+                }
+
+                v.write::<cl_device_fp_atomic_capabilities_ext>(flags.into())
+            }
+            CL_DEVICE_SINGLE_FP_CONFIG => {
+                let mut flags = CL_FP_ROUND_TO_NEAREST | CL_FP_INF_NAN;
+
+                if dev
+                    .get_nir_options()
+                    .float_mul_add32
+                    .are_all_bits_set(nir_float_muladd_support::nir_float_muladd_support_has_ffma)
+                {
+                    flags |= CL_FP_FMA;
+                }
+
+                v.write::<cl_device_fp_config>(flags.into())
+            }
             CL_DEVICE_SPIRV_CAPABILITIES => {
                 v.write_iter::<cl_uint>(dev.spirv_caps_vec.iter().map(|&cap| cap as _))
             }

@@ -19,6 +19,13 @@
     };
 };
 
-&cpu0 { status = "okay"; };
+&cpu0 { status = "okay"; unixnu,cluster-type = "E"; };
+&cpu1 { unixnu,cluster-type = "E"; };
+&cpu2 { unixnu,cluster-type = "E"; };
+&cpu3 { unixnu,cluster-type = "E"; };
+&cpu4 { unixnu,cluster-type = "P"; };
+&cpu5 { unixnu,cluster-type = "P"; };
+&cpu6 { unixnu,cluster-type = "P"; };
+&cpu7 { unixnu,cluster-type = "P"; };
 &ufs { status = "okay"; };
-// CPU 7 owns the resident firmware USB service for the current iOS 18 image.
+// CPU 1 owns the resident firmware USB service for the current iOS 18 image.

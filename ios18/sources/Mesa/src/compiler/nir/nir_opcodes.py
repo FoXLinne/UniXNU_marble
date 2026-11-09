@@ -362,14 +362,20 @@ for src_t in [tint, tuint, tfloat, tbool]:
               # an uint.", but we define the NIR opcodes the SPIRV way.
               if dst_t == tuint:
                    min = "0.0"
-                   max = "u_uintN_max({})".format(dst_bit_size)
+                   # 2^dst_bit_size is a power of 2 and exactly representable
+                   # in float, avoiding the rounding issue with u_uintN_max().
+                   max = "{}.0".format(2 ** dst_bit_size)
               else:
                    min = "u_intN_min({})".format(dst_bit_size)
-                   max = "u_intN_max({})".format(dst_bit_size)
+                   # 2^(dst_bit_size-1) is exactly representable in float,
+                   # unlike i_intN_max() which rounds up when converted.
+                   max = "{}.0".format(2 ** (dst_bit_size - 1))
               conv_expr = f"""
-                dst = src0;
-                if (src0 < {min} || src0 > {max}) {{
+                if (isnan(src0) || src0 < {min} || src0 >= {max}) {{
                    poison = true;
+                   dst = 0;
+                }} else {{
+                   dst = src0;
                 }}
               """
               unop_numeric_convert("{0}2{1}{2}".format(src_t[0], dst_t[0],
@@ -441,6 +447,7 @@ unop("fquantize2f16", tfloat32, "(fabsf(src0) < ldexpf(1.0, -14)) ? copysignf(0.
 
 unop("fsin", tfloat, "bit_size == 64 ? sin(src0) : sinf(src0)")
 unop("fcos", tfloat, "bit_size == 64 ? cos(src0) : cosf(src0)")
+unop("ftanh", tfloat, "bit_size == 64 ? tanh(src0) : tanhf(src0)")
 
 # dfrexp
 unop_convert("frexp_exp", tint32, tfloat, "frexp(src0, &dst);", valid_fp_math_ctrl = preserve_inf + preserve_nan + exact)
@@ -506,10 +513,10 @@ dst.x = (src0.x & 0xffff) | (src0.y << 16);
 """)
 
 unop_horiz("pack_uvec4_to_uint", 1, tuint32, 4, tuint32, """
-dst.x = (src0.x <<  0) |
-        (src0.y <<  8) |
-        (src0.z << 16) |
-        (src0.w << 24);
+dst.x = ((src0.x & 0xff) <<  0) |
+        ((src0.y & 0xff) <<  8) |
+        ((src0.z & 0xff) << 16) |
+        ((src0.w & 0xff) << 24);
 """)
 
 unop_horiz("pack_32_4x8", 1, tuint32, 4, tuint8,
@@ -716,6 +723,12 @@ if (nir_is_rounding_mode_rtz(execution_mode, bit_size)) {
    dst = src0 + src1;
 }
 """)
+binop("fadd_rtne", tfloat, _2src_commutative + inexact_associative,"""
+dst = src0 + src1;
+""", description = """
+Used by lower_round_even in nir_lower_double_ops to correctly round regardless
+of the rounding mode set for the shader.
+""")
 binop("iadd", tint, _2src_commutative + associative, "(uint64_t)src0 + (uint64_t)src1")
 binop("iadd_sat", tint, _2src_commutative, """
       util_add_check_overflow({dest_type}, src0, src1) ?
@@ -856,17 +869,18 @@ binop("fdiv", tfloat, "", "src0 / src1")
 binop("idiv", tint, "", "(src1 == 0 || (src0 == u_intN_min(bit_size) && src1 == -1)) ? 0 : (src0 / src1)")
 binop("udiv", tuint, "", "src1 == 0 ? 0 : (src0 / src1)")
 
-binop_convert("uadd_carry", tuint, tuint, _2src_commutative,
-              "util_add_check_overflow({dest_type}, src0, src1)",
-              description = """
-Return an integer (1 or 0) representing the carry resulting from the
-addition of the two unsigned arguments.
-              """, needs_dest_type = True)
+opcode("uadd_with_carry_out", 2, tuint, [1, 1], [tuint, tuint],
+       False, _2src_commutative, """
+   dst.x = src0.x + src1.x;
+   dst.y = util_add_check_overflow({dest_type}, src0.x,  src1.x);
+""", needs_dest_type = True)
 
-binop_convert("usub_borrow", tuint, tuint, "", "src0 < src1", description = """
-Return an integer (1 or 0) representing the borrow resulting from the
-subtraction of the two unsigned arguments.
-              """)
+opcode("usub_with_borrow_out", 2, tuint, [1, 1], [tuint, tuint],
+       False, "", """
+   dst.x = src0.x - src1.x;
+   dst.y = src0.x < src1.x;
+""")
+
 
 # hadd: (a + b) >> 1 (without overflow)
 # x + y = x - (x & ~y) + (x & ~y) + y - (~x & y) + (~x & y)
@@ -1378,6 +1392,17 @@ if (bits == 0) {
 }
 """)
 
+# Etnaviv-specific bitfield insert. The hardware bit_insert reads the bit offset
+# and bit count from the two channels of the third source, so they are packed
+# into one vec2.
+opcode("bitfield_insert_etna", 0, tuint, [0, 0, 2],
+       [tuint, tuint, tint32], False, "", """
+unsigned base = src0, insert = src1;
+int offset = src2.x, bits = src2.y;
+unsigned mask = ((1ull << bits) - 1) << offset;
+dst = (base & ~mask) | ((insert << offset) & mask);
+""")
+
 quadop_horiz("vec4", 4, 1, 1, 1, 1, """
 dst.x = src0.x;
 dst.y = src1.x;
@@ -1464,6 +1489,32 @@ triop_shift_ir3("shlm_ir3", "<<", "&")
 triop_shift_ir3("shrg_ir3", ">>", "|")
 triop_shift_ir3("shlg_ir3", "<<", "|")
 triop("andg_ir3", tuint, _2src_commutative, "(src0 & src1) | src2")
+
+def triop_shift_pan(name, type0, shift_expr):
+    shift_decl = "uint8_t shift_mask = (bit_size - 1); \
+                  uint8_t shift = src1 & shift_mask;"
+    opcode(name + '_and_pan', 0, type0, [0, 0, 0], [type0, tuint8, tuint],
+           False, "", f"{shift_decl}; dst = ({shift_expr}) & src2;")
+    opcode(name + '_or_pan', 0, type0, [0, 0, 0], [type0, tuint8, tuint],
+           False, "", f"{shift_decl}; dst = ({shift_expr}) | src2;")
+    opcode(name + '_xor_pan', 0, type0, [0, 0, 0], [type0, tuint8, tuint],
+           False, "", f"{shift_decl}; dst = ({shift_expr}) ^ src2;")
+
+triop_shift_pan("arshift", tint, "src0 >> shift")
+triop_shift_pan("lshift", tuint, "src0 << shift")
+triop_shift_pan("rshift", tuint, "src0 >> shift")
+triop_shift_pan("lrot", tuint, "(src0 << shift) |\
+                                (src0 >> ((-shift) & shift_mask))")
+triop_shift_pan("rrot", tuint, "(src0 >> shift) |\
+                                (src0 << ((-shift) & shift_mask))")
+
+# Fused multiply-add followed by a power-of-two scale, rounded to nearest even.
+# The hardware has some precision issues around subnormal inputs/outputs
+# so it should only be used for trascendentals and specficic cases not
+# requiring absolute precision.
+opcode("fma_rscale_pan", 0, tfloat32, [0, 0, 0, 0],
+       [tfloat32, tfloat32, tfloat32, tint32], False, _2src_commutative,
+       "ldexp(fma(src0, src1, src2), src3)")
 
 # r600/gcn specific instruction that evaluates unnormalized cube texture coordinates
 # and face index
@@ -1586,11 +1637,11 @@ opcode("bounds_agx", 0, tint, [0, 0, 0],
        [tint, tint, tint], False,
        "", "src1 <= src2 ? src0 : 0")
 
-binop_convert("interleave", tuint32, tuint16, "", """
+binop_convert("interleave", tuint32, tuint, "", """
       dst = 0;
       for (unsigned bit = 0; bit < 16; bit++) {
-          dst |= (src0 & (1 << bit)) << bit;
-          dst |= (src1 & (1 << bit)) << (bit + 1);
+          dst |= ((uint32_t)src0 & (1 << bit)) << bit;
+          dst |= ((uint32_t)src1 & (1 << bit)) << (bit + 1);
       }""", description="""
       Interleave bits of 16-bit integers to calculate a 32-bit integer. This can
       be used as-is for Morton encoding.
@@ -1613,6 +1664,20 @@ float src0_f = get_float_source(src0_cv, execution_mode, 32);
 float src1_f = get_float_source(src1_cv, execution_mode, 32);
 dst = (src0_f > src1_f || isnan(src1_f)) ? src0 : src1;
 """, valid_fp_math_ctrl = preserve_inf + preserve_nan)
+
+binop("isub_sat_intel", tint, "", """
+      util_sub_check_overflow({dest_type}, src0, src1) ?
+         (src1 < 0 ? u_intN_max(bit_size) : u_intN_min(bit_size)) : (src0 - src1)
+""", description = """
+Signed saturating subtraction, like isub_sat, but src1 must not be the minimum
+signed value for its bit size.  The result is undefined otherwise.
+""", needs_dest_type=True)
+
+# Intel multiply-adds
+triop("imad_32x16_intel", tint32, "", "(src0 * (int16_t) src1) + src2",
+      description = "Multiply 32-bits with low 16-bits, with sign extension, then add a 32-bit value")
+triop("umad_32x16_intel", tuint32, "", "(src0 * (uint16_t) src1) + src2",
+      description = "Multiply 32-bits with low 16-bits, with zero extension, then add a 32-bit value")
 
 # NVIDIA PRMT
 opcode("prmt_nv", 0, tuint32, [0, 0, 0], [tuint32, tuint32, tuint32],

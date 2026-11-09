@@ -130,17 +130,16 @@ struct wsi_device {
        */
       bool ensure_minImageCount;
 
-      /* Wait for fences before submitting buffers to Xwayland. Defaults to
-       * true.
-       */
-      bool xwaylandWaitReady;
-
       /* adds an extra minImageCount when running under xwayland */
       bool extra_xwayland_image;
 
       /* Never report VK_SUBOPTIMAL_KHR. Used to workaround
        * games that cannot handle SUBOPTIMAL correctly. */
       bool ignore_suboptimal;
+
+      /* Select and read Present events on a separate connection to the X
+       * server, so the WSI never reads from the application's connection. */
+      bool dedicated_event_connection;
    } x11;
 
    struct {
@@ -153,10 +152,18 @@ struct wsi_device {
    } win32;
 
    struct {
+      /* Metal4 requires making CAMetalLayer's residencySet resident for the
+       * queue that will render to it. We need a way to query the queue to
+       * make it possible. */
+      void *(*get_mtl4_command_queue)(VkDevice device);
       VkResult (*bind_drawable_to_vkimage)(VkImage image, void *drawable);
       /* Does not transfer the ownership to the command buffer. The command
        * buffer must retain the drawable to ensure lifespan. */
       void (*encode_drawable_present)(VkCommandBuffer cmd, void *drawable);
+      /* Required to work around Metal4 presentation bug. */
+      void (*cmd_blit_image)(VkCommandBuffer cmd,
+                             const VkBlitImageInfo2 *blit_info,
+                             bool opaque_alpha);
    } metal;
 
 
@@ -338,10 +345,23 @@ VkImageUsageFlags
 wsi_caps_get_image_usage(void);
 
 bool
-wsi_instance_supports_google_display_timing(const struct vk_instance *instance);
+wsi_instance_supports_google_display_timing(const struct vk_instance *instance,
+                                            const struct driOptionCache *dri_options);
 
 bool
 wsi_device_supports_explicit_sync(struct wsi_device *device);
+
+static inline VkImageUsageFlags2KHR
+vk_swapchain_usage_flags(const VkSwapchainCreateInfoKHR *info)
+{
+   const VkImageUsageFlags2CreateInfoKHR *usage2 =
+      vk_find_struct_const(info->pNext,
+                           IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR);
+   if (usage2)
+      return usage2->usage;
+   else
+      return info->imageUsage;
+}
 
 #define wsi_common_vk_warn_once(warning) \
    do { \

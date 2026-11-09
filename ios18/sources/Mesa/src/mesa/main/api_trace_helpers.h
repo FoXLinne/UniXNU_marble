@@ -22,7 +22,17 @@ enum mesa_trace_elem_kind {
    MESA_TRACE_ELEM_INTPTR,
 };
 
+const char *
+_mesa_trace_format_ptr(char *buf, size_t buflen, const void *ptr);
+
 void
 _mesa_trace_format_array(char *buf, size_t buflen,
                          const void *arr, size_t n,
                          enum mesa_trace_elem_kind kind);
+
+void
+_mesa_trace_format_bitfield_group(char *buf, size_t buflen,
+                                  const char *enum_names[],
+                                  const unsigned enum_values[],
+                                  size_t num_enums,
+                                  unsigned mask);

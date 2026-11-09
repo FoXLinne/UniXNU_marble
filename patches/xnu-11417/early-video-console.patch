@@ -1,0 +1,24 @@
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -542,11 +542,20 @@ PE_create_console(void)
+ 	 */
+ 	check_for_panic_log();
+ 
+-	if (PE_state.video.v_display) {
++	unsigned int early_console = 0;
++	int verbose = 0;
++	PE_parse_boot_argn("early_console", &early_console, sizeof(early_console));
++	boolean_t text_console = early_console ||
++	    PE_parse_boot_argn("-v", &verbose, sizeof(verbose));
++	if (PE_state.video.v_display && !text_console) {
+ 		PE_initialize_console(&PE_state.video, kPEGraphicsMode);
+ 	} else {
+ 		PE_initialize_console(&PE_state.video, kPETextMode);
+ 	}
++	if (text_console) {
++		PE_initialize_console(NULL, kPEAcquireScreen);
++		printf("MarbleConsole: early text console acquired\n");
++	}
+ }
+ 
+ int

@@ -1,0 +1,14 @@
+--- a/osfmk/arm/rtclock.c
++++ b/osfmk/arm/rtclock.c
+@@ -468,7 +468,10 @@ absolutetime_to_microtime(uint64_t       abstime,
+ 	*secs = t64 = abstime / rtclock_sec_divisor;
+ 	abstime -= (t64 * rtclock_sec_divisor);
+ 
+-	*microsecs = (uint32_t)(abstime / rtclock_usec_divisor);
++	/* The architectural timer may use a fractional MHz clock (marble: 19.2 MHz).
++	 * Dividing its frequency by 1 MHz first truncates it and makes microuptime
++	 * move backwards at each second boundary. Scale the bounded remainder. */
++	*microsecs = (uint32_t)(abstime * USEC_PER_SEC / rtclock_sec_divisor);
+ }
+ 
+ void

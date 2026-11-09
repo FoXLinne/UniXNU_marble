@@ -13,6 +13,7 @@ extern "C" void native_marble_touch_start(void);
 extern "C" IOService *native_hid_touch_allocate(void);
 extern "C" IOService *native_hid_input_allocate(void);
 extern "C" void native_marble_buttons_start(void);
+extern "C" void native_marble_haptics_start(void);
 extern "C" void native_hid_static_init(void) __asm__("__GLOBAL__sub_I_NativeHomeInput.cpp");
 extern "C" void native_hid_input_observed(unsigned, int);
 extern "C" void native_hid_live_checkpoint(IOService *);
@@ -71,5 +72,6 @@ extern "C" void native_marble_hid_start(void)
     marble_hid_stage = 2;
     native_marble_touch_start();
     native_marble_buttons_start();
+    native_marble_haptics_start();
     IOLog("MarbleHID: Goodix digitizer started\n");
 }

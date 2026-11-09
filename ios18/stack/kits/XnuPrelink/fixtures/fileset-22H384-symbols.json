@@ -1,0 +1,2686 @@
+{
+  "inputs": {
+    "kernelcache_sha256": "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70",
+    "entry": "com.apple.kernel"
+  },
+  "functions": [
+    {
+      "original": "0xfffffff007e6e0c8",
+      "original_size": 32,
+      "original_sha256": "18ed9b2bfe71d41cfd06ad8dc0b7671a52565279dcd9fe0002cfc90ba238c44c",
+      "native_symbol": "_lck_mtx_try_lock",
+      "evidence": "CASA of zero to current thread ID at mutex +8, returns whether the prior owner was zero. Native has the same instruction sequence after BTI; the thread ID offset follows the native thread layout. Source: osfmk/arm/locks.c."
+    },
+    {
+      "original": "0xfffffff007f882b4",
+      "original_size": 168,
+      "original_sha256": "ad6b053c3105560e2deec5015f923fa7bd91e7d441ccbaed2acb2d128ee182d0",
+      "native_symbol": "_read_random",
+      "evidence": "Calls the PRNG refresh callback with discriminator 0x4d5f, then generates requested bytes in chunks capped at 0x100 using the current CPU number. Source: osfmk/prng/prng_random.c read_random."
+    },
+    {
+      "original": "0xfffffff007faa420",
+      "original_size": 48,
+      "original_sha256": "7592d49e2c1f5b3dd3b7481897de5c663f7d1d4d8075dc8be6e787af11b97126",
+      "native_symbol": "_mach_absolute_time",
+      "evidence": "Reads the per-CPU timebase offset, issues ISB, reads CNTVCT_EL0, retries when the offset changes, and returns counter plus offset. Native performs the same operations using its CPU data pointer offset. Source: osfmk/arm/rtclock.c."
+    },
+    {
+      "original": "0xfffffff007faa52c",
+      "original_size": 20,
+      "original_sha256": "51d7ebdbb4055df08a4db19e0aa0c10381c2a542e9740ea56dc8dd678b9b1b23",
+      "native_symbol": "_clock_timebase_info",
+      "evidence": "Copies the eight-byte rtclock timebase numerator/denominator pair at rtclock_data +8 to the caller. Native has the identical masked instructions after BTI. Source: osfmk/arm/rtclock.c clock_timebase_info."
+    },
+    {
+      "original": "0xfffffff0084826ec",
+      "original_size": 48,
+      "original_sha256": "e962c824689b61a5edc4f2aeafe146abd378e0f5a909ec34dd0fdf15c81e4d24",
+      "native_symbol": "_register_crypto_functions",
+      "evidence": "Rejects an occupied crypto_functions slot with -1; otherwise stores the supplied table, sets crypto_functions_registered, and returns zero. Native has the same two globals and control flow after BTI. Source: libkern/crypto/register_crypto.c."
+    },
+    {
+      "original": "0xfffffff0085b6fa8",
+      "original_size": 36,
+      "original_sha256": "91b20033d445a38f151b019c42b6c0b57d9129d41219dba7e491ccdeda6ee362",
+      "native_symbol": "_PE_parse_boot_argn",
+      "evidence": "Moves name/buffer/length to x1/x2/x3, reads PE_state.bootArgs->CommandLine at +0x6c, sets allow_prefix=0, and branches to the parser. Source: pexpert/gen/bootargs.c PE_parse_boot_argn."
+    },
+    {
+      "original": "0xfffffff00860b468",
+      "original_size": 104,
+      "original_sha256": "776d773aacea700b8b7ece2ba962a6ef914233980440b0e8d0e5c57ec216b2eb",
+      "native_symbol": "_pmap_claim_reserved_ppl_page",
+      "evidence": "Pops the reserved PPL page list under its spin lock and panics with no reserved PPL page to claim on an empty list. Source: osfmk/arm/pmap/pmap.c pmap_claim_reserved_ppl_page. The native non-PPL implementation returns NULL."
+    },
+    {
+      "original": "0xfffffff00860b5ec",
+      "original_size": 68,
+      "original_sha256": "ccccc1b98b7172b043abcab00683d433e5088e023c02da0fac58a00b4a2694ef",
+      "native_symbol": "_pmap_free_reserved_ppl_page",
+      "evidence": "Pushes x0 onto the reserved PPL page list under the same lock used by pmap_claim_reserved_ppl_page. Source: osfmk/arm/pmap/pmap.c pmap_free_reserved_ppl_page. The native non-PPL implementation returns without storing the page."
+    },
+    {
+      "original": "0xfffffff008426714",
+      "original_size": 596,
+      "original_sha256": "4640979625db4f3fd274591865806290739d9727546188163fc529f207cf86cf",
+      "native_symbol": "__ZN11OSMetaClassD2Ev",
+      "evidence": "Restores the OSMetaClass vtable, removes this class from the class dictionary and superclass list under the metaclass mutex, and frees its metadata. Native D2 has the same destructor body; native D1 is a separate trap. Source: libkern/c++/OSMetaClass.cpp OSMetaClass::~OSMetaClass."
+    },
+    {
+      "original": "0xfffffff008427168",
+      "original_size": 28,
+      "original_sha256": "c7ef1ce57711eba0ccf19ce532ac1f61e371ef5eda0fcdfa23f2e48cbe9947bb",
+      "native_symbol": "__ZNK11OSMetaClass19instanceConstructedEv",
+      "evidence": "Atomically adds one to instanceCount at +0x24; on zero-to-one follows superClassLink at +0x10 and repeats. Source: libkern/c++/OSMetaClass.cpp OSMetaClass::instanceConstructed."
+    },
+    {
+      "original": "0xfffffff00849918c",
+      "original_size": 76,
+      "original_sha256": "5867f08f8405376707fdab0a6847d1e4e6eab4835ec55c3d274b3047f53a0efc",
+      "native_symbol": "_IOFreeData",
+      "evidence": "Null-checks the allocation, calls kfree_ext with KHEAP_DATA_BUFFERS and the supplied size, then atomically subtracts size from debug_iomalloc_size. KHEAP_DATA_BUFFERS at 0xfffffff007a56308 is independently matched by data references. Source: iokit/Kernel/IOLib.cpp IOFreeData and IOFree_internal."
+    },
+    {
+      "original": "0xfffffff008429728",
+      "original_size": 96,
+      "original_sha256": "549fc04fa751d1410192fefc50702ca1906f1e9f803a5a5c283b692459729f17",
+      "native_symbol": "_OSObject_typed_operator_delete",
+      "evidence": "Null-checks memory, masks kt_size at +0x2c to 24 bits, calls kern_os_typed_free for allocations within the declared size and kfree_ext on KHEAP_DEFAULT otherwise, then subtracts allocation size from accounting. Source: libkern/c++/OSObject.cpp OSObject_typed_operator_delete."
+    },
+    {
+      "original": "0xfffffff007f9fa8c",
+      "original_size": 56,
+      "original_sha256": "6ed32ae7bf6023ce8924e9ac83350dc8cb59a08540032ae55972a71e9f9082ff",
+      "native_symbol": "_lck_spin_lock",
+      "evidence": "Increments the current thread preemption counter, tries to acquire the lock with CASA using the thread pointer as owner, then branches to hw_lock_lock_contended on contention. Native performs the same sequence using the native preemption-counter offset. Source: osfmk/arm/locks.c lck_spin_lock."
+    },
+    {
+      "original": "0xfffffff007f93ba4",
+      "original_size": 88,
+      "original_sha256": "8a2ce17f3221ddda632afc4227efe508def13e2f04aa9dc4eec128215fbc6eef",
+      "native_symbol": "_pmap_in_ppl",
+      "evidence": "Masks interrupts, reads the per-CPU PPL state, compares it with PPL_STATE_DISPATCH=1, restores DAIF and returns the result. Retained corecrypto uses this result to select reserved PPL-page allocation. The native non-PPL pmap implementation returns false. Source: osfmk/arm64/proc_reg.h and osfmk/arm/pmap/pmap.c."
+    },
+    {
+      "original": "0xfffffff008010d10",
+      "original_size": 60,
+      "original_sha256": "83829e0cc03118c623399cfe1e1b3bd337cdf82250301d0eb5a580a703b6c050",
+      "native_symbol": "_vnode_mount",
+      "evidence": "Returns vnode.v_mount at +0xd8, authenticated with address diversity 0xd6ef, and returns zero for a null mount. Source: bsd/vfs/kpi_vfs.c vnode_mount; native uses the same field and authentication discriminator."
+    },
+    {
+      "original": "0xfffffff0084991ec",
+      "original_size": 8,
+      "original_sha256": "341aa2426647bc82e40f44130acc0416533d21a59c90e8520e3eed3505107fe4",
+      "native_symbol": "_IOFreeTypeVarImpl",
+      "evidence": "Tags the incoming type-var view with bit zero and tail-calls kfree_ext, preserving address and size. Native has the identical body after BTI. Source: iokit/Kernel/IOLib.cpp IOFreeTypeVarImpl."
+    },
+    {
+      "original": "0xfffffff007f9fb04",
+      "original_size": 4,
+      "original_sha256": "540b83ed516608ef0d49b428ab6d27bea89e8aae889c21967939bce75a0c48c5",
+      "native_symbol": "_lck_spin_unlock",
+      "evidence": "Tail-calls hw_lock_unlock with the incoming lock; native lck_spin_unlock has the identical tail call after BTI. Source: osfmk/arm/locks.c."
+    },
+    {
+      "original": "0xfffffff008010bd4",
+      "original_size": 8,
+      "original_sha256": "19647f57f48e23c8730ecfc85bdce80bf67ce4eae56e82f97661432fa2018025",
+      "native_symbol": "_vfs_context_ucred",
+      "evidence": "Loads and returns vfs_context.vc_ucred at +8. Source: bsd/vfs/kpi_vfs.c vfs_context_ucred and the vfs_context structure."
+    },
+    {
+      "original": "0xfffffff008326850",
+      "original_size": 72,
+      "original_sha256": "6d02f8136458eec280a0c568626ab8a899845e9b70b111f3fea87983eb1d046e",
+      "native_symbol": "_nanotime",
+      "evidence": "Calls clock_get_calendar_nanotime with stack seconds/nanoseconds slots, zero-extends the returned 32-bit nanoseconds and stores both as a timespec. Source: bsd/kern/kern_time.c nanotime."
+    },
+    {
+      "original": "0xfffffff0085b90c8",
+      "original_size": 40,
+      "original_sha256": "af70a898718663ecab22997833c7dfef47d930a3ab2fde3ace6f105e08991be9",
+      "native_symbol": "_PE_i_can_has_debugger",
+      "evidence": "Returns debug_enabled and, when a flags pointer is present, stores debug_boot_arg when enabled or zero otherwise. Source: pexpert/arm/pe_init.c PE_i_can_has_debugger."
+    },
+    {
+      "original": "0xfffffff0084c7c1c",
+      "original_size": 40,
+      "original_sha256": "7a37d0520ea17ebeb4a97add21333b90571535811e6de015a0e4bedaf88a5cf5",
+      "native_symbol": "__ZN9IOServiceC2EPK11OSMetaClass",
+      "evidence": "Sets retainCount=1 at +8 and signs/stores the IOService vtable with address discriminator 0xcda1. The metaclass constructor argument is unused. Native C2EPK11OSMetaClass has the same body after BTI and performs no instance-count update. Source: OSMetaClass.h OSMetaClassDeclareCommonStructors."
+    },
+    {
+      "original": "0xfffffff0084c7c6c",
+      "original_size": 12,
+      "original_sha256": "44b1a5b526f6636f1bd3fefe02e1cfcf690bcb266ef2c5b20632d00d872019ff",
+      "native_symbol": "__ZN9IOServiceD2Ev",
+      "evidence": "Base destructor replaces the vtable pointer with -1. The function follows the IOService constructors and precedes its deleting destructor. Native IOService D2 has the same instructions after BTI. Source: OSMetaClass.cpp OSMetaClassBase::~OSMetaClassBase."
+    },
+    {
+      "original": "0xfffffff008548f38",
+      "original_size": 40,
+      "original_sha256": "40e6e600dc0486c60f9d267e83712642859a3d63364f5221a2e39cc55b810cac",
+      "native_symbol": "__ZN12IOUserClientC2EPK11OSMetaClass",
+      "evidence": "Sets retainCount=1 at +8 and signs/stores the independently mapped IOUserClient vtable with address discriminator 0xcda1. Native C2EPK11OSMetaClass has the same body after BTI. Source: OSMetaClass.h OSMetaClassDeclareCommonStructors."
+    },
+    {
+      "original": "0xfffffff008548f88",
+      "original_size": 12,
+      "original_sha256": "44b1a5b526f6636f1bd3fefe02e1cfcf690bcb266ef2c5b20632d00d872019ff",
+      "native_symbol": "__ZN12IOUserClientD2Ev",
+      "evidence": "Base destructor replaces the vtable pointer with -1. It follows the IOUserClient base constructors and precedes its deleting destructor; native IOUserClient D2 has the same body after BTI. Source: OSMetaClass.cpp OSMetaClassBase::~OSMetaClassBase."
+    },
+    {
+      "original": "0xfffffff0084297d8",
+      "original_size": 40,
+      "original_sha256": "45156c1ab3f019830b604dc81af279f936ab31f0bcb69fab9edfdcc57a68d259",
+      "native_symbol": "__ZN8OSObjectC2EPK11OSMetaClass",
+      "evidence": "Signs/stores the OSObject vtable with address discriminator 0xcda1 and sets retainCount=1 at +8. Native C2EPK11OSMetaClass has the same body after BTI. Source: libkern/c++/OSObject.cpp OSObject::OSObject(const OSMetaClass *)."
+    },
+    {
+      "original": "0xfffffff008433344",
+      "original_size": 180,
+      "original_sha256": "a642d7a6ca954089609d64ae20ef213802725c10fad16955b101c8e1362c0a14",
+      "native_symbol": "__ZN12OSDictionary12withCapacityEj",
+      "evidence": "Uses the independently mapped OSDictionary::gMetaClass to allocate through vtable slot +0x68 with discriminator 0x1601, then calls initWithCapacity at +0xd0 using the supplied capacity. Source: libkern/c++/OSDictionary.cpp OSDictionary::withCapacity."
+    },
+    {
+      "original": "0xfffffff0084336c8",
+      "original_size": 48,
+      "original_sha256": "0b8cdcddd9d820a8efc4ce6546ecbf9162b7612a5c3ce5dfc2543c7b1e18952c",
+      "native_symbol": "__ZN12OSDictionary9setObjectEPKcRK11OSSharedPtrIK15OSMetaClassBaseE",
+      "evidence": "Dereferences the OSSharedPtr object argument at x2 and tail-dispatches the char-key setObject vtable slot +0x100 with discriminator 0xc323. The native OSDictionary vtable identifies the callee as setObject(const char*,const OSMetaClassBase*). Source: libkern/c++/OSDictionary.cpp shared-pointer char-key overload."
+    },
+    {
+      "original": "0xfffffff00855e0d0",
+      "original_size": 140,
+      "original_sha256": "104853de067892811916a8422038aece285f20ab2697d35b20834e86e3817a9d",
+      "native_symbol": "__ZN15IOStateReporter10setStateIDEyiy",
+      "evidence": "Locks the reporter, forwards channel ID, state index and state ID to handleSetStateID at vtable slot +0xf8 with discriminator 0x66cc, then unlocks and restores interrupts. Source: iokit/Kernel/IOStateReporter.cpp setStateID."
+    },
+    {
+      "original": "0xfffffff008561104",
+      "original_size": 168,
+      "original_sha256": "f665b39246a40d757a46cbb40209d809d27b8dbb102d1ed61f278bbd04848f53",
+      "native_symbol": "__ZN14IOReportLegend17addReporterLegendEP10IOReporterPKcS3_",
+      "evidence": "Accepts a reporter and two group names, calls the identified IOReporter::createLegend and IOReportLegend::addLegendEntry, then releases the returned legend entry. Source: iokit/Kernel/IOReportLegend.cpp reporter overload of addReporterLegend."
+    },
+    {
+      "original": "0xfffffff00847a108",
+      "original_size": 56,
+      "original_sha256": "bf009be5d99a55b133681d3e1c72752012b245eda5f30c843c8713f83157dfa4",
+      "native_symbol": "_os_pcpu_ref_release",
+      "evidence": "Loads the current CPU reference slot, subtracts four with LDADDL when live, returns OS_REFCNT_MAX_COUNT=0x0fffffff, and branches to the identified __os_pcpu_ref_release_slow otherwise. Native obtains the slot stride from zpercpu_shift; the original uses a 14-bit shift. Source: libkern/os/refcnt.c os_pcpu_ref_release."
+    },
+    {
+      "original": "0xfffffff0084c8ba8",
+      "original_size": 68,
+      "original_sha256": "4bf1161c5a9a35ab2d4ff28eea4a57c73d96857653e945b7baa2df11dee39006",
+      "native_symbol": "__ZNK9IOService10isInactiveEv",
+      "evidence": "Calls getState through IOService vtable slot +0x298 with discriminator 0xc90d and returns bit zero, kIOServiceInactiveState. Source: iokit/Kernel/IOService.cpp IOService::isInactive."
+    },
+    {
+      "original": "0xfffffff0083047cc",
+      "original_size": 12,
+      "original_sha256": "ac3c159ae6790db12f4c6690914d1cd04f6ac4b3ffaaf7d83da472476631d254",
+      "native_symbol": "_uio_offset",
+      "evidence": "Returns zero for a null uio, otherwise loads the 64-bit uio_offset at +0x18. Native has the same instructions after BTI. Source: bsd/kern/kern_subr.c uio_offset."
+    },
+    {
+      "original": "0xfffffff007e4e7f4",
+      "original_size": 140,
+      "original_sha256": "1a0ec7fd15ed55be5a5d908837f2c2e89511a41dc3b4b0ef4181d3baa2059712",
+      "native_symbol": "_clock_interval_to_deadline",
+      "evidence": "Multiplies interval w0 by scale w1, converts nanoseconds to the rtclock timebase, adds mach_absolute_time with saturation to UINT64_MAX on overflow, and stores the 64-bit deadline through x2. Source: osfmk/kern/clock.c clock_interval_to_deadline."
+    },
+    {
+      "original": "0xfffffff00855bd00",
+      "original_size": 300,
+      "original_sha256": "709c36bce1e5e37d493c1504b8bfdaf4992aa5356b7ad23b233dcafde55d1ea4",
+      "native_symbol": "__ZN16IOSimpleReporter14incrementValueEyx",
+      "evidence": "Locks the reporter, looks up the channel element, copies its values to a zeroed stack record, adds the supplied increment to simple_value and writes the element back, then unlocks and restores interrupts. Source: iokit/Kernel/IOSimpleReporter.cpp incrementValue."
+    },
+    {
+      "original": "0xfffffff00855bb10",
+      "original_size": 204,
+      "original_sha256": "901dcd62f412cdccae9e95932172e64a1dba5cb94bb715a69d0d4ba4409abded",
+      "native_symbol": "__ZN16IOSimpleReporter4withEP9IOServicety",
+      "evidence": "Allocates from the independently mapped IOSimpleReporter::gMetaClass and calls its initWith virtual method at +0xe8 with reporting service, categories and unit. Source: iokit/Kernel/IOSimpleReporter.cpp with."
+    },
+    {
+      "original": "0xfffffff0084fe610",
+      "original_size": 40,
+      "original_sha256": "d4625e695d7ebc3eb2c983d5e7df9e23b35f0eed040a819d2b0a51b45f67a09d",
+      "native_symbol": "__ZN9IOCommandC2EPK11OSMetaClass",
+      "evidence": "Sets retainCount=1 and signs/stores the independently mapped IOCommand vtable, with no instance-count update. Native protected C2 constructor has the same body after BTI. Source: OSMetaClass.h common constructors and IOCommand.cpp."
+    },
+    {
+      "original": "0xfffffff008010e80",
+      "original_size": 48,
+      "original_sha256": "a819a9976e3bae07f02f95eb345c6623f1a8f8692399a6976e1c81c92ececa44",
+      "native_symbol": "_vnode_specrdev",
+      "evidence": "Authenticates vnode.v_specinfo at +0x78 with discriminator 0x026e and returns specinfo.si_rdev at +0x18. Native implements the same field accesses and discriminator. Source: bsd/vfs/kpi_vfs.c vnode_specrdev."
+    },
+    {
+      "original": "0xfffffff00851ae7c",
+      "original_size": 48,
+      "original_sha256": "c70de15646fff60a9eb8ec57f94fb5900d32a6d89772e474d304739a6ed0de44",
+      "native_symbol": "__ZN11IOMemoryMap18getPhysicalAddressEv",
+      "evidence": "Tail-dispatches IOMemoryMap::getPhysicalSegment through vtable slot +0x80 with discriminator 0xacfe and zero offset, length pointer and options. Source: iokit/Kernel/IOMemoryDescriptor.cpp getPhysicalAddress."
+    },
+    {
+      "original": "0xfffffff00855d7c0",
+      "original_size": 232,
+      "original_sha256": "4d95c6fc8c6ae471f49303e8d69cc336ec53dcb035fcd25b16c30dc81f8f8b1e",
+      "native_symbol": "__ZN15IOStateReporter4withEP9IOServicetiy",
+      "evidence": "Rejects nstates above INT16_MAX, allocates from IOStateReporter::gMetaClass, then initializes with reporting service, categories, nstates and unit. Source: iokit/Kernel/IOStateReporter.cpp with."
+    },
+    {
+      "original": "0xfffffff0084fa6b4",
+      "original_size": 84,
+      "original_sha256": "0a76ed67308c2bfca000b18585a630d1a8352d0077fd7ccc6e4ff01d7b6ebec3",
+      "native_symbol": "__ZN10IOWorkLoop14runActionBlockEU13block_pointerFivE",
+      "evidence": "Passes the input block as arg0, this as target and the signed IOWorkLoopActionToBlock helper as the action to virtual runAction at +0x100, zeroing arg1 through arg3. Source: iokit/Kernel/IOWorkLoop.cpp runActionBlock."
+    },
+    {
+      "original": "0xfffffff0084fde84",
+      "original_size": 196,
+      "original_sha256": "a39b334360de38a354cb4a0fd96555a267c2902cd0a80a68ea813f98c4af199c",
+      "native_symbol": "__ZN13IOCommandGate11commandGateEP8OSObjectPFiS1_PvS2_S2_S2_E",
+      "evidence": "Allocates from IOCommandGate::gMetaClass and invokes init with the original owner and action arguments, releasing on failure. Source: iokit/Kernel/IOCommandGate.cpp commandGate."
+    },
+    {
+      "original": "0xfffffff0085034f8",
+      "original_size": 312,
+      "original_sha256": "2f0f49389fd5b395ab4ed1b22d563b094260bfe15ab99a30beff2950dd9d4327",
+      "native_symbol": "__ZN18IOTimerEventSource16timerEventSourceEP8OSObjectPFvS1_PS_E",
+      "evidence": "Allocates a 0x60-byte object, installs the IOTimerEventSource vtable identified by its free and setTimeoutFunc slots, counts the instance and initializes it with owner and action using the kernel-high priority option. Source: iokit/Kernel/IOTimerEventSource.cpp owner/action timerEventSource overload."
+    },
+    {
+      "original": "0xfffffff0085050d0",
+      "original_size": 236,
+      "original_sha256": "2bf5a0607f9b314e8bb4281d8c2cae8388e0ac8b8cf6fbdae884bff5a424d945",
+      "native_symbol": "__ZN24IOBufferMemoryDescriptor12withCapacityEmjb",
+      "evidence": "Allocates from IOBufferMemoryDescriptor::gMetaClass and initializes with kernel_task, input direction plus kIOMemoryUnshared, optional physically contiguous allocation, input capacity and alignment equal to capacity when contiguous or one otherwise. Source: iokit/Kernel/IOBufferMemoryDescriptor.cpp withCapacity."
+    },
+    {
+      "original": "0xfffffff008499b88",
+      "original_size": 16,
+      "original_sha256": "df04f6c6d0e4ccac3ba385d819437435ab28b616148b457c941aaa51bf064323",
+      "native_symbol": "_IOLockWakeup",
+      "evidence": "Moves event and oneThread into x0/x1, sets result=0 in w2 and tail-calls thread_wakeup_prim. Source: iokit/Kernel/IOLocks.cpp IOLockWakeup."
+    },
+    {
+      "original": "0xfffffff007ed1e98",
+      "original_size": 92,
+      "original_sha256": "2574d520fd1b78592182125044a313628410c9af158e8ed29bed19a458c2c004",
+      "native_symbol": "_zfree",
+      "evidence": "Reads zone and stats from the zone view, reads element size at zone +0x34, clears that many bytes with bzero and tail-calls zfree_ext with zone, stats, allocation and size. Native has the identical body. Source: osfmk/kern/zalloc.c zfree."
+    },
+    {
+      "original": "0xfffffff0083257bc",
+      "original_size": 76,
+      "original_sha256": "c7fa78a41714e25e25f5ad944110b76cd1c7ed53d743203b589baee369a74333",
+      "native_symbol": "_microtime",
+      "evidence": "Calls clock_get_calendar_microtime with stack seconds/microseconds outputs and stores seconds as 64 bits and microseconds as 32 bits into the supplied timeval. Source: bsd/kern/kern_time.c microtime."
+    },
+    {
+      "original": "0xfffffff007e4cc08",
+      "original_size": 340,
+      "original_sha256": "a0d682ce95aef146043daac6cd910059fa76c62dd0386e22988e04e1f77bacff",
+      "native_symbol": "_clock_get_calendar_microtime",
+      "evidence": "The identified microtime wrapper passes separate seconds and microseconds pointers to this entry. Its implementation reads calendar time and produces the pair used to fill timeval. Source: osfmk/kern/clock.c clock_get_calendar_microtime and bsd/kern/kern_time.c microtime."
+    },
+    {
+      "original": "0xfffffff008346a20",
+      "original_size": 80,
+      "original_sha256": "b85bac145f4ca3c8be0a2aae39c65f008eb2041915a93abfd22168097ddae92d",
+      "native_symbol": "_ubc_getobject",
+      "evidence": "Returns null when the vnode is null, not VREG, or lacks UBC information; otherwise authenticates v_ubcinfo at +0x78 with discriminator 0x22de and loads ui_control at +0x20. Source: bsd/kern/ubc_subr.c ubc_getobject."
+    },
+    {
+      "original": "0xfffffff007e8b58c",
+      "original_size": 40,
+      "original_sha256": "9ab0fac38da507e32989f7c794ab00b5631997b18e8868452abdbfb9781b858c",
+      "native_symbol": "_preemption_enabled",
+      "evidence": "Returns false when the current thread preemption counter is nonzero; otherwise returns whether DAIF leaves the kernel interrupt mask enabled. Native has the same instructions using its preemption-counter offset. Source: osfmk/kern/sched_prim.c preemption_enabled."
+    },
+    {
+      "original": "0xfffffff007f74850",
+      "original_size": 84,
+      "original_sha256": "0af0322726de3d35f949b7b27ccba701e27c8243c179c50d05a4770a901bf627",
+      "native_symbol": "_strncasecmp",
+      "evidence": "Compares up to x2 bytes, folds only ASCII A through Z to lowercase, stops at a difference or NUL, and returns the folded-byte difference. Source: osfmk/device/subrs.c strncasecmp_impl."
+    },
+    {
+      "original": "0xfffffff008469f98",
+      "original_size": 180,
+      "original_sha256": "9de74f0b3449e1da740e5869ea61a5b89dc32225df06ad55d11ed619eb34287b",
+      "native_symbol": "__ZN8OSString17withCStringNoCopyEPKc",
+      "evidence": "Allocates from the independently mapped OSString::gMetaClass and invokes initWithCStringNoCopy at vtable slot +0x88 with the incoming character pointer, releasing the object on failure. Source: libkern/c++/OSString.cpp withCStringNoCopy."
+    },
+    {
+      "original": "0xfffffff00855f930",
+      "original_size": 372,
+      "original_sha256": "438caa7fe85737373056c831ba480c9a7bbd01ac9c4d8152c857d5f0da94f8a2",
+      "native_symbol": "__ZN19IOHistogramReporter10tallyValueEx",
+      "evidence": "Searches bucket boundaries for the input value under the reporter lock, copies the selected bucket values, updates min/max, saturates sum on signed overflow, increments bucket_hits and writes the element back. Source: iokit/Kernel/IOHistogramReporter.cpp tallyValue."
+    },
+    {
+      "original": "0xfffffff007e4e958",
+      "original_size": 12,
+      "original_sha256": "fd0dd9fefbfab363cbac4739eb12ac083e7d06fcc28a2476146b8fbc2733a75f",
+      "native_symbol": "_mach_continuous_time",
+      "evidence": "Reads the continuous hardware clock with ISB; MRS CNTVCT_EL0; RET. This is the HAS_CONTINUOUS_HWCLOCK implementation of mach_continuous_time; the native non-Apple implementation adds the sleep interval to mach_absolute_time. Source: osfmk/kern/clock.c mach_continuous_time."
+    },
+    {
+      "original": "0xfffffff008519d28",
+      "original_size": 212,
+      "original_sha256": "7e25ead4fd917853649193c1d41d33ae2afc39846a79ad8c1f2ccb537a11e246",
+      "native_symbol": "__ZN18IOMemoryDescriptor19withPhysicalAddressEyyj",
+      "evidence": "Allocates IOGeneralMemoryDescriptor, stores the physical address/length pair on the stack, and calls initWithOptions with one range, zero offset/task/mapper and input direction OR kIOMemoryTypePhysical=0x20. Source: iokit/Kernel/IOMemoryDescriptor.cpp withPhysicalAddress."
+    },
+    {
+      "original": "0xfffffff00849952c",
+      "original_size": 268,
+      "original_sha256": "419f8d39cfff9eb5f0a0f80f83f98dd34542684f0bc1377328650939b2f7c324",
+      "native_symbol": "_IOLogv",
+      "evidence": "Takes format and va_list, forwards to os_log_with_args, formats through doprnt and writes the console buffer. Source: iokit/Kernel/IOLib.cpp IOLogv."
+    },
+    {
+      "original": "0xfffffff007fbe09c",
+      "original_size": 28,
+      "original_sha256": "9aa8a9a54f3607d22279da0a0eff2ce1f43f75927e6632a8886a0e6133e3d550",
+      "native_symbol": "_buf_seterror",
+      "evidence": "Stores the error at buf +0x54 and updates the B_ERROR bit 19 of b_flags at +0x4c according to whether the error is nonzero. Source: bsd/vfs/vfs_bio.c buf_seterror."
+    },
+    {
+      "original": "0xfffffff0084fb088",
+      "original_size": 40,
+      "original_sha256": "6830b12be41e727273a724627bd5ae298e3d7cedb74a05a0280d451b271b690c",
+      "native_symbol": "__ZN13IOEventSourceC2EPK11OSMetaClass",
+      "evidence": "Sets retainCount=1 and signs/stores the IOEventSource vtable. The table is identified by its IOEventSource virtual methods and the function precedes IOEventSource accessors. Native protected C2 constructor performs the same initialization. Source: iokit/Kernel/IOEventSource.cpp and OSMetaClass.h."
+    },
+    {
+      "original": "0xfffffff0084ab130",
+      "original_size": 216,
+      "original_sha256": "1f9c1985004ffde5978dc72115ca6b8236293e8d02f62f764f27cf1562fa3934",
+      "native_symbol": "__ZN15IORegistryEntry16propertyHasValueEPKcPK8OSObject",
+      "evidence": "Calls copyProperty(const char*) at vtable slot +0x148 with discriminator 0x5a20; compares the result with the supplied object, including both-null handling, through isEqualTo, and releases the copied property. Source: iokit/Kernel/IORegistryEntry.cpp non-const char-key propertyHasValue."
+    },
+    {
+      "original": "0xfffffff007e4e964",
+      "original_size": 52,
+      "original_sha256": "995ce7fe32f32944bfd1e3e313790c5bed7e54322e01942ff78e1552160b5068",
+      "native_symbol": "_clock_get_uptime",
+      "evidence": "Reads mach_absolute_time using the per-CPU offset and CNTVCT retry loop and stores the 64-bit result through x0. Source: osfmk/kern/clock.c clock_get_uptime."
+    },
+    {
+      "original": "0xfffffff007f98f04",
+      "original_size": 12,
+      "original_sha256": "9e0ed7dc3ad96eb7358a86a993b340c2cb8e5c7bea6ce3fdd05b5ca680a6e093",
+      "native_symbol": "_cpu_number",
+      "evidence": "Reads the current thread from TPIDR_EL1 and returns its 16-bit CPU number at +0x140. Native uses the native CPU-number field offset. Source: osfmk/arm/cpu_common.c cpu_number."
+    },
+    {
+      "original": "0xfffffff008499638",
+      "original_size": 124,
+      "original_sha256": "e0869b3d605b6a014eeb0f34906c0415d80caa5c218a6ee73f89af75550c5c85",
+      "native_symbol": "_IOFindNameForValue",
+      "evidence": "Walks the terminated IONamedValue array comparing integer values, returns the matching name, and otherwise formats 0x%x (UNDEFINED) into an 80-byte static buffer. Source: iokit/Kernel/IOLib.cpp IOFindNameForValue."
+    },
+    {
+      "original": "0xfffffff0084ce680",
+      "original_size": 300,
+      "original_sha256": "1199f799af8a7f22c1c88413d5f5cdd8f5f67d62c45200e9b59afbcc738483c7",
+      "native_symbol": "__ZN9IOService12nameMatchingEPKcP12OSDictionary",
+      "evidence": "Creates an OSSymbol from the supplied C string and inserts it under the independently mapped gIONameMatchKey, allocating a dictionary when the optional table is null. Source: iokit/Kernel/IOService.cpp nameMatching."
+    },
+    {
+      "original": "0xfffffff00850b3a4",
+      "original_size": 296,
+      "original_sha256": "c1163ed357cad07e4c3e82a38e9b20b9cf81de1eb4ff29bfc6cf6c46999d91e4",
+      "native_symbol": "_IOMappedRead32",
+      "evidence": "Waits for IOMapper::gSystem, maps the input address through mapToPhysicalAddress when a mapper exists, and calls ml_phys_read_data with size four. Source: iokit/Kernel/IOMapper.cpp IOMappedRead32."
+    },
+    {
+      "original": "0xfffffff00800ee00",
+      "original_size": 48,
+      "original_sha256": "30f970d7dc5f849f077ec0ee295f9b1cc419ae6c84864c873f692143971495c7",
+      "native_symbol": "_vfs_typenum",
+      "evidence": "Authenticates mount.mnt_vtable at +0x30 with discriminator 0xfb4a and returns vfc_typenum at +0x18. Source: bsd/vfs/kpi_vfs.c vfs_typenum."
+    },
+    {
+      "original": "0xfffffff008347a80",
+      "original_size": 92,
+      "original_sha256": "0e0eb707c08f00836af8aef2b0b4706e5bda2be581ba6b7df8486bcf76153e73",
+      "native_symbol": "_ubc_is_mapped_writable",
+      "evidence": "Checks VREG and v_ubcinfo, authenticates the UBC info pointer with discriminator 0x22de, and requires ui_flags to contain UI_ISMAPPED|UI_MAPPEDWRITE=0x90. Source: bsd/kern/ubc_subr.c ubc_is_mapped_writable and sys/ubc_internal.h."
+    },
+    {
+      "original": "0xfffffff00855e15c",
+      "original_size": 140,
+      "original_sha256": "f80ce4813bcd5db79c2465b243ed040f45aba408e73e5b6617a7f5b8d9a4bc5c",
+      "native_symbol": "__ZN15IOStateReporter17setStateByIndicesEii",
+      "evidence": "Locks the reporter, dispatches handleSetStateByIndices at +0xf0 with discriminator 0xefd4, forwards the two indices with zero timing arguments, unlocks and restores interrupts. Source: iokit/Kernel/IOStateReporter.cpp setStateByIndices."
+    },
+    {
+      "original": "0xfffffff00851ec08",
+      "original_size": 44,
+      "original_sha256": "b99a03777bd405c09a4672b70206f938b24e00441cce9c3b70bb66b040d2d2db",
+      "native_symbol": "__ZN21IOSubMemoryDescriptorC2EPK11OSMetaClass",
+      "evidence": "Initializes retainCount, clears the inherited memory-descriptor field at +0x18 and signs/stores the independently identified IOSubMemoryDescriptor vtable. Source: iokit/Kernel/IOSubMemoryDescriptor.cpp and IOMemoryDescriptor.h constructors."
+    },
+    {
+      "original": "0xfffffff007e78bf8",
+      "original_size": 260,
+      "original_sha256": "8c1294989cc5c65ecda3f828d3aaf776940a870a109075e6c6dc8950cc616387",
+      "native_symbol": "_vprintf",
+      "evidence": "Checks the format pointer, logs using os_log_with_args, initializes the console output buffer, formats using doprnt, flushes through console_write and checks the stack guard. Source: osfmk/kern/printf.c vprintf."
+    },
+    {
+      "original": "0xfffffff007fb4d24",
+      "original_size": 52,
+      "original_sha256": "c01aa358cb2ea9ff643b90ee46385ce6d1394515b094dd5132f84bf7ba885610",
+      "native_symbol": "_crc32",
+      "evidence": "Complements the input CRC, processes each byte through the CRC32 table using the low byte of input XOR CRC, shifts CRC by eight, and complements the result. Native crc32 uses the same table and update algorithm. Source: bsd/libkern/crc32.c."
+    },
+    {
+      "original": "0xfffffff007e5e800",
+      "original_size": 96,
+      "original_sha256": "44d9bb76a4f3157aa269797700aa358d2c4d83010c7f13f8ee60afb165adf251",
+      "native_symbol": "_mig_strncpy",
+      "evidence": "Copies at most len-1 bytes with null source/destination checks and terminates the destination, returning the copied count. Source: osfmk/kern/ipc_mig.c mig_strncpy."
+    },
+    {
+      "original": "0xfffffff007e5e860",
+      "original_size": 116,
+      "original_sha256": "f8bfedff63f193bf85e5af02a67e355589b9d033556ffd764d647b5ca4c37134",
+      "native_symbol": "_mig_strncpy_zerofill",
+      "evidence": "Copies through the first NUL, zero-fills the rest of the requested destination size, and returns the length before filling. Source: osfmk/kern/ipc_mig.c mig_strncpy_zerofill."
+    },
+    {
+      "original": "0xfffffff008504ff0",
+      "original_size": 224,
+      "original_sha256": "dac5069cea5e38d73a06d77c72197eca7b47332e5516d44f9e7f81c1ad841612",
+      "native_symbol": "__ZN24IOBufferMemoryDescriptor11withOptionsEjmm",
+      "evidence": "Allocates IOBufferMemoryDescriptor and invokes initWithPhysicalMask with kernel_task, original options/capacity/alignment and a zero physical mask. Source: iokit/Kernel/IOBufferMemoryDescriptor.cpp withOptions."
+    },
+    {
+      "original": "0xfffffff00846a04c",
+      "original_size": 164,
+      "original_sha256": "f3eb214da73224ccd5b93049bc4228041459dbb1cd8e0f550679d367e1bd7d00",
+      "native_symbol": "__ZN8OSString11withCStringEPKcm",
+      "evidence": "Allocates through OSString::gMetaClass and calls the length-limited CString initializer; the native factory is uniquely identified by the same metadata and authenticated-call sequence. Source: libkern/c++/OSString.cpp two-argument withCString."
+    },
+    {
+      "original": "0xfffffff008508a28",
+      "original_size": 268,
+      "original_sha256": "ab427e23816dcfbfdf92d9bc29051d754a12f0524bc9aa45ab5ea507bf2f691a",
+      "native_symbol": "__ZN12IODMACommand17withSpecificationEPFbPS_NS_9Segment64EPvjEhyNS_14MappingOptionsEyjP8IOMapperS2_",
+      "evidence": "Allocates through IODMACommand::gMetaClass, invokes initWithSpecification with the incoming segment callback, address bits, transfer limits, mapping options, alignment, mapper and refCon, and releases on failure. Original/native share the unique metadata and authenticated init discriminator 0x1be2. Source: iokit/Kernel/IODMACommand.cpp withSpecification."
+    },
+    {
+      "original": "0xfffffff0084334d4",
+      "original_size": 220,
+      "original_sha256": "3a1259b6be68aa40196997f4eb7d80939a8eeec0412007b3ba634ece6a3ea9f6",
+      "native_symbol": "__ZN12OSDictionary11withObjectsEPPK8OSObjectPPK8OSStringjj",
+      "evidence": "Allocates from OSDictionary::gMetaClass, forwards object array, OSString key array, count and capacity to initWithObjects, and releases on failure. The init discriminator is 0x01f1 in both images. Source: libkern/c++/OSDictionary.cpp OSString-key withObjects."
+    },
+    {
+      "original": "0xfffffff0084ff720",
+      "original_size": 180,
+      "original_sha256": "51374d135f4a6aa6ff55711a6849c041a1e621a7648cb1d0c7ab1dd0fe039f0c",
+      "native_symbol": "__ZN13IOCommandPool12withWorkLoopEP10IOWorkLoop",
+      "evidence": "Allocates IOCommandPool from its identified gMetaClass and invokes initWithWorkLoop with the original work loop. The unique init discriminator is 0x93e9. Source: iokit/Kernel/IOCommandPool.cpp withWorkLoop."
+    },
+    {
+      "original": "0xfffffff0084cf1bc",
+      "original_size": 400,
+      "original_sha256": "de819f90105608cf087be810387d4f6fbafa7b6d81025b01b02d240d19a98fb1",
+      "native_symbol": "__ZN9IOService23registryEntryIDMatchingEyP12OSDictionary",
+      "evidence": "Creates a 64-bit OSNumber from the entry ID, allocates an OSDictionary if needed, inserts under gIORegistryEntryIDKey and releases the number. Both gMetaClass operands and the authenticated call sequence agree with native. Source: iokit/Kernel/IOService.cpp registryEntryIDMatching."
+    },
+    {
+      "original": "0xfffffff00842b90c",
+      "original_size": 204,
+      "original_sha256": "6413de72260440cd7bb6036ebfd067c2cb5450df80981cf592f1be02f93a1a61",
+      "native_symbol": "__ZN7OSArray11withObjectsEPPK8OSObjectjj",
+      "evidence": "Allocates OSArray from its identified gMetaClass and invokes initWithObjects with the input object array, count and capacity; init discriminator 0x04ec. Source: libkern/c++/OSArray.cpp withObjects."
+    },
+    {
+      "original": "0xfffffff0084300cc",
+      "original_size": 204,
+      "original_sha256": "104f87d945f063c62fca9e9e17e64c81bdc01299dff9918cfa2cf0cf8cc4aa70",
+      "native_symbol": "__ZN6OSData8withDataEPKS_jj",
+      "evidence": "Allocates OSData from its identified gMetaClass and invokes initWithData with the input object, start offset and length; init discriminator 0xdca3. Source: libkern/c++/OSData.cpp three-argument withData."
+    },
+    {
+      "original": "0xfffffff0084335b0",
+      "original_size": 196,
+      "original_sha256": "7cb60792acb6f338411bc9ee27536fda3ec6157237617244ccdc51c540860cf3",
+      "native_symbol": "__ZN12OSDictionary14withDictionaryEPKS_j",
+      "evidence": "Allocates OSDictionary from its identified gMetaClass and invokes initWithDictionary with input dictionary and capacity; init discriminator 0xf45c. Source: libkern/c++/OSDictionary.cpp withDictionary."
+    },
+    {
+      "original": "0xfffffff008557420",
+      "original_size": 196,
+      "original_sha256": "d42bc1053fc41ad223490ba726acef0b57b130ee9103abd194eac7c2fd0442aa",
+      "native_symbol": "__ZN17IOSharedDataQueue11withEntriesEjj",
+      "evidence": "Allocates IOSharedDataQueue from its identified gMetaClass and initializes with the incoming number of entries and entry size; init discriminator 0x9436. Source: iokit/Kernel/IOSharedDataQueue.cpp withEntries."
+    },
+    {
+      "original": "0xfffffff0084cc674",
+      "original_size": 376,
+      "original_sha256": "8c0307040453bc449d0f36a702abb571d9f61bb7bfd1a10da8eb22fd30c8a397",
+      "native_symbol": "__ZN9IOService16resourceMatchingEPK8OSStringP12OSDictionary",
+      "evidence": "Constructs the resource matching dictionary through OSDictionary::gMetaClass and stores the resource symbol under gIOResourceMatchKey, releasing temporary values. The metadata and ordered authenticated calls agree with the unique native overload. Source: iokit/Kernel/IOService.cpp resourceMatching(OSString*)."
+    },
+    {
+      "original": "0xfffffff008469e30",
+      "original_size": 180,
+      "original_sha256": "e3445cf63f0ec63fa9f327a2ad1bfeb118349e1bb75399c460fff655ee43ca8a",
+      "native_symbol": "__ZN8OSString10withStringEPKS_",
+      "evidence": "Allocates OSString from its identified gMetaClass and invokes initWithString with the input OSString; init discriminator 0x8a2f. Source: libkern/c++/OSString.cpp withString."
+    },
+    {
+      "original": "0xfffffff00855736c",
+      "original_size": 180,
+      "original_sha256": "d79d12a03a257279f80201a52579de5126544ba5d61542c6c60a745d58e2a98e",
+      "native_symbol": "__ZN17IOSharedDataQueue12withCapacityEj",
+      "evidence": "Allocates IOSharedDataQueue from its identified gMetaClass and initializes with the input capacity; init discriminator 0xa44d. Source: iokit/Kernel/IOSharedDataQueue.cpp withCapacity."
+    },
+    {
+      "original": "0xfffffff008586b5c",
+      "original_size": 276,
+      "original_sha256": "d35886c277f053f0c8bed414201e8ad76cd3d94a52a74ebd87bad64de3ab4805",
+      "native_symbol": "__ZN19IOPerfControlClient15copyWorkContextEv",
+      "evidence": "Constructs IOPerfControlWorkContext, calls its init method and frees it on failure. Original/native share the gMetaClass operand and the ordered authenticated init/free discriminators 0x4a6a and 0xedc5. Source: iokit/Kernel/IOPerfControl.cpp copyWorkContext."
+    },
+    {
+      "original": "0xfffffff007e4e904",
+      "original_size": 60,
+      "original_sha256": "74391b601b88bb85b9d5518291db94b1a53438c1055024b64e2e1cac24802891",
+      "native_symbol": "_clock_absolutetime_interval_to_deadline",
+      "evidence": "Adds the stable per-CPU-offset CNTVCT absolute time to x0, saturates overflow to UINT64_MAX and writes x1. Native differs only in thread.cpu_data offset and BTI. Source: osfmk/kern/clock.c."
+    },
+    {
+      "original": "0xfffffff007eb1138",
+      "original_size": 12,
+      "original_sha256": "17c03e124eb1933125fd3114442fb816eb899e942c8574cee85021ae562f8cfb",
+      "native_symbol": "_thread_tid",
+      "evidence": "Returns zero for a null thread and otherwise its 64-bit thread_id. Native uses thread_id +0x4a0 in place of original +0x428. Source: osfmk/kern/thread.c."
+    },
+    {
+      "original": "0xfffffff007fa3874",
+      "original_size": 52,
+      "original_sha256": "5d29fd0a7bebe71c75beb8c8fc6eaf402241a97405ca7b13c47ef139cccecb10",
+      "native_symbol": "_ml_stack_remaining",
+      "evidence": "Computes local stack distance from the interrupt stack base when within the 16 KiB interrupt stack, otherwise from current_thread kernel_stack. Native differs in thread.cpu_data and kernel_stack offsets plus BTI. Source: osfmk/arm/machine_routines_common.c."
+    },
+    {
+      "original": "0xfffffff007fc7798",
+      "original_size": 172,
+      "original_sha256": "613ceb0f1cd2534932da7541b60e1c1484c96f86a493f2d90ca811f74a842aae",
+      "native_symbol": "_vnode_setmultipath",
+      "evidence": "Takes the vnode spin mutex, sets VNCACHE_MULTIPATH 0x100000 in v_flag at +0x54 and releases the mutex. Full native control flow agrees with adjusted thread lock fields. Source: bsd/vfs/vfs_cache.c."
+    },
+    {
+      "original": "0xfffffff007fe7b8c",
+      "original_size": 172,
+      "original_sha256": "27cc3976f7e56bc41398b6f478d7b69c181788009814b5bc50155cd55a8154bb",
+      "native_symbol": "_vnode_iocount",
+      "evidence": "Reads v_iocount +0x64, takes vnode spin mutex for VE_LINKCHANGE bit0 at +0x70, and subtracts the link lock reference. Full native flow agrees with adjusted thread fields. Source: bsd/vfs/vfs_subr.c."
+    },
+    {
+      "original": "0xfffffff008347874",
+      "original_size": 28,
+      "original_sha256": "bee396b8e741de8027749868d1b263e494a6898eea6db7db1683e017a3211f50",
+      "native_symbol": "_ubc_upl_unmap_range",
+      "evidence": "Moves upl to x1, loads kernel_map, rejects null map with KERN_INVALID_ARGUMENT and tail calls the independently matched vm_map_remove_upl_range with range arguments preserved. Source: bsd/kern/ubc_subr.c."
+    },
+    {
+      "original": "0xfffffff007e70220",
+      "original_size": 28,
+      "original_sha256": "15883186f3de66af852a1b34d5cfbb61952d709e29a856056d386c82763cdc41",
+      "native_symbol": "_lck_rw_try_lock",
+      "evidence": "Dispatches type2 to exclusive and type1 to shared try-lock, otherwise branches to the independently matched _lck_rw_try_lock_type_panic. Source: osfmk/kern/lock_rw.c."
+    },
+    {
+      "original": "0xfffffff007ea0750",
+      "original_size": 28,
+      "original_sha256": "7df81c0b981ee06172c01204bae91035a253a22a8bf8dfa5546c6c49b9b415b5",
+      "native_symbol": "_task_set_cs_auxiliary_info",
+      "evidence": "Returns KERN_INVALID_ARGUMENT for a null task; stores x1 into task_cs_auxiliary_info and returns KERN_SUCCESS otherwise. Native body agrees after task field offset +0x668 to +0x690 and BTI. Source: osfmk/kern/task.c."
+    },
+    {
+      "original": "0xfffffff0084fc7cc",
+      "original_size": 220,
+      "original_sha256": "5b3e653e15462c43b48a9e11420307eefc304ab539cbe588e71bf47f2f242fca",
+      "native_symbol": "__ZN22IOInterruptEventSource20interruptEventSourceEP8OSObjectPFvS1_PS_iEP9IOServicei",
+      "evidence": "Allocates IOInterruptEventSource through its matched gMetaClass, passes owner/action/provider/index to init discriminator 0x8e8e and releases on failure. The block overload has different argument order and calls this factory. Source: iokit/Kernel/IOInterruptEventSource.cpp."
+    },
+    {
+      "original": "0xfffffff008466770",
+      "original_size": 180,
+      "original_sha256": "38b57364eb6bc95f2532fa78101a14e2b451e6c021f3e87ae01769fd337d1a7f",
+      "native_symbol": "__ZN11OSSerialize12withCapacityEj",
+      "evidence": "Allocates through the matched OSSerialize gMetaClass, calls initWithCapacity discriminator 0x8653 with the sole capacity argument, releases on failure. Source: libkern/c++/OSSerialize.cpp."
+    },
+    {
+      "original": "0xfffffff008463c0c",
+      "original_size": 204,
+      "original_sha256": "266a8bf5b12dba11c0f10a7f5532f086002e654a6da86e82724fe2209acbdefa",
+      "native_symbol": "__ZN12OSOrderedSet12withCapacityEjPFiPK15OSMetaClassBaseS2_PvES3_",
+      "evidence": "Allocates through matched OSOrderedSet gMetaClass, passes capacity, ordering callback and refcon to init discriminator 0x452d. The block overload takes two arguments. Source: libkern/c++/OSOrderedSet.cpp."
+    },
+    {
+      "original": "0xfffffff0084fa570",
+      "original_size": 324,
+      "original_sha256": "3ecbb77cb1a772ac19f3b6f022b5bb297fc153fa3f9d97f12ecac8afc74dc682",
+      "native_symbol": "__ZN10IOWorkLoop19workLoopWithOptionsEj",
+      "evidence": "Allocates IOWorkLoop, initializes instance count/vtable, allocates reserved ExpansionData when options is nonzero, stores options and calls init discriminator 0x4a6a. Source: iokit/Kernel/IOWorkLoop.cpp."
+    },
+    {
+      "original": "0xfffffff00852ad08",
+      "original_size": 68,
+      "original_sha256": "c96a1ec21d3b7d9a91e7afbc8e67be9a39fcbe6743ee813dd329658e0c86828b",
+      "native_symbol": "__ZN24IOCPUInterruptControllerC2Ev",
+      "evidence": "Sets reference count to one, signs the IOCPUInterruptController vtable and increments the matched class metaclass instance counter at +0x24 through superclass links. Native C2 body agrees after BTI. Source: iokit/Kernel/IOCPU.cpp."
+    },
+    {
+      "original": "0xfffffff0084fb214",
+      "original_size": 40,
+      "original_sha256": "b36bd895fafea639dacee60340761e2fb6fd88f3f9005972be9446aca2df7f98",
+      "native_symbol": "__ZN13IOEventSource19signalWorkAvailableEv",
+      "evidence": "Loads workLoop +0x30 and tail dispatches IOWorkLoop::signalWorkAvailable slot +0xd0 with authenticated discriminator 0xedeb. Native retains identical slot and discriminator with a different scratch register schedule. Source: iokit/Kernel/IOEventSource.cpp."
+    },
+    {
+      "original": "0xfffffff0082b2ae8",
+      "original_size": 188,
+      "original_sha256": "49ee97577beaa7af647de5de17bfefe32d06a23c1a60c8c21f489c022dc3078a",
+      "native_symbol": "_csproc_get_blob",
+      "evidence": "Checks p_textvp with PAC discriminator 0x612c and CS_SIGNED bit29 via proc_getcsflags, then calls ubc_cs_blob_get(vp,-1,-1,p_textoff). Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b2c2c",
+      "original_size": 148,
+      "original_sha256": "0f7f56c839a0685126e50421d5e82c9d648903993d88f5a6794e4bce453fa190",
+      "native_symbol": "_csblob_set_validation_category",
+      "evidence": "Reads csb_validation_category +0xb0, permits invalid/none or setting none, compares an existing category otherwise, and updates read-only blobs through zalloc_ro_mut zone8 field0xb0 size4. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b2cc8",
+      "original_size": 84,
+      "original_sha256": "47dfaa52547e0eb0852db21dc046ca2fa16aed9b036de16fac9f4db1a40519cd",
+      "native_symbol": "_csblob_set_auxiliary_info",
+      "evidence": "Stores csb_auxiliary_info +0xb8, using zalloc_ro_mut zone8 field0xb8 size8 when csb_ro_addr equals the blob. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b2d24",
+      "original_size": 64,
+      "original_sha256": "98011851dd44e3b72df89955b3af3c4632fce2fdae8fe7b885864e22d64b22b0",
+      "native_symbol": "_csblob_get_trust_level",
+      "evidence": "Authenticates csb_csm_obj +0xc0 with discriminator 0xe82b and returns csb_csm_trust_level +0xcc when present, UINT32_MAX otherwise. Native CODE_SIGNING_MONITOR-disabled implementation returns UINT32_MAX. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b2e24",
+      "original_size": 116,
+      "original_sha256": "70f58524164393304b0989854b5bacad9c54b621dbca6f77cb54f84332da229c",
+      "native_symbol": "_csblob_os_entitlements_set",
+      "evidence": "Retains the optional entitlements object through OSObject retain discriminator0x2e4a and signs/stores csb_entitlements +0xa0 with field discriminator0xaa50. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b2e98",
+      "original_size": 180,
+      "original_sha256": "9c59f5f5d0d64194f0094f13d96c9dd7800aa7250317dcb5ea15268d92f2fd28",
+      "native_symbol": "_csblob_os_entitlements_copy",
+      "evidence": "Authenticates csb_entitlements +0xa0 with 0xaa50, retains it through 0x2e4a, then authenticates and returns the field; returns NULL for absent entitlements. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b2f4c",
+      "original_size": 60,
+      "original_sha256": "e8b78d1057c8158f0a4fb851dac4143e9b1bde9262a0aa1cc5748eb42ce7463b",
+      "native_symbol": "_csblob_os_entitlements_get",
+      "evidence": "Authenticates and returns csb_entitlements +0xa0 with discriminator0xaa50, returning NULL for absent entitlements. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b3a50",
+      "original_size": 376,
+      "original_sha256": "6e72518dafe00b469a8bd098153805e290c7485bffbddc9e84845a94af78b42a",
+      "native_symbol": "_csfg_get_teamid",
+      "evidence": "Checks fileglob type DTYPE_VNODE, authenticates fg_data, locks vnode, follows v_ubcinfo/cs_blob and returns csb_teamid +0x88; unlocks all vnode paths. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b3bc8",
+      "original_size": 128,
+      "original_sha256": "b9901aa6c3d2e0145ffa6c35c94b0b865c5e29efc26adffa86ea31e430c028d3",
+      "native_symbol": "_csfg_get_csblob",
+      "evidence": "Checks DTYPE_VNODE and authenticated fg_data, then tail calls ubc_cs_blob_get(vp,-1,-1,offset), preserving caller offset. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b3fa4",
+      "original_size": 140,
+      "original_sha256": "868bd1ad6eb9ef6b9a56bb856bc544f77256fe0ed3d57d9cabd0cb8c22cd718b",
+      "native_symbol": "_csproc_get_platform_identifier",
+      "evidence": "Authenticates p_textvp, obtains ubc_cs_blob_get with p_textoff, checks code directory length >=8 and returns platform byte +0x26. Source: bsd/kern/kern_cs.c."
+    },
+    {
+      "original": "0xfffffff0082b7904",
+      "original_size": 112,
+      "original_sha256": "abe9c7c7787a98bad77ee9d5bd3ccc32e14f3c546247de0ab3a55c06faa26cc1",
+      "native_symbol": "_fg_get_vnode",
+      "evidence": "Authenticates fg_ops at +0x28 with 0x853c, checks type DTYPE_VNODE and returns fg_data +0x38 authenticated with 0x11b5. Source: bsd/kern/kern_descrip.c."
+    },
+    {
+      "original": "0xfffffff0082ec8e8",
+      "original_size": 260,
+      "original_sha256": "ae03e97fb7d4dd95c8ff4462bd2d8c4eba47b2549162122c2bcdea32967f62e9",
+      "native_symbol": "_proc_csflags",
+      "evidence": "Rejects null proc/output with EINVAL, validates proc zone24 and read-only proc zone5/backreference, copies 32-bit p_csflags to caller 64-bit output. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0082edda8",
+      "original_size": 100,
+      "original_sha256": "de73226aeae3135f29a29cacc4059d344e4ec1cd6117ecf9ab83669d176a1678",
+      "native_symbol": "_proc_getexecutablevnode",
+      "evidence": "Authenticates p_textvp +0x548 discriminator0x612c, takes vnode_getwithref and returns vnode on success or NULL on failure. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff008326c24",
+      "original_size": 16,
+      "original_sha256": "275c29624fbf2f11cde7314c6d38762322a35ebd4ac21abd99ac3cfb2ef36f81",
+      "native_symbol": "_check_trust_cache_runtime_for_uuid",
+      "evidence": "Rejects null UUID with KERN_INVALID_ARGUMENT and tail calls PPL stub dispatch109, PMAP_CHECK_TRUST_CACHE_RUNTIME_FOR_UUID_INDEX in osfmk/arm/pmap/pmap.h. Source: bsd/kern/kern_trustcache.c."
+    },
+    {
+      "original": "0xfffffff008326d0c",
+      "original_size": 124,
+      "original_sha256": "b66c2aafab3290c9e4f362ed610b5c22e77473766ce4a7d3f045a7e2eaf86671",
+      "native_symbol": "_load_trust_cache",
+      "evidence": "Tries load_trust_cache_with_type from type4 through type24 with final two arguments zero and stops on success or KERN_ALREADY_IN_SET=11. Source: bsd/kern/kern_trustcache.c."
+    },
+    {
+      "original": "0xfffffff00832740c",
+      "original_size": 16,
+      "original_sha256": "828e5d1a0db5c357644a8515fe0d0ab5c696036554f528c6c8a5d4fcef473be6",
+      "native_symbol": "_query_trust_cache",
+      "evidence": "Rejects null cdhash x1 and tail calls PPL dispatch99, PMAP_QUERY_TRUST_CACHE_INDEX. Source: bsd/kern/kern_trustcache.c and osfmk/arm/pmap/pmap.h."
+    },
+    {
+      "original": "0xfffffff008327978",
+      "original_size": 72,
+      "original_sha256": "4d7293e2c00e24874f483102e27f37f37d369415a86505c6be60d77ca829264f",
+      "native_symbol": "_code_signing_configuration",
+      "evidence": "Initializes code signing monitor/config once with release/acquire flag; stores monitor1 and config0xfc000000 for this PPL target, copies them to optional x0/x1 output pointers. Source: bsd/kern/kern_codesigning.c."
+    },
+    {
+      "original": "0xfffffff008327a8c",
+      "original_size": 8,
+      "original_sha256": "79109738ccd538ec2562d3c390c1bf9a5bcdd52bd71107ffa51bcde0bbd7ec2d",
+      "native_symbol": "_enable_developer_mode",
+      "evidence": "Sets state=true and calls PPL dispatch100 PMAP_TOGGLE_DEVELOPER_MODE_INDEX. Source: bsd/kern/kern_codesigning.c and osfmk/arm/pmap/pmap.h."
+    },
+    {
+      "original": "0xfffffff008327a94",
+      "original_size": 8,
+      "original_sha256": "c880106e10cf63aece4c2c1a434626848179c9c3f2f5870bcce7a8d78338328d",
+      "native_symbol": "_disable_developer_mode",
+      "evidence": "Sets state=false and calls PPL dispatch100 PMAP_TOGGLE_DEVELOPER_MODE_INDEX. Source: bsd/kern/kern_codesigning.c and osfmk/arm/pmap/pmap.h."
+    },
+    {
+      "original": "0xfffffff008327ad4",
+      "original_size": 4,
+      "original_sha256": "788f1512f26f87f558ccda89030f23036527961be061f31e047ad5b93b8aafe2",
+      "native_symbol": "_garbage_collect_provisioning_profiles",
+      "evidence": "Tail calls provisioning-profile collector which write-locks profiles_lock, resets used flags, unregisters unused profiles and removes/frees successful entries. Source: bsd/kern/kern_codesigning.c."
+    },
+    {
+      "original": "0xfffffff0083280ec",
+      "original_size": 4,
+      "original_sha256": "294aa018a4c18dbdccfdb882ac6803d59c4ee48575be3b36a51fc4bd8f6a586e",
+      "native_symbol": "_set_compilation_service_cdhash",
+      "evidence": "Tail calls PPL dispatch73 PMAP_SET_COMPILATION_SERVICE_CDHASH_INDEX. Source: bsd/kern/kern_codesigning.c and osfmk/arm/pmap/pmap.h."
+    },
+    {
+      "original": "0xfffffff0083280f0",
+      "original_size": 4,
+      "original_sha256": "2e7b1890b684ed9b6c8ebfcdcc34e534b2290b5d47bbe4cfe3078240525b3cf9",
+      "native_symbol": "_match_compilation_service_cdhash",
+      "evidence": "Tail calls PPL dispatch74 PMAP_MATCH_COMPILATION_SERVICE_CDHASH_INDEX. Source: bsd/kern/kern_codesigning.c and osfmk/arm/pmap/pmap.h."
+    },
+    {
+      "original": "0xfffffff0083280f4",
+      "original_size": 4,
+      "original_sha256": "d871de3f130e8163564e2abae63e1acc5243c86a37fd16bb2bbc1c40c64fcc2f",
+      "native_symbol": "_set_local_signing_public_key",
+      "evidence": "Tail calls PPL dispatch84 PMAP_SET_LOCAL_SIGNING_PUBLIC_KEY_INDEX. Source: bsd/kern/kern_codesigning.c and osfmk/arm/pmap/pmap.h."
+    },
+    {
+      "original": "0xfffffff008328114",
+      "original_size": 4,
+      "original_sha256": "0d985713ed9aa92a911f85615e86a1c3e65da4a7fc1147888442db2a4f0a806b",
+      "native_symbol": "_unrestrict_local_signing_cdhash",
+      "evidence": "Tail calls PPL dispatch85 PMAP_UNRESTRICT_LOCAL_SIGNING_INDEX. Source: bsd/kern/kern_codesigning.c and osfmk/arm/pmap/pmap.h."
+    },
+    {
+      "original": "0xfffffff008347a18",
+      "original_size": 4,
+      "original_sha256": "68771d9aef760dffc7979f8af7f24fb9fb57699648d555624693bbe27e30fe2a",
+      "native_symbol": "_ubc_upl_range_needed",
+      "evidence": "Tail calls upl_range_needed which checks UPL_INTERNAL bit4, computes page count and sets needed bit0x40000 over bounded index/count range. Source: bsd/kern/ubc_subr.c and osfmk/vm/vm_pageout.c."
+    },
+    {
+      "original": "0xfffffff008347a1c",
+      "original_size": 100,
+      "original_sha256": "33f26f12d026e7f64153e7c672eec1e078ae42efb35b31b067e2c019b1b4e910",
+      "native_symbol": "_ubc_is_mapped",
+      "evidence": "Checks vnode VREG/UBC info, authenticates v_ubcinfo discriminator0x22de, tests UI_ISMAPPED0x10 and writes optional writable output from UI_MAPPEDWRITE0x80. Source: bsd/kern/ubc_subr.c."
+    },
+    {
+      "original": "0xfffffff008347adc",
+      "original_size": 92,
+      "original_sha256": "1f29ce5e50b789233d7c5a7ac874b0c3daf496659c4106870b1a4c42e794eb29",
+      "native_symbol": "_ubc_was_mapped_writable",
+      "evidence": "Checks vnode UBC info and tests both UI_WASMAPPED and UI_WASMAPPEDWRITE bits mask0x208. Source: bsd/kern/ubc_subr.c."
+    },
+    {
+      "original": "0xfffffff008010c14",
+      "original_size": 32,
+      "original_sha256": "f86b45fe4f03a96bd485a424a84cd400fb30be383b0359180f107227547c0b1d",
+      "native_symbol": "_vfs_set_thread_fs_private",
+      "evidence": "Accepts FS_PRIVATE_TAG_APFS=1, stores x1 to current_uthread t_fs_private and returns zero; returns ENOTSUP45 for other tags. Native uthread offset +0x728 replaces +0x6b0. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff008010c34",
+      "original_size": 36,
+      "original_sha256": "a44fc44154d8fa50bff07f29f0e4b2bd10a9955bee13e022d33dd5023bf6c69b",
+      "native_symbol": "_vfs_get_thread_fs_private",
+      "evidence": "Accepts FS_PRIVATE_TAG_APFS=1, copies current_uthread t_fs_private to output x1 and returns zero; returns ENOTSUP45 for other tags. Native uthread offset +0x728 replaces +0x6b0. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff008482944",
+      "original_size": 280,
+      "original_sha256": "d2494c84fb6ede30f09621af2e18f72d80c66b4776fdcb6c1bd2857feeae31b4",
+      "native_symbol": "_SHA1Init",
+      "evidence": "Uses crypto_functions sha1 descriptor at +0x28, allocates and zeroes digest context, invokes digest init discriminator0x73d8, copies 20-byte state and 64-byte buffer into SHA1_CTX and updates count +0x18. Source: libkern/crypto/corecrypto_sha1.c."
+    },
+    {
+      "original": "0xfffffff008482a5c",
+      "original_size": 436,
+      "original_sha256": "96078d21a84d4d04c8c6102d16593a19a69b42fa23f0a14834a45aeac1eb3a92",
+      "native_symbol": "_SHA1Update",
+      "evidence": "Uses crypto_functions sha1 descriptor +0x28, restores SHA1_CTX state/buffer/count, invokes digest update discriminator0xa0d8 and writes back the context. Source: libkern/crypto/corecrypto_sha1.c."
+    },
+    {
+      "original": "0xfffffff008482790",
+      "original_size": 32,
+      "original_sha256": "2556dd81cf7658233e54cba3f2abd94c4eeeda98d039764caf4f8ba8c268c08e",
+      "native_symbol": "_SHA256_Update",
+      "evidence": "Reorders ctx/data/len for crypto_functions ccdigest_update +8 using sha256 descriptor +0x30 and discriminator0xa0d8. Source: libkern/crypto/corecrypto_sha2.c."
+    },
+    {
+      "original": "0xfffffff0084827b0",
+      "original_size": 36,
+      "original_sha256": "be8d5a5ac1f2b687d978db3777db36db9db354711687a8077c553c28ed2bd1d1",
+      "native_symbol": "_SHA256_Final",
+      "evidence": "Loads crypto_functions sha256 descriptor +0x30 and tail dispatches descriptor final callback +0x38 with address diversity0x1bda. Source: libkern/crypto/corecrypto_sha2.c."
+    },
+    {
+      "original": "0xfffffff008425374",
+      "original_size": 80,
+      "original_sha256": "3f980d1d46e1ae8550bfd7231dad7d4cf41b79f321850ef3af4d477c7d9ad4f9",
+      "native_symbol": "_OSTestAndSet",
+      "evidence": "Computes big-endian byte bit mask 1<<(7-(bit&7)), atomically ORs with CASB and returns prior bit state. Source: libkern/OSAtomic.cpp."
+    },
+    {
+      "original": "0xfffffff0084253c4",
+      "original_size": 84,
+      "original_sha256": "9c0916e532549b8d59e7da309cea055e6be8225206e1d5b84d232aadbcdbc049",
+      "native_symbol": "_OSTestAndClear",
+      "evidence": "Computes big-endian byte bit mask 1<<(7-(bit&7)), atomically clears with CASB and returns whether prior bit was zero. Source: libkern/OSAtomic.cpp."
+    },
+    {
+      "original": "0xfffffff007fdfa34",
+      "original_size": 108,
+      "original_sha256": "1bff9ea83eaf6ea237fd650c8edcd997352230a6d3dcf2a93ab9acd48f2d2799",
+      "native_symbol": "_vnode_hasdirtyblks",
+      "evidence": "Checks vnode dirty buffer list +0x88, then VREG UBC info and clustered write-behind count/list to return whether dirty blocks exist. Source: bsd/vfs/vfs_subr.c."
+    },
+    {
+      "original": "0xfffffff00800fd30",
+      "original_size": 120,
+      "original_sha256": "90991911946721885492aa7412ee25f0b8ac423b9a75cc2005234a6bd85549e9",
+      "native_symbol": "_vfs_ioattr",
+      "evidence": "Zeroes reserved outputs, copies mount I/O attribute fields +0x900..+0x958 and supplies default constants for a null mount. Native stores reserved zeros as STP in place of two STRs. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00800cda4",
+      "original_size": 92,
+      "original_sha256": "0e5308ad5dcddaafdd0ceca2780e3118306fc2788e83a5eb370126fcd6a980fb",
+      "native_symbol": "_vnode_setasnamedstream",
+      "evidence": "Authenticates vnode mount discriminator0xd6ef, checks mount named-stream flag byte+0x76 bit2, returns EINVAL or calls the matched vnode_setasnamedstream_internal and returns success. Source: bsd/vfs/vfs_xattr.c."
+    },
+    {
+      "original": "0xfffffff007fa3f1c",
+      "original_size": 12,
+      "original_sha256": "ae4a4530de595afd482ad46b87b521b5f6555de950c86acac615a589c909cabb",
+      "native_symbol": "_ml_get_topology_info",
+      "evidence": "Returns the topology_info base used by the CPU and cluster enumeration APIs. Its users access num_cpus +4, cpus +0x18 and boot_cpu +0x28. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff007fa5220",
+      "original_size": 16,
+      "original_sha256": "0bbcc06cb4f28cb697ead7758e6414244441cb0b5b8475db2423d1b9f52dca5b",
+      "native_symbol": "_ml_get_cpu_count",
+      "evidence": "Returns topology_info.num_cpus +4 from the same base as ml_get_topology_info. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff007fa5230",
+      "original_size": 20,
+      "original_sha256": "29b89a8cf64e154ba1d7d76b6a97baa7f97cd54f69930c34e8465babbea09efd",
+      "native_symbol": "_ml_get_boot_cpu_number",
+      "evidence": "Loads topology_info.boot_cpu +0x28 and returns cpu_id +0. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff007fa5244",
+      "original_size": 68,
+      "original_sha256": "0e993ac165886cb17562666b667099ab2d4a0d420e31d8e7ec01e1bf99a255bb",
+      "native_symbol": "_ml_get_cpu_number",
+      "evidence": "Masks physical ID to MPIDR affinity0/1, scans num_cpus entries of topology_info.cpus at stride0x78 matching phys_id +4, returns index or -1. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff007fa5288",
+      "original_size": 96,
+      "original_sha256": "454ce68836c32924debd69a3b17ff9d949ffff29633947bd0cde4162d66ded00",
+      "native_symbol": "_ml_get_cluster_number",
+      "evidence": "Looks up masked physical ID in topology_info.cpus stride0x78, returns cluster_id +8 or -1. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff007fa52e8",
+      "original_size": 68,
+      "original_sha256": "bff856ee713fa3114856eff4debd90987c5ce2fcf1e478e14e6898e0f47ba894",
+      "native_symbol": "_ml_get_cpu_number_local",
+      "evidence": "Reads MPIDR_EL1 then performs the same affinity-masked CPU index lookup as ml_get_cpu_number. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff007fa532c",
+      "original_size": 100,
+      "original_sha256": "7b3e630d7910fe43e9873e22fb787c223cfe575e381f407d6506a043a59787a9",
+      "native_symbol": "_ml_get_cluster_number_local",
+      "evidence": "Reads MPIDR_EL1 then returns cluster_id +8 for its matching topology CPU, or -1. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff007e56f00",
+      "original_size": 16,
+      "original_sha256": "42ac2fb1d809bbbcc85168fe86bbc5bc7d962417a238fd2c20647711a3d7d9b9",
+      "native_symbol": "_io_rate_update",
+      "evidence": "Tail invokes io_rate_update_callback with fixed PAC discriminator0x7f34, preserving the five caller arguments. Native body differs in dispatch registers and BTI. Source: osfmk/kern/energy_perf.c."
+    },
+    {
+      "original": "0xfffffff007e92100",
+      "original_size": 44,
+      "original_sha256": "43e37e1b4fd92f82bde90fbd11d1e85b0ce695a69767c791dfd0c9ed0efb2978",
+      "native_symbol": "_smr_enter",
+      "evidence": "Disables preemption, loads SMR per-CPU entry at CPU index shifted7 and stores the domain sequence, then DMB ISH. Native differs in thread fields and equivalent indexed store. Source: osfmk/kern/smr.c."
+    },
+    {
+      "original": "0xfffffff007e9212c",
+      "original_size": 88,
+      "original_sha256": "97c0a829e695cf2ca5d942292ce443b01c911289a8c4428908a18ba261206284",
+      "native_symbol": "_smr_leave",
+      "evidence": "Release-stores zero to per-CPU SMR sequence, enables preemption with underflow and kernel_preempt_check paths. Native differs in thread fields and BTI. Source: osfmk/kern/smr.c."
+    },
+    {
+      "original": "0xfffffff007e92a40",
+      "original_size": 40,
+      "original_sha256": "123865b7693235e521cb57c265dfd199aec7edcb922194ef460842bfca282af9",
+      "native_symbol": "_smr_hash_init_empty",
+      "evidence": "Encodes aligned __smrh_empty pointer with hash shift63 in upper byte and zeroes the remaining hash structure fields. Native uses STP for adjacent zero stores. Source: osfmk/kern/smr.c."
+    },
+    {
+      "original": "0xfffffff007f9f970",
+      "original_size": 36,
+      "original_sha256": "0174325d0fced3e8418b464a0021480722a4fef11a074a8152b497d62f28685e",
+      "native_symbol": "_lck_spin_destroy",
+      "evidence": "Writes the lock destroyed sentinel from a 16-byte constant and releases optional lock group through matched lck_grp_deallocate. Source: osfmk/arm/locks.c."
+    },
+    {
+      "original": "0xfffffff007fb4f58",
+      "original_size": 44,
+      "original_sha256": "e673e5a0d84c2dc529c186fe0147ad7a33f7f736f8ca5924688cf049c5e49649",
+      "native_symbol": "_vfs_setup_vattr_from_attrlist",
+      "evidence": "Zeroes return attrlist fields, obtains context thread bit16 for 64-bit mode, sets is_getattrlistbulk=1 and tail calls getattrlist_setupvattr_all. Source: bsd/vfs/vfs_attrlist.c."
+    },
+    {
+      "original": "0xfffffff00800eaa8",
+      "original_size": 32,
+      "original_sha256": "e23570f031d6454f558f011c0392d2221d850160c20371e8537dce108d28a584",
+      "native_symbol": "_vfs_context_is64bit",
+      "evidence": "Uses the context thread with reference marker bit cleared or current thread, then returns task/thread 64-bit flag bit16. Native differs in uthread flags offset. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00801142c",
+      "original_size": 172,
+      "original_sha256": "6276a0acbf649ab436db14e82225b913e0166b51f37b8a376b73d93f12768cd0",
+      "native_symbol": "_vnode_setnoreadahead",
+      "evidence": "Takes vnode spin mutex, sets VRAOFF in v_flag and unlocks. Full checked native shape agrees after four thread lock-field offset substitutions. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff0080117a0",
+      "original_size": 172,
+      "original_sha256": "2e95b773d17d71221fc8f352faa768d4245198ab5390332037adcd97af1c09b7",
+      "native_symbol": "_vnode_setnoflush",
+      "evidence": "Takes vnode spin mutex, sets VNOFLUSH in v_flag and unlocks. Full checked native shape agrees after four thread lock-field offset substitutions. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00801184c",
+      "original_size": 172,
+      "original_sha256": "a809a99eb6f2644ed3db24ddda65d821af26680793a5dbe24efa3db6fa5bd849",
+      "native_symbol": "_vnode_clearnoflush",
+      "evidence": "Takes vnode spin mutex, clears VNOFLUSH in v_flag and unlocks. Full checked native shape agrees after four thread lock-field offset substitutions. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00800ef08",
+      "original_size": 180,
+      "original_sha256": "ff97d15bd85d8f4249e29b887538386c81654e469593d5614f34a4fc9d71768b",
+      "native_symbol": "_vfs_clearflags",
+      "evidence": "Masks requested flags with0xdffff7ff, locks mount mutex, clears requested bits in mnt_flag +0x70 and unlocks. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00800f478",
+      "original_size": 168,
+      "original_sha256": "6387e2e929a1558ed2c9d0a1e875e6262d466272eb85cda1453ed1179a50b48a",
+      "native_symbol": "_vfs_setextendedsecurity",
+      "evidence": "Locks mount mutex and sets MNTK_EXTENDED_SECURITY0x80000000 in mnt_kern_flag +0x74. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00800f520",
+      "original_size": 168,
+      "original_sha256": "ef70fa283f37cec200b4bf74f3ba79f41acee4afe9330419c8a0abe09cace6ca",
+      "native_symbol": "_vfs_setmntsystem",
+      "evidence": "Locks mount mutex and sets MNTK_SYSTEM0x40 in mnt_kern_flag +0x74. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00800f7c4",
+      "original_size": 168,
+      "original_sha256": "b039e83249ac650b10d29793d85f941d56ace021bf6cb098f8e3a9129259fd1b",
+      "native_symbol": "_vfs_setnoswap",
+      "evidence": "Locks mount mutex and sets MNTK_NOSWAP0x80 in mnt_kern_flag +0x74. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00800fbb8",
+      "original_size": 108,
+      "original_sha256": "2077b26f72001630d5b23e759dbacbca3d13dfb74070cff9a5cdec23b4a6c5fa",
+      "native_symbol": "_vfs_vnodecovered",
+      "evidence": "Authenticates mnt_vnodecovered +0x38 discriminator0x7e60, takes matched vnode_getwithref and returns vnode or NULL on failure. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff008010f9c",
+      "original_size": 160,
+      "original_sha256": "a0419cd1009c735bf79f8483a5cbf3a2155a7e85852ebff3957eba20a37f35f4",
+      "native_symbol": "_vfs_ctx_skipatime",
+      "evidence": "Obtains context proc/thread, checks P_LRAGE_VNODES, uthread update flags and p_flag at +0x616, returning whether to skip atime. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00801197c",
+      "original_size": 236,
+      "original_sha256": "b0259c33454337dc169e1d82492774fe1b2502e48ecd9ce63ce94d678fa65ee3",
+      "native_symbol": "_vnode_setmountedon",
+      "evidence": "Takes vnode spin mutex, authenticates v_specinfo +0x78 discriminator0x026e, sets SI_MOUNTEDON bit0 in specflags +0x10 and unlocks. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff008011a68",
+      "original_size": 236,
+      "original_sha256": "1ed59ea60407fb51e929cbb5bbfda0303995cd4ea98f06a74560fa4062808ffa",
+      "native_symbol": "_vnode_clearmountedon",
+      "evidence": "Takes vnode spin mutex, authenticates v_specinfo +0x78 discriminator0x026e, clears SI_MOUNTEDON bit0 in specflags +0x10 and unlocks. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff008011b64",
+      "original_size": 60,
+      "original_sha256": "41ea70913f388bddf27028e2aac4e76d038076dd01cab6ba8aca6bb129264aec",
+      "native_symbol": "_vnode_parent",
+      "evidence": "Authenticates vnode v_parent +0xc0 using discriminator0xf506 and returns it, preserving NULL. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff007e55d90",
+      "original_size": 28,
+      "original_sha256": "8f79edfa20b2e605d995560689bb3c22f04d6d714699691bb6b7dc939b7c48c4",
+      "native_symbol": "_Debugger",
+      "evidence": "Strips PAC from the caller LR, moves message to x2 and passes null context/options to matched DebuggerWithContext. Source: osfmk/kern/debug.c."
+    },
+    {
+      "original": "0xfffffff007f747e0",
+      "original_size": 40,
+      "original_sha256": "17e03c25a4fd03534927fc4e59d4468097bcf8242177947e4fb1ab584836ac93",
+      "native_symbol": "_strprefix",
+      "evidence": "Compares bytes of prefix x1 with string x0 until prefix NUL, returns one on complete match and zero on first difference. Source: osfmk/device/subrs.c."
+    },
+    {
+      "original": "0xfffffff007fb4dd4",
+      "original_size": 80,
+      "original_sha256": "c9783c3fa36d056052c09eb88ddf70836766c0f4648e67c817d326adccc50079",
+      "native_symbol": "_strsep",
+      "evidence": "Loads caller string pointer, scans delimiter set for each byte, terminates token with NUL and stores next pointer or NULL through stringp. Source: bsd/libkern/strsep.c."
+    },
+    {
+      "original": "0xfffffff007fb4e24",
+      "original_size": 52,
+      "original_sha256": "3a1d272a9af4edf7854b74350999a19dad8f9d28fa0592b95ffae35fba000bb0",
+      "native_symbol": "_memchr",
+      "evidence": "Scans length bytes for the signed-byte comparison against ch and returns first matching address or NULL. Native differs only in CMP operand order, which preserves equality. Source: bsd/libkern/memchr.c."
+    },
+    {
+      "original": "0xfffffff007fbf384",
+      "original_size": 56,
+      "original_sha256": "1daf14be86dee94de63cdc2e8b3ace6b9dc0507db5e6ae29024b7cd16c9416d2",
+      "native_symbol": "_buf_setfilter",
+      "evidence": "Returns old iodone callback +0x80 and transaction +0xd0 through optional outputs, stores replacements and sets B_CALL bit22 according to callback presence. Source: bsd/vfs/vfs_bio.c."
+    },
+    {
+      "original": "0xfffffff00830b7d8",
+      "original_size": 140,
+      "original_sha256": "f4b61371e7231fd4c0d6918153b555422713602d2464f6b6f879dd2d24d1bc7e",
+      "native_symbol": "_sysctl_handle_opaque",
+      "evidence": "Invokes sysctl_req oldfunc +0x28 with arg1/arg2, then optional newfunc +0x48 when newptr +0x30 is present, both callback discriminator0x6827. Source: bsd/kern/kern_newsysctl.c."
+    },
+    {
+      "original": "0xfffffff007fa5390",
+      "original_size": 16,
+      "original_sha256": "86fbeeba43c7028d56ec272df1282ab30459b1ae9b34c783b7cb86b245ac700f",
+      "native_symbol": "_ml_get_cluster_count",
+      "evidence": "Returns topology_info.num_clusters +8 from the independently identified topology base. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff0084fb2b4",
+      "original_size": 40,
+      "original_sha256": "e1e1bddd9ac10a3472fa2beafbfd7aa64ace7a944c073b94addfe0ef29bea016",
+      "native_symbol": "__ZN13IOEventSource9sleepGateEPvj",
+      "evidence": "Loads workLoop +0x30 and tail calls sleepGate(event,type) slot0xf0 discriminator0xa662, preserving event and type. Source: iokit/Kernel/IOEventSource.cpp."
+    },
+    {
+      "original": "0xfffffff0084fb30c",
+      "original_size": 40,
+      "original_sha256": "c3c7b85d8d4d250f029d1fc1f4a31dfb6737d8f241a5ce14fa26de01f7eac8e7",
+      "native_symbol": "__ZN13IOEventSource10wakeupGateEPvb",
+      "evidence": "Loads workLoop +0x30 and tail calls wakeupGate(event,oneThread) slot0xf8 discriminator0x0dec. Source: iokit/Kernel/IOEventSource.cpp."
+    },
+    {
+      "original": "0xfffffff0084fdf48",
+      "original_size": 72,
+      "original_sha256": "8387a6f095f7dceeda6fb784d7fe915c98769f654df676024dc53f885e31c4f8",
+      "native_symbol": "__ZN13IOCommandGate14runActionBlockEU13block_pointerFivE",
+      "evidence": "Passes signed IOCommandGateActionToBlock callback discriminator0xbd41 and block argument to virtual runAction slot0xe8 discriminator0xf9ff with three null arguments. Source: iokit/Kernel/IOCommandGate.cpp."
+    },
+    {
+      "original": "0xfffffff00851b1d4",
+      "original_size": 48,
+      "original_sha256": "0c3877ee389f89a25236054445645e83067675789a3f0cf289614228627e4768",
+      "native_symbol": "__ZN18IOMemoryDescriptor18getPhysicalAddressEv",
+      "evidence": "Tail calls getPhysicalSegment at virtual slot0x98 discriminator0x649a with offset0, length output NULL and options0. Source: iokit/Kernel/IOMemoryDescriptor.cpp."
+    },
+    {
+      "original": "0xfffffff00851932c",
+      "original_size": 128,
+      "original_sha256": "dd7df5496fa5dd96f7aa81517b1da08c66cd785b53b78b38551da56b33289264",
+      "native_symbol": "__ZN18IOMemoryDescriptorD2Ev",
+      "evidence": "Signs the matched IOMemoryDescriptor vtable, releases reserved object +0x18 through discriminator0x3a87, clears the field and stores destroyed vtable sentinel. Native D2 has the same body. Source: iokit/Kernel/IOMemoryDescriptor.cpp."
+    },
+    {
+      "original": "0xfffffff00851ec60",
+      "original_size": 128,
+      "original_sha256": "46379a42d3f2eb7fc9d7359a8439c4d6fdf57f42357070dd4d576b373560842c",
+      "native_symbol": "__ZN18IOMemoryDescriptorD2Ev",
+      "evidence": "Identical inlined IOMemoryDescriptor base destructor: matched base vtable, release/clear reserved +0x18, and destroyed sentinel. Shares the verified D2 replacement. Source: iokit/Kernel/IOMemoryDescriptor.cpp."
+    },
+    {
+      "original": "0xfffffff00852a3e4",
+      "original_size": 128,
+      "original_sha256": "9ecae817e4e4b4ab566ae75b230c2cd22eca034a7e6b4974cb88bd336e692e0f",
+      "native_symbol": "__ZN5IOCPUD2Ev",
+      "evidence": "Signs the matched IOCPU vtable, releases reserved +0x88 through0x3a87, clears field and stores destroyed sentinel. Native D2 body agrees. Source: iokit/Kernel/IOCPU.cpp."
+    },
+    {
+      "original": "0xfffffff00852ac94",
+      "original_size": 116,
+      "original_sha256": "9d1b79e36a2baf055c50ee06d9552bbfc81853a7aad9d980d499173228171292",
+      "native_symbol": "__ZN24IOCPUInterruptControllernwEm",
+      "evidence": "Uses independently identified IOCPUInterruptController typed allocation view, falls back to KHEAP_DEFAULT for larger sizes and accounts allocated bytes in debug_ivars_size. Source: iokit/Kernel/IOCPU.cpp."
+    },
+    {
+      "original": "0xfffffff00853f9c0",
+      "original_size": 40,
+      "original_sha256": "62046b07ae245bd745bb702bfcc17437b653bea284e9c9d1b7d08df278d4fb7d",
+      "native_symbol": "__ZN21IOInterruptControllerC2EPK11OSMetaClass",
+      "evidence": "Sets reference count1 and signs the matched IOInterruptController vtable; C2 is the native base constructor. Source: iokit/Kernel/IOInterruptController.cpp."
+    },
+    {
+      "original": "0xfffffff008461fec",
+      "original_size": 40,
+      "original_sha256": "3acb8ca03598d61069f416a9fa5b1aa93fe516135b5b48287c35a3104b05f5e6",
+      "native_symbol": "__ZN8OSNumberC2EPK11OSMetaClass",
+      "evidence": "Sets reference count1 and signs the matched OSNumber vtable; C2 is the native base constructor. Source: libkern/c++/OSNumber.cpp."
+    },
+    {
+      "original": "0xfffffff008487b08",
+      "original_size": 292,
+      "original_sha256": "9c23df37233c848406c8dd4d21eaaa0153cd4e88263b422b2c79911dc6666327",
+      "native_symbol": "__ZN9IOService12Start_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_E",
+      "evidence": "Validates IOService RPC object and request/reply sizes, invokes callback discriminator0xe4fe and writes Start reply message ID0xab6f76dde6d693f2. The 16-byte reply header matches native Start_Invoke exactly. Source: generated IOService.iig implementation."
+    },
+    {
+      "original": "0xfffffff008487c2c",
+      "original_size": 292,
+      "original_sha256": "307fd9d92d90602c8837180f4f857f8301dad6a43f79b3731fa13186b6a22d29",
+      "native_symbol": "__ZN9IOService11Stop_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_E",
+      "evidence": "Validates IOService RPC object and sizes, invokes callback0xe4fe and writes Stop reply message ID0x98e715041c459fa5. The 16-byte reply header matches native Stop_Invoke exactly. Source: generated IOService.iig implementation."
+    },
+    {
+      "original": "0xfffffff008504c2c",
+      "original_size": 232,
+      "original_sha256": "1387f2f916121384ff397687de377dc3414bc4d141e2ed7deabda8efbe6428d0",
+      "native_symbol": "__ZN24IOBufferMemoryDescriptor17inTaskWithOptionsEP4taskjmm",
+      "evidence": "Allocates matched IOBufferMemoryDescriptor class and passes task/options/capacity/alignment plus physical mask0 to initWithPhysicalMask slot0x128 discriminator0x1c03. Source: iokit/Kernel/IOBufferMemoryDescriptor.cpp."
+    },
+    {
+      "original": "0xfffffff008519ee8",
+      "original_size": 244,
+      "original_sha256": "652539d510a61c0901ab500b74caa77b4ae418d28efd63a6032852653057a5f8",
+      "native_symbol": "__ZN18IOMemoryDescriptor11withOptionsEPvjjP4taskjP8IOMapper",
+      "evidence": "Allocates matched IOGeneralMemoryDescriptor and passes six buffers/count/offset/task/options/mapper arguments to initWithOptions slot0x78 discriminator0xfe46. Source: iokit/Kernel/IOMemoryDescriptor.cpp."
+    },
+    {
+      "original": "0xfffffff008586c70",
+      "original_size": 228,
+      "original_sha256": "b97c1d11d93f276533f9505ba64dcfde6cb179380fb32c3b949fe1ea62ba4752",
+      "native_symbol": "__ZN19IOPerfControlClient29workSubmitAndBeginWithContextEP9IOServiceP8OSObjectPNS_14WorkSubmitArgsEPNS_13WorkBeginArgsE",
+      "evidence": "Calls matched workSubmitWithContext, checks IOPerfControlWorkContext metaclass, builds WorkState with started=true, calls workBegin callback discriminator0xea3c and sets context started flag. Source: iokit/Kernel/IOPerfControl.cpp."
+    },
+    {
+      "original": "0xfffffff00850b4cc",
+      "original_size": 296,
+      "original_sha256": "0740144e5e1238439d8f0f6d0a740227f70e89c33dd86734a15c184478ee0503",
+      "native_symbol": "_IOMappedRead64",
+      "evidence": "Waits for IOMapper system mapping and translates address with discriminator0x3387, then calls matched ml_phys_read_data(address,8). Source: iokit/Kernel/IOMapper.cpp."
+    },
+    {
+      "original": "0xfffffff00850b884",
+      "original_size": 328,
+      "original_sha256": "96d756241157b7d6e94eb9f983072419b103425f18ba79134c8501da74672f68",
+      "native_symbol": "_IOMappedWrite32",
+      "evidence": "Translates through system IOMapper, zero-extends data w1 and tail calls matched ml_phys_write_data(address,data,0,4). Source: iokit/Kernel/IOMapper.cpp."
+    },
+    {
+      "original": "0xfffffff00850b9cc",
+      "original_size": 328,
+      "original_sha256": "afd62c95ba78abf7d558bdb94027a6388c6c57b3c2534c3652f7045cbb5d02de",
+      "native_symbol": "_IOMappedWrite64",
+      "evidence": "Translates through system IOMapper and tail calls matched ml_phys_write_data(address,data,0,8). Source: iokit/Kernel/IOMapper.cpp."
+    },
+    {
+      "original": "0xfffffff0084c8bec",
+      "original_size": 40,
+      "original_sha256": "0543be8af4b244afa3b865357462f2311edf00d6a9e835f59abf540deaa8c56e",
+      "native_symbol": "_IOSetCoreAnalyticsSendEventProc",
+      "evidence": "Returns kIOReturnExclusiveAccess0xe00002e2 when callback is set, otherwise stores the supplied callback and returns success. Native body matches after BTI and relocation normalization. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff0084e9f40",
+      "original_size": 32,
+      "original_sha256": "9c5e655a25a179adef030b1046bc1ea21619c3686a36919234cd13828f56a669",
+      "native_symbol": "__ZN9IOService13getPowerStateEv",
+      "evidence": "Checks initialized power management flag +0x68, returns PM state currentPowerState +0x160 via +0x60 or zero. Source: iokit/Kernel/IOServicePM.cpp."
+    },
+    {
+      "original": "0xfffffff0085aa638",
+      "original_size": 72,
+      "original_sha256": "03057997ae66dabf23417ac9bfb08f5095d652f0bac64365995fa4fbb078e1c4",
+      "native_symbol": "_registerPrioritySleepWakeInterest",
+      "evidence": "Loads matched gRootDomain and gIOPriorityPowerStateInterest, tail calls registerInterest slot0x438 discriminator0x800f with handler/self/ref. Source: iokit/Kernel/IOPMrootDomain.cpp."
+    },
+    {
+      "original": "0xfffffff007fbdf50",
+      "original_size": 16,
+      "original_sha256": "c4852dd422c5f3736b8739d239c4f8d19f7d392d7f6f714c9d8e7b5a872aaef4",
+      "native_symbol": "_bufattr_free",
+      "evidence": "Tail frees with typed allocation descriptor whose fixup +16 names site.struct bufattr. Source: bsd/vfs/vfs_bio.c."
+    },
+    {
+      "original": "0xfffffff007fca02c",
+      "original_size": 116,
+      "original_sha256": "a5d25025f31c4e9fb933689ff907811989b09a643f738267807c65f0468ddadb",
+      "native_symbol": "_cluster_max_io_size",
+      "evidence": "Selects read/write mount segment and byte limits by CL_READ1/CL_WRITE2, caps segments4096, multiplies by target page size16KiB, takes byte minimum and aligns/caps transfer size. Native uses its 4KiB page configuration. Source: bsd/vfs/vfs_cluster.c."
+    },
+    {
+      "original": "0xfffffff007febbf4",
+      "original_size": 120,
+      "original_sha256": "d6d1f083ace8df0211332ff18877fed32831fa72f92eb6fd27db76c6947e2362",
+      "native_symbol": "_vnode_attr_authorize_init",
+      "evidence": "Initializes requested vnode attributes to0x1000600, handles optional directory attrs and delete action, and adds ownership requests0x980 for non-root context credential. Source: bsd/vfs/vfs_subr.c."
+    },
+    {
+      "original": "0xfffffff0080016e4",
+      "original_size": 212,
+      "original_sha256": "cdd84367b0f26349b9be9aac983ebffcd50c5c50d418301c7659442579313b8e",
+      "native_symbol": "_vfs_context_is_dataless_manipulator",
+      "evidence": "Queries AMFI for com.apple.private.vfs.dataless-manipulation then dataless-resolver on context task, treating kernel task separately. Source: bsd/vfs/vfs_syscalls.c."
+    },
+    {
+      "original": "0xfffffff0080053c0",
+      "original_size": 100,
+      "original_sha256": "e6ea9086eb997c20c75f072e0194845f5ddeb4b5eea4162184f27ac8b1be8a5f",
+      "native_symbol": "_nop_pagein",
+      "evidence": "For a committed page-in request aborts UPL range with error/free-on-empty flags0x2c, deallocates empty UPL and returns EINVAL. Source: bsd/vfs/vfs_support.c."
+    },
+    {
+      "original": "0xfffffff008005488",
+      "original_size": 100,
+      "original_sha256": "a6be7d580438364c4180fa0c87367f0996f8048b82cefb7bcc35f4401af0514d",
+      "native_symbol": "_nop_pageout",
+      "evidence": "Same verified default page-out abort sequence with flags0x2c and EINVAL as source nop_pageout. Source: bsd/vfs/vfs_support.c."
+    },
+    {
+      "original": "0xfffffff008013418",
+      "original_size": 76,
+      "original_sha256": "1aa2756a507322d7fc8f9bf48fcd1ec5326c7f0b6430ae2bb1206fc9c9aca2a2",
+      "native_symbol": "_VNOP_FSYNC",
+      "evidence": "Builds vnop_fsync_args with matched vnop_fsync_desc, vnode, waitfor and context, dispatches vnode op vector using discriminator0x307a. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff008014a00",
+      "original_size": 72,
+      "original_sha256": "544471e83f0bf6dea580f6afa81d80124bd15523d97ad42c8767633b869540af",
+      "native_symbol": "_VNOP_STRATEGY",
+      "evidence": "Builds vnop_strategy_args using matched vnop_strategy_desc and buffer, obtains vnode through b_vp +0x88 and dispatches op vector discriminator0x307a. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff00801a8f0",
+      "original_size": 60,
+      "original_sha256": "f7d3b42375a9827bb67d65a900c743d396350d6b26f00917f6e37a61520e3818",
+      "native_symbol": "_doc_tombstone_get",
+      "evidence": "Reads current_uthread tombstone +0x6a8, allocates using site.struct doc_tombstone descriptor with Z_ZERO when null, stores and returns it. Source: bsd/vfs/doc_tombstone.c."
+    },
+    {
+      "original": "0xfffffff0080218e0",
+      "original_size": 44,
+      "original_sha256": "15a56d9b75cba3e4b6354cb939605c737a2dd1ed9eef74c133c20943ddcfeafb",
+      "native_symbol": "_throttle_thread_io_tier_above_metadata",
+      "evidence": "Computes effective I/O policy from current thread policy bits1..2 and override, treating override -1 separately, returns tier<metadata tier1. Source: bsd/miscfs/specfs/spec_vnops.c."
+    },
+    {
+      "original": "0xfffffff008021e94",
+      "original_size": 12,
+      "original_sha256": "68c7b2ae20e6bc3e9faf03b131cfa7066e543c028fe2b041a631359f3af555a9",
+      "native_symbol": "_throttle_lowpri_window",
+      "evidence": "Returns current_uthread uu_lowpri_window byte +0x621. Native has the corresponding uthread offset after layout changes. Source: bsd/miscfs/specfs/spec_vnops.c."
+    },
+    {
+      "original": "0xfffffff0080274d4",
+      "original_size": 16,
+      "original_sha256": "9747fc190b5cda2bdc5eba1538927acdd17fb4875f7d202f95bad99fd389bef5",
+      "native_symbol": "_decmpfs_cnode_destroy",
+      "evidence": "Tail calls matched lck_rw_destroy on cnode compressed_data_lock +0x38 with decmpfs lock group. Source: bsd/kern/decmpfs.c."
+    },
+    {
+      "original": "0xfffffff008027690",
+      "original_size": 28,
+      "original_sha256": "49ad361326ef5410b22bfc56fcd6528ec8725bf7e6ae95f42a0cb58425ccdd7d",
+      "native_symbol": "_decmpfs_cnode_set_vnode_cached_size",
+      "evidence": "Atomically replaces uncompressed_size64 +0x18 with CASAL retry loop. Native uses pre-indexed load for the same field. Source: bsd/kern/decmpfs.c."
+    },
+    {
+      "original": "0xfffffff0080276ac",
+      "original_size": 28,
+      "original_sha256": "c52da72250ab7e1495b2e105cbe9fbbdcff4011431db6bf69a3d651f8f4c66f1",
+      "native_symbol": "_decmpfs_cnode_set_vnode_cached_nchildren",
+      "evidence": "Atomically replaces nchildren64 +0x20 with CASAL retry loop. Source: bsd/kern/decmpfs.c."
+    },
+    {
+      "original": "0xfffffff0080276c8",
+      "original_size": 28,
+      "original_sha256": "7121b58717b716165ab9e8a2976e59106249e46729668dfba0f1bde8e21c9048",
+      "native_symbol": "_decmpfs_cnode_set_vnode_cached_total_size",
+      "evidence": "Atomically replaces total_size64 +0x28 with CASAL retry loop. Source: bsd/kern/decmpfs.c."
+    },
+    {
+      "original": "0xfffffff007e560dc",
+      "original_size": 104,
+      "original_sha256": "0fb880d6791b93650a9ebafeeb5d38a1f1b6d8f67c613ca5a462d37f95521136",
+      "native_symbol": "_kdp_register_callout",
+      "evidence": "Permanently allocates 32-byte kdp_callout, stores callback +8/arg +0x18/in-progress0 and inserts it into kdp_callout_list with CASAL. Source: osfmk/kern/debug.c."
+    },
+    {
+      "original": "0xfffffff007e74628",
+      "original_size": 56,
+      "original_sha256": "2129a7f48d567a7e8f57d70eb454d4176c5ae1b37d880d05fabc9c44804a5023",
+      "native_symbol": "_lck_mtx_gate_alloc_init",
+      "evidence": "Allocates matched KT_GATE descriptor with0x8000, zeroes gate state and sets flags0x70001 at +0x10. Full native body agrees modulo relocations; source mutex and rw wrappers share gate_alloc_init. Source: osfmk/kern/locks.c."
+    },
+    {
+      "original": "0xfffffff007eac820",
+      "original_size": 152,
+      "original_sha256": "d5776cd02f55db01a539d03fa41f8f9323e595ddc7287b088cda79491229c50d",
+      "native_symbol": "_task_reference",
+      "evidence": "Ignores null, validates task backing proc zone24 using proc_struct_size, atomically retains task refcount +0x10 and checks os_ref retain overflow. Source: osfmk/kern/task.c."
+    },
+    {
+      "original": "0xfffffff007ed2b40",
+      "original_size": 120,
+      "original_sha256": "55a8b7e12b0f21b33482a5ba39ca3b93e38fe3250c46563675fde31ac76056f2",
+      "native_symbol": "_zone_require_ro",
+      "evidence": "Validates address x2 within read-only zone map, checks per-zone element boundary and zone ID against x0, calls zone_id_require_ro_panic on failure. Native uses dynamic page geometry. Source: osfmk/kern/zalloc.c."
+    },
+    {
+      "original": "0xfffffff007f15034",
+      "original_size": 156,
+      "original_sha256": "20ee5756ac8fa76b3fcc3f741315f66fb0c8471a5ccdbf842a3d06f52129f20d",
+      "native_symbol": "_vm_kernel_unslide_or_perm_external",
+      "evidence": "Strips pointer tag/PAC, unslides addresses between vm_kernel_slid_base/top and otherwise applies ml_addrperm_pacga to kernel addresses, storing result through x1. Source wrapper and addrperm_external have identical semantics. Source: osfmk/vm/vm_kern.c."
+    },
+    {
+      "original": "0xfffffff007f97eec",
+      "original_size": 328,
+      "original_sha256": "6c0bc269550c97b23d767a4d46ea96ae725b5fa22d1d540448d2cc0ed49f62e3",
+      "native_symbol": "_ml_arm_sleep",
+      "evidence": "Marks CPU_SLEEP state0x50535553, waits for secondary CPUs, captures stable absolute time into wake_abstime, clears reset time and cleans caches before arm64_prepare_for_sleep. Source: osfmk/arm64/cpu.c."
+    },
+    {
+      "original": "0xfffffff007f98f10",
+      "original_size": 12,
+      "original_sha256": "148a9dc55e296ab9cb703f021adf6a0aaa85232d090273e4061c4ad8f6bc075e",
+      "native_symbol": "_ml_get_wake_timebase",
+      "evidence": "Returns wake_abstime at original0xfffffff00a2bc8f8, whose write is verified in ml_arm_sleep and whose use rebases RTClockData on wake. Source: osfmk/arm/cpu_common.c."
+    },
+    {
+      "original": "0xfffffff007fa38c0",
+      "original_size": 12,
+      "original_sha256": "47bb55aaee0bbc918bdb4d99326c768c6fe0529736311e988878e26c6783a60a",
+      "native_symbol": "_ml_set_reset_time",
+      "evidence": "Stores reset_abstime, the hardware clock timestamp used by reset-time sysctl and initialized to UINT64_MAX on sleep; verified through cpu_init and ml_arm_sleep users. Native non-HAS_CONTINUOUS_HWCLOCK implementation is empty. Source: osfmk/arm/machine_routines_common.c."
+    },
+    {
+      "original": "0xfffffff007fa3cb4",
+      "original_size": 56,
+      "original_sha256": "44071423d7024e667e9b0f9c799a42aaac7f2c8ec6ab4d59debccee03eb6d38b",
+      "native_symbol": "_ml_cpu_signal",
+      "evidence": "Compares MPIDR cluster ID and emits immediate Fast IPI through S3_5_C15_C0_0 local or S3_5_C15_C0_1 global with target affinity encoding, followed by ISB. Source: osfmk/arm64/machine_routines.c."
+    },
+    {
+      "original": "0xfffffff007fb4d58",
+      "original_size": 124,
+      "original_sha256": "0d93c143d20bc5d107e588dfd3cef12bc2044ec0438b3c0c1586671fe43ac562",
+      "native_symbol": "_random",
+      "evidence": "Refreshes PRNG through discriminator0x4d5f, requests four bytes for current CPU through0xedeb and masks result to31 bits. Source: bsd/libkern/random.c."
+    },
+    {
+      "original": "0xfffffff007fe7168",
+      "original_size": 12,
+      "original_sha256": "0f3e61b891c142445f4266ff997bd9baf6e4f514ef668007edab81f114e8877d",
+      "native_symbol": "_vfs_shutdown_finished",
+      "evidence": "Returns byte from independently mapped vfs_unmountall_finished global. Source: bsd/vfs/vfs_subr.c."
+    },
+    {
+      "original": "0xfffffff0085b90f0",
+      "original_size": 12,
+      "original_sha256": "80b30958cb5dfc5192ec69d0c5ab7cf36327daa3c5403730d6647e0936780761",
+      "native_symbol": "_PE_panic_debugging_enabled",
+      "evidence": "Returns panicDebugging global read by matched check_and_handle_nested_panic and handle_debugger_trap; native exposes identical getter. Source: pexpert/arm/pe_init.c."
+    },
+    {
+      "original": "0xfffffff0082ad8e0",
+      "original_size": 12,
+      "original_sha256": "fed6be00e7a2fb42652f202c94287ed2936bd912da5c5d1682c3e2f1d73f21c4",
+      "native_symbol": "_get_aiotask",
+      "evidence": "Returns current_uthread uu_aio_task +0x5e8, corresponding to native field +0x660. Source: bsd/kern/kern_aio.c."
+    },
+    {
+      "original": "0xfffffff0082aef50",
+      "original_size": 16,
+      "original_sha256": "426498907f5e528107d28e95bec49c85e811b08412ea375b60eaad216131dd6a",
+      "native_symbol": "_kauth_filesec_free",
+      "evidence": "Tail frees object in matched KHEAP_DATA_BUFFERS with matched kfree_addr_ext. Located after independently matched kauth_filesec_alloc, matching source allocation/free API pair. Source: bsd/kern/kern_authorization.c."
+    },
+    {
+      "original": "0xfffffff0082b0224",
+      "original_size": 52,
+      "original_sha256": "7263dab803fcfc799cd803211182c3df57f30168b8342b50937adee83d877436",
+      "native_symbol": "_kauth_cred_ismember_gid",
+      "evidence": "Scans credential group count16 +0x24 and group ID array32 +0x28, stores membership through x2 and returns zero. Native uses equivalent indexed loop. Source: bsd/kern/kern_credential.c."
+    },
+    {
+      "original": "0xfffffff0082ec428",
+      "original_size": 120,
+      "original_sha256": "a6087c316be04bad0c957e41d3b7533746c89c8f71028e08995857190993bc8e",
+      "native_symbol": "_proc_ppid",
+      "evidence": "Returns -1 for NULL, otherwise validates proc zone24 and returns p_ppid +0x20. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0082ed818",
+      "original_size": 76,
+      "original_sha256": "47ebbca3a6817f96b4d9f824be34b3dafe76382b01e21e3d8edb57bac91401bc",
+      "native_symbol": "_proc_isinitproc",
+      "evidence": "Authenticates initproc global with discriminator0x706f, returns equality with caller proc when present. Native uses same discriminator and null handling. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0082f0efc",
+      "original_size": 120,
+      "original_sha256": "9b70b79b89e282884b57f424cb4efa05e64bfbd54148be7e4d8af32e9153cdb9",
+      "native_symbol": "_proc_skip_mtime_update",
+      "evidence": "Checks current process identity, thread UT_SKIP_MTIME_UPDATE bit18/IGNORE bit19, then process policy bit7; defaults current process through kernproc. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0082fc848",
+      "original_size": 12,
+      "original_sha256": "df8dcfc57bbf9cf6efe5db66308965518eda87ebc2cedd04c9c583845807541d",
+      "native_symbol": "_get_system_inshutdown",
+      "evidence": "Returns system_inshutdown global whose writers/readers include matched reboot_kernel, vfs_mountroot and cluster_push_err. Source: bsd/kern/kern_shutdown.c."
+    },
+    {
+      "original": "0xfffffff008328118",
+      "original_size": 300,
+      "original_sha256": "311495f32e2d170128e720c06c3e329128a68384687a240c4d4942aeb78cc1d6",
+      "native_symbol": "_csm_resolve_os_entitlements_from_proc",
+      "evidence": "Validates proc, checks code-sign monitor enablement, takes task map reference, authenticates pmap +0x40, invokes PPL dispatch107 PMAP_RESOLVE_KERNEL_ENTITLEMENTS_INDEX with KERN_RESOURCE_SHORTAGE retry14, copies output and releases map. Source: bsd/kern/kern_codesigning.c."
+    },
+    {
+      "original": "0xfffffff008347918",
+      "original_size": 140,
+      "original_sha256": "97e10492df020c8fb74c78c953033c8fc511130cce3548637d8e178b1734e961",
+      "native_symbol": "_ubc_upl_commit_range",
+      "evidence": "Rejects commit flags0x240, derives page-info list from UPL, invokes upl_commit_range, and deallocates empty UPL when FREE_ON_EMPTY is requested. Source: bsd/kern/ubc_subr.c."
+    },
+    {
+      "original": "0xfffffff0083479a4",
+      "original_size": 92,
+      "original_sha256": "74fd5fd275a2577fb193f996a5a8136284bd46d2c8cf270bd8f29a484081a710",
+      "native_symbol": "_ubc_upl_abort",
+      "evidence": "For a nonnull UPL calls upl_abort_range from offset0 through upl_size +0x28 then always deallocates UPL; returns KERN_INVALID_ARGUMENT for NULL. Source: bsd/kern/ubc_subr.c."
+    },
+    {
+      "original": "0xfffffff0083811d8",
+      "original_size": 4,
+      "original_sha256": "a28a54b64921cb09befce2e87d5157894c334d63270bc81b15412877467e3e4b",
+      "native_symbol": "_kx_qsort",
+      "evidence": "Tail calls qsort implementation taking base/count/size/comparator; callee performs insertion sort for count<7 and median/partition quicksort otherwise, invoking comparator discriminator0xe4fe. Native kx_qsort is the same public wrapper. Source: libkern/qsort.c."
+    },
+    {
+      "original": "0xfffffff0084280c0",
+      "original_size": 88,
+      "original_sha256": "477d78e98d3be88cada0434dff88026e8b27a067f0d76c170d5b1ca036e038b5",
+      "native_symbol": "__ZN11OSMetaClass18allocClassWithNameEPK8OSString",
+      "evidence": "Converts OSString to OSSymbol, calls matched allocClassWithName(OSSymbol const*) and releases the temporary symbol. Source: libkern/c++/OSMetaClass.cpp."
+    },
+    {
+      "original": "0xfffffff00846bf60",
+      "original_size": 276,
+      "original_sha256": "46f1cba7f3c1114a0f791b5ee934f1b00c07452e0da46b481265a5db41aa4c2f",
+      "native_symbol": "__ZN8OSSymbol10withStringEPK8OSString",
+      "evidence": "Checks OSSymbol metaclass chain and retains an existing symbol; otherwise obtains OSString C string via discriminator0x2987 and calls withCString or withCStringNoCopy according to ownership bit. Source: libkern/c++/OSSymbol.cpp."
+    },
+    {
+      "original": "0xfffffff00849f278",
+      "original_size": 176,
+      "original_sha256": "7a19b869b0db21b8a3eef8b81ad677b59bf1bfa6735080038b37af39189c29a8",
+      "native_symbol": "__Z20IODTMatchNubWithKeysP15IORegistryEntryPKc",
+      "evidence": "Calls matched OSUnserialize(keys,NULL), passes object to nub compareNames slot0x1f8 discriminator0xcbcc, releases parsed object and returns result. Source: iokit/Kernel/IODTPlatformExpert.cpp."
+    },
+    {
+      "original": "0xfffffff0084aa920",
+      "original_size": 12,
+      "original_sha256": "fe1bedfee2e1cd66890fd9fa1f3bbb7b54625d766bfba566d6cec5a18418b8a8",
+      "native_symbol": "__ZN15IORegistryEntry15getRegistryRootEv",
+      "evidence": "Returns registry-root global from IORegistryEntry initialization and registry-root users. Native getter has the same return type and global usage. Source: iokit/Kernel/IORegistryEntry.cpp."
+    },
+    {
+      "original": "0xfffffff0084aaf38",
+      "original_size": 72,
+      "original_sha256": "5cbb4e1865a574e0a02538b6bea5d683a499fa4be8f8b599736087702efd7a57",
+      "native_symbol": "__ZN15IORegistryEntry14propertyExistsEPKc",
+      "evidence": "Invokes getProperty(const char*) slot0x118 discriminator0x37a5 and returns whether result is nonnull. Source: iokit/Kernel/IORegistryEntry.cpp."
+    },
+    {
+      "original": "0xfffffff0084ab490",
+      "original_size": 216,
+      "original_sha256": "94dd346c2eda9c0c1d84a2d676368b725d94212344440e0370048876bd9ac953",
+      "native_symbol": "__ZNK15IORegistryEntry16propertyHasValueEPKcPK8OSObjectPK15IORegistryPlanej",
+      "evidence": "Invokes copyProperty(const char*,plane,options) slot0x78 discriminator0x5c68, compares optional value through isEqualTo discriminator0xfc74 and releases property. Source: iokit/Kernel/IORegistryEntry.cpp."
+    },
+    {
+      "original": "0xfffffff0084caa70",
+      "original_size": 12,
+      "original_sha256": "2e2d85df748dab71349c5b4533deef6844ddf6555eb9b57dfbda64b7ace74084",
+      "native_symbol": "__ZN9IOService11getPlatformEv",
+      "evidence": "Returns gIOPlatform global. Native IOService getter and source getPlatform identify this platform-expert singleton. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff0084caa88",
+      "original_size": 12,
+      "original_sha256": "5a9dbf59586c221b46d5df22dbfcdfe980ac9ac001c4b45f18c4c5db86c845db",
+      "native_symbol": "__ZN9IOService18getResourceServiceEv",
+      "evidence": "Returns gIOResources global which the verified publishResource method updates through setProperty. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff0084cb4b4",
+      "original_size": 212,
+      "original_sha256": "c88c0a239da2f0df6bd45b8b828bb1a103a4cb7bb73a7d4c3740399a4f36dd61",
+      "native_symbol": "__ZN9IOService15publishResourceEPK8OSSymbolP8OSObject",
+      "evidence": "Defaults missing value to kOSBooleanTrue, sets property on gIOResources, checks catalogue lock owner and requests registerService asynchronously when needed. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff00852ad90",
+      "original_size": 144,
+      "original_sha256": "220d7f8df54d9bf235f7dd1c09df7bec8a53db543a3403584b72e68ca83fdcb2",
+      "native_symbol": "_IOCPURunPlatformQuiesceActions",
+      "evidence": "Runs gActionQueues index2 at +0x20, invokes priority callbacks discriminator0x2753 with allow-nested flag1 and returns first error. Source: iokit/Kernel/IOPlatformActions.cpp."
+    },
+    {
+      "original": "0xfffffff00852ae20",
+      "original_size": 144,
+      "original_sha256": "d39352aa5617b2c6e24168db1ebdd17241f9459c2ba9a5179bd21ccbaa003974",
+      "native_symbol": "_IOCPURunPlatformActiveActions",
+      "evidence": "Runs gActionQueues index3 at +0x30, invokes priority callbacks discriminator0x2753 with allow-nested flag1 and returns first error. Source: iokit/Kernel/IOPlatformActions.cpp."
+    },
+    {
+      "original": "0xfffffff00855deb8",
+      "original_size": 268,
+      "original_sha256": "4e1c6863e1216e661725190c3b7aae06ae9239970ef23a87bf6299dab37221f3",
+      "native_symbol": "__ZN15IOStateReporter8setStateEy",
+      "evidence": "Locks reporter, requires one channel, scans element state IDs for x1, calls handleSetStateByIndices with channel0 and zero transition/residency, then unlocks. Source: iokit/Kernel/IOStateReporter.cpp."
+    },
+    {
+      "original": "0xfffffff00855f864",
+      "original_size": 204,
+      "original_sha256": "2fe288930246554355c840dc4eae9b35e13236fb1a6ae986cef3c1f0b2a4f221",
+      "native_symbol": "__ZN19IOHistogramReporter20overrideBucketValuesEjyxxx",
+      "evidence": "Locks reporter, checks bucket index against bucket count +0x98, packs four override values and invokes setElementValues slot0xb8 discriminator0xea10. Source: iokit/Kernel/IOHistogramReporter.cpp."
+    },
+    {
+      "original": "0xfffffff00856084c",
+      "original_size": 348,
+      "original_sha256": "35b499a6354790c1355a1ec9198a72c5d964dfbccfb6a6e6650debe3289feee7",
+      "native_symbol": "__ZN14IOReportLegend4withEP7OSArray",
+      "evidence": "Allocates IOReportLegend and initializes legend by copying an OSArray through initWithArray discriminator0x8442, stores owned array +0x10 and releases on failed init. Source: iokit/Kernel/IOReportLegend.cpp."
+    },
+    {
+      "original": "0xfffffff0085b6c18",
+      "original_size": 64,
+      "original_sha256": "aa77f60ba0af3a24d8d8f3dc34db7c92289a93b1af60ed27b93d6a1765414f81",
+      "native_symbol": "_SecureDTInitEntryIterator",
+      "evidence": "Checks independently matched DTInitialized, defaults null root to DTRootNode, sets iterator root/current to root and zeroes remaining iterator fields, returns1 or -1. Source: pexpert/gen/device_tree.c."
+    },
+    {
+      "original": "0xfffffff008479d88",
+      "original_size": 184,
+      "original_sha256": "f58485d251b13687fb9818e6f5cf17fb354e85d9584feaac3de5bc180fca5d5a",
+      "native_symbol": "_os_pcpu_ref_init",
+      "evidence": "Allocates percpu_u64_zone with0xa000, initializes first per-CPU ref value5 and remaining values1 across zpercpu_early_count, stores pointer to output. Native uses dynamic page shift for the stride. Source: libkern/os/refcnt.c."
+    },
+    {
+      "original": "0xfffffff00847a054",
+      "original_size": 56,
+      "original_sha256": "3568d42efdfddb88d16deb827adc2b118b330873c76da589cfedc6c881cfdec8",
+      "native_symbol": "_os_pcpu_ref_retain_try",
+      "evidence": "Locates current CPU per-page ref slot, tests live bit0 and CAS-increments by4 while live, returns prior live bit. Native uses native thread CPU-index offset and dynamic page shift. Source: libkern/os/refcnt.c."
+    },
+    {
+      "original": "0xfffffff00801a824",
+      "original_size": 204,
+      "original_sha256": "ad9a570f5a14355f3c38a98c046a19a9c9eb2de2ef8286260765dc9136d7645d",
+      "native_symbol": "_cp_os_version",
+      "evidence": "Returns cached value or parses osversion major/build letter/minor into packed24/16/0-bit fields, uses sentinel1 for parse failures. Source: bsd/vfs/vfs_cprotect.c."
+    },
+    {
+      "original": "0xfffffff008027448",
+      "original_size": 140,
+      "original_sha256": "3533d67e7b74e9c9b23764c63a82945f39770f0c95d05e00ce8ed9d98ca8805a",
+      "native_symbol": "_decmpfs_cnode_init",
+      "evidence": "Zeroes cnode then initializes compressed_data_lock +0x38 with default lck_attr and decmpfs_lockgrp, accounting lock-group reference. Source: bsd/kern/decmpfs.c."
+    },
+    {
+      "original": "0xfffffff0080283c8",
+      "original_size": 168,
+      "original_sha256": "3868cb5a4dbfee659b6f034558df7bc1d16a6e02ca6a5a858551471782e1d4c7",
+      "native_symbol": "_decmpfs_hides_xattr",
+      "evidence": "Checks caller against decmpfs_ctx and compression state2/3, compares com.apple.ResourceFork length22 and com.apple.decmpfs length17 to determine hidden xattrs. Source: bsd/kern/decmpfs.c."
+    },
+    {
+      "original": "0xfffffff0082a55c4",
+      "original_size": 216,
+      "original_sha256": "d9e054d72d704bad3c573bb89b1a8bd48821da592bdc56255119ef571ef28b3f",
+      "native_symbol": "_ktriage_unregister_subsystem_strings",
+      "evidence": "Rejects subsystem outside1..9, locks triage mutex, sets num_strings=-1 and strings=NULL in16-byte subsystem entry and unlocks. Source: bsd/kern/kdebug_triage.c."
+    },
+    {
+      "original": "0xfffffff007e8d420",
+      "original_size": 808,
+      "original_sha256": "6b7a3b8c29d48251b243d58ade0a28be3783e115694b903dbf156de2932e0a0c",
+      "native_symbol": "_sched_disable_acc_rail",
+      "evidence": "Finds die/cluster mask in matched topology_info, clears corresponding pcs_required_online_pmgr bits under sched_available_cores_lock, records PMGR_SYSTEM reason5 and signals scheduler update thread when core masks change. Source: osfmk/kern/sched_prim.c."
+    },
+    {
+      "original": "0xfffffff007fc4e88",
+      "original_size": 428,
+      "original_sha256": "e0526af30c3afae031bd6f31cb0ebde977c855c22b91bc8a0ee3393093d3f15b",
+      "native_symbol": "_fs_buffer_cache_gc_register",
+      "evidence": "Locks buf_gc_callout mutex, finds first empty slot among16 callback/context pairs, stores caller pair and returns0 or ENOMEM12. Source: bsd/vfs/vfs_bio.c."
+    },
+    {
+      "original": "0xfffffff007fc5034",
+      "original_size": 220,
+      "original_sha256": "f3bccc19bde13205f932d5ece67887f416d793c8e508335bb3c90679875b065a",
+      "native_symbol": "_fs_buffer_cache_gc_unregister",
+      "evidence": "Locks same buf_gc_callout mutex, scans16 callback/context pairs and clears each matching pair, unlocks and returns0. Source: bsd/vfs/vfs_bio.c."
+    },
+    {
+      "original": "0xfffffff007fe3aa4",
+      "original_size": 336,
+      "original_sha256": "b027a31d9a7eebeaea388377ad308410783a98eaa27221912431c61deb37e086",
+      "native_symbol": "_vfs_getvfs_with_vfsops",
+      "evidence": "Locks mount list, finds matching two-word fsid at mount+0xc0, unlocks and authenticates mnt_op +0x28 discriminator0x5942, returns mount only when ops matches caller x1. Source: bsd/vfs/vfs_subr.c."
+    },
+    {
+      "original": "0xfffffff008005a4c",
+      "original_size": 1040,
+      "original_sha256": "8426a155d4a8e164372a6e9d587c399b586713582db94e6360fd27f80ff1d99f",
+      "native_symbol": "_utf8_encodestr",
+      "evidence": "Encodes UTF16 into UTF8 with alternate slash, decomposition and flag handling, references sfm2mac and Unicode decomposition table, handles Hangul constants0x1100/0x1161/0x11a7 and calls unicode_recursive_decompose. Source: bsd/vfs/vfs_utfconv.c."
+    },
+    {
+      "original": "0xfffffff008006b80",
+      "original_size": 444,
+      "original_sha256": "60c4dddfbe6467ed31c79d577c45ea2199cdba4976e666cbafa6ddd5455b8f29",
+      "native_symbol": "_utf8_normalizeOptCaseFoldAndHash",
+      "evidence": "Streams normalization through matched nextBaseAndAnyMarks, optionally folds case and invokes hash callback discriminator0xc231 on normalized output; stack-guard and full callback inputs match native. Source: bsd/vfs/vfs_unicode.c."
+    },
+    {
+      "original": "0xfffffff008007658",
+      "original_size": 2276,
+      "original_sha256": "264d326d8ea5aadd56376eeb05dde5c4af300209d3ea616086d16b2d8c33521e",
+      "native_symbol": "_utf8_normalizeOptCaseFoldAndCompare",
+      "evidence": "Normalizes two streams through two nextBaseAndAnyMarks calls, orders combining marks and uses memcmp to compare normalized sequences, returning mismatch code0x3b9. Native has the same call set and normalization paths. Source: bsd/vfs/vfs_unicode.c."
+    },
+    {
+      "original": "0xfffffff00801bcb4",
+      "original_size": 532,
+      "original_sha256": "e340429fa7ec743a7d98d0990a9e5b4f6acea694ebcfdc82a19819a74e68cd13",
+      "native_symbol": "_fifo_select",
+      "evidence": "Builds temporary fileproc/fileglob with socket fileops and forwards read/write fifo endpoints through independently matched soo_select, returning first ready result. Source: bsd/miscfs/fifofs/fifo_vnops.c."
+    },
+    {
+      "original": "0xfffffff00801bec8",
+      "original_size": 556,
+      "original_sha256": "a160c10d4218484067d972c9bca65999d4dfeb5f6fa29d93fb2914548bfd1775",
+      "native_symbol": "_fifo_ioctl",
+      "evidence": "Builds temporary socket fileproc/fileglob and forwards fifo read/write endpoint ioctl requests through matched soo_ioctl. Source: bsd/miscfs/fifofs/fifo_vnops.c."
+    },
+    {
+      "original": "0xfffffff008345dcc",
+      "original_size": 172,
+      "original_sha256": "88a81b666ffb048949394057a07df0e2e84e06f8dd4585c03ee6ac70b99e8de6",
+      "native_symbol": "_csblob_register_profile",
+      "evidence": "Registers provisioning profile from data/size, permits already-registered11 or unsupported46, trusts profile then associates its UUID with authenticated csb_csm_obj discriminator0xe82b. Source: bsd/kern/ubc_subr.c."
+    },
+    {
+      "original": "0xfffffff0085cbdd4",
+      "original_size": 580,
+      "original_sha256": "22284f4acf6ea32d5a7b13cafe5149c22a7621ff79a890b74b532f3d8fc0d101",
+      "native_symbol": "_mac_vnode_check_setflags",
+      "evidence": "Obtains context credential, bypasses kernel credential, iterates MAC policies and calls mpo_vnode_check_setflags at policy-ops offset0x8a8 with credential/vnode/label/flags. Native unique setflags method uses the same policy slot. Source: security/mac_vfs.c."
+    },
+    {
+      "original": "0xfffffff007e6e058",
+      "original_size": 56,
+      "original_sha256": "f63c8e9f4e2a2740c46f324ae7315d77fc2d4e195af1b9060f660f54bb8b0602",
+      "native_symbol": "_lck_mtx_lock_spin",
+      "evidence": "Increments current thread preemption count, CAS-acquires the mutex owner with spin bits 0x30000000, and passes type 1 to the matched lck_mtx_lock_contended on contention. Native has the same flow with native thread offsets and a BTI prefix. Source: osfmk/arm64/locks.c."
+    },
+    {
+      "original": "0xfffffff007eb11a8",
+      "original_size": 136,
+      "original_sha256": "089057818e6b6d69aea52dee59926697aad3e1d2218e3092b946627ca29ba12d",
+      "native_symbol": "_thread_reference",
+      "evidence": "Checks a non-null thread against the thread zone (zone ID 25), atomically increments its reference count and calls os_ref_panic_retain on overflow. Native uses its own thread structure size and reference-count offset. Source: osfmk/kern/thread.c."
+    },
+    {
+      "original": "0xfffffff007f1fbb4",
+      "original_size": 32,
+      "original_sha256": "4ab0ddb93abb05e69cb70f1c71dc383296d5e1fb5ec2dac0193093eb1f362fe4",
+      "native_symbol": "_vm_map_page_mask",
+      "evidence": "Returns (1 << map->hdr.page_shift)-1, using the kernel page shift for a null map. Native reads PAGE_SHIFT_CONST for the 4 KiB kernel instead of the original 16 KiB constant. Source: osfmk/vm/vm_map.c."
+    },
+    {
+      "original": "0xfffffff007f2eecc",
+      "original_size": 28,
+      "original_sha256": "db25cb49b3c765f69958c2a15af6e87797696e17f62e8b6d835d8e31754c2ab4",
+      "native_symbol": "_vm_map_page_size",
+      "evidence": "Returns 1 << map->hdr.page_shift, using the kernel page shift for a null map. Native reads PAGE_SHIFT_CONST for its configured page size. Source: osfmk/vm/vm_map.c."
+    },
+    {
+      "original": "0xfffffff007f6a434",
+      "original_size": 32,
+      "original_sha256": "3a0a8993bf1a3246fde142b0dcf03bd14fc3727aac9ab1fa63bc17c981d77102",
+      "native_symbol": "_vm_protect",
+      "evidence": "Rejects a null map with KERN_INVALID_ARGUMENT, accepts a zero-sized range, converts size to end address and tail-calls the matched vm_map_protect with the protection arguments preserved. Native vm_protect has the same complete body after BTI. Source: osfmk/vm/vm_user.c."
+    },
+    {
+      "original": "0xfffffff0082ed7f4",
+      "original_size": 36,
+      "original_sha256": "8c331f7c506c8db25cb815e148837b8888c24c97c451fdfc33d385408c361f40",
+      "native_symbol": "_proc_is64bit_data",
+      "evidence": "Locates proc_ro using the matched proc_struct_size and proc p_lflag P_LHASTASK bit, then extracts the task TFLAGS_64B_DATA bit from its t_flags. Native has the same operations with the native t_flags offset. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0083046d4",
+      "original_size": 48,
+      "original_sha256": "a40c4a3c5ec632a0785dde6c6a1701efacb38e8b4bba36c69e3df496a8989cc0",
+      "native_symbol": "_hashdestroy",
+      "evidence": "Computes checked (hashmask+1)*sizeof(LIST_HEAD), selects overflow sentinel INT64_MIN and frees the hash-table allocation through matched kfree_ext and a typed allocation view. Native has the same data flow and overflow behavior. Source: bsd/kern/kern_subr.c."
+    },
+    {
+      "original": "0xfffffff0080148a0",
+      "original_size": 84,
+      "original_sha256": "fa43710065b095615705a792382735bd0a209fa511b6a18161f2255f06d8afe3",
+      "native_symbol": "_VNOP_GETXATTR",
+      "evidence": "Builds vnop_getxattr_args with six arguments, dispatches through vnode v_op at +0xd0 with discriminator 0x307a and returns the result. All 21 instructions match after masking the two ADRP immediates, ADD and LDRSW descriptor offsets. Both descriptor operands resolve to the paired vnop_getxattr_desc. Source: bsd/vfs/kpi_vfs.c VNOP_GETXATTR."
+    },
+    {
+      "original": "0xfffffff008425ccc",
+      "original_size": 104,
+      "original_sha256": "102db8bca797fbd967f9e9739eb244b6476659648ac54f7b7f7eee7102132ea4",
+      "native_symbol": "__ZN15OSMetaClassBase12safeMetaCastEPKS_PK11OSMetaClass",
+      "evidence": "Returns NULL for a null object; otherwise authenticates its vtable with 0xcda1, calls getMetaClass at slot 0x38 with discriminator 0xfffc, walks superclass links at +0x10 and returns the input on a match. Native has the same traversal and authenticated call. Source: libkern/c++/OSMetaClass.cpp safeMetaCast and metaCast."
+    },
+    {
+      "original": "0xfffffff0084296c4",
+      "original_size": 100,
+      "original_sha256": "1f37c4f9aac2caf442a60a269bcc8a30c4f30321de137a8b8ec53546fed02f06",
+      "native_symbol": "_OSObject_typed_operator_new",
+      "evidence": "Compares requested bytes with the low 24 bits of the allocation view size at +0x2c. Uses kalloc_type_impl_external with Z_WAITOK_ZERO when it fits, otherwise KHEAP_DEFAULT with LIBKERN tag, then atomically increments debug_ivars_size by the requested size. Native has the same two allocation paths and accounting. Source: libkern/c++/OSObject.cpp OSObject_typed_operator_new."
+    },
+    {
+      "original": "0xfffffff00842b5e0",
+      "original_size": 40,
+      "original_sha256": "46e5705d65c8d2a840c701be23d9021eabe57385252f9d09e7f0708dc522e861",
+      "native_symbol": "__ZN7OSArrayC2Ev",
+      "evidence": "Initializes the OSObject reference count to 1 and installs 7OSArray vtable with address-diverse DA discriminator 0xcda1. The vtable identity is independently matched; remaining zero member initializers agree with the class constructor. Source: libkern/libkern/c++/OSMetaClass.h OSDefineBasicStructors and the named class implementation."
+    },
+    {
+      "original": "0xfffffff008468400",
+      "original_size": 44,
+      "original_sha256": "443556c38ae95fe3081b89a58d90b1d4782bb8bf37eade5b014d2bf877b65885",
+      "native_symbol": "__ZN5OSSetC2Ev",
+      "evidence": "Initializes the OSObject reference count to 1 and installs 5OSSet vtable with address-diverse DA discriminator 0xcda1. The vtable identity is independently matched; remaining zero member initializers agree with the class constructor. Source: libkern/libkern/c++/OSMetaClass.h OSDefineBasicStructors and the named class implementation."
+    },
+    {
+      "original": "0xfffffff0084fdc10",
+      "original_size": 40,
+      "original_sha256": "c053cae0f28c33d038af76757ee306f84fc7eb4eaf4cf0312d9611b0ac13e353",
+      "native_symbol": "__ZN13IOCommandGateC2Ev",
+      "evidence": "Initializes the OSObject reference count to 1 and installs 13IOCommandGate vtable with address-diverse DA discriminator 0xcda1. The vtable identity is independently matched; remaining zero member initializers agree with the class constructor. Source: libkern/libkern/c++/OSMetaClass.h OSDefineBasicStructors and the named class implementation."
+    },
+    {
+      "original": "0xfffffff008502f50",
+      "original_size": 40,
+      "original_sha256": "e64cbff623acae8b8cd3b0023da858e6c8d6c0cfbc67dedce02f9999d3bab54c",
+      "native_symbol": "__ZN18IOTimerEventSourceC2Ev",
+      "evidence": "Initializes the OSObject reference count to 1 and installs 18IOTimerEventSource vtable with address-diverse DA discriminator 0xcda1. The vtable identity is independently matched; remaining zero member initializers agree with the class constructor. Source: libkern/libkern/c++/OSMetaClass.h OSDefineBasicStructors and the named class implementation."
+    },
+    {
+      "original": "0xfffffff008504888",
+      "original_size": 48,
+      "original_sha256": "50171dfb3b6350bf036ffafce30a5860a130c3c84364619ae3b2a84e42feb883",
+      "native_symbol": "__ZN24IOBufferMemoryDescriptorC2Ev",
+      "evidence": "Initializes the OSObject reference count to 1 and installs 24IOBufferMemoryDescriptor vtable with address-diverse DA discriminator 0xcda1. The vtable identity is independently matched; remaining zero member initializers agree with the class constructor. Source: libkern/libkern/c++/OSMetaClass.h OSDefineBasicStructors and the named class implementation."
+    },
+    {
+      "original": "0xfffffff008508550",
+      "original_size": 52,
+      "original_sha256": "7e16f3e8250c1c2515ad253212ae770c033dcf312415571428cefee3f87ceb32",
+      "native_symbol": "__ZN12IODMACommandC2Ev",
+      "evidence": "Initializes the OSObject reference count to 1 and installs 12IODMACommand vtable with address-diverse DA discriminator 0xcda1. The vtable identity is independently matched; remaining zero member initializers agree with the class constructor. Source: libkern/libkern/c++/OSMetaClass.h OSDefineBasicStructors and the named class implementation."
+    },
+    {
+      "original": "0xfffffff008557158",
+      "original_size": 40,
+      "original_sha256": "38823513c32eb56e985d7a37a48d878164f67e53206b1de0c3ed5521a2c468df",
+      "native_symbol": "__ZN17IOSharedDataQueueC2Ev",
+      "evidence": "Initializes the OSObject reference count to 1 and installs 17IOSharedDataQueue vtable with address-diverse DA discriminator 0xcda1. The vtable identity is independently matched; remaining zero member initializers agree with the class constructor. Source: libkern/libkern/c++/OSMetaClass.h OSDefineBasicStructors and the named class implementation."
+    },
+    {
+      "original": "0xfffffff00857df70",
+      "original_size": 40,
+      "original_sha256": "29bbbc439937c9e66468f905e1f11aa3fbd69ee16ee25388a661723ecb09d84c",
+      "native_symbol": "__ZN24IOProviderPropertyMergerC2Ev",
+      "evidence": "Initializes the OSObject reference count to 1 and installs 24IOProviderPropertyMerger vtable with address-diverse DA discriminator 0xcda1. The vtable identity is independently matched; remaining zero member initializers agree with the class constructor. Source: libkern/libkern/c++/OSMetaClass.h OSDefineBasicStructors and the named class implementation."
+    },
+    {
+      "original": "0xfffffff008499d0c",
+      "original_size": 116,
+      "original_sha256": "3ae81eadbe6421838d97a70d1431f92534fb91fde5bfcc037becd57431f044ca",
+      "native_symbol": "_IORecursiveLockLock",
+      "evidence": "Reads the mutex owner at +0x18, compares current thread, uses CASA to acquire the mutex at +8, sets recursion depth at +0x20 or increments it, and calls lck_mtx_lock_contended on contention. Native preserves the same control flow with its thread CTID field offset. Source: iokit/Kernel/IOLocks.cpp IORecursiveLockLock."
+    },
+    {
+      "original": "0xfffffff008466a80",
+      "original_size": 200,
+      "original_sha256": "a01945fa219874fdf359d986b37380bc105b4a7a57b40f6490ba5dd7a310a386",
+      "native_symbol": "__ZN12OSSerializer9forTargetEPvPFbS0_S0_P11OSSerializeES0_",
+      "evidence": "Uses the independently matched OSSerializer gMetaClass, calls MetaClass::alloc and init via authenticated slots, then stores target, reference and callback at object +0x10,+0x18,+0x20; releases on failed init. Native has the same argument routing and stores. Source: libkern/c++/OSSerializer.cpp forTarget."
+    },
+    {
+      "original": "0xfffffff007f74808",
+      "original_size": 72,
+      "original_sha256": "9c8e26bcdb702119eede96d0d5b5c18f714b5153dc6e2177da2f0a67d987051b",
+      "native_symbol": "_strcasecmp",
+      "evidence": "Compares unsigned bytes after folding ASCII A-Z with bit 0x20, advances both strings until a mismatch or NUL, and returns the byte difference. Source: libkern/strcasecmp.c."
+    },
+    {
+      "original": "0xfffffff008425d34",
+      "original_size": 96,
+      "original_sha256": "e5cc0798382eea96c4cdf96703f1b06ab58820c3257ac7c801672235026d67e3",
+      "native_symbol": "__ZNK15OSMetaClassBase8metaCastEPK11OSMetaClass",
+      "evidence": "Calls the authenticated getMetaClass slot +0x38, compares the returned metaclass with the requested class, and walks superClassLink at +0x10 until match or null. Source: libkern/c++/OSMetaClass.cpp metaCast."
+    },
+    {
+      "original": "0xfffffff00842b9d8",
+      "original_size": 196,
+      "original_sha256": "c868d363444071ac6b14eeddec6cbc4a46272eba608facbff03df7fd709bf564",
+      "native_symbol": "__ZN7OSArray9withArrayEPKS_j",
+      "evidence": "Allocates through the independently matched OSArray metaclass, passes array and capacity to vtable +0xe0 (initWithArray, PAC discriminator 0x8442), and releases on failed initialization. Source: libkern/c++/OSArray.cpp withArray."
+    },
+    {
+      "original": "0xfffffff00842ba9c",
+      "original_size": 48,
+      "original_sha256": "8d07e8322e6a8264f73ea151c937b79bb2131856ab47043efe8ef2d363280155",
+      "native_symbol": "__ZN7OSArray9setObjectERK11OSSharedPtrIK15OSMetaClassBaseE",
+      "evidence": "Unwraps the input OSSharedPtr, reads count at +0x14 and tail-calls the indexed setObject slot +0xf0 with discriminator 0x354b. Source: libkern/c++/OSArray.cpp setObject(OSSharedPtr const&)."
+    },
+    {
+      "original": "0xfffffff00842fddc",
+      "original_size": 180,
+      "original_sha256": "6c1c1be21e9f46cd24ed0303656fdb168117e43fe993bbd1d8f6a1c6e4bd0f9e",
+      "native_symbol": "__ZN6OSData12withCapacityEj",
+      "evidence": "Allocates through the independently matched OSData metaclass and invokes initWithCapacity at slot +0x78, discriminator 0xd405; releases on failure. Source: libkern/c++/OSData.cpp withCapacity."
+    },
+    {
+      "original": "0xfffffff008430018",
+      "original_size": 180,
+      "original_sha256": "d56ccd9cb93c9072d0650d6099b8fd67fd16a9223ed9dcbce30e789e350dbdf5",
+      "native_symbol": "__ZN6OSData8withDataEPKS_",
+      "evidence": "Allocates through the independently matched OSData metaclass and invokes initWithData at slot +0x90, discriminator 0x0519; releases on failure. Source: libkern/c++/OSData.cpp withData."
+    },
+    {
+      "original": "0xfffffff0084333f8",
+      "original_size": 220,
+      "original_sha256": "805a772b40828dddd5f0c2502007c853ffcc76dc22e23fb0fe2903eb685fee5f",
+      "native_symbol": "__ZN12OSDictionary11withObjectsEPPK8OSObjectPPK8OSSymboljj",
+      "evidence": "Uses the independently matched OSDictionary metaclass and initWithObjects slot +0xd8 with discriminator 0x161b, forwarding the object array, OSSymbol key array, count and capacity; releases on failure. Source: libkern/c++/OSDictionary.cpp withObjects."
+    },
+    {
+      "original": "0xfffffff008433908",
+      "original_size": 192,
+      "original_sha256": "2992243803cfd0292eb48cebfc20ce30d82397ce34d48674d70fec0a91db6be1",
+      "native_symbol": "__ZN12OSDictionary14iterateObjectsEU13block_pointerFbPK8OSSymbolP8OSObjectE",
+      "evidence": "Loops over 16-byte dictionary entries using count at +0x14 and updateStamp at +0xc, invokes the block at +0x10, stops on true or mutation, and returns whether updateStamp is unchanged. Source: libkern/c++/OSDictionary.cpp iterateObjects(block)."
+    },
+    {
+      "original": "0xfffffff008468878",
+      "original_size": 196,
+      "original_sha256": "d8974cce4b6a13fdcdc996cd9b2ccad7946b0137375ef8da36cf318a1b1796ea",
+      "native_symbol": "__ZN5OSSet9withArrayEPK7OSArrayj",
+      "evidence": "Uses the independently matched OSSet metaclass, forwards array and capacity to initWithArray slot +0xe0 with discriminator 0xb26e, and releases on failure. Source: libkern/c++/OSSet.cpp withArray."
+    },
+    {
+      "original": "0xfffffff00846893c",
+      "original_size": 196,
+      "original_sha256": "2e5426403f7b14bf3fb387e37c3564d8612c98746d2a68bfa4c705175d6a750c",
+      "native_symbol": "__ZN5OSSet7withSetEPKS_j",
+      "evidence": "Uses the independently matched OSSet metaclass, forwards set and capacity to initWithSet slot +0xe8 with discriminator 0xb327, and releases on failure. Source: libkern/c++/OSSet.cpp withSet."
+    },
+    {
+      "original": "0xfffffff0082a9220",
+      "original_size": 180,
+      "original_sha256": "b140a76ce753b6de422c4c89486abf4e361564c2abb2f00a3f802957dc7b3578",
+      "native_symbol": "_kdebug_debugid_explicitly_enabled",
+      "evidence": "Reads the type-filter flag and bitmap, permits DBG_TRACE class 7, then applies configured four-value or inclusive-range filters. Source: bsd/kern/kdebug.c kdebug_debugid_explicitly_enabled."
+    },
+    {
+      "original": "0xfffffff007ed64cc",
+      "original_size": 60,
+      "original_sha256": "41bd363a7660cf5956f04689ccade403c8cffa7ae8ba6942505828ef073682a5",
+      "native_symbol": "_get_task_map",
+      "evidence": "Returns the task map at task +0x28, authenticating the field with DA discriminator 0x5ef8. The field is independently consumed by IOUserClient::setAsyncReference64(...,task), which calls vm_map_is_64bit(get_task_map(task)); the original checks the returned map maximum address. Source: iokit/Kernel/IOUserClient.cpp and get_task_map."
+    },
+    {
+      "original": "0xfffffff007faa450",
+      "original_size": 84,
+      "original_sha256": "719807621e5b8fab13140d8518b5604e92dcefee9f770b0326662f51fff309cd",
+      "native_symbol": "_clock_get_system_microtime",
+      "evidence": "Reads the stable per-CPU architectural counter offset, divides ticks by rtclock_data.counts_per_sec for seconds and the remainder by counts_per_usec for microseconds. Native uses the native counter frequency conversion. Source: osfmk/arm/rtclock.c clock_get_system_microtime."
+    },
+    {
+      "original": "0xfffffff008468a00",
+      "original_size": 40,
+      "original_sha256": "6f7f927da10c7ac10414bd2dfcc830eacbb8e1b2cd97e6b5824bc74fb256da7a",
+      "native_symbol": "__ZN5OSSet9setObjectERK11OSSharedPtrIK15OSMetaClassBaseE",
+      "evidence": "Unwraps the input OSSharedPtr and tail-calls the OSSet setObject virtual slot +0xf0, authenticated with discriminator 0x5467. Source: libkern/c++/OSSet.cpp setObject(OSSharedPtr const&)."
+    },
+    {
+      "original": "0xfffffff008499370",
+      "original_size": 72,
+      "original_sha256": "c4d4a911bcf9154fddb7d32c8e5ecba37f73feb4fe6d4875b4d8f7d269d77632",
+      "native_symbol": "_IOFlushProcessorCache",
+      "evidence": "Accepts kernel_task, returns kIOReturnUnsupported for other tasks, forwards address/length and false to flush_dcache64, then returns success. Source: iokit/Kernel/IOLib.cpp IOFlushProcessorCache."
+    },
+    {
+      "original": "0xfffffff0084ab298",
+      "original_size": 72,
+      "original_sha256": "1cf3535093778c8de5e73ee2622df25d71055f002c764430c9e2d3e8bb49d050",
+      "native_symbol": "__ZNK15IORegistryEntry14propertyExistsEPKcPK15IORegistryPlanej",
+      "evidence": "Calls getProperty(const char*,plane,options) at virtual slot +0x130, discriminator 0xa20f, and returns whether the property pointer is non-null. Source: iokit/Kernel/IORegistryEntry.cpp propertyExists."
+    },
+    {
+      "original": "0xfffffff0084ca150",
+      "original_size": 12,
+      "original_sha256": "6610e87c87c574207ee83953cf4260ced6db0ac12c4261751ad0ed2002f169b3",
+      "native_symbol": "__ZN9IOService14getServiceRootEv",
+      "evidence": "Loads gIOServiceRoot, the global set to this by IOService::attach for a provider-less service and consumed by StartIOKitMatching. Source: iokit/Kernel/IOService.cpp getServiceRoot."
+    },
+    {
+      "original": "0xfffffff0084fb23c",
+      "original_size": 40,
+      "original_sha256": "5cb5885ab38d1cafb31f671447167d4336399319750f9d8f03e1cbd954e45370",
+      "native_symbol": "__ZN13IOEventSource8openGateEv",
+      "evidence": "Loads the workLoop member at +0x30 and tail-calls IOWorkLoop::openGate at vtable +0xd8 with discriminator 0x1ba6. Source: iokit/Kernel/IOEventSource.cpp openGate."
+    },
+    {
+      "original": "0xfffffff0084fb264",
+      "original_size": 40,
+      "original_sha256": "3a3a00774514ea7fb038d9722f2cf045f082d92543ac96df2119866a02210cf0",
+      "native_symbol": "__ZN13IOEventSource9closeGateEv",
+      "evidence": "Loads the workLoop member at +0x30 and tail-calls IOWorkLoop::closeGate at vtable +0xe0 with discriminator 0x3946. Source: iokit/Kernel/IOEventSource.cpp closeGate."
+    },
+    {
+      "original": "0xfffffff0084fb2dc",
+      "original_size": 48,
+      "original_sha256": "b9086c48d520118ce08a55340a962d1c03cab563951a55df1d317c26bdcda6f4",
+      "native_symbol": "__ZN13IOEventSource9sleepGateEPvyj",
+      "evidence": "Loads workLoop at +0x30 and forwards event, AbsoluteTime deadline and type to its sleepGate slot +0x110 with discriminator 0x3b96. Source: iokit/Kernel/IOEventSource.cpp sleepGate(event,deadline,type)."
+    },
+    {
+      "original": "0xfffffff008508b34",
+      "original_size": 132,
+      "original_sha256": "811d2bd747c8bb8a34d4f58c37ea2f4918213d1540ef180c697dd3e758c801eb",
+      "native_symbol": "__ZN12IODMACommand19getMemoryDescriptorEv",
+      "evidence": "Chooses the copy descriptor at reserved +0xf0 when present, otherwise fMemory at +0x48, and preserves temporary shared ownership with retain/release before returning the raw descriptor. Source: iokit/Kernel/IODMACommand.cpp getMemoryDescriptor."
+    },
+    {
+      "original": "0xfffffff008526258",
+      "original_size": 88,
+      "original_sha256": "a8f3c46bb9d73eec8e50093e478948a65b48495b7a04b492e73cd6521a726a9b",
+      "native_symbol": "_PEGetModelName",
+      "evidence": "Loads gIOPlatform, forwards the name buffer and length, and calls IOPlatformExpert::getModelName at slot +0x5a8 with discriminator 0xb584. Source: iokit/Kernel/IOPlatformExpert.cpp PEGetModelName."
+    },
+    {
+      "original": "0xfffffff008549140",
+      "original_size": 68,
+      "original_sha256": "a39f54f6e445a30d407962f8d9a2d7c729134434e914495a5cca91f1a2445afd",
+      "native_symbol": "__ZN12IOUserClient19setAsyncReference64EPyP8ipc_portyyP4task",
+      "evidence": "Preserves async flags, writes wake port/callback/refcon, then sets the 64-bit flag from vm_map_is_64bit(get_task_map(task)). The task map field is authenticated with discriminator 0x5ef8. Source: iokit/Kernel/IOUserClient.cpp five-argument setAsyncReference64."
+    },
+    {
+      "original": "0xfffffff00854ab20",
+      "original_size": 120,
+      "original_sha256": "22500321ef4463e63be681b44edfee5f97104a8e056491ad418bf7cb5ac6252e",
+      "native_symbol": "__ZN12IOUserClient27copyObjectForPortNameInTaskEP4taskjPP8OSObject",
+      "evidence": "Reads the task ipc_space, calls iokit_lookup_object_in_space_with_port_name with IKOT_IOKIT_IDENT 27, writes the OSObject output and returns IPC error for null. Source: iokit/Kernel/IOUserClient.cpp copyObjectForPortNameInTask."
+    },
+    {
+      "original": "0xfffffff00854ab98",
+      "original_size": 168,
+      "original_sha256": "4af9ec2f02ae8d472ae89893a424f6562593f787f984cfaec398e39c65b267f4",
+      "native_symbol": "__ZN12IOUserClient27copyObjectForPortNameInTaskEP4taskjR11OSSharedPtrI8OSObjectE",
+      "evidence": "Performs the same IKOT_IOKIT_IDENT lookup as copyObjectForPortNameInTask and transfers the result into OSSharedPtr without an extra retain. Source: iokit/Kernel/IOUserClient.cpp OSSharedPtr overload."
+    },
+    {
+      "original": "0xfffffff0084e8b34",
+      "original_size": 80,
+      "original_sha256": "36f3582043737963e9c4d4721fbdeae0e995210aff95f1cc9e76d2dce43bfe29",
+      "native_symbol": "__ZN9IOService24acknowledgeSetPowerStateEv",
+      "evidence": "Checks PM initialization, acquires request type 0x82 (kIOPMRequestTypeAckSetPowerState), submits it. Source: iokit/Kernel/IOServicePM.cpp."
+    },
+    {
+      "original": "0xfffffff00851a36c",
+      "original_size": 60,
+      "original_sha256": "b500e3d8723959213ac29ebd8a844ba531128ebe2f447fbdb5b7eabe012fcdc9",
+      "native_symbol": "__ZN25IOGeneralMemoryDescriptor12setOwnershipEP4taskij",
+      "evidence": "Rejects remote memory and disabled iokit_iomd_setownership_enabled, delegates to IOMemoryDescriptor::setOwnership when _memRef exists. Source: iokit/Kernel/IOMemoryDescriptor.cpp."
+    },
+    {
+      "original": "0xfffffff007f14fd4",
+      "original_size": 96,
+      "original_sha256": "2723c9b7b25e40aa60906ba217e9089e136a1a111577809e0194e161500c2da5",
+      "native_symbol": "_vm_kernel_addrhide",
+      "evidence": "Strips the kernel pointer, writes zero outside vm_kernel_slid_base/top and writes address minus vm_kernel_slide inside. Source: osfmk/vm/vm_kern.c VM_KERNEL_ADDRHIDE."
+    },
+    {
+      "original": "0xfffffff0082ede0c",
+      "original_size": 100,
+      "original_sha256": "518b828771263049648f48d4c239c6a43166f6e221981fd2f7f9c4bd8eb3e38a",
+      "native_symbol": "_proc_getexecutablevnode_noblock",
+      "evidence": "Loads proc p_textvp, obtains an iocount with vnode_getwithref_noblock, returns NULL on error. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0082f404c",
+      "original_size": 272,
+      "original_sha256": "23433c19f36062dd27678d983fbcde880f48267a7b8b6f5ee421409a3b773169",
+      "native_symbol": "_proc_get_syscall_filter_mask",
+      "evidence": "Switches UNIX/MACH/KOBJ mask type 0/1/2; obtains proc RO UNIX mask or delegates task filter masks. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0082f429c",
+      "original_size": 96,
+      "original_sha256": "60db971d2dac1ce306fbb0d9a6e5dce4eb975bae66d94efe249ae9681f5ce3b8",
+      "native_symbol": "_proc_set_syscall_filter_callbacks",
+      "evidence": "Requires callback version 1; installs the MACH and KOBJ callbacks from offsets 0x10/0x18, returning EPERM for occupied slots. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0082f42fc",
+      "original_size": 140,
+      "original_sha256": "be1360a8a3ad51c96b773cb23650b6a60a90ffc857f5af1bb380a63b9d38650e",
+      "native_symbol": "_proc_set_syscall_filter_index",
+      "evidence": "Accepts only SYSCALL_MASK_KOBJ (2), resolves the kobject entry and writes its filter index at +4, returns ENOENT when absent. Source: bsd/kern/kern_proc.c."
+    },
+    {
+      "original": "0xfffffff0082e997c",
+      "original_size": 180,
+      "original_sha256": "9c61a09a4d8d49af8f15ea2922f7e5609971a84552f4cdef53072cba16acba7f",
+      "native_symbol": "_persona_get_type",
+      "evidence": "Locks persona at +0x138, checks PERSONA_MAGIC 0xaa55aa0 and reads persona type at +0xc. Source: bsd/kern/kern_persona.c."
+    },
+    {
+      "original": "0xfffffff0082d29d4",
+      "original_size": 256,
+      "original_sha256": "2fa3af109077b4d6a455a5a43420be710521e008159e67f1e68e3982ceea30ab",
+      "native_symbol": "_ctl_name_by_id",
+      "evidence": "Holds kernel control registry lock, finds control ID at +0x78 and copies name at +0x18 with length 0x60. Source: bsd/kern/kern_control.c."
+    },
+    {
+      "original": "0xfffffff00800edc0",
+      "original_size": 64,
+      "original_sha256": "d8e46e163e1d898335ac7ca430af5637b17e41552bb90145e7cd9dc678d730d5",
+      "native_symbol": "_vfs_name",
+      "evidence": "Reads authenticated mount vfs table at +0x30 and copies the filesystem type name from table +8, limit 15. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff0080108e8",
+      "original_size": 80,
+      "original_sha256": "1924a57e013d49222229036f2dc2b1b17226a91b0863c44305e350ee89a74871",
+      "native_symbol": "_vfs_context_set_special_port",
+      "evidence": "Extracts context thread with low bit cleared, resolves get_threadtask and calls task_set_special_port_internal. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff008390428",
+      "original_size": 160,
+      "original_sha256": "0ad9d1097416939f3058af0870a2655e814d0fb9fe742c786baeb9f38ad27900",
+      "native_symbol": "_os_reason_set_flags",
+      "evidence": "Locks os_reason mutex at +8, stores supplied flags at +0x20 and unlocks; NULL reason returns. Source: bsd/kern/kern_exit.c."
+    },
+    {
+      "original": "0xfffffff0084623ec",
+      "original_size": 88,
+      "original_sha256": "7ba179608955fcb12c58457ade606ab435816f8c25e8a1d90ff6dee14774a4d3",
+      "native_symbol": "__ZN8OSNumber10withDoubleEd",
+      "evidence": "Preserves d0, allocates OSNumber, writes bit width 63 at +0xc and double at +0x10. Source: libkern/c++/OSNumber.cpp withDouble."
+    },
+    {
+      "original": "0xfffffff008504d14",
+      "original_size": 248,
+      "original_sha256": "04d4c3d9b2f57d6ed9602c745a55df97f4a5862b6c0e8ba80f420aa8d7f7bcc0",
+      "native_symbol": "__ZN24IOBufferMemoryDescriptor17inTaskWithOptionsEP4taskjmmjj",
+      "evidence": "Preserves six factory arguments, allocates IOBufferMemoryDescriptor, stores VM tags at +0x30/+0x32, calls initWithPhysicalMask(task, options, capacity, alignment, 0). Source: iokit/Kernel/IOBufferMemoryDescriptor.cpp."
+    },
+    {
+      "original": "0xfffffff0085051bc",
+      "original_size": 404,
+      "original_sha256": "74cb2d76efaf5d822d5493b8c3e1058cf82181a841bb5ae9dfdb0af000af6eb8",
+      "native_symbol": "__ZN24IOBufferMemoryDescriptor9withBytesEPKvmjb",
+      "evidence": "Allocates IOBufferMemoryDescriptor, uses kernel_task and page-aligned capacity, converts contiguous bool to option 0x10, initializes, sets length zero and appends input bytes. Source: iokit/Kernel/IOBufferMemoryDescriptor.cpp."
+    },
+    {
+      "original": "0xfffffff008501844",
+      "original_size": 236,
+      "original_sha256": "4ad4f1d6aa1703a713eadfa365748abfac624d8ece718446b905ebfc3fbf83a8",
+      "native_symbol": "__ZN28IOFilterInterruptEventSource26filterInterruptEventSourceEP8OSObjectPFvS1_P22IOInterruptEventSourceiEPFbS1_PS_EP9IOServicei",
+      "evidence": "Allocates IOFilterInterruptEventSource and invokes init with owner/action/filter/provider/index at virtual slot 0x110 discriminator 0xe956. Source: iokit/Kernel/IOFilterInterruptEventSource.cpp."
+    },
+    {
+      "original": "0xfffffff007e47c18",
+      "original_size": 160,
+      "original_sha256": "4593bd7f78e704b35dd51fae5fc0e21502bc255bd5a87fe94baf20be8971fc31",
+      "native_symbol": "_mach_msg_filter_register_callback",
+      "evidence": "Requires fetch_filter_policy and empty callback table; copies 16 bytes for version 0 or 56 bytes for version 1 with all service label callbacks present. Source: osfmk/ipc/mach_msg.c."
+    },
+    {
+      "original": "0xfffffff00832a8cc",
+      "original_size": 264,
+      "original_sha256": "b81997f0d6fcaec1c5139f5daf14442e86a2c8588a8bee7be1e83444cbc6c7bd",
+      "native_symbol": "_kern_stack_snapshot_with_reason",
+      "evidence": "Initializes 64-byte stackshot configuration for pid -1 and flags 0x1ab4006; calls kern_stack_snapshot_internal with type 1 and converts Mach errors to BSD. Source: bsd/kern/stackshot.c."
+    },
+    {
+      "original": "0xfffffff007eb19ac",
+      "original_size": 56,
+      "original_sha256": "abe10c2e731f3d8ca441318d39ca541591afc66a0d7268fc75fac0814a952147",
+      "native_symbol": "_thread_set_allocation_name",
+      "evidence": "Resolves current thread allocation-name field, retains a nonzero existing name for non-NULL new input, otherwise sets field and returns previous value. Same native instructions with thread layout displacement. Source: osfmk/kern/thread.c."
+    },
+    {
+      "original": "0xfffffff00832e34c",
+      "original_size": 28,
+      "original_sha256": "17d934cad0192de5a8bf586069addc5970e835769711098bfd253a84a6f16fea",
+      "native_symbol": "_sbuf_len",
+      "evidence": "Checks SBUF_OVERFLOWED at byte +0x1a bit 2, returns -1 on overflow or sbuf length at +0x14. Native identical operations with inlined address calculation. Source: bsd/kern/subr_sbuf.c."
+    },
+    {
+      "original": "0xfffffff007f87f48",
+      "original_size": 200,
+      "original_sha256": "3843494441aba1a85cd68cf0defe21fadcf24b5477c9c755bc85dbd3bc223d16",
+      "native_symbol": "_read_frandom",
+      "evidence": "Uses initialized PRNG generation in chunks bounded by 0x100 or read_erandom_generate before PRNG initialization. Source: osfmk/prng/prng_random.c read_frandom/read_erandom."
+    },
+    {
+      "original": "0xfffffff0084caa7c",
+      "original_size": 12,
+      "original_sha256": "628bf16b98c06e1af0f18f9b8a17e290e9cadb7cac895eebe6aeb680754ffbb0",
+      "native_symbol": "__ZN9IOService15getPMRootDomainEv",
+      "evidence": "Loads gIOPMRootDomain at 0xfffffff00a2eed40; native global independently identified by service PM initialization. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff008468458",
+      "original_size": 128,
+      "original_sha256": "da340c93c757be045f52199f4b017ddc0dcbd230c99779f5dc4371a529e88b55",
+      "native_symbol": "__ZN5OSSetD2Ev",
+      "evidence": "Writes independently bound OSSet vtable, releases array member at +0x18, clears member, poisons vtable with -1. Native same destructor including member release. Source: libkern/c++/OSSet.cpp generated structors."
+    },
+    {
+      "original": "0xfffffff0085085b8",
+      "original_size": 168,
+      "original_sha256": "cd1b9bbd8f8ae541e5685fe37ed87e432422147e78fe459f1bd240d80710d317",
+      "native_symbol": "__ZN12IODMACommandD2Ev",
+      "evidence": "Writes independently bound IODMACommand vtable, releases members at +0x48 and +0x40, clears both, poisons vtable with -1. Native same destructor and members. Source: iokit/Kernel/IODMACommand.cpp generated structors."
+    },
+    {
+      "original": "0xfffffff0085048e8",
+      "original_size": 196,
+      "original_sha256": "ce65977ab551f226b85083e6cb7593767480fbce1644dad8e6462a21696f018c",
+      "native_symbol": "__ZN24IOBufferMemoryDescriptorD2Ev",
+      "evidence": "Writes independently bound IOGeneralMemoryDescriptor then IOMemoryDescriptor vtables while destroying inherited shared-pointer members at +0x90 and +0x18. Native same base destruction and members. Source: iokit/Kernel/IOBufferMemoryDescriptor.cpp generated structors."
+    },
+    {
+      "original": "0xfffffff008500a9c",
+      "original_size": 236,
+      "original_sha256": "627f4fabba4e04931667c2368cadebecc68e2044c5f6686a6b018bd3bbcd87e8",
+      "native_symbol": "__ZN16IODMAEventSource14dmaEventSourceEP8OSObjectP9IOServicePFvS1_PS_P12IODMACommandiyyES8_j",
+      "evidence": "Allocates gMetaClass at 0xfffffff00a2bdf00, identified by IODMAEventSource MetaClass initializer string at 0xfffffff00850076c; forwards owner/provider/completion/notification/index through init slot 0x130 discriminator 0x6e5b. Source: iokit/Kernel/IODMAEventSource.cpp."
+    },
+    {
+      "original": "0xfffffff007ea0858",
+      "original_size": 8,
+      "original_sha256": "7abb6427c34cdb0a9106e96e45c1f8246c63e14b1b5e6bc2c3b8d3d993045166",
+      "native_symbol": "_task_is_app_suspended",
+      "evidence": "Reads task pidsuspended bool at +0x40c. Native getter reads same field at +0x430 and normalizes bool with AND 1. Source: osfmk/kern/task.c."
+    },
+    {
+      "original": "0xfffffff008470950",
+      "original_size": 180,
+      "original_sha256": "7a980581c53f28499c7c3c0f4c265acf7cb133b607c02b79fc3ab81613c38c0c",
+      "native_symbol": "__ZN11OSSerialize10setIndexedEb",
+      "evidence": "Allocates OSData with capacity 256 and stores indexData shared pointer at OSSerialize +0x48. Native same allocation/initialization/release/store instructions. Source: libkern/c++/OSSerializeBinary.cpp."
+    },
+    {
+      "original": "0xfffffff008488284",
+      "original_size": 280,
+      "original_sha256": "c999cd49525a0d3456922d9fe6a0957f0be6c455787edb744b4fb48bb39e6359",
+      "native_symbol": "__ZN9IOService20SetProperties_InvokeE5IORPCP15OSMetaClassBasePFiS2_P12OSDictionaryE",
+      "evidence": "Requires 2 descriptors and 2 object references, request size >=0x6c and reply size >=0x3c, casts object to OSDictionary and invokes supplied method. Native same RPC body. Source: generated IOService.iig SetProperties_Invoke."
+    },
+    {
+      "original": "0xfffffff007e68a8c",
+      "original_size": 16,
+      "original_sha256": "784d0435436a053ce8ced771605533a6cc8093dbdb831ae4e312d69aa2571cdd",
+      "native_symbol": "_kfree_data_addr_external",
+      "evidence": "Moves pointer to x1, loads KHEAP_DATA_BUFFERS into x0 and tail-calls kfree_addr_ext. Source: osfmk/kern/kalloc.c."
+    },
+    {
+      "original": "0xfffffff007ed2d60",
+      "original_size": 4,
+      "original_sha256": "13d604c4e25e8c76d8ebf9db4b6b49afc21fc53f915066954fb96ef0cddc6ff6",
+      "native_symbol": "_zalloc_ro_mut_atomic",
+      "evidence": "Tail call to PPL dispatch index 77, PMAP_RO_ZONE_ATOMIC_OP_INDEX. Native zalloc_ro_mut_atomic tail-calls pmap_ro_zone_atomic_op_internal with the same zone/element/offset/op/value ABI. Source: osfmk/kern/zalloc.c and osfmk/arm/pmap/pmap.h."
+    },
+    {
+      "original": "0xfffffff008010d4c",
+      "original_size": 76,
+      "original_sha256": "cb87878dda580add6b8096439498c0115e6e5b1c8bd3cfad4783e669a35e8e45",
+      "native_symbol": "_vnode_isonexternalstorage",
+      "evidence": "Returns false for NULL vnode/mount, reads mount +0x928 bit 6; native same field, mask and branches. Source: bsd/vfs/kpi_vfs.c."
+    },
+    {
+      "original": "0xfffffff0080a7328",
+      "original_size": 140,
+      "original_sha256": "6c08aeac10a27de1a21128fd79db471ffe31cca203895672e726b3c5fc98a94a",
+      "native_symbol": "_ifnet_get_address_list_family",
+      "evidence": "Calls ifnet_get_address_list_family_internal with address/count outputs, family and zero options, converts last element into a null-terminated array. Source: bsd/net/kpi_interface.c."
+    },
+    {
+      "original": "0xfffffff008381c80",
+      "original_size": 304,
+      "original_sha256": "23c2161e52d3e5dad3915e6d0b05e8ae4fdfe53b0e47726d5a9ca66ae72c8876",
+      "native_symbol": "_sock_getsockname",
+      "evidence": "Validates socket/buffer/length, locks socket, invokes pru_sockaddr at user request slot +0xa0, unlocks, copies min(buffer length, sockaddr length), frees sockaddr. Source: bsd/kern/kpi_socket.c."
+    },
+    {
+      "original": "0xfffffff008327ac8",
+      "original_size": 12,
+      "original_sha256": "c994a1e68d059d8ea6c85fc2a7d30449a0d1c94c82f3f109fad742a9c4c732e2",
+      "native_symbol": "_complete_security_boot_mode",
+      "evidence": "Stores the uint32_t boot mode into security_boot_mode_complete and returns. Native has the same ADRP/STR/RET body after BTI. Source: bsd/kern/kern_codesigning.c complete_security_boot_mode; the selected non-monitor configuration inlines the empty monitor completion."
+    },
+    {
+      "original": "0xfffffff00842b858",
+      "original_size": 180,
+      "original_sha256": "eeefed206a101013a49fb23197a27f5c665566a83e82ac6d8ab8c9a8ec69cc44",
+      "native_symbol": "__ZN7OSArray12withCapacityEj",
+      "evidence": "OSArray metaclass allocation at vtable +0x68 (PAC 0x1601), initWithCapacity at +0xd0 (PAC 0xa292) with preserved unsigned capacity, and release at +0x28 (PAC 0x3a87) on initialization failure. Compared instruction-by-instruction with current named native function; identical allocation/init/release control flow and return semantics, with compiler-specific authenticated-call register copies. Source: libkern/c++/OSArray.cpp OSArray::withCapacity. Earlier complete maps independently matched this original address to the same native symbol."
+    },
+    {
+      "original": "0xfffffff007faa4a4",
+      "original_size": 40,
+      "original_sha256": "8d9c3b1cdd91e6c1ae8d2063695e5e8ea5cef39137fea8b7b43cd85680d2d260",
+      "native_symbol": "_absolutetime_to_microtime",
+      "evidence": "Arguments are absolute ticks in x0, seconds pointer in x1 and microseconds pointer in x2. Divides ticks by counts_per_sec, stores 64-bit seconds, then divides the remainder by counts_per_usec and stores 32-bit microseconds. Source: osfmk/arm/rtclock.c absolutetime_to_microtime; native scales the remainder by the full counter frequency to support 19.2 MHz."
+    },
+    {
+      "original": "0xfffffff008325a18",
+      "original_size": 80,
+      "original_sha256": "90d6b4e82424692759ec1a6582af04ebb9f16b508875f099beb1661de65bbcb9",
+      "native_symbol": "_microuptime",
+      "evidence": "Reads CNTVCT plus stable per-CPU base timebase, converts to seconds and microseconds, stores 64-bit seconds at +0 and 32-bit microseconds at +8. APFS tx_flush calls this entry to time transaction stages. Source: bsd/kern/kern_time.c microuptime; the native conversion preserves monotonicity for 19.2 MHz."
+    }
+  ],
+  "data": [
+    {
+      "original": "0xfffffff0079e4130",
+      "native_symbol": "_page_shift",
+      "evidence": "Retained corecrypto allocation and free paths load this unsigned value through the GOT at 0xfffffff007dfd660, calculate 1 << value, and require the allocation size to fit one reserved PPL page. These paths select pmap_claim_reserved_ppl_page and pmap_free_reserved_ppl_page when pmap_in_ppl is true. Source: osfmk/arm/pmap/pmap.c reserved PPL page API and page_shift definition."
+    },
+    {
+      "original": "0xfffffff00a24c940",
+      "native_symbol": "_vnop_searchfs_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_searchfs' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_searchfs_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cc70",
+      "native_symbol": "_vnop_compound_open_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_compound_open' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_compound_open_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24ccb0",
+      "native_symbol": "_vnop_exchange_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_exchange' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_exchange_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24ccf0",
+      "native_symbol": "_vnop_mmap_check_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_mmap_check' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_mmap_check_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cd30",
+      "native_symbol": "_vnop_compound_remove_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_compound_remove' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_compound_remove_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cd70",
+      "native_symbol": "_vnop_renamex_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_renamex' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_renamex_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cdb0",
+      "native_symbol": "_vnop_compound_rename_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_compound_rename' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_compound_rename_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cdf0",
+      "native_symbol": "_vnop_compound_mkdir_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_compound_mkdir' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_compound_mkdir_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24ce30",
+      "native_symbol": "_vnop_compound_rmdir_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_compound_rmdir' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_compound_rmdir_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24ce70",
+      "native_symbol": "_vnop_readdirattr_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_readdirattr' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_readdirattr_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24ceb0",
+      "native_symbol": "_vnop_getattrlistbulk_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_getattrlistbulk' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_getattrlistbulk_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cef0",
+      "native_symbol": "_vnop_allocate_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_allocate' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_allocate_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cf30",
+      "native_symbol": "_vnop_clonefile_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_clonefile' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_clonefile_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cf70",
+      "native_symbol": "_vnop_setxattr_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_setxattr' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_setxattr_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24cfb0",
+      "native_symbol": "_vnop_removexattr_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_removexattr' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_removexattr_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d0f0",
+      "native_symbol": "_vnop_getnamedstream_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_getnamedstream' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_getnamedstream_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d130",
+      "native_symbol": "_vnop_makenamedstream_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_makenamedstream' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_makenamedstream_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d170",
+      "native_symbol": "_vnop_removenamedstream_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_removenamedstream' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_removenamedstream_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d4a8",
+      "native_symbol": "_vnop_link_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_link' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_link_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d568",
+      "native_symbol": "_vnop_rmdir_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_rmdir' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_rmdir_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d5a8",
+      "native_symbol": "_vnop_symlink_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_symlink' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_symlink_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d6a8",
+      "native_symbol": "_vnop_pageout_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_pageout' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_pageout_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d6e8",
+      "native_symbol": "_vnop_copyfile_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_copyfile' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_copyfile_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a24d768",
+      "native_symbol": "_vnop_offtoblk_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_offtoblk' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_offtoblk_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a253db8",
+      "native_symbol": "_vnop_inactive_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_inactive' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_inactive_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a253df8",
+      "native_symbol": "_vnop_reclaim_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_reclaim' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_reclaim_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a254038",
+      "native_symbol": "_vnop_pagein_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_pagein' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_pagein_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff00a2540b8",
+      "native_symbol": "_vnop_listxattr_desc",
+      "evidence": "vnodeop_desc.vdesc_name at +8 is 'vnop_listxattr' in both images, read through their chained fixups. Source: bsd/vfs/vnode_if.c vnop_listxattr_desc. Binding selects the native descriptor whose operation offset is initialized by VFS."
+    },
+    {
+      "original": "0xfffffff007042c20",
+      "native_symbol": "_PE_arm_debug_panic_hook",
+      "evidence": "The AppleARMWatchdogTimer startup loads this null callback slot and installs a signed panic callback with discriminator0x2abe through OSCompareAndSwapPtr. Matches PE_arm_debug_panic_hook declaration and native zero initializer. Source: pexpert/arm/hwtrace/hwtrace.c."
+    },
+    {
+      "original": "0xfffffff0079b8768",
+      "native_symbol": "_ipc_kernel_map",
+      "evidence": "Read by mach_port_space_info_from_user, host_processor_info, host_lockgroup_info and ipc_init; kdebug_trace_dyld has this single global operand, matching native ipc_kernel_map. Initialized pointer is zero in both files. Source: osfmk/ipc/ipc_init.c and bsd/kern/kdebug.c."
+    },
+    {
+      "original": "0xfffffff007a1a890",
+      "native_symbol": "__ZN18IOMemoryDescriptor9metaClassE",
+      "evidence": "Constant slot fixup points to independently matched IOMemoryDescriptor::gMetaClass. Native IOMemoryDescriptor::metaClass slot points to the same class object."
+    },
+    {
+      "original": "0xfffffff007a22f38",
+      "native_symbol": "__ZN15IORegistryEntry9metaClassE",
+      "evidence": "Constant slot fixup points to independently matched IORegistryEntry::gMetaClass. Native IORegistryEntry::metaClass slot points to the same class object."
+    },
+    {
+      "original": "0xfffffff007a25be8",
+      "native_symbol": "__ZN12IOUserClient9metaClassE",
+      "evidence": "Constant slot fixup points to independently matched IOUserClient::gMetaClass. Native IOUserClient::metaClass slot points to the same class object."
+    },
+    {
+      "original": "0xfffffff007a54b28",
+      "native_symbol": "__ZN9IOService9metaClassE",
+      "evidence": "Constant slot fixup points to independently matched IOService::gMetaClass. Native IOService::metaClass slot points to the same class object."
+    },
+    {
+      "original": "0xfffffff00a24c6c0",
+      "native_symbol": "__vfs_smr",
+      "evidence": "SMR domain with initial read/write sequence2, referenced by nchinit, vntblinit, mount_common, vfs_mountroot, mount_dropcrossref and dounmount. Native exports __vfs_smr/apfs_smr at the domain base. Source: bsd/vfs/vfs_subr.c."
+    },
+    {
+      "original": "0xfffffff00a24cc08",
+      "native_symbol": "_iftovt_tab",
+      "evidence": "APFS indexes this 32-bit table by vnode mode>>12; first16 entries match native iftovt_tab exactly, including IFIFO1, IFCHR2, IFDIR4, IFBLK6, IFREG8, IFLNK10 and IFSOCK12 indices. Source: bsd/vfs/vfs_subr.c."
+    },
+    {
+      "original": "0xfffffff00a2bc34c",
+      "native_symbol": "_rootdev",
+      "evidence": "Referenced by vfs_mountroot, bsd_init and imageboot_mount_image. Native rootdev is the corresponding dev_t global in all three source call paths. Source: bsd/vfs/vfs_subr.c and bsd/kern/bsd_init.c."
+    },
+    {
+      "original": "0xfffffff00a2bd770",
+      "native_symbol": "_gIODTPHandleKey",
+      "evidence": "IODeviceTreeAlloc interns the phandle property key and IODTInterruptControllerName loads it to obtain OSData identifying the interrupt controller. Source: iokit/Kernel/IODeviceTreeSupport.cpp."
+    },
+    {
+      "original": "0xfffffff00a2bdb10",
+      "native_symbol": "_gIOAllCPUInitializedKey",
+      "evidence": "Matched IOService::initialize interns literal IOAllCPUInitialized then stores the returned OSSymbol to this global at0xfffffff0084c94e0. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff00a2beeb0",
+      "native_symbol": "_gIOPublishNotification",
+      "evidence": "Matched IOService::initialize interns literal IOServicePublish then stores symbol at0xfffffff0084c9168. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff00a2beec0",
+      "native_symbol": "_gIOFirstMatchNotification",
+      "evidence": "Matched IOService::initialize interns literal IOServiceFirstMatch then stores symbol at0xfffffff0084c91a4. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff00a2bf388",
+      "native_symbol": "_gIOPropertyMatchKey",
+      "evidence": "Referenced by IOService::propertyMatching and IONetworkNamePrefixMatching as the dictionary key for property matching, with IOService::initialize as its initializer. Source: iokit/Kernel/IOService.cpp."
+    },
+    {
+      "original": "0xfffffff00a2bfc40",
+      "native_symbol": "_gPEClockFrequencyInfo",
+      "evidence": "The clock-frequency structure bus_clock_rate_hz field at +0x48 is referenced by wfe_timeout_configure, dlil_init, IOCPU::start and pe_identify_machine. Native field is0xfffffff0079d2f48, 72 bytes after gPEClockFrequencyInfo.",
+      "addend": 72
+    },
+    {
+      "original": "0xfffffff007a18f78",
+      "native_symbol": "__ZN9IOCommand9metaClassE",
+      "evidence": "Pointer slot targets independently bound IOCommand gMetaClass; adjacent superClass targets OSObject gMetaClass and is followed by IOCommand MetaClass vtable."
+    },
+    {
+      "original": "0xfffffff007a25b30",
+      "native_symbol": "__ZN15IODispatchQueue10superClassE",
+      "evidence": "Pointer following independently bound IODispatchQueue metaClass targets independently bound OSAction gMetaClass, matching IODispatchQueue inheritance."
+    },
+    {
+      "original": "0xfffffff007a1bff0",
+      "native_symbol": "__ZN16IORangeAllocator10superClassE",
+      "evidence": "Pointer following IORangeAllocator metaClass targets OSObject gMetaClass, matching native superclass pointer and inheritance."
+    },
+    {
+      "original": "0xfffffff007a22de8",
+      "native_symbol": "__ZN12OSCollection9metaClassE",
+      "evidence": "Pointer slot targets independently bound OSCollection gMetaClass; native slot at 0xfffffff007144328 has the same target."
+    },
+    {
+      "original": "0xfffffff00a2bda38",
+      "native_symbol": "_gIOParentMatchKey",
+      "evidence": "IOService::initialize interns literal IOParentMatch at 0xfffffff0070a314a then stores returned symbol here."
+    },
+    {
+      "original": "0xfffffff00a2beeb8",
+      "native_symbol": "_gIOFirstPublishNotification",
+      "evidence": "IOService::initialize interns literal IOServiceFirstPublish at 0xfffffff0070a33c2 then stores returned symbol here."
+    },
+    {
+      "original": "0xfffffff00a268680",
+      "native_symbol": "_kext_assertions_enable",
+      "evidence": "Integer gate read by IOHIDFamily and AppleT8020CLPCv3 assertion paths before evaluating assertion expressions and invoking assertion reports. Source: osfmk/kern/debug.c kext_assertions_enable."
+    },
+    {
+      "original": "0xfffffff00a26e550",
+      "native_symbol": "_audio_active",
+      "evidence": "Integer read by independently matched PROC_CROSSED_HIGH_WATERMARK__SEND_EXC_RESOURCE_AND_SUSPEND for audio-active exception suppression, with disable_exc_resource_during_audio. Source: osfmk/kern/task.c."
+    }
+  ],
+  "sites": [
+    {
+      "site": "0xfffffff007be9960",
+      "native_symbol": "_native_ios18_ce_page_shift",
+      "evidence": "AppleMobileFileIntegrity imports page_shift through this GOT slot. Its two consumers round CoreEntitlements VM allocations and reject query stack contexts in the first 128 bytes of a page. The original ABI uses 16 KiB windows; the native kernel stack is 16 KiB while native page_shift is 12. Binding this consumer to 14 preserves allocation rounding and stack-context boundaries after the observed OSEntitlements.cpp:827 EFAULT panic."
+    }
+  ]
+}

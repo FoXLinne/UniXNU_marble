@@ -1,0 +1,11 @@
+--- a/security/mac_vfs.c
++++ b/security/mac_vfs.c
+@@ -1922,6 +1922,8 @@
+ mac_vnode_check_setattrlist(vfs_context_t ctx, struct vnode *vp,
+     struct attrlist *alist)
+ {
++	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
++
+ 	kauth_cred_t cred;
+ 	int error;
+ 

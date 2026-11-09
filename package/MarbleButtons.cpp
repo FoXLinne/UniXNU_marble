@@ -7,6 +7,7 @@
 #include <kern/thread.h>
 #include <kern/clock.h>
 #include <pexpert/pexpert.h>
+#include "MarbleMicrosecondDelay.h"
 
 extern "C" IOReturn armcpu_spi_attach(uint32_t, bool, void (*)(void *), void *, uint32_t *, uint64_t *);
 extern "C" {
@@ -50,6 +51,7 @@ volatile uint32_t events, stopping, running, restored;
 IOLock *sinkLock;
 void (*sink)(void *, uint32_t);
 OSObject *sinkContext;
+uint32_t sinkMask;
 
 void barrier() { __asm__ volatile("dsb sy" ::: "memory"); }
 void fail(unsigned stage, int error) {
@@ -68,7 +70,7 @@ int transfer(volatile uint32_t *channel, uint32_t command) {
     for (unsigned us = 0; us < 1000; ++us) {
         uint32_t status = channel[2];
         if (status & 1) return (status & 14) ? int(status) : 0;
-        IODelay(1);
+        marbleMicrosecondDelay(1);
     }
     return kIOReturnTimeout;
 }
@@ -165,12 +167,12 @@ void restore() {
 }
 void notify(uint32_t mask) {
     IOLockLock(sinkLock);
-    auto callback = sink;
-    OSObject *context = sinkContext;
-    if (context) context->retain();
+    sinkMask = mask;
+    if (sink && sinkContext) {
+        sink(sinkContext, mask);
+        marble_buttons_stats[13] = marble_buttons_stats[13] + 1;
+    }
     IOLockUnlock(sinkLock);
-    if (callback && context) { callback(context, mask); marble_buttons_stats[13] = marble_buttons_stats[13] + 1; }
-    OSSafeReleaseNULL(context);
 }
 void interrupt(void *) {
     maskInterrupt(true);
@@ -268,7 +270,7 @@ bool setup() {
 }
 void worker(void *, wait_result_t) {
     thread_set_thread_name(current_thread(), "marble-buttons");
-    if (!setup()) { restore(); __atomic_store_n(&running, 0, __ATOMIC_RELEASE); return; }
+    if (!setup()) { notify(0); restore(); __atomic_store_n(&running, 0, __ATOMIC_RELEASE); return; }
     uint32_t candidate = 0, stable = 0;
     uint64_t changed[3] = {};
     bool initial = true;
@@ -292,6 +294,8 @@ void worker(void *, wait_result_t) {
                 else if (!waitMS || debounce - elapsed < waitMS) waitMS = unsigned(debounce - elapsed);
             }
         }
+        if (foreignPending()) { fail(9, kIOReturnExclusiveAccess); break; }
+        maskInterrupt(false);
         if (initial || stable != prior) {
             for (unsigned key = 0; key < 3; ++key) if ((stable ^ prior) & bits[key]) {
                 unsigned slot = ((stable & bits[key]) ? 16 : 19) + key;
@@ -299,12 +303,8 @@ void worker(void *, wait_result_t) {
             }
             marble_buttons_stats[10] = stable;
             notify(stable);
-            IOLog("MarbleButtons: mask=%x raw=%x/%x\n", stable, marble_buttons_stats[8], marble_buttons_stats[9]);
         }
         initial = false;
-        // A shared interrupt retains its owner's pending bits. Kernel routing stays masked on a foreign source.
-        if (foreignPending()) { fail(9, kIOReturnExclusiveAccess); break; }
-        maskInterrupt(false);
         if (waitMS) {
             uint64_t deadline;
             clock_interval_to_deadline(waitMS, kMillisecondScale, &deadline);
@@ -315,7 +315,9 @@ void worker(void *, wait_result_t) {
         else thread_block(THREAD_CONTINUE_NULL);
         maskInterrupt(true);
     }
+    notify(0);
     restore();
+    marble_buttons_stats[10] = 0;
     marble_buttons_stats[31] = 1;
     __atomic_store_n(&running, 0, __ATOMIC_RELEASE);
     thread_wakeup((event_t)&running);
@@ -329,14 +331,30 @@ extern "C" void native_buttons_set_sink(void (*callback)(void *, uint32_t), void
     if (next) next->retain();
     IOLockLock(sinkLock);
     OSObject *previous = sinkContext;
+    if (sink && previous && (previous != next || sink != callback)) sink(previous, 0);
     sinkContext = next; sink = callback;
+    if (sink && next) sink(next, sinkMask);
     IOLockUnlock(sinkLock);
     OSSafeReleaseNULL(previous);
+}
+// Remote interaction uses the same HID sink as the physical switches. Release
+// the pulse in this call so a host disconnect cannot leave a held power key.
+extern "C" void native_marble_buttons_pulse(unsigned mask) {
+    if (!sinkLock || (mask!=2 && mask!=4 && mask!=8)) return;
+    IOLockLock(sinkLock);
+    if (sink && sinkContext) sink(sinkContext,sinkMask|mask);
+    IOLockUnlock(sinkLock);
+    IOSleep(60);
+    IOLockLock(sinkLock);
+    if (sink && sinkContext) sink(sinkContext,sinkMask);
+    IOLockUnlock(sinkLock);
 }
 extern "C" void native_marble_buttons_start(void) {
     unsigned enabled = 1;
     PE_parse_boot_argn("marble-buttons", &enabled, sizeof(enabled));
     if (!enabled || running || !sinkLock) return;
+    __atomic_store_n(&stopping, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&restored, 0, __ATOMIC_RELEASE);
     running = 1;
     thread_t thread = nullptr;
     kern_return_t result = kernel_thread_start(worker, nullptr, &thread);

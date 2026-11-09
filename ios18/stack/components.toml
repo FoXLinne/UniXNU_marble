@@ -1,0 +1,572 @@
+schema_version = 1
+
+[[component]]
+id = "ArmCpu"
+kind = "driver"
+function = "ARM generic interrupt controller and timer"
+scope = "arm64"
+repository = "https://github.com/UniXNU/ArmCpu.git"
+revision = "93a5030c5d983d0ef90f0fca93879d6e36ad1ba8"
+path = "drivers/ArmCpu"
+hardware = ["ARM GICv3", "ARM generic timer"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["ArmCpu.cpp"]
+runtime_identifiers = ["ArmCpu.cpp", "org.blu-sharky.ArmCpu", "ArmCpu"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "ArmCpu"]
+outputs = ["build/armcpu/libArmCpu.a"]
+
+[[component]]
+id = "ArmDTPlatform"
+kind = "driver"
+function = "Device-tree platform expert"
+scope = "arm64"
+repository = "https://github.com/UniXNU/ArmDTPlatform.git"
+revision = "417ff95d6a6e8607ddea9309ec45c3bfd4a67c60"
+path = "drivers/ArmDTPlatform"
+hardware = ["ARM64"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["ArmDTPlatform.cpp"]
+runtime_identifiers = ["ArmDTPlatform.cpp", "org.blu-sharky.ArmDTPlatform", "ArmDTPlatform"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "ArmDTPlatform"]
+outputs = ["build/armdt-platform/libArmDTPlatform.a"]
+
+[[component]]
+id = "ArmVirtPlatform"
+kind = "driver"
+function = "QEMU virt platform expert"
+scope = "platform"
+repository = "https://github.com/UniXNU/ArmVirtPlatform.git"
+revision = "d1423a8bceac4be0478a93d9173587111c040084"
+path = "drivers/ArmVirtPlatform"
+hardware = ["QEMU virt ARM64"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["ArmVirtPlatform.cpp"]
+runtime_identifiers = ["ArmVirtPlatform.cpp", "org.blu-sharky.ArmVirtPlatform", "ArmVirtPlatform"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "ArmVirtPlatform"]
+outputs = ["build/armvirt-platform/libArmVirtPlatform.a"]
+
+[[component]]
+id = "DarwinBoot"
+kind = "driver"
+function = "UEFI XNU loader"
+scope = "firmware"
+repository = "https://github.com/UniXNU/DarwinBoot.git"
+revision = "3c75734014cdab0acd9541e88057b7606ee7ae08"
+path = "drivers/DarwinBoot"
+hardware = ["ARM64 UEFI"]
+os_abi = []
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = []
+runtime_identifiers = []
+build_stage = "firmware"
+build = []
+outputs = []
+
+[[component]]
+id = "Adreno740"
+repository_id = 1426848889
+kind = "driver"
+function = "A740 kernel GPU driver"
+scope = "gpu"
+repository = "https://github.com/UniXNU/Adreno740.git"
+revision = "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d"
+path = "drivers/Adreno740"
+hardware = ["Adreno 740", "SM8550"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["ZAP firmware", "GPU power policy", "reserved memory"]
+verified_devices = ["sheng"]
+dependencies = ["Sm8550Platform", "AdrenoPM4", "AdrenoFirmware", "ArmSmmu4K"]
+source_files = ["NativeAdrenoService.cpp"]
+runtime_identifiers = ["NativeAdreno", "NativeAdrenoService.cpp", "org.blu-sharky.NativeAdreno", "NativeAdrenoGpuService", "NativeAdrenoSmmuService", "NativeAdrenoGmuService"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "Adreno740"]
+outputs = ["build/adreno740/libAdreno740.a"]
+legacy_name = "NativeAdreno"
+legacy_outputs = { "build/native-adreno/libNativeAdreno.a" = "build/adreno740/libAdreno740.a" }
+
+[[component]]
+id = "AdrenoMetal"
+repository_id = 1426849428
+kind = "driver"
+function = "Metal frontend through metal2vulkan and Turnip"
+scope = "graphics"
+repository = "https://github.com/UniXNU/AdrenoMetal.git"
+revision = "6d7f73437087c57ee54a41adceb1735daaea405e"
+path = "drivers/AdrenoMetal"
+hardware = ["Turnip Darwin backend", "kernel GPU user-client ABI"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["display integration", "shader cache"]
+verified_devices = ["sheng"]
+dependencies = ["Adreno740", "AdrenoPM4"]
+source_files = ["NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs"]
+runtime_identifiers = ["NativeMetal", "NativeAdrenoMetalPlugin.mm", "NativeBridgeMetalFrontend.mm", "bridge/NativeMetalBridge.rs", "NativeAdrenoMetal.bundle", "NativeAdrenoMetal", "org.blu-sharky.NativeAdrenoMetal", "libvulkan_freedreno.dylib"]
+build_stage = "payload"
+build = ["build-adreno-metal-plugin.py"]
+outputs = ["build/adreno-metal-plugin/NativeAdrenoMetal.bundle"]
+legacy_name = "NativeMetal"
+
+[[component]]
+id = "ShengUfs"
+repository_id = 1426850705
+kind = "driver"
+function = "SM8550 UFS transport and sheng persistent storage"
+scope = "board"
+repository = "https://github.com/UniXNU/ShengUfs.git"
+revision = "99d8bcd3e43dd24fc3c8437c67b5d4cc71ab94d0"
+path = "drivers/ShengUfs"
+hardware = ["SM8550 UFS controller"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["sheng userdata layout", "SM8550 clocks and SMMU"]
+verified_devices = ["sheng"]
+dependencies = ["VirtioMmioBlock", "VerifiedRoot"]
+source_files = ["NativeUfs.cpp"]
+runtime_identifiers = ["NativeUfs", "NativeUfs.cpp", "org.blu-sharky.NativeUfs"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "ShengUfs"]
+outputs = ["build/sheng-ufs/libShengUfs.a"]
+legacy_name = "NativeUfs"
+legacy_outputs = { "build/native-ufs/libNativeUfs.a" = "build/sheng-ufs/libShengUfs.a" }
+
+[[component]]
+id = "ShengHidInput"
+repository_id = 1426849181
+kind = "driver"
+function = "sheng touch input through IOHIDDevice"
+scope = "board"
+repository = "https://github.com/UniXNU/ShengHidInput.git"
+revision = "71a40e76daeae1bb4127546f96ffa7339c7a06ff"
+path = "drivers/ShengHidInput"
+hardware = ["sheng touch event source"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["touch coordinates and event globals"]
+verified_devices = ["sheng"]
+dependencies = ["ShengNovatekTouch"]
+source_files = ["NativeHidInput.cpp"]
+runtime_identifiers = ["NativeHidInput", "NativeHidInput.cpp"]
+build_stage = "kernel"
+build = ["build-sheng-hid-input.py"]
+outputs = ["build/sheng-hid-input/libShengHidInput.a", "build/sheng-hid-input/NativeHidInput.late.o"]
+legacy_name = "NativeHidInput"
+
+[[component]]
+id = "ShengNovatekTouch"
+repository_id = 1426851990
+kind = "driver"
+function = "NT36532 touch protocol and sheng sensor configuration"
+scope = "board"
+repository = "https://github.com/UniXNU/ShengNovatekTouch.git"
+revision = "3b44b1b7603eaadae942ea44ddc51bdcc48ad060"
+path = "drivers/ShengNovatekTouch"
+hardware = ["Novatek NT36532/NT36532E"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["sheng sensor matrix and coordinates"]
+verified_devices = ["sheng"]
+dependencies = ["QcomGeniSpi"]
+source_files = ["NvtTouchCore.c"]
+runtime_identifiers = ["NativeNovatekTouch", "NvtTouchCore.c"]
+build_stage = "embedded"
+build = []
+outputs = []
+legacy_name = "NativeNovatekTouch"
+
+[[component]]
+id = "QcomGeniSpi"
+repository_id = 1426849026
+kind = "driver"
+function = "Qualcomm GENI SPI controller operations"
+scope = "controller"
+repository = "https://github.com/UniXNU/QcomGeniSpi.git"
+revision = "eac47baefe6a5d2368a70351e6ad1b6361bedbe2"
+path = "drivers/QcomGeniSpi"
+hardware = ["Qualcomm GENI SPI"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["MMIO and DMA callbacks", "clocks and pins"]
+verified_devices = []
+dependencies = []
+source_files = ["GeniSpi.c"]
+runtime_identifiers = ["NativeGeniSpi", "GeniSpi.c"]
+build_stage = "embedded"
+build = []
+outputs = []
+legacy_name = "NativeGeniSpi"
+
+[[component]]
+id = "GopFramebuffer"
+repository_id = 1426849559
+kind = "driver"
+function = "UEFI GOP framebuffer and MobileFramebuffer integration"
+scope = "display"
+repository = "https://github.com/UniXNU/GopFramebuffer.git"
+revision = "e47c1b8de169cd2bd0b885c7d85e433010e3cdf2"
+path = "drivers/GopFramebuffer"
+hardware = ["UEFI GOP framebuffer"]
+os_abi = ["ipados-17.7.11-21H461", "ipados-27.0.1-24A446"]
+board_dependencies = ["framebuffer handoff", "display power hooks"]
+verified_devices = ["sheng"]
+dependencies = []
+source_files = ["NativeMobileDisplay.cpp", "NativeLegacyDisplay.cpp"]
+runtime_identifiers = ["NativeMobileDisplay", "NativeMobileDisplay.cpp", "NativeLegacyDisplay.cpp"]
+build_stage = "embedded"
+build = []
+outputs = ["build/gop-framebuffer/libGopFramebuffer.a", "build/gop-framebuffer/libGopFramebuffer.late.a"]
+legacy_name = "NativeMobileDisplay"
+legacy_outputs = { "build/native-mobile-display/libNativeMobileDisplay.late.a" = "build/gop-framebuffer/libGopFramebuffer.late.a" }
+
+[[component]]
+id = "SoftwareAES"
+repository_id = 1426848774
+kind = "driver"
+function = "Software AES-CBC through IOAESAccelerator"
+scope = "os"
+repository = "https://github.com/UniXNU/SoftwareAES.git"
+revision = "4a45326da5c2cd6fe6813d79ee43db20805628af"
+path = "drivers/SoftwareAES"
+hardware = ["XNU AES routines"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["NativeAES.cpp"]
+runtime_identifiers = ["NativeAES", "NativeAES.cpp"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "SoftwareAES"]
+outputs = ["build/software-aes/libSoftwareAES.a"]
+legacy_name = "NativeAES"
+legacy_outputs = { "build/native-aes/libNativeAES.a" = "build/software-aes/libSoftwareAES.a" }
+
+[[component]]
+id = "AppleKeyStoreState"
+repository_id = 1426849312
+kind = "driver"
+function = "AppleKeyStore state and selector handling"
+scope = "os"
+repository = "https://github.com/UniXNU/AppleKeyStoreState.git"
+revision = "8c70daf814aafdf4a3d35e40dde0322655fd0a83"
+path = "drivers/AppleKeyStoreState"
+hardware = ["AppleKeyStore ABI"]
+os_abi = ["ipados-17.7.11-21H461", "ipados-27.0.1-24A446"]
+board_dependencies = ["platform state callbacks"]
+verified_devices = []
+dependencies = []
+source_files = ["NativeKeyStoreEvents.cpp"]
+runtime_identifiers = ["NativeKeyStoreEvents", "NativeKeyStoreEvents.cpp"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "AppleKeyStoreState"]
+outputs = ["build/apple-key-store-state/libAppleKeyStoreState.a"]
+legacy_name = "NativeKeyStoreEvents"
+legacy_outputs = { "build/native-keystore-events/libNativeKeyStoreEvents.a" = "build/apple-key-store-state/libAppleKeyStoreState.a" }
+
+[[component]]
+id = "RamBlock"
+repository_id = 1426849698
+kind = "driver"
+function = "RAM-backed block device and sparse seed storage"
+scope = "storage"
+repository = "https://github.com/UniXNU/RamBlock.git"
+revision = "4be2d7eb05ef5a98126c91e0302c149140c0e3e1"
+path = "drivers/RamBlock"
+hardware = ["RAM block backing"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = ["optional persistent storage backend"]
+verified_devices = []
+dependencies = []
+source_files = ["NativeRamBlock.cpp"]
+runtime_identifiers = ["NativeRamBlock", "NativeRamBlock.cpp"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "RamBlock"]
+outputs = ["build/ram-block/libRamBlock.a"]
+legacy_name = "NativeRamBlock"
+legacy_outputs = { "build/native-ram-block/libNativeRamBlock.a" = "build/ram-block/libRamBlock.a" }
+
+[[component]]
+id = "VirtioMmioBlock"
+repository_id = 1426850865
+kind = "driver"
+function = "VirtIO MMIO read-only block transport"
+scope = "protocol"
+repository = "https://github.com/UniXNU/VirtioMmioBlock.git"
+revision = "4e1013eb8c45077b57f8d38d61b389fe899ea1c3"
+path = "drivers/VirtioMmioBlock"
+hardware = ["VirtIO 1.2 modern MMIO split queues"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["NativeVirtioBlock.cpp"]
+runtime_identifiers = ["NativeVirtioBlock", "NativeVirtioBlock.cpp"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "VirtioMmioBlock"]
+outputs = ["build/virtio-mmio-block/libVirtioMmioBlock.a"]
+legacy_name = "NativeVirtioBlock"
+legacy_outputs = { "build/native-virtio-block/libNativeVirtioBlock.a" = "build/virtio-mmio-block/libVirtioMmioBlock.a" }
+
+[[component]]
+id = "VirtioMmioConsole"
+repository_id = 1426850991
+kind = "driver"
+function = "VirtIO MMIO console transport"
+scope = "protocol"
+repository = "https://github.com/UniXNU/VirtioMmioConsole.git"
+revision = "70253216890b2afcaa6333948726f896f84fc757"
+path = "drivers/VirtioMmioConsole"
+hardware = ["VirtIO 1.2 modern MMIO split queues"]
+os_abi = ["ipados-17.7.11-21H461"]
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["NativeVirtioConsole.cpp"]
+runtime_identifiers = ["NativeVirtioConsole", "NativeVirtioConsole.cpp"]
+build_stage = "kernel"
+build = ["build-arm-driver.py", "VirtioMmioConsole"]
+outputs = ["build/virtio-mmio-console/libVirtioMmioConsole.a"]
+legacy_name = "NativeVirtioConsole"
+legacy_outputs = { "build/native-virtio-console/libNativeVirtioConsole.a" = "build/virtio-mmio-console/libVirtioMmioConsole.a" }
+
+[[component]]
+id = "XnuPrelink"
+repository_id = 1426851690
+kind = "kit"
+function = "XNU kernelcache prelink and ABI inspection"
+scope = "tool"
+repository = "https://github.com/UniXNU/XnuPrelink.git"
+revision = "c645d76bb0ab8c506a76840ddf93a2276d419a0e"
+path = "kits/XnuPrelink"
+hardware = []
+os_abi = []
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["emit_prelink.py", "native_prelink.py"]
+runtime_identifiers = ["NativePrelink", "emit_prelink.py", "native_prelink.py"]
+build_stage = "prelink"
+build = []
+outputs = []
+legacy_name = "NativePrelink"
+
+[[component]]
+id = "AdrenoPM4"
+kind = "kit"
+function = "Adreno PM4 packet encoding and A740 command helpers"
+scope = "gpu"
+repository = "https://github.com/UniXNU/AdrenoPM4.git"
+revision = "282606b528b2595bc4274ea7490b62b323f35a5f"
+path = "kits/AdrenoPM4"
+hardware = ["Adreno packet type 4 and 7", "A740 command layouts"]
+os_abi = []
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = ["AdrenoPM4.c"]
+runtime_identifiers = ["AdrenoPM4.c"]
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "AdrenoFirmware"
+kind = "kit"
+function = "Adreno firmware and HFI protocol support"
+scope = "gpu"
+repository = "https://github.com/UniXNU/AdrenoFirmware.git"
+revision = "20ad3d7aca14bd46aecab6335c780f5413fa054b"
+path = "kits/AdrenoFirmware"
+hardware = ["Adreno A6xx/A7xx HFI"]
+os_abi = []
+board_dependencies = ["platform firmware and startup inputs"]
+verified_devices = []
+dependencies = []
+source_files = ["AdrenoFirmware.c", "AdrenoHfi.c"]
+runtime_identifiers = ["AdrenoFirmware.c", "AdrenoHfi.c"]
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "ArmSmmu4K"
+kind = "kit"
+function = "ARM SMMU translation with 4 KiB pages"
+scope = "controller"
+repository = "https://github.com/UniXNU/ArmSmmu4K.git"
+revision = "83969cd874503e65997ff7639f7dcf3d0a92cd17"
+path = "kits/ArmSmmu4K"
+hardware = ["ARM SMMU", "MMU-500"]
+os_abi = []
+board_dependencies = ["stream ownership", "hardware readback policy"]
+verified_devices = []
+dependencies = []
+source_files = []
+runtime_identifiers = []
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "AirNir"
+kind = "kit"
+function = "AIR shader translation support"
+scope = "graphics"
+repository = "https://github.com/UniXNU/AirNir.git"
+revision = "b356371a74cd158c2902f4886f373ebb0f833a36"
+path = "kits/AirNir"
+hardware = ["AIR and NIR interfaces"]
+os_abi = []
+board_dependencies = []
+verified_devices = []
+dependencies = []
+source_files = []
+runtime_identifiers = []
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "VerifiedRoot"
+kind = "kit"
+function = "Authenticated block reads"
+scope = "storage"
+repository = "https://github.com/UniXNU/VerifiedRoot.git"
+revision = "974f043d0c71ba2e60331483a41c6c6d35274ee3"
+path = "kits/VerifiedRoot"
+hardware = []
+os_abi = []
+board_dependencies = ["signed volume policy"]
+verified_devices = []
+dependencies = []
+source_files = []
+runtime_identifiers = []
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "Sm8550Platform"
+kind = "kit"
+function = "SM8550 GPU platform operations"
+scope = "soc"
+repository = "https://github.com/UniXNU/UniXNU-sm8550-common.git"
+revision = "a9f45dc60c035084b95463781538380f4c3606c9"
+path = "kits/Sm8550Platform"
+hardware = ["Qualcomm SM8550"]
+os_abi = []
+board_dependencies = ["GPU firmware and power inputs"]
+verified_devices = []
+dependencies = ["AdrenoFirmware", "ArmSmmu4K"]
+source_files = ["ShengGmu.c", "ShengGpuSmmu.c", "ShengGmuCommandDb.c"]
+runtime_identifiers = ["ShengGmu.c", "ShengGpuSmmu.c", "ShengGmuCommandDb.c"]
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "Ath12kWifi"
+repository_id = 1431462336
+kind = "driver"
+function = "ath12k Wi-Fi transport with MHI and QRTR"
+scope = "controller"
+repository = "https://github.com/UniXNU/Ath12kWifi.git"
+revision = "28de7b91d7a880682b777e0e3564245a99dbc3f5"
+path = "drivers/Ath12kWifi"
+legacy_name = "NativeWifi"
+hardware = ["ath12k PCI devices", "qcc2072, qcn9274, and wcn7850 build inputs"]
+os_abi = ["nw_abi platform interface"]
+board_dependencies = ["PCI configuration, BAR, MSI, and DMA operations"]
+verified_devices = []
+dependencies = []
+source_files = ["include/nw_abi.h"]
+runtime_identifiers = ["nw_board", "nw_abi"]
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "QcaBluetooth"
+repository_id = 1447347374
+kind = "driver"
+function = "Qualcomm Bluetooth over GENI UART for Apple's native stack"
+scope = "controller"
+repository = "https://github.com/UniXNU/QcaBluetooth.git"
+revision = "22ff97f93416452335bb61badb14c762da653487"
+path = "drivers/QcaBluetooth"
+hardware = ["Qualcomm WCN7850 UART controller", "Qualcomm GENI UART"]
+os_abi = ["ipados-27.0.1-24A446"]
+board_dependencies = ["WCN power, clocks, pins and IRQs", "mapped DMA addresses", "firmware files"]
+verified_devices = ["sheng"]
+dependencies = []
+source_files = ["include/qbt.h", "include/qbt_geni.h", "include/qbt_transport.h"]
+runtime_identifiers = ["qbt_transport", "com.apple.uart.sk.bluetooth", "kern.qbt_boot", "kern.qbt_power_on", "kern.qbt_firmware"]
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "QcomDwc3"
+repository_id = 1448436865
+kind = "driver"
+function = "Qualcomm DWC3 USB device and host controller for Apple's native stacks"
+scope = "controller"
+repository = "https://github.com/UniXNU/QcomDwc3.git"
+revision = "e4efe95c903a737e0f5955e5b50a8fb4d2a7d718"
+path = "drivers/QcomDwc3"
+hardware = ["Qualcomm DWC3 USB controller", "Synopsys eUSB2 PHY and PM8550B repeater", "QMP USB3/DP PHY", "PS5169 retimer"]
+os_abi = ["ipados-27.0.1-24A446"]
+board_dependencies = ["USB rails and clocks", "stage 1 SMMU context", "UCSI over the charger channel", "prelink roots for the USB stacks"]
+verified_devices = ["sheng"]
+dependencies = []
+source_files = ["QcomDwc3.cpp", "QcomEusb2Phy.h", "QcomQmpUsb3.h", "QcomUcsi.h"]
+runtime_identifiers = ["QcomDwc3Xdci", "QcomDwc3Xhci", "qcom_dwc3_bring_up", "qcom_dwc3_publish", "native_usb_stats"]
+build_stage = "embedded"
+build = []
+outputs = []
+
+[[component]]
+id = "ShengPreflight"
+kind = "driver"
+function = "sheng firmware preflight"
+scope = "board"
+repository = "https://github.com/UniXNU/ShengPreflight.git"
+revision = "9cfc8d2c8d77f2008ba228fa6eff83d2c7ab7fd2"
+path = "drivers/ShengPreflight"
+hardware = ["Xiaomi Pad 6S Pro"]
+os_abi = ["UEFI"]
+board_dependencies = ["sheng firmware resources"]
+verified_devices = ["sheng"]
+dependencies = []
+source_files = []
+runtime_identifiers = ["ShengPreflight"]
+build_stage = "firmware"
+build = []
+outputs = []
+
+[[component]]
+id = "QcomBaseband"
+repository_id = 1443386546
+kind = "driver"
+function = "Qualcomm baseband IOKit bridge, QMUX/QRTR and IPA v4.2"
+scope = "modem"
+repository = "https://github.com/UniXNU/QcomBaseband.git"
+revision = "dd0199cf3300764ed52b23f4a47761f91fab21a2"
+path = "drivers/QcomBaseband"
+hardware = ["Qualcomm QMI over QRTR", "SC7180 IPA v4.2 reference"]
+os_abi = ["ipados-17.7.11-21H461 AppleBaseband IOUserClient"]
+board_dependencies = ["modem power and firmware boot", "GLINK/QRTR transport and rmtfs", "DMA and EFS/NV storage", "cellular ADT and firmware packaging", "raw-IP transport on the QRTR/IPA owner thread"]
+verified_devices = []
+dependencies = []
+source_files = ["baseband/coachz_baseband.cpp", "baseband/QcomBaseband.h", "baseband/coachz_bb_pdp.cpp", "baseband/coachz_bb_pdp.h", "ipa/coachz_ipa_kernel.h", "platform/coachz/coachz_modem.c"]
+runtime_identifiers = ["AppleBaseband", "AppleBasebandPCIControl", "AppleBasebandPCIInterface", "AppleIPAppender", "AppleBasebandPCIMAVPDPManager", "coachz_baseband_configure", "coachz_modem_configure", "coachz_modem_data_send", "coachz_modem_data_receiver", "pdp_ip0", "pdp_ip1", "pdp_ip2", "pdp_ip3"]
+build_stage = "kernel"
+build = ["build-qcom-baseband.py"]
+outputs = ["build/qcom-baseband/libQcomBaseband.a"]

@@ -409,8 +409,9 @@ IOReturn NativeAdrenoMemory::acquireDeviceWrites(size_t offset,size_t bytes,unsi
     if(!backed() || !prepared_ || quarantined_)return kIOReturnNotReady;
     if(!bytes || ((offset|bytes)&4095) || offset>bytes_ || bytes>bytes_-offset)return kIOReturnBadArgument;
     if(imported_ && owner_uncached_)return kIOReturnSuccess;
-    /* Imported pages may hold the owner's unrelated dirty lines next to the GPU's writes: clean as well as invalidate. */
-    if(imported_) {NativeAdrenoNotePhase(phase,bytes);return maintainImported(offset,bytes,NativeAdrenoCleanInvalidate);}
+    /* Publication removed CPU dirty lines before GPU ownership. Completion discards
+     * speculative CPU reads without writing old pixels over the GPU's output. */
+    if(imported_) {NativeAdrenoNotePhase(phase,bytes);return maintainImported(offset,bytes,NativeAdrenoInvalidate);}
     if(write_combined_)return kIOReturnSuccess;
     NativeAdrenoNotePhase(phase,bytes);
     if(!mapping_)return maintainImported(offset,bytes,NativeAdrenoInvalidate);   /* system memory */

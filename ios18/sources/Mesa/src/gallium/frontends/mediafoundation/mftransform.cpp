@@ -144,19 +144,14 @@ CheckGeometricAperture( MFVideoArea *pArea, DWORD Width, DWORD Height )
 // Internal Functions
 //
 
-// internal function to check if the media type is valid.
-// CheckMediaType is used for both input types and output types
+// internal function to check if the input media type is valid.
 HRESULT
-CDX12EncHMFT::CheckMediaType( IMFMediaType *pmt, bool bInputType )
+CDX12EncHMFT::CheckInputMediaType( IMFMediaType *pmt )
 {
    HRESULT hr;
    UINT32 Width, Height;
-   GUID subType;
    MFVideoArea VideoArea;
-   UINT32 uiProfile;
-   enum pipe_video_profile videoProfile = PIPE_VIDEO_PROFILE_UNKNOWN;
 
-   CHECKHR_GOTO( pmt->GetGUID( MF_MT_SUBTYPE, &subType ), done );
    CHECKHR_GOTO( MFGetAttributeSize( pmt, MF_MT_FRAME_SIZE, &Width, &Height ), done );
    hr = pmt->GetBlob( MF_MT_MINIMUM_DISPLAY_APERTURE, (UINT8 *) &VideoArea, sizeof( MFVideoArea ), NULL );
    if( SUCCEEDED( hr ) )
@@ -174,74 +169,8 @@ CDX12EncHMFT::CheckMediaType( IMFMediaType *pmt, bool bInputType )
       }
    }
 
-   hr = MF_E_INVALIDMEDIATYPE;
-   switch( subType.Data1 )
-   {
-      case FOURCC_H264:
-      {
-         // This subtype is only valid when checking Output Type
-         CHECKBOOL_GOTO( bInputType == false, MF_E_INVALIDMEDIATYPE, done );
+   CHECKHR_GOTO( CheckInputMediaSubType( pmt ), done );
 
-         enum eAVEncH264VProfile AVEncProfile = eAVEncH264VProfile_Main;
-         (void) pmt->GetUINT32( MF_MT_VIDEO_PROFILE, (UINT32 *) &AVEncProfile );
-         CHECKBOOL_GOTO( ( AVEncProfile == eAVEncH264VProfile_Base ) || ( AVEncProfile == eAVEncH264VProfile_ConstrainedBase ) ||
-                            ( AVEncProfile == eAVEncH264VProfile_Main ) || ( AVEncProfile == eAVEncH264VProfile_High ) ||
-                            ( AVEncProfile == eAVEncH264VProfile_High10 ) || ( AVEncProfile == eAVEncH264VProfile_ConstrainedHigh ),
-                         MF_E_INVALIDMEDIATYPE,
-                         done );
-         uiProfile = (UINT32) AVEncProfile;
-         hr = S_OK;
-      }
-      break;
-      case FOURCC_HEVC:
-      {
-         // This subtype is only valid when checking Output Type
-         CHECKBOOL_GOTO( bInputType == false, MF_E_INVALIDMEDIATYPE, done );
-
-         enum eAVEncH265VProfile AVEncProfile = eAVEncH265VProfile_Main_420_8;
-         (void) pmt->GetUINT32( MF_MT_VIDEO_PROFILE, (UINT32 *) &AVEncProfile );
-         CHECKBOOL_GOTO( ( AVEncProfile == eAVEncH265VProfile_Main_420_8 ) || ( AVEncProfile == eAVEncH265VProfile_Main_420_10 ) ||
-                            ( AVEncProfile == eAVEncH265VProfile_Main_422_8 ) ||
-                            ( AVEncProfile == eAVEncH265VProfile_Main_422_10 ) ||
-                            ( AVEncProfile == eAVEncH265VProfile_Main_444_8 ) || ( AVEncProfile == eAVEncH265VProfile_Main_444_10 ),
-                         MF_E_INVALIDMEDIATYPE,
-                         done );
-         uiProfile = (UINT32) AVEncProfile;
-         hr = S_OK;
-      }
-      break;
-      case FOURCC_AV01:
-      {
-         // This subtype is only valid when checking Output Type
-         CHECKBOOL_GOTO( bInputType == false, MF_E_INVALIDMEDIATYPE, done );
-
-         enum eAVEncAV1VProfile AVEncProfile = eAVEncAV1VProfile_Main_420_8;
-         (void) pmt->GetUINT32( MF_MT_VIDEO_PROFILE, (UINT32 *) &AVEncProfile );
-         CHECKBOOL_GOTO( ( AVEncProfile == eAVEncAV1VProfile_Main_420_8 ) || ( AVEncProfile == eAVEncAV1VProfile_Main_420_10 ),
-                         MF_E_INVALIDMEDIATYPE,
-                         done );
-         uiProfile = (UINT32) AVEncProfile;
-         hr = S_OK;
-      }
-      break;
-      case FOURCC_NV12:
-      case FOURCC_P010:
-      case FOURCC_AYUV:
-      case FOURCC_Y210:
-      case FOURCC_Y410:
-      case FOURCC_YUY2:
-      {
-         // These subtypes are only valid when checking Input Type
-         CHECKBOOL_GOTO( bInputType == true, MF_E_INVALIDMEDIATYPE, done );
-         hr = S_OK;
-      }
-      break;
-      default:
-         MFE_ERROR( "[dx12 hmft 0x%p] Invalid media subtype", this );
-         CHECKHR_GOTO( MF_E_INVALIDMEDIATYPE, done );
-   }
-
-   if( bInputType )
    {   // Input Type checking
       if( m_uiOutputWidth != Width || m_uiOutputHeight != Height )
       {
@@ -306,14 +235,42 @@ CDX12EncHMFT::CheckMediaType( IMFMediaType *pmt, bool bInputType )
          }
       }
    }
-   else
-   {   // Output Type checking
-      UINT32 uiInterlaceMode, uiNominalRange;
-      if( m_pVlScreen )
+
+done:
+   return hr;
+}
+
+// internal function to check if the output media type is valid.
+HRESULT
+CDX12EncHMFT::CheckOutputMediaType( IMFMediaType *pmt )
+{
+   HRESULT hr;
+   UINT32 Width, Height;
+   MFVideoArea VideoArea;
+   enum pipe_video_profile videoProfile = PIPE_VIDEO_PROFILE_UNKNOWN;
+
+   CHECKHR_GOTO( MFGetAttributeSize( pmt, MF_MT_FRAME_SIZE, &Width, &Height ), done );
+   hr = pmt->GetBlob( MF_MT_MINIMUM_DISPLAY_APERTURE, (UINT8 *) &VideoArea, sizeof( MFVideoArea ), NULL );
+   if( SUCCEEDED( hr ) )
+   {
+      if( TRUE == CheckGeometricAperture( &VideoArea, Width, Height ) )
       {
-         videoProfile = ConvertAVEncVProfileToPipeVideoProfile( m_pVlScreen, uiProfile, m_Codec );
+         Width = VideoArea.Area.cx;
+         Height = VideoArea.Area.cy;
       }
-      CHECKBOOL_GOTO( videoProfile != PIPE_VIDEO_PROFILE_UNKNOWN, MF_E_INVALIDMEDIATYPE, done );
+      else
+      {
+         hr = MF_E_INVALIDMEDIATYPE;
+         MFE_ERROR( "[dx12 hmft 0x%p] Geometric aperture error (MF_MT_MINIMUM_DISPLAY_APERTURE)", this );
+         goto done;
+      }
+   }
+
+   CHECKHR_GOTO( CheckOutputMediaSubType( pmt, videoProfile ), done );
+   CHECKBOOL_GOTO( videoProfile != PIPE_VIDEO_PROFILE_UNKNOWN, MF_E_INVALIDMEDIATYPE, done );
+
+   {  // Output Type checking
+      UINT32 uiInterlaceMode, uiNominalRange;
 
       // Fetch the capabilities of this encoder
       encoder_capabilities encoderCapabilities( this );
@@ -359,7 +316,7 @@ CDX12EncHMFT::InternalCheckInputType( IMFMediaType *pType )
    CHECKHR_GOTO( pType->IsEqual( m_spAvailableInputType.Get(), &dwIsEqualFlags ), done );
    if( ( dwIsEqualFlags & MF_MEDIATYPE_EQUAL_MAJOR_TYPES ) && ( dwIsEqualFlags & MF_MEDIATYPE_EQUAL_FORMAT_TYPES ) )
    {
-      CHECKHR_GOTO( CheckMediaType( pType, true ), done );
+      CHECKHR_GOTO( CheckInputMediaType( pType ), done );
       bSuccess = TRUE;
    }
 
@@ -382,7 +339,7 @@ CDX12EncHMFT::InternalCheckOutputType( IMFMediaType *pType )
    CHECKHR_GOTO( pType->IsEqual( m_spAvailableOutputType.Get(), &dwIsEqualFlags ), done );
    if( ( dwIsEqualFlags & MF_MEDIATYPE_EQUAL_MAJOR_TYPES ) && ( dwIsEqualFlags & MF_MEDIATYPE_EQUAL_FORMAT_TYPES ) )
    {
-      CHECKHR_GOTO( CheckMediaType( pType, false ), done );
+      CHECKHR_GOTO( CheckOutputMediaType( pType ), done );
       bSuccess = TRUE;
    }
    if( !bSuccess )
@@ -442,17 +399,10 @@ CDX12EncHMFT::OnInputTypeChanged()
       CHECKHR_GOTO( hr, done );
    }
 
-   // when input type changes, clear m_spVideoSampleAllocator so we can recreate it later.
-   if( m_spVideoSampleAllocator )
-   {
-      m_spVideoSampleAllocator->UninitializeSampleAllocator();
-      m_spVideoSampleAllocator = nullptr;
-   }
-
 done:
    if( hr != S_OK )
    {
-      CleanupEncoder();
+      CleanupEncoder( true );
    }
    return hr;
 }
@@ -522,7 +472,7 @@ CDX12EncHMFT::OnOutputTypeChanged()
 
    // correct basic settings based on profile
    (void) m_spOutputType->GetUINT32( MF_MT_VIDEO_PROFILE, (UINT32 *) &m_uiProfile );
-   m_outputPipeProfile = ConvertAVEncVProfileToPipeVideoProfile( m_pVlScreen, m_uiProfile, m_Codec );
+   m_outputPipeProfile = ConvertAVEncVProfileToPipeVideoProfile( m_pVlScreen, m_uiProfile );
 
    // Fetch the capabilities of this encoder
    CHECKHR_GOTO( m_EncoderCapabilities.initialize( m_pPipeContext->screen, m_outputPipeProfile ), done );
@@ -548,7 +498,7 @@ CDX12EncHMFT::OnOutputTypeChanged()
 
    if( bResolutionChange )
    {
-      CleanupEncoder();
+      CleanupEncoder( true );
    }
 
    if( m_gpuFeatureFlags.m_bDisableAsync )
@@ -608,7 +558,7 @@ CDX12EncHMFT::UpdateAvailableInputType()
    if( m_spOutputType )
    {
       // Update the encoder's input available media type by the changed output type
-      CHECKHR_GOTO( m_spAvailableInputType.Get()->SetGUID( MF_MT_SUBTYPE, ConvertProfileToSubtype( m_outputPipeProfile ) ), done );
+      CHECKHR_GOTO( m_spAvailableInputType.Get()->SetGUID( MF_MT_SUBTYPE, ConvertAVEncVProfileToSubtype( m_uiProfile ) ), done );
 
       CHECKHR_GOTO( MFSetAttributeSize( m_spAvailableInputType.Get(), MF_MT_FRAME_SIZE, m_uiOutputWidth, m_uiOutputHeight ), done );
       CHECKHR_GOTO(
@@ -644,7 +594,7 @@ CDX12EncHMFT::OnDrain()
    std::unique_lock<std::mutex> lock( m_lock );
    m_bDraining = true;
 
-   if( m_EncodingQueue.unsafe_size() )
+   if( m_EncodingQueue.unsafe_size() || m_bProcessDX12Context )
    {
       m_eventHaveInput.set();
       lock.unlock();
@@ -668,7 +618,7 @@ CDX12EncHMFT::OnFlush()
    m_bFlushing = true;
    m_bDraining = true;
 
-   if( m_EncodingQueue.unsafe_size() )
+   if( m_EncodingQueue.unsafe_size() || m_bProcessDX12Context )
    {
       m_eventHaveInput.set();
       lock.unlock();
@@ -822,7 +772,6 @@ CalculateMaxOutputBitstreamSize( UINT uiWidth, UINT uiHeight, enum pipe_format f
 
    const UINT MIN_BUFFER_SIZE = 128 * 128 * 2;       // Minimum buffer size for very small frames: 128x128 pixels at 2 bytes/pixel
    const UINT MAX_BUFFER_SIZE = 20 * 1024 * 1024;    // Maximum buffer size of 20MB
-   const float EXPECTED_COMPRESSION_FACTOR = 2.0f;   // Assume 50% of calculated size after compression of raw pixel sizes
 
    UINT alignedWidth = ( uiWidth + 15 ) & ~15;
    UINT alignedHeight = ( uiHeight + 15 ) & ~15;
@@ -846,9 +795,6 @@ CalculateMaxOutputBitstreamSize( UINT uiWidth, UINT uiHeight, enum pipe_format f
          bufferSize = ( ( ( alignedHeight ) * ( alignedWidth ) * 15 ) >> 3 );
          break;
    }
-
-   // Apply EXPECTED_COMPRESSION_FACTOR constant (% of calculated size)
-   bufferSize = static_cast<UINT>( std::ceil( bufferSize / EXPECTED_COMPRESSION_FACTOR ) );
 
    // Clamp buffer size between minimum and maximum limits
    bufferSize = std::max( MIN_BUFFER_SIZE, std::min( bufferSize, MAX_BUFFER_SIZE ) );
@@ -911,7 +857,6 @@ CDX12EncHMFT::InitializeEncoder( pipe_video_profile videoProfile, UINT32 Width, 
       encoderSettings.profile = videoProfile;
       encoderSettings.level = m_uiLevel;
       encoderSettings.entrypoint = PIPE_VIDEO_ENTRYPOINT_ENCODE;
-      encoderSettings.chroma_format = ConvertAVEncVProfileToPipeVideoChromaFormat( m_uiProfile, m_Codec );
       encoderSettings.width = Width;
       encoderSettings.height = Height;
       encoderSettings.max_references = m_uiMaxNumRefFrame;
@@ -955,7 +900,7 @@ CDX12EncHMFT::InitializeEncoder( pipe_video_profile videoProfile, UINT32 Width, 
       // Calculate and cache the expected output buffer max bitstream size for a single frame
       m_uiMaxOutputBitstreamSize = CalculateMaxOutputBitstreamSize( encoderSettings.width,
                                                                     encoderSettings.height,
-                                                                    ConvertProfileToFormat( encoderSettings.profile ) );
+                                                                    ConvertAVEncVProfileToPipeFormat( m_uiProfile ) );
 
       debug_printf( "[dx12 hmft 0x%p] Calculated max output bitstream size: %u bytes (%u Kb, %u Mb) for %ux%u pipe_format %u\n",
                     this,
@@ -964,7 +909,7 @@ CDX12EncHMFT::InitializeEncoder( pipe_video_profile videoProfile, UINT32 Width, 
                     m_uiMaxOutputBitstreamSize / ( 1024 * 1024 ),
                     encoderSettings.width,
                     encoderSettings.height,
-                    ConvertProfileToFormat( encoderSettings.profile ) );
+                    ConvertAVEncVProfileToPipeFormat( m_uiProfile ) );
 
       // Create DX12 fence and share it as handle for using it with DX11/create_fence_win32
       CHECKHR_GOTO( m_spDevice->CreateFence( 0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS( &m_spStagingFence12 ) ), done );
@@ -995,19 +940,27 @@ done:
 
 // internal function to clean up adn destroy the encoder
 void
-CDX12EncHMFT::CleanupEncoder( void )
+CDX12EncHMFT::CleanupEncoder( bool apiLocked )
 {
    if( m_hThread )
    {
       m_bExitThread = true;
       m_eventHaveInput.set();
-      WaitForSingleObject( m_hThread, INFINITE );
+      if (apiLocked) {
+         m_lock.unlock();
+         WaitForSingleObject( m_hThread, INFINITE );
+         m_lock.lock();
+      } else {
+         WaitForSingleObject( m_hThread, INFINITE );
+      }
       m_eventHaveInput.reset();
       CloseHandle( m_hThread );
       m_hThread = NULL;
       m_dwThreadId = 0;
       m_bExitThread = false;
    }
+
+   ReleaseAllocators();
 
    if( m_pPipeFenceHandle )
    {
@@ -1109,9 +1062,7 @@ CDX12EncHMFT::ConfigureBitstreamOutputSampleAttributes( IMFSample *pSample,
 
    // Set video format attributes
    CHECKHR_GOTO( pSample->SetUINT32( MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive ), done );
-   CHECKHR_GOTO(
-      pSample->SetUINT32( MF_MT_VIDEO_PROFILE, ConvertPipeProfileToSpecProfile( pDX12EncodeContext->encoderPicInfo.base.profile ) ),
-      done );
+   CHECKHR_GOTO( pSample->SetUINT32( MF_MT_VIDEO_PROFILE, m_uiProfile ), done );
    CHECKHR_GOTO( pSample->SetUINT32( MF_MT_VIDEO_LEVEL, m_pPipeVideoCodec->level ), done );
 
    // Set last slice flag
@@ -1270,8 +1221,7 @@ CDX12EncHMFT::ProcessSliceBitstreamZeroCopy( LPDX12EncodeContext pDX12EncodeCont
    // Create IMFMediaBuffer from the D3D12Resource (zero-copy)
    spMediaBuffer.Attach(
       new CD3D12BitstreamMFBuffer( this,
-                                   m_pPipeContext,
-                                   pDX12EncodeContext->pOutputBitRes[slice_idx],
+                                   pDX12EncodeContext->spOutputBitResourceHolders[slice_idx].Get(),
                                    static_cast<DWORD>( total_slice_size ),
                                    static_cast<DWORD>( mfsample_codec_unit_metadata[0 /*offset to first NAL*/].offset ) ) );
    return true;
@@ -1465,6 +1415,7 @@ CDX12EncHMFT::FinalizeAndEmitOutputSample( LPDX12EncodeContext pDX12EncodeContex
 
 HRESULT
 CDX12EncHMFT::ProcessDX12EncodeContext( CDX12EncHMFT *pThis,
+                                        bool bFlushing,
                                         LPDX12EncodeContext pDX12EncodeContext,
                                         pipe_enc_feedback_metadata &metadata,
                                         DWORD &dwReceivedInput,
@@ -1481,7 +1432,7 @@ CDX12EncHMFT::ProcessDX12EncodeContext( CDX12EncHMFT *pThis,
 
       // If sliced fences supported, we asynchronously copy here every slice as it is ready
       // Otherwise, let's copy all the sliced together here after full frame completion (see below)
-      if( !pThis->m_bFlushing &&
+      if( !bFlushing &&
           ( pDX12EncodeContext->sliceNotificationMode == D3D12_VIDEO_ENCODER_COMPRESSED_BITSTREAM_NOTIFICATION_MODE_SUBREGIONS ) )
       {
          //
@@ -1578,33 +1529,6 @@ CDX12EncHMFT::ProcessDX12EncodeContext( CDX12EncHMFT *pThis,
             pendingMetadata.reserve( 16 );
             uint32_t actual_slice_count = 0;
 
-            struct HandleCloser
-            {
-               void operator()( void *h )
-               {
-                  if( h )
-                     CloseHandle( h );
-               }
-            };
-
-            std::unique_ptr<void, HandleCloser> lastSliceFenceEvent(
-               pThis->m_pPipeContext->screen->fence_get_win32_event( pThis->m_pPipeContext->screen,
-                                                                     pDX12EncodeContext->pLastSliceFence ) );
-            assert( lastSliceFenceEvent );
-
-            // Pre-create all slice fence events to avoid per-iteration
-            // CreateEvent+SetEventOnCompletion kernel round-trips
-            // and so we don't wait between each WaitForMultipleObjects to create the next event
-            std::vector<std::unique_ptr<void, HandleCloser>> sliceFenceEvents;
-            sliceFenceEvents.reserve( num_slice_buffers );
-            for( uint32_t i = 0; i < num_slice_buffers; i++ )
-            {
-               sliceFenceEvents.emplace_back(
-                  pThis->m_pPipeContext->screen->fence_get_win32_event( pThis->m_pPipeContext->screen,
-                                                                        pDX12EncodeContext->pSliceFences[i] ) );
-               assert( sliceFenceEvents[i] );
-            }
-
             for( uint32_t slice_idx = 0; slice_idx < num_slice_buffers; slice_idx++ )
             {
                // Wait for the current slice fence to complete, using pLastSliceFence as a short-circuit.
@@ -1615,13 +1539,15 @@ CDX12EncHMFT::ProcessDX12EncodeContext( CDX12EncHMFT *pThis,
                // auto slice mode). pLastSliceFence acts as a "cancel token" to exit the wait loop when all actual slices are
                // ready to process.
                //
-               // Use WaitForMultipleObjects to block until either fence signals
+               // Use fence_wait_multiple to block until either fence signals
                //
 
-               HANDLE fenceEvents[2] = { sliceFenceEvents[slice_idx].get(), lastSliceFenceEvent.get() };
-               DWORD waitResult = WaitForMultipleObjects( 2, fenceEvents, FALSE /* bWaitAll */, INFINITE );
+               pipe_fence_handle *fences[] = {pDX12EncodeContext->pSliceFences[slice_idx], pDX12EncodeContext->pLastSliceFence};
+               HMFT_ETW_EVENT_START( "GPUSliceFenceWaitMultiple", pThis );
+               const int firstCompletedFenceIdx = pThis->m_pPipeContext->screen->fence_wait_multiple( pThis->m_pPipeContext->screen, fences, 2, false);
+               HMFT_ETW_EVENT_STOP( "GPUSliceFenceWaitMultiple", pThis );
 
-               if( waitResult == WAIT_OBJECT_0 + 0 /* slice fence signaled */ )
+               if( firstCompletedFenceIdx == 0 /* slice fence signaled */ )
                {
                   //
                   // The current slice_idx fence is completed - process this slice
@@ -1659,7 +1585,7 @@ CDX12EncHMFT::ProcessDX12EncodeContext( CDX12EncHMFT *pThis,
 
                   actual_slice_count++;
                }
-               else if( waitResult == WAIT_OBJECT_0 + 1 /* last slice fence signaled */ )
+               else if( firstCompletedFenceIdx == 1 /* last slice fence signaled */ )
                {
                   //
                   // If pLastSliceFence is completed but the slice_idx fence didn't, it means this pSliceFences slot
@@ -1669,19 +1595,15 @@ CDX12EncHMFT::ProcessDX12EncodeContext( CDX12EncHMFT *pThis,
                }
                else
                {
-                  // Unexpected WaitForMultipleObjects result on waitResult
-                  DWORD lastError = GetLastError();
-                  debug_printf( "[dx12 hmft 0x%p] WaitForMultipleObjects failed for slice %" PRIu32 " (result=0x%" PRIx32
-                                ", GetLastError=0x%" PRIx32 ")\n",
+                  // Unexpected fence completion result
+                  debug_printf( "[dx12 hmft 0x%p] fence_wait_multiple failed for slice %" PRIu32 " (result=%d)\n",
                                 pThis,
                                 slice_idx,
-                                static_cast<uint32_t>( waitResult ),
-                                static_cast<uint32_t>( lastError ) );
-                  MFE_ERROR( "[dx12 hmft 0x%p] WaitForMultipleObjects failed for slice %u (result=0x%x, GetLastError=0x%x)",
+                                firstCompletedFenceIdx );
+                  MFE_ERROR( "[dx12 hmft 0x%p] fence_wait_multiple failed for slice %u (result=%d)",
                              pThis,
                              slice_idx,
-                             static_cast<uint32_t>( waitResult ),
-                             static_cast<uint32_t>( lastError ) );
+                             firstCompletedFenceIdx );
                   assert( false );
                   hr = E_FAIL;
                   break;
@@ -1905,15 +1827,19 @@ CDX12EncHMFT::xThreadProc( void *pCtx )
          CloseHandle( fence_handle );
 
          {
+            bool bFlushing = pThis->m_bFlushing;
+            pThis->m_bProcessDX12Context = true;
             apiLock.unlock();
             HRESULT hr = pThis->ProcessDX12EncodeContext( pThis,
+                                                          bFlushing,
                                                           pDX12EncodeContext,
                                                           metadata,
                                                           dwReceivedInput,
                                                           ResolveStatsCompletionFenceValue,
                                                           encoded_bitstream_bytes );
             apiLock.lock();
-            if (FAILED(hr))
+            pThis->m_bProcessDX12Context = false;
+            if( FAILED( hr ) )
             {
                pThis->QueueEvent( MEError, GUID_NULL, E_FAIL, nullptr );
                bHasEncodingError = TRUE;
@@ -1923,7 +1849,6 @@ CDX12EncHMFT::xThreadProc( void *pCtx )
 
             // Only release the reconpic AFTER working on it for two pass if needed
             pThis->m_pGOPTracker->release_reconpic( pDX12EncodeContext->pAsyncDPBToken );
-
          }
          // If we're flushing, just discard all queued up inputs/encodes
          debug_printf( "[dx12 hmft 0x%p] INPUT %d - encode_result = 0x%x, output_bitstream_size = %d\n",
@@ -1965,8 +1890,7 @@ CDX12EncHMFT::xThreadProc( void *pCtx )
 
             // Create IMFMediaBuffer from the D3D12Resource (zero-copy)
             spMemoryBuffer.Attach( new CD3D12BitstreamMFBuffer( pThis,
-                                                                pThis->m_pPipeContext,
-                                                                pDX12EncodeContext->pOutputBitRes[0],
+                                                                pDX12EncodeContext->spOutputBitResourceHolders[0].Get(),
                                                                 static_cast<DWORD>( encoded_bitstream_bytes ),
                                                                 static_cast<DWORD>( metadata.codec_unit_metadata[0].offset ) ) );
 
@@ -2298,7 +2222,7 @@ CDX12EncHMFT::SetOutputType( DWORD dwOutputStreamIndex, IN IMFMediaType *pType, 
 
    if( !pType )
    {
-      CleanupEncoder();
+      CleanupEncoder( true );
       m_spOutputType.Reset();
       goto done;
    }
@@ -2531,7 +2455,7 @@ CDX12EncHMFT::ProcessMessage( MFT_MESSAGE_TYPE eMessage, ULONG_PTR ulParam )
       case MFT_MESSAGE_SET_D3D_MANAGER:
       {
          std::lock_guard<std::mutex> lock( m_lock );
-         CleanupEncoder();
+         CleanupEncoder( true );
          CHECKHR_GOTO( xOnSetD3DManager( ulParam ), done );
          if( m_pPipeContext )
          {

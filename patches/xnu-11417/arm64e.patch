@@ -490,19 +490,19 @@ index 69b9d1f..c998c10 100644
  		*bytes_processed = size;
  
  		const uint32_t *asha1, *esha1;
-@@ -5974,6 +6152,172 @@ cs_validate_hash(
+@@ -5974,6 +6152,185 @@ cs_validate_hash(
  	return validated;
  }
  
 +/*
 + * Fixups of signed file text, each <file name>,<file offset>,<original>,<replacement> (offset in hex, byte strings in hex, at
-+ * most 16 bytes): the board's table in the device tree (/chosen/text-fixups, NUL-separated entries, so it takes no command line
++ * most 32 bytes): the board's table in the device tree (/chosen/text-fixups, NUL-separated entries, so it takes no command line
 + * space), then the boot arguments text-fixup0..7. A page is changed only after it passed signature validation and only when
 + * the original bytes match, so a different file or build is left alone.
 + */
 +#include <pexpert/device_tree.h>
 +#define CS_TEXT_FIXUP_MAX 32
-+#define CS_TEXT_FIXUP_BYTES 16
++#define CS_TEXT_FIXUP_BYTES 32
 +struct cs_text_fixup {
 +	char            name[64];
 +	uint64_t        offset;
@@ -588,9 +588,22 @@ index 69b9d1f..c998c10 100644
 +	return true;
 +}
 +
++extern const char *native_marble_cellular_text_fixup(unsigned int);
++
 +static void
 +cs_text_fixup_init(void)
 +{
++	for (unsigned int i = 0; ; i++) {
++		const char *entry = native_marble_cellular_text_fixup(i);
++		if (entry == NULL) {
++			break;
++		}
++		if (cs_text_fixup_count == CS_TEXT_FIXUP_MAX ||
++		    !cs_text_fixup_parse(entry, &cs_text_fixups[cs_text_fixup_count])) {
++			panic("Marble cellular text policy entry %u invalid", i);
++		}
++		cs_text_fixup_count++;
++	}
 +	DTEntry chosen;
 +	void const *table;
 +	unsigned int size;
@@ -2530,7 +2543,7 @@ new file mode 100644
 index 0000000..5a5574e
 --- /dev/null
 +++ b/pexpert/pexpert/arm64/BCM2837.h
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,45 @@
 +/*
 + * Copyright (c) 2016 Apple Inc. All rights reserved.
 + */
@@ -2549,6 +2562,7 @@ index 0000000..5a5574e
 +#define __ARM_VFP__               4
 +#define __ARM_COHERENT_CACHE__    1
 +#define __ARM_DEBUG__             7
++#define __ARM_AMP__               1
 +#if !defined(__arm64e__)
 +#define __ARM64_PMAP_SUBPAGE_L1__ 1
 +#endif

@@ -37,7 +37,10 @@ def observe(kernel, layout_path, output, interval, duration, once=False, skip_th
                 for key in ('version', 'phase', 'returns'):
                     report[key] = channel.command('getvar:' + key)
                 if '_marble_buttons_stats' in symbols:
-                    report['buttons_firmware'] = channel.command('getvar:buttons-firmware')
+                    try:
+                        report['buttons_firmware'] = channel.command('getvar:buttons-firmware')
+                    except RuntimeError as error:
+                        report['buttons_firmware'] = str(error)
                 if report['phase'] == 'firmware':
                     memory = RetainedKernel(channel)
                 else:

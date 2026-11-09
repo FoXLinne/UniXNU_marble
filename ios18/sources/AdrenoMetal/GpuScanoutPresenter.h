@@ -54,6 +54,7 @@ public:
     // One frame: encodes the GPU copy, commits, waits for the GPU. Rows are copied as whole rows of width*4 bytes.
     Result present(const Frame &frame) {
         if (!ready()) return kBadScanout;
+        if (frame.width != scanout_.width || frame.height != scanout_.height) return scale(frame);
         if (frame.format == NGP_RGBA16F_LINEAR || frame.format == NGP_RGBA16F_ENCODED) return convert(frame);
         if (frame.format != NGP_BGRX8888) return kBadFrame;
         const size_t page = (size_t)getpagesize(), row = (size_t)frame.width * 4;
@@ -132,6 +133,36 @@ public:
         [commands waitUntilCompleted];
         return commands.status == MTLCommandBufferStatusCompleted ? kOk : kGpuFailed;
     }
+    Result scale(const Frame &frame) {
+        const size_t page=(size_t)getpagesize();
+        const bool half=frame.format==NGP_RGBA16F_LINEAR || frame.format==NGP_RGBA16F_ENCODED;
+        const size_t pixel=half?8:4;
+        if ((frame.format!=NGP_BGRX8888 && !half) || !frame.base || !frame.width || !frame.height ||
+            ((uintptr_t)frame.base & (page-1)) || !frame.bytes || (frame.bytes & (page-1)) ||
+            (frame.stride & 3) || (scanout_.stride & 3) || frame.stride<(size_t)frame.width*pixel ||
+            frame.height>frame.bytes/frame.stride ||
+            frame.stride*(frame.height-1)+(size_t)frame.width*pixel>frame.bytes) return kBadFrame;
+        if (!pipeline(scale_,scaleFailed_,@"scanout_scale")) return kNoResource;
+        id<MTLBuffer> source=sourceFor(frame);
+        id<MTLBuffer> codes=half?table(frame.format==NGP_RGBA16F_ENCODED):source;
+        if (!source || !codes) return kNoResource;
+        id<MTLCommandBuffer> commands=[queue_ commandBuffer];
+        id<MTLComputeCommandEncoder> encoder=commands?[commands computeCommandEncoder]:nil;
+        if (!encoder) return kNoResource;
+        const uint32_t params[12]={frame.width,frame.height,(uint32_t)(frame.stride/4),(uint32_t)(scanout_.stride/4),
+            scanout_.width,scanout_.height,0,0,frame.format,0,0,0};
+        [encoder setComputePipelineState:scale_];
+        [encoder setBuffer:source offset:0 atIndex:0];
+        [encoder setBuffer:target_ offset:0 atIndex:1];
+        [encoder setBuffer:codes offset:0 atIndex:2];
+        [encoder setBytes:params length:sizeof params atIndex:3];
+        [encoder dispatchThreadgroups:MTLSizeMake((scanout_.width+15)/16,(scanout_.height+7)/8,1)
+                threadsPerThreadgroup:MTLSizeMake(16,8,1)];
+        [encoder endEncoding];
+        [commands commit];
+        [commands waitUntilCompleted];
+        return commands.status==MTLCommandBufferStatusCompleted?kOk:kGpuFailed;
+    }
     // A kernel of the scanout library, made once; a failure is not retried (every later half-float frame then goes back to the display
     // driver's own path, every BGRA frame to the blit).
     bool pipeline(__strong id<MTLComputePipelineState> &state, bool &failed, NSString *name) {
@@ -188,6 +219,8 @@ private:
     id<MTLCommandQueue> queue_;
     id<MTLBuffer> target_;
     id<MTLComputePipelineState> convert_ = nil, opaque_ = nil;
+    bool scaleFailed_=false;
+    __strong id<MTLComputePipelineState> scale_=nil;
     bool convertFailed_ = false, opaqueFailed_ = false;
     id<MTLBuffer> tables_[2] = {nil, nil};
     Source sources_[kSources] = {};

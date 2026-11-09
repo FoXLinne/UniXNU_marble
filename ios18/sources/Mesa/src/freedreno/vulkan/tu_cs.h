@@ -83,6 +83,27 @@ struct tu_bo_array {
 struct tu_pkt;
 struct tu_crb;
 
+/* Temporary struct for tracking a register state to be written, used by
+ * a6xx-pack.h and tu_cs_emit_regs()
+ */
+struct tu_reg_value {
+   uint32_t reg;
+   uint64_t value;
+   bool is_address;
+};
+
+#define fd_reg_pair tu_reg_value
+
+struct tu_scratch_slot {
+   unsigned slot;
+};
+
+/** Boxed type for GPU virtual addresses, to disambiguate vs. uint32_t immed. */
+struct tu_gpuva {
+   uint64_t gpuva;
+   tu_gpuva(uint64_t arg) : gpuva(arg) {}
+};
+
 struct tu_cs
 {
    uint32_t *start;
@@ -95,6 +116,7 @@ struct tu_cs
    enum tu_cs_mode mode;
    bool writeable;
    uint32_t next_bo_size;
+   VkResult status;
 
    struct tu_cs_entry *entries;
    uint32_t entry_count;
@@ -117,7 +139,96 @@ struct tu_cs
 
    tu_pkt *pkt;
 
+   /*
+    * Helpers for various pm4 pkt building:
+    */
+
    tu_crb crb(uint32_t nregs);
+
+   void scratch_to_reg(struct fd_reg_pair reg, struct tu_scratch_slot scratch, unsigned cnt);
+   void reg_to_scratch(struct tu_scratch_slot scratch, struct fd_reg_pair reg, unsigned cnt);
+   void scratch_write(struct tu_scratch_slot scratch, uint32_t *val, unsigned cnt);
+   void scratch_write(struct tu_scratch_slot scratch, uint32_t val) {
+      scratch_write(scratch, &val, 1);
+   }
+
+   /**
+    * A flexible src/dst type for pm4 pkt helpers, which can be register/scratch/immediate
+    * (the latter for src args only).  The actual types supported depend on the pm4 pkt.  If
+    * there is only one possible type, use the underlying type directly (ie fd_reg_pair, etc)
+    */
+   struct tu_pm4_arg {
+      enum {
+         TU_PM4_IMMED,
+         TU_PM4_GPUVA,
+         TU_PM4_REG,
+         TU_PM4_SCRATCH,
+      } type;
+
+      union {
+         uint32_t imm;
+         struct tu_gpuva gpuva;
+         struct fd_reg_pair reg;
+         struct tu_scratch_slot scratch;
+      };
+
+      tu_pm4_arg(uint32_t arg) : type(TU_PM4_IMMED), imm(arg) {}
+      tu_pm4_arg(struct tu_gpuva arg) : type(TU_PM4_GPUVA), gpuva(arg) {}
+      tu_pm4_arg(struct fd_reg_pair arg) : type(TU_PM4_REG), reg(arg) {}
+      tu_pm4_arg(struct tu_scratch_slot arg) : type(TU_PM4_SCRATCH), scratch(arg) {}
+
+      operator uint32_t() const {
+         if (type == TU_PM4_IMMED)
+            return imm;
+         else if (type == TU_PM4_REG)
+            return reg.reg;
+         else if (type == TU_PM4_SCRATCH)
+            return scratch.slot;
+         else
+            UNREACHABLE("bad type");
+      }
+   };
+
+   struct tu_rmw_args {
+      bool skip_wfm;
+      uint32_t rotate;
+      bool src1_add;
+      struct tu_pm4_arg src0, src1;
+   };
+
+   void rmw(struct tu_pm4_arg dst, struct tu_rmw_args args);
+
+   struct tu_reg_to_mem_args {
+      unsigned cnt;     /* value of 0 treated as 1 by sqe */
+      bool is_64b;
+      bool accumulate;
+   };
+
+   void reg_to_mem(uint64_t va, struct fd_reg_pair reg, struct tu_reg_to_mem_args args = {});
+
+   /* For reg64: */
+   void reg_to_mem(uint64_t va, struct fd_reg_pair reg_lo, struct fd_reg_pair reg_hi) {
+      reg_to_mem(va, reg_lo, { .cnt = 2, .is_64b = true });
+   }
+
+   struct tu_cond_write_args {
+      enum cp_cond_function function;
+      bool signed_compare;
+      uint32_t ref;
+      uint32_t mask = ~0;
+      uint32_t write_data;
+   };
+
+   void cond_write(struct tu_pm4_arg dst, struct tu_pm4_arg src, struct tu_cond_write_args args);
+
+   struct tu_mem_to_reg_args {
+      bool one_reg_wr;
+      unsigned cnt;     /* value of 0 treated as 1 by sqe */
+      bool shift_by_2;
+      bool wait_cache_flush;
+   };
+
+   void mem_to_reg(struct fd_reg_pair reg, uint64_t va, struct tu_mem_to_reg_args args = {});
 };
 
 void
@@ -177,6 +288,8 @@ static inline struct tu_draw_state
 tu_cs_end_draw_state(struct tu_cs *cs, struct tu_cs *sub_cs)
 {
    struct tu_cs_entry entry = tu_cs_end_sub_stream(cs, sub_cs);
+   if (!entry.bo)
+      return (struct tu_draw_state) {};
    return (struct tu_draw_state) {
       .iova = entry.bo->iova + entry.offset,
       .size = entry.size / sizeof(uint32_t),
@@ -187,6 +300,22 @@ tu_cs_end_draw_state(struct tu_cs *cs, struct tu_cs *sub_cs)
 VkResult
 tu_cs_reserve_space(struct tu_cs *cs, uint32_t reserved_size);
 
+/* Write sink for OOM state: tu_cs_emit writes here harmlessly instead of
+ * needing a per-dword status branch that would prevent vectorization.
+ * Sized to the PM4 maximum (14-bit count field + header = 16384 dwords) so
+ * no single tu_cs_reserve call can overflow it.
+ */
+#define TU_CS_FAIL_SINK_SIZE 16384
+extern uint32_t tu_cs_fail_sink[TU_CS_FAIL_SINK_SIZE];
+
+static inline void
+tu_cs_fail(struct tu_cs *cs, VkResult result)
+{
+   cs->status = result;
+   cs->cur = tu_cs_fail_sink;
+   cs->reserved_end = tu_cs_fail_sink + ARRAY_SIZE(tu_cs_fail_sink);
+}
+
 uint64_t
 tu_cs_get_cur_iova(const struct tu_cs *cs);
 
@@ -195,8 +324,13 @@ tu_cs_draw_state(struct tu_cs *sub_cs, struct tu_cs *cs, uint32_t size)
 {
    struct tu_cs_memory memory;
 
-   /* TODO: clean this up */
-   tu_cs_alloc(sub_cs, size, 1, &memory);
+   VkResult result = tu_cs_alloc(sub_cs, size, 1, &memory);
+   if (result != VK_SUCCESS) {
+      /* Freshly declared, nothing owned yet so safe to zero. */
+      memset(cs, 0, sizeof(*cs));
+      tu_cs_fail(cs, result);
+      return (struct tu_draw_state) {};
+   }
    tu_cs_init_external(cs, sub_cs->device, memory.map, memory.map + size,
                        memory.iova, memory.writeable);
    tu_cs_begin(cs);
@@ -311,6 +445,11 @@ tu_cs_get_space(const struct tu_cs *cs)
 static inline void
 tu_cs_reserve(struct tu_cs *cs, uint32_t reserved_size)
 {
+   if (unlikely(cs->status != VK_SUCCESS)) {
+      tu_cs_fail(cs, cs->status);
+      return;
+   }
+
    if (cs->mode != TU_CS_MODE_GROW) {
       assert(tu_cs_get_space(cs) >= reserved_size);
       assert(cs->reserved_end == cs->end);
@@ -323,9 +462,13 @@ tu_cs_reserve(struct tu_cs *cs, uint32_t reserved_size)
       return;
    }
 
-   ASSERTED VkResult result = tu_cs_reserve_space(cs, reserved_size);
-   /* TODO: set this error in tu_cs and use it */
-   assert(result == VK_SUCCESS);
+   tu_cs_reserve_space(cs, reserved_size);
+}
+
+static inline VkResult
+tu_cs_get_status(const struct tu_cs *cs)
+{
+   return cs->status;
 }
 
 /**
@@ -596,17 +739,6 @@ tu_cs_emit_data_nop(struct tu_cs *cs,
                     uint32_t size,
                     uint32_t align);
 
-/* Temporary struct for tracking a register state to be written, used by
- * a6xx-pack.h and tu_cs_emit_regs()
- */
-struct tu_reg_value {
-   uint32_t reg;
-   uint64_t value;
-   bool is_address;
-};
-
-#define fd_reg_pair tu_reg_value
-
 #include "a6xx-pack.xml.h"
 #include "adreno-pm4-pack.xml.h"
 
@@ -791,9 +923,6 @@ struct tu_crb : public tu_pkt {
       return *this;
    }
 
-   /* for with_crb() */
-   bool first = true;
-
 private:
    /* Disallow copy constructor to prevent mistakes with using tu_crb instead
     * of tu_crb& as function param:
@@ -802,8 +931,159 @@ private:
 };
 
 
-#define with_crb(...) \
-   for (tu_crb crb(__VA_ARGS__); crb.first; crb.first = false)
+#define __with_crb(_label, ...)                                      \
+   for (tu_crb crb(__VA_ARGS__); true; ({ goto _label; }))           \
+      if (false) {                                                   \
+_label:                                                              \
+         break;                                                      \
+      } else
+
+#define with_crb(...) __with_crb(CONCAT2(_label, __COUNTER__), __VA_ARGS__)
+
+/**
+ * A builder for an arbitrary PKT7 (for CRB, use fd_crb instead)
+ */
+class tu_pkt7 final : public tu_pkt {
+public:
+   tu_pkt7(tu_cs *cs, enum adreno_pm4_type3_packets pkt, unsigned ndwords) :
+      tu_pkt(cs, pkt, ndwords)
+   {
+   }
+
+   /* Allow appending a "naked" dwords: */
+   tu_pkt7& add(uint32_t val) {
+      append(val);
+      off_++;
+      return *this;
+   }
+
+   tu_pkt7& add(struct fd_reg_pair reg) {
+      __assert_eq(off_, reg.reg);
+      off_ = reg.reg + 1;
+      append(reg.value);
+      return *this;
+   }
+
+   tu_pkt7& add(struct fd_reg_pair reg_lo, struct fd_reg_pair reg_hi) {
+      __assert_eq(reg_hi.reg, 0);
+      __assert_eq(off_, reg_lo.reg);
+      off_ = reg_lo.reg + 2;
+      uint64_t val = reg_lo.value;
+      append(val);
+      append(val >> 32);
+      return *this;
+   }
+
+private:
+   /* Disallow copy constructor to prevent mistakes with using fd_pkt7 instead
+    * of fd_pkt7& as function param:
+    */
+   tu_pkt7(const tu_pkt7 &);
+
+   /* for debugging: */
+   unsigned off_ = 0;
+};
+
+inline void
+tu_cs::rmw(struct tu_pm4_arg dst, struct tu_rmw_args args)
+{
+   assert((dst.type == tu_pm4_arg::TU_PM4_REG) || (dst.type == tu_pm4_arg::TU_PM4_SCRATCH));
+   assert((args.src0.type == tu_pm4_arg::TU_PM4_REG) || (args.src0.type == tu_pm4_arg::TU_PM4_IMMED));
+   assert((args.src1.type == tu_pm4_arg::TU_PM4_REG) || (args.src1.type == tu_pm4_arg::TU_PM4_IMMED));
+
+   tu_pkt7(this, CP_REG_RMW, 3)
+      .add(CP_REG_RMW_0(
+         .dst_reg = dst,
+         .dst_scratch = dst.type == tu_pm4_arg::TU_PM4_SCRATCH,
+         .skip_wait_for_me = args.skip_wfm,
+         .rotate = args.rotate,
+         .src1_add = args.src1_add,
+         .src1_is_reg = args.src1.type == tu_pm4_arg::TU_PM4_REG,
+         .src0_is_reg = args.src0.type == tu_pm4_arg::TU_PM4_REG,
+      ))
+      .add(args.src0)
+      .add(args.src1);
+}
+
+inline void
+tu_cs::cond_write(struct tu_pm4_arg dst, struct tu_pm4_arg src, struct tu_cond_write_args args)
+{
+   assert((dst.type == tu_pm4_arg::TU_PM4_REG) || (dst.type == tu_pm4_arg::TU_PM4_GPUVA));
+
+   enum poll_memory_type poll;
+
+   if (src.type == tu_pm4_arg::TU_PM4_REG)
+      poll = POLL_REGISTER;
+   else if (src.type == tu_pm4_arg::TU_PM4_GPUVA)
+      poll = POLL_MEMORY;
+   else if (src.type == tu_pm4_arg::TU_PM4_SCRATCH)
+      poll = POLL_SCRATCH;
+   else
+      UNREACHABLE("invalid src type");
+
+   assert((src.type == tu_pm4_arg::TU_PM4_REG) ||
+          (src.type == tu_pm4_arg::TU_PM4_GPUVA) ||
+          (src.type == tu_pm4_arg::TU_PM4_SCRATCH));
+
+   tu_pkt7 pkt(this, CP_COND_WRITE5, 8);
+
+   pkt.add(CP_COND_WRITE5_0(
+      .function = args.function,
+      .signed_compare = args.signed_compare,
+      .poll = poll,
+      .write_memory = dst.type == tu_pm4_arg::TU_PM4_GPUVA,
+   ));
+
+   if (src.type == tu_pm4_arg::TU_PM4_GPUVA) {
+      pkt.add(src.gpuva.gpuva);
+      pkt.add(src.gpuva.gpuva >> 32);
+   } else {
+      pkt.add(src);
+      pkt.add(0);
+   }
+
+   pkt.add(CP_COND_WRITE5_3(.ref = args.ref));
+   pkt.add(CP_COND_WRITE5_4(.mask = args.mask));
+
+   if (dst.type == tu_pm4_arg::TU_PM4_GPUVA) {
+      pkt.add(dst.gpuva.gpuva);
+      pkt.add(dst.gpuva.gpuva >> 32);
+   } else {
+      pkt.add(dst);
+      pkt.add(0);
+   }
+
+   pkt.add(CP_COND_WRITE5_7(.write_data = args.write_data));
+}
+
+inline void
+tu_cs::reg_to_mem(uint64_t va, struct fd_reg_pair reg, struct tu_reg_to_mem_args args)
+{
+   tu_pkt7(this, CP_REG_TO_MEM, 3)
+      .add(CP_REG_TO_MEM_0(
+         .reg = reg.reg,
+         .cnt = args.cnt,
+         .is_64b = args.is_64b,
+         .accumulate = args.accumulate,
+      ))
+      .add(va)
+      .add(va >> 32);
+}
+
+inline void
+tu_cs::mem_to_reg(struct fd_reg_pair reg, uint64_t va, struct tu_mem_to_reg_args args)
+{
+   tu_pkt7(this, CP_MEM_TO_REG, 3)
+      .add(CP_MEM_TO_REG_0(
+         .reg = reg.reg,
+         .one_reg_wr = args.one_reg_wr,
+         .cnt = args.cnt,
+         .shift_by_2 = args.shift_by_2,
+         .wait_cache_flush = args.wait_cache_flush,
+      ))
+      .add(va)
+      .add(va >> 32);
+}
 
 template <chip CHIP>
 static inline fd_reg_pair

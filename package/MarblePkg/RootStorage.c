@@ -68,7 +68,7 @@ EFI_STATUS MarbleRootStorage(VOID *TemporaryKernel, UINTN TemporaryKernelBytes) 
     mStorage=AllocatePages(EFI_SIZE_TO_PAGES(sizeof(*mStorage)));
     if (!mStorage) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }
     ZeroMem(mStorage,sizeof(*mStorage));
-    mStorage->Magic=ROOT_STAGE_MAGIC; mStorage->Version=2;
+    mStorage->Magic=ROOT_STAGE_MAGIC; mStorage->Version=ROOT_STAGE_VERSION;
     mStorage->KernelBytes=0x200000000ULL;
     mStorage->KernelBase=(UINTN)AllocateAlignedPages(EFI_SIZE_TO_PAGES(mStorage->KernelBytes+0x200000),0x200000);
     if (!mStorage->KernelBase) { FreePages(Header,1); return EFI_OUT_OF_RESOURCES; }

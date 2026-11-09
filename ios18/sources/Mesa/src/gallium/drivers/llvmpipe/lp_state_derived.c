@@ -80,8 +80,40 @@ compute_vertex_info(struct llvmpipe_context *llvmpipe)
    draw_emit_vertex_attr(vinfo, EMIT_4F, vs_index);
 
    struct nir_shader *nir = llvmpipe->fs->base.ir.nir;
-   uint64_t slot_emitted = 0;
+
+   /* The FS reads the input with driver location i from attrib i + 1, so
+    * emit the vertex attributes in driver location order. The variable
+    * list is sorted by location, which is not necessarily the same order
+    * (e.g. the FS inputs PRIMITIVE_ID, VIEWPORT and LAYER are assigned
+    * driver locations after all other inputs).
+    */
+   nir_variable *inputs[PIPE_MAX_SHADER_INPUTS] = { NULL };
+   unsigned num_input_slots = 0;
+
    nir_foreach_shader_in_variable(var, nir) {
+      unsigned slots = nir_variable_count_slots(var, var->type);
+      assert(var->data.driver_location + slots <= PIPE_MAX_SHADER_INPUTS);
+      inputs[var->data.driver_location] = var;
+      num_input_slots = MAX2(num_input_slots,
+                             var->data.driver_location + slots);
+   }
+
+   for (unsigned attr = 0; attr < num_input_slots;) {
+      nir_variable *var = inputs[attr];
+
+      assert(vinfo->num_attribs == attr + 1);
+
+      if (!var) {
+         /* There should be no holes between driver locations, but emit a
+          * dummy attribute to preserve the FS input mapping if there is
+          * one.
+          */
+         assert(!"hole in FS input driver locations");
+         draw_emit_vertex_attr(vinfo, EMIT_4F, 0);
+         attr++;
+         continue;
+      }
+
       unsigned tgsi_semantic_name, tgsi_semantic_index;
       unsigned slots = nir_variable_count_slots(var, var->type);
       tgsi_get_gl_varying_semantic(var->data.location,
@@ -93,10 +125,6 @@ compute_vertex_info(struct llvmpipe_context *llvmpipe)
          vs_index = draw_find_shader_output(llvmpipe->draw,
                                             tgsi_semantic_name,
                                             tgsi_semantic_index);
-         if (slot_emitted & BITFIELD64_BIT(vs_index)) {
-            tgsi_semantic_index++;
-            continue;
-         }
 
          if (tgsi_semantic_name == TGSI_SEMANTIC_COLOR &&
              tgsi_semantic_index < 2) {
@@ -128,9 +156,9 @@ compute_vertex_info(struct llvmpipe_context *llvmpipe)
              */
             draw_emit_vertex_attr(vinfo, EMIT_4F, vs_index);
          }
-         slot_emitted |= BITFIELD64_BIT(vs_index);
          tgsi_semantic_index++;
       }
+      attr += slots;
    }
 
    /*
@@ -208,11 +236,13 @@ check_linear_rasterizer(struct llvmpipe_context *lp)
         lp->framebuffer.cbufs[0].format == PIPE_FORMAT_R8G8B8X8_UNORM));
 
    /* permit_linear means guardband, hence fake scissor, which we can only
-    * handle if there's just one vp. */
+    * handle if there's just one vp, and only when the linear rasterizer is
+    * available, since setup scissors to the viewport only in that case. */
    const bool single_vp = lp->viewport_index_slot < 0;
    const bool permit_linear = (!lp->framebuffer.zsbuf.texture &&
                                valid_cb_format &&
-                               single_vp);
+                               single_vp &&
+                               lp_setup_linear_rasterizer_supported());
 
    /* Tell draw that we're happy doing our own x/y clipping.
     */

@@ -259,6 +259,15 @@ int qrisc_util_init(enum qrisc_fwid fw_id, int *gpuver_out, bool colors)
    char *pipe_reg_name = NULL;
 
    switch (fw_id) {
+   case QRISC_GEN80000:
+   case QRISC_GEN80100:
+   case QRISC_GEN80200:
+      name = "A6XX";
+      variant = "A8XX";
+      control_reg_name = "A7XX_GEN3_CONTROL_REG";
+      pipe_reg_name = "A7XX_PIPE_REG";
+      *gpuver_out = 8;
+      break;
    case QRISC_A750:
       name = "A6XX";
       variant = "A7XX";
@@ -269,6 +278,8 @@ int qrisc_util_init(enum qrisc_fwid fw_id, int *gpuver_out, bool colors)
    case QRISC_A730:
    case QRISC_A740:
    case QRISC_GEN70500:
+   case QRISC_GEN71500:
+   case QRISC_GEN71700:
       name = "A6XX";
       variant = "A7XX";
       control_reg_name = "A7XX_CONTROL_REG";
@@ -278,6 +289,7 @@ int qrisc_util_init(enum qrisc_fwid fw_id, int *gpuver_out, bool colors)
    case QRISC_A630:
    case QRISC_A650:
    case QRISC_A660:
+   case QRISC_A702:
       name = "A6XX";
       variant = "A6XX";
       control_reg_name = "A6XX_CONTROL_REG";

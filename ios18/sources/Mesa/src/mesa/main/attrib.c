@@ -143,7 +143,7 @@ _mesa_PushAttrib(GLbitfield mask)
       attr->DepthTest = ctx->Depth.Test;
       attr->Dither = ctx->Color.DitherFlag;
       attr->Fog = ctx->Fog.Enabled;
-      for (i = 0; i < ctx->Const.MaxLights; i++) {
+      for (i = 0; i < MAX_LIGHTS; i++) {
          attr->Light[i] = ctx->Light.Light[i].Enabled;
       }
       attr->Lighting = ctx->Light.Enabled;
@@ -331,8 +331,6 @@ _mesa_PushAttrib(GLbitfield mask)
 static void
 pop_enable_group(struct gl_context *ctx, const struct gl_enable_attrib_node *enable)
 {
-   GLuint i;
-
    TEST_AND_UPDATE(ctx->Color.AlphaEnabled, enable->AlphaTest, GL_ALPHA_TEST);
    if (ctx->Color.BlendEnabled != enable->Blend) {
       if (ctx->Extensions.EXT_draw_buffers2) {
@@ -433,9 +431,7 @@ pop_enable_group(struct gl_context *ctx, const struct gl_enable_attrib_node *ena
    TEST_AND_UPDATE(ctx->Polygon.StippleFlag, enable->PolygonStipple,
                    GL_POLYGON_STIPPLE);
    if (ctx->Scissor.EnableFlags != enable->Scissor) {
-      unsigned i;
-
-      for (i = 0; i < ctx->Const.MaxViewports; i++) {
+      for (unsigned i = 0; i < ctx->Const.MaxViewports; i++) {
          TEST_AND_UPDATE_INDEX(ctx->Scissor.EnableFlags, enable->Scissor,
                                i, GL_SCISSOR_TEST);
       }
@@ -486,7 +482,7 @@ pop_enable_group(struct gl_context *ctx, const struct gl_enable_attrib_node *ena
    const unsigned curTexUnitSave = ctx->Texture.CurrentUnit;
 
    /* texture unit enables */
-   for (i = 0; i < ctx->Const.MaxTextureUnits; i++) {
+   for (GLuint i = 0; i < ctx->Const.MaxTextureUnits; i++) {
       const GLbitfield enabled = enable->Texture[i];
       const GLbitfield gen_enabled = enable->TexGen[i];
       const struct gl_fixedfunc_texture_unit *unit = &ctx->Texture.FixedFuncUnit[i];
@@ -730,9 +726,8 @@ _mesa_PopAttrib(void)
           * function, but legal for the later.
           */
          GLboolean multipleBuffers = GL_FALSE;
-         GLuint i;
 
-         for (i = 1; i < ctx->Const.MaxDrawBuffers; i++) {
+         for (GLuint i = 1; i < ctx->Const.MaxDrawBuffers; i++) {
             if (attr->Color.DrawBuffer[i] != GL_NONE) {
                multipleBuffers = GL_TRUE;
                break;
@@ -890,7 +885,7 @@ _mesa_PopAttrib(void)
       memcpy(&ctx->Light.Model, &attr->Light.Model,
              sizeof(attr->Light.Model));
 
-      for (i = 0; i < ctx->Const.MaxLights; i++) {
+      for (i = 0; i < MAX_LIGHTS; i++) {
          TEST_AND_UPDATE(ctx->Light.Light[i].Enabled,
                          attr->Light.Light[i].Enabled,
                          GL_LIGHT0 + i);
@@ -1199,6 +1194,10 @@ copy_array_object(struct gl_context *ctx,
 {
    /* skip Name */
    /* skip RefCount */
+
+   dest->FormatFallbackMask =
+      (dest->FormatFallbackMask & ~copy_attrib_mask) |
+      (src->FormatFallbackMask & copy_attrib_mask);
 
    while (copy_attrib_mask) {
       unsigned i = u_bit_scan(&copy_attrib_mask);

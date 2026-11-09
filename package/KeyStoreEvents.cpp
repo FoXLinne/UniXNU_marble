@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <IOKit/IOService.h>
+#include <IOKit/IODeviceTreeSupport.h>
+#include <libkern/c++/OSData.h>
 #include <libkern/c++/OSSymbol.h>
 #include <mach/kmod.h>
 #include <pexpert/pexpert.h>
@@ -19,6 +21,19 @@ extern "C" uint32_t native_aks_lock_state(void) {
     unsigned state = 0;
     PE_parse_boot_argn("sheng-aks-sls", &state, sizeof(state));
     return state <= 7 ? state : 0;
+}
+extern "C" size_t native_aks_device_id(uint8_t *out, size_t capacity) {
+    IORegistryEntry *chosen = IORegistryEntry::fromPath("/chosen", gIODTPlane);
+    OSData *id = chosen ? OSDynamicCast(OSData, chosen->getProperty("unique-chip-id")) : nullptr;
+    size_t n = 0;
+    if (id && id->getLength() >= 8 && id->getLength() <= capacity) {
+        const uint8_t *bytes = static_cast<const uint8_t *>(id->getBytesNoCopy());
+        bool nonzero = false;
+        for (unsigned i = 0; i < id->getLength(); ++i) { out[i] = bytes[i]; nonzero |= bytes[i] != 0; }
+        if (nonzero) n = id->getLength();
+    }
+    if (chosen) chosen->release();
+    return n;
 }
 extern "C" void native_aks_opened(void) { openedClients++; }
 extern "C" void native_aks_call(uint32_t, int32_t) { clientCalls++; }

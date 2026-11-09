@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tomllib
 import zlib
+from marble_display_geometry import display_geometry, display_layout
 
 from build_ios18_arm64e import DEVICE, ADSP_FIRMWARE, PROFILE as OS_PROFILE, read_adt, write_adt, validate_prelink
 from build_pac_uefi import build_applications, pack_boot_image
@@ -45,6 +46,35 @@ def persistent_data_metadata(seed, profile_path):
     return metadata
 
 
+def append_appsync(addon, runtime, output):
+    report = json.loads((runtime / 'report.json').read_text())
+    if (report['target'], report['build']) != ('ios18', '22H384'):
+        raise ValueError('AppSync runtime must target 22H384')
+    for relative, record in report['files'].items():
+        if hashlib.sha256((runtime / relative).read_bytes()).hexdigest() != record['sha256']:
+            raise ValueError('AppSync executable differs from its build: ' + relative)
+    blob = addon.read_bytes()
+    if blob[:8] != b'NGPUADD2' or struct.unpack_from('<Q', blob, 16)[0] != len(blob):
+        raise ValueError('AppSync requires an NGPUADD2 base addon')
+    count, = struct.unpack_from('<I', blob, 8)
+    body = bytearray(blob[24:])
+    for prefix, directory in report['directories'].items():
+        for path in sorted((runtime / directory).rglob('*')):
+            if not path.is_file():
+                continue
+            name = prefix + '/' + path.relative_to(runtime / directory).as_posix()
+            encoded = name.encode() + b'\0'
+            if len(encoded) > 160 or '..' in Path(name).parts or name.startswith('/'):
+                raise ValueError('Invalid AppSync addon path: ' + name)
+            data = path.read_bytes()
+            packed = zlib.compress(data, 9)
+            body += struct.pack('<IIQQ', len(encoded), path.stat().st_mode & 0o777, len(data), len(packed))
+            body += encoded + bytes(-len(encoded) % 8) + packed + bytes(-len(packed) % 8)
+            count += 1
+    output.write_bytes(b'NGPUADD2' + struct.pack('<IIQ', count, 0, len(body) + 24) + body)
+    return output, report
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True, type=Path)
@@ -55,11 +85,20 @@ def main():
                         help='Persistent Data geometry and identity for this board')
     parser.add_argument('--temporary', action='store_true',
                         help='Embed the kernel and retain the RootStage USB service')
+    parser.add_argument('--hold-rootstage', action='store_true',
+                        help='Wait for the RootStage continue command before entering XNU')
+    parser.add_argument('--usb-owner', choices=('firmware','kernel'), default='kernel',
+                        help='Controller owner while XNU runs; kernel ownership uses all eight CPUs')
     parser.add_argument('--vsync', type=int, default=120,
                         help='Display presentation cadence')
     parser.add_argument('--gpu-addon', type=Path, help='22H384 NGPUADD2 bundle; defaults to ROOT/gpu/metal.gpuaddon')
-    parser.add_argument('--display-scale', type=int, choices=(2, 3), default=3,
-                        help='Pixels per UI point on the 1080x2400 panel')
+    parser.add_argument('--appsync-runtime', type=Path, help='Built 22H384 AppSync runtime directory')
+    parser.add_argument('--kernel', type=Path, help='New fileset kernel built from the current device sources')
+    parser.add_argument('--firmware-binaries', type=Path, help='Built MarbleBoot AARCH64 applications for this candidate')
+    parser.add_argument('--baseline', type=Path,
+                        help='Running candidate directory containing temporary-boot.json and kernel.macho')
+    parser.add_argument('--display-scale', type=int, choices=(2, 3),
+                        help='Integer artwork scale; FrontBoard uses the panel-to-layout point scale')
     parser.add_argument('--cpu-regs', default=','.join(hex(value) for value in XNU_AFFINITIES),
                         help='XNU CPU affinities excluding the resident USB service owner')
     parser.add_argument('--disabled-jobs', default='com.apple.CommCenter,com.apple.locationd',
@@ -67,25 +106,46 @@ def main():
     parser.add_argument('--kernel-arg', action='append', default=[], help='Additional NAME=VALUE runtime setting')
     parser.add_argument('--skip-setup', action='store_true', help='Persist Setup completion before launchd starts')
     args = parser.parse_args()
+    candidate = (json.loads((args.baseline / 'temporary-boot.json').read_text())
+                 if args.baseline else None)
     identity = tomllib.loads(OS_PROFILE.read_text())['ui_identity']
+    if candidate:
+        args.cpu_regs = ','.join(hex(value) for value in candidate['enabled_cpu_affinities'])
+        if args.display_scale is None:
+            args.display_scale = display_geometry()['scale']
+        if args.usb_owner=='firmware' and candidate['firmware_usb_affinity'] != USB_AFFINITY:
+            raise ValueError('Candidate CPU ownership differs from this firmware')
+    native_usb=args.usb_owner=='kernel'
+    allowed_affinities=list(range(0,0x800,0x100)) if native_usb else XNU_AFFINITIES
+    if native_usb:args.cpu_regs=','.join(hex(value) for value in allowed_affinities)
+    if args.display_scale is None:
+        args.display_scale = display_geometry()['scale']
     cpu_regs = [int(value, 0) for value in args.cpu_regs.split(',')]
     if not cpu_regs or cpu_regs[0] != 0 or len(set(cpu_regs)) != len(cpu_regs) or any(
-            value not in XNU_AFFINITIES for value in cpu_regs):
+            value not in allowed_affinities for value in cpu_regs):
         parser.error('--cpu-regs must select distinct XNU-owned affinities, starting with 0')
     metadata = persistent_data_metadata(args.data_seed.resolve(), args.storage_profile.resolve())
     root, out = args.root.resolve(), args.assets.resolve()
     out.mkdir(parents=True, exist_ok=True)
     platform = DEVICE / 'firmware'
-    binaries = build_applications(out, platform, DEVICE.parent / 'UniXNU')
+    binaries = (args.firmware_binaries.resolve() if args.firmware_binaries else
+                args.baseline / 'Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64' if candidate
+                else build_applications(out, platform, DEVICE.parent / 'UniXNU'))
     kernel = out / 'kernel.macho'
-    shutil.copyfile(root / 'kernel.fileset.macho', kernel)
-    baseline = validate_prelink(root)
+    selected_kernel = args.kernel or (args.baseline / 'kernel.macho' if candidate else root / 'kernel.fileset.macho')
+    shutil.copyfile(selected_kernel, kernel)
+    baseline = ({'candidate_sha256': candidate['kernel_sha256'],
+                 'inputs': {'native_sha256': candidate['native_sha256']}}
+                if candidate and args.kernel is None else validate_prelink(root))
     if hashlib.sha256(kernel.read_bytes()).hexdigest() != baseline['candidate_sha256']:
         raise ValueError('Kernel differs from the current prelink report')
     addon = (args.gpu_addon or root / 'gpu/metal.gpuaddon').resolve()
     gpu = json.loads((root / 'gpu/userspace.json').read_text())
     if hashlib.sha256(addon.read_bytes()).hexdigest() != gpu['addon_sha256']:
         raise ValueError('GPU addon differs from its signed userspace build')
+    appsync = None
+    if args.appsync_runtime:
+        addon, appsync = append_appsync(addon, args.appsync_runtime.resolve(), out / 'runtime.gpuaddon')
     data = kernel.read_bytes()
     data += bytes(-len(data) % 4096)
     offset = len(data)
@@ -113,8 +173,19 @@ def main():
         boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
     if args.skip_setup:
         boot_args += ' marble-skip-setup=1'
+    if candidate:
+        boot_args = candidate['boot_args']
+        if (candidate['data_uuid'].upper() != metadata['volume_uuid'].upper()
+                or candidate['data_logical_bytes'] != metadata['logical_bytes']):
+            raise ValueError('Candidate Data identity differs from the selected installation')
     try:
-        boot_args = merge_kernel_args(boot_args, args.kernel_arg)
+        if native_usb:
+            args.kernel_arg+=['rootstage-runtime-usb=1','marble-native-services=1',f'cpus={len(cpu_regs)}']
+        if appsync:
+            args.kernel_arg.append('appsync=1')
+        boot_args = merge_kernel_args(boot_args, ['sheng-aks-sls=3', *args.kernel_arg,
+                                                      f'marble-ui-identity={identity["generation"]}',
+                                                      f'marble-display-scale={args.display_scale}'])
     except ValueError as error:
         parser.error(str(error))
     mailbox[128:128 + len(boot_args)] = boot_args.encode()
@@ -144,7 +215,8 @@ def main():
     shutil.copyfile(binaries / 'UniXNU.efi', stage / 'UniXNU.efi')
     shutil.copyfile(binaries / 'DarwinBoot.efi', payloads / 'DarwinBoot.efi')
     for name in ['kernel.macho.adt', 'kernel.macho.trustcache']:
-        shutil.copyfile(root / 'boot/stage/EFI/UniXNU/Payloads' / name, payloads / name)
+        template = args.baseline if candidate else root / 'boot'
+        shutil.copyfile(template / 'stage/EFI/UniXNU/Payloads' / name, payloads / name)
     shutil.copyfile(addon, payloads / 'kernel.macho.gpuaddon')
     # Preserve each original trust module and append the owner-built GPU module.
     original_trust = (payloads / 'kernel.macho.trustcache').read_bytes()
@@ -157,6 +229,12 @@ def main():
         raise ValueError('GPU owner trust module differs from the userspace build')
     if owner_bytes not in modules:
         modules.append(owner_bytes)
+    if appsync:
+        hashes = sorted({bytes.fromhex(record['cdhash']) for record in appsync['files'].values()})
+        module = struct.pack('<I16sI', 2, hashlib.sha256(b''.join(hashes)).digest()[:16], len(hashes))
+        module += b''.join(value + bytes([2, 0, 0, 0]) for value in hashes)
+        if module not in modules:
+            modules.append(module)
     cursor = 4 + 4 * len(modules)
     offsets = []
     for module in modules:
@@ -170,6 +248,9 @@ def main():
     template = cpus[1][0][0]
     cpus[1][:] = [({**template, 'name': f'cpu{index}\0'.encode(),
                     'reg': struct.pack('<I', affinity),
+                    'cluster-type': struct.pack('<I', ord('E' if affinity < 0x400 else 'P')),
+                    'compatible': (b'arm,cortex-a510\0' if affinity < 0x400 else
+                                   b'arm,cortex-a710\0' if affinity < 0x700 else b'arm,cortex-x2\0'),
                     'state': b'running\0' if index == 0 else b'waiting\0'}, [])
                   for index, affinity in enumerate(cpu_regs)]
     if not any(node[0].get('name') == b'psci\0' for node in tree[1]):
@@ -177,22 +258,36 @@ def main():
     chosen = next(node for node in tree[1] if node[0].get('name') == b'chosen\0')
     # Keep display geometry and artwork density in agreement on the phone panel.
     chosen[0]['display-scale'] = struct.pack('<I', args.display_scale)
+    geometry = display_geometry()
+    chosen[0]['dot-pitch'] = struct.pack('<I', geometry['pixels_per_inch'])
+    chosen[0]['display-physical-size-mm'] = struct.pack('<II', geometry['width_mm'], geometry['height_mm'])
     product = next(node for node in tree[1] if node[0].get('name') == b'product\0')
     product[0]['artwork-scale-factor'] = struct.pack('<I', args.display_scale)
     tree[0]['model'] = identity['product'].encode() + b'\0'
     tree[0]['target-type'] = identity['target_type'].encode() + b'\0'
+    tree[0]['ui-hardware-model'] = identity['hardware_model'].encode() + b'\0'
     for key in ('product-name', 'product-description'):
         product[0][key] = identity['name'].encode() + b'\0'
     product[0]['model'] = identity['product'].encode() + b'\0'
     product[0]['artwork-device-subtype'] = struct.pack('<I', identity['artwork_device_subtype'])
+    product[0]['large-format-phone'] = struct.pack('<I', int(identity['large_format_phone']))
     product[0]['compatible-device-fallback'] = identity['compatible_device_fallback'].encode() + b'\0'
+    layout = display_layout()
+    corner = layout['corner_radius_pixels'] / layout['native_points_scale']
+    product[0]['display-corner-radius'] = struct.pack('<II', round(corner * 10000), 10000)
+    product[0]['island-notch-location'] = struct.pack('<I', identity['island_notch_location'])
+    product[0]['chrome-identifier'] = identity['chrome_identifier'].encode() + b'\0'
+    product[0]['oled-display'] = struct.pack('<I', int(identity['oled_display']))
+    product[0]['udid-version'] = struct.pack('<I', identity['udid_version'])
     chosen[0]['darwinboot-memory-size'] = struct.pack('<Q', 0x200000000)
     memory = next(node for node in chosen[1] if node[0].get('name') == b'memory-map\0')
     memory[0]['RootDisks'] = bytes(16)
     memory[0]['GpuAddon'] = bytes(16)
     adt.write_bytes(write_adt(tree))
-    config = (root / 'boot/stage/EFI/UniXNU/unixnu.toml').read_text()
-    config = config.replace('args = "', 'args = "rootstage-runtime-usb=3 ' + cpu_args + ' ', 1)
+    template = args.baseline if candidate else root / 'boot'
+    config = (template / 'stage/EFI/UniXNU/unixnu.toml').read_text()
+    config = re.sub(r'(?m)^(\s*args\s*=\s*)"[^"\n]*"',
+                    lambda match: match[1] + json.dumps(boot_args), config, count=1)
     (stage / 'unixnu.toml').write_text(config)
     volume = out / 'volume.img'
     volume_size = sum(path.stat().st_size for path in stage.rglob('*') if path.is_file()) + 4 * 1048576
@@ -202,26 +297,41 @@ def main():
     subprocess.run(['mformat', '-i', volume, '-v', 'MARBLEESP', '::'], check=True)
     subprocess.run(['mcopy', '-i', volume, '-s', '-Q', stage.parent, '::/'], check=True)
     blobs = [('loader.efi', (binaries / 'MarbleBootstrap.efi').read_bytes())]
+    if args.hold_rootstage:
+        blobs.append(('root.stage', b'1'))
     if args.temporary:
         blobs.append(('kernel.seed', data))
     blobs.append(('root.usb', b'1'))
+    if native_usb:blobs.append(('root.nativeusb', b'1'))
     blobs += [('root.storage', b'1'), ('volume.img', volume.read_bytes())]
     body = b''.join(struct.pack('<16sII', name.encode(), len(blob), 0) + blob + bytes(-len(blob) % 16)
                     for name, blob in blobs) + bytes(24)
     boot = pack_boot_image(out, platform, struct.pack('<II', 0x50554e58, len(body)) + body,
                            'marble_temporary_boot.img' if args.temporary else 'marble_persistent_boot.img')
-    if args.temporary:
-        (out / 'temporary-boot.json').write_text(json.dumps(dict(
+    report = out / ('temporary-boot.json' if args.temporary else 'persistent-boot.json')
+    report.write_text(json.dumps(dict(
             image=str(boot), kernel_sha256=hashlib.sha256(kernel.read_bytes()).hexdigest(),
             native_sha256=baseline['inputs']['native_sha256'],
-            kernel_source='boot-image', system_source='ufs', exit_boot_services=False,
-            resident_usb=True, runtime_usb_mode=3, enabled_cpu_affinities=cpu_regs,
-            firmware_usb_affinity=USB_AFFINITY, display_scale=args.display_scale, ui_identity=identity,
+            kernel_source='boot-image' if args.temporary else 'ufs',
+            system_source='ufs', exit_boot_services=False,
+            resident_usb=not native_usb, runtime_usb_mode=1 if native_usb else 3,
+            usb_owner=args.usb_owner, enabled_cpu_affinities=cpu_regs,
+            rootstage_hold=args.hold_rootstage,
+            firmware_usb_affinity=None if native_usb else USB_AFFINITY, display_scale=args.display_scale, ui_identity=identity,
             data_logical_bytes=metadata['logical_bytes'], data_uuid=metadata['volume_uuid'],
             storage_profile_sha256=hashlib.sha256(args.storage_profile.read_bytes()).hexdigest(),
-            logical_size=[1080 // args.display_scale, 2400 // args.display_scale], boot_args=boot_args,
-            gpu_addon_sha256=gpu['addon_sha256'], gpu_sources=gpu['sources'],
-            owner_trust_cache_sha256=gpu['trust_cache_sha256']), indent=2) + '\n')
+            logical_size=[layout['logical_width'], layout['logical_height']],
+            native_size=layout['compositor_size'], artwork_scale=args.display_scale,
+            display_layout_target=layout, boot_args=boot_args,
+            gpu_addon_sha256=hashlib.sha256(addon.read_bytes()).hexdigest(), gpu_sources=gpu['sources'],
+            owner_trust_cache_sha256=gpu['trust_cache_sha256'],
+            appsync_runtime=str(args.appsync_runtime.resolve()) if appsync else None,
+            appsync_build=appsync['build'] if appsync else None), indent=2) + '\n')
+    if candidate:
+        data = json.loads(report.read_text())
+        data['baseline_candidate'] = args.baseline.name
+        data['baseline_kernel_sha256'] = candidate['kernel_sha256']
+        report.write_text(json.dumps(data, indent=2) + '\n')
     print(boot)
 
 

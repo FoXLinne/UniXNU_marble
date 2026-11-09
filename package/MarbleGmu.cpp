@@ -402,6 +402,12 @@ bool ready;
 extern "C" bool native_marble_gmu_ready(void) {
     return __atomic_load_n(&ready, __ATOMIC_ACQUIRE);
 }
+extern "C" int native_marble_gmu_read(uint32_t reg, uint32_t *value) {
+    if (!device || !device->core.words || !value || reg < 0x1a000 || (uint64_t(reg) * 4 - 0x68000) >= 0x37000)
+        return -22;
+    *value = device->read(reg);
+    return 0;
+}
 extern "C" int native_marble_gmu_write(uint32_t reg, uint32_t value) {
     if (!device || !device->core.words || reg < 0x1a000 || (uint64_t(reg) * 4 - 0x68000) >= 0x37000)
         return -22;

@@ -1,0 +1,16 @@
+--- a/bsd/kern/subr_log.c
++++ b/bsd/kern/subr_log.c
+@@ -832,6 +832,8 @@ find_pattern_in_buffer(const char *pattern, size_t len, size_t expected_count)
+ 	return match_count;
+ }
+ 
++#endif /* CONFIG_XNUPOST */
++
+ __startup_func
+ static void
+ oslog_init_msgbuf(void)
+@@ -844,4 +846,3 @@ oslog_init_msgbuf(void)
+ }
+ STARTUP(OSLOG, STARTUP_RANK_SECOND, oslog_init_msgbuf);
+ 
+-#endif

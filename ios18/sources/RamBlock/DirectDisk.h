@@ -6,15 +6,18 @@
 //   Buf: uint64_t read(uint64_t at, void *p, uint64_t n)        bytes of the request buffer (the data of a write)
 //        uint64_t copy(uint64_t at, const void *p, uint64_t n)  bytes into the request buffer (the data of a read)
 //   Store: bool read(block, count, dst); bool write(block, count, src)   (PersistOverlay.h's Ops)
-// `stage` is stagePages * 4096 bytes. Returns the bytes completed; *storeError is set when the store refused or failed (a short
-// copy by the buffer is not a store error). Caller serializes I/O.
+// `stage` is stagePages * 4096 bytes, owned by this call. Returns the bytes completed; *storeError is set when the store refused or
+// failed (a short copy by the buffer is not a store error).
+// Concurrency: reads need no lock. A write writes its pages, then calls commit(index, count), which must run Overlay::commitRun
+// serialized against every other commit and flush; the caller also keeps writes to the same pages from overlapping (a partial page
+// is read, merged and written back). The form without `commit` commits directly, for a caller that serializes all I/O.
 #include "SparseDisk.h"
 #include "SeedDisk.h"
 #include "PersistOverlay.h"
 
-template<class Seed, class Store, class Buf>
+template<class Seed, class Store, class Buf, class Commit>
 static uint64_t directDiskIO(const Seed &seed, persist::Overlay &ov, Store &store, uint8_t *stage, uint32_t stagePages, bool write,
-                             uint64_t offset, uint64_t length, Buf &buf, bool *storeError)
+                             uint64_t offset, uint64_t length, Buf &buf, bool *storeError, Commit &commit)
 {
   static const uint8_t zero[4096] = {};
   *storeError = false;
@@ -48,7 +51,7 @@ static uint64_t directDiskIO(const Seed &seed, persist::Overlay &ov, Store &stor
       uint32_t n = 0;
       while (n < stagePages && (uint64_t) (n + 1) * 4096 <= length - done) ++n;
       if (buf.read(done, stage, (uint64_t) n * 4096) != (uint64_t) n * 4096) break;
-      if (!ov.writeRun(store, index, n, stage)) { *storeError = true; break; }
+      if (!ov.writePages(store, index, n, stage) || !commit(index, n)) { *storeError = true; break; }
       done += (uint64_t) n * 4096;
       continue;
     }
@@ -61,8 +64,20 @@ static uint64_t directDiskIO(const Seed &seed, persist::Overlay &ov, Store &stor
       memcpy(stage, page ? page : zero, 4096);
     }
     if (buf.read(done, stage + skip, n) != n) break;
-    if (!ov.writeRun(store, index, 1, stage)) { *storeError = true; break; }
+    if (!ov.writePages(store, index, 1, stage) || !commit(index, 1)) { *storeError = true; break; }
     done += n;
   }
   return done;
+}
+
+template<class Store> struct DirectCommit {
+  persist::Overlay &ov; Store &store;
+  bool operator()(uint64_t index, uint32_t count) { return ov.commitRun(store, index, count); }
+};
+template<class Seed, class Store, class Buf>
+static uint64_t directDiskIO(const Seed &seed, persist::Overlay &ov, Store &store, uint8_t *stage, uint32_t stagePages, bool write,
+                             uint64_t offset, uint64_t length, Buf &buf, bool *storeError)
+{
+  DirectCommit<Store> commit = {ov, store};
+  return directDiskIO(seed, ov, store, stage, stagePages, write, offset, length, buf, storeError, commit);
 }

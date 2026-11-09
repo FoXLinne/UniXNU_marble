@@ -12,6 +12,10 @@
 extern "C" {
 #endif
 
+/* Minimum required DRM version (Linux kernel 6.11.2+). */
+#define AC_AMDGPU_DRM_MAJOR 3
+#define AC_AMDGPU_DRM_MINOR 59
+
 struct radeon_info;
 
 enum radeon_family
@@ -130,6 +134,7 @@ enum radeon_family
    CHIP_GFX1156,
    /* GFX11.7 */
    CHIP_GFX1170,
+   CHIP_GFX1171,
    /* GFX12 (RDNA 4) */
    CHIP_GFX1200,        /* Radeon 9060 */
    CHIP_GFX1201,        /* Radeon 9070 */
@@ -224,6 +229,7 @@ enum vcn_version{
 
    VCN_5_0_0,
    VCN_5_0_1,
+   VCN_5_0_2,
    VCN_5_3_0,
 };
 

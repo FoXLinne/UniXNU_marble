@@ -1,0 +1,13 @@
+# Copy to unixnu.local.toml and fill in the paths for your device.
+# Relative paths start at this file's directory.
+[build]
+device = "../UniXNU-<device>"
+uefi = "../uefi-<device>"
+dtb = "/path/to/firmware.dtb"
+kernelcache = "/path/to/kernelcache"
+trust_cache = "/path/to/trustcache.bundle"
+data_ramdisk = "/path/to/data-seed.dbr"
+unique_chip_id = "<hex>"
+jobs = 8
+target = "DEBUG"
+kernel_args = ["-v", "serial=3", "debug=0x14e"]

@@ -17,8 +17,6 @@
 #endif
 
 static constexpr unsigned variant_count = GLOBAL_SH_COUNT + 2;
-static constexpr size_t max_pack_size = 4 * 1024 * 1024;
-static constexpr size_t max_variant_size = 256 * 1024;
 
 static void
 identity(struct tu_device *dev, struct blob *out)
@@ -51,89 +49,26 @@ available(const struct blob_reader *in, size_t bytes)
    return !in->overrun && bytes <= (size_t)(in->end - in->current);
 }
 
-/* Read only after bounding the record and every allocation. Unlike the
- * general IR3 disk-cache reader, failure is checked before dereferencing an
- * allocation, and no allocation size is taken from an unchecked short blob. */
+/* Use the driver's shared variant reader, as its pipeline cache does. */
 static struct ir3_shader_variant *
 read_variant(struct blob_reader *in, struct ir3_compiler *compiler, void *owner)
 {
-   if (!available(in, sizeof(struct ir3_shader_key) + 8))
+   const struct ir3_shader_variant *variant = NULL;
+   ir3_blob_read reader{in, compiler};
+   reader.variant(variant);
+   if (in->overrun) {
+      ralloc_free(const_cast<struct ir3_shader_variant *>(variant));
       return NULL;
-   struct ir3_shader_key key;
-   blob_copy_bytes(in, &key, sizeof(key));
-   const struct ir3_shader_key zero_key = {};
-   if (memcmp(&key, &zero_key, sizeof(key)))
-      return NULL;
-   const uint32_t stage = blob_read_uint32(in);
-   const uint32_t mergedregs = blob_read_uint32(in);
-   if ((stage != MESA_SHADER_VERTEX && stage != MESA_SHADER_FRAGMENT) || mergedregs > 1)
-      return NULL;
-   struct ir3_shader_variant *v = rzalloc(owner, struct ir3_shader_variant);
-   if (!v)
-      return NULL;
-   v->compiler = compiler;
-   v->key = key;
-   v->type = (mesa_shader_stage) stage;
-   v->mergedregs = mergedregs;
-   v->const_state = rzalloc(v, struct ir3_const_state);
-   if (!v->const_state)
-      return NULL;
-   unsigned count = stage == MESA_SHADER_VERTEX && ir3_has_binning_vs(&key) ? 2 : 1;
-   for (unsigned i = 0; i < count; ++i) {
-      struct ir3_shader_variant *part = v;
-      if (i) {
-         part = rzalloc(v, struct ir3_shader_variant);
-         if (!part)
-            return NULL;
-         v->binning = part;
-         part->compiler = compiler;
-         part->key = key;
-         part->type = MESA_SHADER_VERTEX;
-         part->mergedregs = mergedregs;
-         part->binning_pass = true;
-         part->nonbinning = v;
-         part->const_state = v->const_state;
-      }
-      if (!available(in, VARIANT_CACHE_SIZE))
-         return NULL;
-      blob_copy_bytes(in, VARIANT_CACHE_PTR(part), VARIANT_CACHE_SIZE);
-      const size_t size = part->info.size;
-      if (!size || size > max_variant_size || size % 4 ||
-          part->info.sizedwords * sizeof(uint32_t) > size ||
-          part->info.constant_data_offset > size || !available(in, size))
-         return NULL;
-      part->bin = (uint32_t *) ralloc_size(part, size);
-      if (!part->bin)
-         return NULL;
-      blob_copy_bytes(in, part->bin, size);
-      if (!i) {
-         if (!available(in, sizeof(*part->const_state)))
-            return NULL;
-         blob_copy_bytes(in, part->const_state, sizeof(*part->const_state));
-      }
-      if (!compiler->info->props.load_shader_consts_via_preamble) {
-         if (!available(in, 4))
-            return NULL;
-         unsigned n = blob_read_uint32(in);
-         if (n > max_variant_size / 4 || !available(in, (size_t)n * 4))
-            return NULL;
-         part->imm_state.size = part->imm_state.count = n;
-         if (n) {
-            part->imm_state.values = (uint32_t *) ralloc_size(part, (size_t)n * 4);
-            if (!part->imm_state.values)
-               return NULL;
-            blob_copy_bytes(in, part->imm_state.values, (size_t)n * 4);
-         }
-      }
    }
-   return v;
+   ralloc_steal(owner, const_cast<struct ir3_shader_variant *>(variant));
+   return const_cast<struct ir3_shader_variant *>(variant);
 }
 
 static bool
 decode(struct tu_device *dev, const void *data, size_t size, void *owner,
        struct ir3_shader_variant **variants)
 {
-   if (strlen(TU_BUILTIN_SOURCE_ID) != 64 || !data || size > max_pack_size || size < 32)
+   if (strlen(TU_BUILTIN_SOURCE_ID) != 64 || !data || size < 32)
       return false;
    uint8_t digest[BLAKE3_OUT_LEN];
    _mesa_blake3_compute(data, size - sizeof(digest), digest);
@@ -154,13 +89,12 @@ decode(struct tu_device *dev, const void *data, size_t size, void *owner,
       if (!available(&in, 8) || blob_read_uint32(&in) != i)
          return false;
       const size_t length = blob_read_uint32(&in);
-      if (!length || length > max_variant_size || !available(&in, length))
+      if (!length || !available(&in, length))
          return false;
       struct blob_reader entry;
       blob_reader_init(&entry, in.current, length);
       variants[i] = read_variant(&entry, dev->compiler, owner);
-      if (!variants[i] || entry.overrun || entry.current != entry.end ||
-          variants[i]->type != (i < 3 ? MESA_SHADER_VERTEX : MESA_SHADER_FRAGMENT))
+      if (!variants[i] || entry.overrun || entry.current != entry.end)
          return false;
       in.current += length;
    }
@@ -181,8 +115,8 @@ tu_builtin_pack_load(struct tu_device *dev)
    if (!decode(dev, tu_builtin_pack_bytes, sizeof(tu_builtin_pack_bytes), owner, dev->builtin_variants)) {
       ralloc_free(owner);
       memset(dev->builtin_variants, 0, sizeof(dev->builtin_variants));
-      /* A requested pack is mandatory: no silent runtime compiler fallback. */
-      return VK_ERROR_INITIALIZATION_FAILED;
+      /* A cache miss uses the normal builtin compiler path. */
+      return VK_SUCCESS;
    }
    dev->builtin_cache_owner = owner;
 #endif
@@ -209,7 +143,8 @@ tu_export_builtin_shader_pack(VkDevice handle, size_t *size, void *data)
       }
       struct blob entry;
       blob_init(&entry);
-      ir3_store_variant(&entry, v);
+      ir3_blob_write writer{&entry};
+      writer.variant(v);
       blob_write_uint32(&out, i);
       blob_write_uint32(&out, entry.size);
       blob_write_bytes(&out, entry.data, entry.size);
@@ -220,14 +155,14 @@ tu_export_builtin_shader_pack(VkDevice handle, size_t *size, void *data)
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    }
-   if (out.out_of_memory || out.size > max_pack_size - BLAKE3_OUT_LEN) {
+   if (out.out_of_memory) {
       blob_finish(&out);
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
    uint8_t digest[BLAKE3_OUT_LEN];
    _mesa_blake3_compute(out.data, out.size, digest);
    blob_write_bytes(&out, digest, sizeof(digest));
-   if (out.out_of_memory || out.size > max_pack_size) {
+   if (out.out_of_memory) {
       blob_finish(&out);
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }

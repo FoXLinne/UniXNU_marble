@@ -1045,6 +1045,18 @@ pub extern "C" fn nmb_buffer_length(buffer: *const NmbBuffer) -> u64 {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn nmb_buffer_sync_import(buffer: *const NmbBuffer, acquire: bool,
+    synchronize: Option<unsafe extern "C" fn(u64, u64, u64, bool) -> bool>) -> bool {
+    guard(false, || {
+        let synchronize = synchronize.ok_or("missing import synchronization transport")?;
+        Ok(get(buffer)?.0.synchronize_host_import(|memory, offset, bytes| {
+            // SAFETY: the backend callback synchronizes this retained Vulkan allocation.
+            unsafe { synchronize(memory, offset, bytes, acquire) }
+        }))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn nmb_buffer_gpu_address(buffer: *const NmbBuffer) -> u64 {
     guard(0, || Ok(get(buffer)?.0.gpu_address().0))
 }
@@ -2356,6 +2368,14 @@ pub extern "C" fn nmb_command_buffer_gpu_time(command_buffer: *const NmbCommandB
 }
 
 // ---- events and fences ----
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nmb_command_buffer_kernel_time(command_buffer: *const NmbCommandBuffer, end: bool) -> f64 {
+    guard(0.0, || {
+        let command_buffer = &get(command_buffer)?.0;
+        Ok(if end { command_buffer.kernel_end_time() } else { command_buffer.kernel_start_time() })
+    })
+}
 
 pub enum NmbEvent {
     Event(Event),

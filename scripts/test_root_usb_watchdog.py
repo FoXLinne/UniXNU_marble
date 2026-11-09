@@ -12,13 +12,14 @@ helpers = helpers.replace(
     '__asm__ volatile("mrs %0, cntfrq_el0" : "=r"(mWatchdogFrequency));',
     'mWatchdogFrequency=100;')
 helpers = helpers.replace(
-    '__asm__ volatile("dc cvac, %0\\n\\tdsb sy" :: "r"((UINTN)Heartbeat) : "memory");',
+    '__asm__ volatile("dc cvac, %0\\n\\tdsb sy" :: "r"((UINTN)&mStage->UsbHost) : "memory");',
     'published=TRUE;')
 preamble = r'''
 #include <assert.h>
 #include <stdint.h>
 #include <stddef.h>
 #include "MarbleUsbHealth.h"
+#include "Protocol/RootStage.h"
 #define STATIC static
 #define VOID void
 #define TRUE 1
@@ -26,7 +27,7 @@ preamble = r'''
 typedef uint64_t UINT64;
 typedef uint32_t UINT32;
 typedef int BOOLEAN;
-static struct { UINT64 ReturnTest; } stage;
+static ROOT_STAGE_TABLE stage;
 static typeof(stage) *mStage=&stage;
 static BOOLEAN mKernelRunning, published;
 static UINT64 mWatchdogControl, mWatchdogStatus, mWatchdogPetStatus;
@@ -34,6 +35,8 @@ static UINT64 mWatchdogLastPet, mWatchdogFrequency, counter;
 static BOOLEAN mWatchdogService;
 static int active, statusError, disableError, pets;
 static UINT64 RootCounter(void) { return counter; }
+void MarbleDisplayService(void) {}
+void MarbleRtcService(void) {}
 static UINT64 MarbleWatchdogCall(unsigned call, unsigned a, unsigned b, UINT64 *state) {
   assert(b==0);
   if (call==0x86000006) { *state=active; return statusError; }
@@ -54,15 +57,15 @@ int main(void) {
   counter=50; ServiceWatchdog(); assert(pets==5);
   statusError=1; RetainUsbWatchdog(); assert(mWatchdogService);
   counter+=100; ServiceWatchdog(); assert(pets==6);
-  mKernelRunning=1; stage.ReturnTest=UINT64_C(1)<<32;
+  mKernelRunning=1; stage.UsbHost.Heartbeat=1;
   counter+=100; published=0; ServiceWatchdog();
-  assert(published && (stage.ReturnTest>>32)==UINT32_C(0x80000003));
-  *(UINT32 *)&stage.ReturnTest=2;
+  assert(published && stage.UsbHost.Heartbeat==UINT32_C(0x80000003));
+  stage.UsbHost.Sequence=7; stage.UsbHost.Command=2; stage.UsbKernel.Completed=6;
   counter+=100; ServiceWatchdog();
-  assert((UINT32)stage.ReturnTest==2 && (stage.ReturnTest>>32)==UINT32_C(0x80000005));
-  stage.ReturnTest=UINT64_C(0xffffffff)<<32;
+  assert(stage.UsbHost.Command==2 && stage.UsbHost.Sequence==7 && stage.UsbKernel.Completed==6 && stage.UsbHost.Heartbeat==UINT32_C(0x80000005));
+  stage.UsbHost.Heartbeat=UINT32_MAX;
   counter+=100; ServiceWatchdog();
-  assert((stage.ReturnTest>>32)==MARBLE_USB_HEARTBEAT_TAG);
+  assert(stage.UsbHost.Heartbeat==MARBLE_USB_HEARTBEAT_TAG);
   struct MarbleUsbHealth health={0};
   assert(!marble_usb_health_tick(&health,1,0));
   assert(!marble_usb_health_tick(&health,1,500));

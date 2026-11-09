@@ -5,12 +5,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 int main(int argc, char **argv) {
-  if (argc != 3) {
-    fprintf(stderr, "usage: %s HUB_LOCATION_ID PORT\n", argv[0]);
+  if (argc != 3 && argc != 4) {
+    fprintf(stderr, "usage: %s HUB_LOCATION_ID PORT [OFF_MILLISECONDS]\n", argv[0]);
     return 2;
   }
   unsigned target = (unsigned)strtoul(argv[1], NULL, 0);
   unsigned port = (unsigned)strtoul(argv[2], NULL, 0);
+  unsigned off_ms = argc == 4 ? (unsigned)strtoul(argv[3], NULL, 0) : 1000;
+  if (off_ms < 100 || off_ms > 60000)
+    return 2;
   if (!port || port > 255)
     return 2;
   io_iterator_t iterator = 0;
@@ -74,7 +77,7 @@ int main(int argc, char **argv) {
     r = (*device)->DeviceRequestTO(device, &request);
     unsigned characteristics = descriptor[3] | descriptor[4] << 8;
     printf("hub descriptor=%08x characteristics=%04x\n", r, characteristics);
-    if (!r && request.wLenDone >= 7 && (characteristics & 3) <= 1) {
+    if (!r && request.wLenDone >= 7 && (characteristics & 3) == 1) {
       request.bmRequestType = 0x23;
       request.bRequest = 1;
       request.wValue = 8;
@@ -84,7 +87,7 @@ int main(int argc, char **argv) {
       r = (*device)->DeviceRequestTO(device, &request);
       printf("port=%u power_off=%08x\n", port, r);
       if (!r) {
-        usleep(1000000);
+        usleep(off_ms * 1000);
         request.bRequest = 3;
         r = (*device)->DeviceRequestTO(device, &request);
         printf("port=%u power_on=%08x\n", port, r);

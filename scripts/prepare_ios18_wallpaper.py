@@ -7,6 +7,7 @@ import re
 import subprocess
 
 from prepare_phone_resources import pack_addon, unpack_addon
+from marble_display_geometry import display_geometry, display_layout
 
 
 def prepare_wallpaper(addon, ios_root, identity, cache):
@@ -17,7 +18,9 @@ def prepare_wallpaper(addon, ios_root, identity, cache):
     resources = {}
     converted = 0
     native = 0
-    screen = '360w-800h@3x~iphone'
+    display, layout = display_geometry(), display_layout()
+    screen = (f'{round(layout["logical_width"])}w-{round(layout["logical_height"])}h'
+              f'@{display["scale"]}x~iphone')
 
     def add(path, destination, names=None):
         nonlocal converted

@@ -163,6 +163,9 @@ draw_init(struct draw_context *draw)
    if (!draw_gs_init(draw))
       return false;
 
+   if (!draw_tess_init(draw))
+      return false;
+
    draw->quads_always_flatshade_last =
       !draw->pipe->screen->caps.quads_follow_provoking_vertex_convention;
 
@@ -183,7 +186,7 @@ draw_init(struct draw_context *draw)
 void
 draw_new_instance(struct draw_context *draw)
 {
-   draw_geometry_shader_new_instance(draw->gs.geometry_shader);
+   draw_geometry_shader_new_instance(draw);
    draw_prim_assembler_new_instance(draw->ia);
 }
 
@@ -222,6 +225,7 @@ draw_destroy(struct draw_context *draw)
    draw_pt_destroy(draw);
    draw_vs_destroy(draw);
    draw_gs_destroy(draw);
+   draw_tess_destroy(draw);
 #if DRAW_LLVM_AVAILABLE
    if (draw->llvm)
       draw_llvm_destroy(draw->llvm);
@@ -1291,4 +1295,10 @@ void
 draw_set_constant_buffer_stride(struct draw_context *draw, unsigned num_bytes)
 {
    draw->constant_buffer_stride = num_bytes;
+}
+
+void
+draw_set_tess_ccw_flip(struct draw_context *draw, bool enable)
+{
+   draw->tess_ccw_flip = enable;
 }

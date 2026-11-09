@@ -16,7 +16,7 @@ MarblePanicReaderEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   if (!Log) return EFI_OUT_OF_RESOURCES;
   CopyMem(Log, (VOID *)(UINTN)0xB7000000, 0x100000);
   Stage.Magic = ROOT_STAGE_MAGIC;
-  Stage.Version = 2;
+  Stage.Version = ROOT_STAGE_VERSION;
   Stage.KernelBase = 0xB7000000;
   Stage.ReturnCount = *(UINT32 *)Log;
   Stage.Disks[2].Bytes = 0x100000;

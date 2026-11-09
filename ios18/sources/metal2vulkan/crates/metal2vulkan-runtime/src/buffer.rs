@@ -3562,6 +3562,19 @@ impl Buffer {
         self.0.length
     }
 
+    /// Synchronize a pinned host import through its Vulkan memory binding. The import
+    /// and its placement stay retained through the callback, independent of its CPU VA.
+    pub fn synchronize_host_import(
+        &self,
+        synchronize: impl FnOnce(u64, u64, u64) -> bool,
+    ) -> bool {
+        use ash::vk::Handle;
+        let _placement = self.making_texture();
+        let Some(_pages) = self.host_pages() else { return true; };
+        let (memory, offset, _) = self.memory();
+        synchronize(memory.as_raw(), offset, self.length())
+    }
+
     /// `contents`: the CPU address of the buffer's bytes, or `None` for `Private` storage. A
     /// no-copy buffer's is the caller's pointer. Reading or writing through it while the GPU
     /// writes those bytes is a data race, as in Metal.

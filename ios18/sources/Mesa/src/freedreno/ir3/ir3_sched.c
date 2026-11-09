@@ -257,14 +257,32 @@ schedule(struct ir3_sched_ctx *ctx, struct ir3_instruction *instr)
 
    if (writes_addr0(instr)) {
       assert(ctx->addr0 == NULL);
-      ctx->addr0 = instr;
-      ctx->addr0_uses = instr->uses->entries;
+      if (instr->opc != OPC_MOV) {
+         /* If a0 is written but not actually used (i.e., bar in REUSEGPRMODE or
+          * alias-using texture instructions), we shouldn't keep track of the
+          * writer as this would deadlock us because no reader is ever
+          * scheduled. We can't rely on the uses because texture instructions
+          * have uses but their definition of a0.x does not, so we detect this
+          * by assuming that the only real writes of a0.x come from mova.
+          */
+         ctx->addr0 = NULL;
+         ctx->addr0_uses = 0;
+      } else {
+         ctx->addr0 = instr;
+         ctx->addr0_uses = instr->uses->entries;
+      }
    }
 
    if (writes_addr1(instr)) {
       assert(ctx->addr1 == NULL);
-      ctx->addr1 = instr;
-      ctx->addr1_uses = instr->uses->entries;
+      if (instr->opc != OPC_MOV) {
+         /* See note above for a0. */
+         ctx->addr1 = NULL;
+         ctx->addr1_uses = 0;
+      } else {
+         ctx->addr1 = instr;
+         ctx->addr1_uses = instr->uses->entries;
+      }
    }
 
    if (reads_addr0(instr)) {
@@ -438,37 +456,41 @@ check_instr(struct ir3_sched_ctx *ctx, struct ir3_sched_notes *notes,
     * NOTE if any instructions use pred register and have other
     * src args, we would need to do the same for writes_pred()..
     */
-   if (writes_addr0(instr)) {
+   if (writes_addr0(instr) && instr->uses) {
       struct ir3 *ir = instr->block->shader;
       bool ready = false;
+      bool has_users = false;
       for (unsigned i = 0; (i < ir->a0_users_count) && !ready; i++) {
          struct ir3_instruction *indirect = ir->a0_users[i];
          if (!indirect)
             continue;
          if (indirect->address->def != instr->dsts[0])
             continue;
+         has_users = true;
          ready = could_sched(ctx, indirect, instr);
       }
 
       /* nothing could be scheduled, so keep looking: */
-      if (!ready)
+      if (has_users && !ready)
          return false;
    }
 
-   if (writes_addr1(instr)) {
+   if (writes_addr1(instr) && instr->uses) {
       struct ir3 *ir = instr->block->shader;
       bool ready = false;
+      bool has_users = false;
       for (unsigned i = 0; (i < ir->a1_users_count) && !ready; i++) {
          struct ir3_instruction *indirect = ir->a1_users[i];
          if (!indirect)
             continue;
          if (indirect->address->def != instr->dsts[0])
             continue;
+         has_users = true;
          ready = could_sched(ctx, indirect, instr);
       }
 
       /* nothing could be scheduled, so keep looking: */
-      if (!ready)
+      if (has_users && !ready)
          return false;
    }
 
@@ -492,6 +514,9 @@ check_instr(struct ir3_sched_ctx *ctx, struct ir3_sched_notes *notes,
     * bary.f is scheduled.  The hw seems unhappy if the thread
     * gets killed before the end-input (ei) flag is hit.
     *
+    * TODO: this isn't true anymore on newer gens (probably a5xx+) so we should
+    * evaluate if scheduling kills earlier would be better for performance.
+    *
     * We could do this by adding each bary.f instruction as
     * virtual ssa src for the kill instruction.  But we have
     * fixed length instr->srcs[].
@@ -503,6 +528,19 @@ check_instr(struct ir3_sched_ctx *ctx, struct ir3_sched_notes *notes,
 
       for (unsigned i = 0; i < ir->baryfs_count; i++) {
          struct ir3_instruction *baryf = ir->baryfs[i];
+         if (baryf->block != instr->block) {
+            /* It's impossible to schedule the kill relative to instructions in
+             * a different block so ignore those. This could, in theory, lead to
+             * issues on gens where the hw really wants kills before (ei).
+             * However, this shouldn't happen because we don't support
+             * interpolateAt* there which is the only source of bary.f
+             * instructions that cannot be moved to the first block (see
+             * 1201aa9332a ("ir3: do not move varying inputs that depend on
+             * unmovable instrs")). Just assert that we are new enough.
+             */
+            assert(is_scheduled(baryf) || ctx->compiler->gen >= 5);
+            continue;
+         }
          if (baryf->flags & IR3_INSTR_UNUSED)
             continue;
          if (!is_scheduled(baryf)) {
@@ -1219,7 +1257,7 @@ sched_block(struct ir3_sched_ctx *ctx, struct ir3_block *block)
             new_instr =
                split_addr(ctx, &ctx->addr1, ir->a1_users, ir->a1_users_count);
          } else {
-            d("unscheduled_list:");
+            d("unscheduled_list:\n");
             foreach_instr (instr, &ctx->unscheduled_list)
                di(instr, "unscheduled: ");
             assert(0);

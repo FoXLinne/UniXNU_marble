@@ -2,7 +2,7 @@
 //! and `kernelEndTime`, in seconds of the host's clock ([`host_time`]), as Metal gives them in the
 //! host's time base.
 //!
-//! - **The host's clock.** `CLOCK_UPTIME_RAW` on macOS, the clock of `mach_absolute_time` and so
+//! - **The host's clock.** `CLOCK_UPTIME_RAW` on Apple platforms, the clock of `mach_absolute_time` and so
 //!   of Metal's times and `CACurrentMediaTime`; `CLOCK_MONOTONIC_RAW` elsewhere on Unix, its
 //!   counterpart (monotonic, never slewed, stopped while the system sleeps). Other platforms count
 //!   the runtime's own monotonic clock, which no device can calibrate against.
@@ -218,7 +218,7 @@ const SAMPLE_BUFFER_TIMESTAMPS: u32 = 4096;
 const _: () = assert!(PLAIN * SLOTS <= SAMPLE_BUFFER_TIMESTAMPS);
 
 /// The host time now, in seconds of the clock the runtime's GPU and kernel times count (the
-/// module documentation): `CLOCK_UPTIME_RAW` on macOS, which `mach_absolute_time` and
+/// module documentation): `CLOCK_UPTIME_RAW` on Apple platforms, which `mach_absolute_time` and
 /// `CACurrentMediaTime` count, and `CLOCK_MONOTONIC_RAW` elsewhere on Unix.
 pub fn host_time() -> f64 {
     host_nanos() as f64 / 1e9
@@ -240,9 +240,9 @@ pub(crate) fn host_nanos() -> u64 {
 }
 
 /// The host's clock.
-#[cfg(target_os = "macos")]
+#[cfg(target_vendor = "apple")]
 const BASE: libc::clockid_t = libc::CLOCK_UPTIME_RAW;
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(all(unix, not(target_vendor = "apple")))]
 const BASE: libc::clockid_t = libc::CLOCK_MONOTONIC_RAW;
 
 /// `clock` now, in nanoseconds.

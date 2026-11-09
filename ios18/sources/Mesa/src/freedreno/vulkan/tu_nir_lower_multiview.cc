@@ -106,7 +106,7 @@ tu_nir_lower_multiview(nir_shader *nir, uint32_t mask, struct tu_device *dev,
    /* In addition to the generic checks done by NIR, check that we don't
     * overflow VPC with the extra copies of gl_Position.
     */
-   } else if (!TU_DEBUG(NOMULTIPOS) &&
+   } else if (!dev->physical_device->compiler_options.no_multi_pos &&
        num_views <= max_views_for_multipos && nir->num_outputs + (num_views - 1) <= 32 &&
        nir_can_lower_multiview(nir, options)) {
       /* It appears that the multiview mask is ignored when multi-position
@@ -130,3 +130,79 @@ tu_nir_lower_multiview(nir_shader *nir, uint32_t mask, struct tu_device *dev,
    return progress;
 }
 
+/*
+ * Software multiview lowering for devices without HW multiview support.
+ *
+ * Unlike the HW multiview path which uses per-view position output and the
+ * GPU's built-in multiview mode, the SW path works by duplicating draws on
+ * the CPU side (one draw per view).  The view index is passed via a driver
+ * param (view_index at dword 5, placed after the vec4 that
+ * CP_DRAW_INDIRECT_MULTI overwrites), and the VS writes it to
+ * VARYING_SLOT_LAYER so the rasterizer targets the correct layer.
+ */
+
+static bool
+lower_view_index_to_layer_id_filter(const nir_instr *instr,
+                                    UNUSED const void *data)
+{
+   if (instr->type != nir_instr_type_intrinsic)
+      return false;
+   return nir_instr_as_intrinsic(instr)->intrinsic ==
+          nir_intrinsic_load_view_index;
+}
+
+static nir_def *
+lower_view_index_to_layer_id(nir_builder *b, nir_instr *instr,
+                             UNUSED void *data)
+{
+   return nir_load_layer_id(b);
+}
+
+bool
+tu_nir_lower_multiview_sw_vs(nir_shader *nir)
+{
+   assert(nir->info.stage == MESA_SHADER_VERTEX);
+
+   nir_function_impl *impl = nir_shader_get_entrypoint(nir);
+
+   /* If the shader already writes gl_Layer, demote the existing output to a
+    * temp so our store takes precedence.
+    */
+   nir_variable *existing_layer =
+      nir_find_variable_with_location(nir, nir_var_shader_out,
+                                     VARYING_SLOT_LAYER);
+   if (existing_layer) {
+      existing_layer->data.mode = nir_var_shader_temp;
+      existing_layer->data.location = 0;
+      nir_fixup_deref_modes(nir);
+   }
+
+   nir_builder b = nir_builder_at(nir_after_impl(impl));
+
+   /* Write gl_Layer = view_index so the rasterizer targets the correct
+    * layer.  load_view_index survives to IR3 where it becomes a driver
+    * param read.
+    */
+   nir_variable *layer_var =
+      nir_variable_create(nir, nir_var_shader_out,
+                          glsl_int_type(), "gl_Layer");
+   layer_var->data.location = VARYING_SLOT_LAYER;
+   nir_store_var(&b, layer_var, nir_load_view_index(&b), 0x1);
+   nir->info.outputs_written |= BITFIELD64_BIT(VARYING_SLOT_LAYER);
+
+   return true;
+}
+
+bool
+tu_nir_lower_multiview_sw_fs(nir_shader *nir)
+{
+   assert(nir->info.stage == MESA_SHADER_FRAGMENT);
+
+   /* In the fragment shader, replace load_view_index with load_layer_id.
+    * The VS wrote the view index to gl_Layer, so the FS can read it back
+    * from the rasterizer-provided layer ID.
+    */
+   return nir_shader_lower_instructions(nir,
+                                        lower_view_index_to_layer_id_filter,
+                                        lower_view_index_to_layer_id, NULL);
+}

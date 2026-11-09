@@ -658,7 +658,7 @@ extern "C" void native_root_block_start(void)
   OSSafeReleaseNULL(memory);
   if (!mapping) panic("RootStage: table mapping failed");
   const auto *table = reinterpret_cast<const ROOT_STAGE_TABLE *>(mapping->getVirtualAddress());
-  if (table->Magic != ROOT_STAGE_MAGIC || table->Version != 2) panic("RootStage: invalid table header");
+  if (table->Magic != ROOT_STAGE_MAGIC || table->Version != ROOT_STAGE_VERSION) panic("RootStage: invalid table header");
   extern void native_resident_configure(uint64_t);
   native_resident_configure(table->ReturnStub);
   const ROOT_STAGE_DISK &kernel = table->Disks[2];

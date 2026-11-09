@@ -3,12 +3,13 @@
 #include <cassert>
 #include <cstdio>
 #include <vector>
-struct Peer {uint32_t cntl=0;uint64_t now=0;bool fail=false;std::vector<uint32_t> order;};
+struct Peer {uint32_t cntl=0;uint64_t now=0;uint32_t completion=0;bool fail=false;std::vector<uint32_t> order;};
 static int write(void *v,uint32_t r,uint32_t n) {auto &p=*(Peer*)v;p.order.push_back(r);if(p.fail)return 1;if(r==0x08a0)p.cntl=n;return 0;}
 static int read(void *v,uint32_t r,uint32_t *n) {*n=r==0x08a0?((Peer*)v)->cntl:0;return 0;}
 static int barrier(void *) {return 0;}
 static int gmu(void *v,uint32_t,uint32_t n) {((Peer*)v)->order.push_back(n?0xaabb:0xccdd);return 0;}
 static uint64_t now(void *v) {return ((Peer*)v)->now;}
+static uint32_t completion(void *v) {return ((Peer*)v)->completion;}
 int main() {
  Peer p;NativeAdrenoPreempt a;NativeAdrenoPreemptIo io{&p,write,read,barrier,&p,gmu};
  uint8_t r0[64]{},r1[64]{},s0[32]{},s1[32]{};
@@ -21,5 +22,18 @@ int main() {
  assert(a.trigger(0,true));p.now+=1000001;assert(a.timedOut(1000000));a.noteTimeout(nullptr);assert(a.stats().faulted==1);
  a.restart(1);assert(p.order.back()==0xccdd && !a.inFlight());
  p.fail=true;assert(!a.trigger(0,true) && p.order.back()==0xccdd && a.stats().faulted==2);
- assert(!a.detach());std::puts("PASS preemption GMEM, keepalive ordering, pending poll, timeout, restart and refused trigger");
+ assert(!a.detach());
+ // A STOP-clear observation can precede CP_SW. The old notification also
+ // belongs to its old trigger, including across a completed switch.
+ Peer irq;NativeAdrenoPreempt ordered;NativeAdrenoPreemptIo irqio{&irq,write,read,barrier,&irq,gmu,completion};
+ assert(!ordered.attach(&irqio,rings,0,now,&irq));
+ assert(ordered.trigger(1,true));irq.cntl=0x340;
+ assert(!ordered.complete() && ordered.loaded()==0 && ordered.inFlight());
+ irq.completion++;assert(ordered.complete() && ordered.loaded()==1);
+ assert(ordered.releaseKeepalive());
+ assert(ordered.trigger(0,true));irq.cntl=0x340;
+ assert(!ordered.complete() && ordered.loaded()==1 && ordered.inFlight());
+ irq.completion++;assert(ordered.complete() && ordered.loaded()==0);
+ assert(ordered.releaseKeepalive() && !ordered.detach());
+ std::puts("PASS preemption GMEM, keepalive ordering, pending poll, IRQ completion ordering, timeout, restart and refused trigger");
 }

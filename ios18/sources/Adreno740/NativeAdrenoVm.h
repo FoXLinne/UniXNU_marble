@@ -41,6 +41,7 @@ class NativeAdrenoVm final {
         uint64_t handle=0,iova=0;
         size_t spans=0,mapped_spans=0;
         unsigned permissions=0,writeback=0,shareability=0,jobs=0,upper=0;
+        bool client_maintained=false; // The importing client synchronizes the resources used by each command.
     };
     Mapping *mappings_=nullptr;
     NativeAdrenoHandleIndex index_;   /* live handle -> its mappings_ slot */
@@ -108,7 +109,7 @@ public:
     IOReturn detach();
     IOReturn findAddress(unsigned upper,size_t bytes,uint64_t alignment,uint64_t *iova) const;
     IOReturn map(NativeAdrenoMemory *,unsigned upper,uint64_t iova,
-        unsigned permissions,unsigned writeback,unsigned shareability,uint64_t *handle);
+        unsigned permissions,unsigned writeback,unsigned shareability,uint64_t *handle,bool client_maintained=false);
     IOReturn unmap(uint64_t handle);
     IOReturn holdJob(uint64_t handle);
     /* TLBIALL for the context bank plus TLBSYNC: drops every cached translation of the bank whatever its ASID. Unmap already

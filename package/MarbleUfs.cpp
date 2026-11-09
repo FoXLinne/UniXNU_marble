@@ -157,6 +157,13 @@ static void hostWrite (unsigned offset, uint32_t value)
 
 #include "RootQueue.h"
 
+// The marble transport serializes commands on its existing polling path.
+// Supply the shared command interface without enabling another board's IRQ
+// or advertising direct DMA outside this transport's mapped allocation.
+static uint32_t hostCompletionCount(unsigned) { return 0; }
+static bool hostInterruptMode(void) { return false; }
+static void hostWaitCompletion(unsigned, uint32_t, uint64_t) { IODelay(2); }
+static uint64_t hostDmaAddress(const void *) { return 0; }
 #include "RootCommands.h"
 
 // Bring the live controller up for reading: map, SMMU pass-through for the UFS stream, take over
@@ -189,7 +196,8 @@ static bool hostBringUp (const char **why)
     static_cast<IOOptionBits> (kIOMemoryMapperNone),
     kDmaBytes, 4096);
   gHost.lock = IOLockAlloc ();
-  if (!gHost.dma || !gHost.lock) {
+  IOLock *slotLock = IOLockAlloc();
+  if (!gHost.dma || !gHost.lock || !slotLock) {
     *why = "dma buffer";
     return false;
   }
@@ -205,6 +213,8 @@ static bool hostBringUp (const char **why)
   }
   bzero (gHost.virt, kDmaBytes);
   cacheCivac (gHost.virt, kDmaBytes);
+  hostSlotGeometryRegionA(1);
+  hostSlotsInit(1, slotLock);
   uint32_t report[3] = { 0, 0, 0 };
   gRootDiagnostic.stage = "SMMU and request list";
   if (!hostStopQueue (why)) return false;

@@ -14,6 +14,7 @@ _compiler_rs_sources = [
   'nir_instr_printer.rs',
   'nir.rs',
   'smallvec.rs',
+  'union_find.rs',
   'vec_pair.rs',
 ]
 
@@ -31,6 +32,7 @@ _compiler_binding_types = [
   'gl_tess_spacing',
   'gl_varying_slot',
   'gl_vert_attrib',
+  'glsl_sampler_dim',
   'glsl_type',
   'glsl_matrix_layout',
   'nir_.*',
@@ -105,6 +107,7 @@ _compiler_bindings_rs = rust.bindgen(
   output_inline_wrapper : 'bindings.c',
   c_args : [
     pre_args,
+    bindgen_c_args,
   ],
   args : _compiler_bindgen_args,
   dependencies : [
@@ -154,7 +157,7 @@ _libcompiler_rs = static_library(
 
 # TODO: Linking Rust executables (such as unit tests) doesn't play nicely
 # with the sanitizers because meson doesn't know to pass -fsanitize to the
-# Rust linker.  See also https://github.com/mesonbuild/meson/issues/11741
+# Rust linker.  See also https://github.com/mesonbuild/meson/issues/15222
 if with_tests and get_option('b_sanitize') == 'none'
   rust.test(
     'compiler_test',

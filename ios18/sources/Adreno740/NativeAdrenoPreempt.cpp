@@ -173,6 +173,7 @@ bool NativeAdrenoPreempt::trigger(uint32_t ring,bool uses_gmem)
         {stats_.faulted++;closeEvent(3);releaseKeepalive();return false;}
     if(io_.barrier(io_.cookie)) {stats_.faulted++;closeEvent(3);releaseKeepalive();return false;}
     const uint32_t cntl=CntlStop|CntlLevel1|CntlSkipSaveRestore|(uses_gmem?CntlUsesGmem:0);
+    trigger_sequence_=io_.completion_sequence?io_.completion_sequence(io_.cookie):0;
     if(io_.write32(io_.cookie,PreemptCntl,cntl)) {stats_.faulted++;closeEvent(3);releaseKeepalive();return false;}
     event_[6]=readCntl();
     next_=ring;armed_=true;
@@ -194,6 +195,9 @@ uint32_t NativeAdrenoPreempt::readCntl() const
 bool NativeAdrenoPreempt::complete()
 {
     if(!attached_ || !armed_)return false;
+    // KGSL gen7_preemption_callback and msm a6xx_preempt_irq finish on
+    // CP_SW. STOP may clear while the outgoing ring registers remain live.
+    if(io_.completion_sequence && io_.completion_sequence(io_.cookie)==trigger_sequence_)return false;
     uint32_t cntl=0;
     if(io_.read32(io_.cookie,PreemptCntl,&cntl)) {stats_.faulted=stats_.faulted+1;return false;}
     if(cntl&CntlStop)return false;

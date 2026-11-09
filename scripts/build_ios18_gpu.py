@@ -18,7 +18,11 @@ from marble_sources import stage_ios18, stage_ios18_build
 DEVICE = Path(__file__).resolve().parents[1]
 LLVM = Path('/opt/homebrew/opt/llvm/bin')
 PROFILE = json.loads((DEVICE / 'profiles/gpu-22H384.json').read_text())
-SOURCES = PROFILE['sources']
+ORIGINS = {entry['name']: entry for entry in json.loads((DEVICE / 'source_origins.json').read_text())['sources']}
+SOURCES = {name: ORIGINS['ios18-build' if name == 'UniXNU' else name]['upstream_commit']
+           for name in PROFILE['sources']}
+PROFILE['translator'].update(commit=ORIGINS['metal2vulkan']['upstream_commit'],
+                             branch=ORIGINS['metal2vulkan'].get('upstream_branch', 'development'))
 
 
 def sha(path):
@@ -101,11 +105,20 @@ def source_tree(root):
             target.symlink_to(path.resolve(), target_is_directory=path.is_dir())
     reference = cache / 'gpu-reference'
     reference.mkdir(exist_ok=True)
-    stage_ios18('metal2vulkan', reference / 'metal2vulkan')
+    translator = gpu / 'metal2vulkan-runtime'
+    stage_ios18('metal2vulkan', translator)
+    translator_link = reference / 'metal2vulkan'
+    if translator_link.is_symlink() and translator_link.resolve() != translator.resolve():
+        translator_link.unlink()
+    elif translator_link.exists() and not translator_link.is_symlink():
+        archived = gpu / 'metal2vulkan-reference-963f0e64'
+        translator_link.rename(archived)
+    if not translator_link.exists():
+        translator_link.symlink_to(translator.resolve(), target_is_directory=True)
     inputs = tree / 'scripts/data/gpu-metal-vulkan-inputs.json'
     pins = json.loads(inputs.read_text())
     pin = PROFILE['translator']
-    pins['translator'] = {key: pin[key] for key in ('repository', 'commit')}
+    pins['translator'] = {key: pin[key] for key in ('repository', 'commit', 'branch') if key in pin}
     inputs.write_text(json.dumps(pins, indent=2) + '\n')
     (gpu / 'sources.json').write_text(json.dumps(SOURCES, indent=2) + '\n')
     return tree
@@ -333,7 +346,9 @@ def userspace(root):
     owner = root / 'gpu/owner.trustcache'
     owner.write_bytes(module)
     (root / 'gpu/userspace.json').write_text(json.dumps(dict(
-        sources=SOURCES, target='arm64e-apple-ios18.0', addon=str(addon), addon_sha256=sha(addon),
+        sources={**SOURCES, 'Mesa': ORIGINS['ios18-Mesa']['upstream_commit'],
+                 'metal2vulkan': ORIGINS['metal2vulkan']['upstream_commit']},
+        target='arm64e-apple-ios18.0', addon=str(addon), addon_sha256=sha(addon),
         trust_cache=str(owner), trust_cache_sha256=sha(owner), cdhashes=trust,
         primelist_entries=len(libraries), translator=PROFILE['translator']['commit'],
         translator_patch_sha256=sha(DEVICE / PROFILE['translator']['patch']),

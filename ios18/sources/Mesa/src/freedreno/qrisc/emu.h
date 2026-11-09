@@ -148,6 +148,8 @@ enum emu_processor {
    EMU_PROC_SQE,
    EMU_PROC_BV,
    EMU_PROC_LPAC,
+   EMU_PROC_DDE_BR,
+   EMU_PROC_DDE_BV,
    EMU_PROC_COUNT,
 };
 
@@ -166,6 +168,12 @@ struct emu {
    uint32_t *instrs;
    unsigned sizedwords;
    unsigned fw_id;
+
+   /* The base relative to instrs where the microcode for this processors.
+    * The pc is relative to this base. This is non-zero when there is firmware
+    * for multiple processors in the same microcode.
+    */
+   uint32_t instr_base;
 
    struct emu_control_regs control_regs;
    struct emu_sqe_regs     sqe_regs;
@@ -235,7 +243,7 @@ struct emu {
  */
 void emu_step(struct emu *emu);
 void emu_run_bootstrap(struct emu *emu);
-void emu_init(struct emu *emu);
+void emu_init(struct emu *emu, const uint32_t fw_offsets[EMU_PROC_COUNT]);
 void emu_fini(struct emu *emu);
 
 /*

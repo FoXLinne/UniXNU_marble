@@ -179,3 +179,15 @@ static inline uint64_t native_legacy_copy_diff(volatile void *destination,
     }
     return stored;
 }
+
+// A single compositor layer may have a logical canvas different from scanout.
+// Both rectangles cover their complete canvases; the GPU presenter performs
+// the size conversion before display completion.
+static inline int native_legacy_full_frame_rects(const uint32_t source[4],
+    const uint32_t destination[4], uint32_t width, uint32_t height,
+    uint32_t surfaceWidth, uint32_t surfaceHeight) {
+    return width>0 && height>0 && width<=16384 && height<=16384 &&
+        source[0]==0 && source[1]==0 && source[2]>0 && source[3]>0 &&
+        source[2]<=16384 && source[3]<=16384 && source[2]<=surfaceWidth && source[3]<=surfaceHeight &&
+        destination[0]==0 && destination[1]==0 && destination[2]==width && destination[3]==height;
+}

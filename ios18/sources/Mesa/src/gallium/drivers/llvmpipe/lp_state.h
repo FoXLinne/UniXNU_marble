@@ -89,8 +89,6 @@ struct llvmpipe_context;
 
 
 struct lp_geometry_shader {
-   bool no_tokens;
-   struct pipe_stream_output_info stream_output;
    struct draw_geometry_shader *dgs;
 };
 
@@ -163,10 +161,16 @@ void
 llvmpipe_init_compute_funcs(struct llvmpipe_context *llvmpipe);
 
 void
+lp_destroy_cs_variants(struct llvmpipe_context *lp);
+
+void
 llvmpipe_init_clip_funcs(struct llvmpipe_context *llvmpipe);
 
 void
 llvmpipe_init_fs_funcs(struct llvmpipe_context *llvmpipe);
+
+void
+llvmpipe_destroy_fs_funcs(struct llvmpipe_context *llvmpipe);
 
 void
 llvmpipe_init_vs_funcs(struct llvmpipe_context *llvmpipe);
@@ -176,6 +180,9 @@ llvmpipe_init_gs_funcs(struct llvmpipe_context *llvmpipe);
 
 void
 llvmpipe_init_tess_funcs(struct llvmpipe_context *llvmpipe);
+
+void
+llvmpipe_set_tess_ccw_flip(struct pipe_context *pipe, bool enable);
 
 void
 llvmpipe_init_task_funcs(struct llvmpipe_context *llvmpipe);

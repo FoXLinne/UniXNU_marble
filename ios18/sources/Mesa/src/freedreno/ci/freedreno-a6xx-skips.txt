@@ -81,12 +81,10 @@ spec@nv_copy_image@nv_copy_image.*
 # If we find any non-piglit users of these features, then maybe a driconf
 # way to force fall-over to zink for that app could make sense.  Until
 # then, just pretend that this stuff doesn't exist:
-.*edgeflag.*
-.*stipple.*
+spec@.*edgeflag.*
+spec@.*line.*stipple.*
 # uses edgeflags:
 shaders@point-vertex-id.*
-# uses stipple:
-spec@!opengl 1.0@gl-1.0-no-op-paths
 
 # Some reconvergence tests are very slow:
 (gmem-|stale-regs-)?dEQP-VK.reconvergence.(sub|work)group_uniform_control_flow_(ballot|elect).compute.nesting4.(0.40|7.10)

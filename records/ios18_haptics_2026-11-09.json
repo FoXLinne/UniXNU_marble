@@ -1,0 +1,67 @@
+{
+  "candidate": "haptics-direct-play-20261109",
+  "date": "2026-11-09",
+  "driver": "package/MarbleHaptics.cpp",
+  "integration": {
+    "start": "package/MarbleHid18.cpp native_marble_hid_start",
+    "stop": "package/NativeResident.cpp host interrupt request 1",
+    "restore": "package/NativeResident.cpp returnOnBootCpu",
+    "archive": "scripts/build_ios18_arm64e.py source list",
+    "capture": "scripts/capture_ios18_resident.py globals"
+  },
+  "hardware": {
+    "pmic": "PM8350B SID 3",
+    "peripherals": {
+      "cfg": "0xf000 ppid 0x3f0",
+      "pattern": "0xf100 ppid 0x3f1",
+      "hboost": "0xf200 ppid 0x3f2"
+    },
+    "sdam": "PMK8350 SID 0 0x9d00"
+  },
+  "measured_boot": {
+    "route": "fastboot -s 556fdfe boot marble_temporary_boot.img",
+    "image": "outputs/UniXNU_marble/haptics-20261109/marble_temporary_boot.img",
+    "transport_seconds": 1.874,
+    "phase": "kernel",
+    "stage": 3,
+    "plays": 1,
+    "spmi_version": "0x70000000",
+    "apids": 768,
+    "found": [
+      "cfg apid 465",
+      "ptn apid 466",
+      "boost apid 400"
+    ],
+    "missing": [
+      "hap_cfg_sdam"
+    ],
+    "mappings": {
+      "cfg": "0x103f000",
+      "ptn": "0x103f100",
+      "boost": "0x103f200"
+    },
+    "pattern_revision": 2,
+    "boost_revision": [
+      1,
+      0
+    ],
+    "en_ctl_after_stop": "0x80",
+    "vmax_register": 29,
+    "tlra_register": 1204,
+    "play_milliseconds": 101,
+    "fault_status": 0,
+    "spmi_play_after_stop": 0,
+    "vreg_en": 0,
+    "direct_amplitude": 255,
+    "fifo_ready": 1
+  },
+  "blocked": {
+    "sdam_lookup": "mapping 表里 ppid 0x9d0 未出现，升压写入未执行；mapping 值只带 ppid 与有效位，SID 0 的 SDAM 需要另一条寻址路径",
+    "stage_start": "root_control start --kernel 传输成功后 panic MarbleStorage: UFS Data window invalid @MarbleRootDisk.cpp:76；marble_ufs_store_open 要求 unixnu 分区容纳 image + 64 GiB Data + 256 扇区",
+    "rootstage_fastboot": "RootStage 兼容层 max-download-size 0x400000，81 MB 镜像回 invalid download size"
+  },
+  "next": [
+    "用 0x9d0 之外的 PPID 候选扫描 SDAM，或从 SPMI core mapping 解析 SID 字段后访问 SID 0",
+    "重新安装 UFS 布局，使 unixnu 分区容纳镜像与 64 GiB Data，再走 root_control start"
+  ]
+}

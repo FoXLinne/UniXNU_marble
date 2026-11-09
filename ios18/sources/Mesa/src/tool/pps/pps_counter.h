@@ -54,6 +54,10 @@ class Counter
       Byte,
       Hertz,
       None,
+      Primitive,
+      Instruction,
+      Pixel,
+      Fragment
    };
 
    using Value = std::variant<int64_t, double>;
@@ -103,7 +107,7 @@ class Counter
    std::function<Getter> getter;
 
    /// The unit of the counter
-   Units units;
+   Units units = Units::None;
 
    /// Bitfield representing the groups this counter belongs to
    /// Counter can belong to multiple groups

@@ -16,19 +16,27 @@ static constexpr unsigned kInputReportType = 0;
 #include <libkern/c++/OSArray.h>
 #include <IOKit/IOLib.h>
 #include <IOKit/IODeviceTreeSupport.h>
+#include <kern/clock.h>
+#include "MarbleButtonReports.h"
+#include "MarbleInputLatency.h"
 extern "C" void native_hid_input_observed(unsigned,int);
 extern "C" void native_hid_live_checkpoint(IOService *);
 extern "C" bool native_hid_input_requested(void);
 extern "C" void native_buttons_set_sink(void (*)(void *, uint32_t), void *);
 extern "C" { volatile uint32_t marble_buttons_hid_stats[8]; }
 
-// Keyboard collection selects the generic event driver. Report 2 carries
-// Consumer Menu, Power, Volume Increment and Volume Decrement.
+// The iOS 18 board personality matches Consumer Control. Publish that usage
+// as the application collection so backboardd classifies the built-in switches
+// by their actual function. Report 2 carries Menu, Power and the volume keys.
 static const uint8_t reportDescriptor[] = {
+#ifdef MARBLE_IOS18_GPU
+    0x05,0x0c,0x09,0x01,0xa1,0x01,
+#else
     0x05,0x01,0x09,0x06,0xa1,0x01,0x85,0x01,
     0x05,0x07,0x19,0xe0,0x29,0xe7,0x15,0x00,0x25,0x01,
     0x75,0x01,0x95,0x08,0x81,0x02,0x75,0x08,0x95,0x01,0x81,0x03,
     0x19,0x00,0x29,0x65,0x15,0x00,0x25,0x65,0x75,0x08,0x95,0x06,0x81,0x00,
+#endif
     0x85,0x02,0x05,0x0c,0x09,0x40,0x09,0x30,0x09,0xe9,0x09,0xea,0x15,0x00,0x25,0x01,
     0x75,0x01,0x95,0x04,0x81,0x02,0x75,0x04,0x95,0x01,0x81,0x03,0xc0
 };
@@ -224,20 +232,39 @@ class NativeHomeInput : public IOHIDDevice {
     IOWorkLoop *inputLoop = nullptr;
     IOTimerEventSource *timer = nullptr;
     IOBufferMemoryDescriptor *reportBuffer = nullptr;
-    bool active = false, matched = false, pending = true;
-    uint8_t buttons = 0;
-    static IOReturn send(OSObject *owner, void *mask, void *, void *, void *) {
-        auto *self = static_cast<NativeHomeInput *>(owner);
-        if (!self->active) return kIOReturnNotReady;
-        self->buttons = uint8_t(uintptr_t(mask) & 0xe);
-        self->pending = true;
-        IOReturn result = self->flush();
-        if (result && self->timer) self->timer->setTimeoutMS(25);
-        return result;
-    }
+    IOLock *queueLock = nullptr;
+    MarbleButtonReports reports;
+    bool active = false, matched = false;
     static void buttonsChanged(void *context, uint32_t mask) {
         auto *self = static_cast<NativeHomeInput *>(context);
-        if (self->inputLoop) self->inputLoop->runAction(send, self, reinterpret_cast<void *>(uintptr_t(mask)));
+        auto *report = static_cast<MarbleButtonReport *>(IOMalloc(sizeof(MarbleButtonReport)));
+        if (!report) { marble_buttons_hid_stats[2] = uint32_t(kIOReturnNoMemory); return; }
+        report->timestamp = mach_absolute_time(); report->mask = mask;
+        IOLockLock(self->queueLock);
+        if (!self->active || !self->reports.append(report)) {
+            IOLockUnlock(self->queueLock); IOFree(report, sizeof(*report)); return;
+        }
+        marble_buttons_hid_stats[6] = self->reports.count;
+        if (self->reports.count > marble_buttons_hid_stats[7]) marble_buttons_hid_stats[7] = self->reports.count;
+        // Scheduling a timer enqueues work; the sampling thread never waits for handleReport.
+        if (self->timer) self->timer->setTimeoutUS(1);
+        IOLockUnlock(self->queueLock);
+    }
+    IOReturn report(uint32_t mask, uint64_t timestamp) {
+        const uint8_t bytes[] = {2, uint8_t(mask)};
+        reportBuffer->writeBytes(0, bytes, sizeof(bytes));
+#if __has_feature(ptrauth_calls)
+        IOReturn result = handleReportWithTime(timestamp, reportBuffer, kInputReportType, 0);
+#else
+        (void)timestamp;
+        IOReturn result = handleReport(reportBuffer, kInputReportType, 0);
+#endif
+        marble_buttons_hid_stats[1] = marble_buttons_hid_stats[1] + 1;
+        marble_buttons_hid_stats[2] = uint32_t(result);
+        if (!result) marble_buttons_hid_stats[3] = mask;
+        else marble_buttons_hid_stats[4] = marble_buttons_hid_stats[4] + 1;
+        native_hid_input_observed(4, result);
+        return result;
     }
     IOReturn flush() {
         if (!matched) {
@@ -252,26 +279,42 @@ class NativeHomeInput : public IOHIDDevice {
             }
         }
         if (!matched) return kIOReturnNotReady;
-        if (!pending) return kIOReturnSuccess;
-        uint8_t report[] = {2, buttons};
-        reportBuffer->writeBytes(0, report, sizeof(report));
-        IOReturn result = handleReport(reportBuffer, kInputReportType, 0);
-        marble_buttons_hid_stats[1] = marble_buttons_hid_stats[1] + 1;
-        marble_buttons_hid_stats[2] = uint32_t(result);
-        marble_buttons_hid_stats[3] = buttons;
-        native_hid_input_observed(4, result);
-        if (!result) pending = false;
-        else marble_buttons_hid_stats[4] = marble_buttons_hid_stats[4] + 1;
-        return result;
+        for (;;) {
+            IOLockLock(queueLock);
+            MarbleButtonReport *next = reports.head;
+            IOLockUnlock(queueLock);
+            if (!next) return kIOReturnSuccess;
+            IOReturn result = report(next->mask, next->timestamp);
+            if (result) return result;
+            IOLockLock(queueLock);
+            reports.completed(); marble_buttons_hid_stats[6] = reports.count;
+            IOLockUnlock(queueLock);
+            IOFree(next, sizeof(*next));
+        }
     }
     static void tick(OSObject *owner, IOTimerEventSource *source) {
-        NativeHomeInput *self = OSDynamicCast(NativeHomeInput,owner);
-        if (!self || !self->active) return;
+        auto *self = OSDynamicCast(NativeHomeInput, owner);
+        if (!self) return;
+        IOLockLock(self->queueLock);const bool active=self->active;IOLockUnlock(self->queueLock);
+        if (!active) return;
         native_hid_live_checkpoint(self);
-        self->flush();
-        if (!self->matched || self->pending)
-            source->setTimeoutMS(marble_buttons_hid_stats[5] < 200 ? 25 : 1000);
+        const IOReturn result = self->flush();
+        IOLockLock(self->queueLock);
+        if (self->active) {
+            if (result) source->setTimeoutMS(25);
+            else if (self->reports.head) source->setTimeoutUS(1);
+        }
+        IOLockUnlock(self->queueLock);
     }
+    static IOReturn releaseReports(OSObject *owner, void *, void *, void *, void *) {
+        auto *self = static_cast<NativeHomeInput *>(owner);
+        self->flush();
+        return self->report(0, mach_absolute_time());
+    }
+    void discardReports() {
+        while (auto *next = reports.completed()) IOFree(next, sizeof(*next));
+    }
+
 public:
     IOWorkLoop *getWorkLoop() const override { return inputLoop; }
     OSString *newTransportString() const override { return OSString::withCString("SPMI"); }
@@ -282,9 +325,10 @@ public:
     }
     bool start(IOService *provider) override {
         inputLoop = IOWorkLoop::workLoop();
+        queueLock = IOLockAlloc();
         const uint8_t released[] = {2, 0};
         reportBuffer = IOBufferMemoryDescriptor::withBytes(released, sizeof(released), kIODirectionNone);
-        if (!inputLoop || !reportBuffer || !setProperty("Built-In", true) ||
+        if (!inputLoop || !queueLock || !reportBuffer || !setProperty("Built-In", true) ||
             !setProperty("HIDDefaultBehavior",true) || !IOHIDDevice::start(provider)) return false;
         timer = IOTimerEventSource::timerEventSource(this,tick);
         if (!timer || inputLoop->addEventSource(timer) != kIOReturnSuccess) {
@@ -292,15 +336,21 @@ public:
         }
         active = true;
         native_buttons_set_sink(buttonsChanged, this);
-        native_hid_input_observed(2,0); timer->setTimeoutMS(25); return true;
+        native_hid_input_observed(2,0); return true;
     }
     void stop(IOService *provider) override {
-        active = false;
         native_buttons_set_sink(nullptr, nullptr);
-        if (timer) { timer->cancelTimeout(); inputLoop->removeEventSource(timer); OSSafeReleaseNULL(timer); }
+        if (queueLock) { IOLockLock(queueLock); active = false; IOLockUnlock(queueLock); }
+        if (timer) timer->cancelTimeout();
+        if (inputLoop && reportBuffer && queueLock) inputLoop->runAction(releaseReports, this);
+        if (timer) { inputLoop->removeEventSource(timer); OSSafeReleaseNULL(timer); }
         IOHIDDevice::stop(provider);
     }
-    void free() override { OSSafeReleaseNULL(reportBuffer); OSSafeReleaseNULL(inputLoop); IOHIDDevice::free(); }
+    void free() override {
+        discardReports();
+        if (queueLock) { IOLockFree(queueLock); queueLock = nullptr; }
+        OSSafeReleaseNULL(reportBuffer); OSSafeReleaseNULL(inputLoop); IOHIDDevice::free();
+    }
 };
 OSDefineMetaClassAndStructors(NativeHomeInput,IOHIDDevice)
 extern "C" IOService *native_hid_input_allocate(void) { return new NativeHomeInput; }
@@ -332,7 +382,8 @@ class NativeMarbleTouchInput : public IOHIDDevice {
         auto *self = static_cast<NativeMarbleTouchInput *>(owner);
         unsigned count = reinterpret_cast<uintptr_t>(countValue);
         auto *points = static_cast<const uint8_t *>(pointsValue);
-        uint8_t report[62] = {3}, seen[10][6] = {};
+        uint8_t report[62] = {3}, seen[10][6] = {}, next[10][6];
+        memcpy(next, self->previous, sizeof(next));
         // Unused transducers must not share the state of contact 0.
         for (unsigned slot = 0; slot < 10; ++slot) report[2 + 6 * slot] = 240 + slot;
         for (unsigned i = 0; i < count; ++i) {
@@ -353,22 +404,25 @@ class NativeMarbleTouchInput : public IOHIDDevice {
                 uint8_t *finger = report + 1 + 6 * slots++;
                 finger[0] = 3; finger[1] = id;
                 memcpy(finger + 2, seen[id] + 2, 4);
-                self->previous[id][0] = 3;
-                memcpy(self->previous[id] + 2, seen[id] + 2, 4);
+                next[id][0] = 3;
+                memcpy(next[id] + 2, seen[id] + 2, 4);
                 pending = true;
-            } else if (self->previous[id][0] == 3) {
+            } else if (next[id][0] == 3) {
                 uint8_t *finger = report + 1 + 6 * slots;
                 finger[1] = id;
-                memcpy(finger + 2, self->previous[id] + 2, 4);
+                memcpy(finger + 2, next[id] + 2, 4);
                 finger[0] = 2;
-                self->previous[id][0] = 0;
+                next[id][0] = 0;
                 ++slots; pending = true;
             }
         }
         if (!pending) return kIOReturnSuccess;
         report[61] = slots;
         auto *buffer = IOBufferMemoryDescriptor::withBytes(report, sizeof(report), kIODirectionNone);
+        if(count)native_marble_input_hid_begin();
         IOReturn result = buffer ? self->handleReport(buffer, kInputReportType, 0) : kIOReturnNoMemory;
+        if(count)native_marble_input_hid_end(uint32_t(result));
+        if(!result)memcpy(self->previous,next,sizeof(next));
         OSSafeReleaseNULL(buffer);
         native_hid_input_observed(6, result);
         return result;

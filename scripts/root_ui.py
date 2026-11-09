@@ -63,15 +63,20 @@ class RootUI:
                 if step < steps:
                     time.sleep(max(0, began + duration_ms/1000*(step+1)/steps - time.monotonic()))
             if hold_ms:
-                time.sleep(hold_ms/1000)
+                # Stationary contact reports let gesture velocity decay while
+                # the finger rests, as in the touch controller's frame stream.
+                deadline = time.monotonic() + hold_ms/1000
+                while time.monotonic() < deadline:
+                    self.contact(to_x, to_y, True)
+                    time.sleep(max(0, min(.016, deadline - time.monotonic())))
         finally:
             self.contact(to_x, to_y, False)
             self.wait_idle()
 
-    def screenshot(self, kernel, output):
+    def screenshot(self, kernel, output, prelink_tools=None):
         self.input(4)
         self.wait_idle()
-        symbols = kernel_symbols(kernel)
+        symbols = kernel_symbols(kernel, prelink_tools)
         memory = memory_for(self.channel, symbols)
         width, height, stride = struct.unpack('<3I', memory.read(symbols['_marble_display_geometry'], 12))
         pixels = int.from_bytes(memory.read(symbols['_marble_display_pixels'], 8), 'little')
@@ -101,6 +106,7 @@ def main():
     parser.add_argument('--hold-ms', type=int, default=800)
     parser.add_argument('--kernel', type=Path)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--prelink-tools', type=Path)
     args = parser.parse_args()
     c = RootUsb(timeout_ms=5000)
     try:
@@ -108,7 +114,12 @@ def main():
         if args.command == 'screen':
             if args.kernel is None or args.output is None:
                 parser.error('screen requires --kernel and --output')
-            print(json.dumps(ui.screenshot(args.kernel.resolve(), args.output.resolve())))
+            prelink_tools = args.prelink_tools
+            if prelink_tools is None:
+                bundled = Path(__file__).resolve().parents[3] / 'outputs/UniXNU_marble/ios18_arm64e/XnuPrelink'
+                if bundled.is_dir():
+                    prelink_tools = bundled
+            print(json.dumps(ui.screenshot(args.kernel.resolve(), args.output.resolve(), prelink_tools)))
         elif args.command in ('home', 'switcher'):
             ui.swipe(540, 2385, 540, 1400, 400, args.hold_ms if args.command == 'switcher' else 0)
         elif args.command == 'swipe':

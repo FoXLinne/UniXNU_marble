@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "MarbleScreenGeometry.h"
 
 static IMP originalBatteryUpdate;
 static IMP originalDictationAvailability;
@@ -97,28 +98,64 @@ static void installWallpaperColor(void)
     originalWallpaperColor = method_setImplementation(method, (IMP)wallpaperProminentColor);
 }
 
-static IMP originalVisualProvider;
-static Class nativeVisualProvider;
+struct VisualProviderBinding {
+    const char *factoryName, *islandName, *splitName;
+    IMP original;
+    Class provider;
+};
+static struct VisualProviderBinding visualBindings[] = {
+    {"_UIStatusBarVisualProvider_iOS", "_UIStatusBarVisualProvider_DynamicSplit", "_UIStatusBarVisualProvider_Split", NULL, Nil},
+    {"STUIStatusBarVisualProvider_iOS", "STUIStatusBarVisualProvider_DynamicSplit", "STUIStatusBarVisualProvider_Split", NULL, Nil},
+};
+uint32_t marble_phone_ui_state;
+static unsigned visualInstalling, compositionInstalling;
+
+static bool selectedDeviceHasIsland(void)
+{
+    static bool queried, island;
+    if (!queried) {
+        void *library = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW | RTLD_LOCAL);
+        CFTypeRef (*copy)(CFStringRef) = library ? (CFTypeRef (*)(CFStringRef))dlsym(library, "MGCopyAnswer") : NULL;
+        if (copy) {
+            CFTypeRef value = copy(CFSTR("DeviceSupportsDynamicIsland"));
+            island = value && CFGetTypeID(value) == CFBooleanGetTypeID() && CFBooleanGetValue(value);
+            if (value) CFRelease(value);
+        }
+        if (library) dlclose(library);
+        queried = true;
+    }
+    return island;
+}
 
 static Class visualProvider(id self, SEL selector, id screen, id info)
 {
-    CGRect bounds = ((CGRect (*)(id, SEL))objc_msgSend)(screen, sel_registerName("nativeBounds"));
-    if (nativeVisualProvider &&
-        ((bounds.size.width == 1080 && bounds.size.height == 2400) ||
-         (bounds.size.width == 2400 && bounds.size.height == 1080))) return nativeVisualProvider;
-    return ((Class (*)(id, SEL, id, id))originalVisualProvider)(self, selector, screen, info);
+    unsigned index = !strncmp(class_getName((Class)self), "STUI", 4);
+    struct VisualProviderBinding *binding = &visualBindings[index];
+    if (binding->provider && [screen respondsToSelector:sel_registerName("_isEmbeddedScreen")] &&
+        ((BOOL (*)(id, SEL))objc_msgSend)(screen, sel_registerName("_isEmbeddedScreen"))) {
+        Class provider = ((Class (*)(id, SEL, id, id))objc_msgSend)(binding->provider, selector, screen, info);
+        if (provider) return provider;
+    }
+    return ((Class (*)(id, SEL, id, id))binding->original)(self, selector, screen, info);
 }
 
 static void installNativeScreen(void)
 {
-    if (originalVisualProvider) return;
-    Class split = objc_lookUpClass("_UIStatusBarVisualProvider_iOS");
-    Class provider = objc_lookUpClass("_UIStatusBarVisualProvider_DynamicSplit");
-    Method method = class_getClassMethod(split,
-        sel_registerName("visualProviderSubclassForScreen:visualProviderInfo:"));
-    if (!provider || !signature(method, '#', 2, "@@")) return;
-    nativeVisualProvider = provider;
-    originalVisualProvider = method_setImplementation(method, (IMP)visualProvider);
+    marble_screen_geometry_install();
+    for (unsigned i = 0; i < sizeof(visualBindings) / sizeof(visualBindings[0]); ++i) {
+        struct VisualProviderBinding *binding = &visualBindings[i];
+        if (binding->original) continue;
+        Class factory = objc_lookUpClass(binding->factoryName);
+        Class provider = objc_lookUpClass(selectedDeviceHasIsland() ? binding->islandName : binding->splitName);
+        Method method = class_getClassMethod(factory,
+            sel_registerName("visualProviderSubclassForScreen:visualProviderInfo:"));
+        if (!provider || !signature(method, '#', 2, "@@")) continue;
+        if (__atomic_fetch_or(&visualInstalling, 1u << i, __ATOMIC_ACQ_REL) & (1u << i)) continue;
+        binding->provider = provider;
+        binding->original = method_getImplementation(method);
+        method_setImplementation(method, (IMP)visualProvider);
+        __atomic_fetch_or(&marble_phone_ui_state, 1u << i, __ATOMIC_RELEASE);
+    }
 }
 
 static BOOL dictationAvailable(id self, SEL selector)
@@ -181,14 +218,16 @@ static void configureDisplays(void *context)
         id server = ((id (*)(id, SEL))objc_msgSend)((id)objc_lookUpClass("CAWindowServer"),
             sel_registerName("serverIfRunning"));
         NSArray *displays = ((id (*)(id, SEL))objc_msgSend)(server, sel_registerName("displays"));
-        for (id display in displays)
+        for (id display in displays) {
             ((void (*)(id, SEL, BOOL))objc_msgSend)(display,
                 sel_registerName("setAllowsDisplayCompositing:"), NO);
+        }
     }
 }
 
 static void installComposition(void)
 {
+    if (originalDisplayComposition) return;
     // The virtual framebuffer consumes one surface composed by the render server.
     Class display = objc_lookUpClass("CAWindowServerDisplay");
     Class server = objc_lookUpClass("CAWindowServer");
@@ -197,8 +236,12 @@ static void installComposition(void)
     if (!signature(composition, 'v', 1, "B") || !signature(add, 'v', 1, "@") ||
         !signature(class_getClassMethod(server, sel_registerName("serverIfRunning")), '@', 0, "") ||
         !signature(class_getInstanceMethod(server, sel_registerName("displays")), '@', 0, "")) return;
-    originalDisplayComposition = method_setImplementation(composition, (IMP)displayComposition);
-    originalAddDisplay = method_setImplementation(add, (IMP)addDisplay);
+    unsigned expected = 0;
+    if (!__atomic_compare_exchange_n(&compositionInstalling, &expected, 1u, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) return;
+    originalDisplayComposition = method_getImplementation(composition);
+    originalAddDisplay = method_getImplementation(add);
+    method_setImplementation(composition, (IMP)displayComposition);
+    method_setImplementation(add, (IMP)addDisplay);
     dispatch_async_f(dispatch_get_main_queue(), NULL, configureDisplays);
 }
 
@@ -289,6 +332,7 @@ static void install(void *context)
     (void)context;
     installWallpaperColor();
     installPhotoRendering();
+    installComposition();
     __atomic_store_n(&queued, false, __ATOMIC_RELEASE);
     installNativeScreen();
     installDictation();
@@ -308,6 +352,7 @@ static void imageAdded(const struct mach_header *header, intptr_t slide)
     installNativeScreen();
     installWallpaperColor();
     installPhotoRendering();
+    installComposition();
     bool expected = false;
     if (__atomic_compare_exchange_n(&queued, &expected, true, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
         dispatch_async_f(dispatch_get_main_queue(), NULL, install);

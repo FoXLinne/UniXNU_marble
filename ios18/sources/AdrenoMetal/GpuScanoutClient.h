@@ -122,7 +122,8 @@ public:
             stats_->totalMs += stats_->lastMs;
         }
         stats_->lastResult = (int)r;
-        if (r == gpupresent::kOk && swap.format == NGP_BGRX8888 && stats_->verified < 4) verify(swap);
+        if (r == gpupresent::kOk && swap.format == NGP_BGRX8888 &&
+            swap.width==scanout_.width && swap.height==scanout_.height && stats_->verified < 4) verify(swap);
         note(0x6731);   // the GPU copy returned
         const uint64_t copiedUs = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000;
         NGPComplete done = {swap.sequence, r == gpupresent::kOk ? 0u : 0xe00002bcu /* kIOReturnError */, 0};

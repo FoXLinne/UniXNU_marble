@@ -28,17 +28,18 @@ patch = "patches/xnu-11417/arm64e.patch"
 gpu_patch = "patches/xnu-11417/gpu-trust-cache.patch"
 ui_patch = "patches/xnu-11417/phone-ui-startup.patch"
 filesystem_patch = "patches/xnu-11417/native-union-statfs-fsid.patch"
-roots = ["com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMPlatform", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.iokit.IOHIDEventDriver", "com.apple.kec.pthread"]
+performance_patch = "patches/xnu-11417/sheng-amp.patch"
+roots = ["com.apple.driver.AppleUSBXDCI", "com.apple.iokit.IOUSBDeviceFamily", "com.apple.driver.AppleUSBDeviceMux", "com.apple.driver.usb.AppleUSBCommon", "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMPlatform", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.iokit.IOHIDEventDriver", "com.apple.kec.pthread"]
 
 [kernel.prelink]
 kernelcache_sha256 = "557ccde6e0a233594a7328df5177a77c2976e23e4c5dbb6132829bc0ed50fb70"
 early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff009083bcc"
 
 [upstream]
-commit = "b56f17c00aa0753ad9cf0714dfcac55c24e799c0"
+commit = "5dc00d201496a1e7a72d1f5db23f041eb94ace1c"
 scripts_patch = "patches/UniXNU/ios18-static-if.patch"
 prelink_url = "https://github.com/UniXNU/XnuPrelink.git"
-prelink_commit = "f1d80d37528a33e24643583787123c652b70a268"
+prelink_commit = "9b950f2e104da77f494e8f2735c6f044f0e4db4d"
 prelink_patch = "patches/XnuPrelink/ios18-layout.patch"
 
 [payload]
@@ -47,9 +48,17 @@ root_volume_uuid = "D38FFE6A-C933-4C2C-BDE0-CCCDC3889156"
 kernel_args = ["-v", "serial=0", "keepsyms=1", "debug=0x14e", "msgbuf=1048576"]
 
 [ui_identity]
-product = "iPhone17,1"
-name = "iPhone 16 Pro"
-target_type = "D93"
-artwork_device_subtype = 2622
-compatible_device_fallback = "iPhone16,1"
-generation = 1701
+product = "iPhone16,2"
+name = "iPhone 15 Pro Max"
+target_type = "D84"
+hardware_model = "D84AP"
+artwork_device_subtype = 2796
+# Standard 375-point mini screen family; product capabilities come from D84.
+screen_category = 11
+compatible_device_fallback = "iPhone15,3"
+generation = 1602
+large_format_phone = true
+island_notch_location = 144
+chrome_identifier = "com.apple.dt.devicekit.chrome.phone8"
+oled_display = true
+udid_version = 2

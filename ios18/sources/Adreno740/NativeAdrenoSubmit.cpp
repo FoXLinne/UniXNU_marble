@@ -286,6 +286,22 @@ bool NativeAdrenoSubmit::fenceProgress(uint32_t *submitted,uint32_t *retired,uin
     if(rings){rings[0]=done[0];rings[1]=done[1];}
     *submitted=issued;*retired=prefix;return true;
 }
+bool NativeAdrenoSubmit::ownerFenceProgress(int32_t owner,uint32_t *submitted,uint32_t *retired,uint32_t *rings)
+{
+    if(!attached_ || poisoned_ || !submitted || !retired || owner<=0)return false;
+    uint32_t done[2]={},issued=fence_issued_,newest=0;
+    for(unsigned i=0;i<ring_count_;++i) {
+        if(ring(i)->fenceValue(&done[i]))return false;
+        if((int32_t)(ring(i)->lastSubmitted()-issued)>0)issued=ring(i)->lastSubmitted();
+    }
+    uint32_t prefix=issued;
+    for(const auto &job:jobs_)if(job.active && job.owner==owner) {
+        if(!newest || (int32_t)(job.fence-newest)>0)newest=job.fence;
+        if((int32_t)(job.fence-done[job.ring])>0 && (int32_t)((job.fence-1)-prefix)<0)prefix=job.fence-1;
+    }
+    if(rings){rings[0]=done[0];rings[1]=done[1];}
+    *submitted=newest;*retired=prefix;return true;
+}
 IOReturn NativeAdrenoSubmit::setPreemption(NativeAdrenoRing *high,NativeAdrenoRing *low,const PreemptSetup &setup,bool on)
 {
     if(!attached_ || poisoned_)return kIOReturnNotReady;
@@ -375,6 +391,9 @@ IOReturn NativeAdrenoSubmit::submit(NativeAdrenoVm *vm,const NativeAdrenoSubmitB
     if(!vm)vm=vm_;
     NativeAdrenoVm *const vm_=vm;   /* this submission's VM: every vm_ below is the job's own */
     if(!attached_ || poisoned_)return kIOReturnNotReady;
+    const bool explicit_context=next_context_set_;
+    const uint32_t requested_context=next_context_;
+    next_context_set_=false;
     /* msm_ioctl_gem_submit refuses a VM a hang made unusable. */
     if(vm->unusable())return kIOReturnNotPermitted;
     if(!buffers || !count || count>SubmitMaxBuffers)return kIOReturnBadArgument;
@@ -495,7 +514,7 @@ IOReturn NativeAdrenoSubmit::submit(NativeAdrenoVm *vm,const NativeAdrenoSubmitB
         for(unsigned i=0;i<28;++i)native_adreno_ib_log[slot][4+i]=head[i];
         native_adreno_ib_log_count=native_adreno_ib_log_count+1;
     }
-    target->useContext(ring(0)->context());
+    target->useContext(explicit_context?requested_context:ring(0)->context());
     status=useVm(vm,clock,index);
     if(status) {
         for(size_t i=0;i<handle_count;++i) {vm_->retireJobAfterCompletion(handles[i]);++stats_.references_retired;}

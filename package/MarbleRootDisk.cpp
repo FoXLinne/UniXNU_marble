@@ -42,8 +42,10 @@ uint64_t marble_data_bytes;
 volatile uint64_t marble_ufs_reads, marble_ufs_writes;
 }
 extern "C" void marble_runtime18_start(void);
+extern "C" void marble_runtime18_observe(unsigned);
+extern "C" void marble_runtime18_observation_start(void);
 extern "C" void native_resident_configure(uint64_t);
-extern "C" void native_resident_usb_control(volatile uint64_t *);
+extern "C" void native_resident_usb_control(const ROOT_STAGE_TABLE *);
 extern "C" bool native_root_block_has_data(void);
 extern "C" bool native_root_block_has_data(void) { return marble_data_bytes != 0; }
 extern "C" { char *native_root_block_boot_args; }
@@ -200,6 +202,7 @@ static int rootBlockVolume(const char *uuid, unsigned index, dev_t *device, char
 
 static int waitRootBlockVolume(const char *uuid, unsigned index, dev_t *device, char *path, size_t size)
 {
+    marble_runtime18_observation_start();
     if (rootBlockVolume(uuid, index, device, path, size)) return 1;
     OSDictionary *matching = IOService::serviceMatching("IOMedia");
     OSDictionary *properties = OSDictionary::withCapacity(1);
@@ -308,6 +311,9 @@ static uint64_t prepareDataHandoff(const ROOT_STAGE_DISK &kernel)
         native_root_block_boot_args = residentBootArgs;
         IOLog("MarbleStorage: extra boot arguments %s\n", extra);
     }
+    uint32_t observationSeconds = 0;
+    memcpy(&observationSeconds, header + 32, sizeof(observationSeconds));
+    marble_runtime18_observe(observationSeconds);
     marble_runtime18_start();
     uint64_t firmwareOffset = ramU64(header + 104), firmwareBytes = ramU64(header + 112);
     if (firmwareBytes) {
@@ -363,12 +369,12 @@ extern "C" void native_marble_root_start(void)
     OSSafeReleaseNULL(memory);
     if (!mapping) panic("MarbleStorage: RootDisks table mapping failed");
     const ROOT_STAGE_TABLE *table = reinterpret_cast<const ROOT_STAGE_TABLE *>(mapping->getVirtualAddress());
-    if (table->Magic != ROOT_STAGE_MAGIC || table->Version != 2 || table->DiskCount > 2)
+    if (table->Magic != ROOT_STAGE_MAGIC || table->Version != ROOT_STAGE_VERSION || table->DiskCount > 2)
         panic("MarbleStorage: RootDisks header invalid");
     uint64_t dataBytes = prepareDataHandoff(table->Disks[2]);
     residentControlMapping=mapping;
     native_resident_configure(table->ReturnStub);
-    native_resident_usb_control(const_cast<volatile uint64_t *>(&table->ReturnTest));
+    native_resident_usb_control(table);
     if (!marble_ufs_start()) panic("MarbleStorage: UFS initialization failed");
     IOService *provider = IOService::getPlatform();
     for (unsigned i = 0; i < table->DiskCount; ++i) {

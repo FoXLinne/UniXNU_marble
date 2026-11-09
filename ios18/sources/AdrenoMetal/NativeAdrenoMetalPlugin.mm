@@ -187,7 +187,7 @@ static id clientDevice(unsigned port) {
         }
         if (!device && !lastError[0]) lastError = nmb_last_error();
     }
-    if (!device && !usable) {
+    if (!device) {
         setenv("METAL2VULKAN_SHADER_CACHE_OPTIONAL", "1", 1);
         const char *path = candidates[0][0] ? candidates[0] : candidates[1][0] ? candidates[1] : "/var/mobile/tmp/m2v";
         @try {

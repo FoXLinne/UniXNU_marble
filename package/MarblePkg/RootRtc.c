@@ -8,6 +8,7 @@
 
 STATIC volatile MARBLE_RTC *mRtc;
 STATIC UINT64 mRtcFrequency, mRtcLastService;
+VOID MarbleRtcSuspend(VOID) {mRtc=NULL;}
 
 STATIC UINT64 RtcCounter(VOID) {
   UINT64 Value;

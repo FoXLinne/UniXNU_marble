@@ -51,7 +51,19 @@ def stage_ios17(destination):
 
 def stage_ios18(name, destination):
     source = DEVICE / 'ios18/sources' / name
-    return copy_sources(source, destination)
+    destination = Path(destination)
+    inventory = destination.parent / ('.' + destination.name + '.source-files.json')
+    current = {str(path.relative_to(source)) for path in source.rglob('*')
+               if path.is_file() or path.is_symlink()}
+    if inventory.is_file():
+        previous = set(json.loads(inventory.read_text()))
+        for relative in previous - current:
+            path = destination / relative
+            if path.is_file() or path.is_symlink():
+                path.unlink()
+    result = copy_sources(source, destination)
+    inventory.write_text(json.dumps(sorted(current)) + '\n')
+    return result
 
 
 def stage_ios18_build(destination):
@@ -62,3 +74,29 @@ def build_source_revision():
     origins = json.loads((DEVICE / 'source_origins.json').read_text())
     return next(row['upstream_commit'] for row in origins['sources']
                 if row['name'] == 'ios18-build')
+
+
+def stage_ios18_stack(destination):
+    destination = stage_ios18_build(destination)
+    drivers = {'ArmCpu': 'ArmCpu', 'ArmDTPlatform': 'ArmDTPlatform',
+               'DarwinBoot': 'DarwinBoot', 'QcomGeniSpi': 'NativeGeniSpi',
+               'ShengUfs': 'NativeUfs', 'Adreno740': 'Adreno740',
+               'AdrenoMetal': 'AdrenoMetal', 'GopFramebuffer': 'GopFramebuffer',
+               'RamBlock': 'RamBlock', 'SoftwareAES': 'SoftwareAES',
+               'AppleKeyStoreState': 'AppleKeyStoreState'}
+    for name, target in drivers.items():
+        stage_ios18(name, destination / 'drivers' / target)
+    for name in ('ArmSmmu4K', 'AdrenoPM4', 'AdrenoFirmware', 'XnuPrelink'):
+        stage_ios18(name, destination / 'kits' / name)
+    references = destination / 'refer'
+    references.mkdir(exist_ok=True)
+    for source in (DEVICE.parent / 'UniXNU/refer').iterdir():
+        target = references / source.name
+        if not target.exists():
+            target.symlink_to(source.resolve(), target_is_directory=True)
+    return destination
+
+
+def source_revision(name):
+    origins = json.loads((DEVICE / 'source_origins.json').read_text())
+    return next(row['upstream_commit'] for row in origins['sources'] if row['name'] == name)

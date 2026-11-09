@@ -3,8 +3,9 @@
 
 use crate::api::icd::*;
 use crate::api::types::DeleteContextCB;
-use crate::api::util::bit_check;
+use crate::api::util::BitFlags;
 use crate::core::device::*;
+use crate::core::event::EventSig;
 use crate::core::format::*;
 use crate::core::gl::*;
 use crate::core::memory::*;
@@ -368,7 +369,7 @@ impl Context {
 
         let address = ptr as u64;
         let mut buffers = HashMap::new();
-        for &dev in &self.devs {
+        for dev in self.svm_devs() {
             let size: u32 = size.get().try_into().map_err(|_| CL_OUT_OF_HOST_MEMORY)?;
 
             // For system SVM devices we simply create a userptr resource.
@@ -433,7 +434,7 @@ impl Context {
         flags: cl_map_flags,
     ) -> CLResult<()> {
         // no need to copy
-        if bit_check(flags, CL_MAP_WRITE_INVALIDATE_REGION) {
+        if flags.are_any_bits_set(CL_MAP_WRITE_INVALIDATE_REGION) {
             return Ok(());
         }
 
@@ -502,26 +503,41 @@ impl Context {
 
     pub fn clear_svm<const T: usize>(
         &self,
-        ctx: &QueueContext,
+        dev: &Device,
         svm_ptr: usize,
         size: usize,
         pattern: [u8; T],
-    ) -> CLResult<()> {
+    ) -> CLResult<EventSig> {
         let svm = self.svm.lock().unwrap();
 
-        if let Some((base, alloc)) = svm.svm_ptrs.find_alloc(svm_ptr) {
-            let res = alloc.alloc.get_res_for_access(ctx, RWFlags::WR)?;
-            let offset = svm_ptr - base;
-            ctx.clear_buffer(res, &pattern, offset as u32, size as u32);
+        if svm.svm_ptrs.find_alloc(svm_ptr).is_some() {
+            match dev.optimize_buffer_fill(&pattern, svm_ptr, size) {
+                DeviceFillBuffer::Meta(pattern) => {
+                    Platform::get()
+                        .meta
+                        .clear_svm(dev, svm_ptr, pattern.to_vec(), size)
+                }
+                DeviceFillBuffer::Clear(pattern) => Ok(Box::new(move |cl_ctx, ctx| {
+                    let svm = cl_ctx.svm.lock().unwrap();
+                    if let Some((base, alloc)) = svm.svm_ptrs.find_alloc(svm_ptr) {
+                        let res = alloc.alloc.get_res_for_access(ctx, RWFlags::WR)?;
+                        let offset = svm_ptr - base;
+                        ctx.clear_buffer(res, &pattern, offset as u32, size as u32);
+                    }
+                    Ok(())
+                })),
+            }
         } else {
-            let slice = unsafe {
-                slice::from_raw_parts_mut(svm_ptr as *mut _, size / size_of_val(&pattern))
-            };
+            Ok(Box::new(move |_, _| {
+                let slice = unsafe {
+                    slice::from_raw_parts_mut(svm_ptr as *mut _, size / size_of_val(&pattern))
+                };
 
-            slice.fill(pattern);
+                slice.fill(pattern);
+
+                Ok(())
+            }))
         }
-
-        Ok(())
     }
 
     pub fn migrate_svm(
@@ -647,7 +663,7 @@ impl Context {
                     modifier,
                     target,
                     pipe_format,
-                    gl_props.stride,
+                    (gl_props.stride, 0),
                     gl_props.width,
                     gl_props.height,
                     gl_props.depth,
@@ -665,6 +681,87 @@ impl Context {
     pub fn flush_gl_mem_objects(&self, mem_objects: &[Mem]) -> CLResult<Option<FenceFd>> {
         let gl_ctx = self.gl_ctx_manager.as_ref().ok_or(CL_INVALID_CONTEXT)?;
         gl_ctx.flush(mem_objects)
+    }
+
+    fn svm_devs(&self) -> impl Iterator<Item = &'static Device> + use<'_> {
+        self.devs.iter().filter(|dev| dev.svm_supported()).copied()
+    }
+
+    pub fn import_dma_buf_buffer(
+        &self,
+        fd: FenceFd,
+        size: usize,
+    ) -> CLResult<HashMap<&'static Device, PipeResourceOwned>> {
+        let adj_size: u32 = size.try_into_with_err(CL_OUT_OF_HOST_MEMORY)?;
+        let mut res = HashMap::new();
+        for dev in &self.devs {
+            let resource = dev
+                .screen()
+                .resource_import_dmabuf(
+                    fd.fd as u32,
+                    0,
+                    pipe_texture_target::PIPE_BUFFER,
+                    pipe_format::PIPE_FORMAT_NONE,
+                    (0, 0),
+                    adj_size,
+                    1,
+                    1,
+                    1,
+                    false,
+                )
+                .ok_or(CL_OUT_OF_RESOURCES)?;
+
+            res.insert(*dev, resource);
+        }
+
+        Ok(res)
+    }
+
+    pub fn import_dma_buf_image(
+        &self,
+        fd: FenceFd,
+        desc: &cl_image_desc,
+        format: &cl_image_format,
+    ) -> CLResult<HashMap<&'static Device, PipeResourceOwned>> {
+        let pipe_format = format.to_pipe_format().unwrap();
+        let target = cl_mem_type_to_texture_target(desc.image_type);
+        let row_stride = desc
+            .image_row_pitch
+            .try_into_with_err(CL_OUT_OF_HOST_MEMORY)?;
+        let slice_stride = desc
+            .image_slice_pitch
+            .try_into_with_err(CL_OUT_OF_HOST_MEMORY)?;
+        let width = desc.image_width.try_into_with_err(CL_OUT_OF_HOST_MEMORY)?;
+        let height = desc.image_height.try_into_with_err(CL_OUT_OF_HOST_MEMORY)?;
+        let depth = desc.image_depth.try_into_with_err(CL_OUT_OF_HOST_MEMORY)?;
+        let array_size = desc
+            .image_array_size
+            .try_into_with_err(CL_OUT_OF_HOST_MEMORY)?;
+
+        let mut res = HashMap::new();
+        for dev in &self.devs {
+            let enable_bind_as_image =
+                dev.formats[format][&desc.image_type] as u32 & CL_MEM_WRITE_ONLY != 0;
+            let resource = dev
+                .screen()
+                .resource_import_dmabuf(
+                    fd.fd as u32,
+                    0,
+                    target,
+                    pipe_format,
+                    (row_stride, slice_stride),
+                    width,
+                    height,
+                    depth,
+                    array_size,
+                    enable_bind_as_image,
+                )
+                .ok_or(CL_OUT_OF_RESOURCES)?;
+
+            res.insert(*dev, resource);
+        }
+
+        Ok(res)
     }
 }
 

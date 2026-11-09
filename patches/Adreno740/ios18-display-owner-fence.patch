@@ -1,0 +1,89 @@
+diff --git a/NativeAdrenoSubmit.cpp b/NativeAdrenoSubmit.cpp
+--- a/NativeAdrenoSubmit.cpp
++++ b/NativeAdrenoSubmit.cpp
+@@ -286,6 +286,22 @@
+     if(rings){rings[0]=done[0];rings[1]=done[1];}
+     *submitted=issued;*retired=prefix;return true;
+ }
++bool NativeAdrenoSubmit::ownerFenceProgress(int32_t owner,uint32_t *submitted,uint32_t *retired,uint32_t *rings)
++{
++    if(!attached_ || poisoned_ || !submitted || !retired || owner<=0)return false;
++    uint32_t done[2]={},issued=fence_issued_,newest=0;
++    for(unsigned i=0;i<ring_count_;++i) {
++        if(ring(i)->fenceValue(&done[i]))return false;
++        if((int32_t)(ring(i)->lastSubmitted()-issued)>0)issued=ring(i)->lastSubmitted();
++    }
++    uint32_t prefix=issued;
++    for(const auto &job:jobs_)if(job.active && job.owner==owner) {
++        if(!newest || (int32_t)(job.fence-newest)>0)newest=job.fence;
++        if((int32_t)(job.fence-done[job.ring])>0 && (int32_t)((job.fence-1)-prefix)<0)prefix=job.fence-1;
++    }
++    if(rings){rings[0]=done[0];rings[1]=done[1];}
++    *submitted=newest;*retired=prefix;return true;
++}
+ IOReturn NativeAdrenoSubmit::setPreemption(NativeAdrenoRing *high,NativeAdrenoRing *low,const PreemptSetup &setup,bool on)
+ {
+     if(!attached_ || poisoned_)return kIOReturnNotReady;
+diff --git a/NativeAdrenoSubmit.h b/NativeAdrenoSubmit.h
+--- a/NativeAdrenoSubmit.h
++++ b/NativeAdrenoSubmit.h
+@@ -166,6 +166,7 @@
+     bool preemptIrq();
+     /* Global completed prefix for scanout: later completions on another ring cannot skip pending work. */
+     bool fenceProgress(uint32_t *submitted,uint32_t *retired,uint32_t *rings=nullptr);
++    bool ownerFenceProgress(int32_t owner,uint32_t *submitted,uint32_t *retired,uint32_t *rings=nullptr);
+     /* The switch counters, the ring the CP runs, whether a switch is in flight and the control register as the hardware holds it. */
+     /* A word of ring `index`'s preemption record as the CPU sees it now (the CP saves the read pointer, info and errno there). */
+     uint32_t recordWord(unsigned index,uint32_t byte_offset) const
+diff --git a/NativeAdrenoPublish.cpp b/NativeAdrenoPublish.cpp
+--- a/NativeAdrenoPublish.cpp
++++ b/NativeAdrenoPublish.cpp
+@@ -1270,6 +1270,15 @@
+ {
+     return native_adreno_fences_detail(submitted,retired,nullptr);
+ }
++extern "C" bool native_adreno_owner_fences(int32_t owner,uint32_t *submitted,uint32_t *retired,uint32_t *detail)
++{
++    if(detail){detail[0]=detail[1]=detail[2]=0;}
++    if(!g.published || !g.submit || !submitted || !retired)return false;
++    if(!IOLockTryLock(g.lock)){if(detail)detail[2]=1;return false;}
++    const bool known=g.submit->ownerFenceProgress(owner,submitted,retired,detail);
++    if(detail)detail[2]=known?2:3;
++    IOLockUnlock(g.lock);return known;
++}
+ /* Publishes the service once. Everything passed in must outlive the system (the board probe keeps them in statics) and
+  * the VM, submit object and ring must already be attached to the live GPU context. The core must not be open. */
+ extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *vm,NativeAdrenoSubmit *submit,NativeAdrenoRing *ring,
+diff --git a/tests/test_submit.cpp b/tests/test_submit.cpp
+--- a/tests/test_submit.cpp
++++ b/tests/test_submit.cpp
+@@ -324,11 +324,14 @@
+         CHECK(p.submit.setTableSwitching(2,write,nullptr)==0);
+         p.ring.tableInstalled(0xaaaa000);low.tableInstalled(0xbbbb000);p.ring.useContext(42);
+         NativeAdrenoSubmitBuffer buffer{p.handle,0x800000,4096};uint32_t first=0,second=0;
+-        clock_us=1;p.submit.nextPriority(1);CHECK(p.submit.submit(&p.vm,&buffer,1,7,&first,&ringclock)==0);
++        clock_us=1;p.submit.nextOwner(302);p.submit.nextPriority(1);CHECK(p.submit.submit(&p.vm,&buffer,1,7,&first,&ringclock)==0);
+         CHECK(low.lastSubmitted()==first && p.ring.lastSubmitted()==0 && low.table()==p.vm.ttbr0() && p.ring.table()==0xaaaa000);
+         CHECK(low.context()==42 && cp.regs[0x08a0]==0x341);
+         uint32_t overtaking=0;
+-        p.submit.nextPriority(0);CHECK(p.submit.submit(&p.vm,&buffer,1,8,&overtaking,&ringclock)==0);
++        p.submit.nextOwner(60);p.submit.nextPriority(0);CHECK(p.submit.submit(&p.vm,&buffer,1,8,&overtaking,&ringclock)==0);
++        uint32_t ownerSubmitted=0,ownerRetired=0;
++        CHECK(p.submit.ownerFenceProgress(60,&ownerSubmitted,&ownerRetired) && ownerSubmitted==overtaking && ownerRetired<overtaking);
++        CHECK(p.submit.ownerFenceProgress(302,&ownerSubmitted,&ownerRetired) && ownerSubmitted==first && ownerRetired<first);
+         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq());
+         CHECK(cp.regs[0x08a0]==0x341 && p.submit.deadReason()==0); // immediately switch back for newly queued high work
+         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq());
+@@ -336,7 +339,11 @@
+         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq() && cp.regs[0x08a0]==0x340); // aged low ring gets a time slice
+         clock_us+=2001;CHECK(p.submit.retireCompleted()==0 && cp.regs[0x08a0]==0x341);
+         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq() && cp.regs[0x08a0]==0x340); // no immediate aging ping-pong
+-        fencemem[1]=overtaking;CHECK(p.submit.retireCompleted()==0);
++        fencemem[1]=overtaking;
++        CHECK(p.submit.ownerFenceProgress(60,&ownerSubmitted,&ownerRetired) && ownerSubmitted==overtaking && ownerRetired>=overtaking);
++        CHECK(p.submit.ownerFenceProgress(302,&ownerSubmitted,&ownerRetired) && ownerSubmitted==first && ownerRetired<first);
++        CHECK(p.submit.retireCompleted()==0);
++        CHECK(p.submit.ownerFenceProgress(60,&ownerSubmitted,&ownerRetired) && ownerSubmitted==0 && ownerRetired>=overtaking);
+         cp.regs[0x08a0]=0x340;CHECK(p.submit.preemptIrq());
+         p.submit.nextPriority(0);CHECK(p.submit.submit(&p.vm,&buffer,1,7,&second,&ringclock)==0);
+         CHECK(low.lastSubmitted()==second && p.ring.lastSubmitted()==overtaking); // own queue cannot overtake

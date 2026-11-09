@@ -114,6 +114,7 @@ public:
     /* CPU mappings of the BO of this token that BoCpuMap handed out and BoCpuUnmap has not given back; 0 for no such BO. */
     uint32_t mappingLeases(uint32_t token) const;
     IOReturn query(NativeAdrenoAbiParams *);
+    IOReturn syncBo(const NativeAdrenoAbiBoSync *);
     IOReturn allocBo(const NativeAdrenoAbiBoAlloc *,NativeAdrenoAbiBoAllocReply *);
     /* BoAlloc's system pages prepared before the driver's lock (NativeAdrenoMemory::prepareSystem), offered to the next allocBo under the
      * lock and withdrawn after it (null: none); allocBo takes them when they fit its request. */

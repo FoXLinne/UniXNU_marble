@@ -2397,6 +2397,104 @@
       "original_sha256": "eeefed206a101013a49fb23197a27f5c665566a83e82ac6d8ab8c9a8ec69cc44",
       "native_symbol": "__ZN7OSArray12withCapacityEj",
       "evidence": "OSArray metaclass allocation at vtable +0x68 (PAC 0x1601), initWithCapacity at +0xd0 (PAC 0xa292) with preserved unsigned capacity, and release at +0x28 (PAC 0x3a87) on initialization failure. Compared instruction-by-instruction with current named native function; identical allocation/init/release control flow and return semantics, with compiler-specific authenticated-call register copies. Source: libkern/c++/OSArray.cpp OSArray::withCapacity. Earlier complete maps independently matched this original address to the same native symbol."
+    },
+    {
+      "original": "0xfffffff007faa4a4",
+      "original_size": 40,
+      "original_sha256": "8d9c3b1cdd91e6c1ae8d2063695e5e8ea5cef39137fea8b7b43cd85680d2d260",
+      "native_symbol": "_absolutetime_to_microtime",
+      "evidence": "Arguments are absolute ticks in x0, seconds pointer in x1 and microseconds pointer in x2. Divides ticks by counts_per_sec, stores 64-bit seconds, then divides the remainder by counts_per_usec and stores 32-bit microseconds. Source: osfmk/arm/rtclock.c absolutetime_to_microtime; native scales the remainder by the full counter frequency to support 19.2 MHz."
+    },
+    {
+      "original": "0xfffffff008325a18",
+      "original_size": 80,
+      "original_sha256": "90d6b4e82424692759ec1a6582af04ebb9f16b508875f099beb1661de65bbcb9",
+      "native_symbol": "_microuptime",
+      "evidence": "Reads CNTVCT plus stable per-CPU base timebase, converts to seconds and microseconds, stores 64-bit seconds at +0 and 32-bit microseconds at +8. APFS tx_flush calls this entry to time transaction stages. Source: bsd/kern/kern_time.c microuptime; the native conversion preserves monotonicity for 19.2 MHz."
+    },
+    {
+      "original": "0xfffffff008322758",
+      "original_size": 68,
+      "original_sha256": "1682e3e58cebd36cd50dbbe2b20fb8041868b4fd27edfb6fe6e4346d16b86d25",
+      "native_symbol": "_mbuf_data",
+      "evidence": "bsd/kern/kpi_mbuf.c: m_mtod_current returns the current data pointer and checks its bounds."
+    },
+    {
+      "original": "0xfffffff00832279c",
+      "original_size": 44,
+      "original_sha256": "6513dbdfaa070123ba1f75884e2e0c81f7f5d4ed88e68d8356d4780c49ba52c5",
+      "native_symbol": "_mbuf_datastart",
+      "evidence": "bsd/kern/kpi_mbuf.c: M_EXT selects ext_buf; the internal packet-data region is the alternative."
+    },
+    {
+      "original": "0xfffffff0083227c8",
+      "original_size": 100,
+      "original_sha256": "c493f99b36686e0b439a42735e4aed62b014b8458da78532f1adc4ccba5f011c",
+      "native_symbol": "_mbuf_setdata",
+      "evidence": "bsd/kern/kpi_mbuf.c: validates start/end, then writes m_data and m_len."
+    },
+    {
+      "original": "0xfffffff008322e14",
+      "original_size": 248,
+      "original_sha256": "ceb9ff22eab5f1e362b036b8af9315d8f0baff43182fb0d1b460279398cb7206",
+      "native_symbol": "_mbuf_getcluster",
+      "evidence": "bsd/kern/kpi_mbuf.c: allocates an optional mbuf and selects the 2K/4K/16K external cluster."
+    },
+    {
+      "original": "0xfffffff008323014",
+      "original_size": 36,
+      "original_sha256": "7f62deef3f8aed280030c6db6b28e4bbb49a230d58059f1b239c2fdd051c9e89",
+      "native_symbol": "_mbuf_freem",
+      "evidence": "bsd/kern/kpi_mbuf.c: repeatedly calls m_free until the chain is empty."
+    },
+    {
+      "original": "0xfffffff008381e74",
+      "original_size": 120,
+      "original_sha256": "9aefd4b1180a1aabcfa27c1dd5eeb5d43104bd7c2ae4f93bae597e2d6a88ad16",
+      "native_symbol": "_sock_getsockopt",
+      "evidence": "bsd/kern/kpi_socket.c: constructs SOPT_GET, calls sogetoptlock and returns the result length."
+    },
+    {
+      "original": "0xfffffff008381ef8",
+      "original_size": 96,
+      "original_sha256": "50246c5b3ccfe742d77693e81da18570011906e881f0e68affa2b8c3a2ae2efe",
+      "native_symbol": "_sock_setsockopt",
+      "evidence": "bsd/kern/kpi_socket.c: constructs SOPT_SET and calls sosetoptlock."
+    },
+    {
+      "original": "0xfffffff0084ff488",
+      "original_size": 44,
+      "original_sha256": "2a6ec4525a088d97fb22b6137ef108b6b93296ab943f8cd5c03f4b56f0965940",
+      "native_symbol": "__ZN13IOCommandPoolC2EPK11OSMetaClass",
+      "evidence": "iokit/Kernel/IOCommandPool.cpp: OSDefineMetaClassAndStructors base constructor sets its vtable and clears workLoop."
+    },
+    {
+      "original": "0xfffffff0084ff4e0",
+      "original_size": 128,
+      "original_sha256": "0e65f40e77106bd9fba0d607d7779ed11e04708a0c96dca01494741694ba6549",
+      "native_symbol": "__ZN13IOCommandPoolD2Ev",
+      "evidence": "iokit/Kernel/IOCommandPool.cpp: base destructor releases workLoop before OSObject destruction."
+    },
+    {
+      "original": "0xfffffff008503250",
+      "original_size": 316,
+      "original_sha256": "7e43382ead175ff83ec33afae94f9ca1080d12e2d19b52556ed2330ce5e15750",
+      "native_symbol": "__ZN18IOTimerEventSource16timerEventSourceEjP8OSObjectPFvS1_PS_E",
+      "evidence": "iokit/Kernel/IOTimerEventSource.cpp: options/owner/action factory, allocates from its metaclass and initializes the event source."
+    },
+    {
+      "original": "0xfffffff008504e0c",
+      "original_size": 232,
+      "original_sha256": "f85382c1b214d2a37e3cc06b541aed7d65ad15acc6dd2199942c6d06b35cb494",
+      "native_symbol": "__ZN24IOBufferMemoryDescriptor22inTaskWithPhysicalMaskEP4taskjyy",
+      "evidence": "iokit/Kernel/IOBufferMemoryDescriptor.cpp: task/options/capacity/physicalMask factory, four arguments forwarded to buffer initialization."
+    },
+    {
+      "original": "0xfffffff008526200",
+      "original_size": 88,
+      "original_sha256": "c8a9c2bf289825b7f62deedf95fcbf2b3b5151f6739102574aa40003b0fe687f",
+      "native_symbol": "_PEGetMachineName",
+      "evidence": "pexpert/arm/pe_identify_machine.c: forwards name and maximum length through the platform expert machine-name method."
     }
   ],
   "data": [

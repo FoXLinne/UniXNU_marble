@@ -20,7 +20,7 @@ RunProbe(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable, BOOLEAN SelfTest
   STATIC ROOT_STAGE_TABLE Stage;
   EFI_GUID Guid = ROOT_STAGE_GUID;
   Stage.Magic = ROOT_STAGE_MAGIC;
-  Stage.Version = 2;
+  Stage.Version = ROOT_STAGE_VERSION;
   Stage.KernelBytes = 0x80000000ULL;
   Stage.KernelBase = (UINTN)AllocateAlignedPages(
       EFI_SIZE_TO_PAGES(Stage.KernelBytes + 0x200000), 0x200000);

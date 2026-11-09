@@ -33,6 +33,7 @@ enum {
     NativeAdrenoMethodNote = 18,
     NativeAdrenoMethodBoCpuMapTask = 19,
     NativeAdrenoMethodBoCpuUnmapTask = 20,
+    NativeAdrenoMethodBoSync = 21,
     NativeAdrenoAbiMetadataBytes = 64
 };
 struct NativeAdrenoAbiParams {
@@ -62,6 +63,12 @@ struct NativeAdrenoAbiBoAllocReply {
 struct NativeAdrenoAbiBoImport {
     uint64_t address;             /* 4KiB aligned */
     uint64_t bytes;               /* 4KiB multiple, <= max_bo_bytes */
+};
+/* Synchronizes the pinned BO pages; the importing task's original address may be unmapped. */
+struct NativeAdrenoAbiBoSync {
+    uint64_t handle, offset, bytes;
+    uint32_t acquire;             /* 0 publishes CPU writes; 1 acquires completed GPU writes */
+    uint32_t reserved;
 };
 struct NativeAdrenoAbiBoMap {
     uint64_t handle;

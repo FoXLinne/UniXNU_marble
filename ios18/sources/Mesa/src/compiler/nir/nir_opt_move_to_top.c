@@ -73,6 +73,7 @@ can_move_src_to_top(nir_src *src, void *_state)
       case nir_intrinsic_load_per_primitive_input:
       case nir_intrinsic_load_per_vertex_input:
       case nir_intrinsic_load_scalar_arg_amd:
+      case nir_intrinsic_load_scalar_arg_wg_div_amd:
          break;
       case nir_intrinsic_load_global_amd:
          if (!(nir_intrinsic_access(nir_instr_as_intrinsic(instr)) &
@@ -116,6 +117,9 @@ move_src(nir_src *src, void *_state)
 
    if (instr->pass_flags & PASS_FLAG_MOVED)
       return true; /* already moved */
+
+   if (instr->block != nir_start_block(b->impl))
+      nir_instr_set_speculated(instr);
 
    nir_foreach_src(instr, move_src, b);
    nir_instr_move(b->cursor, instr);

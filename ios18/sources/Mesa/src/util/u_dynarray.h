@@ -160,6 +160,10 @@ util_dynarray_clone(struct util_dynarray *buf, void *mem_ctx,
       memcpy(buf->data, from_buf->data, from_buf->size);
 }
 
+/* growbytes has already been checked for overflow by the inline wrapper. */
+MUST_CHECK ATTRIBUTE_NOINLINE void *
+util_dynarray_grow_bytes_slow(struct util_dynarray *buf, unsigned growbytes);
+
 MUST_CHECK static inline void *
 util_dynarray_grow_bytes(struct util_dynarray *buf, unsigned ngrow, size_t eltsize)
 {
@@ -169,12 +173,22 @@ util_dynarray_grow_bytes(struct util_dynarray *buf, unsigned ngrow, size_t eltsi
                 growbytes > UINT_MAX - buf->size))
       return NULL;
 
-   unsigned newsize = buf->size + growbytes;
-   void *p = util_dynarray_ensure_cap(buf, newsize);
-   if (!p)
-      return NULL;
+   if (likely(growbytes <= buf->capacity - buf->size)) {
+      void *p = (char *)buf->data + buf->size;
+      buf->size += growbytes;
+      return p;
+   }
 
-   buf->size = newsize;
+   return util_dynarray_grow_bytes_slow(buf, growbytes);
+}
+
+static inline void *
+util_dynarray_grow_bytes_zero(struct util_dynarray *buf, unsigned ngrow, size_t eltsize)
+{
+   void *p = util_dynarray_grow_bytes(buf, ngrow, eltsize);
+
+   if (p)
+      memset(p, 0, ngrow * eltsize);
 
    return p;
 }
@@ -221,6 +235,7 @@ util_dynarray_append_dynarray(struct util_dynarray *buf,
 #define util_dynarray_resize(buf, type, nelts) util_dynarray_resize_bytes(buf, (nelts), sizeof(type))
 #define util_dynarray_resize_zero(buf, type, nelts) util_dynarray_resize_bytes_zero(buf, (nelts), sizeof(type))
 #define util_dynarray_grow(buf, type, ngrow) util_dynarray_grow_bytes(buf, (ngrow), sizeof(type))
+#define util_dynarray_grow_zero(buf, type, ngrow) util_dynarray_grow_bytes_zero(buf, (ngrow), sizeof(type))
 #define util_dynarray_top_ptr(buf, type) ((type*)((char*)(buf)->data + (buf)->size - sizeof(type)))
 #define util_dynarray_top(buf, type) *util_dynarray_top_ptr(buf, type)
 #define util_dynarray_pop_ptr(buf, type) ((type*)((char*)(buf)->data + ((buf)->size -= sizeof(type))))
@@ -253,6 +268,17 @@ util_dynarray_append_dynarray(struct util_dynarray *buf,
            elem;                                                \
            elem = elem > (type *)(buf)->data ? elem - 1 : NULL)
 
+#define util_dynarray_delete_unordered_ptr(buf, type, ptr)              \
+   do {                                                                 \
+      type *__v2 = util_dynarray_pop_ptr((buf), type);                  \
+      if (ptr != __v2)                                                  \
+         memcpy(ptr, __v2, sizeof(type));                               \
+   } while (0)
+
+#define util_dynarray_delete_unordered_element(buf, type, elem)         \
+   util_dynarray_delete_unordered_ptr((buf), type,                      \
+      util_dynarray_element((buf), type, (elem)));
+
 #define util_dynarray_delete_unordered(buf, type, v)                    \
    do {                                                                 \
       unsigned num_elements = (buf)->size / sizeof(type);               \
@@ -260,8 +286,7 @@ util_dynarray_append_dynarray(struct util_dynarray *buf,
       for (i = 0; i < num_elements; i++) {                              \
          type __v = *util_dynarray_element((buf), type, (i));           \
          if (v == __v) {                                                \
-            memcpy(util_dynarray_element((buf), type, (i)),             \
-                   util_dynarray_pop_ptr((buf), type), sizeof(type));   \
+            util_dynarray_delete_unordered_element((buf), type, (i));   \
             break;                                                      \
          }                                                              \
       }                                                                 \

@@ -21,17 +21,24 @@ extern "C" void native_hid_request_tap(unsigned, unsigned);
 extern "C" void native_hid_request_contact(unsigned, unsigned, bool);
 extern "C" void armcpu_complete_active_interrupt(void);
 extern "C" void native_runtime_usb_stop(void);
+#ifdef MARBLE_IOS18
+extern "C" void native_marble_usb_quiesce(void);
+#endif
 extern "C" void native_root_block_export_data(void);
 extern "C" void native_marble_reboot_bootloader(void);
 extern "C" void native_marble_buttons_stop(void);
 extern "C" void native_marble_buttons_restore(void);
+extern "C" void native_marble_buttons_pulse(unsigned);
+extern "C" void native_marble_haptics_stop(void);
+extern "C" void native_marble_haptics_restore(void);
 #ifdef MARBLE_IOS18_GPU
 extern "C" int native_marble_adreno_stop(void);
 extern "C" void native_marble_gmu_stop(void);
 extern "C" void native_marble_display_timing_request(void);
+extern "C" void native_marble_panel_refresh_request(unsigned);
 #endif
 extern "C" volatile uint32_t armcpu_smp_step[8], armcpu_smp_mpidr[8];
-extern "C" void native_resident_usb_control(volatile uint64_t *);
+extern "C" void native_resident_usb_control(const ROOT_STAGE_TABLE *);
 extern "C" void native_marble_rtc_start(const ROOT_STAGE_TABLE *);
 extern "C" void native_marble_rtc_observe(void);
 extern "C" void native_marble_rtc_sync(void);
@@ -50,19 +57,40 @@ extern "C" void native_resident_record_panic(const char *message)
 }
 
 static uint64_t return_stub;
-static volatile uint32_t *usb_interrupt;
+static const ROOT_STAGE_TABLE *residentTable;
+extern "C" const ROOT_STAGE_TABLE *native_resident_table(void) {return residentTable;}
+static volatile ROOT_STAGE_USB_HOST *usb_host;
+static volatile ROOT_STAGE_USB_KERNEL *usb_kernel;
+
+static void refreshUsbHost(void)
+{
+  __asm__ volatile("dc ivac, %0\n\tdsb sy" :: "r"(usb_host) : "memory");
+}
+
+static void publishUsbKernel(void)
+{
+  __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"(usb_kernel) : "memory");
+}
 static MarbleUsbHealth usbHealth;
 extern "C" {
 volatile uint32_t marble_usb_heartbeat, marble_usb_stalls;
 void native_marble_usb_health_check(void);
+bool native_resident_usb_service_active(void);
+}
+
+extern "C" bool native_resident_usb_service_active(void)
+{
+  if (!usb_host) return false;
+  refreshUsbHost();
+  return (usb_host->Heartbeat & MARBLE_USB_HEARTBEAT_MASK) == MARBLE_USB_HEARTBEAT_TAG;
 }
 static IOMemoryMap *earlyResidentMapping;
 
 extern "C" void native_marble_usb_health_check(void)
 {
-  if (!usb_interrupt) return;
-  __asm__ volatile("dmb oshld" ::: "memory");
-  uint32_t heartbeat=usb_interrupt[1];
+  if (!usb_host) return;
+  refreshUsbHost();
+  uint32_t heartbeat=usb_host->Heartbeat;
   marble_usb_heartbeat=heartbeat;
   uint64_t ns=0;
   absolutetime_to_nanoseconds(mach_absolute_time(),&ns);
@@ -82,16 +110,17 @@ extern "C" bool native_resident_prepare(void)
   if (range && range->getLength()==sizeof(location))
     memcpy(location,range->getBytesNoCopy(),sizeof(location));
   OSSafeReleaseNULL(map);
-  if (!location[0]) return false;
+  if (!location[0] || location[1]!=sizeof(ROOT_STAGE_TABLE)) return false;
   IOMemoryDescriptor *memory=IOMemoryDescriptor::withAddressRange(
       location[0],location[1],kIODirectionInOut|kIOMemoryMapperNone,nullptr);
   earlyResidentMapping=memory ? memory->map(kIOMapAnywhere|kIOMapCopybackCache) : nullptr;
   OSSafeReleaseNULL(memory);
   if (!earlyResidentMapping) return false;
   const auto *table=reinterpret_cast<const ROOT_STAGE_TABLE *>(earlyResidentMapping->getVirtualAddress());
+  if (table->Magic!=ROOT_STAGE_MAGIC || table->Version!=ROOT_STAGE_VERSION) return false;
   return_stub=table->ReturnStub;
   native_marble_rtc_start(table);
-  native_resident_usb_control(const_cast<volatile uint64_t *>(&table->ReturnTest));
+  native_resident_usb_control(table);
   return return_stub!=0;
 }
 
@@ -99,11 +128,16 @@ static void usbControlWorker(void *, wait_result_t)
 {
   uint64_t activeUntil=0;
   for (;;) {
-    uint32_t request=usb_interrupt[0];
-    __asm__ volatile("dmb oshld" ::: "memory");
+    refreshUsbHost();
+    uint32_t sequence=usb_host->Sequence;
+    uint32_t request=sequence==usb_kernel->Completed ? 0 : usb_host->Command;
     if (request) clock_interval_to_deadline(500,kMillisecondScale,&activeUntil);
     if (request==1) {
+      usb_kernel->Completed=sequence;
+      usb_kernel->Ready=0;
+      publishUsbKernel();
       native_marble_buttons_stop();
+      native_marble_haptics_stop();
       native_root_block_capture_log();
       panic("RootStage USB host interrupt");
     }
@@ -117,30 +151,38 @@ static void usbControlWorker(void *, wait_result_t)
       if (operation==6) native_marble_rtc_observe();
       if (operation==7) native_marble_rtc_sync();
 #ifdef MARBLE_IOS18_GPU
-      if (operation==5) native_marble_display_timing_request();
+      if (operation==5) {
+        if (y==1) native_marble_buttons_pulse(x);
+        else if (x) native_marble_panel_refresh_request(x==1 ? 0 : x);
+        else native_marble_display_timing_request();
+      }
 #endif
-      usb_interrupt[0]=0;
-      __asm__ volatile("dsb sy" ::: "memory");
     }
     if (request==2) {
-      usb_interrupt[0]=0;
-      __asm__ volatile("dsb sy" ::: "memory");
+      usb_kernel->Completed=sequence;
+      publishUsbKernel();
       native_marble_reboot_bootloader();
+    }
+    if (request) {
+      usb_kernel->Completed=sequence;
+      publishUsbKernel();
     }
     IOSleep(mach_absolute_time()<activeUntil ? 1 : 16);
   }
 }
 
-extern "C" void native_resident_usb_control(volatile uint64_t *request)
+extern "C" void native_resident_usb_control(const ROOT_STAGE_TABLE *table)
 {
+  residentTable=table;
   unsigned mode=0;
   if (!PE_parse_boot_argn("rootstage-runtime-usb",&mode,sizeof(mode)) || mode!=3) return;
-  if (usb_interrupt) return;
-  usb_interrupt=reinterpret_cast<volatile uint32_t *>(request);
-  // The firmware request and kernel readiness occupy separate words. Ordinary
-  // accesses support both RAM and device mappings without RCpc instructions.
-  usb_interrupt[1]=1;
-  __asm__ volatile("dsb sy" ::: "memory");
+  if (usb_host || table->Version!=ROOT_STAGE_VERSION) return;
+  usb_host=const_cast<ROOT_STAGE_USB_HOST *>(&table->UsbHost);
+  usb_kernel=const_cast<ROOT_STAGE_USB_KERNEL *>(&table->UsbKernel);
+  refreshUsbHost();
+  usb_kernel->Completed=0;
+  usb_kernel->Ready=1;
+  publishUsbKernel();
   thread_t worker;
   if (kernel_thread_start(usbControlWorker,nullptr,&worker)!=KERN_SUCCESS)
     panic("RootStage USB interrupt worker start failed");
@@ -169,6 +211,9 @@ static void powerOffSecondary(void *)
 
 static void returnOnBootCpu(void *)
 {
+#ifdef MARBLE_IOS18
+  native_marble_usb_quiesce();
+#endif
   unsigned requested = 0;
   for (unsigned core = 1; core < 8; ++core) {
     // The startup worker and initCPU publish separate milestones. A running
@@ -188,8 +233,10 @@ static void returnOnBootCpu(void *)
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(now));
     if (now - began > frequency / 2) psci(0x84000009);
   }
+  native_runtime_usb_stop();
 #ifdef MARBLE_IOS18_GPU
   native_marble_buttons_restore();
+  native_marble_haptics_restore();
   if (native_marble_adreno_stop()) psci(0x84000009);
   native_marble_gmu_stop();
 #endif
@@ -205,7 +252,6 @@ extern "C" __attribute__((used)) void native_resident_panic_return(void)
 {
   if (!return_stub && !native_resident_prepare()) return;
   native_root_block_capture_log();
-  native_runtime_usb_stop();
   native_root_block_export_data();
   uint64_t start, now, frequency;
   __asm__ volatile("mrs %0, cntvct_el0" : "=r"(start));

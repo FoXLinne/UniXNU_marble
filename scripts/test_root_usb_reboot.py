@@ -8,9 +8,9 @@ root = Path(__file__).resolve().parents[1]
 source = (root / 'package/MarblePkg/RootUsb.c').read_text()
 reply = source[source.index('STATIC BOOLEAN Reply('):source.index('STATIC VOID Hex(')]
 start = source.index('    else if (!AsciiStrCmp(Command,"reboot-bootloader")) {')
-end = source.index('    else if ', start + 12)
+end = source.index('    else if (!AsciiStrCmp(Command,"getvar:watchdog"))', start)
 command = source[start:end]
-command = command[command.index('{') + 1:command.rfind('}')]
+command = 'if (0) {}\n' + command
 command = command.replace(
     '__asm__ volatile("dc cvac, %0\\n\\tdsb sy" :: "r"((UINTN)&mStage->ReturnTest) : "memory");',
     'published=1;')
@@ -30,12 +30,15 @@ preamble = r'''
 #define AsciiStrLen strlen
 #define CopyMem memcpy
 static struct {uint64_t ReturnTest;} stage;
-static typeof(stage) *mStage=&stage;
-static int mKernelRunning, published, transferred, fail;
+static int mKernelRunning, published, transferred, fail, pending;
+static const char *Command;
+#define AsciiStrCmp strcmp
+static unsigned UsbControl(void) { return pending; }
+static void PublishControl(unsigned value) { assert(transferred && !fail); published=value; }
 static char mTx[512];
 static long Transfer(unsigned endpoint, void *buffer, size_t size) {
     assert(endpoint==EP_IN && buffer==mTx && size>4);
-    assert((uint32_t)stage.ReturnTest==0 && !published);
+    assert(!published);
     transferred=1;
     return fail ? -1 : (long)size;
 }
@@ -48,10 +51,10 @@ ending = r'''
     }
 }
 int main(void) {
-    mKernelRunning=1;
+    Command="reboot-bootloader"; mKernelRunning=1;
     stage.ReturnTest=UINT64_C(0x80000005)<<32;
     run();
-    assert(transferred && published && (uint32_t)stage.ReturnTest==2);
+    assert(transferred && published==2);
     assert(stage.ReturnTest>>32==UINT32_C(0x80000005));
     assert(!strcmp(mTx,"OKAYbootloader reset requested"));
     stage.ReturnTest=UINT64_C(0x80000007)<<32;
@@ -62,6 +65,11 @@ int main(void) {
     run();
     assert(transferred && !published && (uint32_t)stage.ReturnTest==0);
     assert(!strncmp(mTx,"FAIL",4));
+    mKernelRunning=1; Command="oem interrupt"; fail=0; published=transferred=0;
+    run(); assert(transferred && published==1);
+    fail=1; published=transferred=0; run(); assert(transferred && !published);
+    fail=0; pending=1; transferred=0; run(); assert(transferred && !published);
+    assert(!memcmp(mTx,"FAILcontrol request pending",strlen("FAILcontrol request pending")));
 }
 '''
 with tempfile.TemporaryDirectory(prefix='root-usb-reboot-') as temporary:

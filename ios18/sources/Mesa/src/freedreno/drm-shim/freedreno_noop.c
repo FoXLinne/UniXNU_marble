@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,8 +13,6 @@
 
 #include "util/os_misc.h"
 #include "util/u_math.h"
-
-bool drm_shim_driver_prefers_first_render_node = true;
 
 struct msm_device_info {
    uint64_t chip_id;
@@ -206,11 +205,13 @@ static ioctl_fn_t driver_ioctls[] = {
    [DRM_MSM_SUBMITQUEUE_CLOSE] = msm_ioctl_noop,
    [DRM_MSM_SUBMITQUEUE_QUERY] = msm_ioctl_noop,
    [DRM_MSM_VM_BIND] = msm_ioctl_vm_bind,
+   [DRM_MSM_PERFCNTR_CONFIG] = msm_ioctl_noop,
 };
 
 #define CHIPID(maj, min, rev, pat)                                             \
    ((maj << 24) | (min << 16) | (rev << 8) | (pat))
 
+/* Keep supported gpu_id aliases in sync with bin/drm-shim.py. */
 static const struct msm_device_info device_infos[] = {
    {
       /* First entry is default */
@@ -231,6 +232,11 @@ static const struct msm_device_info device_infos[] = {
    {
       .gpu_id = 220,
       .chip_id = CHIPID(2, 2, 0, 0xff),
+      .gmem_size = 512 * 1024,
+   },
+   {
+      .gpu_id = 225,
+      .chip_id = CHIPID(2, 2, 5, 0xff),
       .gmem_size = 512 * 1024,
    },
    {
@@ -279,9 +285,19 @@ static const struct msm_device_info device_infos[] = {
       .gmem_size = 1024 * 1024,
    },
    {
+      .gpu_id = 610,
+      .chip_id = CHIPID(6, 1, 0, 0),
+      .gmem_size = 128 * 1024 + 4 * 1024,
+   },
+   {
       .gpu_id = 618,
       .chip_id = CHIPID(6, 1, 8, 0xff),
       .gmem_size = 512 * 1024,
+   },
+   {
+      .gpu_id = 650,
+      .chip_id = CHIPID(6, 5, 0, 0xff),
+      .gmem_size = 1024 * 1024 + 128 * 1024,
    },
    {
       .gpu_id = 660,
@@ -294,9 +310,24 @@ static const struct msm_device_info device_infos[] = {
       .gmem_size = 128 * 1024,
    },
    {
+      .gpu_id = 710,
+      .chip_id = 0x07010000,
+      .gmem_size = 512 * 1024,
+   },
+   {
+      .gpu_id = 720,
+      .chip_id = 0x43020000,
+      .gmem_size = 1024 * 1024,
+   },
+   {
       .gpu_id = 730,
       .chip_id = 0x07030001,
       .gmem_size = 2 * 1024 * 1024,
+   },
+   {
+      .gpu_id = 735,
+      .chip_id = 0x43030B00,
+      .gmem_size = 1024 * 1024 + 512 * 1024,
    },
    {
       .gpu_id = 740,
@@ -327,8 +358,8 @@ print_supported_chips_and_abort(const char *unrecognized_env)
    fprintf(stderr, "%s unrecognized, shim supports:\n", unrecognized_env);
 
    for (int i = 1; i < ARRAY_SIZE(device_infos); i++) {
-      fprintf(stderr, "- gpu_id=%d, chip_id=0x%lx\n", device_infos[i].gpu_id,
-              device_infos[i].chip_id);
+      fprintf(stderr, "- gpu_id=%" PRIu32 ", chip_id=0x%" PRIx64 "\n",
+              device_infos[i].gpu_id, device_infos[i].chip_id);
    }
 
    abort();
@@ -379,8 +410,6 @@ msm_driver_get_device_info(void)
 void
 drm_shim_driver_init(void)
 {
-   shim_device.bus_type = DRM_BUS_PLATFORM;
-   shim_device.driver_name = "msm";
    shim_device.driver_ioctls = driver_ioctls;
    shim_device.driver_ioctl_count = ARRAY_SIZE(driver_ioctls);
 
@@ -391,9 +420,5 @@ drm_shim_driver_init(void)
 
    msm_driver_get_device_info();
 
-   drm_shim_override_file("OF_FULLNAME=/rdb/msm\n"
-                          "OF_COMPATIBLE_N=1\n"
-                          "OF_COMPATIBLE_0=qcom,adreno\n",
-                          "/sys/dev/char/%d:%d/device/uevent", DRM_MAJOR,
-                          render_node_minor);
+   drm_shim_platform_device_setup("msm", "/rdb/msm", "qcom,adreno");
 }

@@ -1025,6 +1025,76 @@
       "original_sha256": "c8922e3272ccfd4baeb44438a2656fd6302c0a13f10d335aea9a1dfff6f9d860",
       "native_symbol": "__ZN11OSSerialize10setIndexedEb",
       "evidence": "The only IOHIDFamily caller at 0xfffffe000a20624c calls OSSerialize::binaryWithCapacity(0x1000, 0, 0), then this with x0 = that serializer and w1 = 1. The body creates a 256-entry index object in the serializer, as native OSSerialize::setIndexed does for true. The object offset differs (0x50 original, 0x48 native); the serializer comes from the bound native constructor, so the native function uses its own layout."
+    },
+    {
+      "original": "0xfffffe000b29ad68",
+      "original_size": 16,
+      "original_sha256": "93e2981462c2821d47fbfaff18e8793719c582e5b2f73601bf22ba9476eddf88",
+      "native_symbol": "_mbuf_data",
+      "evidence": "The native body returns the m_data field; the original loads the same field at +0x10 and returns it. AppleUSBDeviceMux reads each segment header through it right after mbuf_pkthdr_setheader and before mbuf_len, the only KPI of this shape."
+    },
+    {
+      "original": "0xfffffe000b29ae08",
+      "original_size": 48,
+      "original_sha256": "5487a428059967eb73ab77fef42a7d891f13c33f388e803d39e313fe761c2ecb",
+      "native_symbol": "_mbuf_datastart",
+      "evidence": "Returns the M_EXT buffer start or the inline packet data at +0xe0, as native mbuf_datastart does. AppleUSBDeviceMux pairs it with mbuf_maxlen for each scatter-gather segment of a USB read."
+    },
+    {
+      "original": "0xfffffe000b29ae38",
+      "original_size": 104,
+      "original_sha256": "285c9b9309942b3c4735e49887e8763b8621a032c6359ba78ac586e4dcb03b86",
+      "native_symbol": "_mbuf_setdata",
+      "evidence": "(mbuf, data, len): returns EINVAL when data precedes the buffer start or data + len passes its end, then stores m_data and m_len. AppleUSBDeviceMux calls it with the mbuf_datastart result and the transfer length, as bsd/kern/kpi_mbuf.c mbuf_setdata does."
+    },
+    {
+      "original": "0xfffffe000b3d1ec0",
+      "original_size": 164,
+      "original_sha256": "7c95f942b648fa83b56b1e81cf745e6c724682b55366b06d9672165b8b82d3f6",
+      "native_symbol": "_cdevsw_setkqueueok",
+      "evidence": "(maj, csw, flags): returns -1 when maj exceeds 0x3f (nchrdev), or when bcmp of cdevsw[maj] (0x70 bytes each) against csw differs, then stores the flags. Sits right after cdevsw_add_with_bdev, before bsd_hostname. IOSerialFamily static constructor at 0xfffffe000a3b71e4 calls it with the cdevsw_add result and the same csw, as source bsd/kern/bsd_stubs.c cdevsw_setkqueueok. Reached on hardware: the stub panicked with x0 9 and x1 the csw."
+    },
+    {
+      "original": "0xfffffe000b2bb0b8",
+      "original_size": 120,
+      "original_sha256": "5260b67b37ab94954c69f7672279a03bd590057c419a19619142e0caccd33867",
+      "native_symbol": "_ttsetwater",
+      "evidence": "Reads t_ospeed at +0x190, computes cps = speed / 10, stores t_lowat at +0x1d0 clamped to 32..256 with cps / 2 semantics, then t_hiwat clamped to 144..2064 and rounded by CBSIZE. Source bsd/kern/tty.c ttsetwater, between ttnread and ttyselect. IOSerialFamily calls it from its termios setup."
+    },
+    {
+      "original": "0xfffffe000b29c7cc",
+      "original_size": 756,
+      "original_sha256": "1441852eded461499ab3a6494d46fff3313a09670473b716351c66c37660da7b",
+      "native_symbol": "_mbuf_copyback",
+      "evidence": "(m, off, len, data, how): returns EINVAL for a null mbuf, length or data, walks m_next at +0 by m_len at +0x18, allocates missing mbufs with mbuf_get, grows m_len within the buffer, returns ENOBUFS (55) when allocation fails and updates m_pkthdr.len at +0x60 for a packet header. Source bsd/kern/kpi_mbuf.c mbuf_copyback, between mbuf_allocpacket_list and mbuf_get_mlen."
+    },
+    {
+      "original": "0xfffffe000b553aec",
+      "original_size": 76,
+      "original_sha256": "0ccf3dbb797887343894d31ae677099f01c8c467aad75c367314f6c2bb4dc730",
+      "native_symbol": "__ZN14IOPMrootDomain9isLPWModeEv",
+      "evidence": "Directly follows IOPMrootDomain::isAOTMode (0xfffffe000b553ad8), which reads the same byte at +0x35c. The next function, IOPMIsLPWMode, repeats this body on gIOPMRootDomain. Tests a global flag (gLPWFlags), then compares two power state fields reached through the object at +0x60 with 3 (AOT_STATE), which is currentOrPendingPowerState inlined. Source iokit/Kernel/IOPMrootDomain.cpp isLPWMode. The original also requires the +0x35c byte, which the native source does not; the identity stands on the order, the wrapper and the state test."
+    },
+    {
+      "original": "0xfffffe000b5920cc",
+      "original_size": 164,
+      "original_sha256": "496c6a542d6692f774cea5271e02d6243a2962b1674e36af702ff5163b019926",
+      "native_symbol": "_panic_with_options",
+      "evidence": "(reason, ctx, mask, str, ...): takes the address of the variadic area, strips the return address with xpaci, clears mask bit 9 (DEBUGGER_INTERNAL_OPTIONS_MASK), and calls panic_trap_to_debugger(str, &args, reason, ctx, mask, NULL, ret, NULL), the same argument order as the native body. Sits between Assert and panic_with_options_and_initiator. Source osfmk/kern/debug.c. The reference-order match lost it when Xcode 27.2 changed the native layout."
+    },
+    {
+      "original": "0xfffffe000af56304",
+      "original_size": 88,
+      "original_sha256": "8bf98c61f62a3514dcb5c2d5038523f34ed91c06c6c30550428a8b98db8a5b01",
+      "native_symbol": "_vfs_vnodecovered",
+      "evidence": "Loads the mount's covered vnode at +0x38, returns NULL when absent, calls vnode_getwithref and returns the vnode only on success. Directly precedes vfs_vnodecovered_noblock. Source bsd/vfs/kpi_vfs.c vfs_vnodecovered."
+    },
+    {
+      "original": "0xfffffe000ad4e7c4",
+      "original_size": 12,
+      "original_sha256": "461f0cd8c82fda303d244bd2e7d866dfa0a3a0e88e4e29eeaa32547988cb1a92",
+      "native_symbol": "_ml_io_read8",
+      "evidence": "Loads and returns one byte at x0. Directly precedes ml_io_read16, ml_io_read32 and ml_io_read64, which have the same shape for their widths. Source osfmk/arm64/machine_routines.c ml_io_read8; the native development build adds its timing checks around the same read."
     }
   ],
   "data": [
@@ -1183,6 +1253,24 @@
       "native_symbol": "_audio_active",
       "addend": 0,
       "evidence": "32-bit global load at 0xfffffe000ad7c580 in PROC_CROSSED_HIGH_WATERMARK__SEND_EXC_RESOURCE_AND_SUSPEND, guarded by disable_exc_resource_during_audio and followed by the task_jetsam_realtime_audio bit test. Matches osfmk/kern/task.c resource-exception suppression. The selected sandbox pointer and retained image also identify _audio_active."
+    },
+    {
+      "original": "0xfffffe000b914a18",
+      "native_symbol": "_tk_rawcc",
+      "addend": 0,
+      "evidence": "ttyinput increments this slot when ICANON (0x100) is clear, with t_rawcc at +0x40 of the tty, and the slot at -8 with t_cancc at +0x78 when set. Source bsd/kern/tty.c ttyinput gather stats. IOSerialFamily adds the received length to it and to t_rawcc."
+    },
+    {
+      "original": "0xfffffe000b914a20",
+      "native_symbol": "_tk_nin",
+      "addend": 0,
+      "evidence": "ttyinput increments this slot unconditionally right after the tk_cancc or tk_rawcc choice. Source bsd/kern/tty.c ttyinput ++tk_nin. IOSerialFamily and ppp add the received length to it."
+    },
+    {
+      "original": "0xfffffe000b89fe14",
+      "native_symbol": "_gPESerialBaud",
+      "addend": 0,
+      "evidence": "32-bit global holding -1 in the original image. IOSerialFamily reads it when it sets a new tty up, takes 9600 when it is -1 and stores the result in t_ispeed and t_ospeed. Source pexpert/gen/pe_gen.c int32_t gPESerialBaud = -1, exported in config/Unsupported.exports; the kernel itself has no reader in the original image."
     }
   ],
   "sites": [

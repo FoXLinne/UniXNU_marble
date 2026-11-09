@@ -143,11 +143,14 @@ private:
     IOReturn release(Job &);
     IOReturn poison();
     int32_t next_owner_=0;
+    uint32_t next_context_=0;
+    bool next_context_set_=false;
     /* The clock of the last submission, for the time a job is seen retired (release has no clock of its own). */
     uint64_t (*clock_now_)(void *)=nullptr;void *clock_cookie_=nullptr;
 public:
     /* The process the next submission comes from, for the timeline (the user client sets it before each submit). */
     void nextOwner(int32_t pid) {next_owner_=pid;}
+    void nextContext(uint32_t context) {next_context_=context;next_context_set_=true;}
     /* The Metal GPU priority of the next submission's queue (MTLGPUPriority: 0 high, 1 normal, 2 low, 3 disabled, 4 normal-high,
      * 5 real-time; -1 not given). Only low and disabled (2, 3) go to ring 1; the rest, the unspecified included, stay on ring 0. */
     void nextPriority(int32_t priority) {next_priority_=priority>=0 && priority<=5?priority:-1;}
@@ -166,6 +169,7 @@ public:
     bool preemptIrq();
     /* Global completed prefix for scanout: later completions on another ring cannot skip pending work. */
     bool fenceProgress(uint32_t *submitted,uint32_t *retired,uint32_t *rings=nullptr);
+    bool ownerFenceProgress(int32_t owner,uint32_t *submitted,uint32_t *retired,uint32_t *rings=nullptr);
     /* The switch counters, the ring the CP runs, whether a switch is in flight and the control register as the hardware holds it. */
     /* A word of ring `index`'s preemption record as the CPU sees it now (the CP saves the read pointer, info and errno there). */
     uint32_t recordWord(unsigned index,uint32_t byte_offset) const

@@ -63,6 +63,10 @@ class NativeGOPPresenter : public IOService {
     IOReturn waitSwap(task_t,uint64_t timeoutMs,NGPSwap *,uint32_t *target=nullptr);
     IOReturn completeSwap(uint64_t sequence,int status);
     void abandonSwap();
+    task_t waitingTask=TASK_NULL, swapTask=TASK_NULL;
+public:
+    void detachTask(task_t);
+private:
 public:
     void setMemorySource(IOService *source) {memorySource=source;}
     static IOReturn handoffCall(uint32_t op,task_t task,const void *in,size_t inSize,void *out,size_t outSize);
@@ -184,8 +188,8 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
     const uint64_t began=mach_absolute_time();
     native_gop_wait_stats[0]=native_gop_wait_stats[0]+1;native_gop_wait_stats[2]=timeoutMs;
     IOLockLock(gate);
-    gpuClient=true;
-    while(online && (!swap.offered || swap.delivered)) {
+    gpuClient=true;waitingTask=task;
+    while(online && waitingTask==task && (!swap.offered || swap.delivered)) {
         const wait_result_t woke=IOLockSleepDeadline(gate,&swap,deadline,THREAD_ABORTSAFE);
         if(woke!=THREAD_AWAKENED) {
             const uint64_t state=(uint64_t)swap.offered<<32|(uint64_t)swap.delivered<<33|(uint64_t)online<<34|timeoutMs<<40;
@@ -206,9 +210,9 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
             return kIOReturnTimeout;
         }
     }
-    if(!online) {IOLockUnlock(gate);return kIOReturnNotReady;}
+    if(!online || waitingTask!=task) {IOLockUnlock(gate);return kIOReturnAborted;}
     native_gop_wait_reasons[3]=native_gop_wait_reasons[3]+1;
-    swap.delivered=true;
+    swap.delivered=true;swapTask=task;
     IOMemoryDescriptor *memory=swap.memory;memory->retain();
     const uint64_t sequence=swap.sequence,stride=swap.stride;const uint32_t width=swap.width,height=swap.height,format=swap.format;
     IOMemoryMap *map=nullptr;uint32_t id=0;
@@ -221,6 +225,9 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
         map=memory->createMappingInTask(task,0,kIOMapAnywhere);
         if(map && map->getVirtualAddress()) {
             IOLockLock(gate);
+            if(waitingTask!=task) {
+                IOLockUnlock(gate);memory->release();map->release();return kIOReturnAborted;
+            }
             Kept *victim=&kept[0];
             for(Kept &k:kept) {if(!k.map) {victim=&k;break;} if(k.used<victim->used)victim=&k;}
             Kept old=*victim;
@@ -233,7 +240,7 @@ IOReturn NativeGOPPresenter::waitSwap(task_t task,uint64_t timeoutMs,NGPSwap *ou
     }
     memory->release();
     IOLockLock(gate);
-    if(!map || !map->getVirtualAddress() || !swap.offered || swap.sequence!=sequence) {
+    if(!map || !map->getVirtualAddress() || !swap.offered || swap.sequence!=sequence || waitingTask!=task) {
         IOLockUnlock(gate);OSSafeReleaseNULL(map);__atomic_fetch_add(&native_gop_gpu_failures,1,__ATOMIC_RELAXED);return kIOReturnNoMemory;
     }
     swap.map=map;
@@ -246,14 +253,14 @@ IOReturn NativeGOPPresenter::completeSwap(uint64_t sequence,int status) {
     IOLockLock(gate);
     if(!swap.offered || !swap.delivered || swap.sequence!=sequence) {IOLockUnlock(gate);return kIOReturnBadArgument;}
     const uint32_t target=nextTarget;
-    auto done=swap;swap={};presenting=true;
+    auto done=swap;swap={};swapTask=TASK_NULL;presenting=true;
     IOLockUnlock(gate);
     if(scanoutRing && !status && done.tag && &native_legacy_gpu_copied)
         native_legacy_gpu_copied(done.display,done.tag);
     if(scanoutRing && !status)status=native_gop_scanout_present(target);
     IOLockLock(gate);
     if(scanoutRing) {
-        if(status || !gpuClient){gpuClient=false;native_gop_scanout_restore();}
+        if(status){gpuClient=false;native_gop_scanout_restore();}
         else nextTarget=(target+1)%scanoutBuffers;
     }
     presenting=false;IOLockWakeup(gate,&swap,false);
@@ -279,13 +286,38 @@ void NativeGOPPresenter::abandonSwap() {
     dropKept();
     IOLockLock(gate);
     gpuClient=false;
-    auto done=swap;swap={};
+    auto done=swap;swap={};swapTask=TASK_NULL;waitingTask=TASK_NULL;
     IOLockUnlock(gate);
     if(!done.offered)return;
     OSSafeReleaseNULL(done.map);if(done.memory)done.memory->release();
     __atomic_fetch_add(&native_gop_gpu_abandoned,1,__ATOMIC_RELAXED);
     if(scanoutRing)native_gop_scanout_restore();
     native_legacy_gpu_complete(done.display,kIOReturnAborted);
+}
+// Display-service restarts release the old task's imports while the latched
+// scanout remains available until the replacement render server submits a frame.
+void NativeGOPPresenter::detachTask(task_t task) {
+    if(!gate || !task)return;
+    Kept retired[kKept]={};
+    decltype(swap) retiredSwap={};
+    IOLockLock(gate);
+    for(unsigned i=0;i<kKept;++i)if(kept[i].task==task) {retired[i]=kept[i];kept[i]={};}
+    if(waitingTask==task) {waitingTask=TASK_NULL;gpuClient=false;}
+    if(swapTask==task) {retiredSwap=swap;swap={};swapTask=TASK_NULL;}
+    IOLockWakeup(gate,&swap,false);
+    IOLockUnlock(gate);
+    for(Kept &entry:retired) {
+        OSSafeReleaseNULL(entry.map);OSSafeReleaseNULL(entry.memory);
+        if(entry.task)task_deallocate(entry.task);
+    }
+    if(retiredSwap.offered) {
+        OSSafeReleaseNULL(retiredSwap.map);OSSafeReleaseNULL(retiredSwap.memory);
+        __atomic_fetch_add(&native_gop_gpu_abandoned,1,__ATOMIC_RELAXED);
+        native_legacy_gpu_complete(retiredSwap.display,kIOReturnAborted);
+    }
+}
+extern "C" void native_gop_handoff_close(task_t task) {
+    if(gHandoff)gHandoff->detachTask(task);
 }
 extern "C" void native_gop_presenter_set_source(IOService *presenter,IOService *nub) {
     if(NativeGOPPresenter *p=OSDynamicCast(NativeGOPPresenter,presenter))p->setMemorySource(nub);
@@ -358,7 +390,7 @@ bool NativeGOPClient::start(IOService *provider) {
     opened=controller->open(this);return opened;
 }
 void NativeGOPClient::stop(IOService *provider) {
-    if(opened){if(controller)controller->abandonSwap();controller->close(this);opened=false;}controller=nullptr;IOUserClient::stop(provider);
+    if(opened){if(controller)controller->detachTask(task);controller->close(this);opened=false;}controller=nullptr;IOUserClient::stop(provider);
 }
 void NativeGOPClient::free() {if(task){task_deallocate(task);task=TASK_NULL;}IOUserClient::free();}
 IOReturn NativeGOPClient::modeAction(OSObject *target,void *,IOExternalMethodArguments *a) {

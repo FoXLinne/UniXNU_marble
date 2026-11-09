@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// Polled EP0 diagnostics. PHY and clocks are inherited from the marble loader.
+// Kernel-owned EP0 transport using marble's initialized eUSB2 PHY.
 #include <IOKit/IOLib.h>
 #include <IOKit/IOBufferMemoryDescriptor.h>
 #include <IOKit/IOMemoryDescriptor.h>
 #include <pexpert/pexpert.h>
 #include <kern/thread.h>
+#include <kern/clock.h>
+#include <Protocol/RootStage.h>
+#include <arm/machine_routines.h>
 #include <sys/param.h>
 #include "RuntimeUsbRegisters.h"
 
@@ -26,12 +29,22 @@ extern "C" void native_runtime_usb_stop(void);
 extern "C" void native_marble_buttons_stop(void);
 #endif
 extern "C" void native_runtime_usb_report(char *, unsigned);
+#ifdef MARBLE_IOS18
+extern "C" const ROOT_STAGE_TABLE *native_resident_table(void);
+extern "C" void native_marble_buttons_pulse(unsigned);
+extern "C" void native_marble_display_snapshot(void);
+extern "C" void native_marble_display_timing_request(void);
+extern "C" void native_marble_panel_refresh_request(unsigned);
+extern "C" void native_marble_rtc_observe(void);
+extern "C" void native_marble_rtc_host_sync(uint64_t);
+#endif
 
+#ifndef MARBLE_IOS18
 namespace {
 constexpr unsigned dmaBytes = 16384, eventBytes = 4096, responseBytes = 4096;
 constexpr unsigned trbOffset = 4096, controlOffset = 8192, setupOffset = 12288;
 constexpr uint64_t controllerAddress = 0x0a600000;
-IOMemoryMap *registerMap, *dmaMap;
+IOMemoryMap *registerMap, *dmaMap, *scratchMap;
 IOBufferMemoryDescriptor *dma;
 volatile uint32_t *registers;
 uint8_t *bytes;
@@ -44,9 +57,27 @@ unsigned events, requests, failures, configuration, returnTicks, rebootTicks;
 unsigned controlTicks;
 unsigned enumerationTicks;
 uint32_t controllerId, initialControl, initialStatus, initialPhy, lastCommand;
-bool threeStage, active, controllerOwned, panicOnFailure;
+volatile uint32_t *scratch;
+uint32_t initialSession;
+bool sessionOwned;
+constexpr unsigned scratchHsPhyControl=0x810;
+constexpr uint32_t scratchSessionMask=(1u<<20)|(1u<<28);
+bool threeStage, controllerOwned, panicOnFailure;
+volatile bool active;
+bool linkConnected;
+volatile bool stopping;
+uint64_t pollCount,busyTicks,idleWaits,connectCount,disconnectCount,restartCount;
+uint64_t returnDeadline,rebootDeadline,lastActivity;
+uint64_t timeoutCount;
+uint64_t watchdogPetStatus;
+uint64_t watchdogCall(uint64_t,uint64_t *);
+static uint64_t usbCounter() {
+    uint64_t value;__asm__ volatile("mrs %0,cntpct_el0":"=r"(value));return value;
+}
+#ifdef MARBLE_IOS18
+#include "MarbleKernelUsb.inc"
+#endif
 bool watchdogActive;
-unsigned watchdogTicks;
 volatile bool watchdogRuntimeOwned;
 uint64_t watchdogCall(uint64_t function, uint64_t *control = nullptr) {
     register uint64_t x0 __asm__("x0") = function;
@@ -243,6 +274,19 @@ void handleSetup() {
     controlState = threeStage ? 1 : 2;
     requests++;
     uint8_t *out = response;
+#ifdef MARBLE_IOS18
+    rootReplyTransfer=false;
+    if(setup[0]==0x40 && setup[1]==0x30 && length==64) {
+        for(unsigned i=0;i<64;++i)reinterpret_cast<volatile uint8_t *>(bytes)[controlOffset+i]=0;
+        if(!transfer(0,controlOffset,length,DWC3_TRBCTL_CONTROL_DATA))stall();
+        return;
+    }
+    if(setup[0]==0xc0 && setup[1]==0x31) {
+        count=MIN(length,rootReplyBytes);memcpy(out,rootReply,count);rootReplyTransfer=true;
+    } else if(setup[0]==0xc0 && setup[1]==0x32) {
+        count=rootUpload(value|index<<16,out,MIN(length,responseBytes));
+    } else
+#endif
     if ((setup[0] & 0x60) == 0) {
         switch (setup[1]) {
         case 6:
@@ -267,9 +311,19 @@ void handleSetup() {
         native_hid_request_home(); return;
 #endif
     } else if (setup[0] == 0x40 && !length && setup[1] == 4) {
-        returnTicks = 50; return;
+#ifdef MARBLE_IOS18
+        rootAction=1;rootReplyTransfer=true;
+#else
+        returnTicks=1;clock_interval_to_deadline(500,kMillisecondScale,&returnDeadline);
+#endif
+        return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 17) {
-        rebootTicks = 50; return;
+#ifdef MARBLE_IOS18
+        rootAction=2;rootReplyTransfer=true;
+#else
+        rebootTicks=1;clock_interval_to_deadline(500,kMillisecondScale,&rebootDeadline);
+#endif
+        return;
     } else if (setup[0] == 0x40 && !length && setup[1] == 8) {
         native_marble_touch_start(); return;
 
@@ -301,9 +355,15 @@ void handleEvent(uint32_t event) {
         if (DWC3_DEVT_CATEGORY(event) != DWC3_EVENT_TYPE_DEV) return;
         switch (DWC3_DEVT_TYPE(event)) {
         case DWC3_DEVICE_EVENT_RESET:
+            linkConnected=true;
+            enumerationTicks=0;
+#ifdef MARBLE_IOS18
+            rootSessionReset();
+#endif
             __atomic_store_n(&configuration, 0, __ATOMIC_RELEASE);
-            end(1);
-            if (controlState != 0) end(0);
+            // A bus reset can abort SETUP while software still owns its TRB.
+            // Release both directions so CONNECT_DONE queues a fresh SETUP.
+            end(1); end(0);
             controlState=0;
             controlTicks=0;
             command(0,DWC3_DEPCMD_CLEARSTALL);
@@ -311,6 +371,8 @@ void handleEvent(uint32_t event) {
             write(DWC3_DCFG,read(DWC3_DCFG)&~DWC3_DCFG_DEVADDR_MASK);
             break;
         case DWC3_DEVICE_EVENT_CONNECT_DONE: {
+            linkConnected=true;
+            ++connectCount;
             bool rearm=!resourceOwned[0];
             if ((rearm && !startConfiguration()) || !configure(0,!rearm) || !configure(1,!rearm)) {
                 active=false;
@@ -320,7 +382,22 @@ void handleEvent(uint32_t event) {
             IOLog("RuntimeUSB: connected speed=%x\n",read(DWC3_DSTS)&7);
             break;
         }
-        case DWC3_DEVICE_EVENT_DISCONNECT: __atomic_store_n(&configuration, 0, __ATOMIC_RELEASE); break;
+        case DWC3_DEVICE_EVENT_DISCONNECT:
+            linkConnected=false;
+            ++disconnectCount;
+#ifdef MARBLE_IOS18
+            rootSessionReset();
+#endif
+            __atomic_store_n(&configuration,0,__ATOMIC_RELEASE);
+            end(1); end(0);
+            controlState=0;
+            controlTicks=enumerationTicks=0;
+            break;
+        case DWC3_DEVICE_EVENT_ERRATIC_ERROR:
+        case DWC3_DEVICE_EVENT_OVERFLOW:
+            IOLog("RuntimeUSB: controller event=%x\n",event);
+            active=false;
+            break;
         }
         return;
     }
@@ -332,8 +409,25 @@ void handleEvent(uint32_t event) {
         resourceOwned[ep]=false;
         resource[ep]=0;
         if (controlState == 0 && ep == 0) handleSetup();
+#ifdef MARBLE_IOS18
+        else if(controlState==1 && ep==0 && setup[0]==0x40 && setup[1]==0x30) {
+            const unsigned length=setup[6]|setup[7]<<8;
+            char text[65];
+            for(unsigned i=0;i<length;++i)text[i]=reinterpret_cast<volatile uint8_t *>(bytes)[controlOffset+i];
+            text[length]=0;rootCommand(text);controlState=2;
+        }
+#endif
         else if (controlState == 1 && ep == 1) controlState=2;
-        else if (controlState == 3 && ep == statusEndpoint) receiveSetup();
+        else if (controlState == 3 && ep == statusEndpoint) {
+#ifdef MARBLE_IOS18
+            if(rootReplyTransfer&&rootAction) {
+                if(rootAction==1){returnTicks=1;clock_interval_to_deadline(500,kMillisecondScale,&returnDeadline);}
+                if(rootAction==2){rebootTicks=1;clock_interval_to_deadline(500,kMillisecondScale,&rebootDeadline);}
+                rootAction=0;rootReplyTransfer=false;
+            }
+#endif
+            receiveSetup();
+        }
     } else if (type == DWC3_DEPEVT_XFERNOTREADY &&
                !(DWC3_DEPEVT_STATUS(event) & DEPEVT_STATUS_TRANSFER_ACTIVE) &&
                DEPEVT_STATUS_CONTROL_PHASE(DWC3_DEPEVT_STATUS(event)) == DEPEVT_STATUS_CONTROL_STATUS &&
@@ -344,9 +438,11 @@ void handleEvent(uint32_t event) {
     }
 }
 bool initialize() {
-    auto *memory = IOMemoryDescriptor::withAddressRange(controllerAddress,0x10000,kIODirectionInOut | kIOMemoryMapperNone,nullptr);
-    registerMap = memory ? memory->map(kIOMapInhibitCache) : nullptr;
-    OSSafeReleaseNULL(memory);
+    if(!registerMap) {
+        auto *memory = IOMemoryDescriptor::withAddressRange(controllerAddress,0x10000,kIODirectionInOut | kIOMemoryMapperNone,nullptr);
+        registerMap = memory ? memory->map(kIOMapInhibitCache) : nullptr;
+        OSSafeReleaseNULL(memory);
+    }
     if (!registerMap) return false;
     registers = reinterpret_cast<volatile uint32_t *>(registerMap->getVirtualAddress());
     uint32_t id=read(DWC3_GSNPSID);
@@ -354,17 +450,27 @@ bool initialize() {
     IOLog("RuntimeUSB: id=%x ctl=%x status=%x phy=%x\n",id,read(DWC3_DCTL),read(DWC3_DSTS),read(DWC3_GUSB2PHYCFG(0)));
     if ((id&DWC3_GSNPSID_MASK)!=DWC3_GSNPSID_USB3 && (id&DWC3_GSNPSID_MASK)!=DWC3_GSNPSID_USB31) return false;
     controllerOwned=true;
-    dma = IOBufferMemoryDescriptor::withOptions(kIODirectionInOut|kIOMemoryPhysicallyContiguous|kIOMapInhibitCache,dmaBytes,4096);
-    dmaMap = dma ? dma->map(kIOMapInhibitCache) : nullptr;
+    if(!dmaMap) {
+        dma = IOBufferMemoryDescriptor::withOptions(kIODirectionInOut|kIOMemoryPhysicallyContiguous|kIOMapInhibitCache,dmaBytes,4096);
+        dmaMap = dma ? dma->map(kIOMapInhibitCache) : nullptr;
+    }
     if (!dmaMap) return false;
     bytes = reinterpret_cast<uint8_t *>(dmaMap->getVirtualAddress());
     physical = dmaMap->getPhysicalAddress();
-    for (unsigned i=0; i<dmaBytes/4; i++) reinterpret_cast<volatile uint32_t *>(bytes)[i]=0;
+    eventPosition=controlState=controlTicks=enumerationTicks=0;
+    resource[0]=resource[1]=0;resourceOwned[0]=resourceOwned[1]=false;linkConnected=false;
+    __atomic_store_n(&configuration,0,__ATOMIC_RELEASE);
+#ifdef MARBLE_IOS18
+    rootSessionReset();
+#endif
+    ++restartCount;
     // Reset the inherited device queues while clearing RUN_STOP. Firmware can
     // leave a bulk OUT request pending, so waiting for halt before reset stalls
     // takeover. DWC_usb31 also needs time for its clock domains to synchronize.
     write(DWC3_DEVTEN,0);
-    write(DWC3_DCTL,(read(DWC3_DCTL)&~(DWC3_DCTL_RUN_STOP|DWC3_DCTL_ULSTCHNGREQ_MASK))|DWC3_DCTL_CSFTRST);
+    const uint32_t deviceSleep=DWC3_DCTL_L1_HIBER_EN|DWC3_DCTL_HIRD_THRES_MASK|
+        DWC3_DCTL_INITU1ENA|DWC3_DCTL_ACCEPTU1ENA|DWC3_DCTL_INITU2ENA|DWC3_DCTL_ACCEPTU2ENA;
+    write(DWC3_DCTL,(read(DWC3_DCTL)&~(DWC3_DCTL_RUN_STOP|DWC3_DCTL_ULSTCHNGREQ_MASK|deviceSleep))|DWC3_DCTL_CSFTRST);
     unsigned wait=0;
     for (; wait<40 && (read(DWC3_DCTL)&DWC3_DCTL_CSFTRST); wait++) IOSleep(5);
     if (wait==40) { IOLog("RuntimeUSB: inherited device reset timeout\n"); return false; }
@@ -374,14 +480,19 @@ bool initialize() {
     if (stopped==100) { IOLog("RuntimeUSB: reset device halt timeout\n"); return false; }
     // RootStage and RuntimeRoot have distinct descriptors. Give the host a disconnect interval.
     IOSleep(300);
-    write(DWC3_GCTL,(read(DWC3_GCTL)&~DWC3_GCTL_PRTCAPDIR(3))|DWC3_GCTL_PRTCAPDIR(2)|DWC3_GCTL_DSBLCLKGTNG);
+    write(DWC3_GCTL,(read(DWC3_GCTL)&~(DWC3_GCTL_PRTCAPDIR(3)|DWC3_GCTL_GBLHIBERNATIONEN))|
+        DWC3_GCTL_PRTCAPDIR(2)|DWC3_GCTL_DSBLCLKGTNG);
     write(DWC3_GUSB2PHYCFG(0),read(DWC3_GUSB2PHYCFG(0))&~(DWC3_GUSB2PHYCFG_SUSPHY|DWC3_GUSB2PHYCFG_ENBLSLPM));
+    // The controller has relinquished DMA ownership before its queues change.
+    for (unsigned i=0; i<dmaBytes/4; i++) reinterpret_cast<volatile uint32_t *>(bytes)[i]=0;
+    write(DWC3_DCTL,read(DWC3_DCTL)&~deviceSleep);
     write(DWC3_DCFG,(read(DWC3_DCFG)&~(DWC3_DCFG_SPEED_MASK|DWC3_DCFG_DEVADDR_MASK))|DWC3_DCFG_HIGHSPEED);
     write(DWC3_GEVNTADRLO(0),(uint32_t)physical);
     write(DWC3_GEVNTADRHI(0),physical>>32);
     write(DWC3_GEVNTSIZ(0),DWC3_GEVNTSIZ_INTMASK|eventBytes);
     write(DWC3_GEVNTCOUNT(0),read(DWC3_GEVNTCOUNT(0))&DWC3_GEVNTCOUNT_MASK);
-    write(DWC3_DEVTEN,DWC3_DEVTEN_DISCONNEVTEN|DWC3_DEVTEN_USBRSTEN|DWC3_DEVTEN_CONNECTDONEEN);
+    write(DWC3_DEVTEN,DWC3_DEVTEN_DISCONNEVTEN|DWC3_DEVTEN_USBRSTEN|DWC3_DEVTEN_CONNECTDONEEN|
+        DWC3_DEVTEN_ERRTICERREN|DWC3_DEVTEN_EVNTOVERFLOWEN);
     write(DWC3_DALEPENA,0);
     if (!startConfiguration()) return false;
     if (!configure(0,false) || !configure(1,false)) return false;
@@ -405,56 +516,100 @@ void startupWatchdog(void *, wait_result_t) {
     thread_terminate(current_thread());
 }
 void worker(void *, wait_result_t) {
-    bool initialized=active;
-    if (initialized) {
-        unsigned maintenanceTicks = 0;
+    {
+        uint64_t controlDeadline=0,enumerationDeadline=0;
+        uint64_t watchdogDeadline=0;
         uint64_t control = 0;
         uint64_t status = watchdogCall(0x86000006, &control);
         watchdogActive = !status && (control & 1);
         IOLog("MarbleWatchdog: active=%u status=%llx\n", watchdogActive, status);
         __atomic_store_n(&watchdogRuntimeOwned, true, __ATOMIC_RELEASE);
-        while (active) {
-            const bool maintenance = ++maintenanceTicks == 10;
-            if (maintenance) maintenanceTicks = 0;
-            if (maintenance && watchdogActive && ++watchdogTicks >= 100) {
-                watchdogCall(0x86000007);
-                watchdogTicks = 0;
+        while (!stopping) {
+            uint64_t now=mach_absolute_time();
+            if (watchdogActive && now>=watchdogDeadline) {
+                watchdogPetStatus=watchdogCall(0x86000007);
+                clock_interval_to_deadline(1000,kMillisecondScale,&watchdogDeadline);
+            }
+            if(!active) {
+#ifdef MARBLE_IOS18
+                rootSessionReset();
+#endif
+                controlDeadline=enumerationDeadline=0;
+                IOSleep(1000);
+                if(stopping)break;
+                if(!initialize())++failures;
+                continue;
             }
             unsigned count = read(DWC3_GEVNTCOUNT(0)) & DWC3_GEVNTCOUNT_MASK;
+            ++pollCount;
             if (count > eventBytes || (count&3)) {
-                IOLog("RuntimeUSB: invalid event count=%u\n",count); break;
+                IOLog("RuntimeUSB: invalid event count=%u\n",count);++failures;active=false;continue;
             }
+            if(count)clock_interval_to_deadline(250,kMillisecondScale,&lastActivity);
+            const uint64_t began=usbCounter();
             __asm__ volatile("dsb sy" ::: "memory");
-            for (unsigned i=0; i<count; i+=4) {
+            for (unsigned i=0; i<count && active && !stopping; i+=4) {
                 uint32_t event=reinterpret_cast<volatile uint32_t *>(bytes)[eventPosition/4];
                 eventPosition=(eventPosition+4)%eventBytes;
                 write(DWC3_GEVNTCOUNT(0),4);
+                if (!DWC3_EVENT_IS_ENDPOINT(event)) {
+                    controlDeadline=enumerationDeadline=0;
+                } else if (DWC3_DEPEVT_TYPE(event)==DWC3_DEPEVT_XFERCOMPLETE) {
+                    const unsigned ep=DWC3_DEPEVT_EPNUMBER(event);
+                    if (ep<2 && resourceOwned[ep]) {
+                        auto *trb=reinterpret_cast<volatile uint32_t *>(bytes+trbOffset+ep*32);
+                        // An event from a cancelled transfer may follow its replacement.
+                        if (trb[3]&DWC3_TRB_CTRL_HWO) continue;
+                        const unsigned trbStatus=DWC3_TRB_SIZE_TRBSTS(trb[2]);
+                        if (trbStatus==DWC3_TRBSTS_SETUP_PENDING) {
+#ifdef MARBLE_IOS18
+                            rootSessionReset();
+#endif
+                            receiveSetup();controlDeadline=0;continue;
+                        }
+                        if ((DWC3_DEPEVT_STATUS(event)&DEPEVT_STATUS_BUSERR) || trbStatus) {
+                            IOLog("RuntimeUSB: failed transfer event=%x trb=%x\n",event,trb[2]);
+                            ++failures;active=false;break;
+                        }
+                        // Never execute a short or cancelled command envelope.
+                        if (ep==0 && (controlState==0 || controlState==1) &&
+                            DWC3_TRB_SIZE_LENGTH(trb[2])) {
+                            stall();controlDeadline=0;continue;
+                        }
+                    }
+                    controlDeadline=0;
+                }
                 handleEvent(event);
             }
-            if (maintenance && panicOnFailure && controlState && ++controlTicks >= 500) {
-                native_root_block_capture_log();
-                panic("RuntimeUSB: control transfer timeout state=%u events=%u requests=%u failures=%u",
-                    controlState, events, requests, failures);
+            busyTicks+=usbCounter()-began;
+            if (!active || stopping) continue;
+            now=mach_absolute_time();
+            if (!controlState) controlDeadline=0;
+            else if (!controlDeadline) clock_interval_to_deadline(2000,kMillisecondScale,&controlDeadline);
+            if (configuration || !linkConnected) enumerationDeadline=0;
+            else if (!enumerationDeadline) clock_interval_to_deadline(5000,kMillisecondScale,&enumerationDeadline);
+            const uint32_t state=read(DWC3_DSTS);
+            const unsigned link=DWC3_DSTS_USBLNKST(state);
+            if ((controlDeadline && now>=controlDeadline) ||
+                (enumerationDeadline && now>=enumerationDeadline)) {
+                IOLog("RuntimeUSB: recovering state=%u link=%u configured=%u events=%u requests=%u\n",
+                    controlState,link,configuration,events,requests);
+                ++timeoutCount;++failures;active=false;continue;
             }
-            if (configuration) enumerationTicks=0;
-            else if (maintenance && panicOnFailure && ++enumerationTicks >= 1000) {
-                native_root_block_capture_log();
-                panic("RuntimeUSB: enumeration timeout state=%u events=%u requests=%u failures=%u",
-                    controlState, events, requests, failures);
+            if ((state&DWC3_DSTS_DEVCTRLHLT) || !(read(DWC3_DCTL)&DWC3_DCTL_RUN_STOP)) {
+                IOLog("RuntimeUSB: recovering halted controller status=%x\n",state);
+                ++failures;active=false;continue;
             }
-            if (maintenance && returnTicks && !--returnTicks) {
+            if (returnTicks && !controlState && mach_absolute_time()>=returnDeadline) {
                 native_root_block_capture_log();
-                panic("RootStage runtime return requested");
+                panic("RootStage USB host interrupt");
             }
-            if (maintenance && rebootTicks && !--rebootTicks) rebootBootloader();
-            IOSleep(1);
+            if (rebootTicks && !controlState && mach_absolute_time()>=rebootDeadline) rebootBootloader();
+            ++idleWaits;
+            IOSleep(mach_absolute_time()<lastActivity?1:linkConnected?8:50);
         }
     }
     IOLog("RuntimeUSB: stopped events=%u requests=%u failures=%u\n",events,requests,failures);
-    if (initialized && panicOnFailure) {
-        native_root_block_capture_log();
-        panic("RuntimeUSB: event processing stopped events=%u requests=%u failures=%u", events, requests, failures);
-    }
     native_runtime_usb_stop();
     // DMA allocations stay owned until the controller is quiescent.
     thread_terminate(current_thread());
@@ -471,23 +626,29 @@ extern "C" void native_runtime_usb_stop(void) {
 #ifndef MARBLE_IOS18
     native_marble_gmu_stop();
 #endif
-    active=false;
+    stopping=true;active=false;
     if (!controllerOwned) return;
     write(DWC3_DEVTEN,0);
+    end(1);end(0);
     write(DWC3_DCTL,read(DWC3_DCTL)&~DWC3_DCTL_RUN_STOP);
     for (unsigned i=0; i<10000 && !(read(DWC3_DSTS)&DWC3_DSTS_DEVCTRLHLT); i++) IODelay(1);
+    if(!(read(DWC3_DSTS)&DWC3_DSTS_DEVCTRLHLT)) {
+        write(DWC3_DCTL,read(DWC3_DCTL)|DWC3_DCTL_CSFTRST);
+        for(unsigned i=0;i<200000&&(read(DWC3_DCTL)&DWC3_DCTL_CSFTRST);++i)IODelay(1);
+    }
+    controllerOwned=false;
 }
 extern "C" void native_runtime_usb_start(void) {
     unsigned enabled=0;
     if (!PE_parse_boot_argn("rootstage-runtime-usb",&enabled,sizeof(enabled)) || (enabled!=1 && enabled!=2)) return;
     panicOnFailure=enabled==2;
+    stopping=false;
     if (!initialize()) {
         if (panicOnFailure) {
             char report[256]; native_runtime_usb_report(report,sizeof(report));
             panic("%s",report);
         }
-        native_runtime_usb_stop();
-        return;
+        active=false;
     }
     thread_t thread;
     kern_return_t status=kernel_thread_start(worker,nullptr,&thread);
@@ -503,3 +664,93 @@ extern "C" void native_marble_watchdog_start(void) {
 
 #endif
 extern "C" bool native_runtime_usb_configured(void) {return __atomic_load_n(&configuration, __ATOMIC_ACQUIRE) != 0;}
+
+#else
+extern "C" void native_marble_usb_start(void);
+extern "C" void native_marble_usb_stop(void);
+extern "C" void native_marble_usb_report(char *,unsigned);
+extern "C" bool native_marble_usb_configured(void);
+namespace {
+uint64_t watchdogCall(uint64_t function, uint64_t *control = nullptr) {
+    register uint64_t x0 __asm__("x0") = function;
+    register uint64_t x1 __asm__("x1") = 0;
+    __asm__ volatile("smc #0" : "+r"(x0), "+r"(x1) ::
+        "x2","x3","x4","x5","x6","x7","x8","x9","x10","x11","x12","x13","x14","x15","x16","x17","memory");
+    if (control) *control = x1;
+    return x0;
+}
+IOMemoryMap *rebootMap(uint64_t address, unsigned length) {
+    auto *memory=IOMemoryDescriptor::withAddressRange(address,length,kIODirectionInOut | kIOMemoryMapperNone,nullptr);
+    auto *mapping=memory ? memory->map(kIOMapInhibitCache) : nullptr;
+    OSSafeReleaseNULL(memory);
+    return mapping;
+}
+bool rebootTransfer(volatile uint32_t *channel, uint32_t command) {
+    channel[0]=command;
+    __asm__ volatile("dsb sy" ::: "memory");
+    for (unsigned tick=0;tick<1000;++tick) {
+        uint32_t status=channel[2];
+        if (status&1) return (status&15)==1;
+        IODelay(1);
+    }
+    return false;
+}
+void rebootBootloader() {
+    IOMemoryMap *core=rebootMap(0xc400000,0x3000), *config=rebootMap(0xc42d000,0x4000);
+    IOMemoryMap *observer=rebootMap(0xc440000,0x80000), *writer=nullptr, *imem=nullptr;
+    bool ready=false;
+    if (core && config && observer) {
+        auto *table=reinterpret_cast<volatile uint32_t *>(core->getVirtualAddress());
+        auto *owners=reinterpret_cast<volatile uint32_t *>(config->getVirtualAddress());
+        uint32_t version=table[0];
+        bool v7=version>=0x70000000;
+        unsigned apid=v7 ? 1024 : 512;
+        if (version>=0x50000000) for (unsigned index=0;index<(v7?1024u:512u);++index) {
+            unsigned offset=(v7?0x2000:0x900)+4*index;
+            unsigned owner=(v7?0:0x700)+4*index;
+            if (((table[offset/4]>>8)&0xfff)==0x71 && (owners[owner/4]&7)==0) apid=index;
+        }
+        if (apid<(v7?1024u:512u)) {
+            writer=rebootMap(0xc500000ULL+apid*(v7?0x1000:0x10000),0x1000);
+            if (writer) {
+                auto *rd=reinterpret_cast<volatile uint32_t *>(observer->getVirtualAddress()+apid*(v7?0x20:0x80));
+                auto *wr=reinterpret_cast<volatile uint32_t *>(writer->getVirtualAddress());
+                // marble's PMK8350 SDAM restart cell is SID 0, address 0x7148, bits 1..7.
+                if (rebootTransfer(rd,(1u<<27)|(0x48u<<4))) {
+                    uint32_t previous=rd[6]&255;
+                    wr[4]=(previous&1)|(2u<<1);
+                    __asm__ volatile("dsb sy" ::: "memory");
+                    ready=rebootTransfer(wr,0x48u<<4) && rebootTransfer(rd,(1u<<27)|(0x48u<<4)) && ((rd[6]>>1)&127)==2;
+                    IOLog("MarbleReboot: arbiter=%x apid=%u reason=%x->%x ready=%u\n",version,apid,previous,rd[6]&255,ready);
+                }
+            }
+        }
+        if (ready) {
+            imem=rebootMap(0x146aa000,0x1000);
+            if (imem) {
+                reinterpret_cast<volatile uint32_t *>(imem->getVirtualAddress())[0x65c/4]=0x77665500;
+                __asm__ volatile("dsb sy" ::: "memory");
+            }
+#ifdef MARBLE_IOS18
+            native_marble_buttons_stop();
+#endif
+            native_root_block_capture_log();
+            native_runtime_usb_stop();
+            watchdogCall(0x84000009);
+        }
+    }
+    IOLog("MarbleReboot: bootloader reset returned ready=%u\n",ready);
+    OSSafeReleaseNULL(imem); OSSafeReleaseNULL(writer); OSSafeReleaseNULL(observer);
+    OSSafeReleaseNULL(config); OSSafeReleaseNULL(core);
+}
+}
+extern "C" void native_runtime_usb_start(void){
+    unsigned mode=0;
+    PE_parse_boot_argn("rootstage-runtime-usb",&mode,sizeof(mode));
+    if(mode!=3)native_marble_usb_start();
+}
+extern "C" void native_runtime_usb_stop(void){native_marble_usb_stop();}
+extern "C" void native_runtime_usb_report(char *out,unsigned size){native_marble_usb_report(out,size);}
+extern "C" bool native_runtime_usb_configured(void){return native_marble_usb_configured();}
+extern "C" void native_marble_reboot_bootloader(void){rebootBootloader();}
+#endif

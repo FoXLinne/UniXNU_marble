@@ -30,14 +30,15 @@ struct ac_shader_config {
    unsigned float_mode;
    unsigned scratch_bytes_per_wave;
    bool wgp_mode;
+   bool mem_ordered;
    unsigned rsrc1;
    unsigned rsrc2;
    unsigned rsrc3;
 };
 
-void ac_parse_shader_binary_config(const char *data, size_t nbytes, unsigned wave_size,
-                                   const struct ac_compiler_info *compiler_info,
-                                   struct ac_shader_config *conf);
+void ac_parse_llvm_binary_config(const char *data, size_t nbytes, unsigned wave_size,
+                                 const struct ac_compiler_info *compiler_info,
+                                 struct ac_shader_config *conf);
 
 unsigned ac_align_shader_binary_for_prefetch(enum amd_gfx_level gfx_level,
                                              unsigned prefetch_distance,

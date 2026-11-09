@@ -328,5 +328,34 @@ int native_marble_metal_prepare(proc_t process, user_addr_t scratch)
         "/System/Library/EventTimingProfiles/D84.Default.plist",
         &native_gpu_addon3_stage, &native_gpu_addon3_status);
     printf("MarbleMetal: event timing mount=%d/%d\n", native_gpu_addon3_stage, native_gpu_addon3_status);
+    uint32_t appsync = 0;
+    PE_parse_boot_argn("appsync", &appsync, sizeof(appsync));
+    if (appsync == 1) {
+        static const char library[] = "/private/var/ngpu/appsync/lib";
+        static const char libexec[] = "/private/var/ngpu/appsync/libexec";
+        static const char helper[] = "/private/var/ngpu/appsync/helper";
+        static const char helper_point[] = "/System/Library/PrivateFrameworks/MobileInstallation.framework/XPCServices/com.apple.MobileInstallationHelperService.xpc";
+        static const char coreservices[] = "/private/var/ngpu/appsync/coreservices";
+        static volatile int stages[4], status[4];
+        native_gpu_addon_mount(process, scratch, 0x400, library, sizeof(library),
+            "/usr/lib", sizeof("/usr/lib"), "/usr/lib/dyld", "/usr/lib/UniXNUAppSync.dylib",
+            &stages[0], &status[0]);
+        if (status[0]) return status[0];
+        native_gpu_addon_mount(process, scratch, 0x400, libexec, sizeof(libexec),
+            "/usr/libexec", sizeof("/usr/libexec"), "/usr/libexec/launchd_cache_loader", "/usr/libexec/unixnu-appinst",
+            &stages[1], &status[1]);
+        native_gpu_addon_mount(process, scratch, 0x400, helper, sizeof(helper),
+            helper_point, sizeof(helper_point),
+            "/System/Library/PrivateFrameworks/MobileInstallation.framework/XPCServices/com.apple.MobileInstallationHelperService.xpc/Info.plist",
+            "/System/Library/PrivateFrameworks/MobileInstallation.framework/XPCServices/com.apple.MobileInstallationHelperService.xpc/UniXNUAppSync.runtime",
+            &stages[2], &status[2]);
+        native_gpu_addon_mount(process, scratch, 0x400, coreservices, sizeof(coreservices),
+            "/System/Library/CoreServices", sizeof("/System/Library/CoreServices"),
+            "/System/Library/CoreServices/SystemVersion.plist",
+            "/System/Library/CoreServices/SpringBoard.app/UniXNUAppSync.runtime", &stages[3], &status[3]);
+        printf("MarbleAppSync: library=%d/%d installd=%d/%d helper=%d/%d SpringBoard=%d/%d\n",
+            stages[0], status[0], stages[1], status[1], stages[2], status[2], stages[3], status[3]);
+        for (unsigned i = 1; i < 4; ++i) if (status[i]) return status[i];
+    }
     return native_gpu_addon3_status;
 }

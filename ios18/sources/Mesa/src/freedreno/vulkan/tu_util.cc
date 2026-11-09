@@ -42,7 +42,6 @@ static const struct debug_control tu_debug_options[] = {
    { "bos", TU_DEBUG_BOS },
    { "3d_load", TU_DEBUG_3D_LOAD },
    { "fdm", TU_DEBUG_FDM },
-   { "noconform", TU_DEBUG_NOCONFORM },
    { "rd", TU_DEBUG_RD },
    { "hiprio", TU_DEBUG_HIPRIO },
    { "noconcurrentresolves", TU_DEBUG_NO_CONCURRENT_RESOLVES },
@@ -57,6 +56,7 @@ static const struct debug_control tu_debug_options[] = {
    { "nocb", TU_DEBUG_NO_CONCURRENT_BINNING },
    { "forcecb", TU_DEBUG_FORCE_CONCURRENT_BINNING },
    { "computeroundrobin", TU_DEBUG_COMPUTE_ROUND_ROBIN },
+   { "gmem_warmup", TU_DEBUG_GMEM_WARMUP },
    { NULL, 0 }
 };
 
@@ -343,8 +343,8 @@ tu_tiling_config_update_tile_layout(struct tu_framebuffer *fb,
       uint32_t total_tiles = tile_count.width * tile_count.height + fdm_penalty;
       if (total_tiles < best_tile_count ||
           (total_tiles == best_tile_count &&
-           abs((int)(tile_size.width - tile_size.height)) <
-              abs((int)(tiling->tile0.width - tiling->tile0.height)))) {
+           abs(static_cast<int>(tile_size.width - tile_size.height)) <
+              abs(static_cast<int>(tiling->tile0.width - tiling->tile0.height)))) {
          tiling->possible = true;
          tiling->tile0 = tile_size;
          tiling->vsc.tile_count = tile_count;
@@ -532,7 +532,7 @@ tu_framebuffer_init_tiling_config(struct tu_framebuffer *fb,
    for (int gmem_layout = 0; gmem_layout < TU_GMEM_LAYOUT_COUNT; gmem_layout++) {
       struct tu_tiling_config *tiling = &fb->tiling[gmem_layout];
       tu_tiling_config_update_tile_layout(fb, device, pass,
-                                          (enum tu_gmem_layout) gmem_layout);
+                                          static_cast<enum tu_gmem_layout>(gmem_layout));
       if (!tiling->possible)
          continue;
 
@@ -565,12 +565,14 @@ tu_framebuffer_get_tiling_config(struct tu_framebuffer *fb,
    assert(divisor >= 1 && divisor <= TU_GMEM_LAYOUT_DIVISOR_MAX);
    assert(divisor == 1 || !pass->has_fdm); /* For FDM, it's expected that FDM alone will be sufficient to
                                               appropriately size the tiles for the framebuffer.*/
-   struct tu_tiling_config *tiling = &fb->tiling[(TU_GMEM_LAYOUT_COUNT * (divisor - 1)) + gmem_layout];
 
-   if (divisor > fb->initd_divisor) {
-      const struct tu_tiling_config *base_tiling =
-         tu_framebuffer_get_tiling_config(fb, device, pass, gmem_layout, divisor - 1);
-      tu_tiling_config_divide_tile(device, pass, fb, base_tiling, tiling, divisor);
+   /* Initialize every level between what's already been done and the requested divisor, in
+    * order, so a jump of more than one level never leaves an intermediate slot uninitialized.
+    */
+   for (uint32_t d = fb->initd_divisor + 1; d <= divisor; d++) {
+      struct tu_tiling_config *tiling = &fb->tiling[(TU_GMEM_LAYOUT_COUNT * (d - 1)) + gmem_layout];
+      const struct tu_tiling_config *base_tiling = &fb->tiling[gmem_layout];
+      tu_tiling_config_divide_tile(device, pass, fb, base_tiling, tiling, d);
 
       struct tu_vsc_config *vsc = &tiling->vsc;
       if (tiling->possible) {
@@ -587,13 +589,14 @@ tu_framebuffer_get_tiling_config(struct tu_framebuffer *fb,
           (vsc->tile_count.width * vsc->tile_count.height > 100) /* 100 tiles are too many, even with HW binning.   */
       ) {
          /* Revert to the previous level's tiling configuration. */
-         *tiling = *base_tiling;
+         const struct tu_tiling_config *prev_tiling = &fb->tiling[(TU_GMEM_LAYOUT_COUNT * (d - 2)) + gmem_layout];
+         *tiling = *prev_tiling;
       }
 
-      fb->initd_divisor = divisor;
+      fb->initd_divisor = d;
    }
 
-   return tiling;
+   return &fb->tiling[(TU_GMEM_LAYOUT_COUNT * (divisor - 1)) + gmem_layout];
 }
 
 void
@@ -635,10 +638,10 @@ tu_dbg_log_gmem_load_store_skips(struct tu_device *device)
 
    mesa_logi("[GMEM] loads total: %u skipped: %.1f%%\n",
          current_time_frame_total_loads,
-         current_time_frame_skipped_loads / (float) current_time_frame_total_loads * 100.f);
+         current_time_frame_skipped_loads / static_cast<float>(current_time_frame_total_loads) * 100.f);
    mesa_logi("[GMEM] stores total: %u skipped: %.1f%%\n",
          current_time_frame_total_stores,
-         current_time_frame_skipped_stores / (float) current_time_frame_total_stores * 100.f);
+         current_time_frame_skipped_stores / static_cast<float>(current_time_frame_total_stores) * 100.f);
 
    last_skipped_loads = skipped_loads;
    last_skipped_stores = skipped_stores;

@@ -91,10 +91,23 @@ typedef struct {
    struct hash_table *errors;
 } validate_state;
 
+static bool interactive;
+
+#if !DETECT_OS_WINDOWS
+static void
+init_interactive(void)
+{
+   interactive = isatty(STDERR_FILENO);
+}
+#endif
+
 static void
 log_error(validate_state *state, const char *cond, const char *file, int line)
 {
    const void *obj;
+
+   const char *color_red   = interactive ? "\x1b[0;1;31m" : "";
+   const char *color_reset = interactive ? "\x1b[0m"      : "";
 
    if (state->instr)
       obj = state->instr;
@@ -103,8 +116,8 @@ log_error(validate_state *state, const char *cond, const char *file, int line)
    else
       obj = cond;
 
-   char *msg = ralloc_asprintf(state->errors, "error: %s (%s:%d)",
-                               cond, file, line);
+   char *msg = ralloc_asprintf(state->errors, "%serror: %s (%s:%d)%s",
+                               color_red, cond, file, line, color_reset);
 
    _mesa_hash_table_insert(state->errors, obj, msg);
 }
@@ -271,6 +284,16 @@ validate_alu_instr(nir_alu_instr *instr, validate_state *state)
       case nir_op_ufind_msb:
       case nir_op_ufind_msb_rev:
          validate_assert(state, src_bit_size == 32 || src_bit_size == 64);
+         break;
+
+      /* In nir_opcodes.py, these are defined to take general int sources.
+       * However, for downcasts they are redundant with u2uN opcodes and
+       * in order make things consistent, we only want to use the latter.
+       */
+      case nir_op_i2i8:
+      case nir_op_i2i16:
+      case nir_op_i2i32:
+         validate_assert(state, src_bit_size <= instr->def.bit_size);
          break;
 
       default:
@@ -638,7 +661,7 @@ validate_intrinsic_instr(nir_intrinsic_instr *instr, validate_state *state)
    case nir_intrinsic_load_per_view_output:
    case nir_intrinsic_load_per_primitive_output:
    case nir_intrinsic_load_push_constant:
-   case nir_intrinsic_load_attribute_pan:
+   case nir_intrinsic_load_attr_pan:
       /* All memory load operations must load at least a byte */
       validate_assert(state, instr->def.bit_size >= 8);
       break;
@@ -1045,6 +1068,8 @@ validate_tex_src_texture_deref(nir_tex_instr *instr, validate_state *state,
    case nir_texop_query_levels:
    case nir_texop_fragment_mask_fetch_amd:
    case nir_texop_txf_ms_mcs_intel:
+   case nir_texop_txs_lod0_intel:
+   case nir_texop_resinfo_intel:
       validate_assert(state, nir_alu_type_get_base_type(instr->dest_type) == nir_type_int ||
                                 nir_alu_type_get_base_type(instr->dest_type) == nir_type_uint);
       break;
@@ -2376,6 +2401,12 @@ validate_options(const nir_shader_compiler_options *options, validate_state *sta
 static void
 init_validate_state(validate_state *state)
 {
+   static struct util_once_flag once = UTIL_ONCE_FLAG_INIT;
+
+#if !DETECT_OS_WINDOWS
+   util_call_once(&once, init_interactive);
+#endif
+
    state->mem_ctx = ralloc_context(NULL);
    state->ssa_defs_found = NULL;
    state->blocks = _mesa_pointer_set_create(state->mem_ctx);
@@ -2462,7 +2493,10 @@ nir_validate_shader(nir_shader *shader, const char *when)
       nir_var_sampler_heap;
 
    if (mesa_shader_stage_is_callable(shader->info.stage))
-      valid_modes |= nir_var_shader_call_data;
+      valid_modes |= nir_var_shader_call_data_in | nir_var_shader_call_data_out;
+
+   if (shader->info.stage == MESA_SHADER_RAYGEN)
+      valid_modes |= nir_var_shader_call_data_out;
 
    if (shader->info.stage == MESA_SHADER_ANY_HIT ||
        shader->info.stage == MESA_SHADER_CLOSEST_HIT ||

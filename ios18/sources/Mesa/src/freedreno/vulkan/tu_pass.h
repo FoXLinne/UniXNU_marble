@@ -32,6 +32,8 @@ struct tu_subpass_barrier {
    VkAccessFlags2 dst_access_mask;
    VkAccessFlags3KHR dst_access_mask2;
    bool incoherent_ccu_color, incoherent_ccu_depth;
+   bool non_fb_local;
+   bool read_only_input_attachments;
 };
 
 struct tu_subpass_attachment
@@ -161,6 +163,7 @@ struct tu_render_pass
    bool has_fdm;
    bool allow_ib2_skipping;
    bool has_layered_fdm;
+   bool has_msrtss;
 
    bool warn_fdm_force_disabled;
 

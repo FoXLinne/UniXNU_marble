@@ -50,7 +50,11 @@
 
 #if DRAW_LLVM_AVAILABLE
 struct gallivm_state;
+struct draw_tcs_inputs;
+struct draw_tcs_outputs;
+struct draw_tes_inputs;
 #endif
+struct draw_gs_run_state;
 
 /**
  * The max stage the draw stores resources for.
@@ -121,9 +125,6 @@ struct draw_vertex_buffer {
 #define UNDEFINED_VERTEX_ID 0xffff
 
 
-/* maximum number of shader variants we can cache */
-#define DRAW_MAX_SHADER_VARIANTS 512
-
 struct draw_buffer_info {
    const void *ptr;
    unsigned size;
@@ -153,7 +154,6 @@ struct draw_context
       struct draw_stage *stipple;
       struct draw_stage *aapoint;
       struct draw_stage *aaline;
-      struct draw_stage *pstipple;
       struct draw_stage *wide_line;
       struct draw_stage *wide_point;
       struct draw_stage *rasterize;
@@ -256,6 +256,8 @@ struct draw_context
    bool flushing;         /**< debugging/sanity */
    bool suspend_flushing; /**< internally set */
 
+   bool tess_ccw_flip; /**< flip tess ccw during execution */
+
    /* Flags set if API requires clipping in these planes and the
     * driver doesn't indicate that it can do it for us.
     */
@@ -314,6 +316,15 @@ struct draw_context
       unsigned position_output;
       unsigned clipvertex_output;
 
+#if DRAW_LLVM_AVAILABLE
+      struct draw_gs_llvm_variant *current_variant;
+#endif
+
+      /* Per-context execution state for the bound GS, the shader CSO may
+       * be shared across contexts.
+       */
+      struct draw_gs_run_state *run_state;
+
       /** Fields for TGSI interpreter / execution */
       struct {
          struct tgsi_exec_machine *machine;
@@ -327,6 +338,14 @@ struct draw_context
    /* Tessellation state */
    struct {
       struct draw_tess_ctrl_shader *tess_ctrl_shader;
+#if DRAW_LLVM_AVAILABLE
+      struct draw_tcs_llvm_variant *current_variant;
+      /* Per-context input/output staging buffers, the shader CSO may be
+       * shared across contexts.
+       */
+      struct draw_tcs_inputs *tcs_input;
+      struct draw_tcs_outputs *tcs_output;
+#endif
    } tcs;
 
    struct {
@@ -334,6 +353,11 @@ struct draw_context
       unsigned num_tes_outputs;  /**< convenience, from tess_eval_shader */
       unsigned position_output;
       unsigned clipvertex_output;
+#if DRAW_LLVM_AVAILABLE
+      struct draw_tes_llvm_variant *current_variant;
+      /* Per-context input staging buffer, see tcs comment above. */
+      struct draw_tes_inputs *tes_input;
+#endif
    } tes;
 
    /** Fragment shader state */

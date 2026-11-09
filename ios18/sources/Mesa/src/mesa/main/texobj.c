@@ -411,6 +411,7 @@ _mesa_initialize_texture_object( struct gl_context *ctx,
    obj->Attrib.ImageFormatCompatibilityType = GL_IMAGE_FORMAT_COMPATIBILITY_BY_SIZE;
    obj->CompressionRate = GL_SURFACE_COMPRESSION_FIXED_RATE_NONE_EXT;
    obj->AstcDecodePrecision = GL_RGBA16F;
+   obj->TextureTiling = GL_OPTIMAL_TILING_EXT;
 
    /* GL_ARB_bindless_texture */
    _mesa_init_texture_handles(obj);
@@ -790,6 +791,16 @@ _mesa_test_texobj_completeness( const struct gl_context *ctx,
 
    /* Compute _MaxLambda = q - p in the spec used during mipmapping */
    t->_MaxLambda = (GLfloat) (t->_MaxLevel - baseLevel);
+
+   /* GL_EXT_YUV_target / OES_EGL_image_external: TEXTURE_EXTERNAL_OES
+    * textures only ever have a base level, so there are no mipmap levels to
+    * check for consistency.  _MaxLevel/_MaxLambda are computed above and must
+    * not be skipped -- st_finalize_texture() feeds _MaxLevel into
+    * gl_texture_object::lastLevel, and a stale value there produces a bogus
+    * sampler view.
+    */
+   if (t->Target == GL_TEXTURE_EXTERNAL_OES)
+      return;
 
    if (t->Immutable) {
       /* This texture object was created with glTexStorage1/2/3D() so we

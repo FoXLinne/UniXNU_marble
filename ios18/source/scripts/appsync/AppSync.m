@@ -45,6 +45,7 @@ static BOOL validate(id self, SEL command, NSError **error) {
     id bundle = [self bundle];
     if (![bundle respondsToSelector:@selector(bundleURL)] || !userBundle([bundle bundleURL]))
         return originalValidation(self, command, error);
+    NSLog(@"[UniXNU AppSync] validating user bundle: %@", [bundle bundleURL]);
     // Validate ad-hoc user packages without a preloaded hash or provisioning
     // profile ID. The kernel trusts their validated CodeDirectories on demand.
     BOOL adhoc = [self allowAdhocSigning], trust = [self verifyTrustCachePresence];

@@ -1,0 +1,80 @@
+--- a/osfmk/arm64/locore.s
++++ b/osfmk/arm64/locore.s
+@@ -375,6 +375,21 @@
+ 	/* FALLTHROUGH */
+ .endmacro
+ 
++.macro NATIVE_PAC_KERNEL_ENTRY
++#if HAS_NATIVE_PAC
++	stp		x0, x1, [sp, #-16]!
++	mrs		x0, SCTLR_EL1
++	orr		x1, x0, #SCTLR_PACIA_ENABLED
++	orr		x1, x1, #SCTLR_PACDA_ENABLED
++	cmp		x0, x1
++	b.eq	Lnative_pac_entry_done_\@
++	msr		SCTLR_EL1, x1
++	isb
++Lnative_pac_entry_done_\@:
++	ldp		x0, x1, [sp], #16
++#endif
++.endmacro
++
+ #if __ARM_KERNEL_PROTECT__
+ 	.section __DATA_CONST,__const
+ 	.align 3
+@@ -453,24 +468,28 @@
+ 	.align 7
+ Lel0_synchronous_vector_64:
+ 	MAP_KERNEL
++	NATIVE_PAC_KERNEL_ENTRY
+ 	BRANCH_TO_KVA_VECTOR el0_synchronous_vector_64_long, 8
+ 
+ 	.text
+ 	.align 7
+ Lel0_irq_vector_64:
+ 	MAP_KERNEL
++	NATIVE_PAC_KERNEL_ENTRY
+ 	BRANCH_TO_KVA_VECTOR el0_irq_vector_64_long, 9
+ 
+ 	.text
+ 	.align 7
+ Lel0_fiq_vector_64:
+ 	MAP_KERNEL
++	NATIVE_PAC_KERNEL_ENTRY
+ 	BRANCH_TO_KVA_VECTOR el0_fiq_vector_64_long, 10
+ 
+ 	.text
+ 	.align 7
+ Lel0_serror_vector_64:
+ 	MAP_KERNEL
++	NATIVE_PAC_KERNEL_ENTRY
+ 	BRANCH_TO_KVA_VECTOR el0_serror_vector_64_long, 11
+ 
+ 	/* Fill out the rest of the page */
+@@ -1619,6 +1638,26 @@
+ #endif  /* defined(ERET_IS_NOT_CONTEXT_SYNCHRONIZING) && !__ARM_KERNEL_PROTECT__ */
+ 	strb	wzr, [x1, CPU_SYNC_ON_CSWITCH]
+ 
++#if HAS_NATIVE_PAC
++	/* Match XNU's user JOP policy after authenticating the saved kernel state. */
++	ldr		w2, [x0, SS64_CPSR]
++	tbnz	w2, PSR64_MODE_EL_SHIFT, Lnative_pac_user_done
++	mrs		x1, TPIDR_EL1
++	ldr		w2, [x1, TH_ARM_MACHINE_FLAGS]
++	mrs		x3, SCTLR_EL1
++	orr		x4, x3, #SCTLR_PACIA_ENABLED
++	orr		x4, x4, #SCTLR_PACDA_ENABLED
++	tbz		w2, ARM_MACHINE_THREAD_DISABLE_USER_JOP_SHIFT, Lnative_pac_user_apply
++	bic		x4, x4, #SCTLR_PACIA_ENABLED
++	bic		x4, x4, #SCTLR_PACDA_ENABLED
++Lnative_pac_user_apply:
++	cmp		x3, x4
++	b.eq	Lnative_pac_user_done
++	msr		SCTLR_EL1, x4
++	isb
++Lnative_pac_user_done:
++#endif
++
+ 	/* Restore arm_saved_state64 */
+ 
+ 	// Skip x0, x1 - we're using them

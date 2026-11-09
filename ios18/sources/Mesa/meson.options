@@ -130,13 +130,6 @@ option(
 )
 
 option(
-  'gallium-d3d10umd',
-  type : 'boolean',
-  value : false,
-  description : 'build gallium D3D10 WDDM UMD frontend.',
-)
-
-option(
   'gallium-rusticl',
   type : 'boolean',
   value : false,
@@ -147,7 +140,7 @@ option(
   'gallium-rusticl-enable-drivers',
   type : 'array',
   value : ['auto'],
-  choices : ['auto', 'asahi', 'freedreno', 'radeonsi'],
+  choices : ['auto', 'asahi', 'freedreno', 'panfrost', 'radeonsi'],
   description : 'List of gallium drivers for which rusticl will be enabled ' +
                 'by default',
 )
@@ -196,13 +189,6 @@ option(
 )
 
 option(
-  'd3d-drivers-path',
-  type : 'string',
-  value : '',
-  description : 'Location of D3D drivers. Default: $libdir/d3d',
-)
-
-option(
   'vulkan-drivers',
   type : 'array',
   value : ['auto'],
@@ -235,11 +221,29 @@ option(
 )
 
 option(
+  'amd-options',
+  type : 'array',
+  value : ['use-llvm'],
+  choices : ['use-llvm', 'virtio'],
+  description : 'List of options that apply to radv and radeonsi',
+)
+
+# Remove after 27.1 branchpoint
+option(
   'amdgpu-virtio',
   type : 'boolean',
   value : false,
+  deprecated : 'amd-options',
   description : 'use experimental virtio backend for radeonsi/radv',
 )
+
+option(
+  'panfrost-virtio',
+  type : 'boolean',
+  value : false,
+  description : 'use experimental virtio backend for panfrost',
+)
+
 option(
   'imagination-srv',
   type : 'boolean',
@@ -310,7 +314,16 @@ option(
   'moltenvk-dir',
   type : 'string',
   value : '',
-  description : 'Location of the MoltenVk SDK. Default: '
+  description : 'Location of the MoltenVK SDK, macOS only. ' +
+                'Also enables MoltenVK-specific configuration.'
+)
+
+option(
+  'vulkan-loader-rpath',
+  type : 'string',
+  value : '/usr/local/lib',
+  description : 'The path where the vulkan loader (libvulkan.1.dylib) exists at runtime.' +
+                'Defaults to /usr/local/lib since that is where the Vulkan SDK installs it to by default.'
 )
 
 option(
@@ -318,7 +331,7 @@ option(
   type : 'array',
   value : [],
   choices : [
-    'device-select', 'intel-nullhw', 'overlay', 'screenshot', 'anti-lag',
+    'device-select', 'intel-nullhw', 'overlay', 'screenshot',
     'vram-report-limit',
   ],
   description : 'List of vulkan layers to build'
@@ -378,7 +391,7 @@ option(
   'glx',
   type : 'combo',
   value : 'auto',
-  choices : ['auto', 'disabled', 'dri', 'xlib'],
+  choices : ['auto', 'disabled', 'dri'],
   description : 'Build support for GLX platform'
 )
 
@@ -447,10 +460,12 @@ option(
                 'is included.'
 )
 
+# Remove after 27.1 branchpoint
 option(
   'amd-use-llvm',
   type : 'boolean',
   value : true,
+  deprecated : 'amd-options',
   description : 'Whether to use LLVM for the AMD drivers, if LLVM ' +
                 'is included.'
 )
@@ -557,8 +572,8 @@ option(
   type : 'array',
   value : [],
   choices : ['amd', 'asahi', 'dlclose-skip', 'drm-shim', 'etnaviv', 'freedreno',  
-             'glsl', 'imagination', 'intel', 'intel-ui', 'lima', 'nir', 'nouveau',
-             'panfrost', 'rti', 'zink', 'all'],
+             'gamma', 'glsl', 'imagination', 'intel', 'intel-ui', 'lima', 'nir',
+             'nouveau', 'panfrost', 'zink', 'all'],
   description : 'List of tools to build. (Note: `intel-ui` selects `intel`)',
 )
 
@@ -642,6 +657,13 @@ option(
 )
 
 option(
+  'apitrace',
+  type : 'boolean',
+  value : false,
+  description : 'Build in apitrace GL call tracing, enabled at run time with MESA_APITRACE=1. Default: false'
+)
+
+option(
   'perfetto',
   type : 'boolean',
   value : false,
@@ -663,6 +685,13 @@ option(
   type : 'boolean',
   value : false,
   description : 'Enable TensorFlow Lite delegate. Default: false'
+)
+
+option(
+  'torx',
+  type : 'boolean',
+  value : false,
+  description : 'Enable Torx (PyTorch backend). Default: false'
 )
 
 option(
@@ -778,6 +807,14 @@ option(
   type : 'string',
   value : '',
   description : 'Override build id for shader cache keys (hex string). '
+)
+
+option(
+  'nvk-build-id',
+  type : 'string',
+  value : '',
+  description : 'Override build id for shader cache keys (hex string). ' +
+                'Can be extracted with readelf -x .note.gnu.build-id'
 )
 
 option(
@@ -903,7 +940,7 @@ option(
 option(
   'panfrost-rust',
   type : 'boolean',
-  value : false,
+  value : true,
   description : 'Build panfrost Rust components.'
 )
 
@@ -917,3 +954,10 @@ option('offline-air-nir-llvm-config', type : 'string', value : '',
 
 option('tu-builtin-source-id', type : 'string', value : '', description : 'Exact builtin compiler source and profile identity')
 option('tu-builtin-pack-header', type : 'string', value : '', description : 'Explicit generated builtin pack header; empty retains compiler path')
+
+option(
+  'panfrost-disassemble',
+  type : 'boolean',
+  value : true,
+  description : 'Build panfrost disassemblers. Explicitly setting this option to false will cause the panfrost stack to build without disassemblers. This should be left enabled for distro builds.'
+)

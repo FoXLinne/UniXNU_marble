@@ -3,12 +3,6 @@
 /* SPDX-License-Identifier: MIT */
 #include "NativeAdrenoUserClient.h"
 #include <kern/task.h>
-#define template ledger_template
-extern "C" {
-#include <kern/policy_internal.h>
-}
-#undef template
-#include <mach/task_policy.h>
 extern "C" volatile uint32_t native_adreno_trace_stage;
 /* 0 keeps user BOs cacheable and maintained before every submission (int-070..097); the board sets it from the sheng-gpu-wc boot argument. */
 /* sheng-gpu-owned-coherent=1: the GPU's own BOs use the IO-coherent path (CPU write-back view, GPU write-back inner-shareable mapping) instead of
@@ -306,6 +300,18 @@ IOReturn NativeAdrenoUserClient::importBo(const NativeAdrenoAbiBoImport *request
     }
     return kIOReturnSuccess;
 }
+IOReturn NativeAdrenoUserClient::syncBo(const NativeAdrenoAbiBoSync *request)
+{
+    if(!open_)return kIOReturnNotReady;
+    if(!request || request->acquire>1 || request->reserved || !request->bytes)return kIOReturnBadArgument;
+    Entry *entry=find(request->handle);
+    if(!entry || !entry->mapped_state || entry->unreleasable || !entry->memory.imported())return kIOReturnBadArgument;
+    const size_t length=entry->memory.bytes();
+    if(request->offset>=length || request->bytes>length-request->offset)return kIOReturnBadArgument;
+    const size_t begin=request->offset&~size_t(4095),end=(request->offset+request->bytes+4095)&~size_t(4095);
+    return request->acquire?entry->memory.acquireDeviceWrites(begin,end-begin,NativeAdrenoPhaseComplete):
+        entry->memory.publishForDevice(begin,end-begin,true,false,NativeAdrenoPhaseSubmit);
+}
 IOReturn NativeAdrenoUserClient::mapBo(const NativeAdrenoAbiBoMap *request,
     NativeAdrenoAbiBoMapReply *reply)
 {
@@ -337,7 +343,7 @@ IOReturn NativeAdrenoUserClient::mapBo(const NativeAdrenoAbiBoMap *request,
     const bool coherent=(entry->memory.imported() && native_adreno_io_coherent && !importedWrite) ||
                         (!entry->memory.imported() && ownedCoherent());
     const IOReturn status=vm_->map(&entry->memory,0,request->iova,permissions,
-        coherent?1u:request->writeback,coherent?3u:request->shareability,&handle);
+        coherent?1u:request->writeback,coherent?3u:request->shareability,&handle,entry->memory.imported());
     if(status)return status;
     entry->mapped=handle;entry->iova=request->iova;entry->mapped_state=true;
     if(end>window_peak_)window_peak_=end;
@@ -380,8 +386,7 @@ IOReturn NativeAdrenoUserClient::freeBo(const NativeAdrenoAbiBoFree *request)
     clear(*entry);
     return kIOReturnSuccess;
 }
-/* The GPU priority this process's next submission takes: its queues' foreground value while it renders visible UI (any GPU role above
- * background), their background value otherwise. A process that never told us keeps the daemon's default (no ring choice). */
+/* Queue-requested rendering priority, independent of the process's application role. */
 /* Which processes told the driver what (the newest 32): pid, foreground priority, background priority, the GPU role then, the time (ms of
  * the submission clock when the board gave one, else 0) and how many times this connection had told it before (0 the runtime's first call
  * at device open, later ones the process's own setGPUPriority:/setBackgroundGPUPriority: through the frontend). */
@@ -390,10 +395,9 @@ extern "C" uint64_t native_adreno_now_us(void) __attribute__((weak));
 int32_t NativeAdrenoUserClient::submitPriority() const
 {
     if(priority_foreground_<0 && priority_background_<0)return -1;
-    const bool background=proc_get_effective_task_policy(current_task(),TASK_POLICY_DARWIN_BG) ||
-        proc_get_effective_task_policy(current_task(),TASK_POLICY_ROLE)==TASK_BACKGROUND_APPLICATION;
-    return background?(priority_background_>=0?priority_background_:priority_foreground_)
-                     :(priority_foreground_>=0?priority_foreground_:priority_background_);
+    // iOS 18 application roles do not describe GPU visibility. Keep each
+    // queue's requested rendering priority for its work, including posters.
+    return priority_foreground_>=0?priority_foreground_:priority_background_;
 }
 IOReturn NativeAdrenoUserClient::setPriority(uint32_t foreground,uint32_t background)
 {
@@ -404,7 +408,7 @@ IOReturn NativeAdrenoUserClient::setPriority(uint32_t foreground,uint32_t backgr
     {
         const uint32_t n=native_adreno_prio_count;
         volatile uint32_t *row=native_adreno_prio_log[n&31];
-        row[0]=uint32_t(proc_selfpid());row[1]=foreground;row[2]=background;row[3]=uint32_t(proc_get_effective_task_policy(current_task(),TASK_POLICY_ROLE));
+        row[0]=uint32_t(proc_selfpid());row[1]=foreground;row[2]=background;row[3]=0;
         row[4]=&native_adreno_now_us?uint32_t(native_adreno_now_us()/1000):0;row[5]=priority_told_;
         native_adreno_prio_count=n+1;
         if(priority_told_<0xffffffffu)++priority_told_;
@@ -438,10 +442,10 @@ IOReturn NativeAdrenoUserClient::submit(const NativeAdrenoAbiSubmit *request,
     }
     uint32_t fence=0;
     used_=true;
-    ring_->useContext(context_);
+    submit_->nextContext(context_);
     submit_->nextOwner(proc_selfpid());
     submit_->nextPriority(submitPriority());
-    submit_->nextRole(proc_get_effective_task_policy(current_task(),TASK_POLICY_ROLE));
+    submit_->nextRole(0);
     const IOReturn status=submit_->submit(vm_,buffers,request->buffer_count,
         queue_base_+request->queue,&fence,clock);
     if(status)return status;
@@ -504,6 +508,7 @@ size_t NativeAdrenoUserClient::inputSize(uint32_t method)
     case NativeAdrenoMethodGetDeviceInfo:return 0;
     case NativeAdrenoMethodBoAlloc:return sizeof(NativeAdrenoAbiBoAlloc);
     case NativeAdrenoMethodBoMap:return sizeof(NativeAdrenoAbiBoMap);
+    case NativeAdrenoMethodBoSync:return sizeof(NativeAdrenoAbiBoSync);
     case NativeAdrenoMethodBoImport:return sizeof(NativeAdrenoAbiBoImport);
     case NativeAdrenoMethodBoFree:return sizeof(NativeAdrenoAbiBoFree);
     case NativeAdrenoMethodSubmit:return sizeof(NativeAdrenoAbiSubmit);
@@ -523,7 +528,8 @@ size_t NativeAdrenoUserClient::outputSize(uint32_t method)
     case NativeAdrenoMethodQuery:return sizeof(NativeAdrenoAbiParams);
     case NativeAdrenoMethodBoAlloc:return sizeof(NativeAdrenoAbiBoAllocReply);
     case NativeAdrenoMethodBoMap:return sizeof(NativeAdrenoAbiBoMapReply);
-    case NativeAdrenoMethodBoFree:return 0;
+    case NativeAdrenoMethodBoFree:
+    case NativeAdrenoMethodBoSync:return 0;
     case NativeAdrenoMethodSubmit:return sizeof(NativeAdrenoAbiSubmitReply);
     case NativeAdrenoMethodWaitFence:return 0;
     case NativeAdrenoMethodGetTimestamp:return sizeof(NativeAdrenoAbiTimestamp);
@@ -598,6 +604,10 @@ IOReturn NativeAdrenoUserClient::dispatch(uint32_t method,const void *input,
             native_adreno_map_fail[6][0]=(uint32_t)(request.iova>>12);native_adreno_map_fail[6][1]=(uint32_t)(request.handle);
         }
         break;
+    }
+    case NativeAdrenoMethodBoSync: {
+        NativeAdrenoAbiBoSync request{};memcpy(&request,input,sizeof(request));
+        status=syncBo(&request);break;
     }
     case NativeAdrenoMethodBoFree: {
         NativeAdrenoAbiBoFree request{};

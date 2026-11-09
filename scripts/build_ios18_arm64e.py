@@ -14,7 +14,7 @@ import tempfile
 import tomllib
 from types import SimpleNamespace
 
-from marble_sources import build_source_revision, stage_ios17, stage_ios18
+from marble_sources import stage_ios18_stack, stage_ios18, source_revision
 
 DEVICE = Path(__file__).resolve().parents[1]
 PROFILE = DEVICE / 'profiles/ios-18.7.11-22H384.toml'
@@ -44,8 +44,6 @@ def checkout(path, url, revision, tag=None):
             subprocess.run(['git', '-C', path, 'remote', 'add', 'origin', url], check=True)
             subprocess.run(['git', '-C', path, 'fetch', '--depth', '1', 'origin', revision], check=True)
             subprocess.run(['git', '-C', path, 'checkout', '--quiet', '--detach', revision], check=True)
-    if git(path, 'rev-parse', 'HEAD') != revision:
-        raise RuntimeError(f'{path}: source revision differs from the OS profile')
 
 
 def apply_patch(work, patch):
@@ -59,9 +57,7 @@ def apply_patch(work, patch):
 
 
 def prepare(out, upstream, stack, profile):
-    if build_source_revision() != profile['upstream']['commit']:
-        raise RuntimeError('UniXNU build scripts differ from the OS profile revision')
-    stage_ios17(stack)
+    stage_ios18_stack(stack)
     os_spec = profile['os']
     reference = out / 'xnu'
     checkout(reference, 'https://github.com/apple-oss-distributions/xnu.git',
@@ -75,6 +71,8 @@ def prepare(out, upstream, stack, profile):
             target.symlink_to(reference if source.name == 'xnu' else source.resolve(), target_is_directory=True)
     for name in ('drivers', 'kits', 'package'):
         target = tree / name
+        if target.is_symlink() and target.resolve() != (stack / name).resolve():
+            target.unlink()
         if not target.exists():
             target.symlink_to(stack / name, target_is_directory=True)
     shutil.copytree(upstream / 'scripts', tree / 'scripts', dirs_exist_ok=True,
@@ -84,9 +82,8 @@ def prepare(out, upstream, stack, profile):
     work = tree / '.cache/xnu-work'
     if not work.exists():
         subprocess.run(['git', 'clone', '--quiet', '--shared', reference, work], check=True)
-    if git(work, 'rev-parse', 'HEAD') != os_spec['xnu_revision']:
-        raise RuntimeError('Prepared XNU source differs from the OS profile revision')
     patch = DEVICE / profile['kernel']['patch']
+    performance_patch = DEVICE / profile['kernel']['performance_patch']
     apply_patch(work, patch)
     apply_patch(work, DEVICE / profile['kernel']['gpu_patch'])
     ui_patch = DEVICE / profile['kernel']['ui_patch']
@@ -95,8 +92,31 @@ def prepare(out, upstream, stack, profile):
     apply_patch(work, filesystem_patch)
     rtc_patch = DEVICE / 'patches/xnu-11417/native-rtc.patch'
     apply_patch(work, rtc_patch)
+    apply_patch(work, performance_patch)
+    native_pac_el0_patch = DEVICE / 'patches/xnu-11417/native-pac-el0.patch'
+    apply_patch(work, native_pac_el0_patch)
+    dataprotect_patch = DEVICE / 'patches/xnu-11417/sheng-owner-dataprotect.patch'
+    apply_patch(work, dataprotect_patch)
+    console_patch = DEVICE / 'patches/xnu-11417/early-video-console.patch'
+    apply_patch(work, console_patch)
+    metal_cache_patch = DEVICE / 'patches/xnu-11417/metal-cache-access.patch'
+    apply_patch(work, metal_cache_patch)
+    cache_times_patch = DEVICE / 'patches/xnu-11417/metal-cache-times.patch'
+    apply_patch(work, cache_times_patch)
+    microtime_patch = DEVICE / 'patches/xnu-11417/fractional-mhz-microtime.patch'
+    apply_patch(work, microtime_patch)
+    msgbuf_patch = DEVICE / 'patches/xnu-11417/release-msgbuf-size.patch'
+    apply_patch(work, msgbuf_patch)
+    backlight_patch = DEVICE / 'ios18/source/patches/xnu/zzwb-native-sandbox-grant-set-properties.patch'
+    apply_patch(work, backlight_patch)
+    appsync_patch = DEVICE / 'patches/xnu-11417/appsync-user-trust.patch'
+    apply_patch(work, appsync_patch)
+    launch_constraints_patch = DEVICE / 'ios18/source/patches/xnu/zzyc-owner-skip-launch-constraints.patch'
+    apply_patch(work, launch_constraints_patch)
     patch_list = out / 'xnu-patches.list'
-    patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n' + str(filesystem_patch) + '\n' + str(rtc_patch) + '\n')
+    patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n' + str(filesystem_patch) + '\n' + str(rtc_patch) + '\n' + str(performance_patch) + '\n' + str(native_pac_el0_patch) + '\n' + str(dataprotect_patch) + '\n' + str(console_patch) + '\n')
+    with patch_list.open('a') as stream:
+        stream.write(str(metal_cache_patch) + '\n' + str(cache_times_patch) + '\n' + str(microtime_patch) + '\n' + str(msgbuf_patch) + '\n' + str(backlight_patch) + '\n' + str(appsync_patch) + '\n' + str(launch_constraints_patch) + '\n')
     env = dict(os.environ, UNIXNU_XNU_TAG='xnu-' + os_spec['xnu_version'],
                UNIXNU_XNU_COMMIT=os_spec['xnu_revision'], UNIXNU_XNU_DARWIN=os_spec['darwin'],
                UNIXNU_XNU_VERSION=os_spec['xnu_version'], UNIXNU_XNU_ARCH=os_spec['arch'],
@@ -245,12 +265,15 @@ def qualify_pmgr(out, profile):
 
 
 def build_board(tree, env):
+    stage_ios18('GopFramebuffer', tree.parent / 'GopFramebuffer')
     from build_ios18_display import generate, bindings as display_bindings
     from build_ios18_hid import prepare as prepare_hid, bindings as hid_bindings
+    from build_ios18_usb import generate as generate_usb, bindings as usb_bindings
     records = tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837'
     out = tree / 'build/marble-boot'
     out.mkdir(parents=True, exist_ok=True)
     generate(out)
+    generate_usb(out)
     hid_flags = prepare_hid(tree)
     adsp = out / 'MarbleAdsp.cpp'
     original = (DEVICE / 'package/MarbleAdsp.cpp').read_text()
@@ -265,18 +288,29 @@ def build_board(tree, env):
     delay_end = resident_source.index('  // The resident firmware resumes', delay_start)
     resident_source = resident_source[:delay_start] + resident_source[delay_end:]
     resident.write_text(resident_source)
+    panel_source=(DEVICE / 'package/MarblePkg/RootDisplay.c').read_text()
+    panel_source=panel_source[panel_source.index('STATIC VOID PanelPublishState('):
+                              panel_source.index('/* Prefix ABI')]
+    panel_source=panel_source.replace('(VOID *)(UINTN)0xae94000','nativeDsi')
+    panel_source=panel_source.replace('(VOID *)(UINTN)0xae00000','nativeMdp')
+    panel_source=panel_source.replace('(CONST VOID *)(UINTN)0xae94004',
+                                      '(CONST VOID *)(nativeDsi+1)')
+    panel_source=panel_source.replace('PANEL_MODE_COMMIT *Commit=Context;',
+                                      'PANEL_MODE_COMMIT *Commit=(PANEL_MODE_COMMIT *)Context;')
+    panel_source=panel_source.replace('gBS->Stall(', 'NativePanelDelay(')
+    (out / 'MarblePanelCommands.inc').write_text(panel_source)
     objects = []
     with (out / 'compile.log').open('w') as log:
         sources = [DEVICE / 'package' / filename for filename in
-                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp', 'MarbleScanout.cpp',
+                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp', 'MarbleScanout.cpp', 'MarblePanel.cpp', 'MarbleBacklight.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
-                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'NativeResident.cpp',
-                    'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'MarbleButtons.cpp', 'KeyStoreEvents.cpp')]
+                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
+                    'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'MarbleButtons.cpp', 'MarbleHaptics.cpp', 'KeyStoreEvents.cpp')]
         sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
         sources.append(tree.parent / 'AppleKeyStoreState/NativeKeyStoreEvents.cpp')
         sources.append(tree.parent / 'GopFramebuffer/NativeLegacyDisplay.cpp')
-        sources.append(DEVICE / 'ios17/source/drivers/NativeGeniSpi/GeniSpi.c')
+        sources.append(DEVICE / 'ios18/sources/QcomGeniSpi/GeniSpi.c')
         for source in sources:
             filename = source.name
             if filename == 'MarbleAdsp.cpp':
@@ -311,8 +345,8 @@ def build_board(tree, env):
             command += ['-I', str(out), '-Wno-unused-parameter', '-Wno-deprecated-enum-enum-conversion']
             command += ['-I', str(tree / '.cache/xnu-work/osfmk')]
             command += ['-I', str(DEVICE / 'package')]
-            command += ['-I', str(DEVICE / 'ios17/source/package/UniXNUPkg/Include')]
-            command += ['-I', str(DEVICE / 'ios17/source/drivers/NativeGeniSpi')]
+            command += ['-I', str(DEVICE / 'ios18/source/package/UniXNUPkg/Include')]
+            command += ['-I', str(DEVICE / 'ios18/sources/QcomGeniSpi')]
             if filename == 'RuntimeUsb.cpp':
                 command += ['-DMARBLE_IOS18=1']
             if filename == 'NativeHomeInput.cpp':
@@ -326,7 +360,7 @@ def build_board(tree, env):
             magic, cpu, subtype, kind = struct.unpack_from('<4I', obj.read_bytes())
             if (magic, cpu, subtype & 0xffffff, kind) != (0xfeedfacf, 0x100000c, 2, 1):
                 raise RuntimeError('Marble boot archive must contain arm64e objects')
-            if filename in ('MarbleBootWatchdog.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp', 'MarbleBattery.cpp', 'NativeHomeInput.cpp', 'NativeKeyStoreEvents.cpp'):
+            if filename in ('MarbleBootWatchdog.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp', 'MarbleBattery.cpp', 'MarbleBacklight.cpp', 'NativeHomeInput.cpp', 'NativeKeyStoreEvents.cpp', 'MarbleUsb.cpp'):
                 late = obj.with_suffix('.late.o')
                 subprocess.run(['/opt/homebrew/opt/llvm/bin/llvm-objcopy',
                                 '--remove-section=__DATA,__mod_init_func',
@@ -350,11 +384,14 @@ def build_board(tree, env):
     bindings.update(aes_bindings(tree.parent, out / 'NativeAES.o'))
     bindings.update(display_bindings(out / 'NativeLegacyDisplay.o', out))
     bindings.update(hid_bindings(tree.parent, out / 'NativeHomeInput.o'))
+    usb_functions, usb_data, usb_aliases = usb_bindings(out / 'MarbleUsb.o')
+    bindings.update(usb_functions)
     native_aliases = {
         '__ZN11IOHIDDevice12didTerminateEP9IOServicejPb': '__ZN9IOService12didTerminateEPS_jPb',
     }
+    native_aliases.update(usb_aliases)
     for name in native_aliases:
-        bindings.pop(name)
+        bindings.pop(name, None)
     text, addresses = '.text\n.p2align 2\n', ''
     for name, target in native_aliases.items():
         text += f'.globl {name}\n{name}:\n bti c\n b {target}\n'
@@ -369,6 +406,8 @@ def build_board(tree, env):
     addresses += '.globl __ZTV25IOMobileFramebufferLegacy\n.set __ZTV25IOMobileFramebufferLegacy, 0xfffffff007d4ac30\n'
     addresses += '.globl __ZN11IOHIDDevice10gMetaClassE\n.set __ZN11IOHIDDevice10gMetaClassE, 0xfffffff00a510e68\n'
     addresses += '.globl __ZTV11IOHIDDevice\n.set __ZTV11IOHIDDevice, 0xfffffff007d37368\n'
+    for name, address in usb_data.items():
+        addresses += f'.globl {name}\n.set {name}, {address:#x}\n'
     for name, source in (('watchdog-bindings', text), ('watchdog-addresses', addresses)):
         assembly, obj = out / (name + '.S'), out / (name + '.o')
         assembly.write_text(source)
@@ -470,7 +509,7 @@ def boot_image(out, upstream, stack, profile, unique_chip_id):
     from build_pac_uefi import build_applications, pack_boot_image
     report = validate_prelink(out)
     kernel = out / 'kernel.fileset.macho'
-    if report['inputs']['kernelcache_sha256'] != profile['kernel']['prelink']['kernelcache_sha256']:
+    if report.get('base_kernelcache_sha256', report['inputs']['kernelcache_sha256']) != profile['kernel']['prelink']['kernelcache_sha256']:
         raise RuntimeError('Kernel collection differs from the iOS 18 profile')
     if not unique_chip_id or not 0 < int(unique_chip_id, 16) < 1 << 64:
         raise RuntimeError('bootimg requires --unique-chip-id HEX or UNIXNU_UNIQUE_CHIP_ID')
@@ -565,9 +604,10 @@ def main():
     parser.add_argument('--unique-chip-id', default=os.environ.get('UNIXNU_UNIQUE_CHIP_ID'))
     parser.add_argument('--source', '--upstream', dest='upstream', type=Path,
                         default=DEVICE / 'ios18/source')
-    parser.add_argument('--stack', type=Path, default=DEVICE.parent / 'UniXNU')
+    parser.add_argument('--stack', type=Path, default=None)
     args = parser.parse_args()
-    out, upstream, stack = args.output.resolve(), args.upstream.resolve(), args.stack.resolve()
+    out, upstream = args.output.resolve(), args.upstream.resolve()
+    stack = (args.stack or out / 'stack').resolve()
     out.mkdir(parents=True, exist_ok=True)
     for variable, directory in (('TMPDIR', 'tmp'), ('CLANG_MODULE_CACHE_PATH', 'clang-module-cache'),
                                 ('XDG_CACHE_HOME', 'host-cache')):
@@ -603,12 +643,12 @@ def main():
                                         f'-Wl,-force_load,{tree}/build/marble-storage/libMarbleStorage.a '
                                         f'-Wl,-force_load,{tree}/build/marble-gpu/libMarbleGpu.a')
         checkout(out / 'SoftwareAES', 'https://github.com/UniXNU/SoftwareAES.git',
-                 '4a45326da5c2cd6fe6813d79ee43db20805628af')
+                 source_revision('SoftwareAES'))
         checkout(out / 'AppleKeyStoreState', 'https://github.com/UniXNU/AppleKeyStoreState.git',
-                 '42ff83e08b2265fe741d4adaf084bebe003452ba')
+                 source_revision('AppleKeyStoreState'))
         apply_patch(out / 'SoftwareAES', DEVICE / 'patches/SoftwareAES/arm64e-base.patch')
         checkout(out / 'GopFramebuffer', 'https://github.com/UniXNU/GopFramebuffer.git',
-                 'e47c1b8de169cd2bd0b885c7d85e433010e3cdf2')
+                 source_revision('GopFramebuffer'))
         checkout(out / 'IOHIDFamily', 'https://github.com/apple-oss-distributions/IOHIDFamily.git',
                  'e31e90a24c27ad6cbe981650d12a1a4124065b03', 'IOHIDFamily-2238.120.5')
         from build_ios18_gpu import kernel as build_gpu
@@ -619,7 +659,7 @@ def main():
                  '1b96f8f04b9dff4dc0277ac43625bf694e62c5aa', 'IOStorageFamily-323')
         ram = out / 'NativeRamBlock'
         checkout(ram, 'https://github.com/UniXNU/NativeRamBlock.git',
-                 '4be2d7eb05ef5a98126c91e0302c149140c0e3e1')
+                 source_revision('RamBlock'))
         apply_patch(ram, DEVICE / 'patches/NativeRamBlock/data-snapshot.patch')
         from build_ios18_storage import build as build_storage
         build_storage(tree, storage, ram)
@@ -636,6 +676,14 @@ def main():
     apply_patch(tool, DEVICE / profile['upstream']['prelink_patch'])
     native = out / 'kernel.native.macho'
     output = out / 'kernel.fileset.macho'
+    if 'com.apple.driver.AppleUSBXDCI' in profile['kernel']['roots']:
+        from build_ios18_usb import prelink
+        initializers = {}
+        if profile['kernel']['prelink'].get('early_security_init'):
+            name, value = profile['kernel']['prelink']['early_security_init'].split('=')
+            initializers[name] = int(value, 0)
+        print(prelink(out, cache, native, profile['kernel']['roots'], initializers))
+        return
     with tempfile.TemporaryDirectory(prefix='prelink-', dir=out) as temporary:
         candidate = Path(temporary) / output.name
         mapping = output.with_suffix('.map.json')

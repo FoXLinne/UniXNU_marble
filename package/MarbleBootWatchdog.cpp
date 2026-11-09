@@ -27,6 +27,7 @@ volatile uint32_t marble_watchdog_monitoring;
 static IOWatchdog *activeWatchdog;
 extern "C" bool native_resident_prepare(void);
 extern "C" void native_marble_usb_health_check(void);
+extern "C" void native_marble_rtc_kernel_service(void);
 static bool residentWatchdog;
 static uint64_t watchdogCall(uint64_t, uint64_t * = nullptr, uint64_t = 0);
 
@@ -134,6 +135,7 @@ static uint64_t watchdogCall(uint64_t function, uint64_t *control, uint64_t argu
     IOLog("MarbleWatchdog: startup active=%u status=%llx\n", !status && (control & 1), status);
     for (;;) {
         native_marble_usb_health_check();
+        native_marble_rtc_kernel_service();
         if (activeWatchdog) {
             const char *state = reinterpret_cast<const char *>(activeWatchdog);
             memcpy(const_cast<uint64_t *>(&marble_watchdog_checkins), state + 0xb8, 8);

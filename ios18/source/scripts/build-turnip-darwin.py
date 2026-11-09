@@ -39,7 +39,7 @@ options = ['-Dgallium-drivers=', '-Dvulkan-drivers=freedreno', '-Dfreedreno-kmds
            '-Degl=disabled', '-Dgbm=disabled', '-Dopengl=false', '-Dgles1=disabled', '-Dgles2=disabled',
            '-Dllvm=disabled', '-Dshared-glapi=disabled', '-Dxmlconfig=disabled', '-Dshader-cache=enabled',
            '-Dtools=', '-Dbuild-tests=false', '-Dvideo-codecs=', '-Dvulkan-layers=']
-setup = [ROOT / '.cache/mesa-venv/bin/meson', 'setup', OUT, SOURCE, '--wrap-mode=nodownload']
+setup = [ROOT / '.cache/mesa-venv/bin/meson', 'setup', OUT, SOURCE]
 if args.target in ('ios', 'ios27'):
     sdk = read(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'])
     find = lambda tool: read(['xcrun', '--sdk', 'iphoneos', '--find', tool])
@@ -73,7 +73,8 @@ for directory, directories, filenames in os.walk(SOURCE):
     directories[:] = sorted(name for name in directories if name not in ('.git', '__pycache__'))
     for name in sorted(filenames):
         path = Path(directory) / name
-        source_extras[str(path.relative_to(SOURCE))] = hashlib.sha256(path.read_bytes()).hexdigest()
+        contents = os.readlink(path).encode() if path.is_symlink() else path.read_bytes()
+        source_extras[str(path.relative_to(SOURCE))] = hashlib.sha256(contents).hexdigest()
 profile = dict(mesa_revision=pins['mesa']['commit'], target=args.target,
                source_diff_sha256=hashlib.sha256(source_diff).hexdigest(), extra_sources=source_extras,
                patch_guard_sha256=hashlib.sha256((ROOT / 'scripts/mesa_patch_identity.py').read_bytes()).hexdigest(),
