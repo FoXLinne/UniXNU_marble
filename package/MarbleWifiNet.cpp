@@ -455,7 +455,7 @@ int apple80211(bool set, apple80211req &rq) {
   uint32_t *w = reinterpret_cast<uint32_t *>(out.raw);
   if (set) {
     switch (type) {
-    case kPower: { uint32_t in[6]; if (copy_in(rq, in, sizeof in)) return EFAULT; gUserJoin = true; gPower = in[2] != 0; log(6, "wifi-net: power set %u", in[2]); if (!gPower) disconnect_user(); nw_wifi_power(gPower); marble_wifi_wake(); post_event(kEvPowerChanged, nullptr, 0); return 0; }
+    case kPower: { uint32_t in[6]; if (copy_in(rq, in, sizeof in)) return EFAULT; gUserJoin = true; gPower = in[2] != 0; log(6, "wifi-net: power set %u", in[2]); gLinkSuppressed = !gPower; if (!gPower) disconnect_user(); nw_wifi_power(gPower); marble_wifi_wake(); post_event(kEvPowerChanged, nullptr, 0); return 0; }
     case kScanReq: case kScanReqMultiple: {
       if (!gPower) return ENETDOWN;
       if (gLinkSuppressed) {
@@ -469,7 +469,7 @@ int apple80211(bool set, apple80211req &rq) {
       if (st.state >= NW_STA_AUTH && nw_wifi_bss_count() > 0) {
         if (!gCachedScan) gCachedScan = thread_call_allocate(cached_scan_done, nullptr);
         static unsigned answered; if (++answered <= 8 || answered % 64 == 0) log(6, "wifi-net: scan %u while joined: answered from the cache", answered);
-        gScanning = 1; gScanCursor = 0; gResultsShown = 24; uint64_t at; clock_interval_to_deadline(2000, kMillisecondScale, &at); thread_call_enter_delayed(gCachedScan, at); return 0; }
+        gScanning = 1; gScanCursor = 0; gResultsShown = 24; uint64_t at; clock_interval_to_deadline(20, kMillisecondScale, &at); thread_call_enter_delayed(gCachedScan, at); return 0; }
       gScanning = 1; gScanCursor = 0; gResultsShown = 0;
       int result = nw_wifi_scan(ssidLength && ssidLength <= 32 ? ssid : nullptr, ssidLength <= 32 ? ssidLength : 0);
       if (result) { __atomic_store_n(&gScanning, 0u, __ATOMIC_RELEASE); return ENETDOWN; }
@@ -534,7 +534,7 @@ int apple80211(bool set, apple80211req &rq) {
     w[0] = 1; w[1] = 1; w[2] = 0; for (int i = 3; i < 13; i++) w[i] = v; return copy_out(rq, w, 13 * 4); }
   case kRate: return answer_value(rq, st.state == NW_STA_UP ? st.tx_rate_100kbps / 10 : 0);
   case kTxPower: return answer_value(rq, 15);
-  case kDriverVersion: case kHardwareVersion: { const char *v = type == kDriverVersion ? "nativewifi 1" : "WCN7850"; strlcpy(reinterpret_cast<char *>(out.raw), v, 256); return copy_out(rq, out.raw, 256); }
+  case kDriverVersion: case kHardwareVersion: { const char *v = type == kDriverVersion ? "nativewifi 1" : "WCN6855 hw2.1"; strlcpy(reinterpret_cast<char *>(out.raw), v, 256); return copy_out(rq, out.raw, 256); }
   case kCountryCode: { char cc[3]; country(cc); return answer_bytes(rq, cc, 3); }   // the two letters and a NUL (the daemon asks with a 3-byte buffer)
   case kAssociateResult: return answer_value(rq, static_cast<uint32_t>(gAssocResult));
   case kSupportedChannels: case kHwSupportedChannels: {

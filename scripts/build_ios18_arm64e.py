@@ -111,6 +111,7 @@ def prepare(out, upstream, stack, profile):
     apply_patch(work, backlight_patch)
     appsync_patch = DEVICE / 'patches/xnu-11417/appsync-user-trust.patch'
     apply_patch(work, appsync_patch)
+    apply_patch(work, DEVICE / 'patches/xnu-11417/wifi-association-event-cluster.patch')
     launch_constraints_patch = DEVICE / 'ios18/source/patches/xnu/zzyc-owner-skip-launch-constraints.patch'
     apply_patch(work, launch_constraints_patch)
     patch_list = out / 'xnu-patches.list'
