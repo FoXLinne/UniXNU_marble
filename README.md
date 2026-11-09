@@ -30,8 +30,13 @@ GPU 修复范围、逐项状态与总验收条件见 [GPU_REPAIR_GOAL.md](GPU_RE
 Wi-Fi 板级入口为 `package/MarbleWifi.cpp`，目标为 SM7475 PCIe0 上的 QCA6490。
 `marble-wifi=1` 采集时钟和 GPIO 交接状态；`marble-wifi=2` 执行电源投票、
 XO/WLAN_EN 时序、PHY 初始化、Gen2 链路训练与端点识别。阶段 7 记录 PCI ID、
-subsystem ID、BAR、SoC 和 MHI 状态；`capture_ios18_resident.py` 输出 `wifi` 字段。
-PHY 表来自原机设备树。ath11k、固件、SMMU/MSI 和系统网络接口接入依赖真机识别结果。
+subsystem ID、BAR、SoC 和 MHI 状态。真机端点为 `17cb:1103`、WCN6855 hw2.1，链路为 Gen2 ×1。
+`marble-wifi=3` 配置 128 MiB DMA 窗口；`marble-wifi=4` 启动 ath11k 与扫描。
+DMA 使用 stream `0x1c01`、IOVA `0xa0000000`，输出宽度来自 SMMU IDR2，
+ATOS 能力来自 IDR0。固件输入由 `profiles/wifi-wcn6855-hw21.json` 固定摘要，
+打包参数为 `--wifi-firmware DIR`。`MarbleWifiDiagnostics` 提供 IORegistry 状态与日志。
+测试镜像保留内核 USB、8 核与原生服务，状态经 Apple USB diagnostics relay 读取。
+PHY 表来自原机设备树，ath11k 构建入口为 `scripts/build_marble_wifi.py`。
 源码与构建记录见 `records/wifi-adaptation-2026-11-10.json`。
 
 系统盘与内核产物位于工作区 `outputs/UniXNU_marble`。`scripts/build_compact_system.py` 使用仓库内的 `scripts/mkapfs.py` 生成紧凑系统盘。

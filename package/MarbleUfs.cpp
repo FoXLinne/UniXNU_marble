@@ -136,6 +136,8 @@ static void cacheCivac (const void *start, size_t length)
   __asm__ volatile ("dsb sy" ::: "memory");
 }
 
+#include "MarbleWifiDma.inc"
+
 // Device-owned cache lines must not be written back over DMA results. All
 // callers use complete 64-byte lines from the dedicated page-aligned buffer.
 static void cacheInvalidate (const void *start, size_t length)
@@ -220,6 +222,7 @@ static bool hostBringUp (const char **why)
   if (!hostStopQueue (why)) return false;
   smmuBypassStream (0xe0, gHost.smmuMap, report, gHost.phys, kDmaBytes);
   gHost.smmu = gHost.smmuMap->getVirtualAddress ();
+  marbleWifiDma(report);
   uint32_t idr1 = read32 (gHost.smmu, 0x24);
   gHost.cb = gHost.smmu + ((1U << (((idr1 >> 28) & 7) + 1)) + (report[0] >> 16)) * 4096;
   if (gRootDiagnosticEnabled) {

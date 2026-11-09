@@ -10,6 +10,7 @@
 #include "MarbleWifi.h"
 #include "MarbleWifiPhy.h"
 #include "QcomRpmh.h"
+#include "MarbleWifiFirmware.h"
 
 extern "C" {volatile uint32_t native_marble_wifi_stats[24];}
 namespace {
@@ -33,7 +34,7 @@ struct Window {
     void clear(uint32_t offset, uint32_t mask) {write(offset, read(offset) & ~mask);}
 };
 enum {StMapped=1, StRails=2, StClocks=3, StPhy=4, StLink=5, StEndpoint=6, StIdentified=7};
-constexpr uint32_t kBranches[] = {0x7b020, 0x7b028, 0x7b030, 0x7b034, 0x7b03c, 0x7b01c, 0x7b08c, 0x7b044};
+constexpr uint32_t kBranches[] = {0x7b020, 0x7b028, 0x7b030, 0x7b034, 0x7b03c, 0x7b01c, 0x7b08c, 0x7b044, 0x9d098, 0x9d094};
 void stage(unsigned value) {
     native_marble_wifi_stats[0] = value;
     IOLog("MarbleWifi stage=%u\n", value);
@@ -115,7 +116,7 @@ bool atu(Window &a, unsigned region, uint32_t type, uint32_t cpu, uint32_t bytes
     a.write(r,type); a.write(r+4,1u<<31);
     return waitBits(a,r+4,1u<<31,1u<<31,10);
 }
-bool endpoint(Window &a, Window &dbi) {
+bool endpoint(Window &a, Window &dbi, unsigned requested) {
     Window cfg;
     if (!atu(a,0,4,0x60100000,0x100000,1u<<24) || !cfg.open(0x60100000,0x1000)) return false;
     uint32_t id=cfg.read(0);
@@ -160,6 +161,8 @@ bool endpoint(Window &a, Window &dbi) {
     }
     IOLog("MarbleWifi endpoint=%08x subsystem=%08x BAR=%08x/%x SoC=%08x subversion=%08x\n",
         id,native_marble_wifi_stats[10],base,size,native_marble_wifi_stats[13],native_marble_wifi_stats[14]);
+    stage(StIdentified);
+    if (requested>=3) marble_wifi_runtime(bar.va,size,cfg.va,dbi.va,requested);
     return true;
 }
 void run(void *arg, wait_result_t) {
@@ -194,7 +197,7 @@ void run(void *arg, wait_result_t) {
     if (!waitBits(gcc,0x7b064,1,0,10) || !waitBits(gcc,0x7b048,1,0,10)) {fail(StClocks,ETIMEDOUT); return;}
     gcc.write(0x7b060,(gcc.read(0x7b060)&~3u)|2u);
     gcc.set(0x62008,0x3fu);
-    gcc.set(0x62000,(1u<<12)|(1u<<19)|(1u<<22));
+    gcc.set(0x62000,(1u<<11)|(1u<<12)|(1u<<19)|(1u<<22));
     gcc.set(0x9c004,1);
     IOSleep(1);
     if (halted(gcc)&0x2f) {fail(StClocks,EIO); return;}
@@ -217,6 +220,15 @@ void run(void *arg, wait_result_t) {
     native_marble_wifi_stats[6]=phy.read(0x214);
     if (!ready) {fail(StPhy,ETIMEDOUT); return;}
     stage(StPhy);
+    for (unsigned i=0; i<256; ++i) parf.write(0x2000+4*i,0);
+    uint8_t hash=0;
+    const uint8_t requester[]={1,0};
+    for (uint8_t byte:requester) {
+        hash^=byte;
+        for (unsigned bit=0; bit<8; ++bit) hash=(hash&0x80) ? (hash<<1)^7 : hash<<1;
+    }
+    parf.write(0x2000+4*hash,(0x100u<<16)|(1u<<8));
+    parf.clear(0x2c00,1);
     if (!dbi.open(0x60000000,0x1000) || !a.open(0x60001000,0x1000)) {fail(StLink,ENOMEM); return;}
     dbi.write(0x18,0x10100); dbi.write(4,(dbi.read(4)&0xffff)|6u);
     dbi.write(0xa0,(dbi.read(0xa0)&~15u)|2u); // Gen2, per CNSS QCA6490 enumeration.
@@ -232,13 +244,13 @@ void run(void *arg, wait_result_t) {
     if (!link) {fail(StLink,ETIMEDOUT); return;}
     stage(StLink);
     stage(StEndpoint);
-    if (!endpoint(a,dbi)) {fail(StEndpoint,ENXIO); return;}
+    if (!endpoint(a,dbi,requested)) {fail(StEndpoint,ENXIO); return;}
     stage(StIdentified);
 }
 }
 extern "C" void marble_wifi_start(void) {
     unsigned stage=0;
-    if (!PE_parse_boot_argn("marble-wifi",&stage,sizeof(stage)) || stage<1 || stage>2) return;
+    if (!PE_parse_boot_argn("marble-wifi",&stage,sizeof(stage)) || stage<1 || stage>4) return;
     if (native_marble_wifi_stats[23]) return;
     native_marble_wifi_stats[23]=stage;
     thread_t thread=THREAD_NULL;

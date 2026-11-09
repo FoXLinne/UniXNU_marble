@@ -266,6 +266,12 @@ def qualify_pmgr(out, profile):
 
 def build_board(tree, env):
     stage_ios18('GopFramebuffer', tree.parent / 'GopFramebuffer')
+    wifi_module = stage_ios18('Ath12kWifi', tree.parent / 'wifi/Ath12kWifi')
+    wifi_output = tree.parent / 'wifi/objects'
+    with (tree.parent / 'wifi-build.log').open('w') as log:
+        subprocess.run([sys.executable, DEVICE / 'scripts/build_marble_wifi.py', wifi_module, wifi_output],
+                       stdout=log, stderr=subprocess.STDOUT, check=True)
+    wifi_objects = json.loads((wifi_output / 'build-report.json').read_text())['objects']
     from build_ios18_display import generate, bindings as display_bindings
     from build_ios18_hid import prepare as prepare_hid, bindings as hid_bindings
     from build_ios18_usb import generate as generate_usb, bindings as usb_bindings
@@ -305,7 +311,7 @@ def build_board(tree, env):
                    ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp', 'MarbleScanout.cpp', 'MarblePanel.cpp', 'MarbleBacklight.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
-                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleWifi.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
+                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleWifi.cpp', 'MarbleWifiRuntime.cpp', 'MarbleWifiFirmware.c', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
                     'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'MarbleButtons.cpp', 'MarbleHaptics.cpp', 'KeyStoreEvents.cpp')]
         sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
         sources.append(tree.parent / 'AppleKeyStoreState/NativeKeyStoreEvents.cpp')
@@ -345,6 +351,7 @@ def build_board(tree, env):
             command += ['-I', str(out), '-Wno-unused-parameter', '-Wno-deprecated-enum-enum-conversion']
             command += ['-I', str(tree / '.cache/xnu-work/osfmk')]
             command += ['-I', str(DEVICE / 'package')]
+            command += ['-I', str(wifi_module / 'include')]
             command += ['-I', str(DEVICE / 'ios18/source/package/UniXNUPkg/Include')]
             command += ['-I', str(DEVICE / 'ios18/sources/QcomGeniSpi')]
             if filename == 'RuntimeUsb.cpp':
@@ -367,6 +374,7 @@ def build_board(tree, env):
                                 '--globalize-symbol=__GLOBAL__sub_I_' + filename, obj, late], check=True)
                 obj = late
             objects.append(obj)
+    objects.extend(Path(unit['path']) for unit in wifi_objects)
     assembly, obj = out / 'adsp-firmware.S', out / 'adsp-firmware.o'
     assembly.write_text('.section __DATA_CONST,__const\n.p2align 3\n'
                         '.globl _marble_adsp_firmware_size\n_marble_adsp_firmware_size:\n.quad ' +

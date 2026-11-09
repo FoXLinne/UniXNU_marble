@@ -93,6 +93,7 @@ def main():
                         help='Display presentation cadence')
     parser.add_argument('--gpu-addon', type=Path, help='22H384 NGPUADD2 bundle; defaults to ROOT/gpu/metal.gpuaddon')
     parser.add_argument('--appsync-runtime', type=Path, help='Built 22H384 AppSync runtime directory')
+    parser.add_argument('--wifi-firmware', type=Path, help='WCN6855 firmware matching profiles/wifi-wcn6855-hw21.json')
     parser.add_argument('--kernel', type=Path, help='New fileset kernel built from the current device sources')
     parser.add_argument('--firmware-binaries', type=Path, help='Built MarbleBoot AARCH64 applications for this candidate')
     parser.add_argument('--baseline', type=Path,
@@ -146,6 +147,19 @@ def main():
     appsync = None
     if args.appsync_runtime:
         addon, appsync = append_appsync(addon, args.appsync_runtime.resolve(), out / 'runtime.gpuaddon')
+    wifi_firmware = None
+    if args.wifi_firmware:
+        wifi_firmware = json.loads((DEVICE / 'profiles/wifi-wcn6855-hw21.json').read_text())
+        for entry in wifi_firmware['files']:
+            path = args.wifi_firmware / entry['name']
+            if hashlib.sha256(path.read_bytes()).hexdigest() != entry['sha256']:
+                raise ValueError('Wi-Fi firmware differs from selected profile: ' + entry['name'])
+        prefix = re.search(r'^#define MARBLE_WIFI_FIRMWARE_PREFIX "([^"]+)"',
+                           (DEVICE / 'package/MarbleWifiFirmware.h').read_text(), re.M).group(1)
+        wifi_addon = out / 'wifi.gpuaddon'
+        subprocess.run([sys.executable, DEVICE / 'ios18/source/scripts/addon-add-dir.py',
+                        addon, wifi_addon, prefix, args.wifi_firmware.resolve()], check=True)
+        addon = wifi_addon
     data = kernel.read_bytes()
     data += bytes(-len(data) % 4096)
     offset = len(data)
@@ -326,6 +340,7 @@ def main():
             gpu_addon_sha256=hashlib.sha256(addon.read_bytes()).hexdigest(), gpu_sources=gpu['sources'],
             owner_trust_cache_sha256=gpu['trust_cache_sha256'],
             appsync_runtime=str(args.appsync_runtime.resolve()) if appsync else None,
+            wifi_firmware=wifi_firmware,
             appsync_build=appsync['build'] if appsync else None), indent=2) + '\n')
     if candidate:
         data = json.loads(report.read_text())

@@ -34,13 +34,12 @@
     "UniXNU-sheng": "a68ee4ee67cc71792fbf519de7e3e28072c717b5",
     "Ath12kWifi": "52fcbe46279857111af7d2a6470a47ffcab7a97d"
   },
-  "device_test": "pending user-provided hardware",
-  "boot_argument": "marble-wifi=2",
+  "device_test": "WCN6855 hw2.1 identified; BHI DMA translation fault captured over Apple USB",
+  "boot_argument": "marble-wifi=4",
   "completion": "stage=7, actual PCI/subsystem/SoC values captured",
   "remaining": [
-    "Endpoint identification on device",
-    "Endpoint SMMU and MSI",
-    "ath11k backend and firmware",
+    "SMMU stage-1 context hardware confirmation",
+    "Firmware bootstrap and scan",
     "22H384 Apple80211 and supplicant"
   ],
   "build": {
@@ -71,18 +70,75 @@
     ]
   },
   "source_sha256": {
+    "package/MarbleWifiDma.inc": "36d1f0cd8807e7c466612b9710ab17ff9b9667d3050d65c013e9fcc533acb310",
+    "package/MarbleWifiRuntime.cpp": "e921b21ec72c9ff77285c4f4cb1cffd44df6125c4121989f3427a445d4a436e5",
+    "package/MarbleWifiFirmware.c": "92a4e809c609b99434a3770c74e5d73c205abccc99c6e6e78caf9ed42ccbfba9",
     "package/MarbleWifi.h": "69ec9cb58f9f9d52d5ff2aac7119985ed47882f980907cca23543ea2f4d07176",
-    "package/MarbleWifi.cpp": "0ad3ad79b64b8a3e0732bd8077d6d6650c9e34bec8cd7945e342c12ed63d6b0c",
+    "package/MarbleWifiArena.inc": "66f0c7049b2039838721c20e10e05ead05684d381fa98c0ac93940459e1527c2",
+    "package/MarbleWifi.cpp": "3f271017e827a05032185415b4c19af46c9b8d1466035d57cf3bf2e5eca2ba33",
+    "package/MarbleWifiControl.inc": "15cb105fcfc89451d56dbc655592eedd58d1a580da36f816f2944865daaea086",
     "package/MarbleWifiPhy.h": "1ebac92808a2bba2dc4a0d39e11ffa1b59eae04415bad7802c564da444f2cb1b",
-    "package/MarbleRuntime18.cpp": "2db3ab64fb8790d4ff09afe3eb80f5360513f3c6a34969e4453768f425d4054e",
-    "package/MarbleCharging.cpp": "68a1c68a53a9ea63760a56ccb909c8c4f4a8f7e6f2e81034c7609b40a100cf83",
-    "scripts/build_ios18_arm64e.py": "e76d514b59a5fc8ea8fad8f415a129c302722ede97402041f3524283a209b0bb",
-    "scripts/capture_ios18_resident.py": "e248a2a008e66d315804b7d3963b9a1a912e2d0dbc0aca3efba696e22e977aa6"
+    "package/MarbleWifiFirmware.h": "cad140be22f7bae62a571399660394adf7f5bf7877c0927ed811c642bfc242ed",
+    "package/MarbleUfs.cpp": "033d63fc52375bea280a216255a626b63e7d236ae69bbafaf79c24b849b7952d",
+    "scripts/build_marble_wifi.py": "9f62d23bb1536e6be4282bd9dcbc1c297327af64f4ddb5f1b092cc2bd51981d4",
+    "scripts/build_ios18_arm64e.py": "9a51a51eec66e0f75a814892a0a07582a7037a261a56b88f16e7939a14d93176",
+    "scripts/pack_ios18_ufs.py": "4acfcf9e670c05eae07fbb4bc890fc2e9489e03b9554b2c5be5c0f18475e7aa3"
   },
   "checks": [
     "arm64e board compilation passed",
     "RELEASE kernel linked",
     "prelink unresolved closure references=0; stubbed functions=0",
     "boot image packaged; Wi-Fi stage=2 and firmware USB mode=3 selected"
-  ]
+  ],
+  "device_result": {
+    "version": "RootStage2",
+    "phase": "kernel",
+    "returns": "0000000000000000",
+    "handoff-fault": "0000000000000000:0000000000000000:0000000000000000",
+    "wifi": {
+      "stage": 7,
+      "error": 0,
+      "rail_mask": 255,
+      "tcs_status": 65793,
+      "gdsc": 4163039233,
+      "halted_clocks": 0,
+      "phy_status": 134,
+      "ltssm": 64060433,
+      "link_status": 806486024,
+      "pci_id": 285415371,
+      "subsystem_id": 17307595,
+      "bar0": 1614807044,
+      "bar_bytes": 2097152,
+      "soc_version": 1074532881,
+      "soc_subversion": 269930721,
+      "mhi_version": 3735928559,
+      "mhi_status": 0,
+      "bhi_offset": 256,
+      "bhi_environment": 0,
+      "pci_command": 2,
+      "wlan_pin": 3,
+      "perst_pin": 3,
+      "capability_pointer": 64,
+      "requested_stage": 2
+    },
+    "panic": "",
+    "time": "2026-11-10T02:12:35.865873+08:00"
+  },
+  "hardware_identity": {
+    "pci": "17cb:1103",
+    "subsystem": "17cb:0108",
+    "soc_version": "0x400c1211",
+    "soc_subversion": "0x1016d0e1",
+    "backend": "ath11k WCN6855 hw2.1",
+    "link": "Gen2 x1",
+    "bar0": "0x60400000",
+    "bar_bytes": 2097152
+  },
+  "last_capture": "records/wifi-bhi-2026-11-10.json",
+  "usb_constraints": {
+    "usb_owner": "kernel",
+    "cpus": 8,
+    "runtime_usb_mode": 1,
+    "marble_native_services": 1
+  }
 }
