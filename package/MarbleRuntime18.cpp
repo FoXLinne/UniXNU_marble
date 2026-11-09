@@ -9,6 +9,7 @@
 #include <IOKit/IOLocks.h>
 #include <libkern/c++/OSData.h>
 #include <pexpert/pexpert.h>
+#include "MarbleWifi.h"
 
 extern "C" {
 void native_runtime_usb_start(void);
@@ -227,6 +228,7 @@ extern "C" unsigned native_root_runtime_read(unsigned kind, unsigned offset, voi
 
 extern "C" void marble_runtime18_start(void)
 {
+    marble_wifi_start();
     unsigned reboot = 0;
     if (PE_parse_boot_argn("marble-reboot-bootloader", &reboot, sizeof(reboot)) && reboot)
         native_marble_reboot_bootloader();

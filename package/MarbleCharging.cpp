@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <IOKit/IOLib.h>
+#include "MarbleWifi.h"
 extern "C" {
 bool marble_adsp_prepare(void);
 void marble_adsp_start(void);
@@ -23,6 +24,7 @@ unsigned native_marble_charging_report(char *out,unsigned cap) {
     }
     at+=snprintf(out+at,cap-at,"ADSP %s QRTR %s\n",native_adsp_text,native_qrtr_text);
     at+=marble_adsp_report(out+at,cap-at);
+    at+=marble_wifi_report(out+at,cap-at);
     return at;
 }
 }

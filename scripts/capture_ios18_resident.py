@@ -423,6 +423,14 @@ def capture(channel, kernel, output, data_snapshot=False):
         for name in ('_native_adsp_stats', '_native_battery_stats', '_native_charger_stats', '_native_qrtr_stats'):
             if name in symbols:
                 result[name[1:]] = list(struct.unpack('<16i', memory.read(symbols[name], 64)))
+        if '_native_marble_wifi_stats' in symbols:
+            result['wifi'] = dict(zip(
+                ('stage', 'error', 'rail_mask', 'tcs_status', 'gdsc', 'halted_clocks',
+                 'phy_status', 'ltssm', 'link_status', 'pci_id', 'subsystem_id', 'bar0',
+                 'bar_bytes', 'soc_version', 'soc_subversion', 'mhi_version', 'mhi_status',
+                 'bhi_offset', 'bhi_environment', 'pci_command', 'wlan_pin', 'perst_pin',
+                 'capability_pointer', 'requested_stage'),
+                struct.unpack('<24I', memory.read(symbols['_native_marble_wifi_stats'], 96))))
         keystore = (('refused_opens', '__ZL12refusedOpens'), ('opened_clients', '__ZL13openedClients'),
                     ('calls', '__ZL11clientCalls'))
         if all(symbol in symbols for _, symbol in keystore):

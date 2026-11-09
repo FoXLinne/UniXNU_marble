@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-10T01:56:46.612010+08:00",
+  "updated_at": "2026-11-10T02:05:53.066617+08:00",
   "device": "marble",
   "work_focus": "Wi-Fi 适配：SM7475 PCIe0 / QCA6490；视频渲染排查停止",
   "必须采用的基线": {
@@ -4743,18 +4743,17 @@
     "matching_crashes": "outputs/UniXNU_marble/gpu-import-kernel-sync-20261110/device-test/matching-crashes.json"
   },
   "待启动候选": {
-    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/gpu-import-kernel-sync-20261110/boot/marble_temporary_boot.img",
-    "kernel_sha256": "7ce7956b48294caa55c1e823c1fc021a429709ab81680275cbe563ba5891b348",
-    "native_sha256": "4e5d53042f99b887dc9ceb999635ba27c2f6d6e2a14ab6aeed084bac557b910b",
-    "kernel_source": "boot-image",
-    "system_source": "ufs",
-    "exit_boot_services": false,
-    "resident_usb": false,
-    "runtime_usb_mode": 1,
-    "usb_owner": "kernel",
+    "candidate": "wifi-pcie-identification-20261110",
+    "status": "内核、预链接、镜像打包完成；待用户提供真机",
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/marble_temporary_boot.img",
+    "image_sha256": "50ccc4d092a9322d6565fc1c8e8f436737e53c1588ec7f2ce1c5097f72733180",
+    "kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/kernel.macho",
+    "kernel_sha256": "9508f70cda875892d779549eb617f53934380c28ec8df9988e886164bc12893f",
+    "manifest": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/temporary-boot.json",
+    "boot_args": "sheng-aks-sls=3 offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-skip-setup=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 sheng-diag=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 rootstage-runtime-usb=3 cpus=7 marble-native-services=0 marble-wifi=2 appsync=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
     "enabled_cpu_affinities": [
       0,
-      256,
       512,
       768,
       1024,
@@ -4762,84 +4761,53 @@
       1536,
       1792
     ],
-    "rootstage_hold": true,
-    "firmware_usb_affinity": null,
-    "display_scale": 3,
-    "ui_identity": {
-      "product": "iPhone16,2",
-      "name": "iPhone 15 Pro Max",
-      "target_type": "D84",
-      "hardware_model": "D84AP",
-      "artwork_device_subtype": 2796,
-      "screen_category": 11,
-      "compatible_device_fallback": "iPhone15,3",
-      "generation": 1602,
-      "large_format_phone": true,
-      "island_notch_location": 144,
-      "chrome_identifier": "com.apple.dt.devicekit.chrome.phone8",
-      "oled_display": true,
-      "udid_version": 2
-    },
-    "data_logical_bytes": 68719476736,
-    "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
-    "storage_profile_sha256": "2f439c20ac2a30cd6f3b979ff2f590fb3c0e1b04b55b8edfb7806be238b08f56",
-    "logical_size": [
-      375.0,
-      812.0
-    ],
-    "native_size": [
-      1125,
-      2436
-    ],
-    "artwork_scale": 3,
-    "display_layout_target": {
-      "logical_width": 375.0,
-      "reference_height": 812.0,
-      "home_screen": "D52",
-      "standard_width_pixels": 1125,
-      "standard_height_pixels": 2436,
-      "zoomed_width_pixels": 960,
-      "zoomed_height_pixels": 2079,
-      "zoomed_screen_category": 12,
-      "corner_radius_pixels": 100.0,
-      "sensor_width_pixels": 288.0,
-      "sensor_height_pixels": 84.0,
-      "sensor_top_pixels": 18.0,
-      "point_scale": 2.88,
-      "artwork_scale": 3,
-      "logical_zoom": 1.0,
-      "logical_height": 812.0,
-      "compositor_size": [
-        1125,
-        2436
-      ],
-      "native_points_scale": 2.88
-    },
-    "boot_args": "sheng-aks-sls=3 offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-skip-setup=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 sheng-diag=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 rootstage-runtime-usb=1 marble-native-services=1 cpus=8 appsync=1 marble-ui-identity=1602 marble-display-scale=3",
-    "gpu_addon_sha256": "6ac847466db6b28fdf7746c656bdf0d446bbed2ef7ce492acdfd76154319f939",
-    "gpu_sources": {
-      "UniXNU": "d3de950a23a54d454d6ac21d8deceaa3f4ad0e73",
-      "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
-      "AdrenoMetal": "da7aedd827dfdb581eac041615c45cc1cd5e71db",
-      "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17",
-      "Mesa": "6384fd6037871b44784d78bf63369bdf05708965",
-      "metal2vulkan": "963f0e64f103d2e682cd0cc454a8fe50f52c8cbb"
-    },
-    "owner_trust_cache_sha256": "ea9692aaa6f60a5f88350ea3466f03cde0060b2cf454b43a5c3c26f67e3fc273",
-    "appsync_runtime": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/usb-fix-20261109/app-install/runtime",
-    "appsync_build": "22H384",
-    "baseline_candidate": "gpu-producer-island",
-    "baseline_kernel_sha256": "c6b1aba7ff0a8d2ed0532fb7d966b1a23df4eab894a9eb7a48847c416ddaa6d4",
-    "candidate": "gpu-import-kernel-sync-20261110",
-    "manifest": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/gpu-import-kernel-sync-20261110/boot/temporary-boot.json",
-    "image_sha256": "2f4e3f093657c82c0a71862eb420c9f7d6cd56d302436d7fc83d842415d0aa9d",
-    "status": "2026-11-10 自主启动完成；Wi-Fi 镜像待构建"
+    "device_test": "pending",
+    "remaining": [
+      "PCIe 端点与硬件版本真机识别",
+      "SMMU/MSI",
+      "ath11k 与固件",
+      "22H384 系统网络接口与认证"
+    ]
   },
   "Wi-Fi适配": {
-    "status": "SM7475 PCIe0 端点识别开发",
+    "status": "内核、预链接、镜像打包完成；待用户提供真机",
     "hardware": "DT QCA6490; endpoint PCI/SoC identity pending device",
     "reference": "records/wifi-research-2026-11-08.md",
     "upstream_refresh": "85 repositories; fetch-only; existing device source preserved",
-    "device_test": "适配构建后通知用户提供真机"
+    "device_test": "pending",
+    "source_sha256": {
+      "package/MarbleWifi.h": "69ec9cb58f9f9d52d5ff2aac7119985ed47882f980907cca23543ea2f4d07176",
+      "package/MarbleWifi.cpp": "0ad3ad79b64b8a3e0732bd8077d6d6650c9e34bec8cd7945e342c12ed63d6b0c",
+      "package/MarbleWifiPhy.h": "1ebac92808a2bba2dc4a0d39e11ffa1b59eae04415bad7802c564da444f2cb1b",
+      "package/MarbleRuntime18.cpp": "2db3ab64fb8790d4ff09afe3eb80f5360513f3c6a34969e4453768f425d4054e",
+      "package/MarbleCharging.cpp": "68a1c68a53a9ea63760a56ccb909c8c4f4a8f7e6f2e81034c7609b40a100cf83",
+      "scripts/build_ios18_arm64e.py": "e76d514b59a5fc8ea8fad8f415a129c302722ede97402041f3524283a209b0bb",
+      "scripts/capture_ios18_resident.py": "e248a2a008e66d315804b7d3963b9a1a912e2d0dbc0aca3efba696e22e977aa6"
+    },
+    "kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/kernel.macho",
+    "kernel_sha256": "9508f70cda875892d779549eb617f53934380c28ec8df9988e886164bc12893f",
+    "boot_args": "sheng-aks-sls=3 offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-skip-setup=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 sheng-diag=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 rootstage-runtime-usb=3 cpus=7 marble-native-services=0 marble-wifi=2 appsync=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
+    "unresolved_references": 0,
+    "stubbed_functions": 0,
+    "candidate": "wifi-pcie-identification-20261110",
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/marble_temporary_boot.img",
+    "image_sha256": "50ccc4d092a9322d6565fc1c8e8f436737e53c1588ec7f2ce1c5097f72733180",
+    "manifest": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/temporary-boot.json",
+    "enabled_cpu_affinities": [
+      0,
+      512,
+      768,
+      1024,
+      1280,
+      1536,
+      1792
+    ],
+    "remaining": [
+      "PCIe 端点与硬件版本真机识别",
+      "SMMU/MSI",
+      "ath11k 与固件",
+      "22H384 系统网络接口与认证"
+    ]
   }
 }

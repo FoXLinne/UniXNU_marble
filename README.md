@@ -27,6 +27,13 @@ GPU 修复范围、逐项状态与总验收条件见 [GPU_REPAIR_GOAL.md](GPU_RE
 
 执行 `python3 scripts/snapshot_upstream.py` 生成本仓库源码摘要 `source_snapshot.json`。
 
+Wi-Fi 板级入口为 `package/MarbleWifi.cpp`，目标为 SM7475 PCIe0 上的 QCA6490。
+`marble-wifi=1` 采集时钟和 GPIO 交接状态；`marble-wifi=2` 执行电源投票、
+XO/WLAN_EN 时序、PHY 初始化、Gen2 链路训练与端点识别。阶段 7 记录 PCI ID、
+subsystem ID、BAR、SoC 和 MHI 状态；`capture_ios18_resident.py` 输出 `wifi` 字段。
+PHY 表来自原机设备树。ath11k、固件、SMMU/MSI 和系统网络接口接入依赖真机识别结果。
+源码与构建记录见 `records/wifi-adaptation-2026-11-10.json`。
+
 系统盘与内核产物位于工作区 `outputs/UniXNU_marble`。`scripts/build_compact_system.py` 使用仓库内的 `scripts/mkapfs.py` 生成紧凑系统盘。
 
 通过 `root_control.py start --kernel` 更新内核时，传输包附带 1 MiB 回传区，起始 64 KiB 保存日志。panic 返回 RootStage 后读取内核日志与 panic 文本：

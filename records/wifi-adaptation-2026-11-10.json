@@ -1,0 +1,88 @@
+{
+  "device": "marble",
+  "os": "iOS 18.7.11 / 22H384",
+  "stage": "PCIe0 endpoint identification",
+  "references": [
+    {
+      "file": "gcc-waipio.c",
+      "url": "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/clk/qcom/gcc-waipio.c",
+      "sha256": "64ea080dbefe415837c7977030ddbd5d630d91ac3ff37b3ba6566f259afcc77e"
+    },
+    {
+      "file": "pci-msm.c",
+      "url": "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/pci/controller/pci-msm.c",
+      "sha256": "00dcf28f8bc61d4532226c6485c39133117650ab22df2b337f46496aee7cf37d"
+    },
+    {
+      "file": "cnss2-power.c",
+      "url": "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/net/wireless/cnss2/power.c",
+      "sha256": "a3c867eb186d4852c25e440813cac3b739ccb326b656b45dbcb149a2ee4035ed"
+    },
+    {
+      "file": "waipio.c",
+      "url": "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/marble-s-oss/drivers/interconnect/qcom/waipio.c",
+      "sha256": "82d5425eec718e5cb6587dc1d8563fe4e48ed645e0840bf7dcf83f27b16191dc"
+    },
+    {
+      "file": "rpmh-rsc.c",
+      "url": "https://github.com/torvalds/linux/blob/v6.1/drivers/soc/qcom/rpmh-rsc.c",
+      "sha256": "4833551743cafd0b06b6cc6bf1415c892d3c83f95496a691ce00df8c3f0f4a02"
+    }
+  ],
+  "upstream": {
+    "UniXNU": "95ad78129203442c3c14c02336303adbddf8d0a3",
+    "UniXNU-sheng": "a68ee4ee67cc71792fbf519de7e3e28072c717b5",
+    "Ath12kWifi": "52fcbe46279857111af7d2a6470a47ffcab7a97d"
+  },
+  "device_test": "pending user-provided hardware",
+  "boot_argument": "marble-wifi=2",
+  "completion": "stage=7, actual PCI/subsystem/SoC values captured",
+  "remaining": [
+    "Endpoint identification on device",
+    "Endpoint SMMU and MSI",
+    "ath11k backend and firmware",
+    "22H384 Apple80211 and supplicant"
+  ],
+  "build": {
+    "candidate": "wifi-pcie-identification-20261110",
+    "status": "内核、预链接、镜像打包完成；待用户提供真机",
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/marble_temporary_boot.img",
+    "image_sha256": "50ccc4d092a9322d6565fc1c8e8f436737e53c1588ec7f2ce1c5097f72733180",
+    "kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/kernel.macho",
+    "kernel_sha256": "9508f70cda875892d779549eb617f53934380c28ec8df9988e886164bc12893f",
+    "manifest": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-adaptation-20261110/boot/temporary-boot.json",
+    "boot_args": "sheng-aks-sls=3 offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-skip-setup=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 sheng-diag=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 rootstage-runtime-usb=3 cpus=7 marble-native-services=0 marble-wifi=2 appsync=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
+    "enabled_cpu_affinities": [
+      0,
+      512,
+      768,
+      1024,
+      1280,
+      1536,
+      1792
+    ],
+    "device_test": "pending",
+    "remaining": [
+      "PCIe 端点与硬件版本真机识别",
+      "SMMU/MSI",
+      "ath11k 与固件",
+      "22H384 系统网络接口与认证"
+    ]
+  },
+  "source_sha256": {
+    "package/MarbleWifi.h": "69ec9cb58f9f9d52d5ff2aac7119985ed47882f980907cca23543ea2f4d07176",
+    "package/MarbleWifi.cpp": "0ad3ad79b64b8a3e0732bd8077d6d6650c9e34bec8cd7945e342c12ed63d6b0c",
+    "package/MarbleWifiPhy.h": "1ebac92808a2bba2dc4a0d39e11ffa1b59eae04415bad7802c564da444f2cb1b",
+    "package/MarbleRuntime18.cpp": "2db3ab64fb8790d4ff09afe3eb80f5360513f3c6a34969e4453768f425d4054e",
+    "package/MarbleCharging.cpp": "68a1c68a53a9ea63760a56ccb909c8c4f4a8f7e6f2e81034c7609b40a100cf83",
+    "scripts/build_ios18_arm64e.py": "e76d514b59a5fc8ea8fad8f415a129c302722ede97402041f3524283a209b0bb",
+    "scripts/capture_ios18_resident.py": "e248a2a008e66d315804b7d3963b9a1a912e2d0dbc0aca3efba696e22e977aa6"
+  },
+  "checks": [
+    "arm64e board compilation passed",
+    "RELEASE kernel linked",
+    "prelink unresolved closure references=0; stubbed functions=0",
+    "boot image packaged; Wi-Fi stage=2 and firmware USB mode=3 selected"
+  ]
+}

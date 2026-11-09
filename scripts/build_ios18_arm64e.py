@@ -305,7 +305,7 @@ def build_board(tree, env):
                    ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp', 'MarbleScanout.cpp', 'MarblePanel.cpp', 'MarbleBacklight.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
-                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
+                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleWifi.cpp', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
                     'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'MarbleButtons.cpp', 'MarbleHaptics.cpp', 'KeyStoreEvents.cpp')]
         sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
         sources.append(tree.parent / 'AppleKeyStoreState/NativeKeyStoreEvents.cpp')
