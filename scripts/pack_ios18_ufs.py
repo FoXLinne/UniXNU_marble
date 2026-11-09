@@ -93,6 +93,7 @@ def main():
                         help='Display presentation cadence')
     parser.add_argument('--gpu-addon', type=Path, help='22H384 NGPUADD2 bundle; defaults to ROOT/gpu/metal.gpuaddon')
     parser.add_argument('--appsync-runtime', type=Path, help='Built 22H384 AppSync runtime directory')
+    parser.add_argument('--wifi-runtime', type=Path, help='Signed iOS 18 supplicant and launchd cache')
     parser.add_argument('--wifi-firmware', type=Path, help='WCN6855 firmware matching profiles/wifi-wcn6855-hw21.json')
     parser.add_argument('--kernel', type=Path, help='New fileset kernel built from the current device sources')
     parser.add_argument('--firmware-binaries', type=Path, help='Built MarbleBoot AARCH64 applications for this candidate')
@@ -147,6 +148,22 @@ def main():
     appsync = None
     if args.appsync_runtime:
         addon, appsync = append_appsync(addon, args.appsync_runtime.resolve(), out / 'runtime.gpuaddon')
+    wifi_runtime = None
+    if args.wifi_runtime:
+        wifi_runtime = json.loads((args.wifi_runtime / 'report.json').read_text())
+        if (wifi_runtime['target'], wifi_runtime['build']) != ('ios18', '22H384'):
+            raise ValueError('Wi-Fi runtime must target 22H384')
+        for relative, digest in wifi_runtime['files'].items():
+            if hashlib.sha256((args.wifi_runtime / relative).read_bytes()).hexdigest() != digest:
+                raise ValueError('Wi-Fi runtime differs from build: ' + relative)
+        directories = []
+        for prefix, relative in wifi_runtime['directories'].items():
+            directories += [prefix, args.wifi_runtime / relative]
+        wifi_addon = out / 'wifi-runtime.gpuaddon'
+        subprocess.run([sys.executable, DEVICE / 'ios18/source/scripts/addon-add-dir.py',
+                        addon, wifi_addon, *directories], check=True)
+        addon = wifi_addon
+        args.kernel_arg.append('marble-wifi-service=1')
     wifi_firmware = None
     if args.wifi_firmware:
         wifi_firmware = json.loads((DEVICE / 'profiles/wifi-wcn6855-hw21.json').read_text())
@@ -249,6 +266,11 @@ def main():
         module += b''.join(value + bytes([2, 0, 0, 0]) for value in hashes)
         if module not in modules:
             modules.append(module)
+    if wifi_runtime:
+        hashes = sorted({bytes.fromhex(value) for value in wifi_runtime['cdhashes']})
+        module = struct.pack('<I16sI', 2, hashlib.sha256(b''.join(hashes)).digest()[:16], len(hashes))
+        module += b''.join(value + bytes([2, 0, 0, 0]) for value in hashes)
+        modules.append(module)
     cursor = 4 + 4 * len(modules)
     offsets = []
     for module in modules:
@@ -258,6 +280,21 @@ def main():
         struct.pack(f'<{1 + len(modules)}I', len(modules), *offsets) + b''.join(modules))
     adt = payloads / 'kernel.macho.adt'
     tree, _ = read_adt(adt.read_bytes())
+    if wifi_runtime:
+        armio = next(node for node in tree[1] if node[0].get('name') == b'arm-io\0')
+        chosen = next(node for node in tree[1] if node[0].get('name') == b'chosen\0')
+        seed = int.from_bytes(chosen[0]['unique-chip-id'][:8], 'little')
+        hashed = 0xcbf29ce484222325
+        for shift in range(0, 64, 8):
+            hashed = ((hashed ^ ((seed >> shift) & 255)) * 0x100000001b3) & 0xffffffffffffffff
+        mac = bytearray(hashed.to_bytes(8, 'little')[:6])
+        mac[0] = (mac[0] & 0xfe) | 2
+        chosen[0]['mac-address-wifi0'] = bytes(mac)
+        wlan = next((node for node in armio[1] if node[0].get('name') == b'wlan\0'), None)
+        if wlan is None:
+            wlan = ({'name': b'wlan\0', 'compatible': b'qcom,wcn6855\0', 'status': b'okay\0'}, [])
+            armio[1].append(wlan)
+        wlan[0]['local-mac-address'] = bytes(mac)
     cpus = next(node for node in tree[1] if node[0].get('name') == b'cpus\0')
     template = cpus[1][0][0]
     cpus[1][:] = [({**template, 'name': f'cpu{index}\0'.encode(),
@@ -341,6 +378,7 @@ def main():
             owner_trust_cache_sha256=gpu['trust_cache_sha256'],
             appsync_runtime=str(args.appsync_runtime.resolve()) if appsync else None,
             wifi_firmware=wifi_firmware,
+            wifi_runtime=str(args.wifi_runtime.resolve()) if wifi_runtime else None,
             appsync_build=appsync['build'] if appsync else None), indent=2) + '\n')
     if candidate:
         data = json.loads(report.read_text())

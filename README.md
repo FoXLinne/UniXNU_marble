@@ -35,6 +35,9 @@ subsystem ID、BAR、SoC 和 MHI 状态。真机端点为 `17cb:1103`、WCN6855 
 DMA 使用 stream `0x1c01`、IOVA `0xa0000000`，输出宽度来自 SMMU IDR2，
 ATOS 能力来自 IDR0。固件输入由 `profiles/wifi-wcn6855-hw21.json` 固定摘要，
 打包参数为 `--wifi-firmware DIR`。`MarbleWifiDiagnostics` 提供 IORegistry 状态与日志。
+`build_marble_wifi_userspace.py` 构建 iOS 18 认证服务与签名启动缓存，
+打包参数 `--wifi-runtime DIR` 安装服务、WLAN 设备树节点与 MAC 地址。
+原生 USB 采集入口为 `scripts/capture_marble_wifi.py OUTPUT_DIR`。
 测试镜像保留内核 USB、8 核与原生服务，状态经 Apple USB diagnostics relay 读取。
 PHY 表来自原机设备树，ath11k 构建入口为 `scripts/build_marble_wifi.py`。
 源码与构建记录见 `records/wifi-adaptation-2026-11-10.json`。

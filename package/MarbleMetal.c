@@ -357,5 +357,24 @@ int native_marble_metal_prepare(proc_t process, user_addr_t scratch)
             stages[0], status[0], stages[1], status[1], stages[2], status[2], stages[3], status[3]);
         for (unsigned i = 1; i < 4; ++i) if (status[i]) return status[i];
     }
+    uint32_t wifi_service = 0;
+    PE_parse_boot_argn("marble-wifi-service", &wifi_service, sizeof(wifi_service));
+    if (wifi_service) {
+        static const char wifi_xpc[] = "/private/var/ngpu/xpc";
+        static const char wifi_bin[] = "/private/var/ngpu/bin";
+        volatile int wifi_stage = 0, wifi_status = -1;
+        native_gpu_addon_mount(process, scratch, 0x400, wifi_bin, sizeof(wifi_bin),
+            "/usr/libexec", sizeof("/usr/libexec"),
+            "/usr/libexec/launchd_cache_loader", "/usr/libexec/unixnu-wpa_supplicant",
+            &wifi_stage, &wifi_status);
+        printf("MarbleWifi: service binary mount=%d/%d\n", wifi_stage, wifi_status);
+        if (wifi_status) return wifi_status;
+        native_gpu_addon_mount(process, scratch, 0x400, wifi_xpc, sizeof(wifi_xpc),
+            "/System/Library/xpc", sizeof("/System/Library/xpc"),
+            "/System/Library/xpc/launchd.plist", "/System/Library/xpc/launchd.plist.sig",
+            &wifi_stage, &wifi_status);
+        printf("MarbleWifi: launchd cache mount=%d/%d\n", wifi_stage, wifi_status);
+        if (wifi_status) return wifi_status;
+    }
     return native_gpu_addon3_status;
 }

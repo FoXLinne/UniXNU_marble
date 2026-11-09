@@ -153,6 +153,10 @@ void wait(unsigned ms) {
 }
 #include "MarbleWifiControl.inc"
 }
+extern "C" void native_wifi_logf(int level,const char *format,...) __attribute__((format(printf,2,3)));
+extern "C" void native_wifi_logf(int level,const char *format,...) {
+    char line[160]; va_list ap; va_start(ap,format); vsnprintf(line,sizeof(line),format,ap); va_end(ap); logLine(level,line);
+}
 extern "C" void marble_wifi_wake(void) {__atomic_store_n(&gWake,1u,__ATOMIC_RELEASE); thread_wakeup(event_t(&gWake));}
 extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile uint32_t *cfg,volatile uint32_t *dbi,unsigned requested) {
     auto *st=native_marble_wifi_runtime_stats;
@@ -203,7 +207,7 @@ extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile
     if (error) {st[0]=-4; st[1]=-error; gDbi[0x828/4]=0; cfg[4/4]=(cfg[4/4]&0xffffu)&~4u; publishDiagnostics(); return;}
     st[0]=4;
     nw_wifi_irq_mode(1);
-    bool scanStarted=false;
+    bool networkStarted=false;
     uint64_t slice=nowNs();
     uint64_t nextReport=0;
     for (;;) {
@@ -211,8 +215,10 @@ extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile
         st[5]=gArena.used; st[6]=gArena.peak; st[7]=gArena.failures;
         st[8]=nw_wifi_stats.stage; st[9]=nw_wifi_stats.last_err;
         st[10]=nw_wifi_stats.scans; st[11]=nw_wifi_bss_count();
-        if (!scanStarted && nw_wifi_stats.stage>=4) {
-            nw_wifi_power(1); nw_wifi_scan(nullptr,0); scanStarted=true; st[0]=5;
+        if (!networkStarted && nw_wifi_stats.stage>=4) {
+            nw_wifi_status status{}; nw_wifi_status_get(&status);
+            marble_wifi_net_start(status.mac);
+            nw_wifi_power(1); nw_wifi_scan(nullptr,0); networkStarted=true; st[0]=5;
         }
         if (nowMs()>=nextReport) {publishDiagnostics(); nextReport=nowMs()+1000;}
         if (!busy) {unsigned ms=nw_wifi_wait_ms(1000); if (ms) wait(ms); slice=nowNs();}

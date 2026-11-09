@@ -25,7 +25,7 @@ flags = ["-O2", "-g", "-Wall", "-MMD", "-Werror=implicit-function-declaration",
 link = []
 if args.target == "ios":
     sdk = subprocess.check_output(["xcrun", "--sdk", "iphoneos", "--show-sdk-path"], text=True).strip()
-    link = ["-target", "arm64e-apple-ios27.0", "-isysroot", sdk]
+    link = ["-target", "arm64e-apple-ios18.0", "-isysroot", sdk]
     flags += link
 command = ["make", f"-j{args.jobs}", "wpa_supplicant", "V=1", f"CC={compiler}",
            f"BUILDDIR={output}", f"EXTRA_CFLAGS={shlex.join(flags)}", f"LDFLAGS={shlex.join(link)}"]

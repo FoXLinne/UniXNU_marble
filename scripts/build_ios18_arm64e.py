@@ -311,7 +311,7 @@ def build_board(tree, env):
                    ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp', 'MarbleScanout.cpp', 'MarblePanel.cpp', 'MarbleBacklight.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
-                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleWifi.cpp', 'MarbleWifiRuntime.cpp', 'MarbleWifiFirmware.c', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
+                    'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleWifi.cpp', 'MarbleWifiRuntime.cpp', 'MarbleWifiNet.cpp', 'MarbleWifiFirmware.c', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
                     'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'MarbleButtons.cpp', 'MarbleHaptics.cpp', 'KeyStoreEvents.cpp')]
         sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
         sources.append(tree.parent / 'AppleKeyStoreState/NativeKeyStoreEvents.cpp')
@@ -367,7 +367,7 @@ def build_board(tree, env):
             magic, cpu, subtype, kind = struct.unpack_from('<4I', obj.read_bytes())
             if (magic, cpu, subtype & 0xffffff, kind) != (0xfeedfacf, 0x100000c, 2, 1):
                 raise RuntimeError('Marble boot archive must contain arm64e objects')
-            if filename in ('MarbleBootWatchdog.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp', 'MarbleBattery.cpp', 'MarbleBacklight.cpp', 'NativeHomeInput.cpp', 'NativeKeyStoreEvents.cpp', 'MarbleUsb.cpp'):
+            if filename in ('MarbleBootWatchdog.cpp', 'NativeAES.cpp', 'NativeLegacyDisplay.cpp', 'MarbleBattery.cpp', 'MarbleBacklight.cpp', 'NativeHomeInput.cpp', 'NativeKeyStoreEvents.cpp', 'MarbleUsb.cpp', 'MarbleWifiNet.cpp'):
                 late = obj.with_suffix('.late.o')
                 subprocess.run(['/opt/homebrew/opt/llvm/bin/llvm-objcopy',
                                 '--remove-section=__DATA,__mod_init_func',
