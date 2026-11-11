@@ -1,8 +1,8 @@
 //! Render passes of more color attachments than the device draws at once, drawn in color groups
 //! (the runtime's `render/color_groups.rs`), on the device the cfg selects under the validation
-//! layer: restricted to four color attachments and four fragment outputs (Vulkan's floor) through
-//! `VK_LAYER_KHRONOS_profiles` and a profile of those two limits alone, which the test writes, and
-//! as it is, where nothing groups. The owned fixtures `color_groups` and `color_groups_fetch`, each
+//! layer: restricted to four color attachments and four fragment outputs (Vulkan's floor), the
+//! device's description held to four (`DeviceOptions::color_attachment_limit`, so every device
+//! runs it), and as it is, where nothing groups. The owned fixtures `color_groups` and `color_groups_fetch`, each
 //! scene over 8x8 `RGBA16Float` colors:
 //!
 //! - **five**, **seven**, **sparse**: `cg_five` (colors 0 to 4, two groups), `cg_seven` (0 to 6,
@@ -18,8 +18,20 @@
 //!   a pass) in the top half's scissor, and stores color 4 and the depth by late store actions:
 //!   the second group's twin is loaded by its copy.
 //! - **fetch**: `cg_fetch_sparse` in a pass of colors 0 and 5, reading color 5's clear.
+//! - **dead read**: `dfk_dead_group`'s `dfg_branch` and `dfg_gated` specialized with their read of
+//!   color 4 dead (function constant 0 false), and `dfk_dead_rog`'s `dfr_color` (a color 0 input in
+//!   raster order group 0) and `dfr_buffer` (a buffer in group 0) with theirs dead, in a pass of
+//!   colors 0 to 4: each writes `tint` swizzled to colors 0 to 3 and `tint` to color 4, and reads
+//!   nothing, so on the restricted device it draws in two groups as `cg_five` does, its group
+//!   ordering nothing. Specialized live, each is the pipeline's limit refusal there (`dfg_branch`
+//!   reads color 4 from group 0's variant; the others order a read in each group's draw).
+//!   `dfr_lacks`, a color 1 input beside a pipeline of color 0 alone, is the pipeline's
+//!   `InvalidDescriptor(ColorAttachment)` dead and live, as plain Metal refuses it both ways
+//!   (`metal2vulkan-conformance/probes/dead_ordered_and_unattached_reads.m`).
 //!
-//! Metal's answers (a probe on the Apple M3 Max, macOS 27.0.1, of these scenes): every texel of
+//! Metal's answers (a probe on the Apple M3 Max, macOS 27.0.1, of these scenes; the dead read's of
+//! `dfk_dead_rog` by `dead_ordered_and_unattached_reads.m`, `dfg_branch` and `dfg_gated` writing
+//! `tint` and its swizzles only): every texel of
 //! every color, depth and stencil is the closed form the checks compute ([`tint`] at each pixel
 //! center), and the visibility counts are 32 and 22. Where the driver counts each sample once per
 //! color its fragment shader writes (ANV: `RuntimeDriverDefect::OcclusionCountPerColorOutput`),
@@ -33,27 +45,30 @@
 //! color of another group. A pipeline of four colors in the five-color pass, which the device
 //! draws in groups, is refused `NotImplemented(ColorAttachmentGroups)`.
 
+use super::framebuffer_fetch::fetches;
 use super::{layer_reported_nothing_at_all, validated_device_with, Messages, ScratchCache, WAIT};
 use crate::air_library::AirLibrary;
 use crate::gpu::TEST_DEVICE;
-use crate::observation::PROFILES_LAYER;
 use metal2vulkan::device::VkLimit;
-use metal2vulkan::error::{Capability, Feature, RuntimeDriverDefect, Unsupported};
+use metal2vulkan::error::{
+    Capability, DescriptorError, Error as CompileError, Feature, MetalAnswer, RuntimeDriverDefect,
+    Unsupported,
+};
+use metal2vulkan::library::{FunctionConstantValue, FunctionConstantValues};
 use metal2vulkan::metal::state::{DepthStencilDescriptor, StencilDescriptor};
 use metal2vulkan::metal::{
-    BlendFactor, CompareFunction, PixelFormat, PrimitiveType, RenderStages, StencilOperation,
-    TextureUsage,
+    BlendFactor, CompareFunction, DataType, PixelFormat, PrimitiveType, RenderStages,
+    StencilOperation, TextureUsage,
 };
 use metal2vulkan::pipeline::{ColorAttachmentDescriptor, RenderPipelineDescriptor, StageSource};
 use metal2vulkan_devtools::{engine_dir, llvm_assemble};
 use metal2vulkan_runtime::{
     BlitOption, Buffer, ClearColor, CommandQueue, Degradation, DepthStencilState, Device, Error,
-    LayerSetting, LayerSettingValue, Library, LoadAction, Origin, PipelineOptions,
-    RenderCommandEncoder, RenderPassDescriptor, RenderPipelineState, ResourceOptions, RuntimeGap,
-    ScissorRect, Size, StoreAction, Texture, TextureDescriptor, VisibilityResultMode, WorkCounts,
+    Library, LoadAction, Origin, PipelineOptions, RenderCommandEncoder, RenderPassDescriptor,
+    RenderPipelineState, ResourceOptions, RuntimeGap, ScissorRect, Size, StoreAction, Texture,
+    TextureDescriptor, VisibilityResultMode, WorkCounts,
 };
 use std::collections::BTreeSet;
-use std::ffi::CString;
 use std::time::{Duration, Instant};
 
 /// Every target's side.
@@ -74,83 +89,22 @@ struct Lane {
     queue: CommandQueue,
     groups: Library,
     fetch: Library,
+    dead: Library,
+    rog: Library,
     width: Width,
 }
 
-/// The profile of four color attachments and four fragment outputs alone: the profiles layer
-/// reports the device's own value for every member it omits.
-const FOUR_COLORS: &str = r#"{
-  "$schema": "https://schema.khronos.org/vulkan/profiles-0.8-latest.json#",
-  "capabilities": {
-    "four_colors": {
-      "properties": {
-        "VkPhysicalDeviceProperties": {
-          "limits": { "maxColorAttachments": 4, "maxFragmentOutputAttachments": 4 }
-        }
-      }
-    }
-  },
-  "profiles": {
-    "VP_M2V_four_colors": {
-      "version": 1,
-      "api-version": "1.2.0",
-      "label": "Four color attachments",
-      "description": "The device's own capabilities but four color attachments and fragment outputs.",
-      "contributors": {},
-      "history": [
-        { "revision": 1, "date": "2026-10-16", "author": "metal2vulkan", "comment": "A lane's." }
-      ],
-      "capabilities": ["four_colors"]
-    }
-  }
-}"#;
-
 /// The lane's device at `width`, under the validation layer where `validated`, its messages and
-/// shader cache, and the directory of the profile that restricts it; `None` (skipped, visibly)
-/// where the profiles layer is not installed or the device as it is draws fewer than eight.
-fn lane(width: Width, validated: bool) -> Option<(Messages, ScratchCache, ScratchCache, Lane)> {
+/// shader cache; `None` (skipped, visibly) where the device as it is draws fewer than eight.
+fn lane(width: Width, validated: bool) -> Option<(Messages, ScratchCache, Lane)> {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
-    let profile = ScratchCache::new().unwrap();
-    let file = profile.path().join("four_colors.json");
-    if width == Width::Four {
-        if !crate::candidate::profiles_layer_installed().unwrap() {
-            println!("SKIPPED: VK_LAYER_KHRONOS_profiles is not installed");
-            return None;
-        }
-        std::fs::create_dir_all(profile.path()).unwrap();
-        std::fs::write(&file, FOUR_COLORS).unwrap();
-    }
     let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
         if !validated {
             options.layers.clear();
         }
         if width == Width::Four {
-            let setting = |name: &str, value| {
-                LayerSetting::new(
-                    PROFILES_LAYER.to_owned(),
-                    CString::new(name).unwrap(),
-                    value,
-                )
-            };
-            let strings = |values: &[&str]| {
-                LayerSettingValue::Strings(
-                    values.iter().map(|v| CString::new(*v).unwrap()).collect(),
-                )
-            };
-            let path = file.to_string_lossy().into_owned();
-            options.layers.push(PROFILES_LAYER.to_owned());
-            options.layer_settings.extend([
-                setting("profile_emulation", LayerSettingValue::Bool(true)),
-                setting("profile_file", strings(&[&path])),
-                setting("profile_name", strings(&["VP_M2V_four_colors"])),
-                setting(
-                    "simulate_capabilities",
-                    strings(&["SIMULATE_PROPERTIES_BIT"]),
-                ),
-                setting("emulate_portability", LayerSettingValue::Bool(false)),
-                setting("debug_fail_on_error", LayerSettingValue::Bool(false)),
-            ]);
+            options.color_attachment_limit = Some(4);
         }
     })
     .unwrap();
@@ -175,10 +129,12 @@ fn lane(width: Width, validated: bool) -> Option<(Messages, ScratchCache, Scratc
         queue: device.new_command_queue().unwrap(),
         groups: library("color_groups"),
         fetch: library("color_groups_fetch"),
+        dead: library("dfk_dead_group"),
+        rog: library("dfk_dead_rog"),
         width,
         device,
     };
-    Some((messages, cache, profile, lane))
+    Some((messages, cache, lane))
 }
 
 /// The fixture's `tint` at pixel `(x, y)`'s center: the fullscreen triangle's `a` is
@@ -453,7 +409,7 @@ fn plain(
 }
 
 fn scenes(width: Width) {
-    let Some((messages, _cache, _profile, lane)) = lane(width, true) else {
+    let Some((messages, _cache, lane)) = lane(width, true) else {
         return;
     };
     // Announced once, as the first state of groups is made; and where the driver counts per
@@ -471,8 +427,13 @@ fn scenes(width: Width) {
     });
     depth_scene(&lane, &five);
     load_scene(&lane, &five);
-    fetch_scene(&lane);
-    refusals(&lane, &five);
+    dead_scene(&lane, &five);
+    // A device without a fetch form refuses the fetching pipelines, typed ([`fetches`]).
+    let fetching = fetches(&lane.device);
+    if fetching {
+        fetch_scene(&lane);
+    }
+    refusals(&lane, &five, fetching);
     let announced: BTreeSet<Degradation> = (messages.take_notices().iter())
         .filter_map(|message| message.degradation.as_ref())
         .map(|notice| notice.degradation)
@@ -731,8 +692,120 @@ fn fetch_scene(lane: &Lane) {
     });
 }
 
-/// What the restricted device refuses, and the device as it is draws (the module docs).
-fn refusals(lane: &Lane, five: &[usize]) {
+/// The pipeline of `cg_cover` and `fragment` of `library` drawing `RGBA16Float` at `colors`, the
+/// fragment function specialized with its `bool` function constant 0 `reads`.
+fn dead_pipeline(
+    lane: &Lane,
+    (library, fragment): (&Library, &str),
+    colors: &[usize],
+    reads: bool,
+) -> Result<RenderPipelineState, Error> {
+    let constants = FunctionConstantValues::defaults().with_index(
+        0,
+        FunctionConstantValue::new(DataType::Bool, [u8::from(reads)]),
+    );
+    let vertex = lane.groups.new_function_with_name("cg_cover").unwrap();
+    let fragment = library
+        .new_function_with_name_constant_values(fragment, &constants)
+        .unwrap();
+    let mut descriptor =
+        RenderPipelineDescriptor::new(StageSource::Function(vertex.function_descriptor()));
+    descriptor.fragment = Some(StageSource::Function(fragment.function_descriptor()));
+    for &index in colors {
+        descriptor.color_attachments[index] =
+            Some(ColorAttachmentDescriptor::new(PixelFormat::RGBA16Float));
+    }
+    lane.device
+        .new_render_pipeline_state(&descriptor, &PipelineOptions::default())
+}
+
+/// The dead read scene (the module docs).
+fn dead_scene(lane: &Lane, five: &[usize]) {
+    let name = lane.device.name().to_owned();
+    // What `dfr_buffer` reads where its read is live.
+    let bytes: Vec<u8> = [0.125f32, 0.25, 0.375, 0.5]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let buffer = lane
+        .device
+        .new_buffer_with_bytes(&bytes, ResourceOptions::shared())
+        .unwrap();
+    let functions = [
+        (&lane.dead, "dfg_branch"),
+        (&lane.dead, "dfg_gated"),
+        (&lane.rog, "dfr_color"),
+        (&lane.rog, "dfr_buffer"),
+    ];
+    for (library, fragment) in functions {
+        let pipeline = dead_pipeline(lane, (library, fragment), five, false)
+            .unwrap_or_else(|e| panic!("{fragment} dead on {name}: {e}"));
+        let targets: Vec<Texture> = five
+            .iter()
+            .map(|_| lane.texture(PixelFormat::RGBA16Float))
+            .collect();
+        let (passes, twins) = group_counts(lane, || {
+            lane.run(&cleared_pass(&targets, five), |encoder| {
+                encoder.set_render_pipeline_state(&pipeline).unwrap();
+                encoder.set_fragment_buffer(Some(&buffer), 0, 0).unwrap();
+                encoder
+                    .draw_primitives(PrimitiveType::Triangle, 0, 3, 1, 0)
+                    .unwrap();
+            });
+        });
+        let groups = u64::from(lane.splits(five.len()));
+        assert_eq!((passes, twins), (groups, 0), "{fragment} dead on {name}");
+        let got: Vec<_> = (five.iter().copied())
+            .zip(targets.iter().map(|t| lane.colors(t)))
+            .collect();
+        check_colors(fragment, lane, &got, |index, x, y| {
+            let t = tint(x, y);
+            match index {
+                4 => t,
+                _ => seven(t)[index],
+            }
+        });
+        eprintln!(
+            "COLOR-GROUPS {fragment} dead on {name} ({:?}): Metal's colors, {passes} group passes \
+             past the first",
+            lane.width
+        );
+    }
+    if lane.width == Width::Four {
+        let limit = Error::Unsupported(Unsupported::needs(
+            Feature::InterfaceComponents,
+            Capability::Limit {
+                limit: VkLimit::MaxColorAttachments,
+                required: 5,
+                available: 4,
+            },
+        ));
+        for (library, fragment) in [functions[0], functions[2], functions[3]] {
+            let live = dead_pipeline(lane, (library, fragment), five, true);
+            assert_eq!(live.unwrap_err(), limit, "{fragment} live on {name}");
+        }
+    }
+    // A color input without an attachment, read or not: Metal's pipeline error.
+    let unattached = Error::Compile(CompileError::InvalidDescriptor(
+        DescriptorError::ColorAttachment {
+            index: 1,
+            metal: MetalAnswer::NilWithError,
+        },
+    ));
+    for reads in [false, true] {
+        let made = dead_pipeline(lane, (&lane.rog, "dfr_lacks"), &[0], reads);
+        assert_eq!(
+            made.unwrap_err(),
+            unattached,
+            "dfr_lacks ({reads}) on {name}"
+        );
+    }
+    eprintln!("COLOR-GROUPS dfr_lacks on {name}: refused dead and live, as Metal");
+}
+
+/// What the restricted device refuses, and the device as it is draws (the module docs); on a
+/// device without a fetch form (not `fetching`), `cg_fetch` is refused there as `FramebufferFetch`.
+fn refusals(lane: &Lane, five: &[usize], fetching: bool) {
     let name = lane.device.name().to_owned();
     // The pipeline's limit refusal: its attachments reach index 4 on a device of four.
     let limit = Error::Unsupported(Unsupported::needs(
@@ -774,7 +847,17 @@ fn refusals(lane: &Lane, five: &[usize]) {
         }
         Width::Device => {
             counts.unwrap();
-            fetch.unwrap();
+            match fetching {
+                true => {
+                    fetch.unwrap();
+                }
+                false => match fetch {
+                    Err(Error::Unsupported(refusal))
+                        if refusal.feature == Feature::FramebufferFetch => {}
+                    Err(error) => panic!("cg_fetch on {name} without a fetch form: {error}"),
+                    Ok(_) => panic!("cg_fetch on {name}: made without a fetch form"),
+                },
+            }
         }
     }
 }
@@ -864,7 +947,7 @@ fn cost(lane: &Lane, colors: &[usize], depth: bool) -> (Duration, Duration) {
 #[test]
 #[ignore = "a measurement, not a check: run by name with --run-ignored all"]
 fn color_group_costs() {
-    let Some((_messages, _cache, _profile, lane)) = lane(Width::Four, false) else {
+    let Some((_messages, _cache, lane)) = lane(Width::Four, false) else {
         return;
     };
     let ms = |d: Duration| d.as_secs_f64() * 1e3;

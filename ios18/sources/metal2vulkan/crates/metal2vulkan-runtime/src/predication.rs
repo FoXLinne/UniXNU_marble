@@ -1286,6 +1286,12 @@ impl Predication {
             .is_some_and(|unit| !unit.stack.is_empty())
     }
 
+    /// Whether the open encoder's unit gates its dispatches (`Unit::gated`): where not,
+    /// [`gates`](Self::gates) makes none, so a dispatch need not list its group counts for it.
+    pub(super) fn gates_dispatches(&self) -> bool {
+        self.unit.as_ref().is_some_and(Unit::gated)
+    }
+
     /// The gates of a dispatch the open encoder records now, one per command of `counts` (its
     /// group counts), where its unit gates its dispatches (`Unit::gated`); none where not, and it
     /// runs as recorded. In the bound form they lie in the last step's record, or where it has no
@@ -1297,12 +1303,9 @@ impl Predication {
         device: &Device,
         counts: &[[u32; 3]],
     ) -> Result<(Option<Step>, Vec<Upload>), Error> {
-        let Some(unit) = &self.unit else {
+        let Some(unit) = self.unit.as_ref().filter(|unit| unit.gated()) else {
             return Ok((None, Vec::new()));
         };
-        if !unit.gated() {
-            return Ok((None, Vec::new()));
-        }
         let mut run = unit
             .run
             .ok_or_else(|| internal("a gated predication unit without its step"))?;
@@ -1957,6 +1960,7 @@ impl ComputeCommandEncoder {
     /// for the End that closes that block; with no block open it is an unbalanced record,
     /// answering `NO` (the module docs).
     pub fn encode_end_if(&mut self) -> Result<bool, Error> {
+        let _for = self.core().notices_for();
         let at = self.log(|_| ComputeCall::EndIf(false));
         let result = self.encode_end_if_uncounted();
         let result = self.counted(result);
@@ -1997,6 +2001,7 @@ impl ComputeCommandEncoder {
         comparison: u64,
         reference_value: u32,
     ) -> Result<(), Error> {
+        let _for = self.core().notices_for();
         self.stop_logging();
         let result = self.encode_start_while_uncounted(buffer, offset, comparison, reference_value);
         self.counted(result)
@@ -2033,6 +2038,7 @@ impl ComputeCommandEncoder {
     /// run, and again while that End's condition holds after each run, as
     /// [`encode_start_while`](Self::encode_start_while)'s run, laid down as there.
     pub fn encode_start_do_while(&mut self) -> Result<(), Error> {
+        let _for = self.core().notices_for();
         self.stop_logging();
         let result = self.encode_start_do_while_uncounted();
         self.counted(result)
@@ -2048,6 +2054,7 @@ impl ComputeCommandEncoder {
     /// block it kills the outermost open block and answers `NO`; with no block open it is an
     /// unbalanced record, answering `NO` (the module docs).
     pub fn encode_end_while(&mut self) -> Result<bool, Error> {
+        let _for = self.core().notices_for();
         self.stop_logging();
         let result = self.encode_end_while_uncounted();
         self.counted(result)
@@ -2076,6 +2083,7 @@ impl ComputeCommandEncoder {
         comparison: u64,
         reference_value: u32,
     ) -> Result<bool, Error> {
+        let _for = self.core().notices_for();
         self.stop_logging();
         let result =
             self.encode_end_do_while_uncounted(buffer, offset, comparison, reference_value);

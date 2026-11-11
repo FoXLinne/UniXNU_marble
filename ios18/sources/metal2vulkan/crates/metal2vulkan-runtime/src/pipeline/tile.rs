@@ -6,10 +6,11 @@
 //!   ([`Kernel::Tile`]): the function compiles under the descriptor's color attachment formats,
 //!   as `compile_tile_pipeline` compiles it, with a compute state's variants, stand-ins, memo,
 //!   archives and disk cache. What the compile refuses is refused (`Compile`, `Unsupported`):
-//!   among it a function that reaches an attachment without a format in the descriptor
-//!   (`InvalidDescriptor(ColorAttachment)`), where Metal's creation answers "Invalid pixel format
-//!   for render target 0", and a member whose type the attachment's format does not hold, which
-//!   Metal's API validation stops (an M3 Max and an M4).
+//!   among it a function that reaches an attachment without a format in the descriptor (the
+//!   translator's `DescriptorError::ColorAttachment`, answering `MetalAnswer::NilWithError`),
+//!   where Metal's creation answers nil and "Invalid pixel format for render target 0", and a
+//!   member whose type the attachment's format does not hold, which Metal's API validation stops
+//!   (an M3 Max and an M4).
 //! - **Answers.** A tile pipeline's state answers its descriptor's
 //!   `threadgroup_size_matches_tile_size`, no indirect command buffers, and a
 //!   `max_total_threads_per_threadgroup`. That is the threads of the descriptor's
@@ -67,6 +68,15 @@ impl Device {
         descriptor: &TileRenderPipelineDescriptor,
         options: &PipelineOptions,
     ) -> Result<RenderPipelineState, Error> {
+        self.at_serving(|device| device.new_tile_render_pipeline_state_now(descriptor, options))
+    }
+
+    /// [`Device::new_tile_render_pipeline_state`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_tile_render_pipeline_state_now(
+        &self,
+        descriptor: &TileRenderPipelineDescriptor,
+        options: &PipelineOptions,
+    ) -> Result<RenderPipelineState, Error> {
         TileState::create(self, descriptor, options, None).map(RenderPipelineState::of_tile)
     }
 
@@ -77,6 +87,18 @@ impl Device {
     /// [`TileRenderPipelineDescriptor::reflection`]'s (its tile bindings), under the creation's
     /// budget; what it refuses refuses the call (`Unsupported`, `Compile`).
     pub fn new_tile_render_pipeline_state_with_reflection(
+        &self,
+        descriptor: &TileRenderPipelineDescriptor,
+        options: &PipelineOptions,
+    ) -> Result<(RenderPipelineState, Option<RenderPipelineReflection>), Error> {
+        self.at_serving(|device| {
+            device.new_tile_render_pipeline_state_with_reflection_now(descriptor, options)
+        })
+    }
+
+    /// [`Device::new_tile_render_pipeline_state_with_reflection`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_tile_render_pipeline_state_with_reflection_now(
         &self,
         descriptor: &TileRenderPipelineDescriptor,
         options: &PipelineOptions,

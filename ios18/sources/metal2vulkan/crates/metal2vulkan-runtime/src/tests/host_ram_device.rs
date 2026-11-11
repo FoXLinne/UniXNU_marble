@@ -25,9 +25,11 @@
 //! - **The use.** Dropping the use while a command buffer still holds a chunk frees the chunk
 //!   after that command buffer completed, and the RAM's keep-alive goes after it; the same RAM
 //!   used twice is refused, a RAM apart from it taken; a new RAM over the same ranges is taken once
-//!   the first use ended.
-//! - **Ahead of the objects.** The device's thread imports chunks of fresh RAM (a `memfd`
-//!   advised for huge pages, as QEMU's RAM is) ahead of the objects: the RAM's first chunk once
+//!   the first use ended. A use of shared memory dropped while the device's thread may be faulting
+//!   it in waits for the thread, so its pages may be unmapped once the drop returned.
+//! - **Ahead of the objects.** The device's thread imports chunks of fresh RAM (advised for huge
+//!   pages, as QEMU's RAM is: a `memfd` mapped shared, or private anonymous memory on a device
+//!   that refuses pointers to shared memory) ahead of the objects: the RAM's first chunk once
 //!   the use begins, and the window past it once a heap took it, so the consumer's 2 MiB heaps
 //!   over consecutive runs, past a chunk's end, import nothing as they are made; a heap's bytes
 //!   go from the CPU to the GPU and back; every heap gone, one made again imports nothing.
@@ -36,7 +38,8 @@
 //!   after the chunk taken. It imports nothing past the window or the RAM's end, and never goes
 //!   back for a chunk a jump skipped. A run of heaps that stays inside the window imports nothing
 //!   on the thread making them; a heap outside it is bound in an import of its own run, and
-//!   imports no chunk.
+//!   imports no chunk. An object over a chunk the thread imported, made while the chunk's state
+//!   is looked at (as the thread looks at each chunk of its window), is bound in the chunk.
 //! - **Down the RAM.** A heap over a chunk not imported, at the RAM's top, is bound in an import
 //!   of its own run, whose bytes go from the CPU to the GPU and back, while the thread imports
 //!   the chunk, in which the heaps over it after that are bound; a heap next to it below opens
@@ -46,11 +49,18 @@
 //!   chunk's over the same pages order by their host bytes, a write through either before a read
 //!   through the other, in one blit encoder, in two encoders of one command buffer and across
 //!   queues; so do a buffer bound in a run's import and a copy of its pages through the chunk's
-//!   (`copy_from_host_ram` after a fill through the buffer, `copy_to_host_ram` before a copy out
-//!   of it). Within the allocation limit's margin no run is imported alone. On a driver whose
-//!   barriers do not order blits through two imports of the same pages
-//!   (`RuntimeDriverDefect::AliasedImportBlitsUnordered`, MoltenVK's) no run is imported alone
-//!   either: an object over a chunk not imported imports the chunk, and the tests hold it to that.
+//!   (`copy_from_host_ram` after a fill through the buffer, `copy_to_host_ram` before a copy out of
+//!   it). Within the allocation limit's margin no run is imported alone. On a driver whose barriers
+//!   do not order blits through two imports of the same pages
+//!   (`RuntimeDriverDefect::AliasedImportBlitsUnordered`, MoltenVK's and ANV's) no run is imported
+//!   alone either: an object over a chunk not imported imports the chunk, and the tests hold it to
+//!   that.
+//!
+//! - **Shared RAM a device refuses.** On a device that refuses pointers to shared memory (RADV),
+//!   a RAM of a `memfd` mapped shared with no dma-buf source imports no chunk, and an object over
+//!   it is a copy of its pages (`HostBacking::Copied`); the device's thread reaches its first chunk
+//!   and faults none of it in. Where the device imports such memory, the thread faults each chunk it
+//!   imports ahead in first (on Linux).
 //!
 //! Every other test holds the device's thread back (`Device::hold_host_ram_imports`), so that
 //! each chunk is imported by the first object over it, as one the thread has not reached is.
@@ -61,13 +71,13 @@
 use super::dispatch_pending::state;
 use crate::host_ram::AHEAD_CHUNKS;
 use crate::{
-    Buffer, CommandBufferStatus, Device, DeviceKind, DeviceOptions, Error, EventRef,
+    Buffer, CommandBufferStatus, Degradation, Device, DeviceKind, DeviceOptions, Error, EventRef,
     HeapDescriptor, HeapType, HostBacking, HostMemory, HostRam, ImportGate, ImportRequest,
-    KeepAlive, Problem, ResourceOptions, RunResolver, Size,
+    KeepAlive, MessageSink, Problem, ResourceOptions, RunResolver, Size,
 };
 use std::ops::Range;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -149,6 +159,11 @@ fn device() -> Option<Device> {
 
 /// A device of the cfg's kind, as the product makes it; `None` where it imports no host memory.
 pub(super) fn ahead_device() -> Option<Device> {
+    ahead_device_with(None)
+}
+
+/// [`ahead_device`], its messages given to `messages`.
+fn ahead_device_with(messages: Option<MessageSink>) -> Option<Device> {
     let options = DeviceOptions {
         kinds: match cfg!(m2v_cpu_icd) {
             true => vec![DeviceKind::Cpu],
@@ -158,6 +173,7 @@ pub(super) fn ahead_device() -> Option<Device> {
                 DeviceKind::Virtual,
             ],
         },
+        messages,
         ..DeviceOptions::default()
     };
     let device = Device::system_default_with(&options).unwrap();
@@ -165,7 +181,27 @@ pub(super) fn ahead_device() -> Option<Device> {
         eprintln!("HOST-RAM: the device imports no host memory here; nothing to test");
         return None;
     }
+    // Asked now, by an import of one page released at once, so that no test's counts or
+    // allocation limit meet that import ([`fresh_ram`] reads the answer).
+    device.imports_shared_host_pointers().unwrap();
+    // The submission checks' imports, held while they run (`submit_check.rs`), likewise: a
+    // test that read the device's live allocations while they ran saw them go later.
+    assert!(
+        device.settle_submit_checks(crate::tests::SETTLE),
+        "the submission checks never answered"
+    );
     Some(device)
+}
+
+/// A sink counting into `heard` the `copied-host-pages` notices it hears.
+pub(super) fn copies_heard(heard: &Arc<AtomicUsize>) -> MessageSink {
+    let heard = Arc::clone(heard);
+    MessageSink::new(move |message| {
+        let notice = message.degradation.as_ref();
+        if notice.is_some_and(|notice| notice.degradation == Degradation::CopiedHostPages) {
+            heard.fetch_add(1, Ordering::Relaxed);
+        }
+    })
 }
 
 /// A resolver answering `answer` of each window it is asked, each window into `asked`.
@@ -251,41 +287,73 @@ fn settles(flag: &AtomicBool) -> bool {
     true
 }
 
-/// Fresh RAM of `length` bytes, never touched: a `memfd` mapped shared and advised for huge pages,
-/// as QEMU's `memory-backend-memfd,share=on` RAM is (anonymous shared memory off Linux), unmapped
-/// by the keep-alive it is given to; its first byte, and whether its keep-alive was dropped.
-pub(super) fn fresh_ram(length: u64) -> (Arc<HostRam>, u64, Arc<AtomicBool>) {
+/// Fresh RAM of `length` bytes, never touched, in 2 MiB pages where the system gives them
+/// ([`RamPages::Huge`]), unmapped by the keep-alive it is given to, of the kind `device` imports: a `memfd` mapped shared, as QEMU's
+/// `memory-backend-memfd,share=on` RAM is (anonymous shared memory off Linux), on a device that
+/// imports pointers to shared memory (`Device::imports_shared_host_pointers`), and private
+/// anonymous memory, as QEMU's `memory-backend-ram` RAM is, on one that refuses them (RADV:
+/// [`a_ram_of_shared_memory_a_device_refuses_imports_no_chunk_and_copies_its_objects`] checks
+/// shared RAM there); its first byte, and whether its keep-alive was dropped.
+pub(super) fn fresh_ram(device: &Device, length: u64) -> (Arc<HostRam>, u64, Arc<AtomicBool>) {
+    fresh_ram_in(device, length, RamPages::Huge)
+}
+
+/// The pages a fresh RAM lies in on Linux ([`fresh_ram_in`]); elsewhere the system's own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RamPages {
+    /// 2 MiB pages: the mapping starts at a multiple of 2 MiB and is advised for huge pages, as
+    /// QEMU aligns and advises its file-backed RAM, so the system backs it with them where its
+    /// shared memory takes the advice (`shmem_enabled` of `advise` or `always`).
+    Huge,
+    /// 4 KiB pages: the mapping is advised against huge pages.
+    Small,
+}
+
+/// [`fresh_ram`]'s RAM in `pages`.
+pub(super) fn fresh_ram_in(
+    device: &Device,
+    length: u64,
+    pages: RamPages,
+) -> (Arc<HostRam>, u64, Arc<AtomicBool>) {
+    let shared = device.imports_shared_host_pointers().unwrap();
+    if !shared {
+        eprintln!(
+            "HOST-RAM {}: the device refuses pointers to shared memory; the fresh RAM is private \
+             anonymous memory",
+            device.name()
+        );
+    }
+    fresh_ram_of(length, shared, pages)
+}
+
+/// Fresh RAM of `length` bytes, as [`fresh_ram`]'s: shared memory where `shared`, else private
+/// anonymous memory, in `pages`.
+fn fresh_ram_of(
+    length: u64,
+    shared: bool,
+    pages: RamPages,
+) -> (Arc<HostRam>, u64, Arc<AtomicBool>) {
     #[cfg(target_os = "linux")]
-    let (flags, fd) = {
-        // SAFETY: a name and flags the call takes.
-        let fd = unsafe { libc::memfd_create(c"m2v-fresh-ram".as_ptr(), libc::MFD_CLOEXEC) };
-        assert!(fd >= 0);
-        // SAFETY: the descriptor was just made, and is closed below.
-        assert_eq!(unsafe { libc::ftruncate(fd, length as libc::off_t) }, 0);
-        (libc::MAP_SHARED, fd)
+    let (flags, fd) = match shared {
+        true => {
+            // SAFETY: a name and flags the call takes.
+            let fd = unsafe { libc::memfd_create(c"m2v-fresh-ram".as_ptr(), libc::MFD_CLOEXEC) };
+            assert!(fd >= 0);
+            // SAFETY: the descriptor was just made, and is closed below.
+            assert_eq!(unsafe { libc::ftruncate(fd, length as libc::off_t) }, 0);
+            (libc::MAP_SHARED, fd)
+        }
+        false => (libc::MAP_PRIVATE | libc::MAP_ANON, -1),
     };
     #[cfg(not(target_os = "linux"))]
-    let (flags, fd) = (libc::MAP_SHARED | libc::MAP_ANON, -1);
-    // SAFETY: a fresh mapping of the file's first `length` bytes (or of anonymous memory).
-    let start = unsafe {
-        libc::mmap(
-            std::ptr::null_mut(),
-            length as usize,
-            libc::PROT_READ | libc::PROT_WRITE,
-            flags,
-            fd,
-            0,
-        )
+    let (flags, fd) = match shared {
+        true => (libc::MAP_SHARED | libc::MAP_ANON, -1),
+        false => (libc::MAP_PRIVATE | libc::MAP_ANON, -1),
     };
-    assert_ne!(start, libc::MAP_FAILED);
+    let start = map_aligned(fd, flags, length, pages);
     if fd >= 0 {
         // SAFETY: the test's descriptor; the mapping keeps the file.
         unsafe { libc::close(fd) };
-    }
-    #[cfg(target_os = "linux")]
-    // SAFETY: advice on the test's own mapping; a kernel without huge pages refuses it, harmlessly.
-    unsafe {
-        libc::madvise(start, length as usize, libc::MADV_HUGEPAGE);
     }
     let start = start as u64;
     let dropped = Arc::new(AtomicBool::new(false));
@@ -300,6 +368,70 @@ pub(super) fn fresh_ram(length: u64) -> (Arc<HostRam>, u64, Arc<AtomicBool>) {
     (Arc::new(ram), start, dropped)
 }
 
+/// `length` bytes of `fd` (anonymous memory where it is -1) mapped with `flags` at a multiple of
+/// 2 MiB, as QEMU maps its RAM, and advised for `pages` on Linux: the mapping's first byte. The
+/// mapping keeps the file; the caller unmaps it.
+pub(super) fn map_aligned(
+    fd: libc::c_int,
+    flags: libc::c_int,
+    length: u64,
+    pages: RamPages,
+) -> *mut libc::c_void {
+    // The mapping at a multiple of 2 MiB: a reservation 2 MiB longer, the mapping placed over it
+    // at its first such multiple, and the reservation's ends unmapped.
+    const ALIGN: usize = 2 << 20;
+    let reserved_length = length as usize + ALIGN;
+    // SAFETY: a fresh reservation of address space, with no access.
+    let reserved = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            reserved_length,
+            libc::PROT_NONE,
+            libc::MAP_PRIVATE | libc::MAP_ANON | libc::MAP_NORESERVE,
+            -1,
+            0,
+        )
+    };
+    assert_ne!(reserved, libc::MAP_FAILED);
+    let head = (reserved as usize).next_multiple_of(ALIGN) - reserved as usize;
+    // SAFETY: a fresh mapping of the file's first `length` bytes (or of anonymous memory), over
+    // the call's own reservation, inside it.
+    let start = unsafe {
+        libc::mmap(
+            reserved.cast::<u8>().add(head).cast(),
+            length as usize,
+            libc::PROT_READ | libc::PROT_WRITE,
+            flags | libc::MAP_FIXED,
+            fd,
+            0,
+        )
+    };
+    assert_ne!(start, libc::MAP_FAILED);
+    // SAFETY: the reservation's parts before and past the mapping, which nothing uses.
+    unsafe {
+        if head > 0 {
+            libc::munmap(reserved, head);
+        }
+        let tail = reserved_length - head - length as usize;
+        if tail > 0 {
+            libc::munmap(start.cast::<u8>().add(length as usize).cast(), tail);
+        }
+    }
+    #[cfg(target_os = "linux")]
+    // SAFETY: advice on the call's own mapping; a kernel without huge pages refuses it,
+    // harmlessly.
+    unsafe {
+        let advice = match pages {
+            RamPages::Huge => libc::MADV_HUGEPAGE,
+            RamPages::Small => libc::MADV_NOHUGEPAGE,
+        };
+        libc::madvise(start, length as usize, advice);
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = pages;
+    start
+}
+
 #[test]
 fn chunks_are_imported_ahead_so_no_making_waits_for_one() {
     let Some(device) = ahead_device() else {
@@ -308,7 +440,7 @@ fn chunks_are_imported_ahead_so_no_making_waits_for_one() {
     // A RAM of the start's one chunk and a full window past it: the device's thread imports all
     // of it once the first heap took the first chunk.
     const CHUNKS: u64 = 1 + AHEAD_CHUNKS as u64;
-    let (ram, start, dropped) = fresh_ram(CHUNKS * 64 * MIB);
+    let (ram, start, dropped) = fresh_ram(&device, CHUNKS * 64 * MIB);
     let before = device.work_counts();
     let ahead_of = |counts: &crate::WorkCounts| {
         counts.host_ram_chunks_imported_ahead - before.host_ram_chunks_imported_ahead
@@ -432,27 +564,51 @@ fn counts_until(device: &Device, done: impl Fn(&crate::WorkCounts) -> bool) -> c
     }
 }
 
-#[test]
-fn the_ahead_thread_leaves_the_allocation_limit_to_the_objects() {
-    let Some(device) = ahead_device() else {
-        return;
-    };
+/// The chunks the device's thread imports ahead of the objects on [`at_the_margin`]'s device: the
+/// start's one, and three of the window an object over the first opens, short of its end.
+const AHEAD: u32 = 4;
+const _: () = assert!(AHEAD as usize <= AHEAD_CHUNKS);
+
+/// The margin of `limit` the device's thread leaves the objects (`allocations.rs`): a quarter.
+fn margin(limit: u32) -> u32 {
+    (limit / 4).max(1)
+}
+
+/// A fresh RAM used on a device of a small `maxMemoryAllocationCount`, its thread stopped at the
+/// margin ([`at_the_margin`]).
+struct AtTheMargin {
+    /// The device's own limit, its live allocations before the RAM, and the limit it is held to.
+    device_limit: u32,
+    live: u32,
+    limit: u32,
+    /// The device's counts before the RAM's use began.
+    before: crate::WorkCounts,
+    /// The RAM's first byte, and the device's import page.
+    start: u64,
+    page: u64,
+    runs: Arc<Mutex<Vec<(u64, u64)>>>,
+    gates: Arc<Mutex<Vec<ImportRequest>>>,
+    /// The object over the first chunk that opened the window past it.
+    opener: Buffer,
+    used: crate::HostRamUse,
+    ram: Arc<HostRam>,
+    dropped: Arc<AtomicBool>,
+}
+
+/// `device` held to the smallest `maxMemoryAllocationCount` whose margin (a quarter) leaves its
+/// thread room for [`AHEAD`] chunks of a fresh RAM of twelve, and no more; the RAM used, an object
+/// made over its first chunk once the thread imported it, and the thread stopped at the margin.
+fn at_the_margin(device: &Device) -> AtTheMargin {
     let allocations = &device.shared().allocations.allocations;
-    // A device of a small `maxMemoryAllocationCount`: the smallest limit whose margin (a
-    // quarter) leaves the thread room for `AHEAD` chunks of the RAM's twelve, and no more: the
-    // start's one, and three of the window an object over the first opens, short of its end.
     const CHUNKS: u64 = 12;
-    const AHEAD: u32 = 4;
-    const _: () = assert!(AHEAD as usize <= AHEAD_CHUNKS);
     let device_limit = allocations.limit();
     let live = allocations.live();
-    let margin = |limit: u32| (limit / 4).max(1);
     let limit = (live + 1..)
         .find(|&limit| limit - margin(limit) - live == AHEAD)
         .unwrap();
     allocations.limit_to(limit);
     assert_eq!(allocations.limit(), limit);
-    let (ram, start, dropped) = fresh_ram(CHUNKS * 64 * MIB);
+    let (ram, start, dropped) = fresh_ram(device, CHUNKS * 64 * MIB);
     let before = device.work_counts();
     let used = device.use_host_ram(&ram).unwrap();
     let ahead = |counts: &crate::WorkCounts| {
@@ -461,16 +617,16 @@ fn the_ahead_thread_leaves_the_allocation_limit_to_the_objects() {
     let page = device.shared().host_import.as_ref().unwrap().page;
     let (runs, gates): (Arc<Mutex<_>>, Arc<Mutex<_>>) = Default::default();
     // An object over the first chunk, once the thread imported it, opens the window past it.
-    counts_until(&device, |counts| ahead(counts) == 1);
+    counts_until(device, |counts| ahead(counts) == 1);
     let opener = buffer(
-        &device,
+        device,
         start,
         4 * page,
         resolver(&runs, itself),
         gate(&gates, true),
     )
     .expect("an object over the first chunk is made");
-    counts_until(&device, |counts| ahead(counts) == u64::from(AHEAD));
+    counts_until(device, |counts| ahead(counts) == u64::from(AHEAD));
     // Stopped at the margin: nothing more comes.
     std::thread::sleep(Duration::from_millis(200));
     let stopped = device.work_counts();
@@ -480,44 +636,69 @@ fn the_ahead_thread_leaves_the_allocation_limit_to_the_objects() {
         "it stopped at the margin"
     );
     assert_eq!(allocations.live(), limit - margin(limit));
-    // An object over a chunk past them imports it as it is made: an allocation the margin left
-    // room for, which brings the device within it, so the thread's chunks no object took are
-    // given back.
-    let past = start + u64::from(AHEAD) * 64 * MIB;
-    let object = buffer(
-        &device,
-        past,
-        4 * page,
-        resolver(&runs, itself),
-        gate(&gates, true),
-    )
-    .expect("an object past the thread's chunks is made");
-    let given = |counts: &crate::WorkCounts| {
-        counts.host_ram_chunks_given_back - before.host_ram_chunks_given_back
-    };
-    // The first chunk, which the opener took, is not given back.
-    let untaken = u64::from(AHEAD) - 1;
-    let back = counts_until(&device, |counts| {
-        given(counts) == untaken && counts.host_ram_chunks_live - before.host_ram_chunks_live == 2
-    });
-    assert_eq!(given(&back), untaken, "the untaken chunks went back");
-    assert_eq!(
-        back.host_ram_chunks_imported - before.host_ram_chunks_imported,
-        u64::from(AHEAD) + 1
-    );
-    assert_eq!(
-        back.host_ram_chunks_live - before.host_ram_chunks_live,
-        2,
-        "the objects' chunks alone stay"
-    );
-    assert_eq!(
-        back.chunk_bound_buffers_made - before.chunk_bound_buffers_made,
-        2
-    );
-    // The objects have the rest of the limit: buffers of blocks of their own are made until the
-    // device holds its limit, and the next is refused without a call of the driver, none of the
-    // thread's chunks among the live allocations then.
-    let room = limit - allocations.live();
+    AtTheMargin {
+        device_limit,
+        live,
+        limit,
+        before,
+        start,
+        page,
+        runs,
+        gates,
+        opener,
+        used,
+        ram,
+        dropped,
+    }
+}
+
+impl AtTheMargin {
+    /// An object over a chunk past the thread's: it imports it as it is made, an allocation the
+    /// margin left room for, which brings the device within it, so the thread's chunks no object
+    /// took are given back.
+    fn object_past(&self, device: &Device) -> Buffer {
+        let past = self.start + u64::from(AHEAD) * 64 * MIB;
+        buffer(
+            device,
+            past,
+            4 * self.page,
+            resolver(&self.runs, itself),
+            gate(&self.gates, true),
+        )
+        .expect("an object past the thread's chunks is made")
+    }
+
+    /// The chunks given back since the RAM's use began.
+    fn given(&self, counts: &crate::WorkCounts) -> u64 {
+        counts.host_ram_chunks_given_back - self.before.host_ram_chunks_given_back
+    }
+
+    /// The chunks of the RAM live.
+    fn chunks_live(&self, counts: &crate::WorkCounts) -> u64 {
+        counts.host_ram_chunks_live - self.before.host_ram_chunks_live
+    }
+
+    /// Let go of the RAM's use, the objects first: its keep-alive goes after the last chunk.
+    fn let_go(self, objects: Vec<Buffer>) {
+        let AtTheMargin {
+            opener,
+            used,
+            ram,
+            dropped,
+            ..
+        } = self;
+        drop((objects, opener, used, ram));
+        assert!(
+            settles(&dropped),
+            "the keep-alive goes after the last chunk"
+        );
+    }
+}
+
+/// Buffers of blocks of their own made on `device` until one is refused: those made, and the
+/// refusal. The device's allocations never pass `limit`.
+fn dedicated_until_refused(device: &Device, limit: u32, page: u64) -> (Vec<Buffer>, Error) {
+    let allocations = &device.shared().allocations.allocations;
     let dedicated = crate::memory::BLOCK_BYTES / 2 + page;
     let mut made = Vec::new();
     let refused = loop {
@@ -526,34 +707,137 @@ fn the_ahead_thread_leaves_the_allocation_limit_to_the_objects() {
             Err(error) => break error,
         }
         assert!(allocations.live() <= limit, "the limit holds");
-        assert!(made.len() <= room as usize + 64, "the limit holds");
+        assert!(made.len() <= limit as usize + 64, "the limit holds");
     };
+    (made, refused)
+}
+
+#[test]
+fn the_ahead_thread_leaves_the_allocation_limit_to_the_objects() {
+    let Some(device) = ahead_device() else {
+        return;
+    };
+    let allocations = &device.shared().allocations.allocations;
+    let at = at_the_margin(&device);
+    let limit = at.limit;
+    let object = at.object_past(&device);
+    // The first chunk, which the opener took, is not given back.
+    let untaken = u64::from(AHEAD) - 1;
+    let back = counts_until(&device, |counts| {
+        at.given(counts) == untaken && at.chunks_live(counts) == 2
+    });
+    assert_eq!(at.given(&back), untaken, "the untaken chunks went back");
+    assert_eq!(
+        back.host_ram_chunks_imported - at.before.host_ram_chunks_imported,
+        u64::from(AHEAD) + 1
+    );
+    assert_eq!(at.chunks_live(&back), 2, "the objects' chunks alone stay");
+    assert_eq!(
+        back.chunk_bound_buffers_made - at.before.chunk_bound_buffers_made,
+        2
+    );
+    // The objects have the rest of the limit: buffers of blocks of their own are made until the
+    // device holds its limit, and the next is refused without a call of the driver, none of the
+    // thread's chunks among the live allocations then.
+    let room = limit - allocations.live();
+    let (made, refused) = dedicated_until_refused(&device, limit, at.page);
     assert!(!made.is_empty(), "the room given back is the objects'");
-    assert!(allocations.live() <= limit);
+    assert!(made.len() <= room as usize + 64, "the limit holds");
     let full = device.work_counts();
     assert!(
-        full.memory_allocations_refused_at_limit > before.memory_allocations_refused_at_limit,
+        full.memory_allocations_refused_at_limit > at.before.memory_allocations_refused_at_limit,
         "refused at the limit: {refused:?}"
     );
     assert_eq!(
-        full.host_ram_chunks_live - before.host_ram_chunks_live,
+        at.chunks_live(&full),
         2,
         "no chunk of the thread's no object took was live at the refusal"
     );
     eprintln!(
-        "HOST-RAM: maxMemoryAllocationCount {}; a limit of {limit} with {live} live: {AHEAD} \
-         chunks imported ahead, {untaken} given back as an object came within the margin of {}, \
-         then {} buffers of blocks of their own made of a room of {room}, the next refused \
-         ({refused:?})",
-        device_limit,
+        "HOST-RAM: maxMemoryAllocationCount {}; a limit of {limit} with {} live: {AHEAD} chunks \
+         imported ahead, {untaken} given back as an object came within the margin of {}, then {} \
+         buffers of blocks of their own made of a room of {room}, the next refused ({refused:?})",
+        at.device_limit,
+        at.live,
         margin(limit),
         made.len()
     );
-    drop((made, object, opener, used, ram));
-    assert!(
-        settles(&dropped),
-        "the keep-alive goes after the last chunk"
+    at.let_go(made.into_iter().chain([object]).collect());
+}
+
+/// The objects' allocations made at once after the one that brought the device within the
+/// margin, while the thread that gives the untaken chunks back is slow to run (held
+/// [`GIVE_BACK_HELD`] as it starts, as a loaded host may leave it unscheduled), reach the limit
+/// before those chunks went: the allocation that finds the limit waits for that give-back, and
+/// is made, rather than refused while chunks no object took hold the device's allocations
+/// (`allocations.rs`). The objects have the whole rest of the limit, as Metal, which holds no
+/// such chunks, would give them, but for the blocks of the runtime's own pools made meanwhile
+/// (`Allocations::room_ahead` leaves the runtime's work the room past the margin): on the M3 Max
+/// under MoltenVK a pool of buffers makes the device's first pooled block in that room, once the
+/// chunks went (a block made ahead that a placement waited for), where lavapipe makes none here.
+#[test]
+fn an_allocation_at_the_limit_waits_for_the_untaken_chunks_to_go_back() {
+    const GIVE_BACK_HELD: Duration = Duration::from_millis(500);
+    let Some(device) = ahead_device() else {
+        return;
+    };
+    let allocations = &device.shared().allocations.allocations;
+    let at = at_the_margin(&device);
+    let limit = at.limit;
+    allocations.hold_give_backs(GIVE_BACK_HELD);
+    let waits = allocations.give_back_waits();
+    let begun = Instant::now();
+    let start = device.work_counts();
+    let object = at.object_past(&device);
+    // At once: the room the margin left, and the untaken chunks' once they went back.
+    let untaken = u64::from(AHEAD) - 1;
+    let room = limit - allocations.live() + untaken as u32;
+    let (made, refused) = dedicated_until_refused(&device, limit, at.page);
+    let took = begun.elapsed();
+    let full = device.work_counts();
+    // The pooled blocks made from just before the object on and not freed since (one
+    // `vkAllocateMemory` each), less one for each buffer made that lies in a pool rather than in
+    // a dedicated block (lavapipe's pools take these buffers): at most the runtime's own blocks
+    // live at the refusal, never one of the buffers'.
+    let pooled = |counts: &crate::WorkCounts| {
+        counts.pooled_memory_blocks_made - counts.pooled_memory_blocks_freed
+    };
+    let dedicated = full
+        .dedicated_memory_blocks_live
+        .saturating_sub(start.dedicated_memory_blocks_live);
+    let in_pools = (made.len() as u64).saturating_sub(dedicated);
+    let own = pooled(&full)
+        .saturating_sub(pooled(&start))
+        .saturating_sub(in_pools);
+    eprintln!(
+        "HOST-RAM: a limit of {limit}: the give-back held {GIVE_BACK_HELD:?}; {} buffers of \
+         blocks of their own made at once of a room of {room} in {took:?}, beside {own} block(s) \
+         of the runtime's pools, the next refused ({refused:?}); {} chunks given back, {} live \
+         then; {} waits for the give-back",
+        made.len(),
+        at.given(&full),
+        at.chunks_live(&full),
+        allocations.give_back_waits() - waits,
     );
+    assert_eq!(
+        at.chunks_live(&full),
+        2,
+        "refused while chunks no object took held the device's allocations ({refused:?})"
+    );
+    assert_eq!(at.given(&full), untaken, "the untaken chunks went back");
+    assert!(
+        made.len() as u64 + own >= u64::from(room),
+        "the objects lacked part of the rest of the limit ({refused:?})"
+    );
+    assert!(
+        allocations.give_back_waits() > waits,
+        "no allocation found the limit while the give-back was under way: the test showed nothing"
+    );
+    assert!(
+        full.memory_allocations_refused_at_limit > at.before.memory_allocations_refused_at_limit,
+        "refused at the limit: {refused:?}"
+    );
+    at.let_go(made.into_iter().chain([object]).collect());
 }
 
 /// The counts once `done` holds of them and a while has passed with the device's thread free to
@@ -569,11 +853,21 @@ fn settled(device: &Device, done: impl Fn(&crate::WorkCounts) -> bool) -> crate:
     later
 }
 
-/// 1 where the device binds an object over a chunk not imported yet in an import of its own run,
-/// 0 where its barriers do not order blits through two imports of the same pages
-/// (`RuntimeDriverDefect::AliasedImportBlitsUnordered`, MoltenVK's) and the object imports the
-/// chunk, as one that finds the device's thread stopped does.
-fn runs_alone(device: &Device) -> u64 {
+/// Keep `buffer`, just made, in the import it was bound in (its run's alone, where it was): its
+/// Metal address handed out keeps that import for good (`Buffer::gpu_address`). The device
+/// releases a buffer's import of its run once idle for 2 s (`host_residency.rs`) and binds the
+/// buffer in its chunk at its next use; a wait for the device's thread under load ([`settled`])
+/// may outlast that, and the test would then find the buffer over one import of its pages, not
+/// the two it orders.
+fn kept_in_its_run(buffer: &Buffer) {
+    let _ = buffer.gpu_address();
+}
+
+/// 1 where the device binds an object over a chunk not imported yet in an import of its own run, 0
+/// where its barriers do not order blits through two imports of the same pages
+/// (`RuntimeDriverDefect::AliasedImportBlitsUnordered`, MoltenVK's and ANV's) and the object
+/// imports the chunk, as one that finds the device's thread stopped does.
+pub(super) fn runs_alone(device: &Device) -> u64 {
     let defect = metal2vulkan::error::RuntimeDriverDefect::AliasedImportBlitsUnordered;
     u64::from(!device.properties().driver_defects.contains(&defect))
 }
@@ -587,7 +881,7 @@ fn the_window_ahead_moves_with_the_objects_and_imports_no_more() {
     // The start's chunk, two full windows, a chunk skipped, a jump's one chunk, and a full
     // window past it.
     const CHUNKS: u64 = 3 * WINDOW + 4;
-    let (ram, start, dropped) = fresh_ram(CHUNKS * 64 * MIB);
+    let (ram, start, dropped) = fresh_ram(&device, CHUNKS * 64 * MIB);
     let before = device.work_counts();
     let used = device.use_host_ram(&ram).unwrap();
     let ahead = |counts: &crate::WorkCounts| {
@@ -691,6 +985,276 @@ fn the_window_ahead_moves_with_the_objects_and_imports_no_more() {
     );
 }
 
+/// On a device that refuses pointers to shared memory (`Device::imports_shared_host_pointers`
+/// false: RADV, whose amdgpu userptr takes private anonymous pages alone), a RAM of shared memory
+/// (a `memfd` mapped shared, as QEMU's `memory-backend-memfd,share=on` RAM is) imports no chunk,
+/// ahead or for an object, and an object over it is a copy of its pages, the RAM given no dma-buf
+/// source ([`HostBacking::Copied`], counted in `WorkCounts::copied_host_buffers_device_refused`
+/// and announced, `copied-host-pages`): the chunk's import by its pointer is refused
+/// (`host_ram_pointer_imports_failed`) and none goes as a dma-buf (`host_ram_dma_buf_imports`).
+/// The use still ends, the RAM's keep-alive going after it. A device that imports such pointers
+/// says so and passes.
+#[test]
+fn a_ram_of_shared_memory_a_device_refuses_imports_no_chunk_and_copies_its_objects() {
+    let heard = Arc::new(AtomicUsize::new(0));
+    let Some(device) = ahead_device_with(Some(copies_heard(&heard))) else {
+        return;
+    };
+    if device.imports_shared_host_pointers().unwrap() {
+        eprintln!(
+            "HOST-RAM {}: the device imports pointers to shared memory; nothing to test",
+            device.name()
+        );
+        return;
+    }
+    let (ram, start, dropped) = fresh_ram_of(2 * 64 * MIB, true, RamPages::Huge);
+    let before = device.work_counts();
+    let used = device.use_host_ram(&ram).unwrap();
+    let page = device.shared().host_import.as_ref().unwrap().page;
+    let (runs, gates): (Arc<Mutex<_>>, Arc<Mutex<_>>) = Default::default();
+    let made = buffer(
+        &device,
+        start,
+        4 * page,
+        resolver(&runs, itself),
+        gate(&gates, true),
+    );
+    let made = made.unwrap();
+    assert_eq!(
+        made.host_backing(),
+        Some(HostBacking::Copied),
+        "an object over the shared RAM"
+    );
+    // The device's thread met the same refusal for the RAM's first chunk, or meets it now.
+    std::thread::sleep(Duration::from_millis(300));
+    let after = device.work_counts();
+    assert_eq!(
+        after.copied_host_buffers_device_refused - before.copied_host_buffers_device_refused,
+        1,
+        "the object copied for the device's refusal"
+    );
+    assert_eq!(heard.load(Ordering::Relaxed), 1, "the copy announced");
+    assert_eq!(
+        after.host_ram_chunks_imported - before.host_ram_chunks_imported,
+        0,
+        "no chunk of the shared RAM imported"
+    );
+    assert_eq!(after.host_ram_chunks_live - before.host_ram_chunks_live, 0);
+    let failed = after.host_ram_pointer_imports_failed - before.host_ram_pointer_imports_failed;
+    let dma_bufs = after.host_ram_dma_buf_imports - before.host_ram_dma_buf_imports;
+    eprintln!(
+        "HOST-RAM {}: shared RAM, no source: {failed} pointer import(s) refused, {dma_bufs} \
+         dma-buf import(s)",
+        device.name()
+    );
+    assert!(failed >= 1, "the chunk's pointer import was refused");
+    assert_eq!(dma_bufs, 0, "no dma-buf without a source");
+    drop((made, used, ram));
+    assert!(settles(&dropped), "the RAM's keep-alive dropped");
+}
+
+/// The device's thread faults a chunk of fresh RAM in before it imports it ahead of the objects,
+/// but none of a RAM of shared memory a device refuses whatever it holds (RADV, the RAM given no
+/// dma-buf source): it still tries the first chunk's import (`host_ram_pointer_imports_failed`),
+/// which shows it reached the chunk, and faults nothing in (`host_ram_chunks_faulted_ahead`), the
+/// pages left as the program left them. Where the device imports such memory, each chunk it
+/// imported ahead it faulted in first, on Linux; elsewhere the import faults the pages in itself,
+/// and none is counted.
+#[test]
+fn the_ahead_thread_faults_in_only_chunks_the_device_may_import() {
+    let Some(device) = ahead_device() else {
+        return;
+    };
+    let refuses = !device.imports_shared_host_pointers().unwrap();
+    let (ram, _, dropped) = fresh_ram_of(2 * 64 * MIB, true, RamPages::Small);
+    let before = device.work_counts();
+    let used = device.use_host_ram(&ram).unwrap();
+    // The RAM's first chunk, which the thread takes before any object takes one: imported, or its
+    // import refused.
+    let reached = |counts: &crate::WorkCounts| {
+        counts.host_ram_chunks_imported_ahead > before.host_ram_chunks_imported_ahead
+            || counts.host_ram_pointer_imports_failed > before.host_ram_pointer_imports_failed
+    };
+    let counts = counts_until(&device, reached);
+    assert!(
+        reached(&counts),
+        "the thread never reached the RAM's first chunk"
+    );
+    let faulted = counts.host_ram_chunks_faulted_ahead - before.host_ram_chunks_faulted_ahead;
+    let imported = counts.host_ram_chunks_imported_ahead - before.host_ram_chunks_imported_ahead;
+    eprintln!(
+        "HOST-RAM {}: shared RAM, no source, refused {refuses}: chunks faulted in ahead {faulted}, \
+         imported ahead {imported}",
+        device.name()
+    );
+    if refuses {
+        assert_eq!(imported, 0, "a chunk the device refuses imported");
+        assert_eq!(faulted, 0, "a chunk the device refuses faulted in");
+    } else if cfg!(target_os = "linux") {
+        assert!(imported >= 1, "the RAM's first chunk imported ahead");
+        assert!(
+            faulted >= imported,
+            "a chunk imported ahead not faulted in first"
+        );
+    } else {
+        assert_eq!(faulted, 0, "nothing faulted in here");
+    }
+    drop((used, ram));
+    assert!(settles(&dropped), "the RAM's keep-alive dropped");
+}
+
+/// A fresh mapping of `length` bytes of a `memfd` mapped shared, as a VMM's guest RAM is
+/// (anonymous shared memory off Linux), never touched: its first byte. The caller unmaps it.
+fn shared_mapping(length: u64) -> u64 {
+    #[cfg(target_os = "linux")]
+    let (flags, fd) = {
+        // SAFETY: a name and flags the call takes.
+        let fd = unsafe { libc::memfd_create(c"m2v-released-ram".as_ptr(), libc::MFD_CLOEXEC) };
+        assert!(fd >= 0);
+        // SAFETY: the descriptor was just made, and is closed below.
+        assert_eq!(unsafe { libc::ftruncate(fd, length as libc::off_t) }, 0);
+        (libc::MAP_SHARED, fd)
+    };
+    #[cfg(not(target_os = "linux"))]
+    let (flags, fd) = (libc::MAP_SHARED | libc::MAP_ANON, -1);
+    // SAFETY: a fresh mapping of the file's first `length` bytes (or of anonymous memory).
+    let start = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            length as usize,
+            libc::PROT_READ | libc::PROT_WRITE,
+            flags,
+            fd,
+            0,
+        )
+    };
+    assert_ne!(start, libc::MAP_FAILED);
+    if fd >= 0 {
+        // SAFETY: the test's descriptor; the mapping keeps the file.
+        unsafe { libc::close(fd) };
+    }
+    start as u64
+}
+
+/// A use of a RAM of shared memory whose keep-alive does not unmap it, dropped and its pages
+/// unmapped at once, as a VMM's teardown unmaps its guest RAM: again and again, the drop coming
+/// at once or up to 5 ms after the use began, while the device's thread may be faulting the RAM's
+/// first chunk in or importing it. The drop waits for the thread, which stops before its
+/// fault-in's next step (`HostRamUse`, `host_ram.rs`'s `Wake::ended`), so no read of the thread's
+/// meets an unmapped page, and the keep-alive has gone once the program dropped the RAM too;
+/// without that wait a read ends the process (`SIGSEGV`), as a consumer's test did on an RTX 5080
+/// and this one on a Radeon 780M. No copy is made: an import a command buffer still held would
+/// keep pages the test unmaps, where the drop frees every import of the thread's. The slowest
+/// drop is printed (`HOST-RAM-RELEASE`).
+#[test]
+fn a_use_s_drop_waits_out_the_thread_so_its_pages_may_be_unmapped_at_once() {
+    let Some(device) = ahead_device() else {
+        return;
+    };
+    const ROUNDS: u64 = 32;
+    const LENGTH: u64 = 64 * MIB;
+    let before = device.work_counts();
+    let (mut slowest, mut kept) = (Duration::ZERO, 0);
+    for round in 0..ROUNDS {
+        let start = shared_mapping(LENGTH);
+        let gone = Arc::new(AtomicBool::new(false));
+        let keep: KeepAlive = Box::new(Gone(Arc::clone(&gone)));
+        let at = NonNull::new(start as *mut u8).unwrap();
+        // SAFETY: the mapping is readable and writable until the keep-alive goes, which the
+        // round checks before it unmaps the pages.
+        let ram = Arc::new(unsafe { HostRam::new(&[(at, LENGTH)], Some(keep)) }.unwrap());
+        let used = device.use_host_ram(&ram).unwrap();
+        std::thread::sleep(Duration::from_micros(round % 4 * 1600));
+        let dropped = Instant::now();
+        drop(used);
+        slowest = slowest.max(dropped.elapsed());
+        drop(ram);
+        kept += u64::from(!gone.load(Ordering::SeqCst));
+        // SAFETY: the test's mapping, which the runtime reads, faults in and imports no page of
+        // once the use's drop returned; a keep-alive still held fails the test below.
+        unsafe { libc::munmap(start as *mut libc::c_void, LENGTH as usize) };
+    }
+    let after = device.work_counts();
+    eprintln!(
+        "HOST-RAM-RELEASE {}: {ROUNDS} uses of {} MiB of shared memory dropped and unmapped at \
+         once, the slowest drop {slowest:?}; chunks imported {}, pointer imports refused {}",
+        device.name(),
+        LENGTH / MIB,
+        after.host_ram_chunks_imported - before.host_ram_chunks_imported,
+        after.host_ram_pointer_imports_failed - before.host_ram_pointer_imports_failed,
+    );
+    assert_eq!(kept, 0, "a round's keep-alive outlived the use and the RAM");
+    assert_eq!(
+        after.host_ram_chunks_live, before.host_ram_chunks_live,
+        "every chunk freed"
+    );
+}
+
+/// A keep-alive that says it went.
+struct Gone(Arc<AtomicBool>);
+
+impl Drop for Gone {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
+/// An object over a chunk the device's thread imported, made while the chunk's state is looked at
+/// as the thread looks at each chunk of its window as it passes them
+/// (`Device::looking_at_host_ram_chunk`), waits for the look and is bound in the chunk: the look
+/// is not an import under way, so the object imports nothing of its own. The look lasts past the
+/// object's making's start; where the making reached the chunk after it ended, it binds there
+/// too.
+#[test]
+fn an_object_made_while_its_imported_chunk_is_looked_at_is_bound_in_the_chunk() {
+    let Some(device) = ahead_device() else {
+        return;
+    };
+    let (ram, start, dropped) = fresh_ram(&device, 2 * 64 * MIB);
+    let before = device.work_counts();
+    let used = device.use_host_ram(&ram).unwrap();
+    let ahead = |counts: &crate::WorkCounts| {
+        counts.host_ram_chunks_imported_ahead - before.host_ram_chunks_imported_ahead
+    };
+    let first = counts_until(&device, |counts| ahead(counts) == 1);
+    assert_eq!(ahead(&first), 1, "the RAM's first chunk, imported ahead");
+    let page = device.shared().host_import.as_ref().unwrap().page;
+    let (runs, gates): (Arc<Mutex<_>>, Arc<Mutex<_>>) = Default::default();
+    let made = std::thread::scope(|scope| {
+        let making = device.looking_at_host_ram_chunk(start, || {
+            let making = scope.spawn(|| {
+                buffer(
+                    &device,
+                    start,
+                    4 * page,
+                    resolver(&runs, itself),
+                    gate(&gates, true),
+                )
+            });
+            // Long past the making's start, so that it reaches the chunk while it is looked at.
+            std::thread::sleep(Duration::from_millis(200));
+            making
+        });
+        making.join().unwrap()
+    });
+    let object = made.expect("the buffer over the chunk is made");
+    let after = device.work_counts();
+    assert_eq!(
+        (
+            after.chunk_bound_buffers_made - before.chunk_bound_buffers_made,
+            after.run_bound_buffers_made - before.run_bound_buffers_made,
+        ),
+        (1, 0),
+        "the object made while its chunk was looked at is bound in the chunk, in no run's import"
+    );
+    assert!(gates.lock().unwrap().is_empty(), "the gate was not asked");
+    drop((object, used, ram));
+    assert!(
+        settles(&dropped),
+        "the keep-alive goes after the last chunk"
+    );
+}
+
 #[test]
 fn a_run_of_heaps_down_the_ram_finds_its_chunks_imported_and_none_waits_for_one() {
     let Some(device) = ahead_device() else {
@@ -699,7 +1263,7 @@ fn a_run_of_heaps_down_the_ram_finds_its_chunks_imported_and_none_waits_for_one(
     const WINDOW: u64 = AHEAD_CHUNKS as u64;
     // The start's chunk, a full window below the top's, and one more.
     const CHUNKS: u64 = 2 * WINDOW + 2;
-    let (ram, start, dropped) = fresh_ram(CHUNKS * 64 * MIB);
+    let (ram, start, dropped) = fresh_ram(&device, CHUNKS * 64 * MIB);
     let before = device.work_counts();
     let used = device.use_host_ram(&ram).unwrap();
     let ahead = |counts: &crate::WorkCounts| {
@@ -833,7 +1397,7 @@ fn an_object_within_the_allocation_margin_imports_its_chunk_and_no_run() {
         return;
     };
     let allocations = &device.shared().allocations.allocations;
-    let (ram, start, dropped) = fresh_ram(4 * 64 * MIB);
+    let (ram, start, dropped) = fresh_ram(&device, 4 * 64 * MIB);
     let before = device.work_counts();
     let used = device.use_host_ram(&ram).unwrap();
     let ahead = |counts: &crate::WorkCounts| {
@@ -902,7 +1466,7 @@ fn a_run_bound_and_a_chunk_bound_buffer_over_the_same_pages_order_by_their_host_
     let Some(device) = ahead_device() else {
         return;
     };
-    let (ram, start, dropped) = fresh_ram(4 * 64 * MIB);
+    let (ram, start, dropped) = fresh_ram(&device, 4 * 64 * MIB);
     let before = device.work_counts();
     let used = device.use_host_ram(&ram).unwrap();
     let ahead = |counts: &crate::WorkCounts| {
@@ -928,6 +1492,7 @@ fn a_run_bound_and_a_chunk_bound_buffer_over_the_same_pages_order_by_their_host_
     // (`AliasedImportBlitsUnordered`) the first imports the chunk, and both lie in it.
     let a = runs_alone(&device);
     let alone = over(4 * page);
+    kept_in_its_run(&alone);
     settled(&device, |counts| ahead(counts) == 2 + a);
     let in_chunk = over(8 * page);
     let made = device.work_counts();
@@ -1041,7 +1606,7 @@ fn a_run_bound_buffer_and_a_copy_of_its_pages_order_by_their_host_bytes() {
     let Some(device) = ahead_device() else {
         return;
     };
-    let (ram, start, dropped) = fresh_ram(4 * 64 * MIB);
+    let (ram, start, dropped) = fresh_ram(&device, 4 * 64 * MIB);
     let before = device.work_counts();
     let used = device.use_host_ram(&ram).unwrap();
     let ahead = |counts: &crate::WorkCounts| {
@@ -1067,6 +1632,7 @@ fn a_run_bound_buffer_and_a_copy_of_its_pages_order_by_their_host_bytes() {
         gate(&gates, true),
     )
     .unwrap();
+    kept_in_its_run(&alone);
     let made = settled(&device, |counts| ahead(counts) == 2 + a);
     assert_eq!(
         (

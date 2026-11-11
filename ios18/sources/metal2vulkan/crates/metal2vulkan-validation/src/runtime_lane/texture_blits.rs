@@ -616,6 +616,8 @@ fn copies_off_metals_rules_land_where_plain_metal_puts_them() {
         let targets: Vec<Texture> = cases.iter().map(|_| rgba8()).collect();
         let out = device.new_buffer(256, ResourceOptions::shared()).unwrap();
         with_bytes(&out, |b| b.fill(0xee));
+        let overlapped = device.new_buffer(64, ResourceOptions::shared()).unwrap();
+        with_bytes(&overlapped, |b| b.fill(0xee));
         // Blit options a format does not take (`bo_*`): a combined depth/stencil texture
         // without one copies its depth, and an option naming an aspect a format lacks is
         // ignored.
@@ -650,15 +652,11 @@ fn copies_off_metals_rules_land_where_plain_metal_puts_them() {
         }
         blit.copy_from_texture_to_buffer(&targets[2], 0, 0, at, four, &out, 0, 18, 0, none)
             .unwrap();
-        // Refused: writes out of a texture whose rows overlap (they race on Metal), and a pitch
-        // of 0 on the aligned path (Metal reads garbage).
-        assert_eq!(
-            blit.copy_from_texture_to_buffer(&targets[0], 0, 0, at, four, &out, 0, 8, 0, none),
-            Err(invalid(
-                "copy_from_texture_to_buffer",
-                Problem::Copy(CopyProblem::BytesPerRow)
-            ))
-        );
+        // Out of a texture at a pitch below its row: each row at `y x bytesPerRow`, written in
+        // turn, the later row's bytes standing (one of the orders plain Metal writes them in).
+        blit.copy_from_texture_to_buffer(&targets[0], 0, 0, at, four, &overlapped, 0, 8, 0, none)
+            .unwrap();
+        // Refused: a pitch of 0 on the aligned path (Metal reads garbage).
         assert_eq!(
             blit.copy_from_buffer_to_texture(&source, 0, 0, 0, four, &targets[0], 0, 0, at, none),
             Err(invalid(
@@ -719,6 +717,14 @@ fn copies_off_metals_rules_land_where_plain_metal_puts_them() {
             written[at..at + 16].copy_from_slice(&counted(16 * row, 16));
         }
         assert_eq!(with_bytes(&out, |b| b.to_vec()), written);
+        // `targets[0]` holds the rows from 4, 20, 36 and 52; each but the last keeps its first 8
+        // bytes, the rest under the next row's.
+        let mut standing = vec![0xeeu8; 64];
+        for (row, from) in [4, 20, 36].into_iter().enumerate() {
+            standing[8 * row..8 * row + 8].copy_from_slice(&counted(from, 8));
+        }
+        standing[24..40].copy_from_slice(&counted(52, 16));
+        assert_eq!(with_bytes(&overlapped, |b| b.to_vec()), standing);
         if combined.is_ok() {
             assert_eq!(with_bytes(&depth_out, |b| b.to_vec()), depth);
         }
@@ -1168,11 +1174,10 @@ pub(super) const UPLOADS: [Degradation; 1] = [Degradation::RestrictedDepthUpload
 /// through a blit from a buffer, on every device.
 ///
 /// A depth image, a read-only texture's and a render target's alike, keeps each value where the
-/// device enabled `VK_EXT_depth_range_unrestricted` or its driver is measured to keep one without
-/// it; elsewhere Vulkan leaves such a value undefined
-/// (`VUID-vkCmdCopyBufferToImage-pRegions-07931`) and a device keeps it or stores it clamped to
-/// `[0, 1]`, which its first upload announces once ([`UPLOADS`]): each value reads back as one of
-/// the two, and the form the device took is printed; where it keeps them, the upload of a negative
+/// device enabled `VK_EXT_depth_range_unrestricted`; elsewhere Vulkan takes no such value by a
+/// copy (`VUID-vkCmdCopyBufferToImage-pRegions-07931`), so the upload clamps it into `[0, 1]`,
+/// which its first upload announces once ([`UPLOADS`]): each value reads back as one of the two,
+/// and the form the device took is printed; where it keeps them, the upload of a negative
 /// value into a render target, whose depth a test reads, announces `signed-depth-test` where the
 /// device's depth test compares the value as it is (`degrade_notices::signs_depth_tests`). A copy
 /// between two depth images moves the source's words, and a copy into a render target announces the
@@ -1316,18 +1321,16 @@ fn depth_outside_the_unit_range_uploads_as_metal_holds_it() {
 }
 
 /// What `device`'s depth images keep, as the runtime plans them: whether it enabled
-/// `VK_EXT_depth_range_unrestricted`; whether such an image may store a copied value outside
-/// `[0, 1]` clamped (without the extension, where its driver lacks
-/// `DriverFact::DepthImageKeepsValuesOutsideUnitRange`); and whether it keeps every `float`
-/// (it does not clamp, and its driver has `DriverFact::DepthImageKeepsDenormals`).
+/// `VK_EXT_depth_range_unrestricted`; whether its uploads clamp a value outside `[0, 1]`
+/// (without the extension, `degrade_notices::clamps_depth_uploads`); and whether it keeps every
+/// `float` (it does not clamp, and its driver has `DriverFact::DepthImageKeepsDenormals`).
 pub(super) fn depth_images(device: &Device) -> (bool, bool, bool) {
     let unrestricted = device
         .enabled()
         .extensions
         .contains(&VkExtension::ExtDepthRangeUnrestricted);
     let facts = &device.properties().driver_facts;
-    let clamps =
-        !unrestricted && !facts.contains(&DriverFact::DepthImageKeepsValuesOutsideUnitRange);
+    let clamps = super::degrade_notices::clamps_depth_uploads(device);
     let keeps_floats = !clamps && facts.contains(&DriverFact::DepthImageKeepsDenormals);
     (unrestricted, clamps, keeps_floats)
 }
@@ -1352,16 +1355,17 @@ const DENORMALS: [u32; 11] = [
 const OUTSIDE: [f32; 5] = [-0.5, 2.0, 1000.0, -1000.0, 1.5];
 
 /// What a `D32_SFLOAT` image keeps of the `float`s Metal's `Depth32Float` texel holds, against
-/// the driver's facts (`DriverFact::DepthImageKeepsDenormals`,
-/// `DriverFact::DepthImageKeepsValuesOutsideUnitRange`), which this lane measures and checks at
-/// each gate.
+/// the driver's denormal fact (`DriverFact::DepthImageKeepsDenormals`), which this lane measures
+/// and checks at each gate, and the upload's clamp.
 ///
 /// A render target's `Depth32Float` texture, which has a depth image on every device, takes 11
 /// denormals and 5 values outside `[0, 1]` through `replace_region` and reads them back through
 /// `get_bytes`. Each count kept is printed with the driver's `driverID` and `driverVersion`. A
-/// driver with a fact keeps every value of its kind, and every device keeps the values outside
-/// `[0, 1]` where it enabled `VK_EXT_depth_range_unrestricted`. The shader's reads and
-/// comparisons of such a texture are `depth_compares`' (Metal's answers there).
+/// driver with the fact keeps every denormal the upload gives it; every device keeps the values
+/// outside `[0, 1]` where it enabled `VK_EXT_depth_range_unrestricted`, and elsewhere its upload
+/// clamps each of them, and the negative denormals, as `bind::clamped_depth` does
+/// (`clamps_depth_uploads`). The shader's reads and comparisons of such a texture are
+/// `depth_compares`' (Metal's answers there).
 #[test]
 fn depth_images_keep_what_their_drivers_claim() {
     let cache = ScratchCache::new().unwrap();
@@ -1408,15 +1412,27 @@ fn depth_images_keep_what_their_drivers_claim() {
             description.driver_version,
             if unrestricted { "enabled" } else { "absent" },
         );
+        // What the upload gives the image: each value, or its clamp where uploads clamp.
+        let clamps = super::degrade_notices::clamps_depth_uploads(&device);
+        let given = |i: usize| match clamps {
+            true => metal2vulkan::bind::clamped_depth(words[i]),
+            false => words[i],
+        };
         if facts.contains(&DriverFact::DepthImageKeepsDenormals) {
-            assert_eq!(
-                denormals, 11,
-                "the driver's denormal fact on {name}: {read:08x?}"
+            let lost: Vec<usize> = (0..11).filter(|&i| read[i] != given(i)).collect();
+            assert!(
+                lost.is_empty(),
+                "the driver's denormal fact on {name}: {lost:?} of {read:08x?}"
             );
         }
-        if unrestricted || facts.contains(&DriverFact::DepthImageKeepsValuesOutsideUnitRange) {
+        if unrestricted {
             assert_eq!(outside, 5, "values outside [0, 1] on {name}: {read:08x?}");
         }
+        let off: Vec<usize> = (11..16).filter(|&i| read[i] != given(i)).collect();
+        assert!(
+            unrestricted || off.is_empty(),
+            "values outside [0, 1] on {name}, clamped as uploaded: {off:?} of {read:08x?}"
+        );
         messages.take_notices();
     }
     layer_reported_nothing_at_all(&messages);

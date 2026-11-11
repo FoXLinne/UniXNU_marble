@@ -24,8 +24,10 @@
 //!   the buffer a shadowed target lies over: the render encoder encoded again, its copies and its
 //!   merged draw into the new pages.
 
+use super::degrade_notices::on_device_with;
 use super::degrade_notices::{
     assert_made_once, assert_once, counts, expected_once, made_compute_kinds, on_device,
+    point_draw_kinds,
 };
 use super::host_memory::Mapping;
 use super::host_memory::Seen;
@@ -34,7 +36,7 @@ use super::line_widths::line_ties;
 use super::rebind_reach::{buffer_len, buffer_of, buffer_over, pages};
 use super::rebinds::rebind;
 use super::render_executions::{forced_with, icb};
-use super::{buffer_with, read_buffer, WAIT};
+use super::{at_plan, buffer_with, read_buffer, WAIT};
 use crate::air_library::AirLibrary;
 use metal2vulkan::metal::RenderStages;
 use metal2vulkan::metal::{
@@ -94,11 +96,20 @@ fn state(device: &Device, library: &Library) -> RenderPipelineState {
 
 /// The kinds the makings of the commands' state and of the writers of `writers` announce on
 /// `device` the first time, beside the device's own ([`forced_with`], [`made_compute_kinds`]):
-/// their translations' precision notes, which the device's arithmetic and point sizes decide
-/// (lavapipe's `device-arithmetic` and `device-point-size` for the vertex function; none on
-/// MoltenVK).
-fn made(device: &Device, library: &Library, writers: &[&str]) -> BTreeSet<Degradation> {
+/// their translations' precision notes, which the device's arithmetic decides (lavapipe's
+/// `device-arithmetic`; none on MoltenVK); and where `points`, a draw of points of the state
+/// (a writer's of points, or the encoder's own), the kinds such a draw announces
+/// ([`point_draw_kinds`]: lavapipe's `device-point-size` for the vertex function).
+fn made(
+    device: &Device,
+    library: &Library,
+    writers: &[&str],
+    points: bool,
+) -> BTreeSet<Degradation> {
     let mut kinds = forced_with(device, &[state_descriptor(library)]);
+    if points {
+        kinds.extend(point_draw_kinds(device, &state_descriptor(library)));
+    }
     for kind in writers {
         kinds.extend(made_compute_kinds(device, writer_function(library, kind)));
     }
@@ -364,7 +375,7 @@ fn merged_points_draw_each_command_s_own_vertices_and_instances() {
         });
         assert_eq!(scene.pixels(), drawn_points(&draws));
         assert_eq!((merged, gpu, read), (8, 8, 0), "drawn in one merged draw");
-        assert_made_once(messages, &[], &made(device, &library, &["points"]));
+        assert_made_once(messages, &[], &made(device, &library, &["points"], true));
     });
 }
 
@@ -392,7 +403,7 @@ fn shape_vertices() -> Vec<[f32; 2]> {
 /// `DriverFact::LineTiesAreMetals`); the host steps announce theirs.
 #[test]
 fn merged_draws_draw_what_the_host_step_draws() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let library = library(device);
         let state = state(device, &library);
         let draws: Vec<Draw> = vec![
@@ -435,7 +446,7 @@ fn merged_draws_draw_what_the_host_step_draws() {
                 // The lines' merged draw draws them at width 1: the driver's ties, where they are
                 // not measured to be Metal's.
                 let writers: Vec<&str> = kinds.iter().map(|(kind, _)| *kind).collect();
-                let made = made(device, &library, &writers);
+                let made = made(device, &library, &writers, writers.contains(&"points"));
                 assert_made_once(messages, line_ties(device), &made);
             }
         }
@@ -467,7 +478,7 @@ fn merged_draws_draw_what_the_host_step_draws() {
 /// there).
 #[test]
 fn gpu_forms_draw_into_a_shadowed_target_what_the_host_step_draws() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let library = library(device);
         let state = state(device, &library);
         let triangles = writer(device, &library, "triangles");
@@ -514,7 +525,7 @@ fn gpu_forms_draw_into_a_shadowed_target_what_the_host_step_draws() {
             }
             if !host_step {
                 let shadowed = [Degradation::ShadowedTexture];
-                let first = made(device, &library, &["triangles"]);
+                let first = made(device, &library, &["triangles"], false);
                 assert_made_once(messages, &shadowed, &first);
             }
         }
@@ -589,7 +600,7 @@ fn rebound_run(
     command_buffer.wait_until_completed_for(WAIT).unwrap();
     let pointed = device.work_counts().replay_tables_pointed - before.replay_tables_pointed;
     let ended = (command_buffer.status(), command_buffer.error());
-    let expected = expected_once(messages, kinds, &made(device, &library, &["points"]));
+    let expected = expected_once(messages, kinds, &made(device, &library, &["points"], true));
     let notices = messages.take_notices();
     let reasons: Vec<String> = (notices.iter())
         .filter_map(|message| message.degradation.as_ref())
@@ -620,7 +631,7 @@ fn rebound_run(
 /// fails the command buffer (`EncodedUseRebound`) or announces anything.
 #[test]
 fn a_rebind_or_a_release_before_the_first_submission_reaches_the_gpu_form_s_records_as_they_lie() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let draws: Vec<Draw> = vec![[0, 5, 1, 0], [8, 3, 2, 1], [30, 6, 3, 2]];
         let points =
             |xy: &[[f32; 2]]| pages(buffer_len(), 0, &floats(xy.iter().flatten().copied()));
@@ -688,7 +699,7 @@ fn a_rebind_or_a_release_before_the_first_submission_reaches_the_gpu_form_s_reco
 /// untouched, and the command buffer completes.
 #[test]
 fn a_rebind_of_a_shadowed_target_s_bytes_encodes_the_gpu_form_s_pass_again() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let draws: Vec<Draw> = vec![[0, 5, 1, 0], [8, 3, 2, 1], [30, 6, 3, 2]];
         // Rows of 1280 bytes for 64 texels of 16: past the 1024 a linear image of them lays.
         let rows = W * 16 + 256;
@@ -815,7 +826,7 @@ fn a_rebind_of_a_shadowed_target_s_bytes_encodes_a_pass_that_draws_again() {
             "(encoders encoded again, refused), and the command buffer's end"
         );
         let shadowed = [Degradation::ShadowedTexture];
-        assert_made_once(messages, &shadowed, &made(device, &library, &[]));
+        assert_made_once(messages, &shadowed, &made(device, &library, &[], true));
         let drawn = drawn_points(&[draw]);
         assert_rows(scene.over.as_ref().unwrap(), rows, &drawn);
         assert_eq!(scene.pixels(), drawn, "the texture over the new pages");

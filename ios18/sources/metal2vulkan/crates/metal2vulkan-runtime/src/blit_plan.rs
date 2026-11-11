@@ -12,8 +12,8 @@
 //! stops it): each row at `offset + z * bytesPerImage + y * bytesPerRow` rounded down to the copy
 //! unit or to 4 bytes, whichever is smaller, and a copy into a texture of one image of more than
 //! one row, from offset 0, with `bytesPerRow` rounded down to the copy unit a multiple of 16, at
-//! that rounded pitch (Metal's aligned path). Out of a texture, images that overlap are written in
-//! turn, a later image's bytes over an earlier one's. A region of one image ignores
+//! that rounded pitch (Metal's aligned path). Out of a texture, rows and images that overlap are
+//! written in turn, a later one's bytes over an earlier one's. A region of one image ignores
 //! `bytesPerImage`. [`placed_rows`] states what stays refused.
 
 use super::chroma_pairs::is_four_two_two;
@@ -156,12 +156,22 @@ fn off_rules(layout: &BufferLayout, s: &Shape, unit: &CopyUnit) -> bool {
 /// to 4 bytes, whichever is smaller, images of a 3D texture at any `bytesPerImage` too (0, 4, 12
 /// and 18 under a 16-byte image). A copy into a texture of one image of
 /// more than one row whose `bytesPerRow` rounded down to the copy unit is a multiple of 16 takes
-/// Metal's aligned path from offset 0: its rows at that rounded pitch.
+/// Metal's aligned path from offset 0: its rows at that rounded pitch, one below a row too, each
+/// row read whole from there so that the rows overlap in the buffer (an Apple M3 Max under macOS
+/// 27.0.1, `probes/short_row_blits.m`: every row of a 32 x 8 texture, 64 x 8 for `R8Unorm`, at
+/// every pitch of the texel from 16 bytes below the row and at half the row plus a texel, in
+/// eight formats of 1 to 16 bytes a texel, `YCBCR8_422_1P` and `YCBCR10_444_1P` among them,
+/// `Private` and `Shared`).
 ///
-/// Refused (`BytesPerRow`): a copy out of a texture whose rows overlap (its writes race on
-/// Metal); on the aligned path, a pitch below a row (Metal reads garbage at pitch 0, and smaller
-/// pitches are not measured), and an offset of 16 or more (not measured). Refused
-/// (`BufferRange`): a row past `u64::MAX`, which lies past every buffer.
+/// A copy out of a texture at a pitch below a row writes each row at its own offset, the rows
+/// overlapping in the buffer: Metal writes them in no one order, and the runtime writes them in
+/// turn, the later row's bytes over the earlier's (`plan_placed_copy`), one of Metal's own answers
+/// (the same probe: copies out at half the row and below, rows `y x bytesPerRow` apart and nothing
+/// past their span written, the later rows' bytes standing in about a fifth of its shapes).
+///
+/// Refused (`BytesPerRow`): on the aligned path, a pitch of 0 (Metal reads garbage) and an offset
+/// of 16 or more (not measured). Refused (`BufferRange`): a row past `u64::MAX`, which lies past
+/// every buffer.
 fn placed_rows(
     layout: &BufferLayout,
     s: &Shape,
@@ -171,13 +181,10 @@ fn placed_rows(
     let bytes = u64::from(unit.bytes);
     let word = bytes.min(4);
     let bpr = layout.bytes_per_row;
-    if s.rows > 1 && bpr < s.row_bytes && !into_texture {
-        return Err(CopyProblem::BytesPerRow);
-    }
     let pitch = bpr - bpr % bytes;
     let aligned = into_texture && s.images == 1 && s.rows > 1 && pitch.is_multiple_of(16);
     if aligned && layout.offset.is_multiple_of(16) {
-        if layout.offset != 0 || pitch < s.row_bytes {
+        if layout.offset != 0 || pitch == 0 {
             return Err(CopyProblem::BytesPerRow);
         }
         return (0..s.rows)
@@ -196,9 +203,31 @@ fn placed_rows(
 
 /// Whether a layout off Metal's rules copies `pf` where plain Metal places its rows
 /// ([`placed_rows`]): a colour format or `Depth32Float` (other depth and stencil formats are not
-/// measured, and keep Metal's validation's refusal).
+/// measured, and keep Metal's validation's refusal, but for [`rows_below_row`]).
 fn placed(pf: PixelFormat) -> bool {
     !is_depth_stencil(pf) || pf == PixelFormat::Depth32Float
+}
+
+/// Whether `layout` is off Metal's rules for a region of shape `s` in `unit`s by a `bytesPerRow`
+/// below the region's row alone: rows of more than one, of one image, from an offset on the copy
+/// unit, at a nonzero pitch on the copy unit below the row. Plain Metal's blit copies such a
+/// layout of each kind of single-sample texture measured, each row whole at
+/// `offset + y x bytesPerRow`: read so into the texture, and written so out of it, in no one
+/// order where the rows overlap (an Apple M3 Max under macOS 27.0.1, `probes/short_row_kinds.m`:
+/// `Depth16Unorm`, `Stencil8`, both aspects of `Depth32Float_Stencil8`, an `RGBA8Unorm` texture
+/// over a buffer and `RGB10A8_2P_XR10`, 32 x 8, from offset 0 at half the row, half plus a unit
+/// and the row less 16, both ways, twice; the colour formats' rows lie so from other offsets on
+/// the unit too, [`placed_rows`]). So a depth or stencil format copies such a layout where
+/// [`placed_rows`] places it, and a texture over a buffer as [`plan_rows_copy`] does.
+pub(super) fn rows_below_row(layout: &BufferLayout, s: &Shape, unit: &CopyUnit) -> bool {
+    let bytes = u64::from(unit.bytes);
+    let bpr = layout.bytes_per_row;
+    s.rows > 1
+        && s.images == 1
+        && bpr > 0
+        && bpr < s.row_bytes
+        && bpr.is_multiple_of(bytes)
+        && layout.offset.is_multiple_of(bytes)
 }
 
 /// The rows of a region of shape `s` laid out as `layout`, image by image and row by row, each
@@ -245,7 +274,8 @@ pub(super) fn plan_buffer_copy(
 ) -> Result<BufferCopyPlan, CopyProblem> {
     let image = check_region(record, region, unit)?;
     let s = shape(region.size, unit);
-    if placed(record.pixel_format) && off_rules(layout, &s, unit) {
+    let placed = placed(record.pixel_format) || rows_below_row(layout, &s, unit);
+    if placed && off_rules(layout, &s, unit) {
         return plan_placed_copy(layout, &s, unit, image, buffer_length, base, into_texture);
     }
     // Every row ends within the buffer (`check_layout`), so no offset below passes `u64::MAX`.
@@ -350,10 +380,11 @@ pub(super) fn plan_buffer_copy(
 
 /// A copy of a layout off Metal's rules (shape `s`, of the checked `image`) through a tightly
 /// packed staging layout, each row where plain Metal places it ([`placed_rows`]); the rows stay
-/// in the buffer. Out of the texture, rows that overlap (images closer than the region's rows)
-/// are written in turn, as plain Metal writes them (in order in every run of
-/// 3D textures up to 256x64x4): each row's bytes that a later row writes are left out of it
-/// ([`later_rows_win`]), so the copies' regions are disjoint.
+/// in the buffer. Out of the texture, rows that overlap are written in turn: images closer than
+/// the region's rows as plain Metal writes them (in order in every run of 3D textures up to
+/// 256x64x4), and rows closer than a row, which Metal writes in no one order, as one of its
+/// answers (the later row's bytes standing). Each row's bytes that a later row writes are left
+/// out of it ([`later_rows_win`]), so the regions of the one copy into the buffer are disjoint.
 fn plan_placed_copy(
     layout: &BufferLayout,
     s: &Shape,
@@ -802,12 +833,14 @@ pub(super) struct RowsCopy {
 
 impl RowsCopy {
     /// Each row of `src` into the same row of `dst` (as many rows, each as long). Destination
-    /// rows overlap in one shape alone: a buffer's rows whose images meet, at a `bytesPerImage`
-    /// below the region's rows, which `check_layout` takes as plain Metal does. There the later
+    /// rows overlap in two shapes alone, both a buffer's: rows whose images meet, at a
+    /// `bytesPerImage` below the region's rows, which `check_layout` takes as plain Metal does,
+    /// and rows at a `bytesPerRow` below the region's row ([`plan_rows_copy`]). There the later
     /// row keeps the bytes they share, as plain Metal writes overlapping images in turn (an M4
-    /// under macOS 27.0.1, the `ctb.race.*` cases; [`plan_placed_copy`] states the same rule for
-    /// a layout off Metal's rules): an earlier row copies only the bytes no later row writes
-    /// ([`later_rows_win`]). No texture's own rows overlap as the destination: a plane's shared
+    /// under macOS 27.0.1, the `ctb.race.*` cases) and as one of the orders it writes such rows
+    /// in ([`plan_placed_copy`] states the same rule for a layout off Metal's rules): an earlier
+    /// row copies only the bytes no later row writes ([`later_rows_win`]). No texture's own rows
+    /// overlap as the destination: a plane's shared
     /// bytes, which have no one Metal order, are refused wherever they would be written
     /// (`blit_texture.rs`), and a rotated texture's rows share no byte
     /// (`buffer_texture::turned_plane`). A plane's rows do overlap as the source, where they are
@@ -886,6 +919,60 @@ impl RowsCopy {
     pub(super) fn length(&self) -> u64 {
         self.rows.iter().map(|r| r.size).sum()
     }
+
+    /// This copy cut where a side's bytes pass `src_cut` or `dst_cut` (a texture's whose texels
+    /// run past its buffer's length, whose bytes past it lie in its tail, `buffer_texture.rs`):
+    /// up to four copies, each `(whether its source rows lie past the source's cut, whether its
+    /// destination rows lie past the destination's, the copy)`, every row in exactly one of
+    /// them, cut where it crosses either cut. A side with no cut lies before it whole.
+    pub(super) fn split(
+        &self,
+        src_cut: Option<u64>,
+        dst_cut: Option<u64>,
+    ) -> Vec<(bool, bool, RowsCopy)> {
+        let (src_cut, dst_cut) = (src_cut.unwrap_or(u64::MAX), dst_cut.unwrap_or(u64::MAX));
+        let mut parts: Vec<(bool, bool, Vec<BufferRange>)> = Vec::new();
+        for row in &self.rows {
+            // The row's cuts, from its start, where either side's bytes pass their cut.
+            let mut cuts = vec![0, row.size];
+            for (start, cut) in [(row.src, src_cut), (row.dst, dst_cut)] {
+                if start < cut && cut < start + row.size {
+                    cuts.push(cut - start);
+                }
+            }
+            cuts.sort_unstable();
+            cuts.dedup();
+            for piece in cuts.windows(2) {
+                let part = BufferRange {
+                    src: row.src + piece[0],
+                    dst: row.dst + piece[0],
+                    size: piece[1] - piece[0],
+                };
+                let side = (part.src >= src_cut, part.dst >= dst_cut);
+                match parts.iter_mut().find(|(s, d, _)| (*s, *d) == side) {
+                    Some((.., rows)) => rows.push(part),
+                    None => parts.push((side.0, side.1, vec![part])),
+                }
+            }
+        }
+        parts
+            .into_iter()
+            .map(|(src_past, dst_past, rows)| {
+                let span = |at: fn(&BufferRange) -> u64| {
+                    let start = rows.iter().map(at).min().unwrap_or(0);
+                    let end = rows.iter().map(|r| at(r) + r.size).max().unwrap_or(start);
+                    start..end
+                };
+                let (src_span, dst_span) = (span(|r| r.src), span(|r| r.dst));
+                let copy = RowsCopy {
+                    rows,
+                    src_span,
+                    dst_span,
+                };
+                (src_past, dst_past, copy)
+            })
+            .collect()
+    }
 }
 
 /// The rows of `region` (a checked region, in `unit`s of one texel or one block) of a texture
@@ -930,7 +1017,8 @@ fn in_units(unit: &CopyUnit, region: &ImageRegion) -> ([u64; 2], [u64; 2]) {
 /// (`linear_plan::Placed`).
 ///
 /// `Err(RuntimeGap::OverlappingSurfaceRows)` where either side's GPU rows share bytes (an
-/// IOSurface plane's at a pitch off 16, [`plane_rows_share_bytes`]). The shared bytes take
+/// IOSurface plane's at a pitch off 16 or wider than its pitch, [`plane_rows_share_bytes`]). The
+/// shared bytes take
 /// whichever of the two rows Metal's command wrote last, an order that follows the command, the
 /// GPU pitch and the row count and that one shape of `copyFromTexture:toTexture:` does not settle
 /// from run to run (`linear_plan.rs`'s **Rows that overlap**), so no order a row copy writes them
@@ -944,8 +1032,8 @@ pub(super) fn plan_texels_rows_copy(
     unit: &CopyUnit,
     copies: &[ImageCopyRegion],
 ) -> Result<RowsCopy, RuntimeGap> {
-    for (gpu, cpu) in [from, to] {
-        if plane_rows_share_bytes(gpu, cpu) {
+    for (gpu, _) in [from, to] {
+        if plane_rows_share_bytes(gpu) {
             return Err(RuntimeGap::OverlappingSurfaceRows);
         }
     }
@@ -980,7 +1068,11 @@ pub(super) fn texel_layout(
 /// A copy between a buffer of `buffer_length` bytes laid out as `layout` and `region` of a
 /// texture over a buffer presenting `record`, whose texels lie at `texels`, in `unit`s of one
 /// texel: Metal's checks of both sides (as [`plan_buffer_copy`] makes them), then the rows, from
-/// the buffer to the texture (the caller swaps them for a copy out of the texture).
+/// the buffer to the texture (the caller swaps them for a copy out of the texture). A
+/// `bytesPerRow` below the row alone ([`rows_below_row`]) is taken as plain Metal takes it, each
+/// row at `y x bytesPerRow`: rows that overlap as the source are each read whole, and as the
+/// destination are written in turn, the later row's bytes standing ([`RowsCopy::new`]), one of
+/// the orders plain Metal's blit leaves.
 pub(super) fn plan_rows_copy(
     record: &ViewRecord,
     region: &TextureRegion,
@@ -990,8 +1082,17 @@ pub(super) fn plan_rows_copy(
     texels: &TexelsLayout,
 ) -> Result<(Vec<Range<u64>>, Vec<Range<u64>>), CopyProblem> {
     let image = check_region(record, region, unit)?;
-    check_layout(layout, region.size, unit, buffer_length)?;
     let s = shape(region.size, unit);
+    match rows_below_row(layout, &s, unit) {
+        // The last row ends furthest: rows lie in order.
+        true => match layout.end(&s) {
+            Some(end) if end <= buffer_length => {}
+            _ => return Err(CopyProblem::BufferRange),
+        },
+        false => {
+            check_layout(layout, region.size, unit, buffer_length)?;
+        }
+    }
     Ok((
         layout_rows(layout, &s).ok_or(CopyProblem::BufferRange)?,
         texel_rows(texels, unit, &image),

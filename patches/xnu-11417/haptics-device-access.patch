@@ -1,0 +1,35 @@
+--- a/security/mac_vfs.c
++++ b/security/mac_vfs.c
+@@ -89,6 +89,8 @@
+ 
+ #include <security/mac_internal.h>
+ 
++extern boolean_t native_marble_haptics_vnode(vfs_context_t, vnode_t, struct componentname *) __attribute__((weak_import));
++
+ /* convert {R,W,X}_OK values to V{READ,WRITE,EXEC} */
+ #define ACCESS_MODE_TO_VNODE_MASK(m)    (m << 6)
+ 
+@@ -1657,6 +1659,7 @@
+ 		return 0;
+ 	}
+ 	VFS_KERNEL_DEBUG_START1(51, dvp);
++	if (native_marble_haptics_vnode && native_marble_haptics_vnode(ctx, dvp, cnp)) return 0;
+ 	MAC_CHECK(vnode_check_lookup, cred, dvp, mac_vnode_label(dvp), cnp);
+ 	VFS_KERNEL_DEBUG_END1(51, dvp);
+ 	return error;
+@@ -1681,6 +1684,7 @@
+ 		return 0;
+ 	}
+ 	VFS_KERNEL_DEBUG_START1(52, vp);
++	if (native_marble_haptics_vnode && native_marble_haptics_vnode(ctx, vp, NULL)) return 0;
+ 	MAC_CHECK(vnode_check_open, cred, vp, mac_vnode_label(vp), acc_mode);
+ 	VFS_KERNEL_DEBUG_END1(52, vp);
+ 	return error;
+@@ -2156,6 +2160,7 @@
+ 		return 0;
+ 	}
+ 	VFS_KERNEL_DEBUG_START1(71, vp);
++	if (native_marble_haptics_vnode && native_marble_haptics_vnode(ctx, vp, NULL)) return 0;
+ 	MAC_CHECK(vnode_check_write, cred, file_cred, vp, mac_vnode_label(vp));
+ 	VFS_KERNEL_DEBUG_END1(71, vp);
+ 

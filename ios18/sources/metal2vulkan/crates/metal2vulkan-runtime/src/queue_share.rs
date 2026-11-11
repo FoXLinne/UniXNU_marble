@@ -39,8 +39,16 @@
 //!   the GPU to start it and the waiter's lateness to see it complete, which marked a queue of
 //!   one-draw command buffers long on the RTX 5080 Laptop GPU beside another process's 30 ms ones
 //!   (draws of 11 and 16 us of GPU time seen 2.0 and 2.3 ms after they became their `VkQueue`'s
-//!   oldest, 1.8 and 2.1 ms of it before they started). A device whose command buffers write no
-//!   timestamps the host can read
+//!   oldest, 1.8 and 2.1 ms of it before they started). One exception: a command buffer one of
+//!   whose batches waits on the GPU for work of another `VkQueue`'s that the host had not seen
+//!   complete as it was submitted (an `MTLEvent`'s signal pending there, the tracker's wait for
+//!   another `VkQueue`'s writes, or new resources' first work there) also marks its queue long
+//!   where more than [`LONG_HEAD`] ran from that batch's submission to its own GPU end
+//!   (`Times::waited_across`). Its timestamps start only once the wait was met, while its
+//!   `VkQueue` held the wait, and every command buffer committed behind it there, for as long as
+//!   the other work ran: a queue whose short command buffers each wait for another queue's long
+//!   one would otherwise share for good, holding its `VkQueue`'s other queues behind each wait. A
+//!   device whose command buffers write no timestamps the host can read
 //!   (`gpu_times_from_host`, a driver whose timestamps wait for every queue's, or no calibrated
 //!   timestamps) does not share ([`Verdict::Unchecked`],
 //!   `WorkCounts::queue_sharing_untimed`). A long queue moves once more, at its next such make: to an
@@ -59,7 +67,12 @@
 //!   `VkQueue` and an unshared queue's are made so that two made at once never both succeed: each
 //!   counts itself there first, then reads the other's count, both sequentially consistent.
 //! - **Counted**: `WorkCounts::queue_moves`, `queue_joins`, `queues_gone_long`,
-//!   `long_queue_settles`, `queue_moves_off_unshared` and `joins_withheld_from_unshared`.
+//!   `long_queue_settles`, `queue_moves_off_unshared`, `joins_withheld_from_unshared`,
+//!   `picks_with_none_busy` and `joins_withheld_from_old_heads`. A choice at an idle point that
+//!   moves nothing found no other `VkQueue` with batches in flight (`picks_with_none_busy`: work
+//!   committed and not yet submitted is in none's flight), passed over a busy one for its oldest
+//!   batch's age (`joins_withheld_from_old_heads`) or for the unshared queue that holds it, found
+//!   the busy ones held by long or unshared queues, or stayed on its own busy, young one.
 //!   Announced `queue-sharing` at the device's first join, a move onto a `VkQueue` with another
 //!   queue's work in flight.
 
@@ -68,7 +81,9 @@ use crate::in_place::DriverIdentity;
 use crate::shader_cache::store::{hex, Lookup};
 use metal2vulkan::device::QueueSharingPolicy;
 use sha2::{Digest, Sha256};
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{
+    AtomicBool, AtomicI64, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering,
+};
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -251,6 +266,17 @@ pub(crate) fn choose(current: usize, looks: &[Look]) -> (Choice, bool) {
     (choice, withheld)
 }
 
+/// Whether a command queue on `current` passes over `look` for its oldest batch alone: another
+/// `VkQueue` with batches in flight, which no long or unshared queue holds, whose oldest batch has
+/// run [`YOUNG_HEAD`] or longer, or for a time not known.
+pub(crate) fn old_busy(current: usize, look: &Look) -> bool {
+    look.index != current
+        && look.depth > 0
+        && !look.long
+        && !look.unshared
+        && !look.head_age.is_some_and(|age| age < YOUNG_HEAD)
+}
+
 /// The `VkQueue` a long queue on `current` settles on, among `looks`: an idle one no long or
 /// unshared queue holds, the one used least recently; `None` to stay.
 pub(crate) fn settle(current: usize, looks: &[Look]) -> Option<usize> {
@@ -342,6 +368,9 @@ pub(crate) struct QueueSwitch {
     ending: Condvar,
     /// The device's teardown began: the check stops at its next step ([`stop`](Self::stop)).
     stopping: AtomicBool,
+    /// The calls waiting for the verdict ([`QueueSwitch::wait`]), for which no round steps aside
+    /// (`step_aside.rs`).
+    waiters: AtomicU32,
     /// How long the teardown waited for the check's thread to end, in nanoseconds: 0 where it
     /// waited for none.
     stop_waited: AtomicU64,
@@ -349,10 +378,18 @@ pub(crate) struct QueueSwitch {
     /// (`tests/teardown_threads.rs`).
     #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
     pub(crate) held: crate::freed_memory::held::Held,
+    /// The crate's device tests' hold of the check between the two submissions of a round on one
+    /// `VkQueue`, its queue's lock held (`tests/device_recovery.rs`).
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    pub(crate) between: crate::freed_memory::held::Held,
     /// The crate's device tests' timings of the check's last two steps, in nanoseconds: the
     /// release of its Vulkan objects, and the drop of its shares of the device's parts.
     #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
     last_steps: [AtomicU64; 2],
+    /// The crate's device tests' count of the fences of the check's own its held rounds waited
+    /// for (`queue_switch_check.rs`).
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    fences_waited: AtomicU64,
 }
 
 impl QueueSwitch {
@@ -369,11 +406,16 @@ impl QueueSwitch {
             running: Mutex::new(false),
             ending: Condvar::new(),
             stopping: AtomicBool::new(false),
+            waiters: AtomicU32::new(0),
             stop_waited: AtomicU64::new(0),
             #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
             held: Default::default(),
             #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+            between: Default::default(),
+            #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
             last_steps: Default::default(),
+            #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+            fences_waited: AtomicU64::new(0),
         }
     }
 
@@ -427,6 +469,11 @@ impl QueueSwitch {
         self.stopping.load(Ordering::SeqCst)
     }
 
+    /// Whether a call waits for the verdict ([`QueueSwitch::wait`]).
+    pub(crate) fn awaited(&self) -> bool {
+        self.waiters.load(Ordering::Acquire) > 0
+    }
+
     /// The device's teardown: the check stops at its next step, and this waits until its thread
     /// ended, which holds no device handle, so never runs this teardown (`queue_switch_check.rs`).
     pub(crate) fn stop(&self) {
@@ -462,6 +509,19 @@ impl QueueSwitch {
         self.last_steps[step].store(nanos.max(1), Ordering::Release);
     }
 
+    /// Record that a held round of the check waited for `fences` of its own.
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    pub(crate) fn waited_fences(&self, fences: usize) {
+        (self.fences_waited).fetch_add(fences as u64, Ordering::Relaxed);
+    }
+
+    /// The fences of its own the check's held rounds waited for so far
+    /// ([`waited_fences`](Self::waited_fences)).
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    pub(crate) fn fences_waited(&self) -> u64 {
+        self.fences_waited.load(Ordering::Relaxed)
+    }
+
     /// How long the check's last two steps took ([`timed_step`](Self::timed_step)).
     #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
     pub(crate) fn last_steps(&self) -> [Duration; 2] {
@@ -489,9 +549,12 @@ impl QueueSwitch {
         self.wake.notify_all();
     }
 
-    /// Wait until the verdict is known, or `timeout` passed: whether it is.
+    /// Wait until the verdict is known, or `timeout` passed: whether it is. Meanwhile the check's
+    /// rounds step aside for nothing (`step_aside.rs`).
     fn wait(&self, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
+        self.waiters.fetch_add(1, Ordering::AcqRel);
+        let _waiting = Waiting(&self.waiters);
         let mut settled = lock(&self.settled);
         while !*settled {
             let left = deadline.saturating_duration_since(Instant::now());
@@ -504,6 +567,15 @@ impl QueueSwitch {
             };
         }
         true
+    }
+}
+
+/// A call waiting for the verdict ([`QueueSwitch::wait`]), counted until it returns.
+struct Waiting<'a>(&'a AtomicU32);
+
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -609,7 +681,9 @@ impl Device {
     /// The choice of a round robin's command queue on `current` that holds no uncompleted command
     /// buffer and is not long (the module docs): one pass over the `VkQueue`s of its family,
     /// atomics alone. Counted where a busy, young `VkQueue` was passed over for the unshared queue
-    /// it holds alone (`WorkCounts::joins_withheld_from_unshared`).
+    /// it holds alone (`WorkCounts::joins_withheld_from_unshared`); where no other `VkQueue` had
+    /// batches in flight (`picks_with_none_busy`); else where it joined none and passed over a busy
+    /// one for its oldest batch's age alone ([`old_busy`], `joins_withheld_from_old_heads`).
     pub(crate) fn pick_vk_queue(&self, current: usize) -> Choice {
         let mut looks = [Look {
             index: 0,
@@ -626,9 +700,21 @@ impl Device {
                 count += 1;
             }
         }
-        let (choice, withheld) = choose(current, &looks[..count]);
+        let looks = &looks[..count];
+        let (choice, withheld) = choose(current, looks);
+        let counts = &self.shared().counts;
         if withheld {
-            self.shared().counts.join_withheld_from_unshared();
+            counts.join_withheld_from_unshared();
+        }
+        if !looks
+            .iter()
+            .any(|look| look.index != current && look.depth > 0)
+        {
+            counts.picked_with_none_busy();
+        } else if !matches!(choice, Choice::Join(_))
+            && looks.iter().any(|look| old_busy(current, look))
+        {
+            counts.join_withheld_from_old_head();
         }
         choice
     }
@@ -742,6 +828,13 @@ impl Device {
     /// benchmarks that hold a device's command queues to the mapping they measure.
     #[doc(hidden)]
     pub fn settle_queue_switch_check(&self, timeout: Duration) -> bool {
+        let current = self.current();
+        current.note_sharing_read("Device::settle_queue_switch_check");
+        current.settle_queue_switch_check_now(timeout)
+    }
+
+    /// [`Device::settle_queue_switch_check`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn settle_queue_switch_check_now(&self, timeout: Duration) -> bool {
         self.start_queue_switch_check();
         self.shared().queue_switch.wait(timeout)
     }
@@ -751,6 +844,11 @@ impl Device {
     /// assert a queue joined another's `VkQueue` where the device shares.
     #[doc(hidden)]
     pub fn shares_vk_queues(&self) -> bool {
+        self.current().shares_vk_queues_now()
+    }
+
+    /// [`Device::shares_vk_queues`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn shares_vk_queues_now(&self) -> bool {
         self.shares_queues()
     }
 
@@ -759,6 +857,31 @@ impl Device {
     /// for the lanes and benchmarks that report it.
     #[doc(hidden)]
     pub fn queue_switch_check_report(&self) -> String {
+        let current = self.current();
+        current.note_sharing_read("Device::queue_switch_check_report");
+        current.queue_switch_check_report_now()
+    }
+
+    /// Where the device's queue limits changed its round robin's or presenting queues'
+    /// `VkQueue`s from the queue plan's, say that its queue sharing was read through `call`
+    /// (`DeviceOptions::queue_limits`).
+    fn note_sharing_read(&self, call: &str) {
+        let Some((taken, planned)) = self.shared().queues_limited() else {
+            return;
+        };
+        let what = format!(
+            "its queue sharing was read ({call}) with {} VkQueue(s) for the round robin and {} \
+             for presenting queues, where the plan gives {} and {}",
+            taken.0, taken.1, planned.0, planned.1
+        );
+        self.inform(
+            crate::device::QUEUE_LIMITS_REACHED,
+            crate::device::queue_limits_reached(self.name(), &what),
+        );
+    }
+
+    /// [`Device::queue_switch_check_report`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn queue_switch_check_report_now(&self) -> String {
         let switch = &self.shared().queue_switch;
         let took = match switch.took.load(Ordering::Acquire) {
             0 => "not run here".to_owned(),

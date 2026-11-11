@@ -252,6 +252,7 @@ impl CommandBuffer {
         call: &'static str,
         dispatch_type: DispatchType,
     ) -> Result<ComputeCommandEncoder, Error> {
+        let _for = self.notices_for();
         // Metal's process ends here under some protection options (`command_buffer/protection.rs`).
         self.refuse_protected_encoder(call)?;
         let core = EncoderCore::open(
@@ -351,6 +352,7 @@ impl ComputeCommandEncoder {
         call: impl FnOnce(&mut CallLog<ComputeCall>) -> ComputeCall,
         run: impl FnOnce(&mut Self) -> Result<T, Error>,
     ) -> Result<T, Error> {
+        let _for = self.core.notices_for();
         let at = self.log(call);
         let ran = run(self);
         if let (Err(_), Some(at), Some(log)) = (&ran, at, &mut self.log) {
@@ -508,12 +510,14 @@ impl ComputeCommandEncoder {
     }
 
     /// `setBuffer:offset:attributeStride:atIndex:`: as [`set_buffer`](Self::set_buffer), the
-    /// buffer read at `stride` by a kernel's stage-in layout of `MTLBufferLayoutStrideDynamic`;
-    /// `MTLAttributeStrideStatic` (`u64::MAX`) sets no stride, as `set_buffer` does. Only such a
-    /// layout reads a stride, and one bound without a stride reads at stride 0; a layout of a
-    /// fixed stride reads its own whatever the bind's (as an M4 reads them). A stride past 32 bits
-    /// other than `MTLAttributeStrideStatic` is taken modulo `2^32`, as plain Metal reads it and
-    /// its validation takes it (an M4 and an M3 Max). Refused as `set_buffer` is.
+    /// buffer read at `stride` by a kernel's stage-in layout of `MTLBufferLayoutStrideDynamic`.
+    /// Only such a layout reads a stride, and one bound without a stride (`set_buffer`) reads at
+    /// stride 0; a layout of a fixed stride reads its own whatever the bind's (as an M4 reads
+    /// them). A stride past 32 bits is taken modulo `2^32`, as plain Metal reads it and its
+    /// validation takes it (an M4 and an M3 Max), and `MTLAttributeStrideStatic` (`u64::MAX`) with
+    /// it: such a layout reads the element at the bind offset for the first element and zero for
+    /// every element past it, which lies `2^32 - 1` bytes on, past the buffer, as plain Metal on an
+    /// M3 Max under macOS 27.0.1 answered it. Refused as `set_buffer` is.
     pub fn set_buffer_with_stride(
         &mut self,
         buffer: Option<&Buffer>,
@@ -567,8 +571,8 @@ impl ComputeCommandEncoder {
 
     /// `setBufferOffset:attributeStride:atIndex:`: as [`set_buffer_offset`](Self::set_buffer_offset),
     /// with the index's stride set as [`set_buffer_with_stride`](Self::set_buffer_with_stride)
-    /// sets it. `set_buffer_offset` clears the stride, as the stride form with
-    /// `MTLAttributeStrideStatic` does. Refused as both are.
+    /// sets it, `MTLAttributeStrideStatic` included. `set_buffer_offset` clears the stride.
+    /// Refused as both are.
     pub fn set_buffer_offset_with_stride(
         &mut self,
         offset: u64,
@@ -609,9 +613,9 @@ impl ComputeCommandEncoder {
 
     /// `setBytes:length:attributeStride:atIndex:`: as [`set_bytes`](Self::set_bytes), the
     /// bytes read at `stride`, its low 32 bits, by a kernel's stage-in layout of
-    /// `MTLBufferLayoutStrideDynamic`. At `MTLAttributeStrideStatic` (`u64::MAX`) such a layout is
-    /// refused at the dispatch (`NotImplemented(KernelStageIn)`): an M4 read element 0 of the
-    /// bytes and zeros past it there, which the fetch does not emulate. Refused as `set_bytes` is.
+    /// `MTLBufferLayoutStrideDynamic`, as [`set_buffer_with_stride`](Self::set_buffer_with_stride)
+    /// reads a buffer: at `MTLAttributeStrideStatic` (`u64::MAX`) such a layout reads element 0 of
+    /// the bytes and zero past it, as an M4 and an M3 Max read them. Refused as `set_bytes` is.
     pub fn set_bytes_with_stride(
         &mut self,
         bytes: &[u8],
@@ -1164,6 +1168,7 @@ impl ComputeCommandEncoder {
     /// `RENDER_TARGETS` records nothing. On a serial encoder, which orders its dispatches anyway,
     /// it adds nothing Metal would not do.
     pub fn memory_barrier_with_scope(&mut self, scope: BarrierScope) {
+        let _for = self.core.notices_for();
         self.log(|_| ComputeCall::BarrierWithScope(scope));
         if !scope.intersects(BarrierScope::BUFFERS.union(BarrierScope::TEXTURES)) {
             return;
@@ -1598,6 +1603,7 @@ impl ComputeCommandEncoder {
     /// `endEncoding`. What it binds is held until the command buffer completes, as Metal holds
     /// what an encoder was handed.
     pub fn end_encoding(mut self) -> Result<(), Error> {
+        let _for = self.core.notices_for();
         // Its unit of command predication takes what it encoded (`predication.rs`).
         self.end_predication()?;
         self.table.let_go_all(&mut self.core);
@@ -2091,7 +2097,7 @@ fn planned_as_before(
 ///   what a used resource states of it beyond that, its buffers' addresses, which only a no-copy
 ///   buffer's move changes, and whether each indirect command buffer holds its ID's slot, which a
 ///   buffer made later with the ID takes: `Residency::holds_slots_as`), of the device's live
-///   sampler states (`Device::sampler_slots_changed`), of the state's visible-function tables
+///   sampler states (`DeviceShared::sampler_slots_changed`), of the state's visible-function tables
 ///   (none: a dispatch of a state that made one takes no memo), and of the sampler maps, which
 ///   are the table's and the residency's. The kept state is this entry's: a dispatch that brings
 ///   it in place keeps its own entry or none (`LiveDispatch::let_go`).
@@ -2118,7 +2124,7 @@ pub(super) struct KeptDispatch {
     forms: BufferForms,
     /// The residency's generation (`Residency::generation`).
     residency: u64,
-    /// `buffer::host_cells_moved` and `Device::sampler_slots_changed` as it was settled.
+    /// `buffer::host_cells_moved` and `DeviceShared::sampler_slots_changed` as it was settled.
     counted: (u64, u64),
     settled: SettledDispatch,
     commands: OnceLock<DispatchCommands>,
@@ -2214,7 +2220,7 @@ fn record(
             let memo = direct.filter(|_| function_tables.is_empty());
             let moved = super::buffer::host_cells_moved();
             let held = memo.is_some_and(|dispatch| {
-                let counted = (moved, core.device().sampler_slots_changed());
+                let counted = (moved, core.generation().sampler_slots_changed());
                 live.memo.holds(&live.state, tables, &dispatch, counted)
             });
             if held {
@@ -2251,12 +2257,12 @@ fn record(
             flat = flat_call;
         }
     }
-    let (kept, kept_state, resident_shadows) = match live {
+    let (kept, kept_state, resident_shadows, kept_uses) = match live {
         Some(live) => {
-            let (state, memo, shadows) = live.parts();
-            (memo.entry(), Some(state), Some(shadows))
+            let (state, memo, shadows, uses) = live.parts();
+            (memo.entry(), Some(state), Some(shadows), Some(uses))
         }
-        None => (None, None, None),
+        None => (None, None, None, None),
     };
     let settled = match (kept, &settled_here) {
         (Some(kept), _) => &kept.settled,
@@ -2354,6 +2360,7 @@ fn record(
     let heap = heap_sets::heap_elements(&compiled.layout, plan, state)?;
     // What the variant's layout binds of the device's tables, worked out once (`heap_sets.rs`).
     let heap_tables = (variant.objects()).heap_tables(&compiled.layout, &compiled.dependencies);
+    (variant.objects()).bind_sampler_tables(&compiled.layout, &compiled.dependencies);
     let texture_table = heap_tables.texture_table(core.device())?;
     let sampler_table = heap_tables.sampler_table(core.device())?;
     let stages = [(Stage::Kernel, tables.table)];
@@ -2414,6 +2421,8 @@ fn record(
             .iter()
             .map(|table| (metal2vulkan::vk::ShaderStageFlags::COMPUTE, table))
             .collect(),
+        // A kernel's artifact states no proof that it stores nothing.
+        root_writes: true,
         push_holes: &commands.push_holes,
         uses: &command_uses,
         blobs: pipeline_stage
@@ -2424,10 +2433,26 @@ fn record(
         mesh: None,
         tessellation: None,
     };
-    let mut uses = binding::command_uses(call, plan, &command, &bound_tables, None, None)?;
+    // An encoder's own dispatch makes its uses over the last one's, in their storage
+    // (`LiveDispatch::uses`), those of what the encoder made resident kept where they are the
+    // last dispatch's, as a draw does (`LiveBind::uses`); an indirect command's state makes them
+    // whole.
+    let mut made_whole;
+    let uses = match kept_uses {
+        Some(uses) => {
+            let inputs = (plan, &command, &bound_tables);
+            binding::command_uses_into(call, inputs, (None, None), uses)?;
+            uses
+        }
+        None => {
+            made_whole = binding::command_uses(call, plan, &command, &bound_tables, None, None)?;
+            &mut made_whole
+        }
+    };
     if let Some((call, _)) = &flat {
         uses.push(call.reads());
     }
+    let uses: &binding::CommandUses = uses;
     // A dispatch that names a detached buffer records nothing: its submission fails.
     let named = uses
         .iter()
@@ -2439,21 +2464,27 @@ fn record(
     }
     let device = core.device().clone();
     // Inside a block of command predication, each command runs from its gate: the flat path's
-    // preprocess (whose command then stays zero), else each region's dispatch.
+    // preprocess (whose command then stays zero), else each region's dispatch. Their group
+    // counts are listed only for a unit that gates them.
     let gates = match own.is_some() {
         true => {
-            let counts: Vec<[u32; 3]> = match &preprocess {
-                Some(_) => vec![[1, 1, 1]],
-                None => commands
-                    .regions
-                    .iter()
-                    .map(|region| region.group_count)
-                    .collect(),
-            };
             let (further, gates) = {
                 let mut state = core.command_buffer().state();
                 let (predication, uploads) = state.predication_and_uploads();
-                predication.gates(uploads, &device, &counts)?
+                match predication.gates_dispatches() {
+                    true => {
+                        let counts: Vec<[u32; 3]> = match &preprocess {
+                            Some(_) => vec![[1, 1, 1]],
+                            None => commands
+                                .regions
+                                .iter()
+                                .map(|region| region.group_count)
+                                .collect(),
+                        };
+                        predication.gates(uploads, &device, &counts)?
+                    }
+                    false => (None, Vec::new()),
+                }
             };
             if let Some(step) = further {
                 predication::record_further(core, &step)?;
@@ -2579,10 +2610,10 @@ fn record(
     // The resident textures' shadows as the encoder keeps them (`compute/live.rs`).
     let textures = tables.table.textures.values();
     let shadows = match resident_shadows {
-        Some(kept) => shadow::shadow_uses_of(textures, kept.of(&device, tables.residency), &uses),
-        None => shadow::shadow_uses(textures.chain(tables.residency.textures()), &uses),
+        Some(kept) => shadow::shadow_uses_of(textures, kept.of(&device, tables.residency), uses),
+        None => shadow::shadow_uses(textures.chain(tables.residency.textures()), uses),
     };
-    let copies = core.plan_shadows(&shadows, &uses)?;
+    let copies = core.plan_shadows(&shadows, uses)?;
     let heap_set = match heap {
         Some(_) => Some(
             heap_sets::bind(
@@ -2590,7 +2621,7 @@ fn record(
                 &objects,
                 &mut core.command_buffer().state().heaps,
                 heap_writes,
-                &uses,
+                uses,
             )?
             .set,
         ),
@@ -2627,7 +2658,7 @@ fn record(
             // Tracked here, as a command recorded here is; its execution recorded here, its
             // creation times set as its segment records.
             let creation = core.records_executions().then(|| Arc::new(OnceLock::new()));
-            if let Some(barrier) = core.command_later(stages, &uses, uses.resident()) {
+            if let Some(barrier) = core.command_later(stages, uses, uses.resident()) {
                 let encoder = core.command_buffer().state().open_encoder_place();
                 let pending = PendingDispatch {
                     variant: Arc::clone(variant),
@@ -2641,7 +2672,7 @@ fn record(
                 };
                 core.pend(next, pending)?;
             }
-            core.shadows_used(&shadows, &uses, &[]);
+            core.shadows_used(&shadows, uses, &[]);
             if let Some(creation) = creation {
                 core.executed(|| {
                     Execution::made_later(
@@ -2654,13 +2685,13 @@ fn record(
         }
         None => {
             let made = &*pipelines;
-            core.command_reaching(stages, &uses, uses.resident(), |raw, command_buffer| {
+            core.command_reaching(stages, uses, uses.resident(), |raw, command_buffer| {
                 // SAFETY: the encoder's command buffer is recording outside a render pass;
                 // every object recorded is live until the command buffer completes (retained
                 // below), and the pipelines are the variant's, one per region.
                 unsafe { recording.record(raw, command_buffer, made) }
             });
-            core.shadows_used(&shadows, &uses, &[]);
+            core.shadows_used(&shadows, uses, &[]);
             core.executed(|| {
                 Execution::new(
                     ExecutedPipeline::Compute(Arc::clone(variant.shared_pipeline())),

@@ -200,8 +200,10 @@ surface! {
         enum ExtendedRangeBlend N;
         enum RuntimeInput N;
         enum DescriptorError N;
+        enum MetalAnswer N;
         enum DynamicLibraryProblem N;
         enum MeshPipelineProblem N;
+        enum ComputePipelineProblem N;
         enum LinkProblem N;
         enum Limit N;
         enum BudgetExceeded N;
@@ -232,10 +234,12 @@ surface! {
         enum RenderLoweringPolicy N;
         enum HostPageTexturePolicy N;
         enum HalfChainPolicy N;
+        enum YCbCrInPlacePolicy N;
         enum PipelineWaitPolicy N;
         enum WideLinePolicy N;
         enum ExtendedRangeBlitPolicy N;
         enum QueueSharingPolicy N;
+        enum DontCareColorPolicy N;
         struct DeviceProfile O;
         struct SpirvValidation N;
         struct EnabledCaps N;
@@ -386,6 +390,7 @@ surface! {
         struct BufferSlot N;
         struct CommandWrites E;
         enum DescriptorView N;
+        struct LevelReads N;
         struct MeshRecords N;
         enum NumberedSampler N;
         enum PatchDomain N;
@@ -395,8 +400,11 @@ surface! {
         struct PushPlacement N;
         struct RecordField N;
         enum RecordValue N;
+        struct SampledLevels N;
+        struct SamplerLevels N;
         struct SamplerSlot N;
         enum SlotInterface N;
+        enum SnapshotRefusal N;
         struct TextureAccess N;
         struct TextureSlot N;
         struct ThreadgroupArgument N;
@@ -473,6 +481,7 @@ surface! {
         struct MeshDispatch N;
         enum MeshGroups N;
         enum MeshRecordsRegion N;
+        struct SlotRebinds O;
         struct TessellationDispatch N;
         enum TessellationRecords N;
         fn heap_classes;
@@ -650,6 +659,9 @@ surface! {
         fn extended_canonical_module;
         fn extended_range_canonical;
         struct ExtendedCanonicalModule N;
+        fn depth_clamp_module;
+        fn clamped_depth;
+        struct DepthClampModule N;
         fn dynamic_views_module;
         struct DynamicViewsModule N;
         fn shadow_merge_module;
@@ -740,6 +752,8 @@ surface! {
         enum PlanesCopy N;
         struct PlanesMergeModules N;
         struct PlanesSplitModule N;
+        fn check_draw_modules;
+        struct CheckDrawModules N;
         fn interleave_merge_modules;
         fn interleave_split_module;
         struct InterleaveMergeModules N;
@@ -903,6 +917,7 @@ surface! {
         fn block_extent;
         enum Footprint N;
         fn footprint;
+        fn copies_only;
         fn imageblock_sample_length;
         fn color_record;
         fn explicit_imageblock_sample_length;
@@ -1458,7 +1473,10 @@ fn a_signed_integer_attachment_compiles_the_fragment_for_it() {
             dev.compile_render_pipeline(&foreign, &Budget::standard())
                 .unwrap_err(),
             metal2vulkan::error::Error::InvalidDescriptor(
-                metal2vulkan::error::DescriptorError::ColorAttachment { index: 1 }
+                metal2vulkan::error::DescriptorError::ColorAttachment {
+                    index: 1,
+                    metal: metal2vulkan::error::MetalAnswer::NilWithError,
+                }
             ),
             "{stem}"
         );

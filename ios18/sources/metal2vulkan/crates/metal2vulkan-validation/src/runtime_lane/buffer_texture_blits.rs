@@ -9,15 +9,18 @@
 //! between rows. The overlapping cases, which a model alone would not prove, also match the rows
 //! the probe recorded on the M4 and the M3 Max.
 
-use super::degrade_notices::{assert_made_once, forced, shared_in_system_memory};
+use super::degrade_notices::{
+    assert_made_once, clear_in_question, forced, shared_in_system_memory,
+};
 use super::host_memory::{no_copy, not_importable, Mapping};
 use super::{
-    buffer_with, layer_reported_nothing_at_all, read_buffer, validated_device, Messages,
-    ScratchCache, WAIT,
+    at_plan, buffer_with, layer_reported_nothing_at_all, read_buffer, validated_device,
+    validated_device_with, Messages, ScratchCache, WAIT,
 };
 use crate::gpu::TEST_DEVICE;
 use ash::vk;
 use metal2vulkan::metal::{PixelFormat, TextureType, TextureUsage};
+use metal2vulkan_runtime::DeviceOptions;
 use metal2vulkan_runtime::{
     AppleOnly, BlitCommandEncoder, BlitOption, Buffer, BufferTextureProblem, ClearColor,
     CommandBufferStatus, Deallocator, Degradation, Device, Error, Invalid, IoSurfacePlane,
@@ -383,11 +386,14 @@ fn copy(
 }
 
 /// Run `test` on a validated device of the lane, then fail on any validation message.
-fn on_device(test: impl FnOnce(&Device)) {
+///
+/// `adjust` is applied to the options of each device it makes (`at_plan` gives them their
+/// queue plan).
+fn on_device_with(adjust: fn(&mut DeviceOptions), test: impl FnOnce(&Device)) {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), adjust).unwrap();
         test(&device);
     }
     layer_reported_nothing_at_all(&messages);
@@ -859,7 +865,7 @@ fn texture_buffer_blits(device: &Device, kind: Kind) {
 /// ordinary and a no-copy buffer, at 32- and 256-byte rows.
 #[test]
 fn blits_of_textures_over_buffers_move_metals_bytes() {
-    on_device(|device| {
+    on_device_with(at_plan, |device| {
         for kind in [Kind::Ordinary, Kind::NoCopy] {
             if Held::new(device, kind).is_none() {
                 eprintln!(
@@ -891,7 +897,7 @@ fn an_overlapping_texel_copy_is_announced_once() {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         // What the device announced as it was made.
         messages.take_notices();
         let all = [4, 4];
@@ -936,14 +942,14 @@ pub(super) const NARROW_ROWS: [Degradation; 1] = [Degradation::NarrowSurfaceRows
 /// without planes at 4 bytes a row (Metal asserts) and of rows that overlap on the GPU. The
 /// device announces `NarrowSurfaceRows` once, for the planes under 16 bytes a row, and where they
 /// force it a plane's shadow ([`linear_rows_differ`]), the `Shared` buffers' system memory, and
-/// the planes' clear's conversion on a driver whose clears take either nearest code
-/// (`DriverFact::ColorClearTakesEitherCode`).
+/// the planes' clear's conversion but where the load operation clears as Metal's
+/// (`degrade_notices::clear_in_question`).
 #[test]
 fn iosurface_planes_lie_where_metal_puts_them() {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         // What the device announced as it was made.
         messages.take_notices();
         let planes = [
@@ -1014,17 +1020,16 @@ fn iosurface_planes_lie_where_metal_puts_them() {
             .iter()
             .any(|&(pf, texel, _, bpr)| linear_rows_differ(&device, pf, [4, 4], texel, bpr));
         // The planes' clear to (0.2, 0.4, 0.6, 0.8), each scaled `float` a hair off a whole code,
-        // where the device's clear may store either code nearest it.
-        let either = (device.properties().driver_facts)
-            .contains(&metal2vulkan::device::DriverFact::ColorClearTakesEitherCode);
-        let first = forced(&[
+        // where the device's clear may store either code nearest it, by its load operation of
+        // the whole plane.
+        let mut first = forced(&[
             (Degradation::ShadowedTexture, shadowed),
             (
                 Degradation::SharedInSystemMemory,
                 shared_in_system_memory(&device),
             ),
-            (Degradation::DeviceColorConversion, either),
         ]);
+        first.extend(clear_in_question(&device, true));
         assert_made_once(&messages, &NARROW_ROWS, &first);
     }
     layer_reported_nothing_at_all(&messages);
@@ -1067,7 +1072,7 @@ fn an_iosurface_plane_whose_gpu_rows_share_bytes_is_announced() {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         eprintln!("device {}", device.name());
         // What the device announced as it was made.
         messages.take_notices();
@@ -1183,6 +1188,123 @@ fn an_iosurface_plane_whose_gpu_rows_share_bytes_is_announced() {
     layer_reported_nothing_at_all(&messages);
 }
 
+/// The kind [`a_plane_past_its_surface_is_made_and_announced`] takes: a colour texture of a plane
+/// of an IOSurface with planes whose texels run past the buffer standing for its surface, those
+/// texels in a tail of the texture's own.
+pub(super) const SURFACE_TAILS: [Degradation; 1] = [Degradation::SurfaceTexelsTail];
+
+/// A 64x66 `RGBA8Unorm` plane of a planar surface at 256 bytes a row over the 16-KiB ordinary
+/// buffer standing for the surface, its last two rows past the surface, is made, which plain
+/// Metal makes too and lays out in no one place past the surface (an Apple M3 Max under macOS
+/// 27.0.1, `metal2vulkan-conformance/probes/surface_texture_envelope.m`). The device announces
+/// [`SURFACE_TAILS`] once for it, with the shadow its tail takes and the `Shared` buffer's system
+/// memory where the device forces it. The CPU reads its rows inside the surface as the buffer's
+/// bytes and its rows past it as zero, what it writes past the surface reads back, and no byte of
+/// the buffer changes. `tests::buffer_tail_device` in the runtime holds every path's bytes over
+/// more shapes.
+#[test]
+fn a_plane_past_its_surface_is_made_and_announced() {
+    let messages = Messages::default();
+    let cache = ScratchCache::new().unwrap();
+    {
+        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        eprintln!("device {}", device.name());
+        // What the device announced as it was made.
+        messages.take_notices();
+        let held = Held::new(&device, Kind::Ordinary).expect("an ordinary buffer");
+        let (w, row) = (64u64, 256u64);
+        let inside = LEN as u64 / row;
+        let h = inside + 2;
+        let read = TextureUsage::SHADER_READ.union(TextureUsage::SHADER_WRITE);
+        let texture = surface_plane(&held, [w, h], row, read)
+            .unwrap_or_else(|e| panic!("a plane past its surface: {e}"));
+        let first = forced(&[
+            (Degradation::ShadowedTexture, true),
+            (
+                Degradation::SharedInSystemMemory,
+                shared_in_system_memory(&device),
+            ),
+        ]);
+        assert_made_once(&messages, &SURFACE_TAILS, &first);
+        let get = |y: u64| {
+            let mut bytes = vec![0xEE; row as usize];
+            let region = Region::new_2d(0, y, w, 1);
+            (texture.get_bytes(&mut bytes, row, 0, region, 0, 0)).unwrap();
+            bytes
+        };
+        let last = (inside - 1) as usize * row as usize;
+        assert_eq!(get(inside - 1), held.model[last..last + row as usize]);
+        assert_eq!(get(inside), vec![0; row as usize], "the first row past");
+        let written: Vec<u8> = (0..row as usize).map(|i| (i * 5 + 1) as u8).collect();
+        let past = Region::new_2d(0, inside + 1, w, 1);
+        (texture.replace_region(past, 0, 0, &written, row, 0)).unwrap();
+        assert_eq!(get(inside + 1), written, "a row written past the surface");
+        assert_eq!(held.bytes(), held.model, "the buffer's bytes");
+        assert_made_once(&messages, &[], &forced(&[]));
+    }
+    layer_reported_nothing_at_all(&messages);
+}
+
+/// The kind [`a_mipmapped_plane_lies_apart_and_is_announced`] takes: a texture over a plane of an
+/// IOSurface with planes whose texels Metal lays out in no one place, its first level's among
+/// them, in memory of its own.
+pub(super) const SURFACE_APART: [Degradation; 1] = [Degradation::SurfaceTexelsApart];
+
+/// A 64x64 `RGBA8Unorm` 2D texture of two levels over a plane of a planar surface at 256 bytes a
+/// row over the 16-KiB ordinary buffer standing for the surface is made, which plain Metal makes
+/// too and lays out in no one place, its first level among them (an Apple M3 Max under macOS
+/// 27.0.1, `metal2vulkan-conformance/probes/surface_texture_envelope.m`'s `bgra1x2.mips2`). The
+/// device announces [`SURFACE_APART`] once for it, with the `Shared` buffer's system memory where
+/// the device forces it. The texture lies in memory of its own: its first level reads zero as
+/// made where the buffer holds the probe's pattern, what the CPU writes into either level reads
+/// back, and no byte of the buffer changes. `tests::buffer_tail_device` in the runtime holds a 3D
+/// and a multisample one too.
+#[test]
+fn a_mipmapped_plane_lies_apart_and_is_announced() {
+    let messages = Messages::default();
+    let cache = ScratchCache::new().unwrap();
+    {
+        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        eprintln!("device {}", device.name());
+        // What the device announced as it was made.
+        messages.take_notices();
+        let held = Held::new(&device, Kind::Ordinary).expect("an ordinary buffer");
+        let (w, row) = (64u64, 256u64);
+        let h = LEN as u64 / row;
+        let mut d = TextureDescriptor::texture_2d(PixelFormat::RGBA8Unorm, w, h, false);
+        d.mipmap_level_count = 2;
+        d.usage = TextureUsage::SHADER_READ.union(TextureUsage::SHADER_WRITE);
+        d.resource_options = held.buffer.resource_options();
+        let plane = IoSurfacePlane::new(0, row, true);
+        let texture = (held.buffer.new_texture_with_iosurface_plane(&d, plane))
+            .unwrap_or_else(|e| panic!("a mipmapped plane: {e}"));
+        let first = forced(&[(
+            Degradation::SharedInSystemMemory,
+            shared_in_system_memory(&device),
+        )]);
+        assert_made_once(&messages, &SURFACE_APART, &first);
+        let get = |level: u64, y: u64| {
+            let bytes_per_row = (w >> level) * 4;
+            let mut bytes = vec![0xEE; bytes_per_row as usize];
+            let region = Region::new_2d(0, y, w >> level, 1);
+            (texture.get_bytes(&mut bytes, bytes_per_row, 0, region, level, 0)).unwrap();
+            bytes
+        };
+        assert_eq!(get(0, 5), vec![0; row as usize], "level 0 as made");
+        let written: Vec<u8> = (0..row as usize).map(|i| (i * 5 + 1) as u8).collect();
+        let region = Region::new_2d(0, 5, w, 1);
+        (texture.replace_region(region, 0, 0, &written, row, 0)).unwrap();
+        assert_eq!(get(0, 5), written, "level 0 as written");
+        let half = &written[..row as usize / 2];
+        let region = Region::new_2d(0, 3, w / 2, 1);
+        (texture.replace_region(region, 1, 0, half, row / 2, 0)).unwrap();
+        assert_eq!(get(1, 3), half, "level 1 as written");
+        assert_eq!(held.bytes(), held.model, "the buffer's bytes");
+        assert_made_once(&messages, &[], &forced(&[]));
+    }
+    layer_reported_nothing_at_all(&messages);
+}
+
 /// A texture of a `w` x `h` `RGBA8Unorm` plane of a planar surface at offset 0 of `held`'s buffer,
 /// `bpr` bytes a row, of `usage` and the buffer's own resource options.
 fn surface_plane(
@@ -1216,7 +1338,7 @@ fn surface_plane(
 /// below it (the CPU's rows 28 bytes apart, the GPU's 16).
 #[test]
 fn a_blit_out_of_a_plane_whose_gpu_rows_share_bytes_reads_each_row_at_its_own_pitch() {
-    on_device(|device| {
+    on_device_with(at_plan, |device| {
         for kind in [Kind::Ordinary, Kind::NoCopy] {
             let Some(held) = Held::new(device, kind) else {
                 eprintln!("{}: no {kind:?} buffer", device.name());
@@ -1310,7 +1432,7 @@ fn a_planar_surface_s_depth_or_stencil_texture_reads_and_stores_the_plane() {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         eprintln!("device {}", device.name());
         let (w, h, bpr) = (4u64, 4u64, 64u64);
         for kind in [Kind::Ordinary, Kind::NoCopy] {
@@ -1479,7 +1601,7 @@ fn a_planar_surface_s_depth_or_stencil_texture_s_passes_write_metal_s_elements_a
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         eprintln!("device {}", device.name());
         let probe = Probe {
             queue: device.new_command_queue().unwrap(),
@@ -1825,7 +1947,7 @@ fn four_two_two_iosurface_planes_move_the_surface_s_rows() {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         for kind in [Kind::Ordinary, Kind::NoCopy] {
             for pf in [PixelFormat::GBGR422, PixelFormat::BGRG422] {
                 let what = format!("{kind:?} {pf:?}");
@@ -1963,7 +2085,7 @@ fn iosurface_420v(device: &Device, kind: Kind) {
 #[test]
 fn iosurface_planes_take_their_descriptors_options() {
     use metal2vulkan_runtime::{CpuCacheMode, HazardTrackingMode, StorageMode};
-    on_device(|device| {
+    on_device_with(at_plan, |device| {
         for kind in [Kind::Ordinary, Kind::NoCopy] {
             if Held::new(device, kind).is_none() {
                 eprintln!("{}: no {kind:?} buffer", device.name());

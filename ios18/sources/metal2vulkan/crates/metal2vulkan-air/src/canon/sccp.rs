@@ -1,8 +1,8 @@
 //! Sparse conditional constant propagation.
 //!
 //! One standard algorithm (Wegman–Zadeck) per function: an SSA worklist and a flow worklist over
-//! executable edges, a lattice per instruction, and folding by [`Folder`]. Two AIR-specific
-//! lattice facts are added:
+//! executable edges, a lattice per instruction, and folding by [`Folder`]. Three facts are
+//! added:
 //!
 //! - `air.is_function_constant_defined(@g)` folds to whether `@g`'s constant was supplied, and a
 //!   load from a bound (supplied) function constant folds to its value, like any load from a
@@ -19,6 +19,17 @@
 //!   Plain Metal makes such a function's pipeline, and its own
 //!   reads of an undefined constant vary from read to read, zero and the false way among them; its
 //!   predicate gates nothing, whether negated or not (Metal probes).
+//! - A float operation a constant operand decides, whatever the run computes for the others, is
+//!   that constant, as Metal's compiler decides it once the constants are bound
+//!   ([`Solver::float_fold`]): an `fadd`, `fsub`, `fmul`, `fdiv` or `air.fma` with a NaN operand
+//!   (every lane a NaN or `poison`) is the first such operand, as it is beside a value only the
+//!   run knows and quieted where every operand is a constant, and an `fmul` under `nnan` and
+//!   `nsz` with an operand every lane of which is a zero is `+0`. SCCP computes no float
+//!   arithmetic: these are the answers no operand the run computes can change. Under `nnan` such a
+//!   NaN makes the AIR's value `poison`, which any answer refines; the NaN is Metal's answer for
+//!   a fragment's output (the Apple M3 Max, the AMD Radeon Pro 5300M and the Intel UHD Graphics
+//!   630, macOS 27.0.1), where a device given the operation answers otherwise (MoltenVK 1.4.2 `0`
+//!   for a quotient by a NaN, MoltenVK and RADV a NaN for an infinity or a NaN times a zero).
 //!
 //! Afterwards unreachable blocks are deleted, branches on constants become unconditional, PHIs
 //! keep one entry per remaining edge, and instructions with a constant value are replaced by it.
@@ -36,13 +47,15 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::budget::{vec_bytes, Meter};
-use crate::error::{AbiError, CanonError, DiagName, Error, InputError, InputErrorKind, Location};
-use crate::intrinsics::{AirIntrinsic, FunctionConstant};
-use crate::ir::{Arena, BlockId, Body, Callee, Const, ConstId, ConstTable, Constant, Global};
-use crate::ir::{ArgIdx, BinOp, GlobalId, Idx, InstId, InstKind, Type, Value};
+use crate::error::{AbiError, CanonError, DiagName, Error, InputError, InputErrorKind};
+use crate::error::{IntrinsicError, Location};
+use crate::intrinsics::MathFn;
+use crate::intrinsics::{AirIntrinsic, Bound, FunctionConstant, LlvmIntOp, LlvmIntrinsic, Math};
+use crate::ir::{Arena, BlockId, Body, Call, Callee, Const, ConstId, ConstTable, Constant, Global};
+use crate::ir::{ArgIdx, BinOp, FastMath, GlobalId, Idx, InstId, InstKind, Type, TypeId, Value};
 
 use super::const_loads;
-use super::fold::Folder;
+use super::fold::{FloatClass, Folder};
 use super::rewrite::{apply, filled, invariant, scoped, BodyEdit};
 
 /// A function constant as SCCP sees it.
@@ -295,6 +308,40 @@ fn is_normalize(kind: &InstKind) -> bool {
                 op: AirIntrinsic::FunctionConstant(FunctionConstant::NormalizePredicate(_)),
                 ..
             }
+        )
+    )
+}
+
+/// The integer `llvm.*` bit operation `kind` calls (`ctpop`, `bitreverse`, `bswap`), which SCCP
+/// folds over a constant operand. The other integer operations (minimum and maximum, the funnel
+/// shifts, saturating arithmetic) are computed where they run.
+fn int_op(kind: &InstKind) -> Option<LlvmIntOp> {
+    match kind {
+        InstKind::Call(call) => match call.callee {
+            Callee::Llvm {
+                op: LlvmIntrinsic::Int { op, .. } | LlvmIntrinsic::NarrowInt { op, .. },
+                ..
+            } if matches!(
+                op,
+                LlvmIntOp::Ctpop | LlvmIntOp::BitReverse | LlvmIntOp::Bswap
+            ) =>
+            {
+                Some(op)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Whether `kind` calls `air.fma`, the fused multiply-add SCCP's float folds read
+/// ([`Solver::float_fold`]).
+fn is_fma(kind: &InstKind) -> bool {
+    matches!(
+        kind,
+        InstKind::Call(call) if matches!(
+            call.callee,
+            Callee::Air { op: AirIntrinsic::Math(Math { f: MathFn::Fma, .. }), .. }
         )
     )
 }
@@ -850,6 +897,50 @@ impl<'b> Solver<'b> {
         }
     }
 
+    /// A float operation over `ops` (`fadd`, `fsub`, `fmul`, `fdiv`, or `air.fma`; `product` for
+    /// `fmul`) with the fast-math flags `fmf`, typed `ty`, decided by its constant operands
+    /// whatever the others hold, as Metal's compiler decides it once the constants are bound. A NaN
+    /// operand, the first in operand order, is the result: as it is beside an operand only the run
+    /// knows (LLVM's `propagateNaN` as Metal's compiler has it, with no poison step for `nnan`),
+    /// and quieted where every operand is a constant (constant folding). Otherwise a product under
+    /// `nnan` and `nsz` with an operand each lane of which is a zero of either sign is `+0`. `Top`
+    /// while an operand is unknown. `None` where no operand decides it, and wherever one is an
+    /// unsupplied constant's undefined value, which keeps its own reading.
+    fn float_fold(
+        &self,
+        (product, fmf): (bool, FastMath),
+        ops: &[Value],
+        ty: TypeId,
+        cx: &mut Context<'_>,
+        m: &mut Meter,
+    ) -> Result<Option<Lat>, Error> {
+        let (mut nan, mut zero, mut run) = (None, false, false);
+        for &v in ops {
+            match self.lat(v) {
+                Lat::Fc(_) => return Ok(None),
+                Lat::Top => return Ok(Some(Lat::Top)),
+                Lat::Bottom => run = true,
+                Lat::Const(k) => match cx.folder.float_class(k, m)? {
+                    FloatClass::Nan => {
+                        nan.get_or_insert(k);
+                    }
+                    FloatClass::Zero => zero = true,
+                    FloatClass::Other => {}
+                },
+            }
+        }
+        if let Some(k) = nan {
+            if run {
+                return Ok(Some(Lat::Const(k)));
+            }
+            return Ok(cx.folder.quiet_nan(k, m)?.map(Lat::Const));
+        }
+        if product && zero && fmf.contains(FastMath::NNAN) && fmf.contains(FastMath::NSZ) {
+            return Ok(Some(Lat::Const(cx.folder.float_zero(ty, m)?)));
+        }
+        Ok(None)
+    }
+
     fn visit(
         &mut self,
         i: InstId,
@@ -870,9 +961,15 @@ impl<'b> Solver<'b> {
         let ty = inst.ty;
         let never = |_: &mut Folder<'_>, _: &[ConstId], _: &mut Meter| Ok(None);
         let new = match &inst.kind {
-            InstKind::BinOp { op, a, b, .. } => {
+            InstKind::BinOp { op, fmf, a, b, .. } => {
                 let op = *op;
-                match self.absorbed(op, *a, *b, cx) {
+                let float = matches!(op, BinOp::FAdd | BinOp::FSub | BinOp::FMul | BinOp::FDiv);
+                let folded = if float {
+                    self.float_fold((op == BinOp::FMul, *fmf), &[*a, *b], ty, cx, m)?
+                } else {
+                    self.absorbed(op, *a, *b, cx)
+                };
+                match folded {
                     Some(lat) => lat,
                     None => self.pure(&[*a, *b], cx, m, |f, c, m| match c {
                         [x, y] => f.binop(op, ty, *x, *y, m),
@@ -1011,6 +1108,21 @@ impl<'b> Solver<'b> {
                 },
                 None => Lat::Bottom,
             },
+            // An integer bit operation on a constant is its constant; on an undefined value, what
+            // the run computes, as any call's.
+            InstKind::Call(call) if int_op(&inst.kind).is_some() => {
+                let op = int_op(&inst.kind).ok_or_else(|| invariant("an integer operation"))?;
+                match self.pure(&call.args, cx, m, |f, c, m| match c {
+                    [x] => f.int_unary(op, ty, *x, m),
+                    _ => Ok(None),
+                })? {
+                    Lat::Fc(_) => Lat::Bottom,
+                    lat => lat,
+                }
+            }
+            InstKind::Call(call) if is_fma(&inst.kind) => self
+                .float_fold((false, call.fmf), &call.args, ty, cx, m)?
+                .unwrap_or(Lat::Bottom),
             kind @ InstKind::Call(_) => match is_defined_arg(kind, cx.folder.consts, cx.fcs) {
                 Some(Some(g)) => {
                     let supplied = cx.fcs.get(&g).is_some_and(|f| f.supplied);
@@ -1146,6 +1258,51 @@ impl<'b> Solver<'b> {
         found.into_iter().try_for_each(|k| read(reads, k, m))
     }
 
+    /// The call `call` (at block and instruction `at`) bound, when it is `Callee::Unbound` and
+    /// its immediates are constants now: its constant operands are written in, and the
+    /// intrinsic binds as decode binds it. `None` for any other call, and for one whose
+    /// immediates are still not all constants (the post-check refuses it).
+    fn bound(
+        &self,
+        call: &Call,
+        cx: &Context<'_>,
+        (b, i): (BlockId, InstId),
+        m: &mut Meter,
+        held: &mut usize,
+    ) -> Result<Option<InstKind>, Error> {
+        let Callee::Unbound { decl, template } = call.callee else {
+            return Ok(None);
+        };
+        // The rewritten call is the edit's until the body is rebuilt.
+        let bytes = std::mem::size_of::<Call>().saturating_add(call.heap_bytes());
+        m.charge(bytes)?;
+        *held = held.saturating_add(bytes);
+        let mut args = call.args.clone();
+        for a in args.iter_mut() {
+            if let Lat::Const(c) = self.lat(*a) {
+                *a = Value::Const(c);
+            }
+        }
+        let callee = match template.bind(&args, cx.folder.consts) {
+            Ok(Bound::Air(op)) => Callee::Air { decl, op },
+            Ok(Bound::Llvm(op)) => Callee::Llvm { decl, op },
+            Ok(Bound::Unknown) => Callee::UnknownIntrinsic(decl),
+            Err(IntrinsicError::ImmediateNotConstant) => return Ok(None),
+            Err(e) => {
+                let at = Location::function(cx.name.clone(), Some(b.raw()), Some(i.raw()));
+                return Err(InputError::new(InputErrorKind::Intrinsic(e), at).into());
+            }
+        };
+        Ok(Some(InstKind::Call(Box::new(Call {
+            callee,
+            args,
+            fmf: call.fmf,
+            tail: call.tail,
+            attrs: call.attrs.clone(),
+            range: call.range.clone(),
+        }))))
+    }
+
     fn edit(
         &self,
         cx: &mut Context<'_>,
@@ -1171,6 +1328,8 @@ impl<'b> Solver<'b> {
                 let lat = self.val.get(i.index()).copied().unwrap_or(Lat::Bottom);
                 let deletable = is_pure(&inst.kind)
                     || is_normalize(&inst.kind)
+                    || int_op(&inst.kind).is_some()
+                    || is_fma(&inst.kind)
                     || is_defined_arg(&inst.kind, cx.folder.consts, cx.fcs).is_some();
                 match (&inst.kind, lat) {
                     // A field's address constant serves the loads it folds; the instruction stays,
@@ -1242,6 +1401,11 @@ impl<'b> Solver<'b> {
                                     hints: *hints,
                                 },
                             );
+                        }
+                    }
+                    (InstKind::Call(call), _) => {
+                        if let Some(bound) = self.bound(call, cx, (b, i), m, held)? {
+                            edit.rewrite.insert(i, bound);
                         }
                     }
                     _ => {}

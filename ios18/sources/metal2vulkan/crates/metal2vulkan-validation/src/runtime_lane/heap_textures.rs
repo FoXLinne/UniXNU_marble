@@ -30,12 +30,13 @@
 use super::degrade_notices::counts;
 use super::heap_layouts::HEAP_LAYOUTS;
 use super::heap_metal_sizes::STACKED_NIL_ALIGNMENT;
+use super::host_memory::on_device_with;
 use super::host_memory::{gpu_fill, gpu_read, on_device, run};
 use super::presenting::Adopted;
 use super::textures::{no_texture_alone, pattern, texel_bytes};
 use super::{
-    bound_buffers, buffer_with, encode_case, layer_reported_nothing_at_all, pipeline_state,
-    public_case, read_buffer, run_case, texture_descriptor, validated_device,
+    at_plan, bound_buffers, buffer_with, encode_case, layer_reported_nothing_at_all,
+    pipeline_state, public_case, read_buffer, run_case, texture_descriptor, validated_device,
     validated_device_with, CaseResources, Messages, PublicCase, ScratchCache,
 };
 use crate::air_library::AirLibrary;
@@ -43,7 +44,7 @@ use crate::candidate::engine::ComputeOutput;
 use crate::gpu::TEST_DEVICE;
 use metal2vulkan::device::{DriverFact, HeapCompressionPolicy};
 use metal2vulkan::error::{Feature, LinearNeed, Needs};
-use metal2vulkan::metal::format::{footprint, is_depth_stencil, Footprint};
+use metal2vulkan::metal::format::{copies_only, footprint, is_depth_stencil, Footprint};
 use metal2vulkan::metal::{
     IndirectCommandType, PixelFormat, PrimitiveType, RenderStages, ResourceUsage, TextureType,
     TextureUsage,
@@ -382,10 +383,19 @@ fn heap_textures_answer_and_place_as_metal_s_do() {
                 // (a multisample texture, a depth or stencil one, any on a driver without
                 // `DriverFact::ColorImagesLieAsMetalHeapTextures`), or for such a texture no image
                 // bound in the heap's memory serves, a shadow of Metal's tiles there
-                // (`shadowed-texture`, `texture/heap_tiled.rs`; the NVIDIA RTX 5080 Laptop's).
+                // (`shadowed-texture`, `texture/heap_tiled.rs`; the NVIDIA RTX 5080 Laptop's). A
+                // 32-bit float depth texture whose image a shadow fills from the heap's bytes, on
+                // a device whose copies clamp a depth outside `[0, 1]` (no
+                // `VK_EXT_depth_range_unrestricted`: ANV, MoltenVK), `restricted-depth-upload`.
                 let facts = &device.properties().driver_facts;
                 let apart = is_depth_stencil(shape.pixel_format)
                     && facts.contains(&DriverFact::DepthStencilImagesLieApart);
+                let clamps = super::degrade_notices::clamps_depth_uploads(device);
+                let float_depth = matches!(
+                    shape.pixel_format,
+                    PixelFormat::Depth32Float | PixelFormat::Depth32FloatStencil8
+                );
+                let upload = [Degradation::RestrictedDepthUpload];
                 let as_metal = shape.samples == 1
                     && !is_depth_stencil(shape.pixel_format)
                     && facts.contains(&DriverFact::ColorImagesLieAsMetalHeapTextures);
@@ -396,6 +406,7 @@ fn heap_textures_answer_and_place_as_metal_s_do() {
                     .chain(apart.then_some(&DEPTH_STENCIL_ROUTES[..]))
                     .chain((!as_metal).then_some(&HEAP_LAYOUTS[..]))
                     .chain((!as_metal).then_some(&TILE_SHADOW[..]))
+                    .chain((clamps && float_depth).then_some(&upload[..]))
                     .flatten();
                 let allowed: BTreeSet<Degradation> =
                     SIZE_NOTICES.iter().chain(routes).copied().collect();
@@ -749,19 +760,25 @@ fn alias_round_trip(
 /// the buffer's 1024 bytes and the buffer's write none of its 256 texels), the texture takes
 /// host-transfer usage or a linear image: the device announces one of `heap-texture-host-transfer`
 /// and `heap-texture-linear` once, never `heap-texture-hides-aliased-writes`, whose texels would
-/// fail the test. Elsewhere none of the three is announced. `HEAPTEX alias` lines print the counts.
+/// fail the test. On any device, a texture whose first image takes more bytes or a coarser
+/// alignment of the heap than Metal's answer lies in place as one that fits
+/// (`WorkCounts::heap_textures_refit`: host-transfer usage or a linear image, announced as such;
+/// on the NVIDIA RTX 5080 Laptop, a 64x64 render-target texture's optimal image in the `Private`
+/// heap takes 16384 bytes at 1024 where Metal answers 16512 at 128). Elsewhere none of the three
+/// is announced. `HEAPTEX alias` lines print the counts.
 #[test]
 fn a_buffer_write_shows_in_an_overlapping_texture() {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
-    // Whether the driver hides such writes, and whether a texture was made in a heap.
-    let (hides, made) = {
+    // Whether the driver hides such writes, whether a texture was made in a heap, and whether
+    // one was made in place of its first image.
+    let (hides, made, refit) = {
         let device = &validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
         let hides = device
             .properties()
             .driver_facts
             .contains(&DriverFact::CompressedImagesHideAliasedWrites);
-        let mut made = false;
+        let (mut made, mut refit) = (false, false);
         let queue = device.new_command_queue().unwrap();
         for storage in [StorageMode::Shared, StorageMode::Private] {
             let options = ResourceOptions::new(
@@ -782,16 +799,20 @@ fn a_buffer_write_shows_in_an_overlapping_texture() {
                     let mut descriptor = rgba8(side, options);
                     descriptor.usage = usage;
                     let what = format!("{storage:?} {side}x{side} {usage:?}");
+                    let before = device.work_counts().heap_textures_refit;
                     let Some(unchanged) = alias_round_trip(&queue, &heap, &descriptor, &what)
                     else {
                         continue;
                     };
                     made = true;
+                    let fitted = device.work_counts().heap_textures_refit > before;
+                    refit |= fitted;
+                    eprintln!("HEAPTEX alias {what}: in place of its first image {fitted}");
                     assert_eq!(unchanged, 0, "{what}: texels the buffer's write left alone");
                 }
             }
         }
-        (hides, made)
+        (hides, made, refit)
     };
     let notices = counts(&messages.take_notices());
     let [transfer, linear, hidden] = ALIASES.map(|kind| notices.get(&kind).copied().unwrap_or(0));
@@ -800,7 +821,8 @@ fn a_buffer_write_shows_in_an_overlapping_texture() {
          {hidden} heap-texture-hides-aliased-writes notices"
     );
     assert_eq!(hidden, 0);
-    assert_eq!(transfer + linear, usize::from(hides && made));
+    assert!(transfer <= 1 && linear <= 1, "a route announced twice");
+    assert_eq!(transfer + linear > 0, (hides && made) || refit);
     layer_reported_nothing_at_all(&messages);
 }
 
@@ -808,17 +830,21 @@ fn a_buffer_write_shows_in_an_overlapping_texture() {
 /// compressed image's texels apart from its memory
 /// (`DriverFact::CompressedImagesHideAliasedWrites`: ANV), a heap's `RGBA8Unorm` texture that Metal
 /// keeps losslessly compressed (render-target and sampled-only usage, 64 and 1024 texels a side)
-/// takes the driver's compressed image, announced once (`heap-texture-compressed`); its texels the
-/// buffer's write may leave alone, as Metal's compressed texture shows such a write otherwise than
-/// as written: printed (`HEAPTEX compressed` lines), not asserted. One Metal keeps uncompressed
-/// (storage usage, or 8 texels a side) takes the uncompressed image it takes under
-/// `HeapCompressionPolicy::Uncompressed`, so the buffer's write changes every texel it reads
-/// ([`alias_round_trip`]). Elsewhere no route is announced.
+/// takes the driver's compressed image where that image fits Metal's answer, announced once
+/// (`heap-texture-compressed`); its texels the buffer's write may leave alone, as Metal's
+/// compressed texture shows such a write otherwise than as written: printed (`HEAPTEX compressed`
+/// lines), not asserted. Where the compressed image does not fit (ANV on an Iris Xe aligns it to
+/// 64 KiB, where Metal answers 128), the texture lies in place as an image that fits
+/// (`WorkCounts::heap_textures_refit`: host-transfer usage or a linear image). That one, and one
+/// Metal keeps uncompressed (storage usage, or 8 texels a side), which takes the uncompressed image
+/// it takes under `HeapCompressionPolicy::Uncompressed`, show the buffer's write in every texel
+/// they read ([`alias_round_trip`]), announced `heap-texture-host-transfer` or
+/// `heap-texture-linear`, each once. Elsewhere no route is announced.
 #[test]
 fn a_heap_texture_metal_compresses_keeps_the_driver_s_compression_by_default() {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
-    let (hides, compressed_made, uncompressed_made) = {
+    let (hides, compressed_made, uncompressed_made, refit) = {
         let device = &validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
             options.policy.heap_compression = HeapCompressionPolicy::Compressed;
         })
@@ -827,7 +853,7 @@ fn a_heap_texture_metal_compresses_keeps_the_driver_s_compression_by_default() {
             .properties()
             .driver_facts
             .contains(&DriverFact::CompressedImagesHideAliasedWrites);
-        let (mut compressed_made, mut uncompressed_made) = (false, false);
+        let (mut compressed_made, mut uncompressed_made, mut refit) = (false, false, false);
         let queue = device.new_command_queue().unwrap();
         for storage in [StorageMode::Shared, StorageMode::Private] {
             let options = tracked(storage);
@@ -853,19 +879,23 @@ fn a_heap_texture_metal_compresses_keeps_the_driver_s_compression_by_default() {
                 let mut descriptor = rgba8(side, options);
                 descriptor.usage = usage;
                 let what = format!("{storage:?} {side}x{side} {usage:?}");
+                let before = device.work_counts().heap_textures_refit;
                 let Some(unchanged) = alias_round_trip(&queue, &heap, &descriptor, &what) else {
                     continue;
                 };
-                if compressed {
+                let fitted = device.work_counts().heap_textures_refit > before;
+                refit |= fitted;
+                if compressed && !fitted {
                     compressed_made = true;
                     eprintln!("HEAPTEX compressed {what}: {unchanged} texels unchanged");
                 } else {
-                    uncompressed_made = true;
+                    uncompressed_made |= !compressed;
+                    eprintln!("HEAPTEX uncompressed {what}: in place of a shadow {fitted}");
                     assert_eq!(unchanged, 0, "{what}: texels the buffer's write left alone");
                 }
             }
         }
-        (hides, compressed_made, uncompressed_made)
+        (hides, compressed_made, uncompressed_made, refit)
     };
     let notices = counts(&messages.take_notices());
     let count = |kind: Degradation| notices.get(&kind).copied().unwrap_or(0);
@@ -878,7 +908,9 @@ fn a_heap_texture_metal_compresses_keeps_the_driver_s_compression_by_default() {
     );
     assert_eq!(compressed, usize::from(hides && compressed_made));
     assert_eq!(hidden, 0);
-    assert_eq!(transfer + linear, usize::from(hides && uncompressed_made));
+    assert!(transfer <= 1 && linear <= 1, "a route announced twice");
+    let routed = (hides && uncompressed_made) || refit;
+    assert_eq!(transfer + linear > 0, routed);
     layer_reported_nothing_at_all(&messages);
 }
 
@@ -1305,7 +1337,8 @@ fn tiling_refusal(error: &Error) -> Option<LinearNeed> {
 /// the footprint **and** makes the texture, so the refusal is this crate's open gap and the
 /// `HEAPTEX shared no image` lines name every format and descriptor it covers. Every such format
 /// answers in all four swept usages, counted from that table, so one that stops answering fails
-/// rather than passing as a query and a call that both refuse. An ASTC texture on a device that
+/// rather than passing as a query and a call that both refuse. A footprint format held for copies
+/// alone (`metal::format::copies_only`) is made instead, in all four, counted from that table too. An ASTC texture on a device that
 /// holds it in a carrier with a decoded twin (lavapipe) answers Metal's model of its blocks and is
 /// refused its making, `NotImplemented(DecodedHeapTexture)`: the twin would decode what the heap's
 /// bytes held. `HEAPTEX shared decoded` lines name each.
@@ -1333,6 +1366,7 @@ fn shared_heap_textures_are_made_or_refused_for_linear_tiling() {
         );
         let staged = device.work_counts().staging_submissions;
         let (mut made, mut round_trips, mut refused) = (0usize, 0usize, Vec::new());
+        let mut copies = 0usize;
         let mut changed = Vec::new();
         let mut changed_again = Vec::new();
         let mut gaps = Vec::new();
@@ -1345,6 +1379,7 @@ fn shared_heap_textures_are_made_or_refused_for_linear_tiling() {
             match (query, call) {
                 (Ok(_), Ok(texture)) => {
                     made += 1;
+                    copies += usize::from(copies_only(descriptor.pixel_format));
                     let Some(bytes) = texel_bytes(descriptor.pixel_format) else {
                         return;
                     };
@@ -1530,14 +1565,24 @@ fn shared_heap_textures_are_made_or_refused_for_linear_tiling() {
             "colour textures refused as gaps: {gaps:#?}"
         );
         // Every format whose footprint its own structure decides answered that footprint in all
-        // four swept usages, the packed 10-bit pair's `NoTexture` 0 bytes at 16 among them (the
-        // arm above). The count comes from the product's own table rather than a number here, so
-        // a footprint that stops answering fails this instead of passing quietly as a query and a
-        // call that both refuse.
+        // four swept usages: one held for copies alone (`copies_only`) with its texture made, every
+        // other with no image of the format, the packed 10-bit pair's `NoTexture` 0 bytes at 16
+        // among them (the arm above). The counts come from the product's own tables rather than
+        // numbers here, so a footprint that stops answering, or a held format whose making stops,
+        // fails this instead of passing quietly as a query and a call that both refuse.
+        let held = PixelFormat::ALL
+            .iter()
+            .filter(|&&pf| copies_only(pf))
+            .count();
         let answering = PixelFormat::ALL
             .iter()
-            .filter(|&&pf| footprint(pf).is_some())
+            .filter(|&&pf| footprint(pf).is_some() && !copies_only(pf))
             .count();
+        assert_eq!(
+            copies,
+            held * SWEPT_USAGES.len(),
+            "textures made of the formats held for copies alone"
+        );
         assert_eq!(
             no_image.len(),
             answering * SWEPT_USAGES.len(),
@@ -1709,7 +1754,7 @@ fn heap_texture_buffer(case: &PublicCase, index: u32, heap: &Heap, offset: u64) 
 /// writes and leaves the bytes around it; in a `Shared` and a `Private` heap.
 #[test]
 fn a_heap_texture_buffer_is_the_heap_s_bytes() {
-    on_device(|device| {
+    on_device_with(at_plan, |device| {
         let queue = device.new_command_queue().unwrap();
         let reader = public_case(FOUR_TEXEL_READS).unwrap();
         let read = run_case(device, &reader).unwrap().output;
@@ -1798,7 +1843,7 @@ fn heap_depth_textures_keep_their_bytes() {
     // Whether the driver lays the textures apart, whether one was made in a heap, and whether
     // the fill changed every texel of the first in each storage made.
     let (apart, made, all_changed) = {
-        let device = &validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = &validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         let apart = device
             .properties()
             .driver_facts
@@ -2184,6 +2229,506 @@ fn heap_depth_textures_keep_their_texels_in_metal_s_tiles() {
     layer_reported_nothing_at_all(&messages);
 }
 
+/// A CPU write of a heap's `Depth32Float` texture's bytes made while its command buffer runs,
+/// after the shadow's copy in read them and before the keep of a later command that writes
+/// another texel through the texture, is kept, as Metal keeps a write of bytes no command
+/// touches (`shadow.rs`, **Merged back**), and the command's write is merged. The command buffer:
+/// a blit reads one texel (the copy in), into the spin's spare bytes, which orders the spin
+/// ([`Busy::spin_in`]) after it; then a blit encoder whose first copy reads the word the spin
+/// publishes, so the keep before its next copy, which writes texel `(3, 1)`, runs after the
+/// spin. The CPU writes texel `(3, 0)` where Metal's tiles place it, in a buffer over the heap's
+/// bytes (`heap_layouts::tiled_offset`), once the spin raised its ticket, and then releases the
+/// spin. The CPU's bytes are kept, and a blit reads the blit's texel; where the texture is a
+/// shadow of Metal's tiles, the heap's bytes hold that texel where they place it and every other
+/// texel as it was (one in place lays its texels out as its driver does). The texture's image holds the copied texels between, so a keep of the heap's bytes as
+/// it runs would hold the CPU's write, and the merge would undo it with the image's value; the
+/// keep holds the bytes the copy in read. A `HEAPTEX keep after copy in` line prints whether the
+/// write fell between: after the spin began (its ticket seen, where the device shows the host a
+/// running kernel's store, or the command buffer's GPU start time 2 ms before it), and before the
+/// spin ended, by its release or by its cap of 250 ms of GPU time (ANV on the Iris Xe showed the
+/// host no ticket and the spin no release, and its cap ended it); elsewhere the writes are kept
+/// all the same. Where the device makes the
+/// texture a shadow of Metal's tiles (`WorkCounts::heap_textures_tiled`), the merge is counted
+/// (`WorkCounts::shadow_merge_dispatches_planned`), and its keep not as one right after its copy
+/// in (`WorkCounts::shadow_keeps_from_staging`): the first encoder's is the only copy in.
+#[test]
+fn a_heap_depth_texture_keeps_a_cpu_write_made_after_its_copy_in() {
+    use super::first_use::{release, Busy};
+    use super::heap_layouts::tiled_offset;
+    use metal2vulkan_runtime::host_time;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::time::{Duration, Instant};
+    // The word at `index` of a Shared buffer, read atomically while the GPU may write it.
+    let word = |buffer: &Buffer, index: usize| {
+        let contents = buffer.contents().expect("a Shared buffer");
+        // SAFETY: a 4-aligned word inside the buffer, which the host only reads.
+        let word = unsafe { AtomicU32::from_ptr(contents.as_ptr().cast::<u32>().add(index)) };
+        word.load(Ordering::SeqCst)
+    };
+    let messages = Messages::default();
+    let cache = ScratchCache::new().unwrap();
+    {
+        let device = &validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let queue = device.new_command_queue().unwrap();
+        let busy = Busy::new(device, &queue);
+        let options = tracked(StorageMode::Shared);
+        let [w, h] = [37, 5];
+        let mut descriptor = TextureDescriptor::texture_2d(PixelFormat::Depth32Float, w, h, false);
+        descriptor.resource_options = options;
+        descriptor.usage = TextureUsage::SHADER_READ | TextureUsage::RENDER_TARGET;
+        descriptor.allow_gpu_optimized_contents = false;
+        let answer = device.heap_texture_size_and_align(&descriptor).unwrap();
+        let heap = heap(device, HeapType::Placement, 1 << 20, options);
+        let made = device.work_counts();
+        let texture = heap.new_texture_at_offset(&descriptor, 0).unwrap();
+        let tiled = device.work_counts().heap_textures_tiled > made.heap_textures_tiled;
+        let over = heap.new_buffer_at_offset(answer.size, options, 0).unwrap();
+        // Texel `i`'s depth names it: (i + 1) / 2^23, exact and inside [0, 1].
+        let depth = |i: u64| ((i + 1) as f32 / (1u32 << 23) as f32).to_le_bytes();
+        let at = |i: u64| tiled_offset(4, [w, h], i % w, i / w) as usize;
+        let mut bytes = vec![0; answer.size as usize];
+        for i in 0..w * h {
+            bytes[at(i)..at(i) + 4].copy_from_slice(&depth(i));
+        }
+        let source = staged(device, &bytes);
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut copy = command_buffer.blit_command_encoder().unwrap();
+        copy.copy_from_buffer_to_buffer(&source, 0, &over, 0, answer.size)
+            .unwrap();
+        copy.end_encoding().unwrap();
+        run(&command_buffer);
+        let (cpu_texel, gpu_texel) = (3, w + 3);
+        let (cpu, written) = (0.5f32.to_le_bytes(), 0.25f32.to_le_bytes());
+        let value = staged(device, &written);
+        let words = staged(device, &[0; 16]);
+        let sink = staged(device, &[0; 4]);
+        let counted = device.work_counts();
+        let command_buffer = queue.command_buffer().unwrap();
+        let one = Size::new(1, 1, 1);
+        let mut read = command_buffer.blit_command_encoder().unwrap();
+        read.copy_from_texture_to_buffer(
+            &texture,
+            0,
+            0,
+            Origin::new(0, 0, 0),
+            one,
+            &words,
+            8,
+            4,
+            4,
+            BlitOption::None,
+        )
+        .unwrap();
+        read.end_encoding().unwrap();
+        let ticket = busy.spin_in(device, &command_buffer, &words);
+        let mut write = command_buffer.blit_command_encoder().unwrap();
+        write
+            .copy_from_buffer_to_buffer(&words, 4, &sink, 0, 4)
+            .unwrap();
+        write
+            .copy_from_buffer_to_texture(
+                &value,
+                0,
+                4,
+                4,
+                one,
+                &texture,
+                0,
+                0,
+                Origin::new(gpu_texel % w, gpu_texel / w, 0),
+                BlitOption::None,
+            )
+            .unwrap();
+        write.end_encoding().unwrap();
+        command_buffer.commit().unwrap();
+        // The spin's ticket raised, where the device shows the host a running kernel's store;
+        // else 20 ms on, which the GPU's start of the command buffer is checked against below.
+        let deadline = Instant::now() + Duration::from_millis(20);
+        let seen = loop {
+            match word(&ticket, 0) == 2 {
+                true => break true,
+                false if Instant::now() >= deadline => break false,
+                false => std::thread::sleep(Duration::from_micros(50)),
+            }
+        };
+        let written_at = host_time();
+        let contents = over.contents().expect("a Shared heap's buffer");
+        // SAFETY: the texel's four bytes inside the buffer, which no command of the running
+        // command buffer touches.
+        unsafe {
+            let texel = contents.as_ptr().add(at(cpu_texel));
+            std::ptr::copy_nonoverlapping(cpu.as_ptr(), texel, 4);
+        }
+        release(&words);
+        command_buffer
+            .wait_until_completed_for(super::WAIT)
+            .unwrap();
+        assert_eq!(command_buffer.error(), None);
+        // Between the copy in and the keep: after the spin started (its ticket seen, or the
+        // command buffer begun on the GPU 2 ms before), and before the spin ended, by its release
+        // or by its cap, 250 ms of the GPU's time at the fastest rate its calibration measured
+        // (`Busy::new`), from its start, which runs after the command buffer's.
+        let started = command_buffer.gpu_start_time().unwrap_or(f64::MAX);
+        let begun = seen || started + 0.002 < written_at;
+        let released = word(&words, 1) == 5;
+        let before_cap = written_at < started + 0.2;
+        let after = device.work_counts();
+        let merges =
+            after.shadow_merge_dispatches_planned - counted.shadow_merge_dispatches_planned;
+        let staged_keeps = after.shadow_keeps_from_staging - counted.shadow_keeps_from_staging;
+        eprintln!(
+            "HEAPTEX keep after copy in: tiled {tiled}, the CPU's write between the copy in and \
+             the keep {} (the ticket seen {seen}, the GPU began {:.1} ms before the write, the \
+             spin released {released}), {merges} merge dispatches, {staged_keeps} keeps from \
+             staging right after a copy in",
+            begun && (released || before_cap),
+            (written_at - started) * 1e3
+        );
+        if tiled {
+            assert!(merges > 0, "the merge");
+            assert_eq!(staged_keeps, 0, "a keep apart from its copy in");
+        }
+        let bytes = gpu_read(&queue, &over, 0..answer.size);
+        let texel = |i: u64| &bytes[at(i)..at(i) + 4];
+        assert_eq!(texel(cpu_texel), cpu, "the CPU's write since the copy in");
+        let read = staged(device, &[0; 4]);
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut blit = command_buffer.blit_command_encoder().unwrap();
+        let origin = Origin::new(gpu_texel % w, gpu_texel / w, 0);
+        blit.copy_from_texture_to_buffer(
+            &texture,
+            0,
+            0,
+            origin,
+            one,
+            &read,
+            0,
+            4,
+            4,
+            BlitOption::None,
+        )
+        .unwrap();
+        blit.end_encoding().unwrap();
+        run(&command_buffer);
+        assert_eq!(
+            read_buffer(&read, 0, 4).unwrap(),
+            written,
+            "the blit's write"
+        );
+        // A texture in place lays its texels out as its driver does: where Metal's tiles hold
+        // them, each lies where they place it.
+        if tiled {
+            assert_eq!(
+                texel(gpu_texel),
+                written,
+                "the blit's write in the heap's bytes"
+            );
+            let off: Vec<u64> = (0..w * h)
+                .filter(|&i| i != cpu_texel && i != gpu_texel && texel(i) != depth(i))
+                .collect();
+            assert!(off.is_empty(), "texels no write touched: {off:?}");
+        }
+    }
+    layer_reported_nothing_at_all(&messages);
+}
+
+/// A heap's `Depth32Float` texture whose bytes hold depths outside `[0, 1]` (1.5, -0.5, 2.0, a NaN,
+/// an infinity and `0xeeeeeeee`, beside `-0.0` and depths inside,
+/// `depth_upload_clamps::depth_bits`) takes them into its image with no copy outside that range,
+/// under the validation layer (`depth_upload_clamps::gpu_assisted_device`, whose messages
+/// `depth_upload_clamps::reported_no_depth_outside_0_1` checks; its copy check off). Where the
+/// device would store such a depth clamped (`depth_upload_clamps::clamps`), its shadow's copy in
+/// clamps each into `[0, 1]`, a NaN to 1.0 and `-0.0` kept, and a blit of the texture into a buffer
+/// reads the clamped values; elsewhere it reads the bytes as they are. A `-0.0` reads as the device
+/// stores it, with its sign or as `0.0` (ANV's depth images keep no zero's sign). Both where the
+/// texture is a shadow of Metal's tiles, as on ANV and MoltenVK; one in place (lavapipe) lays its
+/// texels out as its driver does and copies nothing in. The texture is a `Shared` placement heap's
+/// 37x5 one, its bytes written through a buffer over them where Metal's tiles place each texel
+/// (`heap_layouts::tiled_offset`). `HEAPTEX depth range` prints whether it was a shadow of Metal's
+/// tiles (`WorkCounts::heap_textures_tiled`), the route that copies it in, and the layer's other
+/// messages.
+#[test]
+fn a_heap_depth_texture_s_copy_in_takes_no_depth_outside_0_1() {
+    use super::depth_upload_clamps::{
+        clamps, depth_bits, gpu_assisted_device, reported_no_depth_outside_0_1, stored_as,
+    };
+    use super::heap_layouts::tiled_offset;
+    let messages = Messages::default();
+    let cache = ScratchCache::new().unwrap();
+    let (clamps, tiled, read) = {
+        let device = &gpu_assisted_device(&messages, cache.path());
+        let clamps = clamps(device);
+        let queue = device.new_command_queue().unwrap();
+        let options = tracked(StorageMode::Shared);
+        let [w, h] = [37, 5];
+        let mut descriptor = TextureDescriptor::texture_2d(PixelFormat::Depth32Float, w, h, false);
+        descriptor.resource_options = options;
+        descriptor.usage = TextureUsage::SHADER_READ | TextureUsage::RENDER_TARGET;
+        descriptor.allow_gpu_optimized_contents = false;
+        let answer = device.heap_texture_size_and_align(&descriptor).unwrap();
+        let heap = heap(device, HeapType::Placement, 1 << 20, options);
+        let made = device.work_counts();
+        let texture = heap.new_texture_at_offset(&descriptor, 0).unwrap();
+        let tiled = device.work_counts().heap_textures_tiled > made.heap_textures_tiled;
+        let over = heap.new_buffer_at_offset(answer.size, options, 0).unwrap();
+        let mut bytes = vec![0; answer.size as usize];
+        for i in 0..w * h {
+            let at = tiled_offset(4, [w, h], i % w, i / w) as usize;
+            bytes[at..at + 4].copy_from_slice(&depth_bits(i).to_le_bytes());
+        }
+        let source = staged(device, &bytes);
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut copy = command_buffer.blit_command_encoder().unwrap();
+        copy.copy_from_buffer_to_buffer(&source, 0, &over, 0, answer.size)
+            .unwrap();
+        copy.end_encoding().unwrap();
+        run(&command_buffer);
+        let row = 4 * w;
+        let into = staged(device, &vec![0; (row * h) as usize]);
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut blit = command_buffer.blit_command_encoder().unwrap();
+        blit.copy_from_texture_to_buffer(
+            &texture,
+            0,
+            0,
+            Origin::new(0, 0, 0),
+            Size::new(w, h, 1),
+            &into,
+            0,
+            row,
+            row * h,
+            BlitOption::None,
+        )
+        .unwrap();
+        blit.end_encoding().unwrap();
+        run(&command_buffer);
+        (clamps, tiled, read_buffer(&into, 0, row * h).unwrap())
+    };
+    let label = format!("HEAPTEX depth range: clamps {clamps}, tiled {tiled}");
+    reported_no_depth_outside_0_1(&messages, &label, false);
+    // A texture in place lays its texels out as its driver does, and copies nothing in: only a
+    // shadow of Metal's tiles reads each texel where they place it.
+    let off: Vec<(u64, u32, u32)> = (0..37 * 5)
+        .filter(|_| tiled)
+        .filter_map(|i| {
+            let at = (4 * i) as usize;
+            let got = u32::from_le_bytes(read[at..at + 4].try_into().unwrap());
+            (!stored_as(depth_bits(i), got, clamps)).then_some((i, depth_bits(i), got))
+        })
+        .collect();
+    assert!(
+        off.is_empty(),
+        "texels read otherwise (texel, bits, read): {off:x?}"
+    );
+}
+
+/// A heap's texture of a format that presents no depth over an image of both aspects
+/// (`X32_Stencil8`, a `D32_SFLOAT_S8_UINT` image) moves its stencil alone between the heap's bytes
+/// and its image: Metal's texture has no depth, its 32 bits beside the stencil padding it never
+/// presents. In a `Shared` placement heap, its bytes first written as words of NaN patterns of both
+/// signs, infinities, values outside `[0, 1]`, a negative zero and others, a blit reads each
+/// stencil as the byte where Metal's tiles place it (`heap_layouts::tiled_offset`, a byte a texel),
+/// a blit's write into part of the texture changes those bytes alone, and every other byte of the
+/// texture's answer keeps its value byte for byte; it announces no `restricted-depth-upload`, and
+/// the layer reports no copy of a depth outside `[0, 1]` (its copy check off,
+/// `depth_upload_clamps::gpu_assisted_device`). Of 37x5 with `allowGPUOptimizedContents` off and
+/// on, and of 64x64 with it on (which Metal keeps losslessly compressed: a shadow of its
+/// uncompressed tiles). A `Depth32Float_Stencil8` texture of 37x5 in the same kind of heap, on a
+/// device of its own without GPU-assisted validation (whose copy check, where on, reads a combined
+/// image's depth at 5 bytes a texel, past the copy's depths: `reported_no_depth_outside_0_1`),
+/// still takes its depth clamped where the device clamps (`depth_upload_clamps::clamps`): a shadow
+/// of Metal's tiles there announces `restricted-depth-upload`, and its depth reads as the device
+/// stores it (`stored_as`). `HEAPTEX stencil alone` lines print each texture's route and what
+/// differed.
+#[test]
+fn a_heap_stencil_texture_over_a_combined_image_moves_its_stencil_alone() {
+    use super::depth_upload_clamps::{
+        clamps, depth_bits, gpu_assisted_device, reported_no_depth_outside_0_1, stored_as,
+    };
+    use super::heap_layouts::tiled_offset;
+    /// A texture of `descriptor` at a new `Shared` placement heap's first byte, a buffer over its
+    /// answer's bytes, the answer's size, and whether it is a shadow of Metal's tiles.
+    fn made(device: &Device, descriptor: &TextureDescriptor) -> (Heap, Texture, Buffer, u64, bool) {
+        let options = descriptor.resource_options;
+        let answer = device.heap_texture_size_and_align(descriptor).unwrap();
+        let heap = heap(device, HeapType::Placement, 1 << 20, options);
+        let before = device.work_counts().heap_textures_tiled;
+        let texture = heap.new_texture_at_offset(descriptor, 0).unwrap();
+        let tiled = device.work_counts().heap_textures_tiled > before;
+        let over = heap.new_buffer_at_offset(answer.size, options, 0).unwrap();
+        (heap, texture, over, answer.size, tiled)
+    }
+    /// `bytes` written over `over`'s.
+    fn write(queue: &CommandQueue, over: &Buffer, bytes: &[u8]) {
+        let source = staged(queue.device(), bytes);
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut copy = command_buffer.blit_command_encoder().unwrap();
+        copy.copy_from_buffer_to_buffer(&source, 0, over, 0, bytes.len() as u64)
+            .unwrap();
+        copy.end_encoding().unwrap();
+        run(&command_buffer);
+    }
+    /// A blit of the texels of `origin` and `size` between `texture`'s `option` and `buffer`
+    /// (`into` the texture, else out of it), rows of `row` bytes there.
+    fn blit(
+        queue: &CommandQueue,
+        into: bool,
+        (texture, option): (&Texture, BlitOption),
+        buffer: &Buffer,
+        (origin, size): (Origin, Size),
+        row: u64,
+    ) {
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut blit = command_buffer.blit_command_encoder().unwrap();
+        let image = row * size.height;
+        match into {
+            true => blit.copy_from_buffer_to_texture(
+                buffer, 0, row, image, size, texture, 0, 0, origin, option,
+            ),
+            false => blit.copy_from_texture_to_buffer(
+                texture, 0, 0, origin, size, buffer, 0, row, image, option,
+            ),
+        }
+        .unwrap();
+        blit.end_encoding().unwrap();
+        run(&command_buffer);
+    }
+    // Word `i` of the heap's bytes.
+    let word = |i: u64| -> u32 {
+        match i % 8 {
+            0 => 0x7fc0_0000,
+            1 => 0xffff_ffff,
+            2 => 0x7f80_0001,
+            3 => f32::NEG_INFINITY.to_bits(),
+            4 => 1.5f32.to_bits(),
+            5 => (-0.0f32).to_bits(),
+            6 => 0xdead_beef,
+            _ => (i as u32).wrapping_mul(0x9e37_79b9),
+        }
+    };
+    let words = |size: u64| -> Vec<u8> {
+        (0..size.div_ceil(4))
+            .flat_map(|i| word(i).to_le_bytes())
+            .take(size as usize)
+            .collect()
+    };
+    let options = tracked(StorageMode::Shared);
+    let cache = ScratchCache::new().unwrap();
+    let messages = Messages::default();
+    let mut tiled = Vec::new();
+    {
+        let device = &gpu_assisted_device(&messages, cache.path());
+        let clamps = clamps(device);
+        let queue = &device.new_command_queue().unwrap();
+        for ([w, h], allow) in [([37, 5], false), ([37, 5], true), ([64, 64], true)] {
+            let what = format!("X32Stencil8 {w}x{h} allow {allow}");
+            let mut descriptor =
+                TextureDescriptor::texture_2d(PixelFormat::X32Stencil8, w, h, false);
+            descriptor.resource_options = options;
+            descriptor.usage = TextureUsage::SHADER_READ;
+            descriptor.allow_gpu_optimized_contents = allow;
+            let (_heap, texture, over, size, shadow) = made(device, &descriptor);
+            tiled.push(shadow);
+            let bytes = words(size);
+            write(queue, &over, &bytes);
+            let at = |x: u64, y: u64| tiled_offset(1, [w, h], x, y) as usize;
+            let stencil = (&texture, BlitOption::None);
+            let whole = (Origin::new(0, 0, 0), Size::new(w, h, 1));
+            let read = staged(device, &vec![0; (w * h) as usize]);
+            blit(queue, false, stencil, &read, whole, w);
+            let read = read_buffer(&read, 0, w * h).unwrap();
+            let read_off: Vec<(u64, u8, u8)> = (0..w * h)
+                .map(|i| (i, bytes[at(i % w, i / w)], read[i as usize]))
+                .filter(|&(_, held, got)| held != got)
+                .collect();
+            // Texels (5, 1) to (14, 3) written, each the complement of its byte.
+            let ([x, y], [across, down]) = ([5, 1], [10, 3]);
+            let mut want = bytes.clone();
+            let mut stencils = Vec::new();
+            for y in y..y + down {
+                for x in x..x + across {
+                    want[at(x, y)] = !bytes[at(x, y)];
+                    stencils.push(want[at(x, y)]);
+                }
+            }
+            let part = (Origin::new(x, y, 0), Size::new(across, down, 1));
+            let source = staged(device, &stencils);
+            blit(queue, true, stencil, &source, part, across);
+            let after = gpu_read(queue, &over, 0..size);
+            let changed: Vec<(usize, u8, u8)> = (0..size as usize)
+                .filter(|&i| after[i] != want[i])
+                .map(|i| (i, want[i], after[i]))
+                .collect();
+            eprintln!(
+                "HEAPTEX stencil alone {what}: clamps {clamps}, tiled {shadow}, {size} bytes; \
+                 {} of {} stencils read otherwise than the bytes hold them {:x?}, {} bytes \
+                 otherwise than written {:x?}",
+                read_off.len(),
+                w * h,
+                &read_off[..read_off.len().min(8)],
+                changed.len(),
+                &changed[..changed.len().min(8)]
+            );
+            assert!(read_off.is_empty(), "{what}: stencils read otherwise");
+            assert!(changed.is_empty(), "{what}: bytes otherwise than written");
+        }
+        assert!(
+            !announced(&messages, Degradation::RestrictedDepthUpload),
+            "an X32Stencil8 texture announced restricted-depth-upload"
+        );
+    }
+    reported_no_depth_outside_0_1(&messages, "HEAPTEX stencil alone X32Stencil8", false);
+    // The `Depth32Float_Stencil8` texture's depth plane at its first byte, each texel's depth
+    // where Metal's tiles place it.
+    let messages = Messages::default();
+    let (clamps, shadow, restricted, depth_off) = {
+        let device = &validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let clamps = clamps(device);
+        let queue = &device.new_command_queue().unwrap();
+        let [w, h] = [37, 5];
+        let mut descriptor =
+            TextureDescriptor::texture_2d(PixelFormat::Depth32FloatStencil8, w, h, false);
+        descriptor.resource_options = options;
+        descriptor.usage = TextureUsage::SHADER_READ | TextureUsage::RENDER_TARGET;
+        descriptor.allow_gpu_optimized_contents = false;
+        let (_heap, texture, over, size, shadow) = made(device, &descriptor);
+        let mut bytes = words(size);
+        for i in 0..w * h {
+            let at = tiled_offset(4, [w, h], i % w, i / w) as usize;
+            bytes[at..at + 4].copy_from_slice(&depth_bits(i).to_le_bytes());
+        }
+        write(queue, &over, &bytes);
+        let row = 4 * w;
+        let read = staged(device, &vec![0; (row * h) as usize]);
+        let depth = (&texture, BlitOption::DepthFromDepthStencil);
+        let whole = (Origin::new(0, 0, 0), Size::new(w, h, 1));
+        blit(queue, false, depth, &read, whole, row);
+        let read = read_buffer(&read, 0, row * h).unwrap();
+        // A texture in place lays its texels out as its driver does, and copies nothing in.
+        let depth_off: Vec<(u64, u32, u32)> = (0..w * h)
+            .filter(|_| shadow)
+            .filter_map(|i| {
+                let at = (4 * i) as usize;
+                let got = u32::from_le_bytes(read[at..at + 4].try_into().unwrap());
+                (!stored_as(depth_bits(i), got, clamps)).then_some((i, depth_bits(i), got))
+            })
+            .collect();
+        let restricted = announced(&messages, Degradation::RestrictedDepthUpload);
+        (clamps, shadow, restricted, depth_off)
+    };
+    let label = format!(
+        "HEAPTEX stencil alone Depth32FloatStencil8 37x5: clamps {clamps}, X32Stencil8 tiled \
+         {tiled:?}, tiled {shadow}, restricted-depth-upload {restricted}, {} depths read \
+         otherwise {:x?}",
+        depth_off.len(),
+        &depth_off[..depth_off.len().min(8)]
+    );
+    eprintln!("{label}");
+    layer_reported_nothing_at_all(&messages);
+    assert!(depth_off.is_empty(), "{label}");
+    assert_eq!(restricted, clamps && shadow, "{label}");
+}
+
 /// One aspect of one slice of a multisample texture a lane moves ([`sample_round_trip`]): its
 /// element bytes, its blit option, the slice, and its plane's first byte in that slice from the
 /// texture's.
@@ -2331,6 +2876,8 @@ fn heap_multisample_textures_keep_their_samples_in_metal_s_tiles() {
         let facts = &device.properties().driver_facts;
         let tiled = facts.contains(&DriverFact::DepthStencilImagesLieApart)
             || facts.contains(&DriverFact::DepthStencilImagesStayGpuOptimized);
+        // A device whose copies clamp a depth outside `[0, 1]` into a depth image.
+        let clamps = super::degrade_notices::clamps_depth_uploads(device);
         let queue = device.new_command_queue().unwrap();
         let options = tracked(StorageMode::Shared);
         let ds = PixelFormat::Depth32FloatStencil8;
@@ -2442,6 +2989,15 @@ fn heap_multisample_textures_keep_their_samples_in_metal_s_tiles() {
             let before = device.work_counts().heap_textures_tiled;
             let texture = heap.new_texture_at_offset(&descriptor, 0).unwrap();
             let counted = device.work_counts().heap_textures_tiled - before == 1;
+            let float_depth = format == d32 || format == ds;
+            if counted && float_depth {
+                // Its shadow's copies in hand its image whatever the heap's bytes hold.
+                let upload = announced(&messages, Degradation::RestrictedDepthUpload);
+                assert_eq!(
+                    upload, clamps,
+                    "{what}: restricted-depth-upload as it is made"
+                );
+            }
             let over = heap.new_buffer_at_offset(answer.size, options, 0).unwrap();
             gpu_fill(&queue, &over, 0..answer.size, 0xee);
             let read = || gpu_read(&queue, &over, 0..answer.size);
@@ -2455,6 +3011,7 @@ fn heap_multisample_textures_keep_their_samples_in_metal_s_tiles() {
                 run(&command_buffer);
             };
             let shape = ([w, h], samples);
+            let staged = device.work_counts().shadow_keeps_from_staging;
             let Some((off, read_off)) =
                 sample_round_trip(&queue, &texture, shape, &aspects, &read, &write)
             else {
@@ -2462,16 +3019,22 @@ fn heap_multisample_textures_keep_their_samples_in_metal_s_tiles() {
                 assert!(!counted, "{what}: tiled, but its blits refused");
                 continue;
             };
+            let staged = device.work_counts().shadow_keeps_from_staging - staged;
             let total = w * h * samples * aspects.len() as u64;
             eprintln!(
                 "HEAPTEX samples {what}: size {} align {}, Metal's {metal:?}; counted tiled \
                  {counted}; {off} of {total} samples off Metal's tiles, {read_off} read otherwise \
-                 from them",
+                 from them; {staged} keeps from staging",
                 answer.size, answer.align
             );
             if counted {
                 assert_eq!((answer.size, answer.align), metal, "{what}");
                 assert_eq!((off, read_off), (0, 0), "{what}: samples off Metal's tiles");
+                // A blit into one slice or aspect of a depth leaves texels its merge keeps: the
+                // heap's bytes its copy in took, not its image's, which the copy in may change.
+                if float_depth && aspects.len() > 1 {
+                    assert!(staged > 0, "{what}: a depth's keep of its image");
+                }
             }
             let moved = matches!(
                 format,
@@ -2497,6 +3060,16 @@ fn heap_multisample_textures_keep_their_samples_in_metal_s_tiles() {
     layer_reported_nothing_at_all(&messages);
 }
 
+/// Whether `messages` took or holds a notice of `kind`, left pending.
+fn announced(messages: &Messages, kind: Degradation) -> bool {
+    let pending = messages.take_notices();
+    messages.restore_notices(pending.clone());
+    messages.taken_kinds().contains(&kind)
+        || (pending.iter())
+            .filter_map(|message| message.degradation.as_ref())
+            .any(|notice| notice.degradation == kind)
+}
+
 /// A heap's colour textures that Metal keeps uncompressed, in a `Private` placement heap over the
 /// device's memory, lie where Metal's tiles place each texel (`heap_layouts::tiled_offset`) on a
 /// driver whose colour images lie as Metal's heap textures
@@ -2507,10 +3080,16 @@ fn heap_multisample_textures_keep_their_samples_in_metal_s_tiles() {
 /// texture counted for no layout lies in Metal's tiles.
 /// Kept uncompressed by `ShaderRead | ShaderWrite` usage: `RGBA8Unorm` of 64 x 64 and 37 x 5,
 /// `R8Unorm` of 100 x 70 and `RG16Float` of 300 x 200; by `allowGPUOptimizedContents` off:
-/// `RGBA8Unorm` of 64 x 64 of `ShaderRead` usage and of `ShaderRead | RenderTarget`; by a side
-/// shorter than 16: `RGBA8Unorm` of 8 x 8 of `ShaderRead` usage. Each is written by a blit naming
-/// each texel and found through a buffer over the heap; `HEAPTEX device-tiles` lines print the
-/// texels off the tiles.
+/// `RGBA8Unorm` of 64 x 64 of `ShaderRead` usage and of `ShaderRead | RenderTarget`, and of
+/// `ShaderRead` usage `ARGB8Unorm_sRGB`, `BGRA8Unorm_sRGB` and `RGBA8Unorm_sRGB` of 64 x 64, a
+/// 2-slice `ARGB8Unorm_sRGB` array of 64 x 64 and `RGBA16Float` of 4 x 4 (a consumer's report: on
+/// MoltenVK the `ARGB8Unorm_sRGB` texture's optimal image takes 16512 bytes, past Metal's 16384,
+/// where its linear image fits but lays its rows out otherwise than Metal's tiles); by a side
+/// shorter than 16: `RGBA8Unorm` of 8 x 8 and `RGBA16Float` of 1 x 1 of `ShaderRead` usage. Each
+/// slice is written by a blit naming each texel and found through a buffer over the heap, then
+/// the heap's bytes are written there through the buffer, naming each texel otherwise, and read
+/// back through a blit as those texels; `HEAPTEX device-tiles` lines print the texels off the
+/// tiles each way.
 #[test]
 fn device_heap_textures_lie_in_metal_s_tiles() {
     use super::heap_layouts::tiled_offset;
@@ -2527,75 +3106,150 @@ fn device_heap_textures_lie_in_metal_s_tiles() {
         let queue = device.new_command_queue().unwrap();
         let options = tracked(StorageMode::Private);
         let (read, written) = (TextureUsage::SHADER_READ, TextureUsage::SHADER_WRITE);
+        let target = read | TextureUsage::RENDER_TARGET;
+        let (rgba8, srgb) = (PixelFormat::RGBA8Unorm, PixelFormat::ARGB8UnormSRGB);
         let shapes = [
-            (PixelFormat::RGBA8Unorm, 4, [64, 64], read | written, true),
-            (PixelFormat::RGBA8Unorm, 4, [37, 5], read | written, true),
-            (PixelFormat::R8Unorm, 1, [100, 70], read | written, true),
-            (PixelFormat::RG16Float, 4, [300, 200], read | written, true),
-            (PixelFormat::RGBA8Unorm, 4, [64, 64], read, false),
+            (rgba8, 4, [64, 64], 1, read | written, true),
+            (rgba8, 4, [37, 5], 1, read | written, true),
+            (PixelFormat::R8Unorm, 1, [100, 70], 1, read | written, true),
             (
-                PixelFormat::RGBA8Unorm,
+                PixelFormat::RG16Float,
                 4,
-                [64, 64],
-                read | TextureUsage::RENDER_TARGET,
-                false,
+                [300, 200],
+                1,
+                read | written,
+                true,
             ),
-            (PixelFormat::RGBA8Unorm, 4, [8, 8], read, true),
+            (rgba8, 4, [64, 64], 1, read, false),
+            (rgba8, 4, [64, 64], 1, target, false),
+            (rgba8, 4, [8, 8], 1, read, true),
+            (srgb, 4, [64, 64], 1, read, false),
+            (PixelFormat::BGRA8UnormSRGB, 4, [64, 64], 1, read, false),
+            (PixelFormat::RGBA8UnormSRGB, 4, [64, 64], 1, read, false),
+            (srgb, 4, [64, 64], 2, read, false),
+            (PixelFormat::RGBA16Float, 8, [4, 4], 1, read, false),
+            (PixelFormat::RGBA16Float, 8, [1, 1], 1, read, true),
         ];
         let mut kept = Vec::new();
-        for (format, unit, [w, h], usage, optimized) in shapes {
-            let what = format!("{format:?} {w}x{h} {usage:?} optimized {optimized}");
+        for (format, unit, [w, h], slices, usage, optimized) in shapes {
+            let what = format!("{format:?} {w}x{h} x{slices} {usage:?} optimized {optimized}");
             let mut descriptor = TextureDescriptor::texture_2d(format, w, h, false);
+            if slices > 1 {
+                descriptor.texture_type = TextureType::Type2DArray;
+                descriptor.array_length = slices;
+            }
             descriptor.resource_options = options;
             descriptor.usage = usage;
             descriptor.allow_gpu_optimized_contents = optimized;
             let answer = device.heap_texture_size_and_align(&descriptor).unwrap();
+            // Each slice's chain lies at its stride from the one before.
+            let stride = answer.size / slices;
             let heap = heap(device, HeapType::Placement, 1 << 20, options);
             let made_before = device.degraded_objects(untiled).unwrap();
             let texture = heap.new_texture_at_offset(&descriptor, 0).unwrap();
             let announced = device.degraded_objects(untiled).unwrap() > made_before;
             let over = heap.new_buffer_at_offset(answer.size, options, 0).unwrap();
             gpu_fill(&queue, &over, 0..answer.size, 0);
-            // Texel `i`'s element, naming it: `unit` bytes of `i + 1`.
-            let element = |i: u64| (i + 1).to_le_bytes()[..unit as usize].to_vec();
             let count = w * h;
-            let named: Vec<u8> = (0..count).flat_map(element).collect();
+            // Texel `i` of `slice`'s element, naming both: `unit` bytes of a number, the second
+            // way's counted down from the first's.
+            let element = |slice: u64, i: u64, back: bool| {
+                let n = slice * count + i + 1;
+                let n = if back { 0xffff_ffff_ffff - n } else { n };
+                n.to_le_bytes()[..unit as usize].to_vec()
+            };
+            let at = |slice: u64, i: u64| {
+                (slice * stride + tiled_offset(unit, [w, h], i % w, i / w)) as usize
+            };
             let row = w * unit;
-            let source = staged(device, &named);
+            let size = Size::new(w, h, 1);
+            let origin = Origin::new(0, 0, 0);
+            let (mut off, mut read_off) = (0, 0);
+            for slice in 0..slices {
+                let named: Vec<u8> = (0..count).flat_map(|i| element(slice, i, false)).collect();
+                let source = staged(device, &named);
+                let command_buffer = queue.command_buffer().unwrap();
+                let mut blit = command_buffer.blit_command_encoder().unwrap();
+                blit.copy_from_buffer_to_texture(
+                    &source,
+                    0,
+                    row,
+                    row * h,
+                    size,
+                    &texture,
+                    slice,
+                    0,
+                    origin,
+                    BlitOption::None,
+                )
+                .unwrap();
+                blit.end_encoding().unwrap();
+                run(&command_buffer);
+            }
+            let mut bytes = gpu_read(&queue, &over, 0..answer.size);
+            for slice in 0..slices {
+                off += (0..count)
+                    .filter(|&i| {
+                        let at = at(slice, i);
+                        bytes.get(at..at + unit as usize) != Some(&element(slice, i, false)[..])
+                    })
+                    .count();
+            }
+            // The other way: the heap's bytes written through the buffer, read through the
+            // texture.
+            for slice in 0..slices {
+                for i in 0..count {
+                    let at = at(slice, i);
+                    if let Some(bytes) = bytes.get_mut(at..at + unit as usize) {
+                        bytes.copy_from_slice(&element(slice, i, true));
+                    }
+                }
+            }
+            let source = staged(device, &bytes);
             let command_buffer = queue.command_buffer().unwrap();
-            let mut blit = command_buffer.blit_command_encoder().unwrap();
-            blit.copy_from_buffer_to_texture(
-                &source,
-                0,
-                row,
-                row * h,
-                Size::new(w, h, 1),
-                &texture,
-                0,
-                0,
-                Origin::new(0, 0, 0),
-                BlitOption::None,
-            )
-            .unwrap();
-            blit.end_encoding().unwrap();
+            let mut copy = command_buffer.blit_command_encoder().unwrap();
+            copy.copy_from_buffer_to_buffer(&source, 0, &over, 0, answer.size)
+                .unwrap();
+            copy.end_encoding().unwrap();
             run(&command_buffer);
-            let bytes = gpu_read(&queue, &over, 0..answer.size);
-            let off = (0..count)
-                .filter(|&i| {
-                    let at = tiled_offset(unit, [w, h], i % w, i / w) as usize;
-                    bytes.get(at..at + unit as usize) != Some(&element(i)[..])
-                })
-                .count();
+            for slice in 0..slices {
+                let back = staged(device, &vec![0; (row * h) as usize]);
+                let command_buffer = queue.command_buffer().unwrap();
+                let mut blit = command_buffer.blit_command_encoder().unwrap();
+                blit.copy_from_texture_to_buffer(
+                    &texture,
+                    slice,
+                    0,
+                    origin,
+                    size,
+                    &back,
+                    0,
+                    row,
+                    row * h,
+                    BlitOption::None,
+                )
+                .unwrap();
+                blit.end_encoding().unwrap();
+                run(&command_buffer);
+                let back = read_buffer(&back, 0, row * h).unwrap();
+                read_off += (0..count)
+                    .filter(|&i| {
+                        let at = (i * unit) as usize;
+                        back[at..at + unit as usize] != element(slice, i, true)[..]
+                    })
+                    .count();
+            }
+            let total = count * slices;
             eprintln!(
-                "HEAPTEX device-tiles {what}: size {}, {off} of {count} texels off Metal's tiles \
-                 (fact {as_metal}, announced {announced})",
+                "HEAPTEX device-tiles {what}: size {}, of {total} texels {off} off Metal's tiles, \
+                 {read_off} read otherwise from them (fact {as_metal}, announced {announced})",
                 answer.size
             );
             if as_metal {
                 assert!(!announced, "{what}: counted untiled");
             }
             if !announced {
-                assert_eq!(off, 0, "{what}: texels off Metal's tiles");
+                assert_eq!((off, read_off), (0, 0), "{what}: texels off Metal's tiles");
             }
             kept.push((texture, over, heap));
         }
@@ -2604,7 +3258,7 @@ fn device_heap_textures_lie_in_metal_s_tiles() {
         (as_metal, counted)
     };
     // The textures not counted on a driver without the fact are shadows of Metal's tiles.
-    let tiled = 7 - counted;
+    let tiled = 13 - counted;
     let notices = counts(&messages.take_notices());
     let layouts: Vec<_> = (notices.iter())
         .filter(|(kind, _)| HEAP_LAYOUTS.contains(kind))

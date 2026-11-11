@@ -1,0 +1,85 @@
+{
+  "date": "2026-11-10T21:30:44.357587+08:00",
+  "scope": "Inspect boot-only haptics while iOS runs under resident firmware USB",
+  "live_kernel": "outputs/UniXNU_marble/charging-usage-buckets64-20261110/boot/kernel.macho",
+  "live_kernel_sha256": "7afc03d1a75205c641d60946553e4a01ffd3a4ae6799c5f44893ea7e8442726b",
+  "phase": "kernel",
+  "firmware_usb_affinity": "0000000000000100",
+  "entry_byte_comparison": {
+    "_native_marble_haptics_start": true,
+    "_native_marble_haptics_stop": true,
+    "_native_marble_haptics_restore": true
+  },
+  "measured": {
+    "stage": 3,
+    "plays": 1,
+    "duration_ms": 101,
+    "fault": 0,
+    "vreg_during_stop": 128,
+    "sdam_apid": 428,
+    "sdam_stop_command": 2,
+    "peripheral_mask": 15
+  },
+  "audio_processes": [
+    {
+      "address": "0xfffffff6498bd100",
+      "pid": 233,
+      "state": 2,
+      "name": "UARPUpdaterServiceLegacyAudio"
+    },
+    {
+      "address": "0xfffffff6498e0100",
+      "pid": 201,
+      "state": 2,
+      "name": "AudioConverterService"
+    },
+    {
+      "address": "0xfffffff64a9e8880",
+      "pid": 194,
+      "state": 2,
+      "name": "audioanalyticsd"
+    },
+    {
+      "address": "0xfffffff64aa9c880",
+      "pid": 99,
+      "state": 2,
+      "name": "audiomxd"
+    },
+    {
+      "address": "0xfffffff64adb3440",
+      "pid": 71,
+      "state": 2,
+      "name": "audioaccessoryd"
+    },
+    {
+      "address": "0xfffffff64aa47440",
+      "pid": 62,
+      "state": 2,
+      "name": "backboardd"
+    },
+    {
+      "address": "0xfffffff64adb6cc0",
+      "pid": 27,
+      "state": 2,
+      "name": "SpringBoard"
+    }
+  ],
+  "finding": "Boot worker initializes HAP520, calls playOnce once and exits. Device package exposes start/stop/restore lifecycle functions; system request interface, Actuator HAL bridge and runtime playback queue are absent.",
+  "source_locations": [
+    "package/MarbleHid18.cpp:75",
+    "package/MarbleHaptics.cpp:270",
+    "package/MarbleHaptics.cpp:287"
+  ],
+  "required_implementation": [
+    "22H384 system Actuator route and capability configuration",
+    "Userspace-to-kernel haptics request or sample transport",
+    "Serialized playback queue with duration, amplitude, stop and client lifecycle handling"
+  ],
+  "evidence_dir": "outputs/UniXNU_marble/haptics-inspection-20261110",
+  "device_actions": "USB memory reads and log capture",
+  "upstream": {
+    "repositories": 85,
+    "report": "build/upstream/latest.json",
+    "status": "fetch completed; integration conflicts recorded by update script"
+  }
+}

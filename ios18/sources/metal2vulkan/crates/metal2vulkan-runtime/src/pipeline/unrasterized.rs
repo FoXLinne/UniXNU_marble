@@ -1,5 +1,6 @@
-//! Metal's refusal of a render pipeline state with rasterization disabled whose vertex function
-//! returns a value.
+//! Metal's refusals of a render pipeline state by what its vertex function returns: one with
+//! rasterization disabled whose vertex function returns a value, and one that rasterizes whose
+//! vertex function returns none, which Metal makes in OpenGL mode.
 //!
 //! - **What Metal refuses** (on an M4 under macOS 27.0.1). `newRenderPipelineStateWithDescriptor:`
 //!   with `rasterizationEnabled` NO answers nil with an `NSError` where the vertex function's
@@ -25,29 +26,81 @@
 //!   rasterization in neither case, where a state that rasterizes without a fragment function is
 //!   still refused a color it lacks, and a mesh render pipeline's state is refused as before (both
 //!   unmeasured). A non-empty draw of such a state is unmeasured on Metal and draws nothing here.
+//! - **A rasterizing `void` vertex function** (on an M3 Max under macOS 27.0.1, probe
+//!   `conformance/probes/opengl_mode.m`). With `rasterizationEnabled` YES, a vertex function whose
+//!   return type is `void` is refused, with or without a fragment function: code 3, "RasterizationEnabled
+//!   is true but the vertex shader's return type is void" ([`Problem::RasterizedVoidVertex`]).
+//!   With `openGLModeEnabled` (`PrivateRenderState::open_gl_mode_enabled`) the state is made, and
+//!   its draws run the vertex function (its stores land) and rasterize nothing (every color stays
+//!   as the pass left it), with or without a fragment function: the runtime makes it as the state
+//!   of its descriptor with rasterization disabled, its fragment function dropped, which binds and
+//!   draws as above. A post-tessellation vertex function is taken alike, unmeasured.
 //! - **Decided from the AIR.** Whether the vertex function returns a value is the compile layer's
-//!   answer (`RenderPipelineDescriptor::vertex_returns_value`); one it refuses (a stage it already
-//!   compiled, which a render descriptor's Metal form never holds) decides nothing.
+//!   answer (`RenderPipelineDescriptor::vertex_returns_value`), asked only where the descriptor's
+//!   state turns on it before its compile: with rasterization disabled, and in OpenGL mode
+//!   ([`asks`]). One it refuses (a stage it already compiled, which a render descriptor's Metal
+//!   form never holds) decides nothing. A rasterizing state outside OpenGL mode asks nothing: its
+//!   compile reads the answer from the vertex entry it specializes anyway, and its link refuses a
+//!   vertex stage without a position (`DescriptorError::RasterizedVoidVertex`), which the creation
+//!   answers as Metal's error ([`compiled`]). That refusal comes after the creation's linked-use
+//!   questions, where Metal's order of two refusals of one descriptor is not measured.
 
 use super::indirect_arguments::{CODE, DOMAIN};
 use crate::error::{Error, MetalError, Problem};
-use metal2vulkan::error::Error as CompileError;
+use metal2vulkan::error::{DescriptorError, Error as CompileError};
+use metal2vulkan::pipeline::RenderPipelineDescriptor;
 
-/// Metal's `localizedDescription` for it.
+/// Metal's `localizedDescription` for a state with rasterization disabled whose vertex function
+/// returns a value.
 const DESCRIPTION: &str =
     "RasterizationEnabled is false but the vertex shader's return type is not void";
 
-/// Refused in `call` (the module docs): a state with rasterization disabled whose vertex
-/// function `returns` a value, as the descriptor answers under the creation's budget.
-pub(crate) fn check(call: &'static str, returns: Result<bool, CompileError>) -> Result<(), Error> {
-    match returns {
-        Ok(true) => Err(Error::MetalError(MetalError::new(
+/// Metal's `localizedDescription` for a rasterizing state whose vertex function returns none.
+const VOID: &str = "RasterizationEnabled is true but the vertex shader's return type is void";
+
+/// Whether a creation of `descriptor` asks whether its vertex function returns a value before its
+/// compile: with rasterization disabled, and in OpenGL mode (the module docs).
+pub(crate) fn asks(descriptor: &RenderPipelineDescriptor) -> bool {
+    !descriptor.rasterization_enabled || descriptor.private.open_gl_mode_enabled
+}
+
+/// Metal's error, in `call`, for `problem` with `description`.
+fn refused(call: &'static str, problem: Problem, description: &'static str) -> Error {
+    Error::MetalError(MetalError::new(call, problem, DOMAIN, CODE, description))
+}
+
+/// Whether the state of `descriptor` rasterizes, its vertex function returning a value or not as
+/// `returns` answers under the creation's budget where the creation asks it ([`asks`]): not with
+/// rasterization disabled, nor in OpenGL mode where its vertex function returns none (the module
+/// docs). Refused in `call` where Metal refuses the state; a refused answer, or none asked,
+/// decides nothing, the state rasterizing as `descriptor` says.
+pub(crate) fn rasterizes(
+    call: &'static str,
+    descriptor: &RenderPipelineDescriptor,
+    returns: Option<Result<bool, CompileError>>,
+) -> Result<bool, Error> {
+    match (descriptor.rasterization_enabled, returns) {
+        (false, Some(Ok(true))) => Err(refused(
             call,
             Problem::UnrasterizedVertexReturn,
-            DOMAIN,
-            CODE,
             DESCRIPTION,
-        ))),
-        Ok(false) | Err(_) => Ok(()),
+        )),
+        (true, Some(Ok(false))) if !descriptor.private.open_gl_mode_enabled => {
+            Err(refused(call, Problem::RasterizedVoidVertex, VOID))
+        }
+        (true, Some(Ok(false))) => Ok(false),
+        (rasterizes, _) => Ok(rasterizes),
+    }
+}
+
+/// `error`, a creation's compile's in `call`, as Metal answers it: the link's refusal of a
+/// rasterizing vertex stage without a position is Metal's error for a rasterizing state whose
+/// vertex function returns `void` (the module docs); any other is itself.
+pub(crate) fn compiled(call: &'static str, error: Error) -> Error {
+    match error {
+        Error::Compile(CompileError::InvalidDescriptor(DescriptorError::RasterizedVoidVertex)) => {
+            refused(call, Problem::RasterizedVoidVertex, VOID)
+        }
+        other => other,
     }
 }

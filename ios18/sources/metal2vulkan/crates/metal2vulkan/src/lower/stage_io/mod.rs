@@ -165,7 +165,7 @@ pub(crate) mod color_write;
 pub(crate) mod extended_color;
 pub mod fetch;
 mod plan;
-mod stage_in;
+pub(crate) mod stage_in;
 pub(crate) mod word_color;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -1064,6 +1064,19 @@ fn bool_as_uint(cx: &EmitCx<'_>, link: &Link) -> bool {
         )
 }
 
+/// Whether `link` is a `bool` builtin (`FrontFacing`) read into an integer argument, as an older
+/// front end's ABI passes `[[front_facing]]` (`i8`): the argument holds 1 or 0.
+fn bool_builtin_as_int(cx: &EmitCx<'_>, link: &Link) -> bool {
+    matches!(link.form.held, Held::Int { .. })
+        && matches!(
+            cx.plan.families.stage_io.objects.get(link.object),
+            Some(IoObject::Builtin {
+                shape: Shape::Bool,
+                ..
+            })
+        )
+}
+
 /// The `uint` form with the lanes of `form`.
 fn uint_lanes(form: Form) -> Form {
     form.with(Held::Int {
@@ -1074,7 +1087,8 @@ fn uint_lanes(form: Form) -> Form {
 
 /// `x`, a value loaded through `link`, as the lowered representation of its form: a narrow
 /// integer masked to its width, a narrow float rounded to its format, a `bool` carried as `uint`
-/// compared with 0, the weights of a [`Place::Weights`] read.
+/// compared with 0, a `bool` builtin read into an integer as 1 or 0, the weights of a
+/// [`Place::Weights`] read.
 fn to_lowered(
     cx: &EmitCx<'_>,
     fb: &mut FunctionBuilder<'_>,
@@ -1086,6 +1100,11 @@ fn to_lowered(
     if bool_as_uint(cx, link) {
         let zero = ops::splat(fb, uint_lanes(form), 0)?;
         return fb.binary(BinOp::INotEqual, x, zero);
+    }
+    if bool_builtin_as_int(cx, link) {
+        let one = ops::splat(fb, form, 1)?;
+        let zero = ops::splat(fb, form, 0)?;
+        return fb.select(x, one, zero);
     }
     let x = ops::mask(fb, form, x)?;
     narrow::round(fb, form, x)
@@ -2189,6 +2208,30 @@ fn output_part(
         Some(color) if cx.plan.families.fragment.input_blends.contains_key(&color) => {
             input_blended(cx, fb, (x, returned), color, (o.link.form, part))?
         }
+        // An attachment held with its channels rotated whose blend the function computes over its
+        // input attachment, in Metal's order: the rotation below takes it into the image's.
+        Some(color)
+            if cx
+                .plan
+                .families
+                .fragment
+                .rotated_blends
+                .contains_key(&color) =>
+        {
+            let plan = cx.plan;
+            let Some(rb) = plan.families.fragment.rotated_blends.get(&color) else {
+                return Err(
+                    cx.fail("a rotated input blend of an attachment the plan does not name")
+                );
+            };
+            let v = crate::lower::fragment::rotated_input_texel(
+                cx,
+                fb,
+                (color, rb),
+                (o.link.form, part),
+            )?;
+            color_write::round(cx, fb, color, o.link.form, v)?
+        }
         Some(color) => match (
             cx.plan.families.stage_io.words_written.get(&color).copied(),
             cx.plan.families.stage_io.extended.get(&color).copied(),
@@ -2202,6 +2245,14 @@ fn output_part(
                     }
                     None => word,
                 }
+            }
+            // The output's `half`, which the instance's shadow of the attachment holds
+            // (`lower::fragment`'s `input_shadow`), and its encode.
+            (None, Some(e)) if crate::lower::fragment::input_shadow(cx, color).is_some() => {
+                let v = extended_color::held(fb, e.form, o.link.form, part)?;
+                crate::lower::fragment::input_shadow_store(cx, fb, color, v)?;
+                let texel = crate::lower::arith::extended_range::encode(fb, e.form, v)?;
+                extended_color::raw_components(fb, e.form, texel)?
             }
             (None, Some(e)) => extended_color::encode(fb, e, o.link.form, part)?,
             (None, None) => color_write::round(cx, fb, color, o.link.form, part)?,

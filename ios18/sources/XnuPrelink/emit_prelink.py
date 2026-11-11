@@ -338,7 +338,8 @@ def main():
         if args.fileset_map:
             pairing = json.loads(map_path.read_text())
             validate_map(original_data, native_data, pairing)
-            if pairing.get('matcher_version') != MATCHER_VERSION or pairing.get('matcher_signature') != matcher_signature():
+            from fileset_names import expected_signature
+            if pairing.get('matcher_version') != MATCHER_VERSION or pairing.get('matcher_signature') != expected_signature(pairing):
                 parser.error('fileset map predates the current matching checks; regenerate it')
             if reference_data is not None and pairing.get('reference_sha256') != reference_hash:
                 parser.error('fileset map does not match the supplied reference kernel')
@@ -348,13 +349,19 @@ def main():
                 cached = json.loads(map_path.read_text())
                 try:
                     validate_map(original_data, native_data, cached)
-                    if (cached.get('matcher_version') == MATCHER_VERSION and cached.get('matcher_signature') == matcher_signature()
+                    from fileset_names import expected_signature
+                    if (cached.get('matcher_version') == MATCHER_VERSION and cached.get('matcher_signature') == expected_signature(cached)
                             and cached.get('reference_sha256') == reference_hash):
                         pairing = cached
                 except ValueError:
                     pass
             if pairing is None:
-                pairing = match_images(original_data, native_data, reference_data=reference_data)
+                from fileset_names import match_by_names, symbol_bearing
+                # A collection that keeps the kernel's symbol table names every kext-facing target: pair by name.
+                if symbol_bearing(original_data):
+                    pairing = match_by_names(original_data, native_data)
+                else:
+                    pairing = match_images(original_data, native_data, reference_data=reference_data)
                 atomic_write(map_path, (json.dumps(pairing, indent=2) + '\n').encode())
         # An experimental image binds every unmatched function start to the
         # panic stub, so an unknown call reports its site instead of jumping to

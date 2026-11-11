@@ -34,6 +34,8 @@ const TEN_BIT_WORDS: RuntimeDriverDefect = RuntimeDriverDefect::TenBitCodesReadA
 const UNPINNABLE: RuntimeDriverDefect = RuntimeDriverDefect::UnpinnablePagesBreakHostMemory;
 const VOLUME_BLITS: RuntimeDriverDefect = RuntimeDriverDefect::VolumeBlitsUnfiltered;
 const ALIASED_BLITS: RuntimeDriverDefect = RuntimeDriverDefect::AliasedImportBlitsUnordered;
+const VOLUME_RESOLVES: RuntimeDriverDefect = RuntimeDriverDefect::VolumeResolveFirstPlane;
+const TRIMS: RuntimeDriverDefect = RuntimeDriverDefect::TrimmedCommandBufferFailsResubmission;
 
 /// Every committed profile's driver has its defects at every release and GPU but those a probe
 /// found clean: MoltenVK the multisampled depth/stencil colour copies, the inexact depths past
@@ -51,16 +53,20 @@ const ALIASED_BLITS: RuntimeDriverDefect = RuntimeDriverDefect::AliasedImportBli
 /// rows past its height, the baked samplers lost after a copy and the 10-bit codes its Y′CbCr
 /// conversion reads as words;
 /// RADV the multisampled copies that convert float NaNs, the 10-bit codes its Y′CbCr conversion
-/// reads as words, and the implicit
+/// reads as words, the color resolve into a 3D image's first plane whatever plane its view begins
+/// at, and the implicit
 /// preprocessing after an execution set on every GPU but the 780M (Phoenix's and Hawk Point's),
 /// measured clean; ANV
-/// the compressed image's short size, the occlusion count per color output and the pushed
-/// descriptors a pipeline bind leaves stale on every GPU (Arrow Lake's, not measured, too);
+/// the compressed image's short size, the occlusion count per color output, the pushed
+/// descriptors a pipeline bind leaves stale, the blits through two imports of the same host
+/// pages a barrier does not order and the submission again of a command buffer that a trimmed one
+/// came after on every GPU (Arrow Lake's, not measured, too);
 /// NVIDIA's the
 /// stencil colour copies on every GPU but the RTX 5080 Laptop GPU, measured clean (the GTX 1060 and
 /// the RTX 5080 desktop GPU, not measured, take them), the 10-bit codes its Y′CbCr conversion reads
-/// with their unused bits and the host memory a failed import of unpinnable pages breaks on every
-/// GPU; SwiftShader none.
+/// with their unused bits, the host memory a failed import of unpinnable pages breaks and the color
+/// resolve into a 3D image it writes where the view begins only at the first plane on every GPU;
+/// SwiftShader none.
 #[test]
 fn the_committed_profiles_drivers_have_their_defects() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../metal2vulkan-validation/profiles");
@@ -98,14 +104,20 @@ fn the_committed_profiles_drivers_have_their_defects() {
             }
             // The 780M, under Phoenix's `deviceID` and Hawk Point's.
             Some(DriverId::MESA_RADV) if matches!(desc.device_id, 0x15bf | 0x1900) => {
-                vec![NAN_COPIES, TEN_BIT_WORDS]
+                vec![NAN_COPIES, TEN_BIT_WORDS, VOLUME_RESOLVES]
             }
-            Some(DriverId::MESA_RADV) => vec![NAN_COPIES, PREPROCESS, TEN_BIT_WORDS],
-            Some(DriverId::INTEL_OPEN_SOURCE_MESA) => vec![COMPRESSION, COUNTS, STALE_PUSHES],
+            Some(DriverId::MESA_RADV) => {
+                vec![NAN_COPIES, PREPROCESS, TEN_BIT_WORDS, VOLUME_RESOLVES]
+            }
+            Some(DriverId::INTEL_OPEN_SOURCE_MESA) => {
+                vec![COMPRESSION, COUNTS, STALE_PUSHES, ALIASED_BLITS, TRIMS]
+            }
             Some(DriverId::NVIDIA_PROPRIETARY) if desc.device_id == 0x2c19 => {
-                vec![TEN_BIT_WORDS, UNPINNABLE]
+                vec![TEN_BIT_WORDS, UNPINNABLE, VOLUME_RESOLVES]
             }
-            Some(DriverId::NVIDIA_PROPRIETARY) => vec![STENCIL_COPIES, TEN_BIT_WORDS, UNPINNABLE],
+            Some(DriverId::NVIDIA_PROPRIETARY) => {
+                vec![STENCIL_COPIES, TEN_BIT_WORDS, UNPINNABLE, VOLUME_RESOLVES]
+            }
             _ => Vec::new(),
         };
         let defects: Vec<_> = of(&desc).into_iter().collect();
@@ -137,8 +149,9 @@ fn a_clean_gpu_alone_lacks_the_defect() {
 /// NVIDIA's stencil colour-copy defect, measured on the RTX 3090 (`deviceID` 0x2204), is every
 /// NVIDIA GPU's but the RTX 5080 Laptop GPU's (0x2c19), measured clean: the RTX 3070 (0x2484) and
 /// an Ada GPU (0x2684) take it; a device that runs another driver has none. The unpinnable pages'
-/// defect and the 10-bit codes read with their unused bits, measured on the 5080, are every NVIDIA
-/// GPU's; no other driver has the unpinnable pages'.
+/// defect, the 10-bit codes read with their unused bits and the volume resolve written where the
+/// view begins only at the first plane, measured on the 5080, are every NVIDIA GPU's; no other
+/// driver has the unpinnable pages'.
 #[test]
 fn nvidia_s_colour_copies_are_clean_on_the_gpu_measured_alone() {
     let nvidia = Some(DriverId::NVIDIA_PROPRIETARY);
@@ -146,13 +159,13 @@ fn nvidia_s_colour_copies_are_clean_on_the_gpu_measured_alone() {
     for device in [0x2204, 0x2484, 0x2684] {
         assert_eq!(
             of(device).into_iter().collect::<Vec<_>>(),
-            vec![STENCIL_COPIES, TEN_BIT_WORDS, UNPINNABLE],
+            vec![STENCIL_COPIES, TEN_BIT_WORDS, UNPINNABLE, VOLUME_RESOLVES],
             "{device:#x}"
         );
     }
     assert_eq!(
         of(0x2c19).into_iter().collect::<Vec<_>>(),
-        vec![TEN_BIT_WORDS, UNPINNABLE]
+        vec![TEN_BIT_WORDS, UNPINNABLE, VOLUME_RESOLVES]
     );
     let radv = among(AFFECTED, Some(DriverId::MESA_RADV), 0x2204);
     assert!(!radv.contains(&COPIES) && !radv.contains(&STENCIL_COPIES));
@@ -208,12 +221,12 @@ fn hawk_points_780m_is_phoenixs_gpu() {
     assert_eq!(properties.driver_defects, measured.driver_defects);
     assert_eq!(
         of(&hawk_point).into_iter().collect::<Vec<_>>(),
-        [NAN_COPIES, TEN_BIT_WORDS]
+        [NAN_COPIES, TEN_BIT_WORDS, VOLUME_RESOLVES]
     );
     hawk_point.driver_version += 1;
     assert_eq!(
         of(&hawk_point).into_iter().collect::<Vec<_>>(),
-        [NAN_COPIES, TEN_BIT_WORDS]
+        [NAN_COPIES, TEN_BIT_WORDS, VOLUME_RESOLVES]
     );
     let mut neighbour = phoenix;
     neighbour.device_id = 0x1901;

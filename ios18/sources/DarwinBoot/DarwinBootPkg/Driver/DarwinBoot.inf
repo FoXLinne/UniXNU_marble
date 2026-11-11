@@ -10,6 +10,8 @@
 [Sources]
   DarwinBoot.c
   PackedRamdisk.h
+  MemoryWindow.h
+  LoaderInputs.h
   BootArgs.h
   BootVideo.h
   DiagFont.h
@@ -37,6 +39,8 @@
   gEfiSimpleFileSystemProtocolGuid ## CONSUMES
   gEfiLoadedImageProtocolGuid ## CONSUMES
   gEfiGraphicsOutputProtocolGuid ## CONSUMES
+  gEfiBlockIoProtocolGuid ## SOMETIMES_CONSUMES
 
 [Guids]
   gEfiFileInfoGuid
+  gEfiHobListGuid ## SOMETIMES_CONSUMES ## SystemTable

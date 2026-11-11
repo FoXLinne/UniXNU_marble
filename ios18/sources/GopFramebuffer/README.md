@@ -2,7 +2,7 @@
 
 UEFI GOP framebuffer and MobileFramebuffer integration.
 
-CPU and GPU scanout are supported. With `sheng-vsync=<Hz>`, a work-loop timer sends the MobileFramebuffer vsync message to the compositor.
+CPU and GPU scanout are supported. With `vsync=<Hz>`, a work-loop timer sends the MobileFramebuffer vsync message to the compositor.
 
 Direct display keeps the first successful GPU fence snapshot for each swap. Busy or unavailable queries retry after 200 microseconds. Reaching 250 milliseconds records a slow wait; the current frame stays on screen until the target completes or the display family cancels the swap. Cancellation clears the pending fence timer and snapshot.
 
@@ -12,6 +12,8 @@ Build and interface details: [documentation](https://unixnu.com/drivers/gop-fram
 
 ## Frame diagnostics
 
-`sheng-gpu-trace=1` records display arrival, fence and latch in the kernel GPU ring. Repeated pending display queries are coalesced. See [GPU frame diagnostics](https://unixnu.com/porting/gpu-diagnostics) for fields and decoding.
+`gpu-trace=1` records display arrival, fence and latch in the kernel GPU ring. Repeated pending display queries are coalesced. See [GPU frame diagnostics](https://unixnu.com/porting/gpu-diagnostics) for fields and decoding.
 
 Display traces obtain physical addresses from prepared direct-display slots. Validation records use address zero until a slot is mapped; the flip record supplies the mapped address. Observers do not prepare memory or query unwired descriptors.
+
+The macOS display attributes, the timing and color elements and the hot plug state follow the display driver of [macOS-DroidVM](https://github.com/Droid-VM/macOS-DroidVM), the DroidVM port booted with UniXNU.

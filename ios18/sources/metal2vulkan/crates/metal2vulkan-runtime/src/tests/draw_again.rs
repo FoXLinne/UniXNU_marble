@@ -8,7 +8,8 @@
 //! bound other buffers, offsets or bytes at its buffer slots, or other textures or sampler states
 //! at its texture and sampler slots, rebinds those alone (`render/draw_again/rebound.rs`,
 //! `WorkCounts::draws_rebound`), with the same commands and pixels as the same draws taking every
-//! step. In builds with debug assertions, every second draw
+//! step; so does a draw of other arguments alone, which works out again what they decide
+//! (`WorkCounts::draws_rebound_arguments`). In builds with debug assertions, every second draw
 //! again takes every step instead, and checks that it changed nothing the draw again leaves and,
 //! rebound, worked out what every step works out (the modules' checks), so these tests run those
 //! checks too.
@@ -25,9 +26,9 @@ use super::rebind_behind_a_wait::{Page, BYTES};
 use crate::render::dynamic_compares;
 use crate::{
     BlitOption, Buffer, CommandBufferStatus, CommandQueue, Degradation, DegradeNotice, Device,
-    DeviceKind, DeviceOptions, Error, MessageSink, Origin, PipelineOptions, Region,
-    RenderCommandEncoder, RenderPipelineState, ResourceOptions, SamplerState, ShaderCacheOptions,
-    Size, Texture, TextureDescriptor, WorkCounts,
+    DeviceKind, DeviceOptions, Error, EventRef, MessageSink, Origin, PipelineOptions, Region,
+    RenderCommandEncoder, RenderPipelineState, ResourceOptions, SamplerState, ScissorRect,
+    ShaderCacheOptions, Size, Texture, TextureDescriptor, WorkCounts,
 };
 use metal2vulkan::bind::SamplerDescriptor;
 use metal2vulkan::metal::{
@@ -37,6 +38,7 @@ use metal2vulkan::pipeline::{ColorAttachmentDescriptor, RenderPipelineDescriptor
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// The draws an encoder of a test draws.
 pub(super) const DRAWS: u64 = 9;
@@ -75,9 +77,9 @@ pub(super) fn device(cache: &Path, each: &[Degradation], heard: &Heard) -> Devic
     Device::system_default_with(&options).unwrap()
 }
 
-/// The draws again of a pass of [`DRAWS`] of the same draw: all but its first two, the first
-/// beginning the pass's instance (which keeps no draw), the second kept.
-const HITS: u64 = DRAWS - 2;
+/// The draws again of a pass of [`DRAWS`] of the same draw: all but its first, which begins the
+/// pass's instance and is kept.
+const HITS: u64 = DRAWS - 1;
 
 /// How many of the draws again `hits` of a run recorded their Vulkan draw alone: every second one
 /// from the first takes every step in a build with debug assertions (the module docs).
@@ -146,11 +148,13 @@ fn commands(device: &Device) -> BTreeMap<String, u64> {
 }
 
 /// Encode `encode` in one pass into a new cleared `RGBA8Unorm` target, commit and wait: what it
-/// recorded and drew. Its primary counts as begun (`begin_command_buffer`) whether its encoder
-/// began it or took it begun ahead (`WorkCounts::encoder_primaries_begun_ahead`): the thread that
-/// completed the command buffer before begins one of its pool's primaries for the next to take
-/// where no thread waited for it (`spares.rs`), so which of the two a run takes follows how the
-/// GPU's completion of the run before met that run's wait.
+/// recorded and drew. Its begins (`begin_command_buffer`) are the `VkCommandBuffer`s its encoders
+/// began (`WorkCounts::encoder_command_buffers_begun`), its primary among them whether its encoder
+/// began it or took it begun ahead (`WorkCounts::encoder_primaries_begun_ahead`), and no other
+/// thread's: the device's count of `vkBeginCommandBuffer` also takes the primaries that the threads
+/// completing other command buffers begin ahead in their spare pools where no thread waited for
+/// those (`spares.rs`), whenever the GPU's completions come, so a begin there may or may not fall
+/// while the run encodes.
 pub(super) fn run(device: &Device, encode: impl Fn(&mut RenderCommandEncoder)) -> Ran {
     let queue = device.new_command_queue().unwrap();
     run_on(device, &queue, encode, true)
@@ -179,16 +183,15 @@ fn run_on(
     encode(&mut encoder);
     encoder.end_encoding().unwrap();
     let after = device.work_counts();
-    let ahead = after.encoder_primaries_begun_ahead - before.encoder_primaries_begun_ahead;
+    let begun = after.encoder_command_buffers_begun - before.encoder_command_buffers_begun;
     let commands = commands(device)
         .into_iter()
-        .map(|(name, count)| {
-            let before = recorded.get(&name).copied().unwrap_or(0);
-            let begun = match name == "begin_command_buffer" {
-                true => ahead,
-                false => 0,
-            };
-            (name, count - before + begun)
+        .map(|(name, count)| match name == "begin_command_buffer" {
+            true => (name, begun),
+            false => {
+                let before = recorded.get(&name).copied().unwrap_or(0);
+                (name, count - before)
+            }
         })
         .collect();
     let mut blit = command_buffer.blit_command_encoder().unwrap();
@@ -223,7 +226,9 @@ fn run_on(
 
 /// Run `encode` on `device` until a run draws no key's residual form and the device's pool is
 /// idle: every later draw finds its key's own pipeline made, as a draw that is kept to draw again
-/// does (a draw recorded against a making, or of a residual form, keeps nothing).
+/// does (a draw recorded against a making, or of a residual form, keeps nothing). Then wait until
+/// the device's own checks ended ([`checks_ended`]), so that no window a test opens after it meets
+/// their command buffers.
 pub(super) fn warm(device: &Device, encode: impl Fn(&mut RenderCommandEncoder)) {
     until("every key's own pipeline made", || {
         let residual = device.work_counts().residual_form_draws;
@@ -233,6 +238,28 @@ pub(super) fn warm(device: &Device, encode: impl Fn(&mut RenderCommandEncoder)) 
     until("the pipeline pool idle", || {
         device.work_counts().pipeline_pool_busy == 0
     });
+    checks_ended(device);
+}
+
+/// How long a device's own checks may run ([`checks_ended`]).
+const CHECKS_WAIT: Duration = Duration::from_secs(120);
+
+/// Wait until `device`'s check of the GPU's idling between `VkQueue`s (`queue_switch_check.rs`,
+/// started by its first command queue) and its submission checks (`submit_check.rs`, started as
+/// it is made) ended. Each records command buffers on a thread of its own (the queue-switch
+/// check's timestamp writes, the submission checks' empty ones), which
+/// `WorkCounts::commands_recorded` counts as it counts a run's: a run whose window met one counted
+/// its commands too, 32 `cmd_reset_query_pool`, 64 `cmd_write_timestamp` and 32
+/// `end_command_buffer` of the queue-switch check under twelve processes' load on an RTX 5080.
+fn checks_ended(device: &Device) {
+    assert!(
+        device.settle_queue_switch_check(CHECKS_WAIT),
+        "the device's queue-switch check ended"
+    );
+    assert!(
+        device.settle_submit_checks(CHECKS_WAIT),
+        "the device's submission checks ended"
+    );
 }
 
 /// A run's commands count its primary as begun whether its encoder began it or took it begun
@@ -280,6 +307,97 @@ fn a_run_counts_its_primary_begun_by_its_encoder_or_ahead_alike() {
     assert_eq!(after_ahead.commands["begin_command_buffer"], 1);
 }
 
+/// A primary another thread begins ahead while a run encodes is no begin of the run's ([`run`]):
+/// a command buffer on another queue that waits for an event the run's encoding signals completes
+/// while the run encodes, with no thread waiting for it, so the thread that completes it begins
+/// its pool's primary ahead then (`spares.rs`); the run counts the begins of a run alone.
+#[test]
+fn a_primary_begun_ahead_while_a_run_encodes_is_no_begin_of_the_run_s() {
+    let scratch = Scratch::new("draw-again-begun-meanwhile");
+    let heard = Heard::default();
+    let device = device(&scratch.0, &[], &heard);
+    let state = adding_state(&device);
+    let plain = |encoder: &mut RenderCommandEncoder| rectangles(encoder, &state, |_| {});
+    warm(&device, plain);
+    let alone = run(&device, plain);
+    let gate = device.new_shared_event().unwrap();
+    let filled = device.new_buffer(4096, ResourceOptions::shared()).unwrap();
+    let held = device
+        .new_command_queue()
+        .unwrap()
+        .command_buffer()
+        .unwrap();
+    held.encode_wait_for_event(EventRef::Shared(&gate), 1)
+        .unwrap();
+    let mut blit = held.blit_command_encoder().unwrap();
+    blit.fill_buffer(&filled, 0..4096, 1).unwrap();
+    blit.end_encoding().unwrap();
+    held.commit().unwrap();
+    let ahead = |counts: &WorkCounts| counts.primaries_begun_ahead;
+    let meanwhile = run(&device, |encoder| {
+        let begun = ahead(&device.work_counts());
+        gate.set_signaled_value(1);
+        until(
+            "the held command buffer's pool's primary begun ahead",
+            || {
+                held.status() == CommandBufferStatus::Completed
+                    && ahead(&device.work_counts()) > begun
+            },
+        );
+        plain(encoder);
+    });
+    assert!(
+        meanwhile.counted(ahead) > 0,
+        "a primary begun ahead meanwhile"
+    );
+    assert_eq!(meanwhile.commands["begin_command_buffer"], 1);
+    assert_eq!(
+        meanwhile.commands["begin_command_buffer"],
+        alone.commands["begin_command_buffer"]
+    );
+    assert_eq!(meanwhile.words, alone.words, "the pixels of the draws");
+}
+
+/// [`warm`] returns once the device's own checks ended ([`checks_ended`]): with its check of the
+/// GPU's idling between `VkQueue`s held between two of its rounds, `warm` waits for its verdict
+/// (a call that waits for it lets the hold go, below), which is known as `warm` returns. A device
+/// that runs no such check is skipped.
+#[test]
+fn warm_returns_once_the_device_s_own_checks_ended() {
+    let scratch = Scratch::new("draw-again-checks-ended");
+    let heard = Heard::default();
+    let device = device(&scratch.0, &[], &heard);
+    if crate::queue_switch_check::pair(&device).is_none()
+        || !crate::queue_switch_check::timed(&device)
+    {
+        println!(
+            "SKIPPED {}: the device runs no queue-switch check",
+            device.name()
+        );
+        return;
+    }
+    let switch = Arc::clone(&device.shared().queue_switch);
+    switch.held.hold();
+    let releasing = std::thread::spawn({
+        let switch = Arc::clone(&switch);
+        move || {
+            let pending = || switch.verdict() == crate::queue_share::Verdict::Pending;
+            while pending() && !switch.awaited() && !switch.stopping() {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            switch.held.release();
+        }
+    });
+    let state = adding_state(&device);
+    warm(&device, |encoder| rectangles(encoder, &state, |_| {}));
+    assert_ne!(
+        switch.verdict(),
+        crate::queue_share::Verdict::Pending,
+        "warm returned while the device's queue-switch check ran"
+    );
+    releasing.join().unwrap();
+}
+
 /// Set `state`, the rectangle over the whole target and its color, `1 / 64` in each channel.
 pub(super) fn set_rectangle(encoder: &mut RenderCommandEncoder, state: &RenderPipelineState) {
     encoder.set_render_pipeline_state(state).unwrap();
@@ -313,16 +431,16 @@ fn rectangles(
 /// Draws of the same rectangle one after another record their Vulkan draws alone, but the first:
 /// the same commands of every kind, the same barriers, state commands and noted uses, and the
 /// same pixels, as the same draws with a call between each that changes nothing for them
-/// (`set_blend_color` of the color the encoder holds), each of which takes every step.
+/// (`set_tessellation_factor_scale`, which no draw of their state reads), each of which takes
+/// every step.
 #[test]
 fn draws_again_record_what_draws_after_calls_record() {
     let scratch = Scratch::new("draw-again");
     let heard = Heard::default();
     let device = device(&scratch.0, &[], &heard);
     let state = adding_state(&device);
-    let same_color =
-        |encoder: &mut RenderCommandEncoder| encoder.set_blend_color(0.0, 0.0, 0.0, 0.0);
-    warm(&device, |encoder| rectangles(encoder, &state, same_color));
+    let forgets = |encoder: &mut RenderCommandEncoder| encoder.set_tessellation_factor_scale(1.0);
+    warm(&device, |encoder| rectangles(encoder, &state, forgets));
     let heard_in = |ran: &dyn Fn() -> Ran| {
         heard.lock().unwrap().clear();
         let ran = ran();
@@ -334,7 +452,7 @@ fn draws_again_record_what_draws_after_calls_record() {
     let (again, again_heard) =
         heard_in(&|| run(&device, |encoder| rectangles(encoder, &state, |_| {})));
     let (after_calls, after_calls_heard) =
-        heard_in(&|| run(&device, |encoder| rectangles(encoder, &state, same_color)));
+        heard_in(&|| run(&device, |encoder| rectangles(encoder, &state, forgets)));
     assert_eq!(again_heard, after_calls_heard, "the notices of the draws");
     let as_before = |counts: &WorkCounts| counts.draws_as_before;
     assert_eq!(again.counted(as_before), drawn_alone(HITS));
@@ -525,12 +643,9 @@ fn a_draw_after_a_no_copy_buffer_moved_takes_every_step() {
             rectangle(encoder);
         }
     });
-    // Three runs of three draws: one draw again in the first (its first draw begins the pass's
-    // instance), two in each other.
-    assert_eq!(
-        moving.counted(as_before),
-        drawn_alone(1) + 2 * drawn_alone(2)
-    );
+    // Three runs of three draws, two drawing again in each: the first run's first draw, which
+    // begins the pass's instance, is kept as any.
+    assert_eq!(moving.counted(as_before), 3 * drawn_alone(2));
     assert_eq!(moving.commands, reference.commands);
     assert_eq!(moving.words, reference.words, "the pixels of the draws");
 }
@@ -642,9 +757,9 @@ fn draws_again_and_rebound_count_as_they_record() {
             read.into_inner()
         };
     // Before the `at`th draw: the draws again among the first `at` draws, the first beginning the
-    // instance and the second kept.
+    // instance and kept.
     let expected: Vec<u64> = (1..DRAWS)
-        .map(|at| drawn_alone(at.saturating_sub(2)))
+        .map(|at| drawn_alone(at.saturating_sub(1)))
         .collect();
     let again = read_between(
         &|encoder, between| rectangles(encoder, &state, between),
@@ -661,8 +776,8 @@ fn draws_again_and_rebound_count_as_they_record() {
 /// Draws after calls that bound other offsets and bytes at buffer slots their functions read
 /// rebind those slots alone (`WorkCounts::draws_rebound`), with the same commands of every kind,
 /// state commands and noted uses, and the same pixels, as the same draws with a call between each
-/// that changes nothing for them (`set_blend_color` of the color the encoder holds), each of
-/// which takes every step; at another offset each and in another color each, as each column's
+/// that changes nothing for them (`set_tessellation_factor_scale`, which no draw of their state
+/// reads), each of which takes every step; at another offset each and in another color each, as each column's
 /// count of draws and each draw's color show. Calls that changed more slots than a draw rebound
 /// takes between them (samplers 0 to 8, which the functions do not read) take every step.
 #[test]
@@ -673,8 +788,7 @@ fn draws_after_buffer_changes_rebind_what_every_step_binds() {
     let state = adding_state(&device);
     let rectangles = rectangles_from_columns(&device);
     let sampler = device.new_sampler_state(&SamplerDescriptor::new()).unwrap();
-    let same_color =
-        |encoder: &mut RenderCommandEncoder| encoder.set_blend_color(0.0, 0.0, 0.0, 0.0);
+    let forgets = |encoder: &mut RenderCommandEncoder| encoder.set_tessellation_factor_scale(1.0);
     let samplers = |encoder: &mut RenderCommandEncoder| {
         for index in 0..9 {
             encoder
@@ -695,13 +809,15 @@ fn draws_after_buffer_changes_rebind_what_every_step_binds() {
             offset_rectangles(encoder, drawn, color, |_| {});
         });
         let every = run(&device, |encoder| {
-            offset_rectangles(encoder, drawn, color, same_color);
+            offset_rectangles(encoder, drawn, color, forgets);
         });
         let sampled = run(&device, |encoder| {
             offset_rectangles(encoder, drawn, color, samplers);
         });
         assert_eq!(rebound.counted(rebound_count), drawn_alone(HITS));
         assert_eq!(rebound.counted(as_before), 0);
+        // Bytes bound at each draw: no draw is moved.
+        assert_eq!(rebound.counted(|counts| counts.draws_moved), 0);
         assert_eq!(every.counted(rebound_count), 0);
         assert_eq!(sampled.counted(rebound_count), 0);
         assert_eq!(rebound.commands, every.commands);
@@ -725,6 +841,278 @@ fn draws_after_buffer_changes_rebind_what_every_step_binds() {
         let last = SIDE as usize - 1;
         assert_ne!(rebound.words[0], rebound.words[last], "the draws' offsets");
     }
+}
+
+/// [`DRAWS`] draws of the rectangles of `columns`, each through the next of `states` in turn
+/// (set before each draw), the `at`th at `16 * at` bytes of vertex buffer 0 (its offset set before
+/// each draw but the first, then `between`) in the color of fragment bytes 0 (set before each
+/// draw); `drawn` draws each.
+fn switching_rectangles(
+    encoder: &mut RenderCommandEncoder,
+    (states, columns): (&[&RenderPipelineState], &Buffer),
+    between: impl Fn(&mut RenderCommandEncoder),
+    drawn: impl Fn(&mut RenderCommandEncoder, usize),
+) {
+    encoder.set_vertex_buffer(Some(columns), 0, 0).unwrap();
+    for at in 0..DRAWS {
+        let state = (at as usize) % states.len();
+        encoder.set_render_pipeline_state(states[state]).unwrap();
+        if at > 0 {
+            encoder.set_vertex_buffer_offset(16 * at, 0).unwrap();
+            between(encoder);
+        }
+        let bytes = bytes_of(&[(at + 1) as f32 / 64.0; 4], f32::to_le_bytes);
+        encoder.set_fragment_bytes(&bytes, 0).unwrap();
+        drawn(encoder, state);
+    }
+}
+
+/// Draws that switch between two pipeline states at each draw rebind each state's own last draw,
+/// its kept draw set aside with its state's bind state while the other state draws
+/// (`render/draw_again.rs`): every draw after each state's first is rebound
+/// (`WorkCounts::draws_rebound`), with the same commands of every kind, state commands and pixels
+/// as the same draws each taking every step, after a call between each that changes nothing for
+/// them (`set_tessellation_factor_scale`, which no draw of their states reads), which forgets
+/// the kept draws of both states. Every draw keeps itself (`WorkCounts::draws_unkept`), the pass's
+/// first, which begins the pass's instance, too, and no draw finds its kept draw unlike it or
+/// stops its rebind. And a draw that keeps nothing (one that writes memory,
+/// `cfb_dn_count`, counted so) forgets the other state's kept draw: draws switching with it take
+/// every step.
+#[test]
+fn draws_switching_pipeline_states_rebind_each_state_s_last_draw() {
+    let scratch = Scratch::new("draw-again-states");
+    let heard = Heard::default();
+    let device = device(&scratch.0, &[], &heard);
+    let (first, second) = (adding_state(&device), adding_state(&device));
+    let columns = rectangles_from_columns(&device);
+    let pair = [&first, &second];
+    let states = (&pair[..], &columns);
+    let forgets = |encoder: &mut RenderCommandEncoder| encoder.set_tessellation_factor_scale(1.0);
+    let drawn = |encoder: &mut RenderCommandEncoder, _| rectangle(encoder);
+    warm(&device, |encoder| {
+        switching_rectangles(encoder, states, |_| {}, drawn)
+    });
+    let rebound_count = |counts: &WorkCounts| counts.draws_rebound;
+    let states_recorded = |counts: &WorkCounts| counts.draw_states_recorded;
+    let rebound = run(&device, |encoder| {
+        switching_rectangles(encoder, states, |_| {}, drawn)
+    });
+    let every = run(&device, |encoder| {
+        switching_rectangles(encoder, states, forgets, drawn)
+    });
+    assert_eq!(rebound.counted(rebound_count), drawn_alone(DRAWS - 2));
+    assert_eq!(every.counted(rebound_count), 0);
+    assert_eq!(rebound.commands, every.commands);
+    assert_eq!(rebound.commands["cmd_draw"], DRAWS);
+    assert_eq!(
+        rebound.counted(states_recorded),
+        every.counted(states_recorded)
+    );
+    assert_eq!(rebound.words, every.words, "the pixels of the draws");
+    let last = SIDE as usize - 1;
+    assert_ne!(rebound.words[0], rebound.words[last], "the draws' offsets");
+    assert_eq!(rebound.counted(|counts| counts.draws_unkept), 0);
+    let missed = |counts: &WorkCounts| counts.draws_unlike_kept + counts.draws_rebind_stopped;
+    assert_eq!(rebound.counted(missed), 0);
+    // Between the adding state's draws, draws that count their fragments in a buffer.
+    let counting = state_counting(&device);
+    let counter = device.new_buffer(4, ResourceOptions::shared()).unwrap();
+    let with_counting = [&first, &counting];
+    let writing = (&with_counting[..], &columns);
+    let drawn = |encoder: &mut RenderCommandEncoder, state: usize| match state {
+        0 => rectangle(encoder),
+        _ => {
+            encoder.set_fragment_buffer(Some(&counter), 0, 0).unwrap();
+            let drawn = encoder.draw_primitives(PrimitiveType::Triangle, 0, 3, 1, 0);
+            assert_eq!(drawn, Ok(()));
+        }
+    };
+    warm(&device, |encoder| {
+        switching_rectangles(encoder, writing, |_| {}, drawn)
+    });
+    clear(&counter);
+    let ran = run(&device, |encoder| {
+        switching_rectangles(encoder, writing, |_| {}, drawn)
+    });
+    assert_eq!(ran.counted(rebound_count), 0);
+    assert_eq!(ran.counted(|counts| counts.draws_as_before), 0);
+    assert_eq!(ran.counted(|counts| counts.draws_unkept_writing), DRAWS / 2);
+    let counted = DRAWS / 2 * SIDE * SIDE;
+    assert_eq!(words_of(&counter), [counted as u32]);
+}
+
+/// [`DRAWS`] rectangles of the columns [`rectangles_from_columns`] holds, each as the six points of
+/// its two triangles (`tob_triangle`'s, in `tob_rect`'s order), [`POINTS`] bytes each.
+fn rectangle_points(device: &Device) -> Buffer {
+    let points: Vec<f32> = (0..DRAWS)
+        .flat_map(|at| {
+            let (x0, x1) = (-1.0 + at as f32 * 2.0 / SIDE as f32, 1.0);
+            [x0, -1.0, x1, -1.0, x0, 1.0, x1, -1.0, x1, 1.0, x0, 1.0]
+        })
+        .collect();
+    let bytes = bytes_of(&points, f32::to_le_bytes);
+    device
+        .new_buffer_with_bytes(&bytes, ResourceOptions::shared())
+        .unwrap()
+}
+
+/// The bytes of a rectangle's points ([`rectangle_points`]).
+const POINTS: u64 = 48;
+
+/// [`DRAWS`] draws of `state`'s rectangles (`tob_triangle`'s) from `points`, the `at`th at
+/// `POINTS * at` bytes of it (vertex buffer 0, its offset moved before each draw but the first),
+/// in the color at `16 * at` bytes of `colors` (fragment buffer 0, bound again at that offset
+/// before each draw but the first), with `between` called after the binds.
+fn moved_rectangles(
+    encoder: &mut RenderCommandEncoder,
+    (state, points, colors): (&RenderPipelineState, &Buffer, &Buffer),
+    between: impl Fn(&mut RenderCommandEncoder),
+) {
+    encoder.set_render_pipeline_state(state).unwrap();
+    encoder.set_vertex_buffer(Some(points), 0, 0).unwrap();
+    encoder.set_fragment_buffer(Some(colors), 0, 0).unwrap();
+    for at in 0..DRAWS {
+        if at > 0 {
+            encoder.set_vertex_buffer_offset(POINTS * at, 0).unwrap();
+            encoder
+                .set_fragment_buffer(Some(colors), 16 * at, 0)
+                .unwrap();
+            between(encoder);
+        }
+        rectangle(encoder);
+    }
+}
+
+/// Draws after calls that moved only the offsets of the buffers bound at their slots, the vertex
+/// buffer's and the fragment buffer's (`set_vertex_buffer_offset`, and `set_fragment_buffer` of
+/// the buffer bound there), are moved (`WorkCounts::draws_moved`: their tables bind the objects
+/// the draw before bound, and their uses differ only at the moved slots'), with the same commands
+/// of every kind, state commands, noted uses and pixels as the same draws with a call between each
+/// that changes nothing for them, each of which takes every step; each at another offset of both
+/// buffers, in another color each, as each column's count of draws and each draw's color show.
+/// The vertex function reads its points through a pointer, from the offset to the buffer's end, so
+/// each draw's use of them lies inside the draw before's, noted already
+/// (`WorkCounts::uses_noted_covered`).
+#[test]
+fn draws_after_offsets_alone_moved_bind_what_every_step_binds() {
+    let scratch = Scratch::new("draw-again-moved");
+    let heard = Heard::default();
+    let device = device(&scratch.0, &[], &heard);
+    let state = state(
+        &device,
+        "engine/tob_renders.ll",
+        ("tob_triangle", "tob_solid"),
+    );
+    let rectangles = rectangle_points(&device);
+    let colors: Vec<f32> = (0..DRAWS)
+        .flat_map(|at| [(at + 1) as f32 / 64.0; 4])
+        .collect();
+    let colors = bytes_of(&colors, f32::to_le_bytes);
+    let colors = (device.new_buffer_with_bytes(&colors, ResourceOptions::shared())).unwrap();
+    let drawn = (&state, &rectangles, &colors);
+    let forgets = |encoder: &mut RenderCommandEncoder| encoder.set_tessellation_factor_scale(1.0);
+    warm(&device, |encoder| moved_rectangles(encoder, drawn, |_| {}));
+    let rebound = run(&device, |encoder| moved_rectangles(encoder, drawn, |_| {}));
+    let every = run(&device, |encoder| moved_rectangles(encoder, drawn, forgets));
+    let moved_count = |counts: &WorkCounts| counts.draws_moved;
+    assert_eq!(rebound.counted(moved_count), drawn_alone(HITS));
+    assert_eq!(
+        rebound.counted(|counts| counts.draws_rebound),
+        drawn_alone(HITS)
+    );
+    assert_eq!(every.counted(moved_count), 0);
+    assert_eq!(rebound.commands, every.commands);
+    assert_eq!(rebound.commands["cmd_draw"], DRAWS);
+    assert_eq!(rebound.words, every.words, "the pixels of the draws");
+    let counts: [(&str, fn(&WorkCounts) -> u64); 4] = [
+        ("draw_states_recorded", |counts| counts.draw_states_recorded),
+        ("commands_noted_as_before", |counts| {
+            counts.commands_noted_as_before
+        }),
+        ("draws_pushing_set_zero", |counts| {
+            counts.draws_pushing_set_zero
+        }),
+        ("uses_noted_covered", |counts| counts.uses_noted_covered),
+    ];
+    // Each draw's vertex buffer use, from its offset to the buffer's end, lies inside the first
+    // draw's: noted already (`noted_apart.rs`).
+    let covered = rebound.counted(|counts| counts.uses_noted_covered);
+    assert!(covered >= DRAWS - 1, "{covered} uses noted covered");
+    for (name, count) in counts {
+        assert_eq!(rebound.counted(count), every.counted(count), "{name}");
+    }
+    // Column 0 holds the first draw's color alone; the last column every draw's.
+    let last = SIDE as usize - 1;
+    assert_ne!(rebound.words[0], rebound.words[last], "the draws' offsets");
+}
+
+/// Draws after calls that moved only the vertex buffer's offset along the buffer are moved inside
+/// (`WorkCounts::draws_moved_inside`): the vertex function reads its points through a pointer,
+/// from the offset to the buffer's end, so each draw's use of them lies inside the draw before's,
+/// noted, read and gathered already, and the draw compares, notes, adds and gathers none of it;
+/// with the same commands of every kind, state commands and pixels as the same draws with a call
+/// between each that changes nothing for them, each of which takes every step and notes the use
+/// covered (`WorkCounts::uses_noted_covered`). The fragment buffer stays bound as it was.
+#[test]
+fn draws_moved_along_their_buffer_note_nothing_again() {
+    let scratch = Scratch::new("draw-again-inside");
+    let heard = Heard::default();
+    let device = device(&scratch.0, &[], &heard);
+    let state = state(
+        &device,
+        "engine/tob_renders.ll",
+        ("tob_triangle", "tob_solid"),
+    );
+    let rectangles = rectangle_points(&device);
+    let color = bytes_of(&[0.25f32; 4], f32::to_le_bytes);
+    let colors = (device.new_buffer_with_bytes(&color, ResourceOptions::shared())).unwrap();
+    let along = |encoder: &mut RenderCommandEncoder,
+                 between: &dyn Fn(&mut RenderCommandEncoder)| {
+        encoder.set_render_pipeline_state(&state).unwrap();
+        encoder.set_vertex_buffer(Some(&rectangles), 0, 0).unwrap();
+        encoder.set_fragment_buffer(Some(&colors), 0, 0).unwrap();
+        for at in 0..DRAWS {
+            if at > 0 {
+                encoder.set_vertex_buffer_offset(POINTS * at, 0).unwrap();
+                between(encoder);
+            }
+            rectangle(encoder);
+        }
+    };
+    let nothing = |_: &mut RenderCommandEncoder| {};
+    let forgets = |encoder: &mut RenderCommandEncoder| encoder.set_tessellation_factor_scale(1.0);
+    warm(&device, |encoder| along(encoder, &nothing));
+    let rebound = run(&device, |encoder| along(encoder, &nothing));
+    let every = run(&device, |encoder| along(encoder, &forgets));
+    let inside = rebound.counted(|counts| counts.draws_moved_inside);
+    assert_eq!(
+        rebound.counted(|counts| counts.draws_moved),
+        drawn_alone(HITS)
+    );
+    assert_eq!(inside, drawn_alone(HITS), "every draw moved is inside");
+    assert_eq!(every.counted(|counts| counts.draws_moved_inside), 0);
+    assert_eq!(rebound.commands, every.commands);
+    assert_eq!(rebound.commands["cmd_draw"], DRAWS);
+    assert_eq!(rebound.words, every.words, "the pixels of the draws");
+    // Every step notes each draw's use but the first's covered; a draw inside compares none.
+    let covered = |counts: &WorkCounts| counts.uses_noted_covered;
+    assert_eq!(every.counted(covered), DRAWS - 1);
+    assert_eq!(rebound.counted(covered) + inside, every.counted(covered));
+    let counts: [(&str, fn(&WorkCounts) -> u64); 3] = [
+        ("draw_states_recorded", |counts| counts.draw_states_recorded),
+        ("commands_noted_as_before", |counts| {
+            counts.commands_noted_as_before
+        }),
+        ("draws_pushing_set_zero", |counts| {
+            counts.draws_pushing_set_zero
+        }),
+    ];
+    for (name, count) in counts {
+        assert_eq!(rebound.counted(count), every.counted(count), "{name}");
+    }
+    // Column 0 holds the first draw's rectangle alone; the last column every draw's.
+    let last = SIDE as usize - 1;
+    assert_ne!(rebound.words[0], rebound.words[last], "the draws' offsets");
 }
 
 /// [`DRAWS`] 4x4 `RGBA8Unorm` textures, the `at`th's texel in column `x` of the bytes
@@ -784,7 +1172,8 @@ fn sampled_rectangles(
 
 /// Draws rebound after their vertex buffer's offset alone moved patch that slot's use in place,
 /// looking at no other use (`binding::patch_buffer_uses`, which finds the uses of buffer slots in
-/// the list `binding::command_uses_into` keeps of them): each draw of `tob_sample`'s rectangles
+/// the list it makes of them at the first patch after `binding::command_uses_into` made them):
+/// each draw of `tob_sample`'s rectangles
 /// also samples a texture, bound once before them, whose use no patch looks at. Builds with debug
 /// assertions, the only builds of this test, count the uses a patch looked at
 /// (`binding::patched_slot_uses`) and check the list against the uses.
@@ -826,6 +1215,45 @@ fn draws_rebound_after_an_offset_moved_patch_that_slot_s_use_alone() {
     );
 }
 
+/// Draws rebound after their fragment texture alone changed, another at each draw, make their
+/// uses again (`render/draw_again/rebound.rs`) and so list none of their uses of buffer slots: a
+/// draw lists those at the first patch after its uses were made (`binding::list_slot_uses`), which
+/// only a draw whose buffer slots alone changed asks for. Listed as the uses are made instead,
+/// each of these draws would list them for no patch to read. Builds with debug assertions, the
+/// only builds of this test, count the listings (`binding::listed_slot_uses`).
+#[cfg(debug_assertions)]
+#[test]
+fn draws_rebound_after_their_texture_changed_list_no_buffer_slot_uses() {
+    let scratch = Scratch::new("draw-again-listed-slot-uses");
+    let heard = Heard::default();
+    let device = device(&scratch.0, &[], &heard);
+    let state = state(&device, "engine/tob_renders.ll", ("tob_rect", "tob_sample"));
+    let rectangles = rectangles_from_columns(&device);
+    let textures = textures(&device);
+    let samplers = [sampler_addressing(
+        &device,
+        SamplerAddressMode::ClampToEdge,
+        f32::MAX,
+    )];
+    let drawn = (&state, &rectangles);
+    let bound = (&textures[..], &samplers[..]);
+    let each = |at| at as usize;
+    let first = |_| 0;
+    let draws = |encoder: &mut RenderCommandEncoder| {
+        sampled_rectangles(encoder, drawn, bound, (&each, &first), |_| {})
+    };
+    warm(&device, draws);
+    let before = crate::binding::listed_slot_uses();
+    let ran = run(&device, draws);
+    let listed = crate::binding::listed_slot_uses();
+    let rebound = ran.counted(|counts| counts.draws_rebound);
+    assert_eq!(rebound, drawn_alone(HITS));
+    assert_eq!(
+        listed, before,
+        "draws whose uses were made again listed their uses of buffer slots"
+    );
+}
+
 /// Draws after calls that bound other textures and sampler states at the slots their fragment
 /// function samples (`tob_sample`, which samples its 4x4 texture at the pixel's position over the
 /// texture's size: inside it in the target's first four columns, outside it in the others) rebind
@@ -849,8 +1277,7 @@ fn draws_after_texture_and_sampler_changes_rebind_what_every_step_binds() {
         sampler_addressing(&device, SamplerAddressMode::ClampToEdge, 1000.0),
         sampler_addressing(&device, SamplerAddressMode::Repeat, f32::MAX),
     ];
-    let same_color =
-        |encoder: &mut RenderCommandEncoder| encoder.set_blend_color(0.0, 0.0, 0.0, 0.0);
+    let forgets = |encoder: &mut RenderCommandEncoder| encoder.set_tessellation_factor_scale(1.0);
     let drawn = (&state, &rectangles);
     let bound = (&textures[..], &samplers[..]);
     let first = |_| 0;
@@ -882,7 +1309,7 @@ fn draws_after_texture_and_sampler_changes_rebind_what_every_step_binds() {
             sampled_rectangles(encoder, drawn, bound, chosen, |_| {});
         });
         let every = run(&device, |encoder| {
-            sampled_rectangles(encoder, drawn, bound, chosen, same_color);
+            sampled_rectangles(encoder, drawn, bound, chosen, forgets);
         });
         let expected = match rebinds {
             true => drawn_alone(HITS),
@@ -1010,11 +1437,10 @@ fn draws_after_a_state_set_or_a_barrier_set_what_every_step_sets() {
         11 => encoder.memory_barrier_with_scope(BarrierScope::BUFFERS, fragment, vertex),
         _ => {}
     };
-    // And the blend color the encoder holds set again before each draw: every step at each.
+    // And a call no draw of the state reads before each draw: every step at each.
     let every_step = |encoder: &mut RenderCommandEncoder, at: u64| {
         came(encoder, at);
-        let color = if at >= 3 { 0.25 } else { 0.0 };
-        encoder.set_blend_color(color, color, color, color);
+        encoder.set_tessellation_factor_scale(1.0);
     };
     let states = |counts: &WorkCounts| counts.draw_states_recorded;
     warm(&device, |encoder| {
@@ -1041,4 +1467,267 @@ fn draws_after_a_state_set_or_a_barrier_set_what_every_step_sets() {
         each[2].0 > 0,
         "the draw after another blend color set none: {each:?}"
     );
+}
+
+/// Indexed draws after the gaps a compositor's draws come after (a guest's window server's): a
+/// vertex buffer offset alone, a scissor rectangle and the offset, or a switch to the other of
+/// two states of one function pair with another texture and the offset, in turn. Every draw but
+/// the pass's first and the second state's first is rebound (`WorkCounts::draws_rebound`): after
+/// the scissor rectangle restated (`render/draw_again/restated.rs`), after the switch from the
+/// state's own kept draw; with the same commands of every kind, state commands and pixels as the
+/// same draws each taking every step, after a call between each that changes nothing for them
+/// (`set_tessellation_factor_scale`, which no draw of their states reads). Every draw keeps
+/// itself (`WorkCounts::draws_unkept`), the pass's first, which begins its instance, too, and no
+/// draw finds its kept draw unlike it or stops its rebind.
+#[test]
+fn draws_after_a_compositor_s_gaps_rebind_what_every_step_binds() {
+    let scratch = Scratch::new("draw-again-gaps");
+    let heard = Heard::default();
+    let device = device(&scratch.0, &[], &heard);
+    let sampling = || state(&device, "engine/tob_renders.ll", ("tob_rect", "tob_sample"));
+    let pair = [sampling(), sampling()];
+    let rectangles = rectangles_from_columns(&device);
+    let textures = textures(&device);
+    let sampler = sampler_addressing(&device, SamplerAddressMode::ClampToEdge, f32::MAX);
+    let indices = bytes_of(&[0u16, 1, 2, 3, 4, 5], u16::to_le_bytes);
+    let index = device
+        .new_buffer_with_bytes(&indices, ResourceOptions::shared())
+        .unwrap();
+    let half = |x| ScissorRect {
+        x,
+        y: 0,
+        width: SIDE / 2,
+        height: SIDE,
+    };
+    let halves = [half(0), half(SIDE / 2)];
+    let gaps = |encoder: &mut RenderCommandEncoder, between: &dyn Fn(&mut RenderCommandEncoder)| {
+        encoder.set_render_pipeline_state(&pair[0]).unwrap();
+        encoder.set_vertex_buffer(Some(&rectangles), 0, 0).unwrap();
+        encoder.set_fragment_texture(Some(&textures[0]), 0).unwrap();
+        encoder
+            .set_fragment_sampler_state(Some(&sampler), 0)
+            .unwrap();
+        let mut drawing = 0;
+        for at in 0..DRAWS {
+            if at > 0 {
+                encoder.set_vertex_buffer_offset(16 * at, 0).unwrap();
+                match at % 3 {
+                    1 => (encoder.set_scissor_rect(halves[(at / 3) as usize % 2])).unwrap(),
+                    2 => {
+                        drawing = 1 - drawing;
+                        encoder.set_render_pipeline_state(&pair[drawing]).unwrap();
+                        let texture = &textures[at as usize];
+                        encoder.set_fragment_texture(Some(texture), 0).unwrap();
+                    }
+                    _ => {}
+                }
+                between(encoder);
+            }
+            let drawn = encoder.draw_indexed_primitives(
+                PrimitiveType::Triangle,
+                6,
+                IndexType::UInt16,
+                &index,
+                0,
+                1,
+                0,
+                0,
+            );
+            assert_eq!(drawn, Ok(()));
+        }
+    };
+    let forgets = |encoder: &mut RenderCommandEncoder| encoder.set_tessellation_factor_scale(1.0);
+    warm(&device, |encoder| gaps(encoder, &|_| {}));
+    let rebound = run(&device, |encoder| gaps(encoder, &|_| {}));
+    let every = run(&device, |encoder| gaps(encoder, &forgets));
+    let rebound_count = |counts: &WorkCounts| counts.draws_rebound;
+    let states_recorded = |counts: &WorkCounts| counts.draw_states_recorded;
+    assert_eq!(rebound.counted(rebound_count), drawn_alone(DRAWS - 2));
+    assert!(rebound.counted(|counts| counts.draws_restated) > 0);
+    assert_eq!(every.counted(rebound_count), 0);
+    assert_eq!(rebound.commands, every.commands);
+    assert_eq!(rebound.commands["cmd_draw_indexed"], DRAWS);
+    assert_eq!(
+        rebound.counted(states_recorded),
+        every.counted(states_recorded)
+    );
+    assert_eq!(rebound.words, every.words, "the pixels of the draws");
+    assert_eq!(rebound.counted(|counts| counts.draws_unkept), 0);
+    let missed = |counts: &WorkCounts| counts.draws_unlike_kept + counts.draws_rebind_stopped;
+    assert_eq!(rebound.counted(missed), 0);
+}
+
+/// A draw unlike the draw its encoder kept is counted in each part it differed by
+/// (`WorkCounts::draws_unlike_kept_*`): the pass's first draw kept, a draw of other counts alone,
+/// which is rebound with them (`draws_rebound_arguments`), one of another primitive type, which
+/// only its assembly sets apart from that one, one of other counts alone that makes no primitive
+/// where that one makes some, whose route they change, so its rebind stops
+/// (`draws_rebind_stopped_arguments_route`), and one of other counts alone that draws nothing,
+/// which takes every step (`draws_unlike_kept_arguments_alone`).
+#[test]
+fn a_draw_unlike_its_kept_draw_is_counted_by_what_differed() {
+    let scratch = Scratch::new("draw-again-unlike");
+    let device = device(&scratch.0, &[], &Heard::default());
+    let state = adding_state(&device);
+    let draws = |encoder: &mut RenderCommandEncoder| {
+        set_rectangle(encoder, &state);
+        rectangle(encoder);
+        // Its first triangle, then the same three vertices as a strip, then a strip of two
+        // vertices, which makes no triangle, then one of none.
+        for (primitive, count) in [
+            (PrimitiveType::Triangle, 3),
+            (PrimitiveType::TriangleStrip, 3),
+            (PrimitiveType::TriangleStrip, 2),
+            (PrimitiveType::TriangleStrip, 0),
+        ] {
+            let drawn = encoder.draw_primitives(primitive, 0, count, 1, 0);
+            assert_eq!(drawn, Ok(()));
+        }
+    };
+    warm(&device, draws);
+    let ran = run(&device, draws);
+    let parts: [(&str, fn(&WorkCounts) -> u64, u64); 14] = [
+        ("unlike", |c| c.draws_unlike_kept, 2),
+        ("counts", |c| c.draws_unlike_kept_counts, 1),
+        (
+            "arguments alone",
+            |c| c.draws_unlike_kept_arguments_alone,
+            1,
+        ),
+        ("call", |c| c.draws_unlike_kept_call, 1),
+        ("pipeline", |c| c.draws_unlike_kept_pipeline, 0),
+        ("index buffer", |c| c.draws_unlike_kept_index_buffer, 0),
+        ("index offset", |c| c.draws_unlike_kept_index_offset, 0),
+        ("tessellation", |c| c.draws_unlike_kept_tessellation, 0),
+        ("command buffer", |c| c.draws_unlike_kept_command_buffer, 0),
+        ("under", |c| c.draws_unlike_kept_under, 0),
+        (
+            "rebound with other arguments",
+            |c| c.draws_rebound_arguments,
+            drawn_alone(1),
+        ),
+        (
+            "stopped at a step of their arguments",
+            |c| c.draws_rebind_stopped_arguments,
+            1,
+        ),
+        (
+            "stopped at their route",
+            |c| c.draws_rebind_stopped_arguments_route,
+            1,
+        ),
+        ("stopped", |c| c.draws_rebind_stopped, 1),
+    ];
+    for (part, count, expected) in parts {
+        assert_eq!(
+            ran.counted(count),
+            expected,
+            "draws unlike their kept draw: {part}"
+        );
+    }
+}
+
+/// Indexed draws that differ from the draw before only in their first index (their index
+/// buffer's offset) are rebound with it (`WorkCounts::draws_rebound_arguments`): their index
+/// buffer bound at their offset and their Vulkan draw, with the same commands of every kind, state
+/// commands and pixels as the same draws with a call between each that changes nothing for them,
+/// each of which takes every step; the `at`th draws the `at`th rectangle's indices
+/// ([`rectangle_points`]), as each column's count of draws shows. So are draws that differ only in
+/// their base vertex, of the same indices, the `at`th from the `at`th rectangle's first point:
+/// their uses are the draw before's, so each is inside (`WorkCounts::draws_moved_inside`) and
+/// compares none of them, where every step notes them as before.
+#[test]
+fn draws_of_another_first_index_alone_are_rebound_with_their_pixels() {
+    let scratch = Scratch::new("draw-again-first-index");
+    let heard = Heard::default();
+    let device = device(&scratch.0, &[], &heard);
+    let state = state(
+        &device,
+        "engine/tob_renders.ll",
+        ("tob_triangle", "tob_solid"),
+    );
+    let rectangles = rectangle_points(&device);
+    let color = bytes_of(&[1.0f32 / 64.0; 4], f32::to_le_bytes);
+    let colors = (device.new_buffer_with_bytes(&color, ResourceOptions::shared())).unwrap();
+    // The `at`th rectangle's six indices, at `12 * at` bytes.
+    let indices: Vec<u16> = (0..6 * DRAWS as u16).collect();
+    let indices = bytes_of(&indices, u16::to_le_bytes);
+    let index = (device.new_buffer_with_bytes(&indices, ResourceOptions::shared())).unwrap();
+    type Arguments = (fn(u64) -> u64, fn(u64) -> i32);
+    let draws = |encoder: &mut RenderCommandEncoder,
+                 (offset, base): Arguments,
+                 between: &dyn Fn(&mut RenderCommandEncoder)| {
+        encoder.set_render_pipeline_state(&state).unwrap();
+        encoder.set_vertex_buffer(Some(&rectangles), 0, 0).unwrap();
+        encoder.set_fragment_buffer(Some(&colors), 0, 0).unwrap();
+        for at in 0..DRAWS {
+            if at > 0 {
+                between(encoder);
+            }
+            let drawn = encoder.draw_indexed_primitives(
+                PrimitiveType::Triangle,
+                6,
+                IndexType::UInt16,
+                &index,
+                offset(at),
+                1,
+                base(at),
+                0,
+            );
+            assert_eq!(drawn, Ok(()));
+        }
+    };
+    let nothing = |_: &mut RenderCommandEncoder| {};
+    let forgets = |encoder: &mut RenderCommandEncoder| encoder.set_tessellation_factor_scale(1.0);
+    let first_indices: Arguments = (|at| 12 * at, |_| 0);
+    let base_vertices: Arguments = (|_| 0, |at| 6 * at as i32);
+    for (form, arguments, within) in [
+        ("first index", first_indices, 0),
+        ("base vertex", base_vertices, drawn_alone(HITS)),
+    ] {
+        warm(&device, |encoder| draws(encoder, arguments, &nothing));
+        let rebound = run(&device, |encoder| draws(encoder, arguments, &nothing));
+        let every = run(&device, |encoder| draws(encoder, arguments, &forgets));
+        let reargued = |counts: &WorkCounts| counts.draws_rebound_arguments;
+        assert_eq!(rebound.counted(reargued), drawn_alone(HITS), "{form}");
+        assert_eq!(
+            rebound.counted(|counts| counts.draws_rebound),
+            drawn_alone(HITS),
+            "{form}"
+        );
+        let missed = |counts: &WorkCounts| counts.draws_unlike_kept + counts.draws_rebind_stopped;
+        assert_eq!(rebound.counted(missed), 0, "{form}");
+        assert_eq!(every.counted(reargued), 0, "{form}");
+        assert_eq!(rebound.commands, every.commands, "{form}");
+        assert_eq!(rebound.commands["cmd_draw_indexed"], DRAWS, "{form}");
+        assert_eq!(
+            rebound.words, every.words,
+            "the pixels of the draws: {form}"
+        );
+        let counts: [(&str, fn(&WorkCounts) -> u64); 2] = [
+            ("draw_states_recorded", |counts| counts.draw_states_recorded),
+            ("draws_pushing_set_zero", |counts| {
+                counts.draws_pushing_set_zero
+            }),
+        ];
+        for (name, count) in counts {
+            assert_eq!(
+                rebound.counted(count),
+                every.counted(count),
+                "{form}: {name}"
+            );
+        }
+        // A draw inside compares none of its uses; every step notes them as before.
+        let inside = rebound.counted(|counts| counts.draws_moved_inside);
+        assert_eq!(inside, within, "{form}: draws inside");
+        let as_before = |counts: &WorkCounts| counts.commands_noted_as_before;
+        assert_eq!(
+            rebound.counted(as_before) + inside,
+            every.counted(as_before),
+            "{form}: commands_noted_as_before"
+        );
+        // Column 0 holds the first draw's rectangle alone; the last column every draw's.
+        let last = SIDE as usize - 1;
+        assert_ne!(rebound.words[0], rebound.words[last], "the draws' {form}");
+    }
 }

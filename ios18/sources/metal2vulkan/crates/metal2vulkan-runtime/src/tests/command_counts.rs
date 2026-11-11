@@ -23,8 +23,10 @@ const DRAWS: u64 = 4000;
 
 /// The command counts the encoders' draws add, by name: those that follow from an encoder's own
 /// calls alone, so that each encoder of the same calls adds the same.
-const COUNTS: [(&str, fn(&WorkCounts) -> u64); 10] = [
+const COUNTS: [(&str, fn(&WorkCounts) -> u64); 13] = [
     ("draws_rebound", |counts| counts.draws_rebound),
+    ("draws_moved", |counts| counts.draws_moved),
+    ("draws_moved_inside", |counts| counts.draws_moved_inside),
     ("draws_as_before", |counts| counts.draws_as_before),
     ("stage_tables_read", |counts| counts.stage_tables_read),
     ("stage_tables_read_in_part", |counts| {
@@ -42,6 +44,7 @@ const COUNTS: [(&str, fn(&WorkCounts) -> u64); 10] = [
     ("commands_noted_as_before", |counts| {
         counts.commands_noted_as_before
     }),
+    ("uses_noted_covered", |counts| counts.uses_noted_covered),
 ];
 
 /// The command counts `after` holds over `before`, by name: below zero where a count read later

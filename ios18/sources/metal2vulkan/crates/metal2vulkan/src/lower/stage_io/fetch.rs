@@ -15,8 +15,15 @@
 //! element · VertexBufferStride(buffer) + offset
 //! ```
 //!
-//! from the bind offset (a view adds the bind residual `SlotBindOffset(buffer)`), in wrapping
-//! `u32` arithmetic, where `element` is the step's element index:
+//! from the bind offset (a view adds the bind residual `SlotBindOffset(buffer)`), in `u32`
+//! arithmetic, where `element` is the step's element index. Metal places an element in 64 bits,
+//! so where an element's bytes run past the first `2^32` bytes from the bind offset
+//! (`element · stride + offset + size > 2^32`, decided exactly, where the `u32` displacement would
+//! wrap back into the buffer) the read lies outside the buffer and yields zero bytes on every
+//! device (`within_reach`, `access::pulled::prepare_within`), as plain Metal on an M3 Max reads a
+//! vertex buffer bound at a stride of `2^31 + 4` (`metal2vulkan-conformance`'s
+//! `attribute-stride-vertex-buffer`): the runtime refuses a draw that may fetch there from a buffer
+//! that holds those bytes. The steps:
 //!
 //! - `PerVertex`: `VertexIndex` (it includes the base vertex in Vulkan as `[[vertex_id]]` does in
 //!   Metal); in the de-indexed and private list forms, whose draws have no indices, the vertex
@@ -60,7 +67,13 @@
 //! descriptor names, at `element · stride + offset` with the layout's stride: a fixed one compiled
 //! in, or for a layout of `MTLBufferLayoutStrideDynamic` the one the encoder binds the buffer with,
 //! from `PushField::StageInStride(buffer_index)`, where `element` is the step's ([`Step::Grid`],
-//! [`Step::Indexed`], [`Step::Constant`]; `super::stage_in` plans them).
+//! [`Step::Indexed`], [`Step::Constant`]; `super::stage_in` plans them), with the same reach as a
+//! vertex attribute's: the runtime refuses a dispatch that may fetch past `2^32` bytes from a
+//! buffer that holds those bytes. A thread-position step's reach check is dropped where the binder
+//! finds that no element of the dispatch region reaches past them (`SpecKey::StageInReach`). A
+//! dynamic layout bound with `MTLAttributeStrideStatic`, a vertex layout's or a kernel's, reads at
+//! its low 32 bits, `2^32 - 1`, so its first element is the one at the bind offset and every
+//! element past it reads zero, as plain Metal on an M3 Max answers both.
 //!
 //! **Source buffers**. This family records which Metal buffer indices the fetch reads
 //! ([`super::StageIoPlan::buffers`]); their slots are the access family's (`lower::access::pulled`,
@@ -90,7 +103,9 @@ use crate::pipeline::sym::{PushField, SlotClass, SlotRef, Stage};
 use crate::spirv::builder::FunctionBuilder;
 use crate::spirv::error::{BResult, BuildError, Dangling};
 use crate::spirv::ids::Value as SValue;
-use crate::spirv::ir::{BinOp, Contraction, ConvOp, GlslOp, IoDir, MemAccess};
+use crate::spirv::ir::{
+    BinOp, ConstBits, Constant, Contraction, ConvOp, GlslOp, IoDir, MemAccess, Type,
+};
 
 use super::plan::{builtin, Shape};
 
@@ -428,17 +443,17 @@ impl PulledRead {
             });
         // A kernel step derives the thread position in the grid (the region arithmetic), clamps it
         // to the stage-in region, reads its index the way it reads the attribute, and adds the
-        // region's origin.
+        // region's origin. Every step with an element checks its reach.
         let element = match self.step {
-            Step::Grid { .. } => GRID_POSITION_WORDS + REGION_AXIS_WORDS + 16,
+            Step::Grid { .. } => {
+                GRID_POSITION_WORDS + REGION_AXIS_WORDS + REACH_WORDS + REACH_KEY_WORDS + 16
+            }
             Step::Indexed { index, .. } => {
-                GRID_POSITION_WORDS + REGION_AXIS_WORDS + index.leaf().cost() + 176
+                GRID_POSITION_WORDS + REGION_AXIS_WORDS + REACH_WORDS + index.leaf().cost() + 176
             }
             // The index read is the plan's, counted once (`super::CAPTURED_INDEX_WORDS`).
-            Step::PerVertex { .. }
-            | Step::PerInstance { .. }
-            | Step::Constant
-            | Step::CapturedVertex => 0,
+            Step::PerVertex { .. } | Step::PerInstance { .. } | Step::CapturedVertex => REACH_WORDS,
+            Step::Constant => 0,
         };
         self.encoding.leaf().cost() + 4 * lane + 160 + element
     }
@@ -448,6 +463,15 @@ impl PulledRead {
 /// `DispatchRegion` read and unpacking, the threadgroup position, and the position in the
 /// threadgroup, unflattened in the flattened tiers (`dispatch::KernelDecl::value`).
 const GRID_POSITION_WORDS: u32 = 400;
+
+/// An upper bound of the words of a pulled read's reach (`within_reach` and
+/// `pulled::prepare_within`): the division, the comparisons and their conjunctions, the
+/// selects, and their constants.
+const REACH_WORDS: u32 = 96;
+
+/// An upper bound of the words of a thread-position step's `SpecKey::StageInReach` over its
+/// reach (`stage_in::reach_key`): the constant, its decoration, `true`, and the select.
+const REACH_KEY_WORDS: u32 = 24;
 
 /// An upper bound of the words of a step's clamp to the stage-in region (`region_axis`): the
 /// region's push-field read, its origin and size, the size less 1, the `UMin`, and the origin's
@@ -992,9 +1016,77 @@ pub(super) fn emit(
         (Some(e), Stride::Static(s)) => Some((e, k32(fb, s)?)),
         (None, _) => None,
     };
+    let n = r.encoding.bytes();
+    // An element reads Metal's 64-bit displacement, which the `u32` one below wraps.
+    let fits = match element {
+        Some((e, s)) => within_reach(fb, e, s, r.stride, r.offset, n)?,
+        None => None,
+    };
+    // A thread-position step's check holds wherever the binder finds no element of the region
+    // reaching (`SpecKey::StageInReach` false); an indexed step's element bounds nothing.
+    let fits = match (r.step, fits) {
+        (Step::Grid { .. }, Some(fits)) => {
+            let reach = super::stage_in::reach_key(fb)?;
+            let ty = fb.module().ty(Type::Bool)?;
+            let c = fb.module().constant(Constant::Scalar {
+                ty,
+                bits: ConstBits(1),
+            })?;
+            let all = fb.module().const_value(c)?;
+            Some(fb.select(reach, fits, all)?)
+        }
+        (_, fits) => fits,
+    };
     let m = displacement(fb, element, r.offset)?;
-    let read = pulled::prepare(cx, fb, r.buffer, m, r.encoding.bytes(), r.check)?;
+    let read = match fits {
+        Some(fits) => pulled::prepare_within(cx, fb, r.buffer, m, fits, n, r.check)?,
+        None => pulled::prepare(cx, fb, r.buffer, m, n, r.check)?,
+    };
     fetch_from(fb, read, r.encoding, r.form)
+}
+
+/// Whether the `n` bytes of a pulled read at element `e` of stride `s` (the value of
+/// `stride`) and attribute offset `offset` lie in the first `2^32` bytes from the bind offset,
+/// as Metal's 64-bit displacement `e · s + offset` places them: `e · s + offset + n <= 2^32`,
+/// exactly, which the `u32` displacement's wrap cannot say. `None` where every element's do (a
+/// fixed stride of 0).
+fn within_reach(
+    fb: &mut FunctionBuilder<'_>,
+    e: SValue,
+    s: SValue,
+    stride: Stride,
+    offset: u32,
+    n: u32,
+) -> BResult<Option<SValue>> {
+    // `e · s` may take `room` bytes; an offset and size past `2^32` leave none, so no element fits.
+    let Some(room) = (1u64 << 32).checked_sub(u64::from(offset) + u64::from(n)) else {
+        let ty = fb.module().ty(Type::Bool)?;
+        let c = fb.module().constant(Constant::Scalar {
+            ty,
+            bits: ConstBits(0),
+        })?;
+        return fb.module().const_value(c).map(Some);
+    };
+    // At most `2^32 - 1`: a format takes at least one byte.
+    let room = room as u32;
+    match stride {
+        Stride::Static(0) => Ok(None),
+        // `e · s <= room` exactly when `e <= floor(room / s)`.
+        Stride::Static(s) => {
+            let most = k32(fb, room / s)?;
+            fb.binary(BinOp::ULessThanEqual, e, most).map(Some)
+        }
+        Stride::Push(_) => {
+            let zero = k32(fb, 0)?;
+            let one = k32(fb, 1)?;
+            let none = fb.binary(BinOp::IEqual, s, zero)?;
+            let by = fb.select(none, one, s)?;
+            let room = k32(fb, room)?;
+            let most = fb.binary(BinOp::UDiv, room, by)?;
+            let within = fb.binary(BinOp::ULessThanEqual, e, most)?;
+            fb.binary(BinOp::LogicalOr, none, within).map(Some)
+        }
+    }
 }
 
 /// A reference decoder for the tests: the component values the decode answers for `bytes` of

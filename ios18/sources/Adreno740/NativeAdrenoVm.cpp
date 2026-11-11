@@ -432,6 +432,14 @@ IOReturn NativeAdrenoVm::invalidateTlb()
         ArmSmmu4KInvalidateAllOwnedContext(&io_,streams_->bank,context_,budget_,&r);
     return status?fail(status):kIOReturnSuccess;
 }
+IOReturn NativeAdrenoVm::markClientMaintained(uint64_t handle)
+{
+    if(!attached_ || poisoned_)return kIOReturnNotReady;
+    Mapping *record=find(handle);
+    if(!record || !record->memory || !record->memory->imported())return kIOReturnBadArgument;
+    record->client_maintained=true;
+    return kIOReturnSuccess;
+}
 IOReturn NativeAdrenoVm::publishMapped()
 {
     if(!attached_ || poisoned_)return kIOReturnNotReady;

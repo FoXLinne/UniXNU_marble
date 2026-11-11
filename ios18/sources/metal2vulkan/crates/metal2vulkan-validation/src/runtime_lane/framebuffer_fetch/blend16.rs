@@ -33,13 +33,14 @@
 //! itself, exactly, announcing none of the three, which is asserted. Through input attachments
 //! (lavapipe) the device blends; what it announces and how many channels are Metal's is printed.
 //! Each draw prints a `FETCH-BLEND16` line (`FETCH-BLEND16-DIFFERENCE` under a difference) naming
-//! its function and blend.
+//! its function and blend. A device that has neither form (RADV on the RX 550) skips them
+//! (`fetches`).
 
 mod nans;
 mod narrow;
 mod zero;
 
-use super::{form, library, through_inputs};
+use super::{fetches, form, library, through_inputs};
 use crate::runtime_lane::buffer_with;
 use crate::runtime_lane::degrade_notices::counts;
 use crate::runtime_lane::resolves::{lane_with, quiet, Lane};
@@ -360,6 +361,9 @@ fn stores_metals_blend(sweep: &Sweep, blends: &[Blending], tag: &str) {
     let (messages, _cache, lane) = lane_with(|options| {
         options.announce_each = kinds.into_iter().chain([device_nans]).collect();
     });
+    if !fetches(&lane.device) {
+        return;
+    }
     let fixture = library(&lane, sweep.fixture);
     let device = lane.device.name();
     let interlock = !through_inputs(&lane);

@@ -72,6 +72,8 @@ typedef struct {
     QcomGlinkChannel channel[QCOM_GLINK_MAX_CHANNELS];
     /* Counters for the log. */
     uint32_t rx_messages, tx_messages, rx_data, unknown_opens, dropped;
+    /* Remote OPEN may precede the local client's registration. */
+    struct {char name[QCOM_GLINK_NAME]; uint16_t rcid; uint8_t used;} pending_open[QCOM_GLINK_MAX_CHANNELS];
     char last_unknown[QCOM_GLINK_NAME];
     char unknown_names[96];  /* the distinct names of those opens, space separated, as many as fit */
 } QcomGlink;

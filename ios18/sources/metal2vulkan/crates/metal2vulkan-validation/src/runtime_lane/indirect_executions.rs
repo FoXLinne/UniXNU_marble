@@ -21,10 +21,9 @@
 use super::degrade_notices::counts;
 use super::host_memory::{host_page, no_copy, not_importable, Mapping};
 use super::{
-    bound_buffers, compute_descriptor, encode_case, in_shard, layer_reported_nothing,
-    layer_reported_nothing_at_all, public_case, public_cases, read_buffer, validated_device,
-    validated_device_with, wait_for_device, CaseResources, DeviceWait, Messages, PublicCase,
-    ScratchCache, WAIT,
+    at_plan, bound_buffers, compute_descriptor, encode_case, in_shard, layer_reported_nothing,
+    layer_reported_nothing_at_all, public_case, public_cases, read_buffer, validated_device_with,
+    wait_for_device, CaseResources, DeviceWait, Messages, PublicCase, ScratchCache, WAIT,
 };
 use crate::air_library::AirLibrary;
 use crate::candidate::engine::{ComputeCase, ComputeOutput};
@@ -45,7 +44,7 @@ use metal2vulkan_runtime::{
     ExecutedPipeline, Execution, Heap, HeapDescriptor, HeapType, HostMemory, IndirectCommand,
     IndirectCommandBuffer, IndirectCommandBufferDescriptor, IndirectCommandBufferProblem, Invalid,
     PipelineCreationCause, PipelineOptions, Problem, Region, RenderPassDescriptor, ResourceOptions,
-    RuntimeGap, Size, VisibleFunctionTableDescriptor, VkResultCode,
+    Size, VisibleFunctionTableDescriptor, VkResultCode,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -413,6 +412,39 @@ fn finish(committed: Committed, compute: &ComputeCase) -> Result<Run, Failed> {
     })
 }
 
+/// Where the command's output `command` and the dispatch's `dispatch` differ, as their 4-byte
+/// little-endian words: how many differ, and the first [`WORDS_SAID`] of them with their index and
+/// both values, in a few hundred characters whatever the outputs' length, so that a failure's line
+/// says which words a run got otherwise even where the log is cut.
+fn words_apart(command: &[u8], dispatch: &[u8]) -> String {
+    let word = |bytes: &[u8], at: usize| {
+        let mut word = [0; 4];
+        let end = bytes.len().min(at * 4 + 4);
+        if let Some(have) = bytes.get(at * 4..end) {
+            word[..have.len()].copy_from_slice(have);
+        }
+        u32::from_le_bytes(word)
+    };
+    let words = command.len().max(dispatch.len()).div_ceil(4);
+    let apart: Vec<usize> = (0..words)
+        .filter(|&at| word(command, at) != word(dispatch, at))
+        .collect();
+    let said: Vec<String> = (apart.iter().take(WORDS_SAID))
+        .map(|&at| format!("{at}: {:#x} {:#x}", word(command, at), word(dispatch, at)))
+        .collect();
+    format!(
+        "of {} and {} bytes, {} of {words} words apart (index: the command's, the dispatch's) \
+         [{}]",
+        command.len(),
+        dispatch.len(),
+        apart.len(),
+        said.join("; ")
+    )
+}
+
+/// How many words apart [`words_apart`] names.
+const WORDS_SAID: usize = 6;
+
 /// Whether `compute` binds buffers alone, which an indirect command's kernel buffers can hold
 /// (their pointers' targets resident), and dispatches as a command does.
 fn buffers_alone(compute: &ComputeCase) -> bool {
@@ -482,7 +514,7 @@ fn every_case_of_buffers_alone_runs_from_a_command_as_its_dispatch(shard: usize)
     let device_name;
     {
         let cache = ScratchCache::new().unwrap();
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         device_name = device.name().to_owned();
         for (at, (name, case)) in cases.iter().enumerate() {
             let Ok(case) = case else {
@@ -521,11 +553,9 @@ fn every_case_of_buffers_alone_runs_from_a_command_as_its_dispatch(shard: usize)
                 (Ok(direct), Ok(indirect)) => {
                     let mut differs = Vec::new();
                     let defined = |output: &[u8]| metal_recorded(&case.case, output.to_vec());
-                    if defined(&direct.output) != defined(&indirect.output) {
-                        differs.push(format!(
-                            "output {:02x?} from the command, {:02x?} from the dispatch",
-                            indirect.output, direct.output
-                        ));
+                    let (command, dispatch) = (defined(&indirect.output), defined(&direct.output));
+                    if command != dispatch {
+                        differs.push(format!("output {}", words_apart(&command, &dispatch)));
                     }
                     if direct.report != indirect.report {
                         differs.push(format!(
@@ -786,7 +816,7 @@ pub(super) const NIL_OFFSETS: [Degradation; 1] = [Degradation::IndirectNilBuffer
 /// buffer at offset 0 announces nothing.
 #[test]
 fn a_nil_buffer_at_an_offset_binds_none_and_is_announced() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let nil_offsets = |messages: &Messages| -> Vec<Degradation> {
             let notices = messages.take_notices();
             counts(&notices);
@@ -1183,12 +1213,13 @@ fn inheriting_commands_run_the_encoder_s_state() {
 
 /// A command's kernel buffer set without a stride, where the pipeline's stage-in layout of
 /// `MTLBufferLayoutStrideDynamic` reads it, on a buffer that supports dynamic attribute strides,
-/// refuses the commit the runtime's own gap (`IndirectCommandUnstridedBuffer`): plain Metal takes
-/// such a command and completes it, and its fetch reads the buffer at stride 2^32 - 1, which the
-/// runtime's 32-bit fetch cannot place.
+/// is read at stride `2^32 - 1`, as plain Metal's fetch reads it (the record's 32-bit stride word;
+/// the stride form at `attributeStride:0xFFFFFFFF` read the same on an M3 Max under macOS 27.0.1):
+/// the plain setter's command and the stride form's at `2^32 - 1` commit, complete and leave the
+/// same output, which the case's own stride's does not.
 #[test]
-fn a_command_s_unstrided_stage_in_buffer_is_refused() {
-    on_device(|device, _| {
+fn a_command_s_unstrided_stage_in_buffer_reads_at_the_record_s_stride() {
+    on_device_with(at_plan, |device, _| {
         let case = public_case(DYNAMIC).unwrap();
         let index = *case
             .compute
@@ -1197,26 +1228,36 @@ fn a_command_s_unstrided_stage_in_buffer_is_refused() {
             .next()
             .expect("a dynamic layout");
         let pipeline = icb_state(device, &case).unwrap();
-        let resources = CaseResources::new(device, &case).unwrap();
-        let buffers = bound_buffers(device, &case.compute, &resources).unwrap();
-        let icb = icb(device, 1, true);
-        encode_command(&icb, 0, Some(&pipeline), &case.compute, &buffers).unwrap();
-        icb.indirect_compute_command_at(0)
-            .unwrap()
-            .set_kernel_buffer(Some(&buffers[&index]), 0, index)
-            .unwrap();
-        let queue = device.new_command_queue().unwrap();
-        let command_buffer = queue.command_buffer().unwrap();
-        let mut encoder = command_buffer.compute_command_encoder().unwrap();
-        make_resident(&mut encoder, &buffers, &resources);
-        encoder.execute_commands_in_buffer(&icb, 0..1).unwrap();
-        encoder.end_encoding().unwrap();
-        assert_eq!(
-            command_buffer.commit().err(),
-            Some(Error::NotImplemented(
-                RuntimeGap::IndirectCommandUnstridedBuffer { index }
-            ))
-        );
+        let run = |bind: &dyn Fn(&metal2vulkan_runtime::IndirectComputeCommand, &Buffer)| {
+            let resources = CaseResources::new(device, &case).unwrap();
+            let buffers = bound_buffers(device, &case.compute, &resources).unwrap();
+            let icb = icb(device, 1, true);
+            encode_command(&icb, 0, Some(&pipeline), &case.compute, &buffers).unwrap();
+            bind(
+                &icb.indirect_compute_command_at(0).unwrap(),
+                &buffers[&index],
+            );
+            let queue = device.new_command_queue().unwrap();
+            let command_buffer = queue.command_buffer().unwrap();
+            let mut encoder = command_buffer.compute_command_encoder().unwrap();
+            make_resident(&mut encoder, &buffers, &resources);
+            encoder.execute_commands_in_buffer(&icb, 0..1).unwrap();
+            encoder.end_encoding().unwrap();
+            complete(&command_buffer);
+            output(&case.compute, &buffers)
+        };
+        let plain = run(&|command, buffer| {
+            command.set_kernel_buffer(Some(buffer), 0, index).unwrap();
+        });
+        let wide = run(&|command, buffer| {
+            command
+                .set_kernel_buffer_with_stride(Some(buffer), 0, 0xFFFF_FFFF, index)
+                .unwrap();
+        });
+        let own = run(&|_, _| {});
+        assert_eq!(plain, wide);
+        assert_eq!(own, case.metal_output);
+        assert_ne!(plain, own);
     });
 }
 

@@ -25,7 +25,7 @@
 //! depth's stand-in; and so does the stencil state, the function testing the stencil first against
 //! the stencil's stand-in (Refused at the draw before). Each case's outcome and form is printed.
 
-use super::{form, library, Z};
+use super::{fetches, form, library, Z};
 use crate::runtime_lane::resolves::{lane, quiet, FULL};
 use crate::runtime_lane::{buffer_with, read_buffer};
 use metal2vulkan::metal::state::DepthStencilDescriptor;
@@ -53,6 +53,9 @@ fn covered(index: usize) -> bool {
 #[test]
 fn a_fetch_that_writes_memory_beside_depth_runs_metals_draws() {
     let (messages, _cache, lane) = lane();
+    if !fetches(&lane.device) {
+        return;
+    }
     let vertices = library(&lane, "rt6_resolves");
     let coherent = library(&lane, "dvp_rog_coherence");
     let device = lane.device.name();

@@ -6,14 +6,15 @@ use std::time::Duration;
 
 /// Policy inputs of `Device::new`. Every field but `heap_compression`, `completion`,
 /// `batch_order`, `render_lowering`, `host_page_textures`, `pipeline_waits`,
-/// `pipeline_creation_wait`, `pipeline_commit_wait`, `wide_lines`, `extended_range_blits` and
-/// `queue_sharing` can change emitted code, so the profile carries it (containment as the encoding
-/// it selects) and its fingerprint covers it; those eleven are the runtime's alone (a heap's
-/// compressed texture's image, when the host sees a command buffer complete, how a batch begins
-/// after the earlier ones of its queue, where a render encoder's calls are lowered, what holds a
-/// sampled texture over host pages, whether and how long a pipeline the driver is still making is
-/// waited for, which lines draw a wide line, what a blit through a compressed extended-range
-/// texture writes, and which `VkQueue` a command queue submits to), and no profile carries them.
+/// `pipeline_creation_wait`, `pipeline_commit_wait`, `wide_lines`, `extended_range_blits`,
+/// `queue_sharing` and `dont_care_colors` can change emitted code, so the profile carries it
+/// (containment as the encoding it selects) and its fingerprint covers it; those twelve are the
+/// runtime's alone (a heap's compressed texture's image, when the host sees a command buffer
+/// complete, how a batch begins after the earlier ones of its queue, where a render encoder's calls
+/// are lowered, what holds a sampled texture over host pages, whether and how long a pipeline the
+/// driver is still making is waited for, which lines draw a wide line, what a blit through a
+/// compressed extended-range texture writes, which `VkQueue` a command queue submits to, and what
+/// a colour attachment stored `DontCare` keeps), and no profile carries them.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -57,6 +58,12 @@ pub struct DevicePolicy {
     /// without `shaderFloat16`, rounds where a value leaves it (the default) or at each operation.
     /// Changes emitted code: the profile carries it.
     pub half_chains: HalfChainPolicy,
+    /// Whether a function that reads a two-plane YCbCr texture's planes in place (a uniform
+    /// texel buffer over their codes, on a device whose memory is the host's) samples them by
+    /// Vulkan's Y′CbCr model in the device's arithmetic, as the device's own conversion would
+    /// (the default), or converts and filters every tap as Metal does, exactly. Changes emitted
+    /// code: the profile carries it.
+    pub ycbcr_in_place_reads: YCbCrInPlacePolicy,
     /// Whether a render or compute state's creation, and a committed command buffer, wait a
     /// bound for a pipeline the driver is still making, the command buffer then dropping the
     /// draws and dispatches whose pipeline is not made (the default), or until it is made. The
@@ -76,11 +83,12 @@ pub struct DevicePolicy {
     /// each such command records as nothing. 4.5 s by default (as the creation wait, above). Unread
     /// under `Exact`. The runtime's alone: no emitted code changes.
     pub pipeline_commit_wait: Duration,
-    /// Whether a line Apple's `setLineWidth:` widens, at a width the device's own lines draw
-    /// otherwise than Metal (strict lines, lines that are not parallelograms, a width off the
-    /// device's granularity or below 1), is the device's own line at that width (the default) or
-    /// the pipeline's band variant, two triangles that cover Metal's parallelogram. The runtime's
-    /// choice alone: no emitted code of a pipeline changes, the band being a variant of its own.
+    /// Whether a line Apple's `setLineWidth:` widens, at a width the device's own lines draw (which
+    /// no device's are taken to draw as Metal's: strict lines, lines that are not parallelograms, a
+    /// width off the device's granularity or below 1, a driver's parallelograms, whose ends the
+    /// driver places), is the device's own line at that width (the default) or the pipeline's band
+    /// variant, two triangles that cover Metal's parallelogram. The runtime's choice alone: no
+    /// emitted code of a pipeline changes, the band being a variant of its own.
     pub wide_lines: WideLinePolicy,
     /// Whether a blit or fill through a `BGRA10_XR` or `BGRA10_XR_sRGB` texture Metal keeps
     /// losslessly compressed keeps the texels' bytes (the default) or writes Metal's canonical
@@ -92,6 +100,11 @@ pub struct DevicePolicy {
     /// each keeps the `VkQueue` it took at its creation. The runtime's choice alone: no emitted
     /// code changes.
     pub queue_sharing: QueueSharingPolicy,
+    /// Whether a colour attachment of a texture's own image that a pass stores `DontCare` is
+    /// stored as the driver stores it (the default) or renders through a backing so that the
+    /// texture keeps the texels it held before the pass, as Apple's GPU leaves them. The runtime's
+    /// choice alone: no emitted code changes.
+    pub dont_care_colors: DontCareColorPolicy,
 }
 
 impl DevicePolicy {
@@ -101,8 +114,9 @@ impl DevicePolicy {
     /// them one after another, and a sampled
     /// texture over host pages in place where the device's check passed, a pipeline still
     /// being made waited for a bound (4.5 s at a state's creation, and 4.5 s from a commit), a
-    /// wide line the device's own wherever it draws the width, and command queues sharing
-    /// `VkQueue`s where the device's GPU idles between work of different ones.
+    /// wide line the device's own wherever it draws the width, command queues sharing
+    /// `VkQueue`s where the device's GPU idles between work of different ones, and a colour stored
+    /// `DontCare` stored as the driver stores it.
     pub const UNTRUSTED: DevicePolicy = DevicePolicy {
         pointer_domain: PointerDomain::ResidentTable,
         handle_domain: HandleDomain::Table,
@@ -114,12 +128,14 @@ impl DevicePolicy {
         render_lowering: RenderLoweringPolicy::AtCall,
         host_page_textures: HostPageTexturePolicy::InPlace,
         half_chains: HalfChainPolicy::AtExits,
+        ycbcr_in_place_reads: YCbCrInPlacePolicy::Model,
         pipeline_waits: PipelineWaitPolicy::Bounded,
         pipeline_creation_wait: Duration::from_millis(4500),
         pipeline_commit_wait: Duration::from_millis(4500),
         wide_lines: WideLinePolicy::Device,
         extended_range_blits: ExtendedRangeBlitPolicy::Kept,
         queue_sharing: QueueSharingPolicy::Adaptive,
+        dont_care_colors: DontCareColorPolicy::Driver,
     };
 
     /// This policy with Metal's answer wherever the choices offer it: a heap's texture whose bytes
@@ -132,12 +148,16 @@ impl DevicePolicy {
     /// ([`RenderLoweringPolicy::AtCall`]), every texture over host pages a shadow, whose
     /// copies touch its texels alone ([`HostPageTexturePolicy::Shadow`]), each `half`
     /// operation rounded on a device without `shaderFloat16` ([`HalfChainPolicy::EachOperation`]),
+    /// every two-plane YCbCr sample of planes read in place Metal's conversion and filter of its
+    /// taps ([`YCbCrInPlacePolicy::Exact`]),
     /// a render state's predicted pipeline made at its creation, each draw's pipeline waited
     /// for until it is made ([`PipelineWaitPolicy::Exact`]), every wide line Metal's
     /// parallelogram where the device's own line differs ([`WideLinePolicy::Exact`]), and every
     /// blit and fill through a compressed `BGRA10_XR` texture Metal's canonical encoding of its
-    /// texels ([`ExtendedRangeBlitPolicy::Canonical`]), and every command queue on the `VkQueue`
-    /// it took at its creation ([`QueueSharingPolicy::PerQueue`]). Every other field is kept.
+    /// texels ([`ExtendedRangeBlitPolicy::Canonical`]), every command queue on the `VkQueue`
+    /// it took at its creation ([`QueueSharingPolicy::PerQueue`]), and every colour attachment of a
+    /// texture's own image stored `DontCare` keeping its earlier texels
+    /// ([`DontCareColorPolicy::Kept`]). Every other field is kept.
     pub const fn exact_answers(self) -> DevicePolicy {
         DevicePolicy {
             heap_compression: HeapCompressionPolicy::Uncompressed,
@@ -146,10 +166,12 @@ impl DevicePolicy {
             render_lowering: RenderLoweringPolicy::AtCall,
             host_page_textures: HostPageTexturePolicy::Shadow,
             half_chains: HalfChainPolicy::EachOperation,
+            ycbcr_in_place_reads: YCbCrInPlacePolicy::Exact,
             pipeline_waits: PipelineWaitPolicy::Exact,
             wide_lines: WideLinePolicy::Exact,
             extended_range_blits: ExtendedRangeBlitPolicy::Canonical,
             queue_sharing: QueueSharingPolicy::PerQueue,
+            dont_care_colors: DontCareColorPolicy::Kept,
             ..self
         }
     }
@@ -279,22 +301,26 @@ pub enum RenderLoweringPolicy {
     AtCall,
 }
 
-/// What holds a texture over host pages whose declared usage only samples or reads it (no
-/// `RenderTarget`, `ShaderWrite` or `ShaderAtomic`): over a no-copy buffer's pages (imported by
-/// their pointer or as dma-bufs) or over a buffer the runtime placed in fresh host pages it
-/// imported. Vulkan makes an image bound to imported memory start `UNDEFINED`
-/// (`VUID-VkImageCreateInfo-pNext-01443`), and lets its first layout transition read and write
-/// every byte bound to it, where Metal keeps every CPU write to those bytes. The runtime's choice
-/// alone: no emitted code changes.
+/// What holds a texture over host pages: over a no-copy buffer's pages (imported by their pointer
+/// or as dma-bufs) or over a buffer the runtime placed in fresh host pages it imported. Vulkan
+/// makes an image bound to imported memory start `UNDEFINED`
+/// (`VUID-VkImageCreateInfo-pNext-01443`), and lets its layout transitions, the first among them,
+/// and a render pass's load and store operations read and write every byte bound to it, and a
+/// linear image's storage writes may reach more than their texels, where Metal keeps every CPU
+/// write to the bytes no command writes. The runtime's choice alone: no emitted code changes.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HostPageTexturePolicy {
     /// A linear image aliasing the pages (the default), on a device whose own check, run once per
-    /// driver and release, shows that this first move of such an image leaves every byte alone
-    /// while the CPU writes beside it; and where the device lays the image out at the buffer's
-    /// row pitch. Elsewhere, and for a texture that renders or writes, the shadow below. A
-    /// texture made before the check's verdict is known is a shadow too.
+    /// driver and release, shows that the first move of such an image leaves every byte alone
+    /// while the CPU writes beside it, for a texture that renders, its render passes' load and
+    /// store operations and its moves into the feedback loop layout and back too, and for one a
+    /// shader writes (`ShaderWrite` or `ShaderAtomic`, of texels of 1, 2, 4, 8 or 16 bytes, those
+    /// of 1 or 2 checked apart), a kernel's storage writes of its texels; and where the device
+    /// makes the image (its format and usage linear) and lays it out at the buffer's row pitch.
+    /// Elsewhere the shadow below. A texture made before the check's verdict is known is a shadow
+    /// too.
     #[default]
     InPlace,
     /// A shadow on every device: an image of the runtime's own memory the encoders copy the
@@ -330,6 +356,37 @@ pub enum HalfChainPolicy {
     AtExits,
     /// Every operation's result rounded to `half`, as the AIR computes it.
     EachOperation,
+}
+
+/// How a function samples a two-plane YCbCr texture (`YCBCR8_420_2P`, `YCBCR10_420_2P`) whose
+/// planes it reads in place: a uniform texel buffer over the planes' codes, on a device whose
+/// memory is the host's (an integrated GPU, a CPU device), where no image of the device's samples
+/// them (`bind::YCbCrInPlace`). No sampler of the device reads a texel buffer, so the function
+/// filters and converts the codes itself either way. Changes emitted code: the profile carries
+/// it.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum YCbCrInPlacePolicy {
+    /// A linear sample by Vulkan's Y′CbCr model, as the device's own sampler Y′CbCr conversion of
+    /// the planes' multi-planar format with a linear chroma filter computes it (the default): the
+    /// luma codes blended bilinearly at the sample's point, the chroma pairs blended bilinearly at
+    /// the same point of the chroma plane (Metal's midpoint siting), then the surface's range and
+    /// matrix (Metal's coefficients) in `float`, each channel clamped into `[0, 1]`, alpha 1:
+    /// eight fetches. Metal converts each of the four taps (its chroma weighted 9/3/3/1 and
+    /// rounded to a code, each channel clamped) and sums their steps of `1/2048`: the answers
+    /// differ by the chroma the taps reconstruct, by those roundings, and where a tap's channel
+    /// leaves `[0, 1]`, recorded `PrecisionNote::HalfSampleFilter` or `FloatSampleFilter` and
+    /// announced `ycbcr-filter-not-exact`. A nearest sample (one tap), a sample through a border
+    /// address mode, one whose texel offset Metal places by a parent's size, and a gather are
+    /// Metal's under either value.
+    #[default]
+    Model,
+    /// Every tap Metal's texel (its luma code, its chroma pairs weighted 9/3/3/1 and rounded to a
+    /// code, the range's and the matrix's fixed-point conversion), and a linear sample Metal's sum
+    /// of the four taps' steps on the grid `2048`, exactly: twenty fetches and four conversions a
+    /// linear sample.
+    Exact,
 }
 
 /// How long the runtime waits for a draw's `VkPipeline` the driver is still making. Metal makes a
@@ -377,21 +434,22 @@ pub enum PipelineWaitPolicy {
     Exact,
 }
 
-/// Which lines draw a line Apple's `setLineWidth:` widens (a width other than 1, quantized as
-/// Metal quantizes it), where the device's own lines draw that width otherwise than Metal's
-/// parallelogram: its lines are strict (rectangles), or not parallelograms
-/// (`nonStrictWideLinesUseParallelogram` unset or unknown), or the width is off the device's
-/// `lineWidthGranularity` (which rounds it) or below 1 (where Vulkan promises no shape). Where the
-/// device's lines draw the width as Metal does, they draw it under either value; where they cannot
-/// draw it at all (no `wideLines`, or a width outside `lineWidthRange`), and at width 0, the band
-/// draws it under either value. The runtime's choice alone: no emitted code changes.
+/// Which lines draw a line Apple's `setLineWidth:` widens (a width other than 1, quantized as Metal
+/// quantizes it) where the device's own lines draw that width, which no device's are taken to draw
+/// as Metal's parallelogram: strict lines (rectangles), lines not stated as parallelograms
+/// (`nonStrictWideLinesUseParallelogram` unset or unknown), a width off the device's
+/// `lineWidthGranularity` (which rounds it) or below 1 (where Vulkan promises no shape), and a
+/// driver's parallelograms, whose ends and endpoints' snap are the driver's. Where they cannot draw
+/// it at all (no `wideLines`, or a width outside `lineWidthRange`), and at width 0, the band draws
+/// it under either value. The runtime's choice alone: no emitted code changes.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WideLinePolicy {
-    /// The device's own line at the width (the default): its rectangle, its Bresenham columns, or
-    /// its width rounded to the granularity, which can cover pixels Metal's parallelogram does not
-    /// and miss others. Announced `device-wide-lines` at the first such draw.
+    /// The device's own line at the width (the default): its rectangle, its Bresenham columns, its
+    /// width rounded to the granularity, or its parallelogram's ends, which can cover pixels
+    /// Metal's parallelogram does not and miss others. Announced `device-wide-lines` at the first
+    /// such draw.
     #[default]
     Device,
     /// The pipeline's band variant (needs `tessellationShader`): each line two triangles over
@@ -459,4 +517,34 @@ pub enum QueueSharingPolicy {
     /// Each command queue on the `VkQueue` it took at its creation, round robin, for its life:
     /// command queues share one only past the `VkQueue`s the device lends the round robin.
     PerQueue,
+}
+
+/// What a colour attachment of a texture's own image (not a texture over a buffer's bytes, not
+/// memoryless, resolving nothing) keeps after a render pass stores it `MTLStoreActionDontCare`.
+/// Metal's documentation leaves it open (`MTLStoreAction.dontCare`: "You need to assume that GPU
+/// discarded the texture's contents"); what Apple's GPU leaves is measured: the texels the
+/// attachment held before the pass, the pass's clear and its draws both gone (the conformance
+/// case `pass-sequence-color-actions`, an Apple M3 Max under macOS 27.0.1, eight runs alike), or
+/// the rendered texels where its tiler overflows. Vulkan's `DONT_CARE` leaves the texels
+/// undefined. On a driver that stores `DONT_CARE` as Metal's own (MoltenVK on Apple's GPUs), a
+/// pass recorded as one render pass instance is handed to it under either value. The runtime's
+/// choice alone: no emitted code changes.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum DontCareColorPolicy {
+    /// As the driver stores it (the default): `DONT_CARE` on a driver measured to keep one of
+    /// Metal's two answers (the earlier texels or the rendered ones) or to store as Metal's own,
+    /// else `STORE`, the rendered texels, Metal's answer where its tiler overflows. No work past
+    /// the pass. Announced `dont-care-store` at the first such pass a driver does not store as
+    /// Metal's own.
+    #[default]
+    Driver,
+    /// The texels the attachment held before the pass: the pass renders through a backing its
+    /// command queue keeps, one image of the attachment's shape, into which a `Load` copies the
+    /// texels first, and nothing is copied back. A `Load` pass costs the copy (on an RTX 5080
+    /// Laptop GPU about 19 µs more a pass at 1920x1080 than one stored `Store`, 10 µs at
+    /// 256x256); a `Clear` or `DontCare` load about none. Where a format makes no such image, the
+    /// pass stores as under `Driver`, announced as there.
+    Kept,
 }

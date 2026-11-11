@@ -6,6 +6,8 @@
 #include <IOKit/IOPlatformExpert.h>
 #include <IOKit/IOWorkLoop.h>
 #include <IOKit/IOTimerEventSource.h>
+#include <IOKit/pwr_mgt/IOPM.h>
+#include <IOKit/pwr_mgt/IOPMpowerState.h>
 #include <libkern/c++/OSBoolean.h>
 #include <libkern/c++/OSData.h>
 #include <libkern/c++/OSDictionary.h>
@@ -18,6 +20,7 @@ extern kmod_info_t g_kernel_kmod_info;
 bool native_marble_panel_control_available(void);
 IOReturn native_marble_panel_set_brightness(uint32_t);
 IOReturn native_legacy_panel_power(unsigned long);
+void native_marble_display_backlight_state(bool);
 volatile uint32_t marble_backlight_stats[8];
 volatile uint32_t marble_backlight_request[4];
 void native_marble_backlight_start(void);
@@ -27,6 +30,8 @@ namespace {
 constexpr uint32_t kMin=4,kMax=4095,kInitial=0x133;
 // Nominal slider calibration, as in sheng; these describe the control scale.
 constexpr uint32_t kMinNits=2,kMidNits=140,kMaxNits=500;
+// 22H384 PLDisplayAgent's AppleARMBacklight interest callback.
+constexpr uint32_t kBacklightOn=0xe0014100,kBacklightOff=0xe0014101;
 const OSMetaClass *appleClass;
 bool useAppleClass;
 uint64_t pendingBrightness;
@@ -37,6 +42,12 @@ class MarbleBacklight : public IOService {
     IOTimerEventSource *timer=nullptr;
     uint32_t level=kInitial,goal=kInitial,steps=0;
     bool offRequested=false,asleep=false;
+    bool powerRegistered=false;
+    uint32_t notifiedPower=2;
+    void notifyPower(bool on) {
+        if (__atomic_exchange_n(&notifiedPower,uint32_t(on),__ATOMIC_ACQ_REL)!=uint32_t(on))
+            native_marble_display_backlight_state(on);
+    }
     static uint32_t clamp(uint64_t value) {return value<kMin?kMin:value>kMax?kMax:uint32_t(value);}
     void publishLevel(uint32_t value) {
         auto *brightness=OSDictionary::withCapacity(3);
@@ -90,6 +101,8 @@ class MarbleBacklight : public IOService {
                 marble_backlight_stats[6]=power;
                 if (power!=kIOReturnSuccess) {marble_backlight_stats[3]=power;return;}
                 self->asleep=false;marble_backlight_stats[7]=1;
+                self->notifyPower(true);
+                if (self->powerRegistered) self->changePowerStateToPriv(1);
             }
         }
         uint32_t next=self->goal;
@@ -104,7 +117,11 @@ class MarbleBacklight : public IOService {
         if (result==kIOReturnSuccess && self->offRequested && !self->steps && !self->asleep) {
             const IOReturn power=native_legacy_panel_power(0);
             marble_backlight_stats[6]=power;
-            if (power==kIOReturnSuccess) {self->asleep=true;marble_backlight_stats[7]=0;self->publishLevel(0);}
+            if (power==kIOReturnSuccess) {
+                self->asleep=true;marble_backlight_stats[7]=0;self->publishLevel(0);
+                self->notifyPower(false);
+                if (self->powerRegistered) self->changePowerStateToPriv(0);
+            }
         }
         if (self->steps || __atomic_load_n(&pendingBrightness,__ATOMIC_ACQUIRE)) self->timer->setTimeoutMS(16);
     }
@@ -120,9 +137,44 @@ public:
         setName("AppleARMBacklight");setProperty("NativeSandboxGrantProcess","*");
         __atomic_store_n(&useAppleClass,true,__ATOMIC_RELEASE);
         setProperty("backlight-control",true);setProperty("built-in",true);
+        static IOPMPowerState states[2]={};
+        states[0].version=states[1].version=1;
+        states[1].capabilityFlags=kIOPMDeviceUsable;
+        states[1].outputPowerCharacter=kIOPMPowerOn;
+        states[1].inputPowerRequirement=kIOPMPowerOn;
+        PMinit();
+        if (!initialized) return false;
+        provider->joinPMtree(this);
+        if (registerPowerDriver(this,states,2)!=kIOReturnSuccess) {PMstop();return false;}
+        powerRegistered=true;
+        if (changePowerStateToPriv(1)!=kIOReturnSuccess) return false;
         marble_backlight_stats[0]=3;marble_backlight_stats[2]=level;marble_backlight_stats[7]=1;
         registerService();IOLog("MarbleBacklight: DCS range=%u..%u initial=%u\n",kMin,kMax,level);
         return true;
+    }
+    IOReturn setPowerState(unsigned long state,IOService *) override {
+        if (state>1) return kIOReturnBadArgument;
+        const bool on=state!=0;
+        if (on==asleep) {
+            const IOReturn result=native_legacy_panel_power(state);
+            marble_backlight_stats[6]=result;
+            if (result!=kIOReturnSuccess) return result;
+            asleep=!on;
+            marble_backlight_stats[7]=on;
+            publishLevel(on?level:0);
+        }
+        // PM supplies the initial CurrentPowerState snapshot. Hardware
+        // transitions also deliver the legacy AppleARMBacklight messages
+        // consumed by Powerlog's display and application-time services.
+        notifyPower(on);
+        return kIOPMAckImplied;
+    }
+    void free() override {
+        if (powerRegistered) PMstop();
+        if (timer) timer->cancelTimeout();
+        if (loop && timer) loop->removeEventSource(timer);
+        OSSafeReleaseNULL(timer);OSSafeReleaseNULL(loop);
+        IOService::free();
     }
     IOReturn setProperties(OSObject *object) override {
         auto *properties=OSDynamicCast(OSDictionary,object);

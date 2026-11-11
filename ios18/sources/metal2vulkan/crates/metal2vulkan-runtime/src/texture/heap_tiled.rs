@@ -152,10 +152,23 @@
 //! (`copy_images.rs`); the encoder's command buffer holds them until it completes. The texture
 //! holds none: before, it planned them as it was made and held their images for its life. Where
 //! they write a 32-bit float depth by the `FragDepth` draw on a driver measured to change some
-//! values, the texture announces `drawn-depth-copy` once, as it is made, and a merge's keep holds
-//! the heap's bytes, not the image's (`ShadowCopies::record_kept`), so a byte the image holds
-//! otherwise than the heap is written back: every byte a command wrote, and the values the copy
-//! in changed.
+//! values, the texture announces `drawn-depth-copy` once, as it is made.
+//!
+//! A texture with a **depth** aspect, of any sample count, takes the heap's bytes into its image
+//! by moves that may change a value: a copy into a depth image takes no value outside `[0, 1]`
+//! without `VK_EXT_depth_range_unrestricted` (`VUID-vkCmdCopyBufferToImage-pRegions-07931`), so on
+//! a device that would store a 32-bit float one clamped (`depth_clamp::clamps_depth`: ANV on the Iris Xe
+//! of RPL-P) the move into the tight buffer clamps each such depth into `[0, 1]`, a NaN to 1.0
+//! (`TiledLevelMove::clamps_depth`), the value the device stores: `restricted-depth-upload`,
+//! announced as the texture is made. The drivers that `drawn-depth-copy` names change values
+//! inside it too. So a merge's keep holds
+//! the heap's bytes as the image stands for them, not the image's (`ShadowCopies::record_kept`):
+//! the staging buffer as the shadow's last copy left it, the bytes the copy in read or those the
+//! last copy back or merge wrote, and no move out of the image. A keep of the image would hold
+//! the changed value, and the merge would keep the heap's byte in each byte a command wrote that
+//! equals it; a keep of the heap's bytes as it runs would hold the CPU's writes since the copy in,
+//! which the merge would undo. A byte the image holds otherwise than the heap is written back:
+//! every byte a command wrote, and the values the copy in changed.
 
 use super::super::blit_plan::BufferLayout;
 use super::super::buffer::Buffer;
@@ -173,14 +186,14 @@ use super::super::shadow::{self, ShadowStaging};
 use super::super::texture_descriptor::TextureLayout;
 use super::super::tracker::Barrier;
 use super::super::values::{CpuCacheMode, HazardTrackingMode, ResourceOptions, StorageMode};
-use super::super::Device;
+use super::super::{depth_clamp, Device};
 use super::copy_images::{Reused, UseMaker};
 use super::heap::HeapPlane;
-use super::{copy_units, Texture, TextureShared};
+use super::{copy_units, each_copy_unit, texel_units, Texture, TextureShared};
 use crate::device::functions::Vk;
 use ash::vk;
 use metal2vulkan::bind::{TiledLevelMove, TiledTexelsModule};
-use metal2vulkan::metal::format::{byte_format, is_depth_stencil, srgb_raw_twin};
+use metal2vulkan::metal::format::{aspects, byte_format, is_depth_stencil, srgb_raw_twin};
 use metal2vulkan::metal::{PixelFormat, TextureType, TextureUsage};
 use metal2vulkan::vk::{Format, ImageAspectFlags};
 use std::sync::{OnceLock, Weak};
@@ -623,26 +636,28 @@ pub(crate) fn metal_keeps_uncompressed(colour: bool, usage: TextureUsage) -> boo
 pub(crate) fn fresh_pattern(pf: PixelFormat) -> Option<FreshPattern> {
     use FreshPattern::{Color, DepthStencil};
     use PixelFormat as P;
-    // A clear color whose conversion writes the texel exactly (`clear_value::texel_bytes`).
+    // A clear color whose conversion writes the texel exactly (`clear_value::texel_bytes`), no
+    // rounding of it in question (`clear_value::rounds_apart`). A signed normalized pattern's
+    // code -1 takes none: no `float` scales onto it (`-1/127` is -0.99999999627 codes, which
+    // Vulkan lets a clear store as 0), so copies of its bytes write it.
     const MAGENTA: Option<[f64; 4]> = Some([1.0, 0.0, 1.0, 1.0]);
     const YELLOW: Option<[f64; 4]> = Some([1.0, 1.0, 0.0, 1.0]);
     const ONES: Option<[f64; 4]> = Some([4294967295.0, 0.0, 4294967295.0, 4294967295.0]);
     const MINUS_ONE: Option<[f64; 4]> = Some([-1.0, 0.0, -1.0, -1.0]);
-    const SNORM8: Option<[f64; 4]> = Some([-1.0 / 127.0, 0.0, -1.0 / 127.0, -1.0 / 127.0]);
-    const SNORM16: Option<[f64; 4]> = Some([-1.0 / 32767.0, 0.0, -1.0 / 32767.0, -1.0 / 32767.0]);
+    const SNORM: Option<[f64; 4]> = None;
     const SHARED: Option<[f64; 4]> = Some([65408.0, 0.0, 65408.0, 1.0]);
     let color = |texel: &'static [u8], color: Option<[f64; 4]>| Some(Color { texel, color });
     match pf {
         P::A8Unorm | P::R8Unorm | P::R8UnormSRGB => color(&[0xff], MAGENTA),
-        P::R8Snorm => color(&[0xff], SNORM8),
+        P::R8Snorm => color(&[0xff], SNORM),
         P::R8Uint => color(&[0xff], ONES),
         P::R8Sint => color(&[0xff], MINUS_ONE),
         P::RG8Unorm | P::RG8UnormSRGB => color(&[0xff, 0x00], MAGENTA),
-        P::RG8Snorm => color(&[0xff, 0x00], SNORM8),
+        P::RG8Snorm => color(&[0xff, 0x00], SNORM),
         P::RG8Uint => color(&[0xff, 0x00], ONES),
         P::RG8Sint => color(&[0xff, 0x00], MINUS_ONE),
         P::R16Unorm => color(&[0xff, 0xff], MAGENTA),
-        P::R16Snorm => color(&[0xff, 0xff], SNORM16),
+        P::R16Snorm => color(&[0xff, 0xff], SNORM),
         P::R16Uint => color(&[0xff, 0xff], ONES),
         P::R16Sint => color(&[0xff, 0xff], MINUS_ONE),
         P::R16Float => color(&[0xff, 0xff], None),
@@ -653,7 +668,7 @@ pub(crate) fn fresh_pattern(pf: PixelFormat) -> Option<FreshPattern> {
         P::RGBA8Unorm | P::RGBA8UnormSRGB | P::BGRA8Unorm | P::BGRA8UnormSRGB => {
             color(&[0xff, 0x00, 0xff, 0xff], MAGENTA)
         }
-        P::RGBA8Snorm => color(&[0xff, 0x00, 0xff, 0xff], SNORM8),
+        P::RGBA8Snorm => color(&[0xff, 0x00, 0xff, 0xff], SNORM),
         P::RGBA8Uint => color(&[0xff, 0x00, 0xff, 0xff], ONES),
         P::RGBA8Sint => color(&[0xff, 0x00, 0xff, 0xff], MINUS_ONE),
         P::RGB10A2Unorm | P::BGR10A2Unorm => color(&[0xff, 0x03, 0xf0, 0xff], MAGENTA),
@@ -662,7 +677,7 @@ pub(crate) fn fresh_pattern(pf: PixelFormat) -> Option<FreshPattern> {
         P::RG11B10Float => color(&[0xe0, 0x07, 0x00, 0xfc], None),
         P::RGB9E5Float => color(&[0xff, 0x01, 0xfc, 0xff], SHARED),
         P::RG16Unorm => color(&[0xff, 0xff, 0x00, 0x00], MAGENTA),
-        P::RG16Snorm => color(&[0xff, 0xff, 0x00, 0x00], SNORM16),
+        P::RG16Snorm => color(&[0xff, 0xff, 0x00, 0x00], SNORM),
         P::RG16Uint => color(&[0xff, 0xff, 0x00, 0x00], ONES),
         P::RG16Sint => color(&[0xff, 0xff, 0x00, 0x00], MINUS_ONE),
         P::RG16Float => color(&[0xff, 0xff, 0x00, 0x00], None),
@@ -670,7 +685,7 @@ pub(crate) fn fresh_pattern(pf: PixelFormat) -> Option<FreshPattern> {
         P::R32Sint => color(&[0xff; 4], MINUS_ONE),
         P::R32Float => color(&[0xff; 4], None),
         P::RGBA16Unorm => color(&[0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff], MAGENTA),
-        P::RGBA16Snorm => color(&[0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff], SNORM16),
+        P::RGBA16Snorm => color(&[0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff], SNORM),
         P::RGBA16Uint => color(&[0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff], ONES),
         P::RGBA16Sint => color(&[0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff], MINUS_ONE),
         P::RGBA16Float => color(&[0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff], None),
@@ -935,6 +950,11 @@ impl Untiled {
         "its image lies in the heap's bytes in the device driver's layout, which no driver fact \
          measures as Metal's tiles (DriverFact::ColorImagesLieAsMetalHeapTextures)",
     );
+    /// A texture of a heap over the device's memory whose image lies in the heap's bytes as a
+    /// linear image, its texels in the driver's rows (`heap-texture-untiled-layout`, `heap.rs`).
+    pub(crate) const LINEAR: Untiled = Untiled::other(
+        "its image is linear, its texels in rows in the heap's bytes, where Metal tiles them",
+    );
     /// A texture of a heap over the device's memory whose image is a shadow of the heap's bytes
     /// in rows, where Metal tiles its elements (`heap-texture-untiled-layout`, `heap.rs`).
     pub(crate) const ROWS: Untiled = Untiled::other(
@@ -1124,31 +1144,32 @@ pub(crate) fn holds_metal_texels(pf: PixelFormat, format: Format, bytes: usize) 
 }
 
 fn image_element(pf: PixelFormat, format: Format) -> Option<(u64, [u64; 2])> {
-    let units = copy_units(format, pf);
+    // Each unit read one by one, collecting nothing: every tiled heap texture's making asks this
+    // (`metal_heap_layout`).
     let element = match pf {
-        PixelFormat::Stencil8 => units
-            .iter()
-            .find(|(aspect, _, _)| *aspect == ImageAspectFlags::STENCIL)
-            .filter(|_| units.len() == 1)
-            .map(|&(_, bytes, block)| (bytes, block)),
-        // A stencil view's image holds a depth aspect it does not name (`heap_plane_layout`).
-        PixelFormat::X32Stencil8 => match units[..] {
-            [(ImageAspectFlags::DEPTH, _, _), (ImageAspectFlags::STENCIL, bytes, block)] => {
-                Some((bytes, block))
+        // A stencil format's image holds its stencil, beside a depth it does not present where
+        // the image is combined (`X32Stencil8`'s; `texel_units`, `heap_plane_layout`).
+        pf if aspects(pf) == Some(ImageAspectFlags::STENCIL) => {
+            match only_unit(texel_units(format, pf)) {
+                Some((ImageAspectFlags::STENCIL, bytes, block)) => Some((bytes, block)),
+                _ => None,
             }
-            _ => None,
-        },
-        PixelFormat::Depth16Unorm | PixelFormat::Depth32Float => match units[..] {
-            [(ImageAspectFlags::DEPTH, bytes, block)] => {
-                (depth_bytes(format) == Some(bytes)).then_some((bytes, block))
+        }
+        // A depth format's image holds its depth, beside a stencil it does not present where
+        // the image is combined (`DepthInCombined`; `texel_units`).
+        PixelFormat::Depth16Unorm | PixelFormat::Depth32Float => {
+            match only_unit(texel_units(format, pf)) {
+                Some((ImageAspectFlags::DEPTH, bytes, block)) => {
+                    (depth_bytes(format) == Some(bytes)).then_some((bytes, block))
+                }
+                _ => None,
             }
-            _ => None,
-        },
+        }
         _ => {
             let bytes_of = |pf: PixelFormat| byte_format(pf).filter(|&own| own == format);
             let same = bytes_of(pf).or_else(|| srgb_raw_twin(pf).and_then(bytes_of));
-            match units[..] {
-                [(ImageAspectFlags::COLOR, bytes, block)]
+            match only_unit(each_copy_unit(format, pf)) {
+                Some((ImageAspectFlags::COLOR, bytes, block))
                     if same.is_some() && block_bytes(pf) == Some(bytes) =>
                 {
                     Some((bytes, block))
@@ -1343,11 +1364,8 @@ pub(crate) fn metal_heap_layout(
             Untiled::other("its image holds other bytes than Metal's elements"),
         );
     }
-    // A stencil view's tiles are its image's stencil aspect's.
     let mut tiles = TiledTexture::one(tiled);
-    if pf == PixelFormat::X32Stencil8 {
-        tiles.parts[0].aspect = Some(ImageAspectFlags::STENCIL);
-    }
+    tiles.parts[0].aspect = held_aspect(format, pf);
     MetalHeapLayout {
         answer: plain,
         layout: HeapLayout::Tiled(tiles),
@@ -1488,11 +1506,27 @@ fn multisample_tiles(
         return None;
     }
     let mut tiles = TiledTexture::one(plane(unit)?);
-    // A stencil view's samples are its image's stencil aspect's.
-    if pf == PixelFormat::X32Stencil8 {
-        tiles.parts[0].aspect = Some(ImageAspectFlags::STENCIL);
-    }
+    tiles.parts[0].aspect = held_aspect(format, pf);
     Some(tiles)
+}
+
+/// The one aspect of an image of `format` whose elements a texture of `pf` lays out where the image
+/// holds another it presents none of ([`texel_units`]): a stencil format's over a combined image
+/// (`X32Stencil8`'s), its tiles its stencil's, and a depth format's (`Depth32Float` over
+/// `D32_SFLOAT_S8_UINT`), its tiles its depth's, the other aspect holding none of its texels;
+/// `None` where the texture's tiles are each of the image's aspects.
+fn held_aspect(format: Format, pf: PixelFormat) -> Option<ImageAspectFlags> {
+    // Each unit read one by one, collecting nothing, as in `image_element`.
+    let (aspect, _, _) = only_unit(texel_units(format, pf))?;
+    each_copy_unit(format, pf).nth(1).map(|_| aspect)
+}
+
+/// The one unit `units` yields, `None` where it yields none or more.
+fn only_unit<T>(mut units: impl Iterator<Item = T>) -> Option<T> {
+    match (units.next(), units.next()) {
+        (Some(unit), None) => Some(unit),
+        _ => None,
+    }
 }
 
 /// One direction of the kernel's moves: its shape, where it lies in the shape buffer, and the
@@ -1518,8 +1552,8 @@ pub(crate) struct HeapTiledCopies {
     /// The tight buffer's copies to and from the image, one a level: a single-sample image's
     /// copies; a multisample image's region, which its [`SampleMoves`] move.
     regions: Vec<vk::BufferImageCopy>,
-    /// A multisample image's texture and what its moves into it change, known once the texture
-    /// is made ([`know_samples`](Self::know_samples)); `None` for a single-sample image.
+    /// A multisample image's texture, known once the texture is made
+    /// ([`know_samples`](Self::know_samples)); `None` for a single-sample image.
     samples: Option<OnceLock<MovedTexture>>,
     /// The tight buffer's planes and where it lies in its `VkBuffer`, which a multisample image's
     /// moves are planned over.
@@ -1548,11 +1582,9 @@ pub(crate) struct SampleMoves {
 
 /// A multisample heap texture whose moves are planned as its copies are recorded
 /// ([`HeapTiledCopies::sample_moves`]): the texture, which holds the moves' tiles and so is held
-/// weakly, and what the moves into its image change (`drawn-depth-copy`), `None` where they are
-/// exact.
+/// weakly.
 struct MovedTexture {
     texture: Weak<TextureShared>,
-    inexact: Option<&'static str>,
 }
 
 impl HeapTiledCopies {
@@ -1564,9 +1596,14 @@ impl HeapTiledCopies {
 
     /// The kernel's levels of a texture of `tiles` whose image's elements lie in the tight
     /// buffer as `planes` say (`heap_plane_layout`, one plane a level of each aspect), each
-    /// part's levels its aspect's planes'; `None` where a byte the moves name lies past `u32`, or
-    /// the planes are not the levels'.
-    fn levels(tiles: &TiledTexture, planes: &[HeapPlane]) -> Option<Vec<TiledLevelMove>> {
+    /// part's levels its aspect's planes', a depth plane's of 4-byte elements clamped into the
+    /// image where `clamps` (`depth_clamp::clamps_depth`); `None` where a byte the moves name lies
+    /// past `u32`, or the planes are not the levels'.
+    fn levels(
+        tiles: &TiledTexture,
+        planes: &[HeapPlane],
+        clamps: bool,
+    ) -> Option<Vec<TiledLevelMove>> {
         let narrow = |v: u64| u32::try_from(v).ok();
         let mut moves = Vec::new();
         for part in &tiles.parts {
@@ -1581,7 +1618,7 @@ impl HeapTiledCopies {
                 if plane.blocks != level.extent || plane.unit != layout.unit {
                     return None;
                 }
-                moves.push(TiledLevelMove::new(
+                let moved = TiledLevelMove::new(
                     narrow(layout.unit)?,
                     [narrow(level.extent[0])?, narrow(level.extent[1])?],
                     narrow(plane.images)?,
@@ -1591,7 +1628,12 @@ impl HeapTiledCopies {
                     narrow(layout.stride)?,
                     narrow(plane.offset)?,
                     narrow(level.bytes)?,
-                ));
+                );
+                let depth = plane.aspect == ImageAspectFlags::DEPTH && layout.unit == 4;
+                moves.push(match clamps && depth {
+                    true => moved.clamping_depth(),
+                    false => moved,
+                });
             }
         }
         // Every plane is a part's.
@@ -1626,7 +1668,7 @@ impl HeapTiledCopies {
                 .limits
                 .max_storage_buffer_range,
         );
-        let Some(levels) = Self::levels(tiles, planes) else {
+        let Some(levels) = Self::levels(tiles, planes, false) else {
             return false;
         };
         let moves = [true, false].iter().all(|&into| {
@@ -1686,19 +1728,21 @@ impl HeapTiledCopies {
     }
 
     /// The moves of a texture of `tiles` through `staging` (its `staging`),
-    /// whose image's elements lie in its tight buffer as `planes` say, `tight_len` bytes, copied
-    /// to and from the image by `regions` (offsets in that buffer), of the texture's `hazard`
-    /// tracking. Refused as `new_buffer` refuses the tight and shape buffers; the caller checked
-    /// that they `fit`.
+    /// whose image of `format` has its elements in its tight buffer as `planes` say, `tight_len`
+    /// bytes, copied to and from the image by `regions` (offsets in that buffer), of the
+    /// texture's `hazard` tracking: a 32-bit float depth clamped into `[0, 1]` on its way into
+    /// the image where the device takes no other value there (`depth_clamp::clamps_depth`). Refused
+    /// as `new_buffer` refuses the tight and shape buffers; the caller checked that they `fit`.
     pub(crate) fn new(
         device: &Device,
         staging: &ShadowStaging,
-        tiles: TiledTexture,
+        (tiles, format): (TiledTexture, Format),
         (planes, tight_len, samples): (&[HeapPlane], u64, u32),
         regions: &[vk::BufferImageCopy],
         hazard: HazardTrackingMode,
     ) -> Result<HeapTiledCopies, Error> {
-        let levels = Self::levels(&tiles, planes)
+        let clamps = depth_clamp::clamps_depth(device, format, ImageAspectFlags::DEPTH);
+        let levels = Self::levels(&tiles, planes, clamps)
             .ok_or_else(|| internal("a tiled heap texture's moves past u32"))?;
         let options =
             ResourceOptions::new(StorageMode::Private, CpuCacheMode::DefaultCache, hazard);
@@ -1821,7 +1865,6 @@ impl HeapTiledCopies {
         }
         let known = MovedTexture {
             texture: texture.downgrade(),
-            inexact,
         };
         // A texture is known once, as it is made, before any command records its copies.
         drop(slot.set(known));
@@ -1862,8 +1905,9 @@ impl HeapTiledCopies {
 
     /// Whether the moves between the image and the staging buffer give back each byte they took:
     /// a single-sample image of colour aspects alone, whose copies to and from the tight buffer
-    /// move its texel blocks' bits (a depth aspect's copy writes values outside `[0, 1]` as
-    /// undefined, `VUID-vkCmdCopyBufferToImage-pRegions-07931`), and whose dispatches move words.
+    /// move its texel blocks' bits (a depth aspect's copy takes no value outside `[0, 1]`,
+    /// `VUID-vkCmdCopyBufferToImage-pRegions-07931`, which the move clamps where the device would
+    /// store it clamped), and whose dispatches move words.
     /// So, right after a move in, the staging buffer holds what a move out of the image would
     /// leave there (`ShadowCopies::record_kept_from_staging`).
     pub(crate) fn moves_bits(&self) -> bool {
@@ -1872,12 +1916,16 @@ impl HeapTiledCopies {
                 .all(|region| region.image_subresource.aspect_mask == vk::ImageAspectFlags::COLOR)
     }
 
-    /// Whether the image takes the heap's bytes inexactly: a multisample depth whose moves into
-    /// it draw values the driver's fragment depth changes (`drawn-depth-copy`), which a merge's
-    /// keep then reads from the heap's bytes (`ShadowCopies::record_kept`).
-    pub(crate) fn takes_inexactly(&self) -> bool {
-        let known = self.samples.as_ref().and_then(OnceLock::get);
-        known.is_some_and(|known| known.inexact.is_some())
+    /// Whether the image has a depth aspect, whose moves into it may change a value the heap's
+    /// bytes hold (the module docs: a 32-bit float depth outside `[0, 1]`, clamped where the
+    /// device lacks `VK_EXT_depth_range_unrestricted`, and the values `drawn-depth-copy`
+    /// names), so that a merge's keep copies the staging buffer, the heap's bytes as the image
+    /// stands for them, and moves nothing out of the image (`ShadowCopies::record_kept`). Of a
+    /// depth whose moves change none, the same bytes.
+    pub(crate) fn takes_depth(&self) -> bool {
+        (self.regions.iter()).any(|region| {
+            (region.image_subresource.aspect_mask).contains(vk::ImageAspectFlags::DEPTH)
+        })
     }
 
     /// Record the move of the image's elements into the tight buffer: a single-sample image's

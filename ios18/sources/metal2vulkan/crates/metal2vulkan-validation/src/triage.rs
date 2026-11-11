@@ -14,7 +14,7 @@ use std::path::Path;
 /// bumps it says what changed; this comment keeps no history.
 macro_rules! analyzer_version {
     () => {
-        "structural-triage-v80"
+        "structural-triage-v82"
     };
 }
 
@@ -835,6 +835,7 @@ fn tooling_requirements(
         requirements.extend(
             crate::executor_contract::unsupported_observation_requirements(
                 *authored_stage,
+                &source.air_ll,
                 reflection,
             ),
         );
@@ -1892,6 +1893,12 @@ entry:
                 "the executors' depth-stencil state; classification creates no pipeline",
             ),
             (
+                "src/executor_contract/depth_range.rs",
+                "the executors' depth-range rule over a case's depth bytes and the device's \
+                 VK_EXT_depth_range_unrestricted; classification reads no depth and opens no \
+                 device",
+            ),
+            (
                 "src/executor_contract/render_target_array.rs",
                 "the executors' render target array length; classification draws no pass",
             ),
@@ -2285,6 +2292,61 @@ define void @{name}(ptr addrspace(2) %ab, ptr addrspace(1) %out) {{
         );
         let fragment = classify(&entry_of("engine/mesh_draws.ll", "mesh_draws_fragment")).unwrap();
         assert_eq!(fragment.mesh_draw, None);
+    }
+
+    /// A vertex function whose only effect is the indexed draw it encodes is observed by executing
+    /// that draw, as a kernel's commands are: its row carries no requirement, the encoded commands
+    /// an unobserved effect.
+    #[test]
+    fn a_vertex_row_whose_only_effect_is_its_replayed_commands_is_resolved() {
+        for (module, entry) in [
+            ("engine/icb_vertex_encode_indexed.ll", "ive_encode"),
+            ("engine/icb_vertex_encode_textured.ll", "ivt_encode"),
+        ] {
+            let classified = classify(&entry_of(module, entry)).unwrap();
+            assert_eq!(classified.tooling_requirements, [], "{entry}");
+            assert!(!classified.unobserved_calls.is_empty(), "{entry}");
+            assert!(
+                classified
+                    .unobserved_calls
+                    .values()
+                    .all(|effect| *effect == UnobservedEffect::IndirectCommandContents),
+                "{entry}: {:?}",
+                classified.unobserved_calls
+            );
+        }
+    }
+
+    /// A mesh function that sets no vertex or primitive and writes nothing (an empty body, or a
+    /// primitive count alone, constant or read from its payload) has no effect a stage observes:
+    /// its row draws with rasterization off and an empty observation, needs no stage, and carries
+    /// no requirement.
+    #[test]
+    fn an_effect_free_mesh_row_needs_no_stage() {
+        for (module, entry) in [
+            (
+                "engine/icb_object_threadgroup.ll",
+                "icb_object_threadgroup_mesh",
+            ),
+            ("engine/mesh_object_grid.ll", "mesh_object_grid_mesh"),
+            (
+                "engine/mesh_partial_barrier.ll",
+                "mesh_partial_barrier_mesh",
+            ),
+            (
+                "engine/mesh_pipeline_limits.ll",
+                "mesh_pipeline_limits_mesh",
+            ),
+            (
+                "engine/mesh_pipeline_limits.ll",
+                "mesh_pipeline_limits_mesh_alone",
+            ),
+        ] {
+            let classified = classify(&entry_of(module, entry)).unwrap();
+            assert_eq!(classified.tooling_requirements, [], "{entry}");
+            let draw = classified.mesh_draw.expect("a mesh draw");
+            assert!(draw.missing.is_empty(), "{entry}: {:?}", draw.missing);
+        }
     }
 
     /// A tile function (a kernel's implicit imageblock over render targets) carries

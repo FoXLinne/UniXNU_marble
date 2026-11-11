@@ -15,10 +15,12 @@
 //! format, that an earlier pass clears to red [`CLEARED`]. In the pass, which loads it, draw F
 //! fills the block `[8, 16)²` with red [`FILL`]. The reader is `tob_read`
 //! (`t.read(uint2(in.position.xy))`) over the block, blended `One + One`, so each fragment adds
-//! what it read to the pixel, through a scissor of the block: the snapshot draw's 20 bytes at
-//! each of its 64 pixels cost less than the split's copy of the target's 1024 texels of 4 bytes
-//! (`RenderCommandEncoder::snapshot_cheaper`), and the snapshot of an `RGBA8Unorm` texture holds
-//! its codes, 4 bytes a pixel. The tests
+//! what it read to the pixel, through the whole target's scissor but where a test names another:
+//! the area rule (`render/snapshot.rs`) takes the snapshot through scissors of a 4-byte color
+//! this large whatever the reader covers, the split's copy of the target's 1,048,576 texels
+//! weighing more than the snapshot draw's 20 bytes at each pixel would at most, each beside a
+//! reader's fixed cost; and the snapshot of an `RGBA8Unorm` texture holds its codes, 4 bytes a
+//! pixel. The tests
 //! run under the default policy, the consumer's, and the first under the lane's exact policy too,
 //! whose exact texel conversion the translator follows into its call
 //! (`StageModule::snapshot_textures`).
@@ -27,24 +29,43 @@
 //!   reader in two instances (every pixel covered by two primitives of the one draw), a barrier,
 //!   the reader once more: `3 * FILL`, then `6 * FILL`. A read of the attachment itself would
 //!   race with the draw's own color writes, the second primitive reading the first's (`4 * FILL`).
-//! - [`readers_take_the_snapshot_where_it_costs_less_than_the_copy`]: the same draws through
-//!   wider scissors, whatever the snapshot's form: over `RGBA8Unorm` through the whole target's
-//!   scissor (1024 pixels of 20 bytes against 1024 texels of 4) and through [`QUARTER`]'s (256
-//!   of 20 against 1024 of 4), a split for each; over `RGBA16Float` through [`QUARTER`]'s (256
-//!   of 20 against 1024 of 8), a snapshot for each where the device takes the path.
+//! - [`a_reader_that_discards_by_its_texel_takes_the_snapshot`]: the first test's draws with a
+//!   reader that discards its fragment where the texel it read is redder than 0.4
+//!   (`sd_read_discarding` of `snapshot_discard.metal`): the first reader adds `FILL` twice
+//!   (`3 * FILL`), the second reads that and discards (`3 * FILL`). Its branch only decides
+//!   whether the invocation demotes itself, which a helper invocation already is, so the
+//!   translator lets a snapshot serve its slot (`StageModule::snapshot_textures`): a snapshot for
+//!   each reader where the device takes the path, else a split for each, and never a split for an
+//!   own-pixel read no snapshot serves (`WorkCounts::reading_draws_split_unreadable_own_pixel`).
+//! - [`a_reader_that_ends_itself_by_its_texel_takes_the_split_for_its_branch`]: the same draws on
+//!   a device that withholds `shaderDemoteToHelperInvocation`, where the discard ends the
+//!   invocation: the same answers, through a split for each reader on every device, each an
+//!   own-pixel read no snapshot serves, counted under its branch alone
+//!   (`WorkCounts::reading_draws_split_unreadable_own_pixel_branch`; `SnapshotRefusal::Branch`).
+//! - [`readers_take_the_snapshot_by_the_area_rule`]: the same draws through each scissor,
+//!   whatever the snapshot's form (`render/snapshot.rs`'s area rule, each form beside a reader's
+//!   fixed cost of a mebibyte): over `RGBA8Unorm` through the whole target's, a snapshot for each
+//!   where the device takes the path; through [`QUARTER`]'s (256 pixels of 20 bytes against the
+//!   split's copy of the 18x18 texels around them, 4 bytes each), a split for each; over
+//!   `RGBA16Float` through [`QUARTER`]'s (the copy's texels of 8 bytes), a snapshot for each where
+//!   the device takes the path.
 //! - [`a_surfaces_readers_take_the_snapshot_at_any_area`]: the same draws over a surface over
 //!   host pages, an `RGBA8Unorm` texture of an IOSurface plane over a no-copy buffer, through the
-//!   whole target's scissor: a snapshot for each where the device takes the path and the
-//!   texture's image aliases the bytes with feedback loop usage
-//!   (`WorkCounts::feedback_loop_alias_images`; `RenderCommandEncoder::snapshot_cheaper` weighs no
-//!   area for it), else a split (NVIDIA's drivers, measured on an RTX 3090 and an RTX 5080, make
-//!   the linear image without the usage).
+//!   whole target's scissor: a snapshot for each where the device takes the path and the image
+//!   the pass renders took feedback loop usage, the texture's shadow (a surface over host pages
+//!   that renders is one where the device's check did not pass for it, `in_place.rs`;
+//!   `WorkCounts::feedback_loop_shadow_images`) or a linear image aliasing the bytes
+//!   (`WorkCounts::feedback_loop_alias_images`), with the storage usage the snapshot's fetch reads
+//!   through, which one over host pages takes where the check passed for a shader's writes there
+//!   (`Pointer writes: Passed`), as
+//!   `RenderCommandEncoder::snapshot_cheaper` weighs no area for either; else a split.
 //! - [`each_form_reads_what_the_split_reads`]: the first test's draws over a target of each of
 //!   `RGBA8Unorm`, `BGRA8Unorm`, `R8Unorm`, `RG8Unorm` (8-bit codes), `RGBA16Float` (half-float
 //!   codes) and `RGB10A2Unorm` (bits): the bytes the split leaves, byte for byte, with a snapshot
-//!   for each reader where the device takes the path, the rule does (not `R8Unorm`'s, whose copy
-//!   moves 1024 bytes) and the device keeps the color in place (an `RGBA8Unorm` one's on every
-//!   such device; the counts printed say which others did).
+//!   for each reader where the device takes the path, the rule does (not `R8Unorm`'s or
+//!   `RG8Unorm`'s, whose copies of 1 and 2 bytes a texel weigh less) and the device keeps the
+//!   color in place (an `RGBA8Unorm` one's on every such device; the counts printed say which
+//!   others did).
 //! - [`without_a_barrier_the_readers_read_the_texels_from_before_the_pass`]: the same draws with
 //!   no barrier: every reader reads [`CLEARED`], the texel from before the pass at its own pixel,
 //!   through the copy taken before the pass: `FILL + 3 * CLEARED`, no snapshot. The M3 Max's
@@ -62,9 +83,10 @@
 //!   depth or stencil first and leave the drawing draw nothing (`FILL`). Under a `Less` depth
 //!   without writes both instances draw (`3 * FILL`).
 
-use super::attachment_reads::{corners, floats, function, red, SIDE};
+use super::attachment_reads::{floats, function};
 use super::degrade_notices::on_device_with;
 use super::host_memory::{no_copy, Mapping, GUEST_PAGE};
+use super::in_place_rows;
 use metal2vulkan::device::VkFeature;
 use metal2vulkan::metal::state::DepthStencilDescriptor;
 use metal2vulkan::metal::{
@@ -87,11 +109,39 @@ const CLEARED: u8 = 64;
 /// The red draw F writes over the block.
 const FILL: u8 = 40;
 
+/// The target's side, in pixels: large enough that a reader of a 4-byte color through the whole
+/// target's scissor takes the snapshot by the area rule (`render/snapshot.rs`).
+const SIDE: u64 = 1024;
+
 /// The block F and the readers draw over.
 const BLOCK: [u64; 4] = [8, 8, 16, 16];
 
 /// A scissor of a quarter of the target, over the block.
 const QUARTER: [u64; 4] = [8, 8, 24, 24];
+
+/// The corners, in normalized device coordinates, of the target's pixels `[x0, x1) x [y0, y1)`.
+fn corners([x0, y0, x1, y1]: [u64; 4]) -> Vec<u8> {
+    let x = |p: u64| p as f32 / SIDE as f32 * 2.0 - 1.0;
+    let y = |p: u64| 1.0 - p as f32 / SIDE as f32 * 2.0;
+    floats([x(x0), y(y1), x(x1), y(y0)])
+}
+
+/// The red of pixel `(x, y)` of `bytes`, tight `RGBA8Unorm` rows of [`SIDE`] pixels.
+fn red(bytes: &[u8], x: u64, y: u64) -> u8 {
+    bytes[((y * SIDE + x) * 4) as usize]
+}
+
+/// A fragment function: its name, and the fixture of `fixtures/public/engine` that holds it.
+type Fragment = (&'static str, &'static str);
+
+/// F's: the solid color of its fragment bytes.
+const SOLID: Fragment = ("tob_solid", "tob_renders.ll");
+
+/// The reader: `t.read(uint2(in.position.xy))`.
+const READ: Fragment = ("tob_read", "tob_renders.ll");
+
+/// The reader that discards its fragment where the texel it read is redder than 0.4.
+const READ_DISCARDING: Fragment = ("sd_read_discarding", "snapshot_discard.ll");
 
 /// The features the snapshot path takes.
 const FEATURES: [VkFeature; 4] = [
@@ -101,16 +151,21 @@ const FEATURES: [VkFeature; 4] = [
     VkFeature::FragmentStoresAndAtomics,
 ];
 
-/// The `tob_rect` state with the fragment function `name` of `tob_renders.ll`, into a color of
-/// `format`, blended `One + One` where `adds`.
-fn state(device: &Device, name: &str, adds: bool, format: PixelFormat) -> RenderPipelineState {
-    state_in(device, name, adds, format, None)
+/// The `tob_rect` state with the fragment function `fragment`, into a color of `format`, blended
+/// `One + One` where `adds`.
+fn state(
+    device: &Device,
+    fragment: Fragment,
+    adds: bool,
+    format: PixelFormat,
+) -> RenderPipelineState {
+    state_in(device, fragment, adds, format, None)
 }
 
 /// [`state`]'s, in a pass whose depth and stencil attachments are of `depth_stencil` where given.
 fn state_in(
     device: &Device,
-    name: &str,
+    (name, fixture): Fragment,
     adds: bool,
     format: PixelFormat,
     depth_stencil: Option<PixelFormat>,
@@ -118,7 +173,7 @@ fn state_in(
     let mut d = RenderPipelineDescriptor::new(function(device, "tob_rect", "tob_renders.ll"));
     d.depth_format = depth_stencil;
     d.stencil_format = depth_stencil;
-    d.fragment = Some(function(device, name, "tob_renders.ll"));
+    d.fragment = Some(function(device, name, fixture));
     let mut color = ColorAttachmentDescriptor::new(format);
     if adds {
         color.blending_enabled = true;
@@ -174,22 +229,26 @@ fn readers(
     barriers: bool,
     scissor: Option<[u64; 4]>,
 ) -> (Vec<u8>, Moved) {
-    let (bytes, moved, _) = readers_over(device, queue, format, barriers, scissor, false);
+    let (bytes, moved, _) = readers_over(device, queue, format, barriers, scissor, false, READ);
     (bytes, moved)
 }
 
-/// How [`readers_over`]' target was made: whether its image aliases its bytes (made as no
-/// shadow, `WorkCounts::shadowed_textures`), and whether with feedback loop usage
-/// (`WorkCounts::feedback_loop_alias_images`).
+/// How [`readers_over`]' target was made: whether the image its passes render took feedback loop
+/// usage (`WorkCounts::feedback_loop_alias_images` for an image aliasing its bytes, or
+/// `feedback_loop_shadow_images` for a shadow), and whether a snapshot's fetch reads it there: a
+/// shadow's, or an image over host pages in place where the device's check passed for a shader's
+/// writes over such pages (`Pointer writes: Passed`), with which it takes the storage usage the
+/// fetch reads through (`texture/in_place_image.rs`).
 #[derive(Debug)]
 struct Made {
-    aliased: bool,
     feedback: bool,
+    fetched: bool,
 }
 
 /// [`readers`]' pass over a new target of `format`: private, or where `surface` a surface over
 /// host pages (a texture of an IOSurface plane over a no-copy buffer, tight rows), as the
-/// consumer's guest makes its framebuffer. Also how the target was made.
+/// consumer's guest makes its framebuffer, with the readers drawn by `reader`. Also how the
+/// target was made.
 fn readers_over(
     device: &Device,
     queue: &CommandQueue,
@@ -197,9 +256,10 @@ fn readers_over(
     barriers: bool,
     scissor: Option<[u64; 4]>,
     surface: bool,
+    reader: Fragment,
 ) -> (Vec<u8>, Moved, Made) {
-    let fill = state(device, "tob_solid", false, format);
-    let read = state(device, "tob_read", true, format);
+    let fill = state(device, SOLID, false, format);
+    let read = state(device, reader, true, format);
     let mut d = TextureDescriptor::texture_2d(format, SIDE, SIDE, false);
     d.usage = TextureUsage::RENDER_TARGET | TextureUsage::SHADER_READ;
     d.resource_options = ResourceOptions::private();
@@ -228,9 +288,16 @@ fn readers_over(
         }
     };
     let counts = device.work_counts();
+    let alias = counts.feedback_loop_alias_images > made.feedback_loop_alias_images;
+    let shadow = counts.feedback_loop_shadow_images > made.feedback_loop_shadow_images;
+    // An image in place over host pages takes the storage usage the snapshot's fetch reads
+    // through where the device's check passed for a shader's writes over such pages, for texels
+    // that lie in lines as the surface's do: its rows one after another from its pages' start.
+    let on_lines = in_place_rows::on_lines(device, 0, row, row, SIDE);
+    let writes = in_place_rows::passed(device, "Pointer writes", on_lines);
     let made = Made {
-        aliased: counts.shadowed_textures == made.shadowed_textures,
-        feedback: counts.feedback_loop_alias_images > made.feedback_loop_alias_images,
+        feedback: alias || shadow,
+        fetched: shadow || (alias && (!surface || writes)),
     };
     let back = device
         .new_buffer(SIDE * row, ResourceOptions::shared())
@@ -309,8 +376,8 @@ fn readers_over(
     (bytes, moved, made)
 }
 
-/// [`readers`]' first test's pass over a private `RGBA8Unorm` target, through the block's
-/// scissor, beside a `Depth32Float_Stencil8` attachment that an earlier pass clears to depth 1 and
+/// [`readers`]' first test's pass over a private `RGBA8Unorm` target, through the whole
+/// target's scissor, beside a `Depth32Float_Stencil8` attachment that an earlier pass clears to depth 1 and
 /// stencil 0: F, under Metal's default depth/stencil state, then a barrier and the reader in two
 /// instances under a state of `reader` (stencil reference 0). The target's bytes, tight rows, and
 /// what the pass moved of the counts.
@@ -321,8 +388,8 @@ fn depth_stencil_readers(
 ) -> (Vec<u8>, Moved) {
     let format = PixelFormat::RGBA8Unorm;
     let depth_format = PixelFormat::Depth32FloatStencil8;
-    let fill = state_in(device, "tob_solid", false, format, Some(depth_format));
-    let read = state_in(device, "tob_read", true, format, Some(depth_format));
+    let fill = state_in(device, SOLID, false, format, Some(depth_format));
+    let read = state_in(device, READ, true, format, Some(depth_format));
     let reader = device.new_depth_stencil_state(reader).unwrap();
     let texture = |format: PixelFormat, usage: TextureUsage| {
         let mut d = TextureDescriptor::texture_2d(format, SIDE, SIDE, false);
@@ -377,14 +444,6 @@ fn depth_stencil_readers(
     encoder.set_fragment_texture(Some(&target), 0).unwrap();
     encoder.set_depth_stencil_state(&reader).unwrap();
     encoder.set_stencil_reference_value(0);
-    let [x0, y0, x1, y1] = BLOCK;
-    let rect = ScissorRect {
-        x: x0,
-        y: y0,
-        width: x1 - x0,
-        height: y1 - y0,
-    };
-    encoder.set_scissor_rect(rect).unwrap();
     encoder.memory_barrier_with_scope(
         BarrierScope::RENDER_TARGETS,
         RenderStages::FRAGMENT,
@@ -466,8 +525,7 @@ fn overlapping_primitives_read_what_the_draws_before_the_barrier_wrote() {
             },
             |device, _messages| {
                 let queue = device.new_command_queue().unwrap();
-                let (bytes, moved) =
-                    readers(device, &queue, PixelFormat::RGBA8Unorm, true, Some(BLOCK));
+                let (bytes, moved) = readers(device, &queue, PixelFormat::RGBA8Unorm, true, None);
                 let takes = snapshots(device);
                 eprintln!("snapshot reads, features {takes}, exact {exact}: {moved:?}");
                 holds("after barriers", &bytes, 6 * FILL);
@@ -493,18 +551,138 @@ fn overlapping_primitives_read_what_the_draws_before_the_barrier_wrote() {
 }
 
 #[test]
-fn readers_take_the_snapshot_where_it_costs_less_than_the_copy() {
+fn a_reader_that_discards_by_its_texel_takes_the_snapshot() {
+    on_default_policy(
+        |_| {},
+        |device| {
+            let queue = device.new_command_queue().unwrap();
+            let format = PixelFormat::RGBA8Unorm;
+            let before = device.work_counts();
+            let (bytes, moved, _) =
+                readers_over(device, &queue, format, true, None, false, READ_DISCARDING);
+            let unreadable = device
+                .work_counts()
+                .reading_draws_split_unreadable_own_pixel
+                - before.reading_draws_split_unreadable_own_pixel;
+            let takes = snapshots(device);
+            eprintln!(
+                "snapshot reads, a discarding reader, features {takes}: {moved:?}, \
+                 unreadable own-pixel splits {unreadable}"
+            );
+            holds("a discarding reader", &bytes, 3 * FILL);
+            assert_eq!(
+                unreadable, 0,
+                "splits for an own-pixel read no snapshot serves"
+            );
+            let (snapshotted, splits) = if takes { (2, 0) } else { (0, 2) };
+            assert_eq!(
+                (moved.snapshotted, moved.splits),
+                (snapshotted, splits),
+                "readers through snapshots, splits"
+            );
+        },
+    );
+}
+
+/// A clause of the unreadable own-pixel splits: its name and its count.
+type Clause = (&'static str, fn(&WorkCounts) -> u64);
+
+/// What `before` to `after` moved of the unreadable own-pixel splits' clauses
+/// (`WorkCounts::reading_draws_split_unreadable_own_pixel_*`), by name.
+fn unreadable_by(before: &WorkCounts, after: &WorkCounts) -> Vec<(&'static str, u64)> {
+    let clauses: [Clause; 12] = [
+        ("branch", |c| {
+            c.reading_draws_split_unreadable_own_pixel_branch
+        }),
+        ("derivative", |c| {
+            c.reading_draws_split_unreadable_own_pixel_derivative
+        }),
+        ("sample", |c| {
+            c.reading_draws_split_unreadable_own_pixel_sample
+        }),
+        ("group_operation", |c| {
+            c.reading_draws_split_unreadable_own_pixel_group_operation
+        }),
+        ("store", |c| {
+            c.reading_draws_split_unreadable_own_pixel_store
+        }),
+        ("atomic", |c| {
+            c.reading_draws_split_unreadable_own_pixel_atomic
+        }),
+        ("image_write", |c| {
+            c.reading_draws_split_unreadable_own_pixel_image_write
+        }),
+        ("undefined_operand", |c| {
+            c.reading_draws_split_unreadable_own_pixel_undefined_operand
+        }),
+        ("writes_memory", |c| {
+            c.reading_draws_split_unreadable_own_pixel_writes_memory
+        }),
+        ("interlock", |c| {
+            c.reading_draws_split_unreadable_own_pixel_interlock
+        }),
+        ("coherent", |c| {
+            c.reading_draws_split_unreadable_own_pixel_coherent
+        }),
+        ("other", |c| {
+            c.reading_draws_split_unreadable_own_pixel_other
+        }),
+    ];
+    (clauses.iter())
+        .map(|&(name, count)| (name, count(after) - count(before)))
+        .collect()
+}
+
+#[test]
+fn a_reader_that_ends_itself_by_its_texel_takes_the_split_for_its_branch() {
+    on_default_policy(
+        |options| {
+            (options.withheld_features).insert(VkFeature::ShaderDemoteToHelperInvocation);
+        },
+        |device| {
+            let queue = device.new_command_queue().unwrap();
+            let format = PixelFormat::RGBA8Unorm;
+            let before = device.work_counts();
+            let (bytes, moved, _) =
+                readers_over(device, &queue, format, true, None, false, READ_DISCARDING);
+            let after = device.work_counts();
+            let unreadable = after.reading_draws_split_unreadable_own_pixel
+                - before.reading_draws_split_unreadable_own_pixel;
+            let clauses = unreadable_by(&before, &after);
+            eprintln!(
+                "snapshot reads, a reader that ends itself: {moved:?}, unreadable own-pixel \
+                 splits {unreadable}, by clause {clauses:?}"
+            );
+            holds("a reader that ends itself", &bytes, 3 * FILL);
+            assert_eq!(
+                (moved.snapshotted, moved.splits),
+                (0, 2),
+                "readers through snapshots, splits"
+            );
+            assert_eq!(
+                unreadable, 2,
+                "splits for an own-pixel read no snapshot serves"
+            );
+            let named: Vec<_> = clauses.into_iter().filter(|&(_, n)| n != 0).collect();
+            assert_eq!(named, [("branch", 2)], "the clauses that left the slot out");
+        },
+    );
+}
+
+#[test]
+fn readers_take_the_snapshot_by_the_area_rule() {
     on_default_policy(
         |_| {},
         |device| {
             let queue = device.new_command_queue().unwrap();
             let narrow = PixelFormat::RGBA8Unorm;
+            let (snapshotted, splits) = if snapshots(device) { (2, 0) } else { (0, 2) };
             let (bytes, moved) = readers(device, &queue, narrow, true, None);
             eprintln!("snapshot reads, whole scissor, RGBA8Unorm: {moved:?}");
             holds("whole scissor", &bytes, 6 * FILL);
             assert_eq!(
                 (moved.snapshotted, moved.splits),
-                (0, 2),
+                (snapshotted, splits),
                 "RGBA8Unorm over the target: snapshots, splits"
             );
             let (bytes, moved) = readers(device, &queue, narrow, true, Some(QUARTER));
@@ -518,7 +696,6 @@ fn readers_take_the_snapshot_where_it_costs_less_than_the_copy() {
             let wide = PixelFormat::RGBA16Float;
             let (_, moved) = readers(device, &queue, wide, true, Some(QUARTER));
             eprintln!("snapshot reads, quarter scissor, RGBA16Float: {moved:?}");
-            let (snapshotted, splits) = if snapshots(device) { (2, 0) } else { (0, 2) };
             assert_eq!(
                 (moved.snapshotted, moved.splits),
                 (snapshotted, splits),
@@ -535,11 +712,11 @@ fn a_surfaces_readers_take_the_snapshot_at_any_area() {
         |device| {
             let queue = device.new_command_queue().unwrap();
             let format = PixelFormat::RGBA8Unorm;
-            let (bytes, moved, made) = readers_over(device, &queue, format, true, None, true);
+            let (bytes, moved, made) = readers_over(device, &queue, format, true, None, true, READ);
             let takes = snapshots(device);
             eprintln!("snapshot reads, surface, whole scissor: {made:?}, {moved:?}");
             holds("surface, whole scissor", &bytes, 6 * FILL);
-            let expected = if takes && made.aliased && made.feedback {
+            let expected = if takes && made.feedback && made.fetched {
                 (2, 0)
             } else {
                 (0, 2)
@@ -572,7 +749,7 @@ fn each_form_reads_what_the_split_reads() {
             },
             |device| {
                 let queue = device.new_command_queue().unwrap();
-                let (bytes, moved) = readers(device, &queue, format, true, Some(BLOCK));
+                let (bytes, moved) = readers(device, &queue, format, true, None);
                 assert_eq!(moved.splits, 2, "{format:?}: a split for each reader");
                 split = Some(bytes);
             },
@@ -581,7 +758,7 @@ fn each_form_reads_what_the_split_reads() {
             |_| {},
             |device| {
                 let queue = device.new_command_queue().unwrap();
-                let (bytes, moved) = readers(device, &queue, format, true, Some(BLOCK));
+                let (bytes, moved) = readers(device, &queue, format, true, None);
                 eprintln!("snapshot reads, {format:?}: {moved:?}");
                 // Each reader through a snapshot where the device keeps the color in place (its
                 // image has storage usage), as `RGBA8Unorm`'s on every device that takes the path.
@@ -634,8 +811,7 @@ fn with_a_feature_withheld_the_readers_take_the_split() {
             },
             |device| {
                 let queue = device.new_command_queue().unwrap();
-                let (bytes, moved) =
-                    readers(device, &queue, PixelFormat::RGBA8Unorm, true, Some(BLOCK));
+                let (bytes, moved) = readers(device, &queue, PixelFormat::RGBA8Unorm, true, None);
                 eprintln!("snapshot reads, {withheld:?} withheld: {moved:?}");
                 holds(&format!("{withheld:?} withheld"), &bytes, 6 * FILL);
                 assert_eq!(

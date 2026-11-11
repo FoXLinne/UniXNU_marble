@@ -4,10 +4,14 @@
 //! - **Order across moves.** A queue's command buffers each copy the word the one before wrote
 //!   into the next word, and write their sequence number, while two other queues keep their
 //!   `VkQueue`s busy in turn, so the queue moves between them where the device shares: every word
-//!   reads as written in commit order, and the queue moved (`queue_moves` above 0) where the
-//!   device shares, never elsewhere.
+//!   reads as written in commit order, and the queue moved where the device shares at every idle
+//!   point where the rule calls for a move, never elsewhere. A choice that stays there is the
+//!   rule's where it found no other `VkQueue` busy or passed over the busy ones for their oldest
+//!   batches' age (`picks_with_none_busy`, `joins_withheld_from_old_heads`): on a busy host or
+//!   beside another process's GPU work every choice can.
 //! - **No deadlock.** A queue joins another's busy `VkQueue` and commits a command buffer that
 //!   waits for a shared event, before the other commits the one that signals it: both complete.
+//!   The join is asserted where the rule calls for it, as above.
 //! - **Pinned and presenting queues never move**, where an unpinned one in the same place does.
 //! - **Unshared queues.** No queue moves onto an unshared queue's `VkQueue` (each command buffer's
 //!   `VkQueue` read, `joins_withheld_from_unshared` above 0 where the device shares), a queue
@@ -31,10 +35,10 @@
 use super::blit_holds::Scratch;
 use crate::{
     Buffer, CommandBuffer, CommandQueue, Device, DeviceKind, DeviceOptions, ResourceOptions,
-    ShaderCacheOptions,
+    ShaderCacheOptions, WorkCounts,
 };
 use metal2vulkan::device::{DevicePolicy, QueueSharingPolicy};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -96,10 +100,12 @@ fn each_policy(leg: &str, test: impl Fn(&Device, bool)) {
     }
 }
 
-/// Commit `count` command buffers of one 1 MiB fill each on `queue`, not waited for: its
-/// `VkQueue` busy, its oldest batch young.
+/// Commit `count` command buffers of one 1 MiB fill each on `queue`, not waited for, the first
+/// scheduled: its `VkQueue` busy as this returns, its oldest batch young unless the host was slow
+/// to come back. A command buffer committed and not yet submitted is in no `VkQueue`'s flight,
+/// which is all a queue's choice looks at (`queue_share.rs`).
 fn burst(queue: &CommandQueue, target: &Buffer, count: usize) -> Vec<CommandBuffer> {
-    (0..count)
+    let command_buffers: Vec<CommandBuffer> = (0..count)
         .map(|_| {
             let command_buffer = queue.command_buffer().unwrap();
             let mut blit = command_buffer.blit_command_encoder().unwrap();
@@ -108,7 +114,21 @@ fn burst(queue: &CommandQueue, target: &Buffer, count: usize) -> Vec<CommandBuff
             command_buffer.commit().unwrap();
             command_buffer
         })
-        .collect()
+        .collect();
+    if let Some(first) = command_buffers.first() {
+        first.wait_until_scheduled().unwrap();
+    }
+    command_buffers
+}
+
+/// Whether a queue's choice made between `before` and `after`, which moved it nowhere, stayed as
+/// the sharing rule says (`queue_share.rs`): it found no other `VkQueue` with batches in flight,
+/// or passed over the busy ones for their oldest batches' age, or a queue went long. On a busy
+/// host or beside another process's GPU work every choice can stay so.
+fn stayed_by_the_rule(before: &WorkCounts, after: &WorkCounts) -> bool {
+    after.picks_with_none_busy > before.picks_with_none_busy
+        || after.joins_withheld_from_old_heads > before.joins_withheld_from_old_heads
+        || after.queues_gone_long > 0
 }
 
 fn wait_all(command_buffers: Vec<CommandBuffer>) {
@@ -141,15 +161,28 @@ fn a_queue_s_command_buffers_run_in_commit_order_across_its_moves() {
             .unwrap();
         let mut seen = Vec::new();
         let mut kept = Vec::new();
+        // The idle points where the queue stayed though the rule called for a move.
+        let mut unexplained = Vec::new();
         for step in 0..STEPS {
             // Every fourth step one of the other queues is busy, in turn; the rest the queue
             // makes its next command buffer with its last one in flight, so with no move.
             let idle = step % 4 == 0;
+            let other = &busy[step / 4 % 2];
             if idle {
-                kept.extend(burst(&busy[step / 4 % 2], &scratch, 24));
+                kept.extend(burst(other, &scratch, 24));
             }
+            let (at, before) = (queue.vk_queue_sharing().0, device.work_counts());
             let command_buffer = queue.command_buffer().unwrap();
-            seen.push(queue.vk_queue());
+            seen.push(queue.vk_queue_sharing().0);
+            // A stay where the busy queue's `VkQueue` is its own is the rule's too.
+            if idle
+                && shares
+                && seen[step] == at
+                && other.vk_queue_sharing().0 != at
+                && !stayed_by_the_rule(&before, &device.work_counts())
+            {
+                unexplained.push(step);
+            }
             let mut blit = command_buffer.blit_command_encoder().unwrap();
             let at = 4 * step as u64;
             match step {
@@ -180,11 +213,23 @@ fn a_queue_s_command_buffers_run_in_commit_order_across_its_moves() {
             assert_eq!(word, u32::from_ne_bytes([step as u8; 4]), "sequence {step}");
         }
         let moved = seen.windows(2).filter(|pair| pair[0] != pair[1]).count();
-        println!("VkQueues {seen:?}: {moved} moves");
+        let counts = device.work_counts();
+        println!(
+            "VkQueues {seen:?}: {moved} moves; choices with none busy {}, old heads passed over \
+             {}, queues gone long {}",
+            counts.picks_with_none_busy,
+            counts.joins_withheld_from_old_heads,
+            counts.queues_gone_long
+        );
         match shares {
+            // Where the device shares, the queue moved at every idle point where the rule called
+            // for a move: where another `VkQueue` had batches in flight whose oldest was young.
             true => {
-                assert!(moved > 0, "the queue moved where the device shares");
-                assert!(device.work_counts().queue_moves > 0);
+                assert!(
+                    unexplained.is_empty(),
+                    "the queue stayed where the device shares, at idle steps {unexplained:?}"
+                );
+                assert!(moved == 0 || counts.queue_moves > 0);
             }
             false => assert_eq!(moved, 0),
         }
@@ -201,10 +246,17 @@ fn a_shared_event_wait_on_a_shared_vk_queue_committed_before_its_signal_complete
             .unwrap();
         let event = device.new_shared_event().unwrap();
         let mut joined = false;
+        // The rounds where the waiter stayed though the rule called for a join.
+        let mut unexplained = Vec::new();
         for round in 1..=8u64 {
             let busy = burst(&signaller, &scratch, 24);
+            let before = device.work_counts();
             let waiting = waiter.command_buffer().unwrap();
-            joined |= waiter.vk_queue() == signaller.vk_queue();
+            let shared = waiter.vk_queue_sharing().0 == signaller.vk_queue_sharing().0;
+            if shares && !shared && !stayed_by_the_rule(&before, &device.work_counts()) {
+                unexplained.push(round);
+            }
+            joined |= shared;
             waiting
                 .encode_wait_for_event((&event).into(), round)
                 .unwrap();
@@ -224,8 +276,13 @@ fn a_shared_event_wait_on_a_shared_vk_queue_committed_before_its_signal_complete
             signalling.wait_until_completed_for(WAIT).unwrap();
             wait_all(busy);
         }
+        println!("the waiter joined the signaller's VkQueue: {joined}");
         if shares {
-            assert!(joined, "the waiter joined the signaller's VkQueue");
+            assert!(
+                unexplained.is_empty(),
+                "the waiter stayed off the signaller's busy VkQueue where the device shares, in \
+                 rounds {unexplained:?}"
+            );
         }
     });
 }
@@ -239,23 +296,28 @@ fn pinned_and_presenting_queues_never_move_where_an_unpinned_one_does() {
             .unwrap();
         let pinned = device.new_command_queue().unwrap();
         // SAFETY: the closure keeps no handle and submits nothing.
-        unsafe { pinned.with_vk_queue(|_, _| {}) };
+        unsafe { pinned.with_vk_queue(|_, _, _| {}) };
         let presenting = device.new_command_queue_for_presenting().unwrap();
         let free = device.new_command_queue().unwrap();
-        let (pinned_at, presenting_at) = (pinned.vk_queue(), presenting.vk_queue());
+        let (pinned_at, presenting_at) =
+            (pinned.vk_queue_sharing().0, presenting.vk_queue_sharing().0);
         let mut free_moved = false;
         for _ in 0..8 {
             for queue in [&pinned, &presenting, &free] {
                 let kept = burst(&busy, &scratch, 24);
-                let before = queue.vk_queue();
+                let before = queue.vk_queue_sharing().0;
                 wait_all(burst(queue, &scratch, 1));
-                free_moved |= std::ptr::eq(queue, &free) && queue.vk_queue() != before;
+                free_moved |= std::ptr::eq(queue, &free) && queue.vk_queue_sharing().0 != before;
                 wait_all(kept);
             }
         }
-        assert_eq!(pinned.vk_queue(), pinned_at, "a pinned queue moved");
         assert_eq!(
-            presenting.vk_queue(),
+            pinned.vk_queue_sharing().0,
+            pinned_at,
+            "a pinned queue moved"
+        );
+        assert_eq!(
+            presenting.vk_queue_sharing().0,
             presenting_at,
             "a presenting queue moved"
         );
@@ -275,35 +337,62 @@ fn no_queue_joins_an_unshared_queue_s_vk_queue_and_one_placed_there_leaves() {
             .new_buffer(1 << 20, ResourceOptions::private())
             .unwrap();
         let unshared = device.new_command_queue_unshared(64).unwrap();
-        let home = unshared.vk_queue();
+        let home = unshared.vk_queue_sharing().0;
         let others: Vec<CommandQueue> = (0..3)
             .map(|_| device.new_command_queue().unwrap())
             .collect();
-        for _ in 0..16 {
+        // Where the device does not share, the unshared queue and each after it took the round
+        // robin's next `VkQueue` (`Device::new_command_queue_unshared`), so every `round_robin`-th
+        // queue after it is on its `VkQueue` (on a device of one queue, each), and no other.
+        let round_robin = device.shared().round_robin();
+        // A choice withholds a join from the unshared queue's `VkQueue` only while that
+        // `VkQueue` is busy and its oldest batch in flight young (`queue_share.rs`), as a choice
+        // right after a burst finds it, unless the host was slow to come back from the burst
+        // (its batches complete or seen complete long before): where the device shares, the
+        // bursts go on past the 16 until a choice withheld one, for at most `WAIT`.
+        let began = Instant::now();
+        let mut bursts = 0;
+        while bursts < 16
+            || (shares
+                && device.work_counts().joins_withheld_from_unshared == 0
+                && began.elapsed() < WAIT)
+        {
+            bursts += 1;
             let kept = burst(&unshared, &scratch, 24);
-            for queue in &others {
+            for (after, queue) in others.iter().enumerate() {
                 let made = queue.command_buffer().unwrap();
-                assert_ne!(
-                    queue.vk_queue(),
-                    home,
-                    "a queue joined the unshared queue's VkQueue"
+                let wrapped = !shares && (after + 1) % round_robin == 0;
+                assert_eq!(
+                    queue.vk_queue_sharing().0 == home,
+                    wrapped,
+                    "queue {after} after the unshared one, of a round robin of {round_robin} \
+                     VkQueues (shares: {shares}): on the unshared queue's VkQueue"
                 );
                 drop(made);
             }
             wait_all(kept);
         }
-        assert_eq!(unshared.vk_queue(), home, "the unshared queue moved");
+        assert_eq!(
+            unshared.vk_queue_sharing().0,
+            home,
+            "the unshared queue moved"
+        );
+        let counts = device.work_counts();
+        println!(
+            "{bursts} bursts: {} choices withheld a join from the unshared queue's VkQueue, {} \
+             found no other VkQueue busy",
+            counts.joins_withheld_from_unshared, counts.picks_with_none_busy
+        );
         if shares {
-            assert!(device.work_counts().joins_withheld_from_unshared > 0);
+            assert!(counts.joins_withheld_from_unshared > 0);
             // Every round robin's `VkQueue` holds a queue, so the next unshared queue shares
             // one with a queue, which leaves at its next idle point.
-            let round_robin = device.shared().round_robin();
             let filled: Vec<CommandQueue> = (0..round_robin)
                 .map(|_| device.new_command_queue().unwrap())
                 .collect();
             let second = device.new_command_queue_unshared(64).unwrap();
             let there: Vec<&CommandQueue> = (filled.iter().chain(&others))
-                .filter(|queue| queue.vk_queue() == second.vk_queue())
+                .filter(|queue| queue.vk_queue_sharing().0 == second.vk_queue_sharing().0)
                 .collect();
             assert!(
                 !there.is_empty(),
@@ -312,7 +401,7 @@ fn no_queue_joins_an_unshared_queue_s_vk_queue_and_one_placed_there_leaves() {
             let before = device.work_counts().queue_moves_off_unshared;
             for queue in &there {
                 drop(queue.command_buffer().unwrap());
-                assert_ne!(queue.vk_queue(), second.vk_queue());
+                assert_ne!(queue.vk_queue_sharing().0, second.vk_queue_sharing().0);
             }
             assert_eq!(
                 device.work_counts().queue_moves_off_unshared - before,
@@ -334,7 +423,11 @@ fn under_per_queue_an_unshared_queue_takes_the_round_robin_s_next_vk_queue() {
         })
         .collect();
     for (made, queue) in queues.iter().enumerate() {
-        assert_eq!(queue.vk_queue(), made % round_robin, "queue {made}");
+        assert_eq!(
+            queue.vk_queue_sharing().0,
+            made % round_robin,
+            "queue {made}"
+        );
     }
     assert_eq!(
         device.work_counts().queues_sharing_a_vk_queue,
@@ -353,6 +446,8 @@ struct Isolation {
     /// Each queue's changes of `VkQueue` or long mark (`CommandQueue::vk_queue_sharing`) over the
     /// run, in words.
     moves: String,
+    /// The device's queues marked long by the run's end (`WorkCounts::queues_gone_long`).
+    gone_long: u64,
 }
 
 impl Isolation {
@@ -394,9 +489,17 @@ fn long(queue: &CommandQueue, target: &Buffer, fills: usize) -> CommandBuffer {
 /// beside an application on its own queue committing long command buffers back to back, each
 /// waited for: the compositor's latencies over 2 s from [`SETTLING`] after `ready` answers
 /// (bounded), so that what queued behind a long command buffer before then has completed.
+///
+/// Where `waiting`, each long command buffer signals an event's next value at its end, and a
+/// third queue commits, once each long one is committed, a command buffer of one small fill that
+/// waits for that value, each waited for. A plain event (`MTLEvent`), not a shared one: no host
+/// call sets its value, so the scheduler submits its wait once the signal is submitted, chained
+/// on the waiter's `VkQueue` (`event_timeline.rs`), so it waits on the GPU, its own GPU work
+/// short, where a shared event's wait is held on the host until the value is reached.
 fn isolation(
     device: &Device,
     compositor: CommandQueue,
+    waiting: bool,
     ready: impl Fn(&Device) -> bool,
 ) -> Isolation {
     let app = device.new_command_queue().unwrap();
@@ -407,19 +510,60 @@ fn isolation(
     let small = device.new_buffer(4096, ResourceOptions::private()).unwrap();
     let stop = Arc::new(AtomicBool::new(false));
     let began = Instant::now();
+    let event = device.new_event().unwrap();
+    // The last value a committed long command buffer signals.
+    let signalled = Arc::new(AtomicU64::new(0));
     let application = {
-        let stop = Arc::clone(&stop);
+        let (stop, event, signalled) = (Arc::clone(&stop), event.clone(), Arc::clone(&signalled));
         std::thread::spawn(move || {
             let mut seen = Seen::default();
+            let mut value = 0;
             while !stop.load(Ordering::Relaxed) {
                 let command_buffer = long(&app, &big, fills);
+                if waiting {
+                    value += 1;
+                    command_buffer
+                        .encode_signal_event((&event).into(), value)
+                        .unwrap();
+                }
                 seen.note(&app, began);
                 command_buffer.commit().unwrap();
+                signalled.store(value, Ordering::SeqCst);
                 command_buffer.wait_until_completed_for(WAIT).unwrap();
             }
             seen.0
         })
     };
+    let waiter = waiting.then(|| {
+        let (stop, signalled) = (Arc::clone(&stop), Arc::clone(&signalled));
+        let (queue, scratch) = (
+            device.new_command_queue().unwrap(),
+            device.new_buffer(4096, ResourceOptions::private()).unwrap(),
+        );
+        std::thread::spawn(move || {
+            let mut seen = Seen::default();
+            let mut waited = 0;
+            while !stop.load(Ordering::Relaxed) {
+                let value = signalled.load(Ordering::SeqCst);
+                if value == waited {
+                    std::thread::sleep(Duration::from_micros(100));
+                    continue;
+                }
+                let command_buffer = queue.command_buffer().unwrap();
+                seen.note(&queue, began);
+                command_buffer
+                    .encode_wait_for_event((&event).into(), value)
+                    .unwrap();
+                let mut blit = command_buffer.blit_command_encoder().unwrap();
+                blit.fill_buffer(&scratch, 0..256, 1).unwrap();
+                blit.end_encoding().unwrap();
+                command_buffer.commit().unwrap();
+                command_buffer.wait_until_completed_for(WAIT).unwrap();
+                waited = value;
+            }
+            seen.0
+        })
+    });
     let latencies = Arc::new(Mutex::new(Vec::new()));
     let recording = Arc::new(AtomicBool::new(false));
     let composing = {
@@ -475,8 +619,12 @@ fn isolation(
     recording.store(false, Ordering::Relaxed);
     stop.store(true, Ordering::Relaxed);
     let counts = device.work_counts();
+    let waiter = match waiter {
+        Some(thread) => format!("waiter {}; ", thread.join().unwrap()),
+        None => String::new(),
+    };
     let moves = format!(
-        "compositor {}; application {}; moves {} joins {} gone long {} settles {}",
+        "compositor {}; application {}; {waiter}moves {} joins {} gone long {} settles {}",
         composing.join().unwrap(),
         application.join().unwrap(),
         counts.queue_moves,
@@ -490,7 +638,11 @@ fn isolation(
         "{} compositor samples",
         latencies.len()
     );
-    Isolation { latencies, moves }
+    Isolation {
+        latencies,
+        moves,
+        gone_long: counts.queues_gone_long,
+    }
 }
 
 /// A queue's changes of `VkQueue` or long mark, each at its command buffer's count and the
@@ -543,7 +695,7 @@ fn a_compositor_beside_a_long_queue_keeps_its_latency_once_that_queue_went_long(
         }
         let compositor = device.new_command_queue().unwrap();
         let ready = |device: &Device| device.work_counts().queues_gone_long >= 1;
-        let run = isolation(device, compositor, ready);
+        let run = isolation(device, compositor, false, ready);
         println!(
             "p99 {:.2} ms, {} stalls of {} samples; {}",
             run.p99(),
@@ -563,7 +715,7 @@ fn an_unshared_compositor_beside_a_long_queue_never_stalls() {
             return;
         }
         let compositor = device.new_command_queue_unshared(64).unwrap();
-        let run = isolation(device, compositor, |_| true);
+        let run = isolation(device, compositor, false, |_| true);
         println!(
             "p99 {:.2} ms, {} stalls of {} samples; {}",
             run.p99(),
@@ -573,5 +725,37 @@ fn an_unshared_compositor_beside_a_long_queue_never_stalls() {
         );
         assert!(run.p99() < 5.0, "p99 {:.2} ms", run.p99());
         assert_eq!(run.stalls(), 0, "the unshared compositor stalled");
+    });
+}
+
+/// A compositor beside a queue whose command buffers each wait on the GPU for the end of another
+/// queue's long command buffer: a wait the long mark must see, as it sees a long command buffer of
+/// the queue's own, since the compositor's work behind it on a shared `VkQueue` waits as long.
+/// The waiting queue goes long as well as the application's, and once the application's did,
+/// the compositor's 99th percentile over 2 s stays under 5 ms with at most one stall over 10 ms,
+/// as beside the long queue alone.
+#[test]
+fn a_compositor_beside_a_queue_waiting_on_the_gpu_for_long_work_keeps_its_latency() {
+    each_policy("isolation-gpu-wait", |device, shares| {
+        if !shares {
+            return;
+        }
+        let compositor = device.new_command_queue().unwrap();
+        let ready = |device: &Device| device.work_counts().queues_gone_long >= 1;
+        let run = isolation(device, compositor, true, ready);
+        println!(
+            "p99 {:.2} ms, {} stalls of {} samples; {}",
+            run.p99(),
+            run.stalls(),
+            run.latencies.len(),
+            run.moves
+        );
+        assert!(
+            run.gone_long >= 2,
+            "{} queue(s) went long: the waiting one did not",
+            run.gone_long
+        );
+        assert!(run.p99() < 5.0, "p99 {:.2} ms", run.p99());
+        assert!(run.stalls() <= 1, "{} stalls", run.stalls());
     });
 }

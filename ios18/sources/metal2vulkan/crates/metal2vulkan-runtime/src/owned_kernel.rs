@@ -90,13 +90,18 @@ pub(super) enum OwnedModule {
     /// `bind::rows_copy_module`: many equal rows of words copied from one buffer into another by
     /// a dispatch, in place of a copy's region per row (`row_copies.rs`).
     RowsCopy,
-    /// `bind::pages_copy_module` of one direction: whole 4 KiB pages copied between a chunk of a
-    /// guest RAM and a buffer by a table of them, a gather or a scatter (`host_ram/copy.rs`).
+    /// `bind::pages_copy_module` of one direction: runs of words, up to a 4 KiB page each, copied
+    /// between a chunk of a guest RAM and a buffer by a table of them, a gather or a scatter
+    /// (`host_ram/copy.rs`).
     PagesCopy(metal2vulkan::bind::PagesCopy),
     /// `bind::extended_canonical_module`: Metal's canonical encoding of `BGRA10_XR` texels
     /// written in place over a buffer's words, after a blit through a texture Metal keeps
     /// losslessly compressed (`extended_canonical.rs`).
     ExtendedCanonical,
+    /// `bind::depth_clamp_module`: 32-bit float depths clamped into `[0, 1]` in place over a
+    /// buffer's words, before a copy takes them into a depth image of a device that takes no
+    /// other (`depth_clamp.rs`).
+    DepthClamp,
     /// `bind::shadow_merge_image_module` of one read of a texel (`ShadowMergeRead`): a shadowed
     /// texture's writes merged into its buffer's bytes, reading its shadow's texels through its
     /// unsigned-integer view or its own 8-bit unsigned normalized view, its sampled image
@@ -338,6 +343,12 @@ impl OwnedModule {
                 let push_bytes = metal2vulkan::bind::PagesCopyModule::PUSH_BYTES;
                 Ok((module.spirv.to_vec(), 3, push_bytes))
             }
+            OwnedModule::DepthClamp => {
+                let module = metal2vulkan::bind::depth_clamp_module(device.compile_device())
+                    .map_err(Error::Compile)?;
+                let push_bytes = metal2vulkan::bind::DepthClampModule::PUSH_BYTES;
+                Ok((module.spirv.to_vec(), 1, push_bytes))
+            }
             OwnedModule::ExtendedCanonical => {
                 let module = metal2vulkan::bind::extended_canonical_module(device.compile_device())
                     .map_err(Error::Compile)?;
@@ -573,6 +584,7 @@ pub(super) struct OwnedKernels {
     pages_gather: Option<OwnedKernel>,
     pages_scatter: Option<OwnedKernel>,
     extended_canonical: Option<OwnedKernel>,
+    depth_clamp: Option<OwnedKernel>,
     ycbcr_refresh: Option<OwnedKernel>,
     ycbcr_converts: HashMap<(YCbCrConversion, bool), OwnedKernel>,
     ycbcr_samples: HashMap<(YCbCrSampler, YCbCrCodes), OwnedKernel>,
@@ -589,11 +601,19 @@ pub(super) struct OwnedKernels {
     predication_step: Option<OwnedKernel>,
     twin_decodes: HashMap<TwinDecode, OwnedKernel>,
     tessellation_scans: HashMap<TessellationScanKernel, OwnedKernel>,
+    /// Every kernel was destroyed: a lost device's once its recovery carried its objects on and
+    /// none of its command buffers records (`device/carry.rs`), before its teardown.
+    destroyed: bool,
 }
 
 impl OwnedKernels {
-    /// Destroy every kernel; the device is idle, and is destroyed next.
-    pub(super) fn destroy(&self, raw: &ash::Device) {
+    /// Destroy every kernel, once; the device is idle, and is destroyed next or makes no work
+    /// again (`device/carry.rs`).
+    pub(super) fn destroy(&mut self, raw: &ash::Device) {
+        if self.destroyed {
+            return;
+        }
+        self.destroyed = true;
         for kernel in [
             self.visibility_combine,
             self.index_bounds_plan,
@@ -621,6 +641,7 @@ impl OwnedKernels {
             self.pages_gather,
             self.pages_scatter,
             self.extended_canonical,
+            self.depth_clamp,
             self.ycbcr_refresh,
             self.two_plane_texels,
             self.plane_bytes_copy,
@@ -807,6 +828,7 @@ impl OwnedKernels {
                 &mut self.pages_scatter
             }
             OwnedModule::ExtendedCanonical => &mut self.extended_canonical,
+            OwnedModule::DepthClamp => &mut self.depth_clamp,
             OwnedModule::YCbCrRefresh => &mut self.ycbcr_refresh,
 
             OwnedModule::TwoPlaneTexels => &mut self.two_plane_texels,
@@ -951,26 +973,16 @@ fn make(
         let info = vk::ComputePipelineCreateInfo::default()
             .stage(stage)
             .layout(kernel.layout);
-        let created = shared
-            .make_pipelines(
-                Making::new("owned kernel").words(spirv).text(&(
-                    images,
-                    storage_images,
-                    buffers,
-                    push_bytes,
-                    pushed,
-                )),
-                |cache| {
-                    // SAFETY: every pointer in `info` outlives the call; the pipeline cache is the
-                    // making's own (`shader_cache/driver.rs`).
-                    unsafe { raw.create_compute_pipelines(cache, &[info], None) }
-                },
-            )
-            .map_err(|(_, error)| vulkan(error))?;
-        kernel.pipeline = created
-            .first()
-            .copied()
-            .ok_or_else(|| internal("the driver made no pipeline"))?;
+        kernel.pipeline = shared.make_compute_pipeline(
+            Making::new("owned kernel").words(spirv).text(&(
+                images,
+                storage_images,
+                buffers,
+                push_bytes,
+                pushed,
+            )),
+            info,
+        )?;
         Ok(())
     })();
     match made {

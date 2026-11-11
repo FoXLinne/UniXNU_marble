@@ -17,11 +17,14 @@
 //!   Vulkan cannot state (`blit_plan.rs`) goes through a scratch buffer of the encoder, two
 //!   commands.
 //! - **Depth.** A copy from a buffer into 32-bit float depth copies the bytes as Metal holds
-//!   them, any `float`, on every device, as `Texture::replace_region` does: Vulkan leaves a copied
-//!   value outside `[0, 1]` undefined without `VK_EXT_depth_range_unrestricted`
-//!   (`VUID-vkCmdCopyBufferToImage-pRegions-07931`), and such a copy into a depth image announces
-//!   `restricted-depth-upload` where the device's driver is not measured to keep such a value
-//!   (`DriverFact::DepthImageKeepsValuesOutsideUnitRange`).
+//!   them, any `float`, as `Texture::replace_region` does, on a device with
+//!   `VK_EXT_depth_range_unrestricted` enabled. Elsewhere Vulkan takes no copied value outside
+//!   `[0, 1]` (`VUID-vkCmdCopyBufferToImage-pRegions-07931`), whatever the driver is measured to
+//!   keep: the copy's bytes go through a scratch buffer of the encoder (or the staging buffer
+//!   its plan copies its rows into), where a dispatch clamps each depth into `[0, 1]`, a NaN to
+//!   1.0, before the copy into the image (`depth_clamp.rs`), as does a copy into a depth from a
+//!   colour texture through the scratch buffer below; the copy announces
+//!   `restricted-depth-upload`.
 //! - **Textures over buffers**. A copy that names a texture over a buffer runs on the buffer's
 //!   bytes at Metal's layout, whatever else holds the texels (an aliasing image, or a shadow image
 //!   the next encoder that uses it copies in from the bytes): one buffer-to-buffer copy of its
@@ -57,9 +60,10 @@
 use super::blit::{reads, reads_by, writes, writes_by, BlitCommandEncoder, TRANSFER};
 use super::blit_plan::{
     plan_block_order_copy, plan_buffer_copy, plan_levels_copy, plan_region_copy, plan_rows_copy,
-    plan_texels_rows_copy, plan_whole_copy, texel_layout, BufferCopyPlan, BufferImageRegion,
-    BufferLayout, BufferRange, CopyPair, ImageCopyRegion, RowsCopy,
+    plan_texels_rows_copy, plan_whole_copy, rows_below_row, texel_layout, BufferCopyPlan,
+    BufferImageRegion, BufferLayout, BufferRange, CopyPair, ImageCopyRegion, RowsCopy,
 };
+use super::buffer_texture::Past;
 use super::compressed_blit::{self, degrade_compressed_blit, Writer};
 use super::copy_plan::{
     check_region, colour_unit, copy_unit, depth_bytes, level_extent, shape, BlitOption,
@@ -67,6 +71,7 @@ use super::copy_plan::{
 };
 use super::deferred::Deferred;
 use super::degradation::Degradation;
+use super::depth_clamp;
 use super::error::{internal, invalid, Error, Problem, RuntimeGap};
 use super::fresh_unwritten::FreshUnwritten;
 use super::image_plan::copies_between;
@@ -95,6 +100,40 @@ use metal2vulkan::metal::{PixelFormat, TextureType};
 use metal2vulkan::vk::{Format, ImageAspectFlags};
 use std::ops::Range;
 use std::sync::Arc;
+
+/// One side of a copy of rows (`BlitCommandEncoder::rows_copy`): the buffer whose bytes its uses
+/// name, and the buffer its rows lie in, `rebase` bytes before their place in the first one's
+/// space: the buffer itself, or for a texture's bytes past its buffer's length the texture's tail
+/// (`buffer_texture::Past`).
+#[derive(Clone, Copy)]
+struct RowsSide<'a> {
+    uses: &'a Buffer,
+    bytes: &'a Buffer,
+    rebase: u64,
+}
+
+impl<'a> RowsSide<'a> {
+    /// `buffer`'s rows in its own bytes.
+    fn of(buffer: &'a Buffer) -> RowsSide<'a> {
+        RowsSide {
+            uses: buffer,
+            bytes: buffer,
+            rebase: 0,
+        }
+    }
+
+    /// `buffer`'s rows in a texture's tail where `past` names it, else in the buffer's own bytes.
+    fn cut(buffer: &'a Buffer, past: Option<Past<'a>>) -> RowsSide<'a> {
+        match past {
+            Some(past) => RowsSide {
+                uses: buffer,
+                bytes: past.tail,
+                rebase: past.rebase,
+            },
+            None => RowsSide::of(buffer),
+        }
+    }
+}
 
 fn copy_error(call: &'static str, refusal: CopyRefusal) -> Error {
     match refusal {
@@ -442,8 +481,9 @@ impl BlitCommandEncoder {
     /// (`Invalid`: with a [`CopyProblem`], a region past the level, an offset or `bytes_per_row`
     /// off the copy unit of another depth or stencil format or of a texture over a buffer, a
     /// layout that runs past the buffer but for that read); a buffer or texture of another
-    /// device (`Invalid`). 32-bit float depth is copied as `Texture::replace_region` copies it,
-    /// as Metal holds it.
+    /// device (`Invalid`). 32-bit float depth is copied as `Texture::replace_region` copies it:
+    /// as Metal holds it, or clamped into `[0, 1]` where the device's depth image would store it
+    /// so (the module docs).
     pub fn copy_from_buffer_to_texture(
         &mut self,
         source_buffer: &Buffer,
@@ -614,7 +654,7 @@ impl BlitCommandEncoder {
             destination_level,
             destination_slice,
         )?;
-        if let Some(texels) = texture.buffer_texels() {
+        if let Some(texels) = texture.blit_texels() {
             // Rows that share bytes (an IOSurface plane's on Metal's GPU): the row
             // copies would write every shared byte from one fixed row, where Metal
             // leaves it from whichever row its own command wrote last -- an order that
@@ -634,7 +674,12 @@ impl BlitCommandEncoder {
                 &texels.layout,
             )
             .map_err(|problem| invalid(CALL, Problem::Copy(problem)))?;
-            return self.rows_copy(source_buffer, &texels.buffer, &RowsCopy::new(&from, &to));
+            let copy = RowsCopy::new(&from, &to);
+            return self.texels_rows_copy(
+                (source_buffer, None),
+                (&texels.buffer, texels.past()),
+                &copy,
+            );
         }
         let plan = plan_copy(CALL, texture, &region, &unit, &layout, source_buffer, true)?;
         let written: Vec<ImageRegion> = plan.regions.iter().map(|r| r.image).collect();
@@ -659,7 +704,10 @@ impl BlitCommandEncoder {
     /// texture's region into the buffer, laid out as
     /// [`copy_from_buffer_to_texture`](Self::copy_from_buffer_to_texture) reads it. The bytes
     /// between rows and images are left as they are; images closer than the region's rows are
-    /// written in turn, the later image's bytes staying, as plain Metal writes them.
+    /// written in turn, the later image's bytes staying, as plain Metal writes them. Rows closer
+    /// than a row (a `bytesPerRow` below it, as `MTLPixelFormatGetInfoForDevice` describes a
+    /// one-plane YCbCr format's) are written in turn too, the later row's bytes staying: plain
+    /// Metal writes them in no one order, and that is one of its answers.
     ///
     /// Refused as `copy_from_buffer_to_texture` is, except that depth is copied out on every
     /// device.
@@ -775,15 +823,15 @@ impl BlitCommandEncoder {
                 }
                 let unit = unit(CALL, source_texture, options)?;
                 let region = region(CALL, source_origin, size, source_level, source_slice)?;
-                if let Some(texels) = source_texture.buffer_texels() {
+                if let Some(texels) = source_texture.blit_texels() {
                     // Rows that share bytes (an IOSurface plane's on Metal's GPU) are served
                     // here, where they are read and not written. The plane is the source; the
-                    // destination is the caller's buffer, whose rows never share a byte, so no
-                    // row's bytes are taken from another: `plan_rows_copy` refuses a
-                    // `bytesPerRow` below the region's row (`CopyProblem::BytesPerRow`), and a
-                    // plane is a 2D texture of one image, so the only other way a layout's rows
-                    // could meet -- images closer than their rows -- cannot arise and
-                    // `RowsCopy::new` finds nothing to order. Each destination row takes the
+                    // destination is the caller's buffer, whose rows share bytes only at a
+                    // `bytesPerRow` below the region's row, where they are written in turn, the
+                    // later row's bytes standing, as plain Metal's blit may leave them
+                    // (`plan_rows_copy`, `RowsCopy::new`); a plane is a 2D texture of one image,
+                    // so the other way a layout's rows could meet -- images closer than their
+                    // rows -- cannot arise. Each destination row takes the
                     // plane's bytes at its own GPU row, so a byte two rows share is read once
                     // for each of them, which is what Metal's own copy reads (an Apple M3 Max
                     // under macOS 27.0.1, one shape a process,
@@ -805,7 +853,11 @@ impl BlitCommandEncoder {
                     )
                     .map_err(|problem| invalid(CALL, Problem::Copy(problem)))?;
                     let copy = RowsCopy::new(&from, &to);
-                    return this.rows_copy(&texels.buffer, destination_buffer, &copy);
+                    return this.texels_rows_copy(
+                        (&texels.buffer, texels.past()),
+                        (destination_buffer, None),
+                        &copy,
+                    );
                 }
                 let plan = plan_copy(
                     CALL,
@@ -849,6 +901,11 @@ impl BlitCommandEncoder {
         // Metal's checks of the buffer's layout, its range among them, as of a 4-byte format.
         plan_copy(call, texture, region, &unit, layout, buffer, into_texture)?;
         let s = shape(region.size, &unit);
+        let width = level_extent(texture.record(), region.level)[0];
+        let flat = texture.texture_type() != TextureType::Type3D;
+        if rows_below_row(layout, &s, &unit) && width.is_multiple_of(4) && flat {
+            return self.plane_short_rows_copy(buffer, texture, &image, layout, into_texture);
+        }
         if !two_planes::measured_layout(
             s.row_bytes,
             s.rows,
@@ -865,7 +922,6 @@ impl BlitCommandEncoder {
         // where they lie, moving texels between rows: at those rows for a 2D texture or array of
         // one level (`two_planes/buffer_rows.rs`); for another (more levels, a view, 1D, 3D, a
         // surface's), announced, the texels moved as `getBytes` and `replaceRegion` move them.
-        let width = level_extent(texture.record(), region.level)[0];
         if !width.is_multiple_of(4) && two_planes::rows_held(texture) {
             return self.plane_rows_copy(buffer, texture, &image, layout, into_texture);
         }
@@ -906,6 +962,49 @@ impl BlitCommandEncoder {
             return self.plane_words_copy(buffer, texture, &first, &layout, true);
         }
         self.plane_words_copy(buffer, texture, &image, layout, into_texture)
+    }
+
+    /// A blit between `buffer`, laid out as `layout` at a `bytesPerRow` below the region's row
+    /// alone (`blit_plan::rows_below_row`), and `region` of a two-plane extended-range `texture`
+    /// whose level is a multiple of 4 texels wide and not 3D, as plain Metal's blit moves it
+    /// (an Apple M3 Max under macOS 27.0.1, `probes/short_row_kinds.m`: a 32 x 8
+    /// `RGB10A8_2P_XR10` texture at half its row, half plus a word and the row less 16): each
+    /// row's color words at `y x bytesPerRow`. Into the texture each row reads its words whole
+    /// from there, the rows overlapping in the buffer, which the module reads as any other
+    /// layout's ([`plane_words_copy`](Self::plane_words_copy)). Out of it Metal writes them in
+    /// no one order; the rows go in turn, the later row's words standing: the words of every
+    /// row that no later row writes (its first `bytesPerRow` bytes), then the last row's rest,
+    /// two copies whose words in the buffer are disjoint.
+    fn plane_short_rows_copy(
+        &mut self,
+        buffer: &Buffer,
+        texture: &Texture,
+        region: &ImageRegion,
+        layout: &BufferLayout,
+        into_texture: bool,
+    ) -> Result<(), Error> {
+        if into_texture {
+            return self.plane_words_copy(buffer, texture, region, layout, true);
+        }
+        let [x, y, z] = region.origin;
+        let [width, height, _] = region.size;
+        // A row's words no later row writes: the pitch's, below the region's row.
+        let pitch = (layout.bytes_per_row / u64::from(two_planes::UNIT.bytes)) as u32;
+        let heads = ImageRegion {
+            size: [pitch, height, 1],
+            ..*region
+        };
+        self.plane_words_copy(buffer, texture, &heads, layout, false)?;
+        let rest = ImageRegion {
+            origin: [x + pitch, y + height - 1, z],
+            size: [width - pitch, 1, 1],
+            ..*region
+        };
+        let after = BufferLayout {
+            offset: layout.offset + u64::from(height) * layout.bytes_per_row,
+            ..*layout
+        };
+        self.plane_words_copy(buffer, texture, &rest, &after, false)
     }
 
     /// Record a checked copy between `buffer` and `texture` (`into_texture`: from the buffer
@@ -956,7 +1055,30 @@ impl BlitCommandEncoder {
             true => Covered::into_image(image, &regions),
             false => Vec::new(),
         };
+        // A 32-bit float depth into a depth image that may store one outside [0, 1] clamped, the
+        // depths clamped first (`depth_clamp.rs`).
+        let clamps = into_texture && texture.clamps_depth_upload(first.image.aspect);
         match plan.staging {
+            None if clamps => {
+                let from = (buffer, raw_buffer, plan.span.clone());
+                let (scratch, through, staged) = self.clamped_depth_copies(from, &regions)?;
+                let uses = [reads(&scratch, 0..scratch.length()), image_use];
+                self.command_reading(&uses, (&[], &covered), |device, raw| {
+                    // SAFETY: the encoder's command buffer is recording; the scratch buffer and
+                    // the image are live and retained until it completes, the image is in the
+                    // `GENERAL` layout, and the regions lie in both.
+                    unsafe {
+                        device.cmd_copy_buffer_to_image(
+                            raw,
+                            through,
+                            image,
+                            vk::ImageLayout::GENERAL,
+                            &staged,
+                        );
+                    }
+                })?;
+                self.core().retain(scratch);
+            }
             None => {
                 let boxes = (&fresh_reads[..], &covered[..]);
                 self.command_reading(&[buffer_use, image_use], boxes, |device, raw| {
@@ -1048,6 +1170,9 @@ impl BlitCommandEncoder {
                         writes_by(&scratch, whole.clone(), rows.write()),
                     ];
                     self.command_in(rows.stages(), &uses, move_rows)?;
+                    if clamps {
+                        self.clamp_depths(&scratch, &regions)?;
+                    }
                     let uses = [reads(&scratch, whole), image_use];
                     self.command_reading(&uses, (&[], &covered), copy_image)?;
                 } else {
@@ -1376,7 +1501,7 @@ impl BlitCommandEncoder {
         destination: &Texture,
         copies: &[ImageCopyRegion],
     ) -> Result<(), Error> {
-        if source.over_buffer() || destination.over_buffer() {
+        if source.blit_texels().is_some() || destination.blit_texels().is_some() {
             // A two-plane extended-range texture over a surface's planes (the plan paired it with
             // another): its bytes as Metal's blit moves them, else refused.
             if two_planes::holds_planes(source.pixel_format()) {
@@ -1641,9 +1766,15 @@ impl BlitCommandEncoder {
                     }
                 })?;
                 uses.push(reads(&scratch, 0..length));
-                for (to, _) in &staging.into {
+                for (to, regions) in &staging.into {
                     destination.degrade_depth_upload(call, to.aspect, true);
                     destination.degrade_depth_denormals(call, to.aspect, false);
+                    // A depth the scratch takes from a colour texture's texels, which may lie
+                    // outside [0, 1], clamped first where the image may store one so
+                    // (`depth_clamp.rs`).
+                    if depth_clamp::clamps_depth(self.core().device(), to.format, to.aspect) {
+                        self.clamp_depths(&scratch, regions)?;
+                    }
                 }
                 Some((scratch, through))
             }
@@ -1733,7 +1864,7 @@ impl BlitCommandEncoder {
         copies: &[ImageCopyRegion],
     ) -> Result<(), Error> {
         let copy_problem = |problem| invalid(call, Problem::Copy(problem));
-        match (source.buffer_texels(), destination.buffer_texels()) {
+        match (source.blit_texels(), destination.blit_texels()) {
             (Some(from), Some(to)) => {
                 let unit = from.unit();
                 // Rows that share bytes are refused, on either side
@@ -1742,7 +1873,7 @@ impl BlitCommandEncoder {
                 let copy =
                     plan_texels_rows_copy(from.row_layouts(), to.row_layouts(), &unit, copies)
                         .map_err(Error::NotImplemented)?;
-                self.rows_copy(&from.buffer, &to.buffer, &copy)
+                self.texels_rows_copy((&from.buffer, from.past()), (&to.buffer, to.past()), &copy)
             }
             (Some(texels), None) | (None, Some(texels)) => {
                 // Rows that share bytes are no layout a buffer-image copy states: an IOSurface
@@ -1752,7 +1883,7 @@ impl BlitCommandEncoder {
                 if texels.plane_rows_overlap() {
                     return Err(Error::NotImplemented(RuntimeGap::OverlappingSurfaceRows));
                 }
-                let into_texture = source.over_buffer();
+                let into_texture = source.blit_texels().is_some();
                 let texture = if into_texture { destination } else { source };
                 let record = texture.record();
                 let (unit, buffer) = (texels.unit(), &texels.buffer);
@@ -1773,6 +1904,57 @@ impl BlitCommandEncoder {
                         };
                         let layout =
                             texel_layout(&texels.layout, &unit, bytes, bytes.layer + layer);
+                        // Texels past the buffer's length lie in its tail: the rows go through a
+                        // scratch buffer of the encoder, as rows of the bytes they lie in.
+                        if let Some(past) = texels.past() {
+                            let [width, height, _] = bytes.size;
+                            let row = u64::from(width) * u64::from(unit.bytes);
+                            let rows: Vec<Range<u64>> = (0..u64::from(height))
+                                .map(|y| layout.offset + y * layout.bytes_per_row)
+                                .map(|start| start..start + row)
+                                .collect();
+                            let packed: Vec<Range<u64>> = (0..u64::from(height))
+                                .map(|y| y * row..(y + 1) * row)
+                                .collect();
+                            let scratch = (self.core().device())
+                                .own_buffer(row * u64::from(height), ResourceOptions::private())?;
+                            let through = BufferLayout {
+                                offset: 0,
+                                bytes_per_row: row,
+                                bytes_per_image: 0,
+                            };
+                            let plan = plan_buffer_copy(
+                                record,
+                                &region,
+                                &image_unit,
+                                &through,
+                                scratch.length(),
+                                scratch.start(),
+                                into_texture,
+                            )
+                            .map_err(copy_problem)?;
+                            if into_texture {
+                                let copy = RowsCopy::new(&rows, &packed);
+                                self.texels_rows_copy(
+                                    (buffer, Some(past)),
+                                    (&scratch, None),
+                                    &copy,
+                                )?;
+                                texture.degrade_depth_upload(call, image_unit.aspect, true);
+                                texture.degrade_depth_denormals(call, image_unit.aspect, false);
+                                self.buffer_texture_copy(&scratch, texture, plan, true)?;
+                            } else {
+                                self.buffer_texture_copy(&scratch, texture, plan, false)?;
+                                let copy = RowsCopy::new(&packed, &rows);
+                                self.texels_rows_copy(
+                                    (&scratch, None),
+                                    (buffer, Some(past)),
+                                    &copy,
+                                )?;
+                            }
+                            self.core().retain(scratch);
+                            continue;
+                        }
                         let plan = plan_buffer_copy(
                             record,
                             &region,
@@ -1796,19 +1978,53 @@ impl BlitCommandEncoder {
         }
     }
 
+    /// Record `copy` from `source`'s bytes into `destination`'s, as [`rows_copy`](Self::rows_copy)
+    /// does, where a side's bytes past its buffer's length lie in a texture's tail (`past`,
+    /// `buffer_texture.rs`): the rows cut there, each part from and into the bytes it lies in,
+    /// its uses those of the buffer's bytes it stands for.
+    fn texels_rows_copy(
+        &mut self,
+        (source, src_past): (&Buffer, Option<Past<'_>>),
+        (destination, dst_past): (&Buffer, Option<Past<'_>>),
+        copy: &RowsCopy,
+    ) -> Result<(), Error> {
+        if src_past.is_none() && dst_past.is_none() {
+            return self.rows_copy(RowsSide::of(source), RowsSide::of(destination), copy);
+        }
+        let cuts = (src_past.map(|p| p.length), dst_past.map(|p| p.length));
+        for (src_beyond, dst_beyond, part) in copy.split(cuts.0, cuts.1) {
+            let (from, to) = (
+                RowsSide::cut(source, src_past.filter(|_| src_beyond)),
+                RowsSide::cut(destination, dst_past.filter(|_| dst_beyond)),
+            );
+            self.rows_copy(from, to, &part)?;
+            let tails = [
+                src_past.filter(|_| src_beyond),
+                dst_past.filter(|_| dst_beyond),
+            ];
+            for past in tails.into_iter().flatten() {
+                self.core().retain(past.tail.clone());
+            }
+        }
+        Ok(())
+    }
+
     /// Record `copy` from `source`'s bytes into `destination`'s, a copy that names a texture
     /// over a buffer (the module's note): its rows in one command, or, where a source row and a
     /// destination row of one buffer share bytes, through a scratch buffer of the encoder, the
     /// whole source read before any of it is written, as Metal moves them.
     fn rows_copy(
         &mut self,
-        source: &Buffer,
-        destination: &Buffer,
+        source: RowsSide<'_>,
+        destination: RowsSide<'_>,
         copy: &RowsCopy,
     ) -> Result<(), Error> {
-        // Read as a blit's (`host_residency.rs`): the command buffer holds the imports.
-        let (src, src_base) = self.core().blit_at(source, 0)?;
-        let (dst, dst_base) = self.core().blit_at(destination, 0)?;
+        // Read as a blit's (`host_residency.rs`): the command buffer holds the imports. A side's
+        // rows in a texture's tail lie `rebase` bytes before their place in the buffer's space.
+        let (src, src_base) = self.core().blit_at(source.bytes, 0)?;
+        let (dst, dst_base) = self.core().blit_at(destination.bytes, 0)?;
+        let (src_rebase, dst_rebase) = (source.rebase, destination.rebase);
+        let (source, destination) = (source.uses, destination.uses);
         let device = self.core().device().clone();
         // One buffer's bytes, or two no-copy buffers' made over the same bytes, which lie in one
         // import (`host_aliases.rs`): one `VkBuffer` from one byte 0.
@@ -1823,13 +2039,13 @@ impl BlitCommandEncoder {
             let mut packed = through_base;
             for row in &copy.rows {
                 into.push(vk::BufferCopy {
-                    src_offset: src_base + row.src,
+                    src_offset: src_base + row.src - src_rebase,
                     dst_offset: packed,
                     size: row.size,
                 });
                 out_of.push(vk::BufferCopy {
                     src_offset: packed,
-                    dst_offset: dst_base + row.dst,
+                    dst_offset: dst_base + row.dst - dst_rebase,
                     size: row.size,
                 });
                 packed += row.size;
@@ -1874,8 +2090,8 @@ impl BlitCommandEncoder {
                 .rows
                 .iter()
                 .map(|row| vk::BufferCopy {
-                    src_offset: src_base + row.src,
-                    dst_offset: dst_base + row.dst,
+                    src_offset: src_base + row.src - src_rebase,
+                    dst_offset: dst_base + row.dst - dst_rebase,
                     size: row.size,
                 })
                 .collect();
@@ -1948,7 +2164,8 @@ impl BlitCommandEncoder {
         const CALL: &str = "generate_mipmaps";
         // One level, of any format, or a depth or stencil texture: Metal's plain call leaves the
         // texture as it is, over a buffer or not, and its API validation asserts. Every texture
-        // over a buffer has one level.
+        // over a buffer has one level but a tiled one, which is an image to a blit
+        // (`Texture::blit_texels`).
         self.core().check_device(CALL, texture.device())?;
         texture.check_rotated_reach()?;
         let record = texture.record();

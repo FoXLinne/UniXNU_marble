@@ -22,17 +22,21 @@
 //! default mode and at `NearestEven`).
 //!
 //! An integer output to such an attachment is Metal's pipeline error: it is not encoded, and link
-//! refuses it (`ColorAttachment`). Refused `NotImplemented(Format)` until measured and modelled:
-//! an attachment the pipeline blends (`ExtendedRangeColor::blended`; Metal's validation refuses a
-//! bfloat one's blend) and a dual-source second output to one. A `bfloat` output is refused
-//! before, as Metal's compiler rejects it.
+//! refuses it (`ColorAttachment`). So is a blend into a bfloat attachment, whatever the function
+//! writes there (`InvalidDescriptor(ColorAttachment)`: Metal's pipeline validation asserts that
+//! the format is not blendable). A `bfloat` output is refused before, as Metal's compiler rejects
+//! it. The blend of another form, a padded one's included, is the function's own, over an ordered
+//! read of the attachment (below, and `lower::fragment::fetch`'s storage form), and a dual-source
+//! second output to such an attachment is that blend's second source: on a device that orders fetch
+//! in neither form the blend is refused naming what it needs (`fetch::unordered_extended_fetch`:
+//! `fragmentShaderPixelInterlock` or `rasterizationOrderColorAttachmentAccess`).
 //!
 //! On a device that orders framebuffer fetch through rasterization-order input attachments, a blend
 //! the function computes over the attachment's input attachment (`lower::fragment`'s `input_blend`)
 //! is built: the output's write stores the raw texel of Metal's blend over the texel the input
 //! attachment reads, which `stage_io` writes through the output variable as it writes [`encode`]'s.
 
-use crate::error::{Error, Feature, Unsupported};
+use crate::error::{DescriptorError, Error, Feature, MetalAnswer, Unsupported};
 use crate::lower::arith::extended_range;
 use crate::lower::arith::texel_round::{self, HalfRounding};
 use crate::lower::arith::{FloatFmt, Form, Held};
@@ -71,8 +75,28 @@ pub(super) fn plan(
     let Some(fmt) = f.float_fmt() else {
         return Ok(None);
     };
+    // A second output to such an attachment is the second source of the blend the function
+    // computes, or stored nowhere (`stage_io::plan`).
+    if index != 0 {
+        return Err(cx.invariant("a second output planned to an extended-range attachment"));
+    }
+    // A blend into a bfloat attachment is Metal's pipeline error (link refuses it whatever the
+    // function writes there).
+    if e.blended && e.form.bfloat() {
+        let invalid = DescriptorError::ColorAttachment {
+            index: color,
+            metal: MetalAnswer::EndsProcess,
+        };
+        return Err(Error::InvalidDescriptor(invalid));
+    }
     let blended = e.blended && !cx.families.fragment.input_blends.contains_key(&color);
-    if index != 0 || blended || !matches!(fmt, FloatFmt::F32 | FloatFmt::Half) {
+    // A blend the function computes over an ordered read of the attachment (the storage form, or
+    // over the input attachment, `lower::fragment`), on a device that orders fetch in neither
+    // form: refused naming the two orderings.
+    if blended && crate::lower::fragment::fetch::fetch_unordered(cx.profile) {
+        return Err(crate::lower::fragment::fetch::unordered_extended_fetch().into());
+    }
+    if blended || !matches!(fmt, FloatFmt::F32 | FloatFmt::Half) {
         return Err(Unsupported::not_implemented(Feature::Format).into());
     }
     cx.families
@@ -124,7 +148,8 @@ pub(super) fn raw_components(
 /// attachment `e` (the module docs): the lanes completed to four as [`held`] completes them, a
 /// `float` output rounded to `half` toward zero (saturating at 65504) or, where
 /// `e.nearest_even`, to nearest even, then each lane's bfloat code nearest, ties to even, a NaN
-/// `0x7fc0` (`arith::extended_range::bfloat_stored`). Integer operations on the bits alone.
+/// `0x7fc0` (`arith::extended_range::bfloat_stored`). Integer operations on the bits alone. The
+/// storage form's unblended write stores it too (`lower::fragment::fetch`).
 pub(crate) fn bfloat_output(
     fb: &mut FunctionBuilder<'_>,
     e: ExtendedRangeColor,
@@ -168,8 +193,8 @@ pub(crate) fn texel(
 /// The value [`texel`] encodes for output `x` (form `f`) to an attachment held in `form`, a
 /// `vec4` of `half` values: the lanes completed to four, a `float` output rounded to `half`.
 /// Metal's tile holds it until the store, which the storage form's shadow of the attachment keeps
-/// (`lower::fragment::fetch`). Not a bfloat form's, whose rounding is the pipeline's
-/// ([`bfloat_output`]) and which takes no storage form.
+/// (`lower::fragment::fetch`). Not a bfloat form's, whose rounding is the pipeline's and whose
+/// store rounds to the nearest code ([`bfloat_output`]).
 pub(crate) fn held(
     fb: &mut FunctionBuilder<'_>,
     form: ExtendedRange,

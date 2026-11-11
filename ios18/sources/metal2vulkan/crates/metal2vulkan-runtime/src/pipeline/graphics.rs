@@ -41,7 +41,8 @@ pub(crate) struct GraphicsKey {
     /// The draw's topology and whether its input assembly restarts primitives.
     pub(crate) topology: metal2vulkan::vk::PrimitiveTopology,
     pub(crate) primitive_restart: bool,
-    /// The pass the pipeline draws in.
+    /// The pass the pipeline draws in, as a key holds it: its resolves left out, which render
+    /// pass compatibility ignores (`PassShape::keyed`).
     pub(crate) pass: PassShape,
     /// The per-bind strides the pipeline keeps static (by Vulkan binding): the draw's
     /// `vertex_strides` on a profile without dynamic strides, empty with them.
@@ -55,7 +56,8 @@ pub(crate) struct GraphicsKey {
 
 /// A [`GraphicsKey`] of a draw's own values, borrowed: what a draw compares with the key its state
 /// last found made, and makes a key of only where it looks one up (`begin_graphics_pipeline`).
-/// Each field is the key's of the same name.
+/// Each field is the key's of the same name; the pass is the instance's whole shape, which the key
+/// holds without its resolves (`PassShape::keyed`).
 #[derive(Clone, Copy)]
 pub(crate) struct DrawKey<'a> {
     pub(crate) specialization: &'a SpecializationKey,
@@ -68,7 +70,7 @@ pub(crate) struct DrawKey<'a> {
 }
 
 impl DrawKey<'_> {
-    /// Whether `key` is this one.
+    /// Whether `key` is this one's (its pass as a key holds it, `PassShape::keys_as`).
     pub(crate) fn is(&self, key: &GraphicsKey) -> bool {
         let GraphicsKey {
             specialization,
@@ -82,19 +84,19 @@ impl DrawKey<'_> {
         self.specialization == specialization
             && self.topology == *topology
             && self.primitive_restart == *primitive_restart
-            && self.pass == pass
+            && self.pass.keys_as(pass)
             && self.strides == &strides[..]
             && self.fixed == *fixed
             && self.sample_positions == &sample_positions[..]
     }
 
-    /// The key, owned.
+    /// The key, owned: the pass as a key holds it (`PassShape::keyed`).
     pub(crate) fn key(&self) -> GraphicsKey {
         GraphicsKey {
             specialization: self.specialization.clone(),
             topology: self.topology,
             primitive_restart: self.primitive_restart,
-            pass: self.pass.clone(),
+            pass: self.pass.keyed(),
             strides: self.strides.to_vec(),
             fixed: self.fixed,
             sample_positions: self.sample_positions.to_vec(),
@@ -1345,31 +1347,35 @@ impl VariantObjects {
                 let mut flag =
                     vk::GraphicsPipelineLibraryCreateInfoEXT::default().flags(part.flag());
                 let info = infos.part(part, &mut flag);
-                let create = |cache| {
-                    // SAFETY: every pointer in `info` outlives the call; the pipeline cache is
-                    // the making's own, destroyed once the call returned, or none.
-                    unsafe { shared.vk().create_graphics_pipelines(cache, &[info], None) }
-                };
                 // A part with shaders is made through the device's shader cache, under a record
-                // of its own; one without holds nothing a record would keep.
+                // of its own, with what its driver reports of it; one without holds nothing a
+                // record would keep.
                 let made = match part.holds_shaders() {
                     true => {
                         let _ = creation_log::take_record();
-                        let made =
-                            shared.make_pipelines(Making::new(part.kind()).digest(name), create);
+                        let made = shared
+                            .make_graphics_pipeline(Making::new(part.kind()).digest(name), info);
                         made_here = Some(creation_log::take_record());
-                        made
+                        made?
                     }
                     false => {
                         made_here = Some(None);
-                        create(vk::PipelineCache::null())
+                        // SAFETY: every pointer in `info` outlives the call.
+                        let made = unsafe {
+                            shared.vk().create_graphics_pipelines(
+                                vk::PipelineCache::null(),
+                                &[info],
+                                None,
+                            )
+                        };
+                        made.map_err(|(_, error)| vulkan(error))?
+                            .first()
+                            .copied()
+                            .ok_or_else(|| internal("the driver made no pipeline library"))?
                     }
                 };
-                let made = made.map_err(|(_, error)| vulkan(error))?;
                 shared.counts.pipeline_library_made(part);
-                made.first()
-                    .copied()
-                    .ok_or_else(|| internal("the driver made no pipeline library"))
+                Ok(made)
             })?;
             if let Some(at) = asked {
                 let how = match made_here {

@@ -42,19 +42,22 @@
 //! queue, it commits one that marks and three that wait for an event first, then mark: the host
 //! meets the first's 15 ms after the draw's commit, another queue's command buffer committed then
 //! the second's, and the host the third's only once the others completed. Last, it commits one
-//! more that marks.
+//! more that marks. Where that other queue's command buffer is slow to complete (beside other GPU
+//! work), its signal can land only after the hang ended, and the second wait is then met after
+//! the hang, as the third's is: its command buffer runs.
 
 use super::super::{
-    buffer_with, layer_reported_nothing_at_all, read_buffer, validated_device, Messages,
-    ScratchCache, WAIT,
+    buffer_with, layer_reported_nothing_at_all, read_buffer, Messages, ScratchCache, WAIT,
 };
 use super::{Lane, FORMATS, SIDE};
 use crate::gpu::TEST_DEVICE;
+use crate::runtime_lane::at_plan;
+use crate::runtime_lane::validated_device_with;
 use metal2vulkan::metal::{IndexType, TextureUsage};
 use metal2vulkan_runtime::{
     Buffer, ClearColor, CommandBuffer, CommandBufferError, CommandBufferStatus, CommandQueue,
     DrawPrimitiveType, EventRef, LoadAction, Region, RenderPassDescriptor, RenderPipelineState,
-    ResourceOptions, StoreAction, Texture, TextureDescriptor,
+    ResourceOptions, StoreAction, Texture, TextureDescriptor, WorkCounts,
 };
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
@@ -67,7 +70,8 @@ mod loops;
 const SCHEDULED: Duration = Duration::from_micros(5_060);
 
 /// The earliest Metal failed a command buffer its GPU hung at after it read `Scheduled`:
-/// 27.5 ms.
+/// 27.5 ms. The lanes hold the runtime's failure to it from the command buffer's scheduling, its
+/// `kernelEndTime` ([`Answer::since_kernel_end`]), where the runtime's hang counts from.
 const HANG: Duration = Duration::from_micros(27_500);
 
 /// The earliest Metal completed a command buffer its GPU faulted at, or failed as a victim of its
@@ -138,6 +142,18 @@ struct Answer {
     scheduled: Instant,
     /// When its completed handler ran.
     completed: Instant,
+    /// The host times, in seconds of the runtime's clock (`host_time`), its scheduler made it
+    /// `Scheduled` (Metal's `kernelEndTime`), its scheduled handler ran and its completed handler
+    /// ran.
+    host: HostTimes,
+}
+
+/// A command buffer's host times, in seconds of the runtime's clock (`host_time`).
+#[derive(Clone, Copy, Debug)]
+struct HostTimes {
+    kernel_end: f64,
+    scheduled: f64,
+    completed: f64,
 }
 
 impl Answer {
@@ -151,9 +167,18 @@ impl Answer {
         self.scheduled - self.committed
     }
 
-    /// From its scheduled handler to its completed handler.
-    fn since_scheduled(&self) -> Duration {
-        self.completed - self.scheduled
+    /// From the host time its scheduler made it `Scheduled`, Metal's `kernelEndTime`, to its
+    /// completed handler: how long after it was scheduled its failure was seen. Not from its
+    /// scheduled handler, which runs on a handler thread once that thread runs, later than the
+    /// scheduling by as long as the host keeps the thread off its CPU: Metal's timing is its
+    /// GPU's, from its scheduling, and its handlers' run promises none.
+    fn since_kernel_end(&self) -> Duration {
+        Duration::from_secs_f64((self.host.completed - self.host.kernel_end).max(0.0))
+    }
+
+    /// From the host time its scheduler made it `Scheduled` to its scheduled handler's run.
+    fn scheduled_handler_lag(&self) -> Duration {
+        Duration::from_secs_f64((self.host.scheduled - self.host.kernel_end).max(0.0))
     }
 
     /// It completed with no error.
@@ -166,8 +191,9 @@ impl Answer {
 struct Tracked {
     command_buffer: CommandBuffer,
     committed: Option<Instant>,
-    scheduled: Arc<OnceLock<Instant>>,
-    completed: Arc<OnceLock<Instant>>,
+    /// Its scheduled and completed handlers' runs: the instant, and the host time in seconds.
+    scheduled: Arc<OnceLock<(Instant, f64)>>,
+    completed: Arc<OnceLock<(Instant, f64)>>,
 }
 
 impl Tracked {
@@ -177,13 +203,13 @@ impl Tracked {
         let set = Arc::clone(&scheduled);
         command_buffer
             .add_scheduled_handler(Box::new(move |_: &CommandBuffer| {
-                let _ = set.set(Instant::now());
+                let _ = set.set((Instant::now(), metal2vulkan_runtime::host_time()));
             }))
             .unwrap();
         let set = Arc::clone(&completed);
         command_buffer
             .add_completed_handler(Box::new(move |_: &CommandBuffer| {
-                let _ = set.set(Instant::now());
+                let _ = set.set((Instant::now(), metal2vulkan_runtime::host_time()));
             }))
             .unwrap();
         Tracked {
@@ -212,22 +238,31 @@ impl Tracked {
     }
 
     fn answer(&self) -> Answer {
+        let (scheduled, scheduled_host) = *self.scheduled.get().expect("its scheduled handler ran");
+        let (completed, completed_host) = *self.completed.get().expect("its completed handler ran");
         Answer {
             status: self.command_buffer.status(),
             error: self.command_buffer.error(),
             committed: self.committed.unwrap(),
-            scheduled: *self.scheduled.get().expect("its scheduled handler ran"),
-            completed: *self.completed.get().expect("its completed handler ran"),
+            scheduled,
+            completed,
+            host: HostTimes {
+                kernel_end: self.command_buffer.kernel_end_time(),
+                scheduled: scheduled_host,
+                completed: completed_host,
+            },
         }
     }
 }
 
 /// A scenario's answers: the command buffer of the draw's, then the others' in [`OTHERS`]'s order
 /// (the queue's at once, 10 ms on, its wait met during the hang by the host and by another
-/// queue's, its wait met after the hang; another queue's, the one after), the marks, the event's
-/// value and whether the pass cleared its target.
+/// queue's, its wait met after the hang; another queue's, the one after), the other queue's
+/// command buffer that meets the second wait, the marks, the event's value and whether the pass
+/// cleared its target.
 struct Outcome {
     answers: [Answer; 8],
+    signal: Answer,
     marks: [u8; 10],
     event: u64,
     cleared: bool,
@@ -353,8 +388,9 @@ fn scenario(
     let mut held = waiting(7, &gate);
     let mut other = Tracked::new(&other_queue);
     other.mark(&marks, 8);
-    let signaller = other_queue.command_buffer().unwrap();
+    let mut signaller = Tracked::new(&other_queue);
     signaller
+        .command_buffer
         .encode_signal_event(EventRef::from(&gpu_gate), 1)
         .unwrap();
 
@@ -367,7 +403,7 @@ fn scenario(
     during.commit();
     on_gpu.commit();
     held.commit();
-    signaller.commit().unwrap();
+    signaller.commit();
     let due = drawn.committed.unwrap() + DURING;
     if let Some(left) = due.checked_duration_since(Instant::now()) {
         std::thread::sleep(left);
@@ -379,7 +415,7 @@ fn scenario(
     gate.set_signaled_value(1);
     held.wait();
     other.wait();
-    signaller.wait_until_completed_for(WAIT).unwrap();
+    signaller.wait();
     let mut after = Tracked::new(queue);
     after.mark(&marks, 9);
     after.commit();
@@ -395,6 +431,7 @@ fn scenario(
             &drawn, &at_once, &later, &during, &on_gpu, &held, &other, &after,
         ]
         .map(Tracked::answer),
+        signal: signaller.answer(),
         marks: std::array::from_fn(|slot| read[slot * 4]),
         event: event.signaled_value(),
         cleared: texel == [0; 16],
@@ -402,48 +439,90 @@ fn scenario(
 }
 
 /// Run each of `draws`'s scenarios on the test device and check it against `expected`.
+/// Its devices take their queue plan (`at_plan`): the work of the tests that call it
+/// changes placements under the lane's queue limits.
 fn answers_as_metal_does(draws: &[Draw], expected: Expected) {
     let cache = ScratchCache::new().unwrap();
     let messages = Messages::default();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         let name = device.name().to_owned();
         let lane = Lane::new(device);
         let pipeline = lane.pipeline("pt_plain");
         for &draw in draws {
             // A queue of its own: a queue's second fault or hang revokes it (`AccessRevoked`).
             let queue = lane.device.new_command_queue().unwrap();
+            let before = lane.device.work_counts();
             let outcome = scenario(&lane, &queue, &pipeline, draw);
-            check(&outcome, expected, &format!("{draw:?} on {name}"));
-            let [drawn, rest @ ..] = &outcome.answers;
-            let ms = |answer: &Answer| answer.took().as_secs_f64() * 1e3;
-            let rest: Vec<String> = rest
-                .iter()
-                .zip(OTHERS)
-                .map(|(answer, slot)| {
-                    let apart = match answer.completed.checked_duration_since(drawn.completed) {
-                        Some(after) => after.as_secs_f64() * 1e3,
-                        None => -(drawn.completed - answer.completed).as_secs_f64() * 1e3,
-                    };
-                    format!(
-                        "{} {:.1} ms ({apart:+.2} ms from the draw's, Scheduled at {:.1} ms)",
-                        MARKS[slot].0,
-                        ms(answer),
-                        answer.to_scheduled().as_secs_f64() * 1e3,
-                    )
-                })
-                .collect();
+            let counts = lane.device.work_counts();
+            // The answers first, so a failed check shows them too.
             println!(
-                "{name}: {draw:?}: {:?} {:?} in {:.1} ms, Scheduled at {:.1} ms; {}",
-                drawn.status,
-                drawn.error,
-                ms(drawn),
-                drawn.to_scheduled().as_secs_f64() * 1e3,
-                rest.join("; "),
+                "{name}: {draw:?}: {}; {}",
+                report(&outcome),
+                submissions(&before, &counts)
             );
+            check(&outcome, expected, &format!("{draw:?} on {name}"));
         }
     }
     layer_reported_nothing_at_all(&messages);
+}
+
+/// `outcome`'s answers in words: each command buffer's time from its commit to its completion,
+/// to the draw's completion, and to its `Scheduled`; the other queue's signalling one's also from
+/// the draw's commit.
+fn report(outcome: &Outcome) -> String {
+    let [drawn, rest @ ..] = &outcome.answers;
+    let ms = |duration: Duration| duration.as_secs_f64() * 1e3;
+    let apart = |answer: &Answer| match answer.completed.checked_duration_since(drawn.completed) {
+        Some(after) => ms(after),
+        None => -ms(drawn.completed - answer.completed),
+    };
+    let rest: Vec<String> = rest
+        .iter()
+        .zip(OTHERS)
+        .map(|(answer, slot)| {
+            format!(
+                "{} {:.1} ms ({:+.2} ms from the draw's, Scheduled at {:.1} ms)",
+                MARKS[slot].0,
+                ms(answer.took()),
+                apart(answer),
+                ms(answer.to_scheduled()),
+            )
+        })
+        .collect();
+    let signal = &outcome.signal;
+    format!(
+        "{:?} {:?} in {:.1} ms, Scheduled at {:.1} ms; {}; another queue's signal committed at \
+         {:.1} ms from the draw's commit, {:.1} ms ({:+.2} ms from the draw's, Scheduled at \
+         {:.1} ms)",
+        drawn.status,
+        drawn.error,
+        ms(drawn.took()),
+        ms(drawn.to_scheduled()),
+        rest.join("; "),
+        ms(signal.committed - drawn.committed),
+        ms(signal.took()),
+        apart(signal),
+        ms(signal.to_scheduled()),
+    )
+}
+
+/// How the scenario's batches went to their `VkQueue`s, from the device's counts `before` and
+/// `after` it: the groups of batches kept while two or more earlier submissions of their
+/// `VkQueue` ran and what sent the groups, the batches submitted behind two or more pending, and
+/// the command queues that joined another's busy `VkQueue`.
+fn submissions(before: &WorkCounts, after: &WorkCounts) -> String {
+    format!(
+        "groups kept pending {}, sent by a wait {}, drained {}, held {}; batches behind two or \
+         more pending {}; queue joins {}",
+        after.groups_kept_pending - before.groups_kept_pending,
+        after.group_ends_wait - before.group_ends_wait,
+        after.group_ends_drained - before.group_ends_drained,
+        after.group_ends_held - before.group_ends_held,
+        (after.batches_with_two_or_three_pending + after.batches_with_four_or_more_pending)
+            - (before.batches_with_two_or_three_pending + before.batches_with_four_or_more_pending),
+        after.queue_joins - before.queue_joins,
+    )
 }
 
 /// Check `outcome` against Metal's answer `expected` (the module docs).
@@ -456,14 +535,15 @@ fn check(outcome: &Outcome, expected: Expected, label: &str) {
         })
     };
     assert_eq!(outcome.event, 2, "{label}: the event's value");
-    let discarded = [
+    // The queue's command buffers committed during a hang.
+    let queued = [
         (at_once, "at once"),
         (later, "10 ms on"),
         (during, "met by the host during the hang"),
         (on_gpu, "met by another queue's"),
     ];
     for (answer, which) in
-        discarded
+        queued
             .into_iter()
             .chain([(held, "held"), (other, "another queue's"), (after, "after")])
     {
@@ -483,19 +563,42 @@ fn check(outcome: &Outcome, expected: Expected, label: &str) {
             assert_eq!(drawn.status, CommandBufferStatus::Error, "{label}");
             assert_eq!(drawn.error, Some(CommandBufferError::GpuHang), "{label}");
             assert!(
-                drawn.since_scheduled() >= HANG,
-                "{label}: failed {:?} after it read Scheduled",
-                drawn.since_scheduled()
+                drawn.since_kernel_end() >= HANG,
+                "{label}: failed {:?} after it was scheduled (its scheduled handler {:?} after)",
+                drawn.since_kernel_end(),
+                drawn.scheduled_handler_lag()
             );
             let scheduled = drawn.to_scheduled();
             assert!(
                 scheduled >= SCHEDULED,
                 "{label}: read Scheduled {scheduled:?} after its commit"
             );
+            // The wait the other queue's command buffer meets was met during the hang where its
+            // signal landed by then. Where the signal landed only after the hang's end (that
+            // command buffer slow to complete beside other GPU work, committed 10 ms after the
+            // draw's), the wait was met after the hang, and the command buffer runs, as the one
+            // the host meets after the hang does and as Metal's met after the hang did. The hang
+            // ends no sooner than [`SCHEDULED`] and [`HANG`] after the draw's commit, so it runs
+            // only where the signal landed after that.
+            let met_after = outcome.marks[6] == MARKS[6].1;
+            if met_after {
+                assert!(
+                    outcome.signal.completed >= drawn.committed + SCHEDULED + HANG,
+                    "{label}: met by another queue's ran, its signal landed during the hang"
+                );
+                assert!(
+                    on_gpu.scheduled >= drawn.scheduled,
+                    "{label}: met by another queue's read Scheduled before the hang"
+                );
+            }
+            let discarded = match met_after {
+                true => &queued[..3],
+                false => &queued[..],
+            };
             // The queue's command buffers committed during the hang read `Scheduled` from the
             // hang's on, before it completes, the host-met wait's once the host met it; the one
             // whose wait is met after the hang, after it.
-            for (answer, which) in discarded {
+            for &(answer, which) in discarded {
                 assert!(
                     answer.scheduled >= drawn.scheduled && answer.scheduled < drawn.completed,
                     "{label}: {which} read Scheduled {:?} after its commit",
@@ -511,8 +614,13 @@ fn check(outcome: &Outcome, expected: Expected, label: &str) {
                 "{label}: held read Scheduled before the hang completed"
             );
             assert!(!outcome.cleared, "{label}: the pass ran nothing");
-            assert_eq!(outcome.marks, marked(&[0, 7, 8, 9]), "{label}");
-            for (answer, which) in discarded {
+            let ran: &[usize] = match met_after {
+                true => &[0, 6, 7, 8, 9],
+                false => &[0, 7, 8, 9],
+            };
+            assert_eq!(outcome.marks, marked(ran), "{label}");
+            // Each completes after the hang, in the queue's order.
+            for (answer, which) in queued {
                 assert!(
                     answer.completed >= drawn.completed,
                     "{label}: {which} completed before the hang did"
@@ -527,9 +635,10 @@ fn check(outcome: &Outcome, expected: Expected, label: &str) {
             assert_eq!(drawn.status, CommandBufferStatus::Error, "{label}");
             assert_eq!(drawn.error, Some(error), "{label}");
             assert!(
-                drawn.since_scheduled() >= FAULT,
-                "{label}: failed {:?} after it read Scheduled",
-                drawn.since_scheduled()
+                drawn.since_kernel_end() >= FAULT,
+                "{label}: failed {:?} after it was scheduled (its scheduled handler {:?} after)",
+                drawn.since_kernel_end(),
+                drawn.scheduled_handler_lag()
             );
             // The queue's command buffer committed at once reads `Scheduled` during the fault and
             // completes after it.
@@ -689,11 +798,13 @@ fn one(
 /// each followed by a command buffer of no draw: those run until the queue's second fault or hang
 /// completed, and from then on every command buffer of the queue fails at its commit with
 /// `AccessRevoked`, running nothing and signalling nothing, while a new queue runs.
+/// Its devices take their queue plan (`at_plan`): the work of the tests that call it
+/// changes placements under the lane's queue limits.
 fn revokes_after(draws: &[(Draw, CommandBufferError)], revoked_from: Option<usize>) {
     let cache = ScratchCache::new().unwrap();
     let messages = Messages::default();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         let name = device.name().to_owned();
         let lane = Lane::new(device);
         let pipeline = lane.pipeline("pt_plain");

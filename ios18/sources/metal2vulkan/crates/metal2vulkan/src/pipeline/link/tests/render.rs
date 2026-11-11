@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::device::requirements::VkFeature;
-use crate::error::{Attachment, Capability, Location};
+use crate::error::{Attachment, Capability, Location, MetalAnswer};
 use crate::metal::{PixelFormat, VertexFormat, VertexStepFunction};
 use crate::pipeline::descriptor::{VertexAttributeDescriptor, VertexBufferLayoutDescriptor};
 use crate::pipeline::lower_inputs::VertexFetch;
@@ -981,7 +981,10 @@ fn the_constant_alpha_drop_follows_the_descriptor_checks() {
     withheld.edit(|x| {
         x.enabled.features.remove(&constant_alpha);
     });
-    let invalid = Error::InvalidDescriptor(DescriptorError::ColorAttachment { index: 0 });
+    let invalid = Error::InvalidDescriptor(DescriptorError::ColorAttachment {
+        index: 0,
+        metal: MetalAnswer::NilWithError,
+    });
     for (output, mask) in [
         (color(0, 1, f4), ColorWriteMask::ALL),
         (color(0, 0, f4), ColorWriteMask::NONE),
@@ -1129,7 +1132,10 @@ fn graphics_state_maps_the_descriptor() {
         missing.color_attachments[2] = None;
         assert_eq!(
             link(&[&va, &fa], &LinkInputs::Render(Box::new(missing)), &p).unwrap_err(),
-            Error::InvalidDescriptor(DescriptorError::ColorAttachment { index: 2 })
+            Error::InvalidDescriptor(DescriptorError::ColorAttachment {
+                index: 2,
+                metal: MetalAnswer::NilWithError,
+            })
         );
         // The sample count maps (the fetching stage was compiled for one sample).
         let mut msaa = r.clone();
@@ -1925,7 +1931,12 @@ fn color_outputs_follow_metals_measured_rules() {
             .graphics
             .expect("graphics"))
     };
-    let invalid = |index| Error::InvalidDescriptor(DescriptorError::ColorAttachment { index });
+    let invalid = |index| {
+        Error::InvalidDescriptor(DescriptorError::ColorAttachment {
+            index,
+            metal: MetalAnswer::NilWithError,
+        })
+    };
     let lavapipe = profile("lavapipe");
     let floor = profile("vk12-floor");
     for p in [&lavapipe, &profile("moltenvk-m3")] {
@@ -2089,7 +2100,8 @@ fn alpha_to_coverage_reads_a_four_component_float_output_at_attachment_0() {
             Some(&fragment(vec![color(0, 0, u4)]))
         ),
         Err(Error::InvalidDescriptor(DescriptorError::ColorAttachment {
-            index: 0
+            index: 0,
+            metal: MetalAnswer::EndsProcess,
         }))
     );
 }
@@ -2323,12 +2335,15 @@ fn multisampled_fragment_invocations_follow_metals_measured_rules() {
         })
     };
     let mut vs = iface(Stage::Vertex, vec![], vec![]);
-    vs.io = stage_io(
-        vec![],
-        ["c", "k", "s", "f"]
-            .iter()
-            .map(|n| varying(n, f4, None))
-            .collect(),
+    vs.io = positioned(
+        Stage::Vertex,
+        stage_io(
+            vec![],
+            ["c", "k", "s", "f"]
+                .iter()
+                .map(|n| varying(n, f4, None))
+                .collect(),
+        ),
     );
     let va = artifact(vs, None);
     let fragment = |inputs: Vec<IoVariable>, builtins: Vec<B>, writes: bool| {
@@ -2655,12 +2670,15 @@ fn split_pixel_fragments_are_refused_where_measured() {
         })
     };
     let mut vs = iface(Stage::Vertex, vec![], vec![]);
-    vs.io = stage_io(
-        vec![],
-        ["c", "k", "f"]
-            .iter()
-            .map(|n| varying(n, f4, None))
-            .collect(),
+    vs.io = positioned(
+        Stage::Vertex,
+        stage_io(
+            vec![],
+            ["c", "k", "f"]
+                .iter()
+                .map(|n| varying(n, f4, None))
+                .collect(),
+        ),
     );
     let va = artifact(vs, None);
     let fragment = |inputs: Vec<IoVariable>, builtins: Vec<B>| {
@@ -2746,7 +2764,7 @@ fn the_graphics_state_states_whether_the_fragment_function_reads_barycentric_coo
     let f4 = io_ty(IoNumeric::Float, 4);
     let stage = |stage: Stage, io: StageIo| {
         let mut i = iface(stage, vec![], vec![]);
-        i.io = io;
+        i.io = positioned(stage, io);
         artifact(i, None)
     };
     let reads = |va: &FunctionArtifact, fa: Option<&FunctionArtifact>| {
@@ -2795,7 +2813,7 @@ fn the_graphics_state_states_whether_the_fragment_function_reads_its_position_s_
     let f4 = io_ty(IoNumeric::Float, 4);
     let stage = |stage: Stage, io: StageIo| {
         let mut i = iface(stage, vec![], vec![]);
-        i.io = io;
+        i.io = positioned(stage, io);
         artifact(i, None)
     };
     let reads = |va: &FunctionArtifact, fa: Option<&FunctionArtifact>| {
@@ -2926,7 +2944,7 @@ fn the_graphics_state_states_whether_the_fragment_function_reads_a_flat_input() 
     let f4 = io_ty(IoNumeric::Float, 4);
     let stage = |stage: Stage, io: StageIo| {
         let mut i = iface(stage, vec![], vec![]);
-        i.io = io;
+        i.io = positioned(stage, io);
         artifact(i, None)
     };
     let flat = |va: &FunctionArtifact, fa: Option<&FunctionArtifact>| {

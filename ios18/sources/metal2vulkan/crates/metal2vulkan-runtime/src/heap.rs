@@ -67,7 +67,7 @@ use super::texture::{Texture, TextureShared};
 use super::values::{CpuCacheMode, HazardTrackingMode, ResourceOptions, StorageMode};
 use super::Device;
 use metal2vulkan::device::AllocationLimits;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 /// The alignment of every buffer a heap places, and the one `heap_buffer_size_and_align`
@@ -306,6 +306,10 @@ struct HeapShared {
     /// encoder that used the heap makes resident as it encodes each later command
     /// (`residency.rs`).
     textures: Mutex<Numbered<TextureShared>>,
+    /// How many textures `textures` numbered, stored under its lock as each is held: what an
+    /// encoder that used the heap reads at each command to see whether it made one since, at one
+    /// load.
+    textures_made: AtomicU64,
     /// A committed command buffer holds a command that used the heap: one of its resources, or
     /// the heap or a resource of it made resident by the command's encoder. Metal's `Empty`
     /// keeps a `Shared` heap's bytes from then on.
@@ -485,6 +489,11 @@ impl Device {
     /// `maxBufferSize` (`NotImplemented(HeapPastMaxBufferSize)`); a pinned address whose range
     /// meets another resource's bytes or leaves the space (`PlacementConflict`).
     pub fn new_heap(&self, descriptor: &HeapDescriptor) -> Result<Heap, Error> {
+        self.at_serving(|device| device.new_heap_now(descriptor))
+    }
+
+    /// [`Device::new_heap`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_heap_now(&self, descriptor: &HeapDescriptor) -> Result<Heap, Error> {
         self.heap_with_token(descriptor, None)
     }
 
@@ -496,6 +505,17 @@ impl Device {
     /// A sparse heap's drops once the runtime frees the heap: after the heap, every texture made
     /// from it, and the command buffers that hold any of them are gone.
     pub fn new_heap_with_range_token(
+        &self,
+        descriptor: &HeapDescriptor,
+        token: RangeToken,
+    ) -> Result<Heap, Error> {
+        self.at_serving_taking(token, |device, token| {
+            device.new_heap_with_range_token_now(descriptor, token)
+        })
+    }
+
+    /// [`Device::new_heap_with_range_token`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_heap_with_range_token_now(
         &self,
         descriptor: &HeapDescriptor,
         token: RangeToken,
@@ -589,6 +609,23 @@ impl Device {
         deallocator: Option<Deallocator>,
         keep_alive: Option<KeepAlive>,
     ) -> Result<Heap, Error> {
+        let taken = (memory, deallocator, keep_alive);
+        self.at_serving_taking(taken, |device, (memory, deallocator, keep_alive)| {
+            // SAFETY: the caller's contract.
+            unsafe {
+                device.new_heap_with_bytes_no_copy_now(memory, descriptor, deallocator, keep_alive)
+            }
+        })
+    }
+
+    /// [`Device::new_heap_with_bytes_no_copy`] on the generation that serves (`device/line.rs`).
+    pub(crate) unsafe fn new_heap_with_bytes_no_copy_now(
+        &self,
+        memory: HostMemory,
+        descriptor: &HeapDescriptor,
+        deallocator: Option<Deallocator>,
+        keep_alive: Option<KeepAlive>,
+    ) -> Result<Heap, Error> {
         let release = HostRelease::new(deallocator, keep_alive);
         // SAFETY: the caller's contract.
         unsafe { self.no_copy_heap_with_token(memory, descriptor, release, None) }
@@ -602,6 +639,31 @@ impl Device {
     ///
     /// As [`Device::new_heap_with_bytes_no_copy`]'s.
     pub unsafe fn new_heap_with_bytes_no_copy_and_range_token(
+        &self,
+        memory: HostMemory,
+        descriptor: &HeapDescriptor,
+        deallocator: Option<Deallocator>,
+        keep_alive: Option<KeepAlive>,
+        token: RangeToken,
+    ) -> Result<Heap, Error> {
+        let taken = (memory, deallocator, keep_alive, token);
+        self.at_serving_taking(taken, |device, (memory, deallocator, keep_alive, token)| {
+            // SAFETY: the caller's contract.
+            unsafe {
+                device.new_heap_with_bytes_no_copy_and_range_token_now(
+                    memory,
+                    descriptor,
+                    deallocator,
+                    keep_alive,
+                    token,
+                )
+            }
+        })
+    }
+
+    /// [`Device::new_heap_with_bytes_no_copy_and_range_token`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) unsafe fn new_heap_with_bytes_no_copy_and_range_token_now(
         &self,
         memory: HostMemory,
         descriptor: &HeapDescriptor,
@@ -628,7 +690,8 @@ impl Device {
         token: Option<RangeToken>,
     ) -> Result<Heap, Error> {
         const CALL: &str = "new_heap_with_bytes_no_copy";
-        let (options, drops_writes) = self.no_copy_options(CALL, descriptor.resource_options);
+        let (options, drops_writes) =
+            super::buffer_descriptor::no_copy_options(descriptor.resource_options);
         let modes = Modes::of(options)?;
         if modes.storage != StorageMode::Shared || descriptor.heap_type == HeapType::Sparse {
             return Err(invalid(CALL, Problem::StorageMode));
@@ -665,6 +728,7 @@ impl Device {
             heap_type,
             ranges: Mutex::new(RangeAllocator::new(0, size)),
             textures: Mutex::new(Numbered::default()),
+            textures_made: AtomicU64::new(0),
             used: AtomicBool::new(false),
             object_id: ObjectId::new(),
             placed: Mutex::new(Placed::default()),
@@ -702,7 +766,7 @@ impl Device {
             .checked_next_multiple_of(page.bytes())
             .ok_or(Error::OutOfMemory(MemoryKind::Device))?;
         if self.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.lost_refusal());
         }
         let hazard = match modes.hazard {
             HazardTrackingMode::Default => HazardTrackingMode::Untracked,
@@ -718,6 +782,7 @@ impl Device {
             heap_type: HeapType::Sparse,
             ranges: Mutex::new(RangeAllocator::new(0, size)),
             textures: Mutex::new(Numbered::default()),
+            textures_made: AtomicU64::new(0),
             used: AtomicBool::new(false),
             object_id: ObjectId::new(),
             placed: Mutex::new(Placed::default()),
@@ -727,6 +792,16 @@ impl Device {
     /// `heapBufferSizeAndAlignWithLength:options:`: `length` bytes at a multiple of 256, for every
     /// length and options, as Metal answers (measured).
     pub fn heap_buffer_size_and_align(
+        &self,
+        length: u64,
+        _options: ResourceOptions,
+    ) -> SizeAndAlign {
+        self.current()
+            .heap_buffer_size_and_align_now(length, _options)
+    }
+
+    /// [`Device::heap_buffer_size_and_align`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn heap_buffer_size_and_align_now(
         &self,
         length: u64,
         _options: ResourceOptions,
@@ -995,7 +1070,7 @@ impl Heap {
             return Err(nil(CALL, self.past_end(0, length)));
         }
         if self.device().is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.device().lost_refusal());
         }
         let offset = self
             .allocate(length, PLACEMENT_ALIGNMENT)
@@ -1035,7 +1110,7 @@ impl Heap {
             return Err(nil(CALL, self.past_end(offset, length)));
         }
         if self.device().is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.device().lost_refusal());
         }
         Ok(self.program_buffer(bytes, offset, length, options))
     }
@@ -1119,20 +1194,28 @@ impl Heap {
     }
 
     /// An automatic heap's lowest free range of `length` bytes at a multiple of `alignment`, now
-    /// taken; `None` where none has room.
+    /// taken; `None` where none has room. Once every passing hold of the device ended
+    /// (`resource_ids.rs`, **Passing holds**): the range a resource the program released held is
+    /// back by then, whichever thread let go of it last, as Metal's release gave it back.
     pub(super) fn allocate(&self, length: u64, alignment: u64) -> Option<u64> {
+        self.device().shared().passing_holds.wait();
         lock(&self.0.ranges).allocate(length, alignment)
     }
 
     /// `texture`, made in the heap, is among the heap's textures while it lives, numbered after
     /// every texture the heap made before it.
     pub(super) fn hold_texture(&self, texture: &Texture) {
-        lock(&self.0.textures).hold(texture.downgrade());
+        let mut textures = lock(&self.0.textures);
+        textures.hold(texture.downgrade());
+        // Stored while the texture is held: a load that reads it, then takes the lock, finds the
+        // texture there.
+        (self.0.textures_made).store(textures.made(), Ordering::Release);
     }
 
-    /// The number the next texture the heap makes takes: how many it made.
+    /// The number the next texture the heap makes takes: how many it made, as the last texture
+    /// held stored it.
     pub(super) fn textures_made(&self) -> u64 {
-        lock(&self.0.textures).made()
+        self.0.textures_made.load(Ordering::Acquire)
     }
 
     /// The heap's live textures numbered `from` or later, in the order they were made, and the

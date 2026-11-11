@@ -515,12 +515,36 @@ static void test_reconnect(void)
     CHECK(sa.last_length == 7 && !memcmp(sa.last, "battery", 7));
 }
 
+static void test_glink_late_client(void)
+{
+    static QcomGlink a, b;
+    static uint8_t local[256], remote[256];
+    memset(desc, 0, sizeof desc);
+    QcomGlinkFifo at = {&desc[1], &desc[0], fifo_a, FIFO}, ar = {&desc[3], &desc[2], fifo_b, FIFO};
+    QcomGlinkFifo bt = {&desc[3], &desc[2], fifo_b, FIFO}, br = {&desc[1], &desc[0], fifo_a, FIFO};
+    qcom_glink_init(&a, at, ar, kick_a, 0);
+    qcom_glink_init(&b, bt, br, kick_b, 0);
+    const QcomGlinkClient client = {on_state, on_receive};
+    Seen sa = {0}, sb = {0};
+    QcomGlinkChannel *cb = qcom_glink_channel(&b, "adsp_apps", 256, 1, remote, &client, &sb, 1);
+    settle(&a, &b);
+    CHECK(a.unknown_opens == 1 && !cb->up);
+    QcomGlinkChannel *ca = qcom_glink_channel(&a, "adsp_apps", 256, 1, local, &client, &sa, 1);
+    settle(&a, &b);
+    CHECK(ca->up && cb->up && sa.ups == 1 && sb.ups == 1);
+    CHECK(qcom_glink_send(&b, cb, "audio", 5) == QcomGlinkOk);
+    settle(&a, &b);
+    CHECK(sa.messages == 1 && sa.last_length == 5 && !memcmp(sa.last, "audio", 5));
+    for (unsigned i = 0; i < QCOM_GLINK_MAX_CHANNELS; ++i) CHECK(!a.pending_open[i].used);
+}
+
 int main(void)
 {
     test_mdt();
     test_smem();
     test_smp2p();
     test_glink();
+    test_glink_late_client();
     test_reconnect();
     test_qmp();
     test_rpmh();

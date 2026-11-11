@@ -57,9 +57,10 @@ pub enum Justification {
     ///
     /// **It is scoped to the venue, and held both ways.** It holds only on a run whose device
     /// presents no such compression (`DeviceProperties::lossless_compression` false, the venue's
-    /// [`crate::case::Venue::lossless_compression`]): on one that presents it, as the M3 Max and
-    /// lavapipe do, it justifies nothing, so the sites it covers compare exactly there and any
-    /// difference at them is a divergence. Where it is named and no venue without the compression
+    /// [`crate::case::Venue::lossless_compression`]): on one that presents it, as the M3 Max
+    /// does, it justifies nothing, so the sites it covers compare exactly there and any difference
+    /// at them is a divergence. lavapipe and the RTX 5080 present a Mac with an Intel or AMD GPU,
+    /// so it holds there. Where it is named and no venue without the compression
     /// ran, the report counts it as a claim nothing checked
     /// ([`crate::report::Report::unchecked_everywhere`]), as it does a notice no run announced.
     WithoutCompression(String),
@@ -214,6 +215,17 @@ pub enum Unjustified {
     /// The venue presents a Mac that keeps textures compressed, as the recordings' Apple silicon
     /// Mac does, so the answer of a venue that keeps none justifies nothing here.
     VenueCompresses,
+}
+
+impl Unjustified {
+    /// Whether an allowance that does not hold for this reason faults the case. Every reason does
+    /// but one: a venue's own answer ([`Justification::WithoutCompression`]) on a venue that
+    /// presents Metal's compression holds nowhere, as on the Mac that recorded the case, so naming
+    /// it is no fault there. The site then compares as if the case loosened nothing, and a
+    /// difference there is the site's own and nothing more.
+    pub fn faults_the_case(&self) -> bool {
+        !matches!(self, Unjustified::VenueCompresses)
+    }
 }
 
 impl std::fmt::Display for Unjustified {

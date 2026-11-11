@@ -18,10 +18,15 @@
 //! - **The unwritten attachment** (`xr-unwritten-*`): a pass whose first draw fills the target
 //!   unblended and whose second is a pipeline that blends the attachment but writes no color: one
 //!   without a fragment function, and one whose function writes depth alone. Metal leaves the
-//!   attachment as the first draw left it.
+//!   attachment as the first draw left it. The padded `RGB10A2Unorm_sRGB` takes the pipeline
+//!   without a fragment function too (not `R10Unorm_X6` or `RG10Unorm_X12`, whose texels Metal
+//!   leaves in a fixed pattern after the pass, nor the bfloat formats, whose blend Metal's
+//!   validation layer refuses: `OTHER_FORMATS`).
 //! - **The masked write** (`xr-masked-*`): a first draw fills the target, and a second writes the
 //!   other values under a mask of some of the channels (red; alpha; red, green and blue; blue and
 //!   green), unblended, and under the mask of red, green and blue with source-over blending.
+//!   `BGR10_XR` and its twin, whose three codes share one word, take red and blue-and-green
+//!   unblended and red under source-over.
 //!
 //! The values are the family's own: each a `half` (so the `half4` and `float4` fills carry the
 //! same value), an alpha on a grid of thirty-seconds in `[0, 1]` and each color its alpha times a
@@ -39,7 +44,7 @@ use crate::render::{
     Blend, ColorState, PassColor, PassDepth, PassStencil, Plane, ReadAt, RenderPass,
     RenderPipelineSpec, RenderStep, RenderWork, StageFunction, TargetSpec,
 };
-use crate::transcript::{Node, Observed, Sites, Value};
+use crate::transcript::{Element, Node, Observed, Sites, Value};
 use metal2vulkan::metal::{BlendFactor as F, BlendOperation as O, ColorWriteMask, PixelFormat};
 use metal2vulkan_runtime::{Degradation, StoreAction};
 
@@ -322,9 +327,9 @@ impl Case for GamutDraw {
     }
 
     /// Beside the family's notices, `extended-range-blends-stored-codes` (the second draw blends
-    /// over the codes the first stored, where Metal's tile holds `half`s through the pass: the
-    /// `half` shadow that keeps them is built for a single-sampled pass fetching in the pixel
-    /// interlock, so not at four samples, nor on lavapipe, which blends over the input
+    /// over the codes the first stored, where Metal's tile holds `half`s through the pass, on a
+    /// device whose passes hold no `half` shadow, `framebuffer_fetch::holds_extended_shadows`:
+    /// each venue of the suite holds it, in the pixel interlock or, on lavapipe, beside the input
     /// attachment), and at four samples what the pass's shape announces: `shader-resolve` and
     /// `extended-range-resolve` (no device's resolve averages the codes, so the runtime's own
     /// resolve does, `BGRA10_XR`'s alpha and an sRGB twin's color from the codes where Metal
@@ -332,13 +337,16 @@ impl Case for GamutDraw {
     /// `MultisampleResolve`, and the depth and stencil stored `DontCare`, on a driver measured to
     /// keep one of Metal's answers), and on a device without multisampled storage images
     /// `sample-planes` and `fetch-through-scratch` (the interlocked blend reads and writes the
-    /// samples as planes, through a scratch image the target's usage needs). None loosens a code:
-    /// every texel still compares exactly.
+    /// samples as planes, through a scratch image the target's usage needs). And
+    /// `render-pass-split` (`crate::replay::interlocked_split_notice`): the second draw blends in
+    /// the pixel interlock over what the first wrote there. None loosens a code: every texel still
+    /// compares exactly.
     fn allowances(&self) -> Vec<Allowance> {
         let mut named = notices(&self.format);
         named.push(crate::replay::notice_allowance(
             Degradation::ExtendedRangeBlendsStoredCodes.code(),
         ));
+        named.push(crate::replay::interlocked_split_notice());
         if self.samples > 1 {
             named.extend(
                 [
@@ -454,7 +462,24 @@ pub struct UnwrittenDraw {
     shape: Unwritten,
 }
 
-/// Each format under each shape.
+/// The padded 10-bit format an unwritten case also takes: Metal leaves an unwritten attachment as it
+/// is whatever its format, this among them, where the runtime refused its blended attachment
+/// written or not. Not `R10Unorm_X6` or `RG10Unorm_X12`: after this pass Metal's texels of either
+/// are a fixed pattern on the M3 Max under macOS 27.0.1 (each row's first sixteen words `0xffff`,
+/// the rest zero, in every run and under validation), neither the clear's nor the first draw's
+/// codes, an answer no case can compare with. Not the bfloat formats: Metal's validation layer
+/// refuses a pipeline that blends one ("the pixelformat MTLPixelFormatR16Bfloat for this render
+/// target is not blendable"), which ends the recording's process.
+const OTHER_FORMATS: [Format; 1] = [Format {
+    slug: "rgb10a2unorm-srgb",
+    format: PixelFormat::RGB10A2UnormSRGB,
+    texel: 4,
+    word: Element::U32,
+    words: 1,
+    copies: true,
+}];
+
+/// Each format under each shape, and the padded format without a fragment function.
 pub fn unwritten() -> Vec<UnwrittenDraw> {
     let names = [
         (
@@ -474,14 +499,26 @@ pub fn unwritten() -> Vec<UnwrittenDraw> {
             1,
         ),
     ];
-    names
+    let others = ["xr-unwritten-rgb10a2unorm-srgb-no-fragment"];
+    let mut cases: Vec<UnwrittenDraw> = names
         .into_iter()
         .map(|(name, shape, format)| UnwrittenDraw {
             name,
             format: formats()[format],
             shape,
         })
-        .collect()
+        .collect();
+    cases.extend(
+        others
+            .into_iter()
+            .zip(OTHER_FORMATS)
+            .map(|(name, format)| UnwrittenDraw {
+                name,
+                format,
+                shape: Unwritten::NoFragment,
+            }),
+    );
+    cases
 }
 
 impl UnwrittenDraw {
@@ -684,6 +721,38 @@ pub fn masked() -> Vec<MaskedDraw> {
             });
         }
     }
+    // `BGR10_XR` and its twin hold the three color codes in one word: a mask of some of them.
+    let word_shapes = [
+        ("red", ColorWriteMask::RED, None),
+        (
+            "blue-green",
+            ColorWriteMask::BLUE.union(ColorWriteMask::GREEN),
+            None,
+        ),
+        ("red-over", ColorWriteMask::RED, Some(OVER)),
+    ];
+    const WORD_NAMES: [[&str; 3]; 2] = [
+        [
+            "xr-masked-bgr10xr-red",
+            "xr-masked-bgr10xr-blue-green",
+            "xr-masked-bgr10xr-red-over",
+        ],
+        [
+            "xr-masked-bgr10xr-srgb-red",
+            "xr-masked-bgr10xr-srgb-blue-green",
+            "xr-masked-bgr10xr-srgb-red-over",
+        ],
+    ];
+    for (format, names) in [FORMATS[2], FORMATS[3]].into_iter().zip(WORD_NAMES) {
+        for ((_, mask, blend), name) in word_shapes.into_iter().zip(names) {
+            cases.push(MaskedDraw {
+                name,
+                format,
+                mask,
+                blend,
+            });
+        }
+    }
     cases
 }
 
@@ -719,14 +788,24 @@ impl Case for MaskedDraw {
     }
 
     /// Beside the family's notices, for the blended write, `extended-range-blends-stored-codes`:
-    /// it blends over the codes the first draw stored on lavapipe, whose blend over the input
-    /// attachment holds no `half` shadow. It loosens no code.
+    /// it blends over the codes the first draw stored on a device whose passes hold no `half`
+    /// shadow (`framebuffer_fetch::holds_extended_shadows`); on lavapipe the shadow is held beside
+    /// the input attachment. And `render-pass-split` (`crate::replay::interlocked_split_notice`):
+    /// a blended write, and a masked one into `BGR10_XR`'s shared word, reads and writes in the
+    /// pixel interlock what the first draw wrote there. It loosens no code.
     fn allowances(&self) -> Vec<Allowance> {
         let mut named = notices(&self.format);
         if self.blend.is_some() {
             named.push(crate::replay::notice_allowance(
                 Degradation::ExtendedRangeBlendsStoredCodes.code(),
             ));
+        }
+        let shared_word = matches!(
+            self.format.format,
+            PixelFormat::BGR10XR | PixelFormat::BGR10XRSRGB
+        );
+        if self.blend.is_some() || shared_word {
+            named.push(crate::replay::interlocked_split_notice());
         }
         named
     }

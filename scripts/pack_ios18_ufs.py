@@ -94,6 +94,7 @@ def main():
     parser.add_argument('--gpu-addon', type=Path, help='22H384 NGPUADD2 bundle; defaults to ROOT/gpu/metal.gpuaddon')
     parser.add_argument('--appsync-runtime', type=Path, help='Built 22H384 AppSync runtime directory')
     parser.add_argument('--wifi-runtime', type=Path, help='Signed iOS 18 supplicant and launchd cache')
+    parser.add_argument('--haptics-runtime', type=Path, help='Signed 22H384 Actuator HAL and tuning overlay')
     parser.add_argument('--wifi-firmware', type=Path, help='WCN6855 firmware matching profiles/wifi-wcn6855-hw21.json')
     parser.add_argument('--kernel', type=Path, help='New fileset kernel built from the current device sources')
     parser.add_argument('--firmware-binaries', type=Path, help='Built MarbleBoot AARCH64 applications for this candidate')
@@ -115,8 +116,11 @@ def main():
         args.cpu_regs = ','.join(hex(value) for value in candidate['enabled_cpu_affinities'])
         if args.display_scale is None:
             args.display_scale = display_geometry()['scale']
-        if args.usb_owner=='firmware' and candidate['firmware_usb_affinity'] != USB_AFFINITY:
+        if args.usb_owner=='firmware' and candidate['firmware_usb_affinity'] not in (None, USB_AFFINITY):
             raise ValueError('Candidate CPU ownership differs from this firmware')
+        if args.usb_owner=='firmware':
+            args.cpu_regs = ','.join(hex(value) for value in candidate['enabled_cpu_affinities']
+                                     if value != USB_AFFINITY)
     native_usb=args.usb_owner=='kernel'
     allowed_affinities=list(range(0,0x800,0x100)) if native_usb else XNU_AFFINITIES
     if native_usb:args.cpu_regs=','.join(hex(value) for value in allowed_affinities)
@@ -164,6 +168,22 @@ def main():
                         addon, wifi_addon, *directories], check=True)
         addon = wifi_addon
         args.kernel_arg.append('marble-wifi-service=1')
+    haptics_runtime = None
+    if args.haptics_runtime:
+        haptics_runtime = json.loads((args.haptics_runtime / 'report.json').read_text())
+        if (haptics_runtime['target'], haptics_runtime['build']) != ('ios18', '22H384'):
+            raise ValueError('Haptics runtime must target 22H384')
+        for relative, digest in haptics_runtime['files'].items():
+            if hashlib.sha256((args.haptics_runtime / relative).read_bytes()).hexdigest() != digest:
+                raise ValueError('Haptics runtime differs from build: ' + relative)
+        directories = []
+        for prefix, relative in haptics_runtime['directories'].items():
+            directories += [prefix, args.haptics_runtime / relative]
+        haptics_addon = out / 'haptics-runtime.gpuaddon'
+        subprocess.run([sys.executable, DEVICE / 'ios18/source/scripts/addon-add-dir.py',
+                        addon, haptics_addon, *directories], check=True)
+        addon = haptics_addon
+        args.kernel_arg.append('marble-haptics=2')
     wifi_firmware = None
     if args.wifi_firmware:
         wifi_firmware = json.loads((DEVICE / 'profiles/wifi-wcn6855-hw21.json').read_text())
@@ -212,6 +232,8 @@ def main():
     try:
         if native_usb:
             args.kernel_arg+=['rootstage-runtime-usb=1','marble-native-services=1',f'cpus={len(cpu_regs)}']
+        else:
+            args.kernel_arg+=['rootstage-runtime-usb=3','marble-native-services=0',f'cpus={len(cpu_regs)}']
         if appsync:
             args.kernel_arg.append('appsync=1')
         boot_args = merge_kernel_args(boot_args, ['sheng-aks-sls=3', *args.kernel_arg,
@@ -271,6 +293,12 @@ def main():
         module = struct.pack('<I16sI', 2, hashlib.sha256(b''.join(hashes)).digest()[:16], len(hashes))
         module += b''.join(value + bytes([2, 0, 0, 0]) for value in hashes)
         modules.append(module)
+    if haptics_runtime:
+        hashes = sorted({bytes.fromhex(value) for value in haptics_runtime['cdhashes']})
+        module = struct.pack('<I16sI', 2, hashlib.sha256(b''.join(hashes)).digest()[:16], len(hashes))
+        module += b''.join(value + bytes([2, 0, 0, 0]) for value in hashes)
+        if module not in modules:
+            modules.append(module)
     cursor = 4 + 4 * len(modules)
     offsets = []
     for module in modules:
@@ -280,6 +308,17 @@ def main():
         struct.pack(f'<{1 + len(modules)}I', len(modules), *offsets) + b''.join(modules))
     adt = payloads / 'kernel.macho.adt'
     tree, _ = read_adt(adt.read_bytes())
+    if haptics_runtime:
+        product = next((node for node in tree[1] if node[0].get('name') == b'product\0'), None)
+        if product is None:
+            product = ({'name': b'product\0'}, [])
+            tree[1].append(product)
+        haptics = next((node for node in product[1] if node[0].get('name') == b'haptics\0'), None)
+        if haptics is None:
+            haptics = ({'name': b'haptics\0'}, [])
+            product[1].append(haptics)
+        haptics[0].update({'supports-3rd-party-haptics': struct.pack('<I', 1),
+                           'closed-loop': struct.pack('<I', 1)})
     if wifi_runtime:
         armio = next(node for node in tree[1] if node[0].get('name') == b'arm-io\0')
         chosen = next(node for node in tree[1] if node[0].get('name') == b'chosen\0')
@@ -379,6 +418,7 @@ def main():
             appsync_runtime=str(args.appsync_runtime.resolve()) if appsync else None,
             wifi_firmware=wifi_firmware,
             wifi_runtime=str(args.wifi_runtime.resolve()) if wifi_runtime else None,
+            haptics_runtime=str(args.haptics_runtime.resolve()) if haptics_runtime else None,
             appsync_build=appsync['build'] if appsync else None), indent=2) + '\n')
     if candidate:
         data = json.loads(report.read_text())

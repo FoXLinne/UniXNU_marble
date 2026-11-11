@@ -1,6 +1,6 @@
 """Compile the actual service against a narrow host lifecycle test double.
 
-Checks the open/answer boundaries, not real IOKit registration. Without sheng-aks every open is refused (closed boundary);
+Checks the open/answer boundaries, not real IOKit registration. Without aks every open is refused (closed boundary);
 with it the user client also wraps and unwraps keys (10, 11) in a form checked against hashlib here, and answers the handshake/bookkeeping selectors, get_system (14), lock state (7) and device state (17, 35; decoded below the way libaks decodes it) and rejects the rest.
 """
 from pathlib import Path

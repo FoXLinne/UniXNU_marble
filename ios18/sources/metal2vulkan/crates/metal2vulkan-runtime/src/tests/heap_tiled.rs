@@ -6,10 +6,11 @@
 //! second probe's answers.
 
 use crate::copy_plan::block_bytes;
+use crate::texture::heap::rows_lie_in_metal_tiles;
 use crate::texture::heap_tiled::{
     fresh_pattern, level_bytes, lossless_answer, metal_compresses, metal_heap_layout,
     own_heap_layout, pattern_levels, sample_grid, shadow_tiles, BlockPlacement, Elements,
-    FreshDepth, FreshPattern, HeapLayout, TiledLayout, Untiled,
+    FreshDepth, FreshPattern, HeapLayout, TiledLayout, TiledPart, Untiled,
 };
 use crate::texture_descriptor::TextureLayout;
 use metal2vulkan::metal::format::byte_format;
@@ -1325,8 +1326,9 @@ fn multisample_samples_lie_where_metal_draws_them() {
 
 /// Each clear color `fresh_pattern` gives converts to its texel on every device: no rounding of
 /// it is in question (`clear_value::rounds_apart`), and Metal's conversion
-/// (`clear_value::tests::texel_bytes`) writes the pattern. Every pattern is of a whole number of bytes a texel, and every format with a pattern
-/// but a clear color is one whose pattern holds a NaN or an extended-range code.
+/// (`clear_value::tests::texel_bytes`) writes the pattern. Every format with a pattern but no
+/// clear color is one whose pattern holds a NaN, an extended-range code or a signed normalized
+/// code -1, which no clear color scales onto a whole code.
 #[test]
 fn fresh_patterns_clear_colors_write_their_texels() {
     let mut cleared = 0;
@@ -1339,15 +1341,15 @@ fn fresh_patterns_clear_colors_write_their_texels() {
                 let bytes = crate::clear_value::tests::texel_bytes(pf, color);
                 assert_eq!(bytes.as_deref(), Some(texel), "{pf:?}: {color:?}");
                 assert!(
-                    !crate::clear_value::rounds_apart(pf, color, false),
+                    !crate::clear_value::rounds_apart(pf, color),
                     "{pf:?}: {color:?}"
                 );
                 cleared += 1;
             }
             Some(FreshPattern::Color { texel, color: None }) => {
                 assert!(
-                    [2, 4, 8, 16].contains(&texel.len()),
-                    "{pf:?}: a NaN or extended-range pattern of {} bytes",
+                    [1, 2, 4, 8, 16].contains(&texel.len()),
+                    "{pf:?}: a NaN, extended-range or signed normalized pattern of {} bytes",
                     texel.len()
                 );
             }
@@ -1473,4 +1475,81 @@ fn a_multisample_heap_texture_apart_from_metal_s_tiles_is_announced_untiled() {
         // planes) lays the texture out as Metal does: nothing to announce.
         assert_eq!(own_heap_layout(&HeapLayout::Measured, 4, apart), None);
     }
+}
+
+/// Rows lie as Metal's tiles (`texture/heap.rs`'s `rows_lie_in_metal_tiles`, which decides whether
+/// a linear image takes the place of a shadow of a texture Metal keeps uncompressed) only where
+/// every element's byte is the same: a one-element level at any pitch, a one-row level, a level
+/// at most two elements wide with rows that far apart, and slices at Metal's chain stride; not a
+/// 64 x 64 or 4 x 4 level's rows, a two-wide level's rows further apart, slices elsewhere, or a
+/// subresource the layouts lack.
+#[test]
+fn rows_lie_as_metal_s_tiles_only_where_every_element_does() {
+    let part = |unit, ty, [w, h]: [u64; 2], slices| TiledPart {
+        aspect: None,
+        at: 0,
+        layout: TiledLayout::of(unit, Elements::Texels, ty, [w, h, 1], 1, slices).unwrap(),
+    };
+    let rows = |offset, row_pitch| ash::vk::SubresourceLayout {
+        offset,
+        size: 0,
+        row_pitch,
+        array_pitch: 0,
+        depth_pitch: 0,
+    };
+    for pitch in [8, 64, 256] {
+        assert!(rows_lie_in_metal_tiles(
+            &part(8, T::Type2D, [1, 1], 1),
+            &[rows(0, pitch)],
+            1
+        ));
+    }
+    assert!(rows_lie_in_metal_tiles(
+        &part(4, T::Type2D, [256, 1], 1),
+        &[rows(0, 1024)],
+        1
+    ));
+    assert!(rows_lie_in_metal_tiles(
+        &part(4, T::Type1D, [100, 1], 1),
+        &[rows(0, 400)],
+        1
+    ));
+    assert!(rows_lie_in_metal_tiles(
+        &part(4, T::Type2D, [2, 8], 1),
+        &[rows(0, 8)],
+        1
+    ));
+    assert!(!rows_lie_in_metal_tiles(
+        &part(4, T::Type2D, [2, 8], 1),
+        &[rows(0, 16)],
+        1
+    ));
+    assert!(!rows_lie_in_metal_tiles(
+        &part(4, T::Type2D, [64, 64], 1),
+        &[rows(0, 256)],
+        1
+    ));
+    assert!(!rows_lie_in_metal_tiles(
+        &part(8, T::Type2D, [4, 4], 1),
+        &[rows(0, 32)],
+        1
+    ));
+    assert!(!rows_lie_in_metal_tiles(
+        &part(8, T::Type2D, [4, 4], 1),
+        &[],
+        1
+    ));
+    let array = part(8, T::Type2DArray, [1, 1], 2);
+    let stride = array.layout.stride;
+    assert!(rows_lie_in_metal_tiles(
+        &array,
+        &[rows(0, 8), rows(stride, 8)],
+        2
+    ));
+    assert!(!rows_lie_in_metal_tiles(
+        &array,
+        &[rows(0, 8), rows(stride + 64, 8)],
+        2
+    ));
+    assert!(!rows_lie_in_metal_tiles(&array, &[rows(0, 8)], 2));
 }

@@ -14,8 +14,12 @@
 //! `Callee::UnknownIntrinsic` and the post-canonical check refuses them only if they survive
 //! function-constant specialization. The same holds for a known name whose immediate names an
 //! enumerator the model does not define. A known name whose declaration disagrees with its
-//! signature is [`IntrinsicError::SignatureMismatch`], and a non-constant immediate is
-//! [`IntrinsicError::ImmediateNotConstant`] (both malformed input). The `llvm.*` markers
+//! signature is [`IntrinsicError::SignatureMismatch`] (malformed input). A call whose immediate is
+//! not an integer constant in the function that makes it keeps its [`Template`]
+//! (`Callee::Unbound`): an internal function's parameter passed on to the intrinsic, as Metal's
+//! compiler leaves OpenCL C's `barrier(flags)`, is each call site's constant once inlining gives
+//! the parameter its argument, and the inliner binds the call there. An immediate still not a
+//! constant after inlining is [`IntrinsicError::ImmediateNotConstant`]. The `llvm.*` markers
 //! [`Dropped`] lists are dropped at decode.
 //!
 //! A [`Signature`]'s `Operand::Handle` parameters and [`Signature::ret_handle`] give the typed handle positions that
@@ -72,7 +76,7 @@ pub use sig::{HandleKind, ImageDim, ImageShape, Immediates, Operand, Signature};
 pub use simd::{Group, GroupOp, GroupScope, IsUniform, SimdgroupSize};
 pub use stage::Imageblock;
 pub use stage::{AbsentAccess, BoolReduce, Derivative, DerivativeOp, Fragment, FunctionConstant};
-pub use stage::{GlobalBuiltin, GlobalVar};
+pub use stage::{GlobalBuiltin, GlobalVar, WorkItem};
 pub use stage::{Interpolate, InterpolateAt};
 pub use sync::{BarrierName, MemFlags, Sync};
 #[cfg(test)]
@@ -117,6 +121,9 @@ pub enum AirIntrinsic {
     SimdgroupSize(SimdgroupSize),
     /// `air.get_<built-in>.<i16|i32>`: a kernel built-in a program-scope variable declares.
     GlobalBuiltin(GlobalBuiltin),
+    /// `air.get_global_offset.i32` and `air.get_work_dim.i32`: an OpenCL C work-item function no
+    /// Metal built-in answers.
+    WorkItem(WorkItem),
     /// A simdgroup-matrix operation: `air.simdgroup_matrix_{8x8,16x16x16}_*`.
     SimdMatrix(SimdMatrix),
     /// A function-constant query, resolved by canonicalization's specialization.
@@ -188,6 +195,7 @@ impl AirIntrinsic {
             .or_else(|| IsUniform::parse(rest).map(A::IsUniform))
             .or_else(|| SimdgroupSize::parse(rest).map(A::SimdgroupSize))
             .or_else(|| GlobalBuiltin::parse(rest).map(A::GlobalBuiltin))
+            .or_else(|| WorkItem::parse(rest).map(A::WorkItem))
             .or_else(|| SimdMatrix::parse(rest).map(A::SimdMatrix))
             .or_else(|| FunctionConstant::parse(rest).map(A::FunctionConstant))
             .or_else(|| Fragment::parse(rest).map(A::Fragment))
@@ -234,6 +242,7 @@ impl AirIntrinsic {
             AirIntrinsic::IsUniform(u) => u.signature(),
             AirIntrinsic::SimdgroupSize(s) => s.signature(),
             AirIntrinsic::GlobalBuiltin(g) => g.signature(),
+            AirIntrinsic::WorkItem(w) => w.signature(),
             AirIntrinsic::SimdMatrix(m) => m.signature(),
             AirIntrinsic::FunctionConstant(f) => f.signature(),
             AirIntrinsic::Fragment(f) => f.signature(),
@@ -444,6 +453,42 @@ pub fn classify(name: &[u8], sym: Sym, fn_ty: TypeId, types: &TypeTable) -> Opti
         }
     };
     Some(class)
+}
+
+impl DeclClass {
+    /// The template of an intrinsic in the closed set: `None` for a dropped marker, an unknown
+    /// name or a mismatched declaration.
+    pub fn template(self) -> Option<Template> {
+        match self {
+            DeclClass::Air(op) => Some(Template::Air(op)),
+            DeclClass::Llvm(op) => Some(Template::Llvm(op)),
+            DeclClass::Drop(_) | DeclClass::Unknown | DeclClass::Mismatch => None,
+        }
+    }
+}
+
+/// An intrinsic in the closed set before a call's immediates are read in: the template its
+/// declaration classifies as. A call whose immediate operand is not an integer constant in the
+/// function that makes it keeps its template (`Callee::Unbound`) until canonicalization reads
+/// the immediates where inlining gives them each call site's arguments ([`Template::bind`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Template {
+    /// An `air.*` intrinsic's template.
+    Air(AirIntrinsic),
+    /// An `llvm.*` intrinsic's template.
+    Llvm(LlvmIntrinsic),
+}
+
+impl Template {
+    /// Bind one call with `args` to an intrinsic of this template, as [`bind`] binds a call to
+    /// its declaration's class.
+    pub fn bind(self, args: &[Value], consts: &ConstTable) -> Result<Bound, IntrinsicError> {
+        let class = match self {
+            Template::Air(op) => DeclClass::Air(op),
+            Template::Llvm(op) => DeclClass::Llvm(op),
+        };
+        bind(class, args, consts)
+    }
 }
 
 /// A call's decoded callee, from its declaration's class and its arguments.

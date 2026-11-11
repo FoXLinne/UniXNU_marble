@@ -16,7 +16,8 @@
 //!   thread holds (`shards.rs`, the threads that hold none sharing one more), each on cache lines
 //!   of its own, and reads their sums: threads that record at once write apart, where one array
 //!   would take each of their commands' counts in turn. A device past the slots records with its
-//!   driver's commands, uncounted.
+//!   driver's commands, uncounted, and says so (`WorkCounts::commands_uncounted`), so that no
+//!   reading takes its empty counts for none recorded.
 
 mod thunks;
 
@@ -151,6 +152,24 @@ pub(crate) unsafe fn route(device: ash::Device) -> (ash::Device, Option<Slot>) {
     (routed, Some(slot))
 }
 
+/// Every slot no device holds, taken as a device takes one ([`route`]) and let go as each
+/// [`Slot`] drops: a device test's stand-in for devices holding them (`tests::recorder_slots`),
+/// so that it makes no more devices than the slots it needs, whatever number of devices a driver
+/// makes in one process.
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+pub(crate) fn take_free_slots() -> Vec<Slot> {
+    let free = (0..SLOTS).filter(|&index| {
+        TAKEN[index]
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+            .is_ok()
+    });
+    free.map(|index| {
+        thunks::clear_counts(index);
+        Slot { index }
+    })
+    .collect()
+}
+
 /// `real`, a device's command `command`, through `slot` where the device has one
 /// ([`Slot::route`]), else as it is.
 ///
@@ -163,6 +182,26 @@ pub(crate) unsafe fn through<F: Copy>(slot: Option<&Slot>, command: Command, rea
         Some(slot) => unsafe { slot.route(command, real) },
         None => real,
     }
+}
+
+/// `routed`, a device's command `command` as its routed functions hold it, as the device's driver
+/// gave it, where the device has `slot`: recorded through it, a command counts for no slot. Where
+/// the device has none, its functions are its driver's, and `routed` is.
+///
+/// # Safety
+///
+/// `routed` is the command of the device `slot` is of, of `command`'s signature, `F`'s.
+pub(crate) unsafe fn unrouted<F: Copy>(slot: Option<&Slot>, command: Command, routed: F) -> F {
+    assert_eq!(
+        std::mem::size_of::<F>(),
+        std::mem::size_of::<*const c_void>()
+    );
+    let real = slot.map_or(std::ptr::null(), |slot| thunks::real(slot.index, command));
+    if real.is_null() {
+        return routed;
+    }
+    // SAFETY: the driver's entry point of `command`, of `F`'s signature (the caller's).
+    unsafe { std::mem::transmute_copy::<*const c_void, F>(&real) }
 }
 
 /// The extension commands of `VK_EXT_mesh_shader` a draw records, routed (`render.rs`).

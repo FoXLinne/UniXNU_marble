@@ -1086,6 +1086,20 @@ pub enum RuntimeDriverDefect {
     /// (`metal2vulkan_runtime::Device::use_host_ram`), it binds it in the chunk's import, which
     /// the object then waits for, so that every object over a chunk's pages lies in one import.
     AliasedImportBlitsUnordered,
+    /// A render pass's color resolve into a 2D view of a 3D image (made
+    /// `VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT`, the view's layers depth planes of it) is
+    /// written where the view begins only at the image's first depth plane: RADV writes the first
+    /// plane whatever plane the view begins at, and NVIDIA's driver writes no plane where the view
+    /// begins at plane 1. Nothing is refused: the runtime resolves into a scratch image of the
+    /// pass's layers, copied into the planes the resolve belongs in after the pass.
+    VolumeResolveFirstPlane,
+    /// A command buffer submitted again as it was recorded, once its earlier submissions
+    /// completed, fails that submission with `VK_ERROR_DEVICE_LOST`, and the device is lost, once
+    /// a command buffer that came next after it in one of those submissions' `pCommandBuffers`
+    /// was freed and its command pool trimmed (`vkTrimCommandPool`). Nothing is refused: the
+    /// runtime frees command buffers without trimming their pools there, and the driver keeps
+    /// what it holds of them for the pools' later command buffers.
+    TrimmedCommandBufferFailsResubmission,
 }
 
 /// One device capability a refusal can name.
@@ -1833,6 +1847,20 @@ pub enum RuntimeInput {
     UniformVaryings,
 }
 
+/// How Metal answers a pipeline it refuses, where a [`DescriptorError`] carries it
+/// ([`DescriptorError::ColorAttachment`]): measured with plain Metal, no API validation layer, on
+/// an Apple M3 Max under macOS 27.0.1.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MetalAnswer {
+    /// The creation call answers nil and an `NSError` (code 3, in the GPU driver's error domain,
+    /// `AGXMetalG15X_M1` on the device measured), and the process goes on.
+    NilWithError,
+    /// Metal's descriptor validation asserts ("Render Pipeline Descriptor Validation") and the
+    /// process ends (`SIGABRT`). Also the answer of a case whose Metal answer is not measured.
+    EndsProcess,
+}
+
 /// The caller's descriptor or request is inconsistent.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1858,15 +1886,40 @@ pub enum DescriptorError {
     /// at: a set attribute names it and it has no layout, or it has a layout of a nonzero or
     /// dynamic stride and no set attribute names it.
     VertexLayout { layout: u32 },
-    /// A color attachment format without a fragment output, or of the wrong type class; one a
-    /// fragment output has fewer components for than its channels; one whose blend reads a
-    /// second output the function does not write, or writes without the first; or an integer
-    /// attachment 0 under alpha to coverage (Metal refuses each pipeline).
-    ColorAttachment { index: u32 },
+    /// Color attachment `index` and the pipeline's function or blend disagree, and Metal refuses
+    /// the pipeline. `metal` is how, as plain Metal answers each case on an Apple M3 Max under
+    /// macOS 27.0.1 (`metal2vulkan-conformance/probes/color_attachment_answers.m`):
+    ///
+    /// - [`MetalAnswer::NilWithError`]: an output, or a `[[color(n)]]` input, of another numeric
+    ///   class than the attachment's format ("output of type half4 is not compatible with a
+    ///   MTLPixelFormatRGBA8Uint color attachment."; "input of type uint4 is not compatible
+    ///   ..."); an output with fewer components than the format's channels ("fragment shader
+    ///   color output does not have enough components for the pixel format"); a blend of the
+    ///   second source whose function writes no second output, or no first ("Fragment shader
+    ///   does not write to render target color(0), index(1) that is required for blending"); and
+    ///   a `[[color(n)]]` input, or a tile function's imageblock member, of an attachment without
+    ///   a format ("Shaders reads from a color attachment whose pixel format is
+    ///   MTLPixelFormatInvalid"; "Invalid pixel format for render target 1").
+    /// - [`MetalAnswer::EndsProcess`]: blending enabled on a bfloat attachment (`R16Bfloat`,
+    ///   `RG16Bfloat`, `RGBA16Bfloat`), whatever the function writes and with no function ("the
+    ///   pixelformat MTLPixelFormatRGBA16Bfloat for this render target is not blendable"); and
+    ///   alpha to coverage over an integer attachment 0, rasterizing or not
+    ///   ("MTLRenderPipelineDescriptor with alphaToCoverageEnabled requires a float/unorm pixel
+    ///   format"). Also a `StageSource::Compiled` tile function compiled under another format of
+    ///   the attachment than the descriptor gives it: Metal compiles a tile function for its
+    ///   pipeline, so the case has no Metal answer to measure, and is answered as unmeasured.
+    ColorAttachment { index: u32, metal: MetalAnswer },
     /// A raw Metal enum value outside the known set.
     UnknownEnumValue { ty: &'static str, value: u32 },
     /// A pipeline descriptor without a required stage.
     MissingStage { stage: Stage },
+    /// A render pipeline that rasterizes whose vertex function writes no `[[position]]`: one
+    /// returning `void`, as every other vertex function Metal's compiler builds returns its
+    /// position. `newRenderPipelineStateWithDescriptor:` refuses it ("RasterizationEnabled is true
+    /// but the vertex shader's return type is void", on an M3 Max under macOS 27.0.1), and makes it
+    /// under `PrivateRenderState::open_gl_mode_enabled` as a state that rasterizes nothing, which
+    /// is the descriptor with rasterization disabled: the link refuses it whatever the mode.
+    RasterizedVoidVertex,
     /// A device description (or the Khronos profile JSON it was read from) is malformed or
     /// inconsistent.
     DeviceDescription { detail: String },
@@ -1927,6 +1980,11 @@ pub enum DescriptorError {
     /// pipeline's vertex or fragment depth. The stack would hold another number of frames than the
     /// pipeline's Metal stage has. Compile the stage under the pipeline's depth.
     MaxCallStackDepth { compiled: u32, given: u32 },
+    /// A `StageSource::Compiled` kernel compiled in another OpenCL mode than its compute
+    /// pipeline's (`RuntimeFact::OpenClMode`; `compiled` says whether it was compiled in OpenCL
+    /// mode): its arguments sit at other indices than the pipeline's Metal kernel takes them at.
+    /// Compile the kernel under the pipeline's `open_cl_mode_enabled`.
+    OpenClMode { compiled: bool },
     /// A tile function that declares threadgroup variables: Metal refuses its tile pipeline
     /// state ("Tile shaders do not support shader declared threadgroup variables", measured on an
     /// M4 and an M3 Max). Its threadgroup memory is its `[[threadgroup(n)]]` arguments alone.
@@ -1951,6 +2009,31 @@ pub enum DescriptorError {
     /// A mesh render pipeline descriptor's thread, threadgroup or payload field that Metal
     /// refuses ([`MeshPipelineProblem`]).
     MeshPipeline { problem: MeshPipelineProblem },
+    /// A compute pipeline descriptor's `maxTotalThreadsPerThreadgroup` that Metal refuses
+    /// ([`ComputePipelineProblem`]).
+    ComputePipeline { problem: ComputePipelineProblem },
+}
+
+/// A compute pipeline descriptor's `maxTotalThreadsPerThreadgroup` that Metal's creation fails
+/// over, an error of code 3, measured on an M3 Max under macOS 27.0.1
+/// (`compute_pipeline_limits.m`, plain and with `MTL_DEBUG_LAYER=1`, which agree). The limit is
+/// Metal's 1024, not a lower one of this device's (the compiled pipeline's
+/// [`ComputePipelineMetalInfo`](crate::pipeline::ComputePipelineMetalInfo) answers that one). A
+/// required threadgroup size beside the maximum is the runtime's check
+/// (`RequiredThreadsProblem`).
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ComputePipelineProblem {
+    /// The descriptor's maximum `max` above Metal's `limit`, for a kernel without a maximum of
+    /// its own: "Specified total max threads per threadgroup (1025) exceeds the maximum total
+    /// threads per threadgroup supported (1024)".
+    MaxThreadsOverLimit { max: u32, limit: u32 },
+    /// The descriptor's maximum `max` beside the kernel's own
+    /// `[[max_total_threads_per_threadgroup(n)]]`, `specified`, another number of threads, whether
+    /// or not `max` is above Metal's limit: "Kernel specified max total threads per threadgroup
+    /// (64) must match compute pipeline specified max total threads per threadgroup (32)". A
+    /// descriptor of the kernel's own maximum is made.
+    MaxThreadsDiffer { specified: u32, max: u32 },
 }
 
 /// A field of a mesh render pipeline descriptor (`MTLMeshRenderPipelineDescriptor`) that Metal
@@ -1969,10 +2052,12 @@ pub enum MeshPipelineProblem {
     /// with or without an object function.
     MaxThreadsOverLimit { stage: Stage, max: u32, limit: u32 },
     /// `stage`'s descriptor maximum `max` beside other `specified` threads: those of its
-    /// function's `[[max_total_threads_per_threadgroup(n)]]`, or of the mesh stage's required
-    /// size. The creation fails, code 3, "Kernel specified max total threads per threadgroup (64)
-    /// must match compute pipeline specified max total threads per threadgroup (32)". An object
-    /// stage's required size of fewer threads than its maximum is made.
+    /// function's `[[max_total_threads_per_threadgroup(n)]]`, or of the stage's required size.
+    /// The creation fails, code 3, "Kernel specified max total threads per threadgroup (64)
+    /// must match compute pipeline specified max total threads per threadgroup (32)". Metal
+    /// refuses a required size so on its first compile of the stage's function; it makes it
+    /// once it compiled that function under the same maximum and a required size of the
+    /// maximum's threads, which this refusal does not follow.
     MaxThreadsDiffer {
         stage: Stage,
         specified: u32,
@@ -2055,13 +2140,6 @@ pub enum BindError {
     InvalidDescriptor(DescriptorError),
     /// A render pipeline fetches a fixed-function vertex buffer that nothing is bound to.
     UnboundVertexBuffer { slot: SlotRef },
-    /// A vertex buffer layout with a per-bind stride (`MTLBufferLayoutStrideDynamic`) reads
-    /// inline bytes (`setVertexBytes`) bound at `MTLAttributeStrideStatic`
-    /// (`BoundBuffer::Bytes::attribute_stride` `Some(u32::MAX)`), which an M4 read as element 0
-    /// and zeros past it (Metal's debug layer stops the draw): not emulated.
-    /// Inline bytes and a buffer bound without a stride read at stride 0, as plain Metal's encoder
-    /// reads them, and at the stride bound with one.
-    MissingVertexStride { slot: SlotRef },
     /// The set-1 heap's elements (one per resident texture a handle can name, plus the null
     /// element) exceed the pipeline's heap capacity: the heap arrays' count, at most the handle
     /// table's reach.

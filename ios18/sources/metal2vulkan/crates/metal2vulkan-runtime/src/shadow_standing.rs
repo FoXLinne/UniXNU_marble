@@ -17,7 +17,9 @@
 //! - **What lets go.** A batch's tracked write of the truth's buffer or of the shadow's image (its
 //!   key, whatever the range) lets go of the standing: another shadow's copy back over the same
 //!   bytes, a blit's or a pass's write, a copy in that a command buffer's end did not leave
-//!   standing. So does any batch of a command buffer whose commands may reach memory no use names
+//!   standing. So does another API's write of an exported buffer's bytes, which the caller says
+//!   it made (`Buffer::external_write_done`, `exported_memory.rs`), counted as that buffer's
+//!   write as the call returns: the API's writes are the device's to read only from then on. So does any batch of a command buffer whose commands may reach memory no use names
 //!   (a root table, an execution resolved from records: `State::reaches_unnamed`), for every
 //!   shadow. Every other command's tracked uses are in its encoder's summary, whether or not the
 //!   device's logs of host pages collected them (`CommandBuffer::note_dirty`). A shadow over a
@@ -26,11 +28,25 @@
 //!   work may write.
 //! - **The copy in.** A command buffer's first copy in of such a shadow takes every texel, even
 //!   for a command that reads inside a rectangle (a pass's scissored draws), so the image holds
-//!   them all after it for the command buffer's later commands and for its end. Made before any
+//!   them all after it for the command buffer's later commands and for its end; but for a command
+//!   that writes the truth apart from the shadow (a pass whose color attachment renders the bytes
+//!   in place, read through the shadow by a draw of the pass, `texture/attached_reads.rs`), after
+//!   which the image holds the truth whole only where a later copy takes again what it wrote: that
+//!   copy moves what the command needs, as any other does. Made before any
 //!   command of its encoder wrote what it reads, it goes to its batch's submission
 //!   (`shadow::GatedCopyIn`), and copies nothing there where the shadow stands and no earlier
 //!   encoder of the command buffer wrote the truth or the image, and the command buffer reaches
 //!   nothing unnamed. Every other copy is as the module `shadow.rs` states.
+//! - **Why a copy moved its texels.** Each command buffer's first copy in of a shadow whose truth
+//!   only the runtime's commands write that moved its texels is counted by where it was decided
+//!   ([`Unskipped`]) and, for a shadow that may stand, by what its standing held then
+//!   ([`LetGo`], or none where it stood): `WorkCounts::shadow_texels_unskipped_*`. A copy
+//!   decided as its encoder recorded it reads the standing by the batches submitted so far.
+//! - **Why it never stood.** A shadow that may stand but never stood keeps what last kept a
+//!   command buffer's end from leaving it standing ([`Missed`]): an encoder that ended with its
+//!   image not holding the truth, a drop from what the command buffer carries to its later
+//!   encoders, an end that held it stale or in part, or an end that records no standing. Its
+//!   unskipped copies count by it (`WorkCounts::shadow_texels_never_stood_*`).
 
 use super::buffer::Buffer;
 use super::key_hash::KeyMap;
@@ -38,8 +54,79 @@ use super::resource::ResourceKey;
 use super::shadow::ShadowCopies;
 use super::tracker::Summary;
 use super::values::{HazardTrackingMode, StorageMode};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
+
+/// Where a command buffer's first copy in of a shadow whose truth only the runtime's commands
+/// write was decided, of one that moved its texels (the module docs).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Unskipped {
+    /// The shadow never stands: its buffer is untracked, a heap's or over the caller's memory, its
+    /// `VkBuffer` was handed out, or Metal drops its writes.
+    Unstanding,
+    /// Recorded between two render pass instances of a pass its encoder holds
+    /// (`render/inline_splits.rs`), which no batch's submission decides.
+    BetweenInstances,
+    /// A command of its encoder wrote what it reads before it.
+    AfterEncoderWrites,
+    /// Recorded whole as its encoder recorded it: inside a predicated loop's laying, or where no
+    /// new `VkCommandBuffer` could be made.
+    RecordedWhole,
+    /// At its batch's submission, where its command buffer may reach memory no use names, or an
+    /// earlier encoder of it wrote the truth or the image.
+    CommandBuffer,
+    /// At its batch's submission, where its standing was let go of ([`LetGo`]).
+    LetGo,
+}
+
+/// What let go of a shadow's standing, or left it none (the module docs).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum LetGo {
+    /// No command buffer's end left its image standing since it was made.
+    NeverStood,
+    /// A batch that may reach memory no use names was submitted since it stood.
+    UnnamedSince,
+    /// A batch submitted since it stood wrote its truth (or the host memory it joined): another
+    /// shadow's copy back or merge over the same bytes, a blit's, a pass's or a kernel's write; or
+    /// another API wrote an exported buffer's bytes, as its caller said
+    /// (`Buffer::external_write_done`).
+    TruthWritten,
+    /// A batch submitted since it stood wrote its image: a copy in its standing did not leave.
+    ImageWritten,
+}
+
+/// What last kept a command buffer's end from leaving a shadow standing, of one that never stood
+/// (the module docs).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub(super) enum Missed {
+    /// No command buffer's end met it: none ended with it among what its encoders carried.
+    Unmet,
+    /// An encoder that used it ended with its image not holding the truth: a command wrote the
+    /// truth another way after its copy in, another shadow's copy back or merge wrote the bytes,
+    /// or nothing copied it in.
+    NotCurrent,
+    /// What the command buffer carried to its later encoders let it go: a later command wrote its
+    /// truth another way, another shadow's copy back or merge wrote the bytes, work recorded apart
+    /// stood between, or an encoder started after a wait, a signal or a host step.
+    Dropped,
+    /// The command buffer's end carried its image holding part of the truth, or some of it stale.
+    Partial,
+    /// The command buffer's end records no standing: a failure, a rebind, memory no use names, or
+    /// a last batch without its last encoder.
+    End,
+}
+
+impl Missed {
+    /// Every one, in the order `WorkCounts::shadow_texels_never_stood_*` counts them.
+    pub(super) const ALL: [Missed; 5] = [
+        Missed::Unmet,
+        Missed::NotCurrent,
+        Missed::Dropped,
+        Missed::Partial,
+        Missed::End,
+    ];
+}
 
 /// The device's count of the writes that let go of its shadows' standings.
 #[derive(Default)]
@@ -69,6 +156,8 @@ struct Key {
 pub(super) struct StandingAcross {
     stood: Mutex<Option<Stood>>,
     handed_out: Option<Arc<AtomicBool>>,
+    /// What last kept a command buffer's end from leaving it standing ([`Missed`], as its `u8`).
+    missed: AtomicU8,
 }
 
 /// The writes counted against each of a shadow's keys, and the unnamed ones, as it stood.
@@ -91,6 +180,7 @@ impl StandingAcross {
         StandingAcross {
             stood: Mutex::new(None),
             handed_out: (private && own && tracked).then(|| buffer.handed_out()),
+            missed: AtomicU8::new(Missed::Unmet as u8),
         }
     }
 
@@ -102,6 +192,22 @@ impl StandingAcross {
     fn stood(&self) -> MutexGuard<'_, Option<Stood>> {
         self.stood.lock().unwrap_or_else(|p| p.into_inner())
     }
+
+    /// Note `why` a command buffer's end did not leave the shadow standing, where it may stand
+    /// (the module docs).
+    pub(super) fn missed(&self, why: Missed) {
+        if self.handed_out.is_some() {
+            self.missed.store(why as u8, Ordering::Relaxed);
+        }
+    }
+
+    /// What last kept a command buffer's end from leaving the shadow standing.
+    pub(super) fn last_missed(&self) -> Missed {
+        let at = self.missed.load(Ordering::Relaxed);
+        (Missed::ALL.into_iter())
+            .find(|why| *why as u8 == at)
+            .unwrap_or(Missed::Unmet)
+    }
 }
 
 impl Standings {
@@ -109,21 +215,38 @@ impl Standings {
         self.0.lock().unwrap_or_else(|p| p.into_inner())
     }
 
-    /// Whether `copies`' image holds every texel of its truth at a copy in submitted now: it
-    /// stood, and no write counted since let go of it (the module docs).
-    pub(super) fn stands(&self, copies: &ShadowCopies) -> bool {
-        if !copies.stands_across() {
-            return false;
-        }
+    /// What let go of the standing of `copies`, a shadow that may stand, by the writes counted
+    /// now, or left it none; `None` where it stands: its image holds every texel of its truth at a
+    /// copy in submitted now, as it stood, and no write counted since let go of it (the module
+    /// docs).
+    pub(super) fn let_go(&self, copies: &ShadowCopies) -> Option<LetGo> {
         let watched = self.watched();
         let stood = copies.standing.stood();
         let Some(stood) = stood.as_ref() else {
-            return false;
+            return Some(LetGo::NeverStood);
         };
-        stood.unnamed == watched.unnamed
-            && (stood.written.iter()).all(|(key, written)| {
-                (watched.keys.get(key)).is_some_and(|known| known.written == *written)
-            })
+        if stood.unnamed != watched.unnamed {
+            return Some(LetGo::UnnamedSince);
+        }
+        let written = (stood.written.iter()).find(|(key, written)| {
+            (watched.keys.get(key)).is_none_or(|known| known.written != *written)
+        });
+        written.map(|&(key, _)| match key == copies.shadow_key {
+            true => LetGo::ImageWritten,
+            false => LetGo::TruthWritten,
+        })
+    }
+
+    /// Another API wrote the bytes of the buffer `key` names, and the caller said so once those
+    /// writes completed (`Buffer::external_write_done`): every standing recorded against the key
+    /// lets go, as a batch's write of it does ([`LetGo::TruthWritten`]), so the next command
+    /// buffer's first copy in of each shadow over those bytes moves what the other API wrote. The
+    /// caller makes the call while no command of the runtime's that uses the buffer is in flight
+    /// (`exported_memory.rs`), so every batch submitted after it reads those writes.
+    pub(super) fn written_apart(&self, key: ResourceKey) {
+        if let Some(known) = self.watched().keys.get_mut(&key) {
+            known.written += 1;
+        }
     }
 
     /// A batch whose encoders' `summaries` these are was submitted: each key its tracked uses

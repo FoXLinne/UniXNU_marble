@@ -53,6 +53,9 @@ hardware offload handles ordinary traffic.
   fragments into aligned mbufs and submits batches of up to 64 frames.
 - skb clones and A-MSDU fragments share reference-counted DMA storage.
   Copy-on-write detaches writable storage. Six reuse classes cache up to 1 MiB.
+  A DMA allocation holds packet bytes only; its descriptor, reference counts
+  and fragment table are heap memory, so a board that maps the window
+  uncached pays that cost for packet bytes alone.
 - mac80211 supplies aggregation, reordering, FQ and AQL. IFF_NO_QUEUE
   enters its scheduler directly; bounded fallback queues retain busy frames.
 - NAPI rotates through contexts with a 256-packet/2 ms budget. Work dispatch
@@ -65,6 +68,15 @@ hardware offload handles ordinary traffic.
 `nw_wifi_buffer_stats_get` exposes allocation, copy, clone and reuse counters.
 `nw_wifi_link_state` reads cached PHY rate, MCS, stream count, bandwidth and RSSI.
 Both use existing driver state without firmware statistics requests.
+
+While joined, the worker logs the driver's receive counters every 30 s in
+which frames arrived: `wifi: rx reo ...` (frames per destination ring,
+exception and error pushes by code; `reo0` counts frames delivered without
+a reorder queue) and `wifi: rx rings ...` (free refill entries, waiting
+entries, frames dropped at the boundary). With `nw_board.diagnostics` set
+and at least 20000 frames in that time it also requests the firmware's
+receive statistics, at most once in two minutes, logged as
+`wifi: fw stats t<tag>: <word>=<value>`.
 
 ## sheng integration
 
@@ -102,7 +114,7 @@ and packages it. The consuming kernel build compiles the production manifest.
 | Exact production objects and XNU imports | `python3 tools/check-mainline-link.py --build-report FILE --kernel FILE` |
 
 Host fixtures use ASan/UBSan with simulated radio operations. The lifecycle
-check releases all 287 tracked allocations. The production audit covers
+check releases all 294 tracked allocations. The production audit covers
 125 objects and 13 XNU imports, with zero missing imports or duplicate definitions.
 Run checks affected by changes and retain their reports in `out/`.
 

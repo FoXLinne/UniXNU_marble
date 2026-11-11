@@ -1323,10 +1323,13 @@ r3d_common(struct tu_cmd_buffer *cmd, struct tu_cs *cs, enum r3d_type type,
          .cs_bindless = CHIP == A6XX ? 0x1f : 0xff,
          .gfx_bindless = CHIP == A6XX ? 0x1f : 0xff,));
 
-   with_crb (cs, 2 * 5 + 2 * 12) {
+   with_crb (cs, 2 * 5 + 2 * 12 + 2 * 3) {
       tu6_emit_xs_config<CHIP>(crb, { .vs = vs, .fs = fs });
       struct tu_pvtmem_config pvtmem = {};
       tu6_emit_xs<CHIP>(crb, cs->device, MESA_SHADER_VERTEX, vs, &pvtmem, vs_iova);
+      tu6_emit_xs<CHIP>(crb, cs->device, MESA_SHADER_TESS_CTRL, NULL, &pvtmem, 0);
+      tu6_emit_xs<CHIP>(crb, cs->device, MESA_SHADER_TESS_EVAL, NULL, &pvtmem, 0);
+      tu6_emit_xs<CHIP>(crb, cs->device, MESA_SHADER_GEOMETRY, NULL, &pvtmem, 0);
       tu6_emit_xs<CHIP>(crb, cs->device, MESA_SHADER_FRAGMENT, fs, &pvtmem, fs_iova);
    }
 
@@ -6241,6 +6244,12 @@ store_3d_blit(struct tu_cmd_buffer *cmd,
    const struct fdl6_view *src_fdl_view = tu_image_view_fdl_view(src_iview, separate_stencil);
    const struct fdl6_view *dst_fdl_view = tu_image_view_fdl_view(dst_iview, separate_stencil);
 
+   /* sync GMEM writes with CACHE. */
+   tu_emit_event_write<CHIP>(cmd, cs, FD_CACHE_INVALIDATE);
+
+   /* Wait for CACHE_INVALIDATE to land. Without a WFI, CP_REG_TO_SCRATCH may read stale values. */
+   tu_cs_emit_wfi(cs);
+
    /* RB_CNTL/GRAS_SC_BIN_CNTL are normally only set once and they
     * aren't set until we know whether we're HW binning or not, and we want to
     * avoid a dependence on that here to be able to store attachments before
@@ -6263,12 +6272,6 @@ store_3d_blit(struct tu_cmd_buffer *cmd,
    tu_note_gmem_side(cmd, src_iview, 0, src_iview->image->layout[0].tile_mode == TILE6_LINEAR, false,
                      src_fdl_view->is_mutable ? src_fdl_view->color_swap : WZYX);
    r3d_src_gmem<CHIP>(cmd, cs, src_fdl_view, src_format, dst_format, gmem_offset, cpp);
-
-   /* sync GMEM writes with CACHE. */
-   tu_emit_event_write<CHIP>(cmd, cs, FD_CACHE_INVALIDATE);
-
-   /* Wait for CACHE_INVALIDATE to land */
-   tu_cs_emit_wfi(cs);
 
    r3d_run(cmd, cs);
 

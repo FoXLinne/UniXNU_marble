@@ -23,6 +23,10 @@ volatile uint32_t marble_haptics_map_dump[32];
 void native_marble_haptics_start(void);
 void native_marble_haptics_stop(void);
 void native_marble_haptics_restore(void);
+void native_marble_haptics_runtime(void);
+void native_marble_haptics_runtime_stop(void);
+int native_marble_haptics_drive(unsigned);
+int native_marble_haptics_quiet(void);
 }
 
 namespace {
@@ -57,6 +61,8 @@ uint32_t spmiVersion;
 uint64_t frequency;
 volatile uint32_t running, stopping, restored;
 uint32_t lastError;
+unsigned mode;
+bool driveActive;
 
 // HAP520 board parameters.
 constexpr uint32_t vmaxMV = 1450, vmaxStepMV = 50;
@@ -271,6 +277,13 @@ void worker(void *, wait_result_t) {
     thread_set_thread_name(current_thread(), "marble-haptics");
     marble_haptics_stage = 1;
     if (!setup()) { __atomic_store_n(&running, 0, __ATOMIC_RELEASE); return; }
+    if (mode >= 2) {
+        marble_haptics_stage = 4;
+        native_marble_haptics_runtime();
+        __atomic_store_n(&running, 0, __ATOMIC_RELEASE);
+        thread_wakeup((event_t)&running);
+        return;
+    }
     marble_haptics_stage = 2;
     if (playOnce()) fail(5, lastError ? int(lastError) : kIOReturnIOError);
     else marble_haptics_stage = 3;
@@ -288,6 +301,7 @@ extern "C" void native_marble_haptics_start(void) {
     unsigned enabled = 1;
     PE_parse_boot_argn("marble-haptics", &enabled, sizeof(enabled));
     if (!enabled || running) return;
+    mode = enabled;
     __atomic_store_n(&stopping, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&restored, 0, __ATOMIC_RELEASE);
     running = 1;
@@ -299,7 +313,36 @@ extern "C" void native_marble_haptics_start(void) {
 extern "C" void native_marble_haptics_stop(void) {
     if (!running) return;
     __atomic_store_n(&stopping, 1, __ATOMIC_RELEASE);
+    native_marble_haptics_runtime_stop();
     for (unsigned tries = 0; tries < 20 && __atomic_load_n(&running, __ATOMIC_ACQUIRE); ++tries) IOSleep(10);
+}
+extern "C" int native_marble_haptics_drive(unsigned amplitude) {
+    if (!amplitude || amplitude > 255 || stopping) return kIOReturnBadArgument;
+    int result = 0;
+    if (!driveActive) {
+        result = configure();
+        if (!result) result = writeByte(cfg, 0x66, 0x07);
+        if (!result) result = boostVreg(true);
+        uint32_t status = 0;
+        if (!result && !waitBoostReady(&status)) result = kIOReturnNotReady;
+        note(45, status);
+    }
+    if (!result) result = writeByte(ptn, 0x26, uint8_t(amplitude));
+    if (!result && !driveActive) result = writeByte(cfg, 0x4c, 0x81);
+    if (!result) driveActive = true;
+    else {
+        writeByte(cfg, 0x4c, 0x01);
+        boostVreg(false);
+        driveActive = false;
+        note(47, uint32_t(result));
+    }
+    return result;
+}
+extern "C" int native_marble_haptics_quiet(void) {
+    int result = writeByte(cfg, 0x4c, 0x01);
+    int power = boostVreg(false);
+    driveActive = false;
+    return result ? result : power;
 }
 extern "C" void native_marble_haptics_restore(void) {
     if (!cfg.found && !ptn.found) return;

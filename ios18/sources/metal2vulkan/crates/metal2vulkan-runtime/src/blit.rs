@@ -10,16 +10,17 @@
 //! - **Fills.** `vkCmdFillBuffer` writes only whole 32-bit words at offsets that are multiples of
 //!   4, while Metal fills any byte range with one byte value: [`fill_pieces`] splits a fill into
 //!   the words and the at most 3 bytes before and after them, which are copied from 4 bytes of the
-//!   value ([`fill_word`]) in a small pattern buffer of the encoder. The words go as
-//!   `word_fill.rs` records them: `vkCmdFillBuffer`, or transfers on a driver measured to compile
-//!   its fill per command pool.
+//!   value ([`fill_word`]) in a small pattern buffer of the encoder. The words go as one
+//!   `vkCmdFillBuffer` (`word_fill.rs`).
 //! - **Heap shadows** (`shadow.rs`). A heap's texture held as a shadow of the heap's bytes (a
-//!   depth or stencil texture, or one of a heap over host pages, `texture/heap.rs`) is an image to
-//!   a blit: a command that uses its image copies it in from the bytes first where the encoder has
-//!   not, and what a command writes through it is copied back by `shadow.rs`'s rules, as the
-//!   encoder ends at the latest. A copy that writes every texel of a one-level, one-slice such
-//!   texture replaces them (`shadow::overwritten`): it takes no copy in and no keep. A blit writes
-//!   one destination, so none writes such a texture's bytes two ways.
+//!   depth or stencil texture, or one of a heap over host pages, `texture/heap.rs`), and a tiled
+//!   texture of more than one level over a buffer's bytes (`Buffer::new_tiled_texture`), is an
+//!   image to a blit: a command that uses its image copies it in from the bytes first where the
+//!   encoder has not, and what a command writes through it is copied back by `shadow.rs`'s rules,
+//!   as the encoder ends at the latest. A copy that writes every texel such a texture's bytes
+//!   hold (of a one-level, one-slice one, or a tiled one's first level) replaces them
+//!   (`shadow::overwritten`): it takes no copy in and no keep. A blit writes one destination, so
+//!   none writes such a texture's bytes two ways.
 
 use super::blit_fill::FillTiles;
 use super::buffer::Buffer;
@@ -183,6 +184,7 @@ impl CommandBuffer {
     /// `blitCommandEncoder`. Refused while another encoder of this command buffer is open,
     /// after one was abandoned, and after commit.
     pub fn blit_command_encoder(&self) -> Result<BlitCommandEncoder, Error> {
+        let _for = self.notices_for();
         let core = EncoderCore::open(self, "blit_command_encoder", EncoderKind::Blit, true)?;
         Ok(BlitCommandEncoder {
             core,
@@ -231,6 +233,7 @@ impl BlitCommandEncoder {
         call: impl FnOnce(&mut CallLog<BlitCall>) -> BlitCall,
         run: impl FnOnce(&mut Self) -> Result<T, Error>,
     ) -> Result<T, Error> {
+        let _for = self.core.notices_for();
         self.refuse_aborted()?;
         let at = match self.log.as_mut().filter(|log| !log.muted()) {
             Some(log) => {
@@ -341,11 +344,11 @@ impl BlitCommandEncoder {
         Ok(())
     }
 
-    /// Note `texture`, which a blit names: where it is a heap shadow, whose image the blit uses
-    /// (a texture over a buffer blits on its bytes, `blit_texture.rs`), its commands take its
-    /// copies.
+    /// Note `texture`, which a blit names: where it is a heap shadow or a tiled texture of more
+    /// than one level, whose image the blit uses (a texture over a buffer blits on its bytes,
+    /// `blit_texture.rs`, `Texture::blit_texels`), its commands take its copies.
     pub(super) fn see(&mut self, texture: &Texture) {
-        if texture.over_buffer() {
+        if texture.blit_texels().is_some() {
             return;
         }
         if let Some(copies) = texture.shadow() {
@@ -486,9 +489,9 @@ impl BlitCommandEncoder {
     /// `fillBuffer:range:value:`: every byte of `range` becomes `value`, for any range, as on
     /// Metal.
     ///
-    /// The range's whole words are filled as `word_fill.rs` records them (`vkCmdFillBuffer`, or
-    /// transfers on a driver that compiles its fill per command pool); the at most 3 bytes at each
-    /// end are copied from the encoder's pattern buffer (1 KiB, made at its first unaligned fill).
+    /// The range's whole words are filled as one `vkCmdFillBuffer` (`word_fill.rs`); the at most
+    /// 3 bytes at each end are copied from the encoder's pattern buffer (1 KiB, made at its first
+    /// unaligned fill).
     ///
     /// An empty range fills nothing, wherever it lies, and the encoder's other commands run, as
     /// plain Metal does (Metal's validation stops it).
@@ -614,8 +617,13 @@ impl BlitCommandEncoder {
                     ResourceRef::Buffer(buffer) => (buffer, 0..buffer.length()),
                     ResourceRef::Texture(texture) => match texture.buffer_texels() {
                         // Where the GPU or the CPU finds the texels (an IOSurface plane's two
-                        // layouts).
-                        Some(texels) => (&texels.buffer, texels.span()),
+                        // layouts), in the buffer: those past its length lie in the texture's
+                        // `Shared` tail, which takes no synchronization (`buffer_texture.rs`).
+                        Some(texels) => {
+                            let span = texels.span();
+                            let end = span.end.min(texels.buffer.length());
+                            (&texels.buffer, span.start.min(end)..end)
+                        }
                         None => return Ok(()),
                     },
                     ResourceRef::IndirectCommandBuffer(_) => return Ok(()),
@@ -642,6 +650,7 @@ impl BlitCommandEncoder {
 
     /// `endEncoding`.
     pub fn end_encoding(self) -> Result<(), Error> {
+        let _for = self.core.notices_for();
         // The core's shadows copy back what the blits wrote through heap shadows. The fill tiles
         // are their command buffer's, which holds them until it completes.
         let BlitCommandEncoder {

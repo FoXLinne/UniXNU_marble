@@ -31,7 +31,10 @@
 //!   buffer's (`Buffer::fill_first_from`). So do a sparse texture's image (its move; an emulated
 //!   one's zeros too) and its tile map's bytes, and the device's neutrals: a neutral image's move
 //!   and its clear ([`FirstMove::cleared`]: it may be multisampled, which no copy writes), and a
-//!   neutral texel buffer's fill (`neutral.rs`).
+//!   neutral texel buffer's fill (`neutral.rs`). An exportable buffer whose memory an external
+//!   agent wrote notes its acquire from that agent's reserved queue family
+//!   (`Buffer::external_write_done`, [`FirstFill::acquired`]), recorded in the barrier that leads
+//!   the fills.
 //! - **Who records it.** The device's next submission that may reach the resource, before any of
 //!   its commands: every batch of the scheduler, whose commands may reach every texture through
 //!   its resource ID and every buffer through its address, unnamed (`heap_sets.rs`), and every
@@ -102,9 +105,23 @@
 //!   ([`FirstMoves::internal_wait`]). Seen without it on RADV: a batch submitted with images in
 //!   `UNDEFINED` in its texture table, under the validation layer.
 //! - **Failure.** A submission that fails gives its work back, still to be done.
+//! - **A resource gone.** A buffer's fill and copies and an image's staged copies go as the
+//!   resource goes ([`FirstMoves::forget`]: a buffer's drop, an image's release), with the
+//!   staging buffer or host copy they hold, each holding the device: left for the next
+//!   submission, they would keep a device whose program let go of it alive for good, as no
+//!   submission comes.
 //! - **Out of reach of a submission.** A texture's `VkImage` handed out (`Texture::vk_image`)
-//!   rests in `GENERAL` as its contract says: handing it out does its work first, by an internal
-//!   submission waited for.
+//!   rests in `GENERAL` as its contract says: handing it out does its work first, by a
+//!   submission waited for, which makes the fills of the buffer an image in place lies in too.
+//!   So does a buffer's `VkBuffer` handed out (`Buffer::vk_buffer`) or its memory exported
+//!   (`Buffer::export_memory_fd`) where a fill waits on that `VkBuffer`
+//!   ([`FirstMoves::fills_wait`]): the caller's own work may write the bytes at once, and a fill
+//!   made after it would wipe them. Each takes its own work alone ([`FirstMoves::take_mine`]),
+//!   in its order, the rest waiting for the device's next submission, and waits for no other
+//!   work of the device's: its sources are the host's and its destinations new
+//!   (`Device::settle_mine`, on the staging queue for a buffer's fills where the device has
+//!   one). A texture in a heap's memory, the caller's or a sparse one, takes the device's work
+//!   as an internal submission does.
 
 use super::super::creation;
 use super::super::device::lock;
@@ -618,7 +635,8 @@ pub(super) const STAGED_COPIES: usize = 4096;
 
 /// A new buffer's fill: copies of the device's zeros onto `range` of `buffer`, or a fill of its
 /// words with zeros (`word_fill.rs`), or copies of the bytes a staging buffer holds, or a
-/// `Managed` buffer's upload from its host copy.
+/// `Managed` buffer's upload from its host copy; or an exportable buffer's acquire from the
+/// external agent that wrote its memory ([`FirstFill::acquired`]), which copies nothing.
 pub(crate) struct FirstFill {
     buffer: vk::Buffer,
     source: vk::Buffer,
@@ -630,6 +648,10 @@ pub(crate) struct FirstFill {
     /// What keeps the staging buffer `source` is, held until the submission that makes the fill
     /// completed; `None` where `source` is the device's zeros.
     staging: Option<Box<dyn Any + Send + Sync>>,
+    /// The queue families of an acquire of the whole `VkBuffer` (source, a family reserved for
+    /// external memory; target), recorded in the barrier before every fill, in place of copies
+    /// (none then).
+    acquire: Option<(u32, u32)>,
 }
 
 impl FirstFill {
@@ -651,18 +673,17 @@ impl FirstFill {
             copies,
             filled: None,
             staging: None,
+            acquire: None,
         }
     }
 
     /// The zeros of `range` of `buffer` on `device`: one `vkCmdFillBuffer` of its words on a
-    /// device without unified memory whose fills are `vkCmdFillBuffer`'s (`word_fill.rs`), where
-    /// the range's ends are multiples of 4; else copies of the device's zeros, made now if they
-    /// are not yet. A discrete GPU reads those host-visible zeros over the bus: on the RX 7900 XTX
-    /// (RADV) 512 KiB of them took 66 us to copy and 11 us more in the barrier after it, where a
-    /// fill of the same bytes took 0.7 us and 2.5 us. The copy stays where the device shares the
-    /// host's memory, whose zeros lie in the memory the GPU reads anyway (not measured there),
-    /// and where fills go as transfers (`DriverFact::FillCompiledPerCommandPool`), whose copies
-    /// within the buffer need `TRANSFER_SRC` usage that a neutral buffer lacks.
+    /// device without unified memory (`word_fill.rs`), where the range's ends are multiples of 4;
+    /// else copies of the device's zeros, made now if they are not yet. A discrete GPU reads those
+    /// host-visible zeros over the bus: on the RX 7900 XTX (RADV) 512 KiB of them took 66 us to
+    /// copy and 11 us more in the barrier after it, where a fill of the same bytes took 0.7 us and
+    /// 2.5 us. The copy stays where the device shares the host's memory, whose zeros lie in the
+    /// memory the GPU reads anyway (not measured there).
     fn zeros(
         device: &Device,
         moves: &FirstMoves,
@@ -671,13 +692,14 @@ impl FirstFill {
     ) -> Result<FirstFill, Error> {
         let words = range.start.is_multiple_of(4) && range.end.is_multiple_of(4);
         let discrete = !device.properties().has_unified_memory;
-        if words && discrete && !crate::word_fill::by_transfers(device) {
+        if words && discrete {
             return Ok(FirstFill {
                 buffer,
                 source: vk::Buffer::null(),
                 copies: Vec::new(),
                 filled: Some(range),
                 staging: None,
+                acquire: None,
             });
         }
         let zeros = moves.zeros(device, 0)?;
@@ -708,7 +730,38 @@ impl FirstFill {
             }],
             filled: None,
             staging: Some(staging),
+            acquire: None,
         }
+    }
+
+    /// The acquire of `buffer`, whole, from `source`, a queue family reserved for external memory
+    /// (`VK_QUEUE_FAMILY_EXTERNAL`, `VK_QUEUE_FAMILY_FOREIGN_EXT`), for `target`: the device's
+    /// queue family, or `VK_QUEUE_FAMILY_IGNORED` where its buffers are concurrent among several.
+    fn acquired(buffer: vk::Buffer, (source, target): (u32, u32)) -> FirstFill {
+        FirstFill {
+            buffer,
+            source: vk::Buffer::null(),
+            copies: Vec::new(),
+            filled: None,
+            staging: None,
+            acquire: Some((source, target)),
+        }
+    }
+
+    /// The barrier of its acquire, where it is one: no access of the device's before it (an
+    /// acquire's source access is ignored), every access after.
+    fn acquire_barrier(&self) -> Option<vk::BufferMemoryBarrier<'static>> {
+        let (source, target) = self.acquire?;
+        Some(
+            vk::BufferMemoryBarrier::default()
+                .src_access_mask(vk::AccessFlags::empty())
+                .dst_access_mask(vk::AccessFlags::MEMORY_READ | vk::AccessFlags::MEMORY_WRITE)
+                .src_queue_family_index(source)
+                .dst_queue_family_index(target)
+                .buffer(self.buffer)
+                .offset(0)
+                .size(vk::WHOLE_SIZE),
+        )
     }
 }
 
@@ -904,6 +957,26 @@ fn past_bound(waiting: &[Waiting]) -> bool {
     copies > STAGED_COPIES || bytes > STAGED_BYTES
 }
 
+/// The work a handle handed out settles ([`FirstMoves::take_mine`]): the fills whose destination
+/// is `buffer`, and the moves of and copies into the image at `image` (an `Image`'s address).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Mine {
+    pub(crate) buffer: Option<vk::Buffer>,
+    pub(crate) image: Option<*const ()>,
+}
+
+impl Mine {
+    /// Whether `entry` is its work.
+    fn names(self, entry: &Waiting) -> bool {
+        let image = |at: *const ()| self.image == Some(at);
+        match entry {
+            Waiting::Fill(_, fill) => self.buffer == Some(fill.buffer),
+            Waiting::Moves(weak) => image(weak.as_ptr().cast()),
+            Waiting::Texels(weak, _) => image(weak.as_ptr().cast()),
+        }
+    }
+}
+
 impl FirstMoves {
     /// The first moves of a device whose registrations wait for their place in the order where
     /// `ordered` ([`FirstMoves::ordered`]).
@@ -966,6 +1039,23 @@ impl FirstMoves {
         Ok(())
     }
 
+    /// The exportable buffer `keeper` waits for the acquire of its `VkBuffer` `buffer`, whole,
+    /// from `families`' source, a queue family reserved for external memory, for its target
+    /// (`FirstFill::acquired`): what an external agent wrote to its memory, which the caller
+    /// waited for, is the device's to read once a submission made it, before any of its commands
+    /// (`Buffer::external_write_done`). Its barrier leads the submission's fills, so the caller
+    /// settles the buffer's own fills first.
+    pub(crate) fn register_acquire(
+        &self,
+        keeper: Weak<dyn Filled>,
+        buffer: vk::Buffer,
+        families: (u32, u32),
+    ) {
+        let fill = FirstFill::acquired(buffer, families);
+        let _order = self.registration_place();
+        lock(&self.waiting).push(Waiting::Fill(keeper, fill));
+    }
+
     /// The buffer `keeper`, whose bytes the host cannot write, waits for the copy of `length`
     /// bytes of `source` (a buffer and its byte the copy starts at), which `staging` keeps, onto
     /// its `VkBuffer` `buffer` from byte `start`: after every fill with zeros waiting, its own
@@ -1007,7 +1097,15 @@ impl FirstMoves {
     /// The submission's place in the order is held until it was made or the work given back
     /// ([`Taken`]): every submission takes, whether or not anything waits.
     pub(crate) fn take(&self, named: impl Fn(ResourceKey) -> bool) -> Taken<'_> {
-        self.take_with(named, || None)
+        self.take_with(named, || None, |_| true)
+    }
+
+    /// As [`take`](Self::take), for a handle handed out (`Buffer::vk_buffer`,
+    /// `Buffer::export_memory_fd`, `Texture::vk_image`): only the work [`Mine`] names, in the order
+    /// it was registered, the rest left waiting for the device's next submission. A move of an
+    /// image bound to host pages is taken where `Mine` names its image, whatever its key.
+    pub(crate) fn take_mine(&self, mine: Mine) -> Taken<'_> {
+        self.take_with(|_| true, || None, |entry| mine.names(entry))
     }
 
     /// As [`take`](Self::take), for a submission whose commands may bind the heap sets (a
@@ -1019,7 +1117,7 @@ impl FirstMoves {
         named: impl Fn(ResourceKey) -> bool,
         hold: impl FnOnce() -> HeldSlots,
     ) -> Taken<'_> {
-        self.take_with(named, || (!self.ordered).then(hold))
+        self.take_with(named, || (!self.ordered).then(hold), |_| true)
     }
 
     /// The submissions' order, for a submission: taken, and the wait counted where another
@@ -1050,11 +1148,13 @@ impl FirstMoves {
         )
     }
 
-    /// As [`take`](Self::take), holding the slots `hold` gives once its place is taken.
+    /// As [`take`](Self::take), holding the slots `hold` gives once its place is taken, and
+    /// taking only the entries `wanted` says: the rest stay waiting, in their order.
     fn take_with(
         &self,
         named: impl Fn(ResourceKey) -> bool,
         hold: impl FnOnce() -> Option<HeldSlots>,
+        wanted: impl Fn(&Waiting) -> bool,
     ) -> Taken<'_> {
         let order = self.submission_place();
         let slots = hold();
@@ -1072,6 +1172,10 @@ impl FirstMoves {
             }
             let mut kept = Vec::new();
             for entry in waiting.drain(..) {
+                if !wanted(&entry) {
+                    kept.push(entry);
+                    continue;
+                }
                 match entry {
                     Waiting::Moves(weak) => {
                         let Some(fresh) = weak.upgrade() else {
@@ -1130,6 +1234,28 @@ impl FirstMoves {
         lock(&self.waiting).is_empty()
     }
 
+    /// Let go of the fills and copies that wait for what is at `keeper` (the address of what
+    /// [`register_bytes`](Self::register_bytes), [`register_fill`](Self::register_fill),
+    /// [`register_acquire`](Self::register_acquire) or [`register_texels`](Self::register_texels)
+    /// was given), as it goes: a gone resource's work is no submission's, and what that work
+    /// holds (a staging buffer, a host copy, each holding the device) goes with it, once the lock
+    /// is free. Left waiting, it would hold the device past the program's last handle until a
+    /// submission took it, and a device the program let go of makes none.
+    pub(crate) fn forget(&self, keeper: *const ()) {
+        let gone: Vec<Waiting> = {
+            let mut waiting = lock(&self.waiting);
+            let (gone, kept): (Vec<Waiting>, Vec<Waiting>) =
+                waiting.drain(..).partition(|entry| match entry {
+                    Waiting::Fill(weak, _) => weak.as_ptr().cast::<()>() == keeper,
+                    Waiting::Texels(weak, _) => weak.as_ptr().cast::<()>() == keeper,
+                    Waiting::Moves(_) => false,
+                });
+            waiting.extend(kept);
+            gone
+        };
+        drop(gone);
+    }
+
     /// Whether a host call's copy waits for the images of what is at `keeper` (the address of
     /// what [`register_texels`](Self::register_texels) was given). A decode alone waiting
     /// ([`TexelCopy::decode_only`]) is not: it writes the decoded twin, never the texels a copy
@@ -1139,6 +1265,15 @@ impl FirstMoves {
             matches!(entry, Waiting::Texels(weak, copy)
                 if weak.as_ptr().cast::<()>() == keeper && !copy.copies.is_empty())
         })
+    }
+
+    /// Whether first work waits on `buffer` (a `VkBuffer`): a new buffer's fill with zeros or
+    /// its staged bytes, or a `Managed` buffer's upload, which the device's next submission makes
+    /// before its commands, over whatever another writer wrote there meanwhile.
+    pub(crate) fn fills_wait(&self, buffer: vk::Buffer) -> bool {
+        lock(&self.waiting)
+            .iter()
+            .any(|entry| matches!(entry, Waiting::Fill(_, fill) if fill.buffer == buffer))
     }
 
     /// The points a submission on `VkQueue` `queue` waits for: of the last batch on each other
@@ -1571,10 +1706,16 @@ impl Taken<'_> {
             })
         };
         if !fills.is_empty() {
-            // SAFETY: the caller's contract.
+            let acquires: Vec<vk::BufferMemoryBarrier<'_>> = fills
+                .iter()
+                .filter_map(|fill| fill.acquire_barrier())
+                .collect();
+            // SAFETY: the caller's contract; each acquired buffer is live (held), and its acquire
+            // names the device's family for it (`Device::external_acquirer`).
             unsafe {
                 let flags = vk::DependencyFlags::empty();
-                device.cmd_pipeline_barrier(command_buffer, all, all, flags, &written(), &[], &[]);
+                let (memory, buffers) = (&written(), &acquires);
+                device.cmd_pipeline_barrier(command_buffer, all, all, flags, memory, buffers, &[]);
             }
             exit_guard::called(Call::CmdPipelineBarrier);
         }
@@ -1609,6 +1750,10 @@ impl Taken<'_> {
                 }
                 exit_guard::called(Call::CmdFillBuffer);
                 counts.new_buffer_zero_filled();
+                continue;
+            }
+            // An acquire copies nothing: its barrier led the fills.
+            if fill.copies.is_empty() {
                 continue;
             }
             // SAFETY: as above; every copy lies within its source, the device's zeros (live and

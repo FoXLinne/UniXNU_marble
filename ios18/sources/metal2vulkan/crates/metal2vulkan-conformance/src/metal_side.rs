@@ -44,8 +44,8 @@ use crate::indirect_commands::{
 };
 use crate::library_facts::{FunctionDescriptorSpec, LibraryFacts};
 use crate::mesh_descriptors::{
-    DescriptorSpec as MeshDescriptorSpec, MeshDescriptorFacts, SuppliedLists as MeshSuppliedLists,
-    AWAY as MESH_AWAY,
+    DescriptorLimits as MeshDescriptorLimits, DescriptorSpec as MeshDescriptorSpec,
+    MeshDescriptorFacts, SuppliedLists as MeshSuppliedLists, AWAY as MESH_AWAY,
 };
 use crate::pass_descriptors::{
     AttachmentFacts, Indices, Numbers, PassDescriptorFacts, PassSpec, Reads, Row, Shape,
@@ -56,6 +56,9 @@ use crate::pipeline_functions::{FunctionsDescriptorFacts, FunctionsDescriptorSpe
 use crate::pipeline_handlers::{
     BothPaths, Delivered, Form as PipelineForm, Handled, StateFacts,
     IMAGEBLOCK as HANDLER_IMAGEBLOCK, WAIT as HANDLER_WAIT,
+};
+use crate::pipeline_limits::{
+    floored, ComputeLimitsSpec, ComputeStateLimits, Creation, MeshLimitsSpec, MeshStateLimits,
 };
 use crate::pipeline_option_reflection::UnderOptions;
 use crate::pipeline_options::{OptionOutcome, FRAGMENT_STAGE, KERNEL_STAGE, VERTEX_STAGE};
@@ -1870,6 +1873,32 @@ fn state_mesh_descriptor(descriptor: &Retained<MTLMeshRenderPipelineDescriptor>)
         MESH_AWAY.stencil_format.as_raw() as usize
     ));
     descriptor.setSupportIndirectCommandBuffers(MESH_AWAY.support_indirect_command_buffers);
+    let limits = MESH_AWAY.limits;
+    descriptor.setMaxTotalThreadsPerObjectThreadgroup(
+        limits.max_total_threads_per_object_threadgroup as usize,
+    );
+    descriptor.setMaxTotalThreadsPerMeshThreadgroup(
+        limits.max_total_threads_per_mesh_threadgroup as usize,
+    );
+    descriptor.setObjectThreadgroupSizeIsMultipleOfThreadExecutionWidth(
+        limits.object_threadgroup_size_is_multiple_of_thread_execution_width,
+    );
+    descriptor.setMeshThreadgroupSizeIsMultipleOfThreadExecutionWidth(
+        limits.mesh_threadgroup_size_is_multiple_of_thread_execution_width,
+    );
+    descriptor.setPayloadMemoryLength(limits.payload_memory_length as usize);
+    descriptor
+        .setMaxTotalThreadgroupsPerMeshGrid(limits.max_total_threadgroups_per_mesh_grid as usize);
+    // SAFETY: the count is the stated table's own 2, and nothing of this family compiles the
+    // descriptor.
+    unsafe {
+        descriptor.setMaxVertexAmplificationCount(limits.max_vertex_amplification_count as usize)
+    };
+    descriptor.setRequiredThreadsPerObjectThreadgroup(size(
+        limits.required_threads_per_object_threadgroup,
+    ));
+    descriptor
+        .setRequiredThreadsPerMeshThreadgroup(size(limits.required_threads_per_mesh_threadgroup));
     let colors: Retained<MTLRenderPipelineColorAttachmentDescriptorArray> =
         descriptor.colorAttachments();
     for color in MESH_AWAY.colors {
@@ -1913,7 +1942,32 @@ fn read_mesh_descriptor(
         stencil_attachment_pixel_format: descriptor.stencilAttachmentPixelFormat().0 as u32,
         support_indirect_command_buffers: descriptor.supportIndirectCommandBuffers(),
         binary_archives: archives.map_or(0, |held| held.len() as u64),
+        limits: read_mesh_limits(descriptor),
         supplied: supplied.then(|| read_mesh_supplied(descriptor)),
+    }
+}
+
+/// A mesh descriptor's limit fields, as its getters answer them.
+fn read_mesh_limits(
+    descriptor: &Retained<MTLMeshRenderPipelineDescriptor>,
+) -> MeshDescriptorLimits {
+    let axes = |held: MTLSize| [held.width as u32, held.height as u32, held.depth as u32];
+    MeshDescriptorLimits {
+        max_total_threads_per_object_threadgroup: descriptor.maxTotalThreadsPerObjectThreadgroup()
+            as u32,
+        max_total_threads_per_mesh_threadgroup: descriptor.maxTotalThreadsPerMeshThreadgroup()
+            as u32,
+        object_threadgroup_size_is_multiple_of_thread_execution_width: descriptor
+            .objectThreadgroupSizeIsMultipleOfThreadExecutionWidth(),
+        mesh_threadgroup_size_is_multiple_of_thread_execution_width: descriptor
+            .meshThreadgroupSizeIsMultipleOfThreadExecutionWidth(),
+        payload_memory_length: descriptor.payloadMemoryLength() as u32,
+        max_total_threadgroups_per_mesh_grid: descriptor.maxTotalThreadgroupsPerMeshGrid() as u32,
+        max_vertex_amplification_count: descriptor.maxVertexAmplificationCount() as u32,
+        required_threads_per_object_threadgroup: axes(
+            descriptor.requiredThreadsPerObjectThreadgroup(),
+        ),
+        required_threads_per_mesh_threadgroup: axes(descriptor.requiredThreadsPerMeshThreadgroup()),
     }
 }
 
@@ -2186,6 +2240,7 @@ impl Side for MetalSide {
             // An Apple GPU keeps textures losslessly compressed; a Mac's Intel or AMD GPU, which
             // supports no Apple family, keeps none (the consumer's AMD 5300M and Intel 630).
             lossless_compression: self.device.supportsFamily(MTLGPUFamily::Apple1),
+            host: None,
         }
     }
 
@@ -3721,6 +3776,99 @@ impl Side for MetalSide {
             stages(&descriptor)?;
         }
         Ok(read_mesh_descriptor(&descriptor, !spec.shape.resets()))
+    }
+
+    fn mesh_pipeline_limits(
+        &mut self,
+        library: Handle,
+        spec: &MeshLimitsSpec<'_>,
+    ) -> Answer<Creation<MeshStateLimits>> {
+        let held: &Retained<ProtocolObject<dyn MTLLibrary>> = self
+            .libraries
+            .get(library.0 as usize)
+            .ok_or_else(|| Failure::named("NoSuchHandle", format!("library {}", library.0)))?;
+        let function = |entry: &str| {
+            held.newFunctionWithName(&NSString::from_str(entry))
+                .ok_or_else(|| Failure::named("NoSuchFunction", entry.to_owned()))
+        };
+        let descriptor = MTLMeshRenderPipelineDescriptor::new();
+        // SAFETY: each function is of this library, the descriptor is this call's own, and the
+        // amplification count is a case's own, one `mesh_pipeline_limits.m` measured Metal
+        // answering for rather than ending the process.
+        unsafe {
+            descriptor.setMeshFunction(Some(&*function(spec.mesh)?));
+            if let Some(object) = spec.object {
+                descriptor.setObjectFunction(Some(&*function(object)?));
+            }
+            descriptor.setMaxVertexAmplificationCount(spec.amplification as usize);
+        }
+        descriptor.setRasterizationEnabled(false);
+        descriptor.setMaxTotalThreadsPerObjectThreadgroup(spec.max_object as usize);
+        descriptor.setMaxTotalThreadsPerMeshThreadgroup(spec.max_mesh as usize);
+        descriptor.setMaxTotalThreadgroupsPerMeshGrid(spec.max_grid as usize);
+        descriptor.setPayloadMemoryLength(spec.payload as usize);
+        let made = self
+            .device
+            .newRenderPipelineStateWithMeshDescriptor_options_reflection_error(
+                &descriptor,
+                MTLPipelineOption::None,
+                None,
+            );
+        let Ok(state) = made else {
+            return Ok(Creation::refused());
+        };
+        // Declared, so the coverage derivation types the receiver.
+        let state: Retained<ProtocolObject<dyn MTLRenderPipelineState>> = state;
+        let axes = |held: MTLSize| [held.width as u64, held.height as u64, held.depth as u64];
+        let object = spec.object.is_some();
+        Ok(Creation::made(MeshStateLimits {
+            max_total_threads_per_object_threadgroup: object
+                .then(|| floored(state.maxTotalThreadsPerObjectThreadgroup() as u64)),
+            max_total_threads_per_mesh_threadgroup: floored(
+                state.maxTotalThreadsPerMeshThreadgroup() as u64,
+            ),
+            object_thread_execution_width: object
+                .then(|| state.objectThreadExecutionWidth() as u64),
+            mesh_thread_execution_width: state.meshThreadExecutionWidth() as u64,
+            max_total_threadgroups_per_mesh_grid: state.maxTotalThreadgroupsPerMeshGrid() as u64,
+            required_threads_per_object_threadgroup: axes(
+                state.requiredThreadsPerObjectThreadgroup(),
+            ),
+            required_threads_per_mesh_threadgroup: axes(state.requiredThreadsPerMeshThreadgroup()),
+            max_total_threads_per_threadgroup: state.maxTotalThreadsPerThreadgroup() as u64,
+        }))
+    }
+
+    fn compute_pipeline_limits(
+        &mut self,
+        library: Handle,
+        spec: &ComputeLimitsSpec<'_>,
+    ) -> Answer<Creation<ComputeStateLimits>> {
+        let held: &Retained<ProtocolObject<dyn MTLLibrary>> = self
+            .libraries
+            .get(library.0 as usize)
+            .ok_or_else(|| Failure::named("NoSuchHandle", format!("library {}", library.0)))?;
+        let function = held
+            .newFunctionWithName(&NSString::from_str(spec.entry))
+            .ok_or_else(|| Failure::named("NoSuchFunction", spec.entry.to_owned()))?;
+        let descriptor = MTLComputePipelineDescriptor::new();
+        descriptor.setComputeFunction(Some(&function));
+        descriptor.setMaxTotalThreadsPerThreadgroup(spec.max_total_threads as usize);
+        let made = self
+            .device
+            .newComputePipelineStateWithDescriptor_options_reflection_error(
+                &descriptor,
+                MTLPipelineOption::None,
+                None,
+            );
+        let Ok(state) = made else {
+            return Ok(Creation::refused());
+        };
+        // Declared, so the coverage derivation types the receiver.
+        let state: Retained<ProtocolObject<dyn MTLComputePipelineState>> = state;
+        Ok(Creation::made(ComputeStateLimits {
+            max_total_threads_per_threadgroup: floored(state.maxTotalThreadsPerThreadgroup() as u64),
+        }))
     }
 
     fn pass_descriptor_facts(&mut self, spec: &PassSpec) -> Answer<PassDescriptorFacts> {
@@ -7140,6 +7288,7 @@ fn sparse_texture_descriptor(spec: &SparseTextureSpec) -> Retained<MTLTextureDes
     };
     descriptor.setUsage(usage);
     descriptor.setStorageMode(MTLStorageMode::Private);
+    descriptor.setAllowGPUOptimizedContents(spec.gpu_optimized);
     descriptor
 }
 
@@ -7997,9 +8146,8 @@ impl MetalSide {
                     .setPixelFormat(MTLPixelFormat(format.as_raw() as usize));
             }
         }
-        if let Some(limit) = spec.max_total_threads_per_threadgroup {
-            descriptor.setMaxTotalThreadsPerThreadgroup(limit as usize);
-        }
+        descriptor
+            .setMaxTotalThreadsPerThreadgroup(spec.max_total_threads_per_threadgroup as usize);
         descriptor.setThreadgroupSizeMatchesTileSize(spec.threadgroup_size_matches_tile_size);
         Ok(descriptor)
     }
@@ -9212,6 +9360,44 @@ impl MetalSide {
                         *control_point_index_offset as usize,
                         *instances as usize,
                         *base_instance as usize,
+                    );
+                }
+            }
+            RenderStep::VertexBufferWithStride {
+                buffer,
+                offset,
+                stride,
+                index,
+            } => {
+                let held = self.held(*buffer)?;
+                // SAFETY: the buffer is this side's own and the encoder outlives the call; the
+                // stride is a number Metal reads, and what a draw fetches at it is the case's
+                // measurement.
+                unsafe {
+                    encoder.setVertexBuffer_offset_attributeStride_atIndex(
+                        Some(held),
+                        *offset as usize,
+                        *stride as usize,
+                        *index as usize,
+                    );
+                }
+            }
+            RenderStep::VertexBytesWithStride {
+                bytes,
+                stride,
+                index,
+            } => {
+                let pointer =
+                    std::ptr::NonNull::new(bytes.as_ptr().cast::<std::ffi::c_void>().cast_mut())
+                        .ok_or_else(|| Failure::named("NoBytes", "an empty inline binding"))?;
+                // SAFETY: `bytes` lives for the call, which copies them; the stride is a number
+                // Metal reads, and what a draw fetches at it is the case's measurement.
+                unsafe {
+                    encoder.setVertexBytes_length_attributeStride_atIndex(
+                        pointer,
+                        bytes.len(),
+                        *stride as usize,
+                        *index as usize,
                     );
                 }
             }

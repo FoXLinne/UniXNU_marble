@@ -70,7 +70,16 @@ impl Device {
         placement: AddressPlacement,
         length: u64,
     ) -> Result<AddressPool, Error> {
-        let address = lock(&self.shared().addresses).reserve_pool(placement, length)?;
+        self.at_serving(|device| device.reserve_address_pool_now(placement, length))
+    }
+
+    /// [`Device::reserve_address_pool`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn reserve_address_pool_now(
+        &self,
+        placement: AddressPlacement,
+        length: u64,
+    ) -> Result<AddressPool, Error> {
+        let address = (self.address_space_for(placement)).reserve_pool(placement, length)?;
         Ok(AddressPool {
             device: self.clone(),
             address,

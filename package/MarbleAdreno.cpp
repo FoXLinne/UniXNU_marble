@@ -536,9 +536,9 @@ class CommandProcessor {
     int publishService() {
         NativeAdrenoVm *vm = NativeAdrenoGpuContextVm();
         native_adreno_dram_read32=dramWord;
-        // Cacheable system BOs use the GPU's board-qualified coherent mapping.
+        // Match the shared driver's write-combined policy for GPU-owned BOs.
         native_adreno_wc_enabled=1;
-        native_adreno_owned_coherent=1;
+        native_adreno_owned_coherent=0;
         coherenceProbe(vm);
         openCpAperture();
         IOReturn status = submit.attach(vm, &ring);

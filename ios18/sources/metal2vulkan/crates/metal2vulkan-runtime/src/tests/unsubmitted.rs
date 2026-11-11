@@ -6,18 +6,19 @@
 //! (`Completion::turn_owed`, `WorkCounts::completion_turns_where_taken`). One that signals an
 //! event is submitted as before. Behind a batch the scheduler holds in its group
 //! (`command_buffer/group.rs`), it goes in the group's submission instead, as any batch behind a
-//! group held does.
+//! group held does. The thread that took it makes that turn before it runs a submission handler,
+//! so a handler of another queue's command buffer may wait for its completion.
 //!
 //! Device tests: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
 //! `m2v_cpu_icd`), on the kind of device the cfg selects.
 
-use crate::command_buffer::merges_submissions;
+use crate::tests::SETTLE;
 use crate::{
     CommandBuffer, CommandBufferStatus, Device, DeviceKind, DeviceOptions, EventRef,
     ResourceOptions,
 };
 use metal2vulkan::device::{CompletionPolicy, DevicePolicy};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 
 /// The command buffers of each kind.
 const ROUNDS: u64 = 40;
@@ -152,9 +153,9 @@ fn an_empty_command_buffer_completes_with_no_submission() {
 /// macOS 27.0.1: its GPU times 65 to 135 us after the fill's `GPUEndTime`).
 ///
 /// Under `CompletionPolicy::Exact`, so on every driver, the empty command buffer is taken with no
-/// submission in each round. Under the default, on a driver whose batches group
-/// (`DriverFact::SubmissionsWithoutSignalsMerge`: lavapipe), the scheduler may hold the fill in its
-/// group as it finds the empty one ready behind it, which then goes in the group's one
+/// submission in each round. Under the default, on a device whose batches group (its check found
+/// its submissions merge, `submit_check.rs`: lavapipe among them), the scheduler may hold the fill
+/// in its group as it finds the empty one ready behind it, which then goes in the group's one
 /// submission with the fill: either way it makes no submission of its own.
 #[test]
 fn an_empty_command_buffer_completes_behind_its_queue_s_earlier_work() {
@@ -166,8 +167,11 @@ fn an_empty_command_buffer_completes_behind_its_queue_s_earlier_work() {
 /// [`an_empty_command_buffer_completes_behind_its_queue_s_earlier_work`] under `completion`.
 fn completes_behind(completion: CompletionPolicy) {
     let device = device_with(completion);
-    let groups = completion == CompletionPolicy::Grouped
-        && merges_submissions(&device.properties().driver_facts);
+    assert!(
+        device.settle_submit_checks(SETTLE),
+        "the submission checks never answered"
+    );
+    let groups = completion == CompletionPolicy::Grouped && device.submissions_merge();
     let queue = device.new_command_queue().unwrap();
     let target = device.new_buffer(FILL, ResourceOptions::private()).unwrap();
     // Whether the fill was still running when the empty command buffer was committed, in some
@@ -244,6 +248,91 @@ fn completes_behind(completion: CompletionPolicy) {
     assert!(
         behind,
         "{completion:?}: the fill always completed before the empty command buffer's commit"
+    );
+}
+
+/// An empty command buffer completes while a submission handler of another queue's command
+/// buffer, taken in the same pass of the scheduler's thread, waits for its completed handler: the
+/// thread makes the completion turn the empty one left it, its queue idle, before it runs the
+/// pass's submission handlers (`scheduler/mod.rs`, `round`), as Metal delivers a command buffer's
+/// completion to another queue's handler that waits for it
+/// (`CommandBuffer::add_submission_handler`). `opener`, whose own submission handler holds that
+/// thread until both are committed, puts the two in one pass.
+#[test]
+fn an_empty_command_buffer_completes_while_another_queue_s_submission_handler_waits_for_it() {
+    for completion in [CompletionPolicy::Exact, CompletionPolicy::Grouped] {
+        completes_past_a_handler(completion);
+    }
+}
+
+/// [`an_empty_command_buffer_completes_while_another_queue_s_submission_handler_waits_for_it`]
+/// under `completion`.
+fn completes_past_a_handler(completion: CompletionPolicy) {
+    let device = device_with(completion);
+    let (first, second) = (
+        device.new_command_queue().unwrap(),
+        device.new_command_queue().unwrap(),
+    );
+    // The device's first work done and every queue idle, so the empty command buffer is taken
+    // behind no work in flight.
+    for queue in [&first, &second] {
+        let idle = queue.command_buffer().unwrap();
+        idle.commit().unwrap();
+        idle.wait_until_completed().unwrap();
+    }
+    let before = device.work_counts();
+    let opener = second.command_buffer().unwrap();
+    let (opened, open) = mpsc::channel::<()>();
+    let (release, released) = mpsc::channel::<()>();
+    opener
+        .add_submission_handler(Box::new(move |_: &CommandBuffer| {
+            opened.send(()).unwrap();
+            released.recv_timeout(SETTLE).unwrap();
+        }))
+        .unwrap();
+    opener.commit().unwrap();
+    open.recv_timeout(SETTLE)
+        .expect("the opener's submission handler ran");
+    let empty = first.command_buffer().unwrap();
+    let (ran, empty_ran) = mpsc::channel::<()>();
+    empty
+        .add_completed_handler(Box::new(move |_: &CommandBuffer| {
+            // The receiver is gone where the handler below stopped waiting.
+            let _ = ran.send(());
+        }))
+        .unwrap();
+    empty.commit().unwrap();
+    let holding = second.command_buffer().unwrap();
+    let (sender, receiver) = mpsc::channel();
+    holding
+        .add_submission_handler(Box::new(move |_: &CommandBuffer| {
+            sender.send(empty_ran.recv_timeout(SETTLE)).unwrap();
+        }))
+        .unwrap();
+    holding.commit().unwrap();
+    release.send(()).unwrap();
+    let waited = receiver
+        .recv_timeout(2 * SETTLE)
+        .expect("the holding command buffer's submission handler ran");
+    assert_eq!(
+        waited,
+        Ok(()),
+        "{completion:?}: the empty command buffer's completed handler never reached the other \
+         queue's submission handler waiting for it"
+    );
+    for command_buffer in [&opener, &empty, &holding] {
+        command_buffer.wait_until_completed().unwrap();
+        assert_eq!(command_buffer.status(), CommandBufferStatus::Completed);
+    }
+    let after = device.work_counts();
+    let unsubmitted = after.command_buffers_unsubmitted - before.command_buffers_unsubmitted;
+    println!(
+        "{completion:?}: unsubmitted {unsubmitted}, turns where taken {}",
+        after.completion_turns_where_taken - before.completion_turns_where_taken
+    );
+    assert_eq!(
+        unsubmitted, 3,
+        "{completion:?}: the three empty command buffers were not all taken with no submission"
     );
 }
 

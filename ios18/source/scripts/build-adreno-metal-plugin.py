@@ -28,6 +28,8 @@ if OUT.exists():
     shutil.rmtree(OUT)
 bundle.mkdir(parents=True)
 sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
+shutil.copyfile(Path(sdk) / 'System/Library/Frameworks/CoreImage.framework/Headers/CIKernelMetalLib.h',
+                bundle / 'CIKernelMetalLib.h')
 base = ['xcrun', 'clang', '-target', 'arm64e-apple-ios27.0' if IOS27 else 'arm64-apple-ios17.0', '-isysroot', sdk, '-O2', '-g', '-Wall', '-Wextra', '-Werror',
         '-fstack-protector-strong']
 source_hash = hashlib.sha256()

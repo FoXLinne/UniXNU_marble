@@ -17,8 +17,10 @@
 //!   completed and answers `false`, detaching nothing; a heap's answers `false` at once. A later
 //!   submission of a command buffer, behind an event wait, holds nothing until it is submitted: a
 //!   detach while it waits detaches at once, whatever the command buffer's earlier submissions
-//!   held, which keep their pages until they complete. A lost device ends the wait
-//!   (`Err(DeviceLost)`). The wait holds no lock of the runtime's: a completion turn lets each
+//!   held, which keep their pages until they complete. A lost device ends the wait: where the
+//!   device recovers from the loss, refused as made before the recovery
+//!   (`NotImplemented(MadeBeforeRecovery)`, `device/line.rs`), else `Err(DeviceLost)`. The wait
+//!   holds no lock of the runtime's: a completion turn lets each
 //!   submission's hold go without one.
 //! - **A detach in a completed handler is a race on Metal, whose deterministic side is `true`.**
 //!   Metal releases what a command buffer used as it processes the completion, and that release
@@ -62,6 +64,13 @@
 //!   names it fails as one naming the buffer does. A texture being made over the bytes refuses
 //!   the detach (`NotImplemented(DetachTextures)`), and no texture is made over detached bytes
 //!   yet.
+//! - **Tiled textures** (`Buffer::new_tiled_texture`, more than one level): the image of its own
+//!   that holds every level presents no stand-in. The detach loads its first level with the
+//!   bytes' texels as they are then, before anything changes (`Texture::keep_first_level`), so
+//!   while they are detached an unnamed read and `get_bytes` read their last texels there, where
+//!   a texture over the bytes alone reads zeros, and its other levels keep their texels, as a
+//!   Mac's texture's own memory does. Its first level copies the bytes in again at its first use
+//!   once they lie in pages.
 //! - **Attaching again.** `rebind_bytes_no_copy` gives a detached buffer or heap pages again.
 
 use super::buffer::{Buffer, Detached, HostCell, Lying};
@@ -71,7 +80,7 @@ use super::error::{invalid, Error, Problem, RuntimeGap};
 use super::heap::Heap;
 use super::rebind::{RebindProblem, StaleTexture, Unexact};
 use super::resource::ObjectId;
-use super::texture::stand_in::TextureImages;
+use super::texture::stand_in::{keep_first_levels, TextureImages};
 use super::Device;
 use std::any::Any;
 use std::sync::atomic::Ordering;
@@ -160,7 +169,7 @@ impl Device {
         heap: Option<&Heap>,
     ) -> Result<bool, Error> {
         if self.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.lost_refusal());
         }
         let shared = self.shared();
         // The render encoders' calls and ends that their calls left to the device's lowering
@@ -181,6 +190,11 @@ impl Device {
         let Lying::In(from) = cell.lying() else {
             return Ok(true);
         };
+        // A tiled texture over the bytes keeps its own image while they are detached: its first
+        // level takes their texels now, which it holds meanwhile (`Texture::keep_first_level`).
+        // Read with no lock of the cell's held.
+        let keeping = cell.settled().map(|textures| textures.keeping());
+        keep_first_levels(keeping.unwrap_or_default())?;
         // No texture is being made over the bytes while this is held, and those over them
         // present stand-ins once they are detached, each made now, before anything changes.
         let no_textures = || Error::NotImplemented(RuntimeGap::DetachTextures);
@@ -199,8 +213,10 @@ impl Device {
         let gone = images.present_stand_ins(stand_ins);
         let texels = cell.texels();
         // Pages a submitted command buffer made resident stay Metal's textures' unnamed reads;
-        // and a stand-in's sink holds what unnamed writes left.
-        let stale = textures.textures().flat_map(|noted| {
+        // and a stand-in's sink holds what unnamed writes left. A texture whose image keeps its
+        // own texels presents no stand-in.
+        let presenting = textures.textures().filter(|noted| !noted.keeps());
+        let stale = presenting.flat_map(|noted| {
             let pages = resident.then_some(Unexact::StalePages);
             let sink = noted.sink().then_some(Unexact::StorageSink);
             let (texture, id) = (noted.texture(), noted.id);
@@ -242,7 +258,9 @@ impl Device {
                     pages.park(gone);
                     super::heap_sets::retire(self, Box::new(Arc::clone(pages)));
                 }
-                Lying::Detached(_) => super::heap_sets::retire(self, Box::new(gone)),
+                Lying::Detached(_) | Lying::Gone(_) => {
+                    super::heap_sets::retire(self, Box::new(gone))
+                }
             }
         }
         // The old pages go now where no command buffer holds them, their import freed; their

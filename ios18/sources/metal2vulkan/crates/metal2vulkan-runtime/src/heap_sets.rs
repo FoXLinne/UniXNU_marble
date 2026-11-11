@@ -19,8 +19,17 @@
 //!   the neutral sampler, the null function table: zeros in the table's buffer). Element `i` of
 //!   each image array holds the texture at ID `i` as the array's class takes it
 //!   (`bind::heap_element`: its view where it fits the class, else the neutral), written as the
-//!   texture takes the slot ([`place`]), for each set that lives then, and by a set made later
-//!   for each texture that lives then. A batch holds those writes from its first work's take
+//!   texture takes the slot ([`place`]), for each set that lives then; a set made later copies
+//!   each image array's elements from a live set's array of the same class and descriptor type,
+//!   which holds every texture as it would, in runs of the IDs textures are placed at, and takes
+//!   no texture (`WorkCounts::heap_arrays_copied`): what the source's writes announced (a
+//!   texture it cannot view, one past its count) was announced as they were made, and the copy
+//!   announces only an ID past its own count. It writes an array of a class no live set holds
+//!   for each texture that lives then. A new set's layout and pool are made with no lock held,
+//!   and so is that walk of the live textures, in parts each taken inside a passing hold of its
+//!   own ([`Walk`]): a texture made meanwhile is placed in the sets that live then, and the set,
+//!   placed after, writes the textures placed since its walk found them and forgets those gone
+//!   since ([`heap_set`]). A batch holds those writes from its first work's take
 //!   until its submission was made ([`hold`]): one asked meanwhile is made then, before the next
 //!   submission takes its first work, so no texture registered after the take, whose move is
 //!   not the batch's, is in its sets or table in `UNDEFINED` (`texture/first_move.rs`), and its
@@ -97,8 +106,11 @@
 //!   [`SamplerWord`], else `{id, 0, 0}`, the neutral. A kind ([`SamplerTableKind`]) maps only the
 //!   states whose elements its layouts' sampler arrays hold, and cubic states only where each of
 //!   the command's stages with a sampler table tests the states it reaches for a cubic filter
-//!   (`RuntimeFact::CubicArgumentSampler`): another is the neutral there, announced. So is a
-//!   state at an ID in neither window. An entry is written after the state's elements, and
+//!   (`RuntimeFact::CubicArgumentSampler`): another is the neutral there, announced while a
+//!   variant whose commands bind a table of the kind lives, from its first command
+//!   ([`TableBinder`]), as the state is made or as that command binds it. The device keeps a
+//!   table after the last such variant went, and a state made then is announced against it by
+//!   none. So is a state at an ID in neither window, announced as it is made. An entry is written after the state's elements, and
 //!   cleared before they go, so a command reading it meanwhile reads the state or the neutral.
 //! - **Release.** A heap set goes with the last variant of its layout and the last command buffer
 //!   that bound it, what its elements name (the sampler states' samplers, which no command holds)
@@ -114,6 +126,7 @@ use super::memory::{Memory, MemoryClass, Placement};
 use super::pipeline::{set_needs, VariantObjects};
 use super::release;
 use super::resource::ResourceKey;
+use super::resource_ids::PassingHold;
 use super::sampler::{SamplerShared, SamplerState};
 use super::texture::{Texture, TextureShared, TwinRead};
 use super::tracker::{Access, Use};
@@ -125,14 +138,15 @@ use metal2vulkan::bind::{
 };
 use metal2vulkan::error::BindError;
 use metal2vulkan::metal::sampler::{OpaqueBlackBorder, SamplerUse, SamplerWord};
+use metal2vulkan::metal::PixelFormat;
 use metal2vulkan::pipeline::{
     BindingSource, DescriptorSetLayout, HandleClass, ImageAccess, ImageHandleClass, PipelineLayout,
     RuntimeDependency, RuntimeFact, SampledType, Stage, SyntheticBinding,
 };
 use std::any::Any;
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 
 /// The heap's set number.
@@ -169,6 +183,8 @@ pub(super) struct DeviceHeaps {
     /// The live heap sets by layout, so the variants of one layout share one.
     by_layout: HashMap<DescriptorSetLayout, (u64, Weak<HeapSet>)>,
     next_set: u64,
+    /// The texture slots written into the table and the sets so far ([`Placed::written`]).
+    slot_writes: u64,
     /// Gone textures' images, which wait for the command buffers submitted before they went.
     retirement: Retirement<Keeper>,
     /// What a rebind or a detach replaced ([`retire`]), which waits for the command buffers
@@ -189,6 +205,27 @@ pub(super) struct DeviceHeaps {
     /// The sampler tables, by what they map ([`SamplerTableKind`]), each made at the first
     /// command that binds one of its kind.
     sampler_tables: BTreeMap<SamplerTableKind, Table>,
+    /// By kind, how many variants' commands may bind a sampler table of it ([`TableBinder`]):
+    /// a state a kind leaves out is announced while one may, not for a table the device keeps
+    /// after every variant that bound it went.
+    sampler_binders: BTreeMap<SamplerTableKind, Arc<AtomicUsize>>,
+    /// The IDs whose slots a cubic state holds (`sampler_slots`), which a kind that does not map
+    /// cubic states leaves out.
+    cubic_slots: BTreeSet<u64>,
+    /// Run by a batch's thread once it wrote the deferred slots and let go of the lock, while
+    /// it still holds their holders (`HeldSlots`): where a program's release may leave it the
+    /// last (`tests/passing_holds.rs`).
+    #[cfg(test)]
+    pub(crate) pause_holding: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// Run by a thread making a new heap set once it made the set's layout and version and walked
+    /// the live textures, with no lock held, before it places the set
+    /// (`tests/heap_set_unlocked.rs`).
+    #[cfg(test)]
+    pub(crate) pause_making: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// Run by a thread walking the live textures for a new heap set once it walked a part of
+    /// them, with no lock or passing hold held ([`Walk::walk`], `tests/heap_set_walk.rs`).
+    #[cfg(test)]
+    pub(crate) pause_walking: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 /// A sampler state every heap set holds at its element: its hold serial and the state (not
@@ -233,6 +270,65 @@ impl SamplerTableKind {
     fn holds(self, slot: &SamplerSlot) -> bool {
         slot.element < u64::from(self.capacity) && (self.cubic || !slot.cubic)
     }
+
+    /// Note that the table leaves out sampler ID `id`, whose slot `slot` holds (not
+    /// [`holds`](Self::holds)): a cubic state, or one past its capacity.
+    fn left_out(self, id: u64, slot: &SamplerSlot, notes: &mut Notes) {
+        match slot.element < u64::from(self.capacity) {
+            true => notes.sampler_cubic(id),
+            false => notes.sampler_past(id, u64::from(self.capacity)),
+        }
+    }
+}
+
+/// A variant's share in the device's sampler tables of the kind its layout binds
+/// ([`SamplerTableKind`]), from its first command until its objects go (`VariantObjects`): while
+/// one lives, a sampler state made that the kind leaves out is announced, as a command of the
+/// variant may read it through an argument buffer. A table the device keeps after the last
+/// binder of its kind went announces none: nothing binds it then, and the first command of a
+/// variant that binds it again announces what it leaves out ([`DeviceHeaps::bind_kind`]).
+pub(crate) struct TableBinder(Arc<AtomicUsize>);
+
+impl TableBinder {
+    /// The binder of the variant of `layout`, of a pipeline stating `dependencies`, of
+    /// `device`, at its first command: `None` for a layout without a sampler table.
+    pub(crate) fn of(
+        device: &Device,
+        layout: &PipelineLayout,
+        dependencies: &[RuntimeDependency],
+    ) -> Option<TableBinder> {
+        let kind = SamplerTableAt::of(layout, dependencies)?.kind;
+        let mut notes = Notes::default();
+        let binder = lock(&device.shared().heaps).bind_kind(kind, &mut notes);
+        notes.announce(device);
+        Some(binder)
+    }
+}
+
+impl Drop for TableBinder {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+/// A variant's first command binding the sampler table of `capacity` elements that maps cubic
+/// states where `cubic` (`tests/sampler_table_binders.rs`): the device's table of the kind made,
+/// its binder taken ([`DeviceHeaps::bind_kind`]) and its notes announced.
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+pub(crate) fn bind_kind_for_tests(
+    device: &Device,
+    capacity: u32,
+    cubic: bool,
+) -> Result<TableBinder, Error> {
+    let kind = SamplerTableKind { capacity, cubic };
+    let mut notes = Notes::default();
+    let binder = {
+        let mut heaps = lock(&device.shared().heaps);
+        heaps.sampler_table(device, kind)?;
+        heaps.bind_kind(kind, &mut notes)
+    };
+    notes.announce(device);
+    Ok(binder)
 }
 
 /// A texture the table and the heap sets hold: its slot's generation and hold serial when it
@@ -241,6 +337,9 @@ impl SamplerTableKind {
 struct Placed {
     generation: u64,
     serial: u64,
+    /// The device's slot writes when it was written ([`DeviceHeaps::slot_writes`]): a new set
+    /// whose walk found it at that write holds it as it is ([`Walk`]).
+    written: u64,
     flags: u32,
     /// The key of the buffer whose bytes its images and texel views lie in
     /// (`Texture::bytes_key`), whose rebind or detach writes its elements again ([`renew_over`]).
@@ -506,24 +605,30 @@ impl DeviceHeaps {
         }
         self.unplace(device, id);
         for entry in self.sets.values_mut() {
-            let placed = texture_writes(device, &entry.images, id, &texture, notes)?;
+            let placed = texture_writes(device, &mut entry.images, id, &texture, notes)?;
             entry.write(device, placed.writes)?;
-            entry.shadow(id, &texture, placed.shadow);
-            if let Some(read) = entry.twin(id, placed.twin) {
-                notes.twin_placed = Some(read);
-            }
-            if let Some(read) = entry.raw(id, placed.raw) {
-                notes.raw_placed = Some(read);
+            // A decoded twin's or a raw view a command that bound the set may yet read through
+            // the texture's ID.
+            let noted = placed.twin.is_some() || placed.raw.is_some();
+            if noted && entry.pending_read() {
+                if let Some(read) = placed.twin {
+                    notes.twin_placed = Some(read);
+                }
+                if let Some(read) = placed.raw {
+                    notes.raw_placed = Some(read);
+                }
             }
         }
         if let Some(table) = &self.table {
             table.put(id, id, id as u32, flags);
         }
+        self.slot_writes += 1;
         self.textures.insert(
             id,
             Placed {
                 generation,
                 serial,
+                written: self.slot_writes,
                 flags,
                 bytes,
                 texture: weak,
@@ -552,9 +657,9 @@ impl DeviceHeaps {
     fn clear(&mut self, device: &Device, id: u64) -> Result<(), Error> {
         self.unplace(device, id);
         for entry in self.sets.values_mut() {
-            entry.shadows.remove(&id);
-            entry.twins.remove(&id);
-            entry.raws.remove(&id);
+            for array in &mut entry.images {
+                array.forget(id);
+            }
         }
         if let Some(table) = &self.table {
             table.put(id, id, 0, 0);
@@ -587,100 +692,71 @@ impl DeviceHeaps {
         Ok(())
     }
 
-    /// A new heap set of `layout`, holding every live texture and sampler state. The states it
-    /// upgrades go to `held_samplers`, to drop once the lock is free.
-    fn made_set(
+    /// `entry`, a new heap set of `layout`, placed among the sets, holding every live texture and
+    /// sampler state: each image array that walked the live textures with no lock held ([`Walk`])
+    /// written for each texture placed since its walk found it, with what it noted of a texture
+    /// gone since forgotten; each other copied from a live set's array of its class
+    /// ([`copy_arrays`](Self::copy_arrays)), else written for each live texture. The textures and
+    /// states it upgrades go to `held` and `held_samplers`, to let go of once the lock is free,
+    /// inside `passing`, the passing hold it takes before its first upgrade, where it upgrades any
+    /// (`resource_ids.rs`).
+    fn made_set<'d>(
         &mut self,
-        device: &Device,
+        device: &'d Device,
         layout: &DescriptorSetLayout,
+        (mut entry, walk): (SetEntry, &Walk),
         (held, held_samplers): (&mut Vec<Texture>, &mut Vec<SamplerState>),
-        notes: &mut Notes,
+        (notes, passing): (&mut Notes, &mut Option<PassingHold<'d>>),
     ) -> Result<Arc<HeapSet>, Error> {
-        let needs = set_needs(layout)?;
-        let raw_layout = Arc::new(RawLayout::create(device, layout)?);
-        let key = self.next_set;
-        // The one version every command binds, where the device lets a pending one's set be
-        // written; else each command buffer makes its own ([`bind`]).
-        let shared = match unused_while_pending(device) {
-            true => Some(Arc::new(SetVersion::allocate(
-                device,
-                &raw_layout,
-                &needs,
-                key,
-            )?)),
-            false => None,
-        };
-        let null_words = self.table(device)?.null_words();
-        let mut images = Vec::new();
-        let mut samplers = Vec::new();
-        let mut neutrals = Vec::new();
-        for binding in &layout.bindings {
-            let ty: vk::DescriptorType = binding.ty.into();
-            let info = match binding.source {
-                BindingSource::Heap(HandleClass::Image(class)) => {
-                    let neutral = NeutralResource::for_image(&class)
-                        .ok_or_else(|| internal("a heap array of a class without a neutral"))?;
-                    let neutral = device.neutral_view(neutral)?;
-                    images.push(ImageArray {
-                        binding: binding.binding,
-                        class,
-                        ty,
-                        count: binding.count,
-                        neutral,
-                    });
-                    image_info(neutral)
-                }
-                BindingSource::Heap(class @ HandleClass::Sampler { compare, .. }) => {
-                    let neutral = device.neutral_sampler(compare)?;
-                    let use_ = class
-                        .sampler_use()
-                        .ok_or_else(|| internal("a sampler class without a use"))?;
-                    samplers.push(SamplerArray {
-                        binding: binding.binding,
-                        use_,
-                        count: binding.count,
-                        neutral,
-                    });
-                    sampler_info(neutral)
-                }
-                BindingSource::Heap(HandleClass::FunctionTable) => Info::Buffer(null_words),
-                _ => return Err(internal("a heap set binding of no heap array")),
-            };
-            neutrals.push(HeapWrite {
-                binding: binding.binding,
-                element: 0,
-                ty,
-                info,
-                keeper: None,
-            });
-        }
-        let mut entry = SetEntry {
-            key,
-            layout: layout.clone(),
-            raw_layout,
-            needs,
-            images,
-            samplers,
-            shared,
-            open: Vec::new(),
-            written: BTreeMap::new(),
-            shadows: BTreeMap::new(),
-            twins: BTreeMap::new(),
-            raws: BTreeMap::new(),
-        };
-        entry.write(device, neutrals)?;
+        let copied = self.copy_arrays(device, &mut entry, &walk.arrays, notes)?;
+        // An array that neither walked nor copied takes every live texture; one that walked,
+        // those placed since its walk found them.
+        let unwalked = (walk.arrays.iter().zip(&copied)).any(|(&walks, &copied)| !walks && !copied);
+        let walked = walk.arrays.contains(&true);
         let mut writes = Vec::new();
         for (&id, placed) in &self.textures {
-            if let Some(texture) = Texture::upgrade(&placed.texture) {
-                held.push(texture.clone());
-                let placed = texture_writes(device, &entry.images, id, &texture, notes)?;
-                writes.extend(placed.writes);
-                entry.shadow(id, &texture, placed.shadow);
-                // A new set no command bound yet: its first binding announces.
-                entry.twin(id, placed.twin);
-                entry.raw(id, placed.raw);
-                notes.placed(&texture, true);
+            let found = walk.found(id, placed.written);
+            if !unwalked && !(walked && !found) {
+                continue;
             }
+            if passing.is_none() {
+                *passing = Some(device.passing_hold());
+            }
+            let Some(texture) = Texture::upgrade(&placed.texture) else {
+                continue;
+            };
+            held.push(texture.clone());
+            let takes = (entry.images.iter_mut().zip(walk.arrays.iter().zip(&copied)))
+                .filter(|(_, (&walks, &copied))| !copied && !(walks && found))
+                .map(|(array, _)| array);
+            // A new set no command bound yet: its first binding announces what its arrays
+            // note.
+            let placed = texture_writes(device, takes, id, &texture, notes)?;
+            writes.extend(placed.writes);
+            notes.placed(&texture, true);
+        }
+        // A texture the walk found that went since: as `clear` leaves it in a live set.
+        let SetEntry {
+            images, written, ..
+        } = &mut entry;
+        for &(id, _, _) in &walk.textures {
+            if self.textures.contains_key(&id) {
+                continue;
+            }
+            for (array, _) in images
+                .iter_mut()
+                .zip(&walk.arrays)
+                .filter(|(_, &walks)| walks)
+            {
+                array.forget(id);
+                if let Ok(element) = u32::try_from(id) {
+                    written.remove(&(array.binding, element));
+                }
+            }
+        }
+        // The sampler arrays take every live state.
+        if passing.is_none() && !self.sampler_states.is_empty() {
+            *passing = Some(device.passing_hold());
         }
         for placed in self.sampler_states.values() {
             if let Some(state) = SamplerState::upgrade(&placed.state) {
@@ -689,7 +765,7 @@ impl DeviceHeaps {
             }
         }
         entry.write(device, writes)?;
-        self.next_set += 1;
+        let key = entry.key;
         let set = Arc::new(HeapSet {
             device: device.clone(),
             key,
@@ -699,6 +775,157 @@ impl DeviceHeaps {
             .insert(layout.clone(), (key, Arc::downgrade(&set)));
         Ok(set)
     }
+}
+
+impl DeviceHeaps {
+    /// The live heap set of `layout`, if one is.
+    fn live_set(&self, layout: &DescriptorSetLayout) -> Option<Arc<HeapSet>> {
+        (self.by_layout.get(layout)).and_then(|(_, set)| set.upgrade())
+    }
+
+    /// Give `entry`, a new set, each of its image arrays' elements but those `walked` picks (which
+    /// walked the live textures, [`Walk`]) from a live set's array that holds every texture as it
+    /// does ([`ImageArray::holds_as`]), with what that array notes of them: copied
+    /// (`vkUpdateDescriptorSets`' copies, or a command buffer's own versions' writes where the
+    /// device has no one version) in runs of the IDs textures are placed at, the others read at no
+    /// element (the table maps them to element 0). No texture is taken. Whether each array took
+    /// them: one walked, or of a class no live set holds, takes none.
+    fn copy_arrays(
+        &self,
+        device: &Device,
+        entry: &mut SetEntry,
+        walked: &[bool],
+        notes: &mut Notes,
+    ) -> Result<Vec<bool>, Error> {
+        let runs = placed_runs(self.textures.keys().copied());
+        let end = runs.last().map_or(0, |run| run.end);
+        let mut copies = Vec::new();
+        let mut copied = Vec::with_capacity(entry.images.len());
+        for (array, &walks) in entry.images.iter_mut().zip(walked) {
+            let reach = end.min(u64::from(array.count));
+            let source = (!walks).then(|| self.source(array, reach)).flatten();
+            let Some((source, from)) = source else {
+                copied.push(false);
+                continue;
+            };
+            match (&entry.shared, &source.shared) {
+                (Some(version), Some(source_version)) => {
+                    let within = runs.iter().filter(|run| run.start < reach);
+                    copies.extend(within.map(|run| {
+                        // Below `reach`, at most the array's count: a `u32`.
+                        let (start, end) = (run.start as u32, run.end.min(reach) as u32);
+                        vk::CopyDescriptorSet::default()
+                            .src_set(source_version.set)
+                            .src_binding(from.binding)
+                            .src_array_element(start)
+                            .dst_set(version.set)
+                            .dst_binding(array.binding)
+                            .dst_array_element(start)
+                            .descriptor_count(end - start)
+                    }));
+                }
+                (None, None) => {
+                    // Below `reach`, at most the array's count: a `u32`.
+                    let elements = (from.binding, 1)..(from.binding, (reach as u32).max(1));
+                    let taken = source
+                        .written
+                        .range(elements)
+                        .map(|(&(_, element), written)| {
+                            let taken = Written {
+                                ty: written.ty,
+                                info: written.info,
+                                keeper: None,
+                            };
+                            ((array.binding, element), taken)
+                        });
+                    entry.written.extend(taken);
+                }
+                _ => {
+                    return Err(internal(
+                        "heap sets of one device with and without one version",
+                    ))
+                }
+            }
+            array.notes_from(from, reach);
+            if let Some((&id, _)) = self.textures.range(u64::from(array.count)..).next() {
+                notes.past = Some((id, array.count));
+            }
+            device.shared().counts.heap_array_copied();
+            copied.push(true);
+        }
+        if !copies.is_empty() {
+            // SAFETY: the new set's one version, which no command binds yet, and live sets' one
+            // versions, read (a copy's source needs no external synchronization, and every write
+            // into them is made under the `heaps` lock held here): each element copied holds a
+            // placed texture as the new array's class takes it, its image (and so its view) kept
+            // until the texture went, which clears its slot under this lock first.
+            unsafe { device.shared().vk().update_descriptor_sets(&[], &copies) };
+        }
+        Ok(copied)
+    }
+}
+
+impl DeviceHeaps {
+    /// A live set's array that holds every texture as `array` does, holding the elements below
+    /// `reach` ([`ImageArray::holds_as`]), with its set.
+    fn source(&self, array: &ImageArray, reach: u64) -> Option<(&SetEntry, &ImageArray)> {
+        self.sets.values().find_map(|source| {
+            let from = source
+                .images
+                .iter()
+                .find(|from| array.holds_as(from, reach))?;
+            Some((source, from))
+        })
+    }
+
+    /// What `entry`, a new set, walks of the live textures with no lock held (the module docs):
+    /// its image arrays of a class no live set holds, the textures placed now, and, where it
+    /// walks any, the tickets that keep what goes meanwhile until the set is placed.
+    fn walk(&mut self, entry: &SetEntry) -> Walk {
+        let end = self.textures.keys().next_back().map_or(0, |&id| id + 1);
+        let arrays: Vec<bool> = (entry.images.iter())
+            .map(|array| {
+                self.source(array, end.min(u64::from(array.count)))
+                    .is_none()
+            })
+            .collect();
+        let textures: Vec<(u64, u64, Weak<TextureShared>)> = match arrays.contains(&true) {
+            true => (self.textures.iter())
+                .map(|(&id, placed)| (id, placed.written, placed.texture.clone()))
+                .collect(),
+            false => Vec::new(),
+        };
+        let tickets =
+            (!textures.is_empty()).then(|| (self.retirement.take(), self.replaced.take()));
+        Walk {
+            arrays,
+            textures,
+            tickets,
+        }
+    }
+
+    /// Give back `walk`'s tickets: what no ticket out waits for any more, to drop once the lock
+    /// is free.
+    fn give_back(&mut self, walk: &Walk) -> Vec<Keeper> {
+        let Some((retired, replaced)) = walk.tickets else {
+            return Vec::new();
+        };
+        let mut freed = self.retirement.give(retired);
+        freed.extend(self.replaced.give(replaced));
+        freed
+    }
+}
+
+/// The runs of consecutive IDs of `ids`, ascending.
+fn placed_runs(ids: impl IntoIterator<Item = u64>) -> Vec<std::ops::Range<u64>> {
+    let mut runs: Vec<std::ops::Range<u64>> = Vec::new();
+    for id in ids {
+        match runs.last_mut() {
+            Some(run) if run.end == id => run.end += 1,
+            _ => runs.push(id..id + 1),
+        }
+    }
+    runs
 }
 
 impl DeviceHeaps {
@@ -758,8 +985,13 @@ impl DeviceHeaps {
             Some(slot) => {
                 self.put_sampler(id, Some(&slot), notes);
                 self.sampler_slots.insert(id, slot);
+                match slot.cubic {
+                    true => self.cubic_slots.insert(id),
+                    false => self.cubic_slots.remove(&id),
+                };
             }
             None => {
+                self.cubic_slots.remove(&id);
                 if self.sampler_slots.remove(&id).is_some() {
                     self.put_sampler(id, None, notes);
                 }
@@ -784,13 +1016,44 @@ impl DeviceHeaps {
         for (kind, table) in &self.sampler_tables {
             let (element, word) = kind.entry(slot);
             table.put(at, id, element, word);
-            if let Some(slot) = slot.filter(|slot| !kind.holds(slot)) {
-                match slot.element < u64::from(kind.capacity) {
-                    true => notes.sampler_cubic(id),
-                    false => notes.sampler_past(id, u64::from(kind.capacity)),
-                }
+        }
+        // A kind that leaves the state out, while a variant's commands may bind its table.
+        let Some(slot) = slot else {
+            return;
+        };
+        for (&kind, binders) in &self.sampler_binders {
+            if binders.load(Ordering::Acquire) > 0 && !kind.holds(slot) {
+                kind.left_out(id, slot, notes);
             }
         }
+    }
+
+    /// A variant whose commands bind sampler tables of `kind` now may: counted while the
+    /// returned binder lives, and the first live state the kind leaves out noted, as its commands
+    /// may read it from now on ([`TableBinder`]).
+    fn bind_kind(&mut self, kind: SamplerTableKind, notes: &mut Notes) -> TableBinder {
+        let binders = Arc::clone(self.sampler_binders.entry(kind).or_default());
+        binders.fetch_add(1, Ordering::AcqRel);
+        let capacity = u64::from(kind.capacity);
+        let cubic = self.cubic_slots.iter().find_map(|id| {
+            let slot = self.sampler_slots.get(id)?;
+            (!kind.holds(slot)).then_some((*id, slot))
+        });
+        // A state past the kind's capacity, where the highest element placed is.
+        let past = || {
+            let highest = self
+                .sampler_states
+                .last_key_value()
+                .map(|(&element, _)| element);
+            highest.filter(|&element| element >= capacity)?;
+            (self.sampler_slots.iter())
+                .find(|(_, slot)| slot.element >= capacity)
+                .map(|(&id, slot)| (id, slot))
+        };
+        if let Some((id, slot)) = cubic.or_else(past) {
+            kind.left_out(id, slot, notes);
+        }
+        TableBinder(binders)
     }
 
     /// Start the sampler tables' high window at `base`: each table's entries of it are rewritten
@@ -821,6 +1084,7 @@ impl DeviceHeaps {
             .is_some_and(|slot| slot.serial == serial)
         {
             self.sampler_slots.remove(&id);
+            self.cubic_slots.remove(&id);
             self.put_sampler(id, None, notes);
         }
         let placed = self
@@ -918,6 +1182,7 @@ pub(super) fn place_sampler(device: &Device, state: &SamplerState) {
         let placed = heaps.place_sampler(device, state, &mut held, &mut notes);
         if placed.is_err() {
             heaps.sampler_slots.remove(&state.gpu_resource_id().0);
+            heaps.cubic_slots.remove(&state.gpu_resource_id().0);
             heaps.put_sampler(state.gpu_resource_id().0, None, &mut notes);
         }
         placed
@@ -973,13 +1238,66 @@ pub(super) fn unused_while_pending(device: &Device) -> bool {
 }
 
 /// One image array of a heap set: its binding, class, descriptor type, element count, and
-/// neutral's view (the device's).
+/// neutral's view (the device's), and what a command that binds the set announces of the
+/// textures its elements hold ([`bind`]).
 struct ImageArray {
     binding: u32,
     class: ImageHandleClass,
     ty: vk::DescriptorType,
     count: u32,
     neutral: vk::ImageView,
+    /// By resource ID, the shadowed textures whose shadow image's view the array holds, with the
+    /// key a command's uses name each by (`Texture::bound_use`): a command that binds the set
+    /// and neither names one nor makes it resident is announced
+    /// (`Degradation::UnnamedShadowedTexture`).
+    shadows: BTreeMap<u64, ResourceKey>,
+    /// By resource ID, the textures whose decoded twin's view the array holds where the twin's
+    /// texels are not Metal's decode exactly, with what a read of it announces
+    /// (`decoded-texel-precision`, `texture/decoded_twin.rs`): a command that binds the set may
+    /// read it through its ID, named or not.
+    twins: BTreeMap<u64, TwinRead>,
+    /// By resource ID, the textures whose raw view the array holds (a heap holds them by their
+    /// raw texels alone, [`RawRead`]): a command that binds the set may read one through its ID,
+    /// named or not, through its function's decode.
+    raws: BTreeMap<u64, RawRead>,
+}
+
+impl ImageArray {
+    /// Whether it holds every texture as `other` does, `other` holding the elements below
+    /// `reach`: an array of the same class and descriptor type (`bind::heap_element` places a
+    /// texture by them alone) of at least `reach` elements.
+    fn holds_as(&self, other: &ImageArray, reach: u64) -> bool {
+        (self.class, self.ty) == (other.class, other.ty) && u64::from(other.count) >= reach
+    }
+
+    /// Take what `other`, an array that holds every texture as it does ([`holds_as`]), notes of
+    /// the textures at the elements below `reach`, the rest of its own.
+    ///
+    /// [`holds_as`]: ImageArray::holds_as
+    fn notes_from(&mut self, other: &ImageArray, reach: u64) {
+        self.shadows = (other.shadows.range(..reach))
+            .map(|(&id, &key)| (id, key))
+            .collect();
+        self.twins = (other.twins.range(..reach))
+            .map(|(&id, read)| (id, read.clone()))
+            .collect();
+        self.raws = (other.raws.range(..reach))
+            .map(|(&id, read)| (id, read.clone()))
+            .collect();
+    }
+
+    /// Whether a command that binds it finds nothing to announce of what it holds: no shadowed
+    /// texture, decoded twin or raw read ([`bind`]).
+    fn notes_nothing(&self) -> bool {
+        self.shadows.is_empty() && self.twins.is_empty() && self.raws.is_empty()
+    }
+
+    /// Forget what it noted of the texture at ID `id`, gone.
+    fn forget(&mut self, id: u64) {
+        self.shadows.remove(&id);
+        self.twins.remove(&id);
+        self.raws.remove(&id);
+    }
 }
 
 /// One sampler array of a heap set: its binding, the use its class makes a state's Vulkan sampler
@@ -1016,23 +1334,12 @@ struct SetEntry {
     /// Where it lacks it, the command buffers' own versions ([`bind`]), while they live and no
     /// submission took them.
     open: Vec<Weak<SetVersion>>,
-    /// Every element written, by `(binding, element)`, but those of textures gone: what a
-    /// command buffer's own version holds as it is made.
+    /// Every element written, by `(binding, element)`, but those of textures gone, and, where
+    /// the set has its one version, its image arrays' (which that version alone holds, and no
+    /// command's write is compared with, [`holds_element`]): what a command buffer's own version
+    /// holds as it is made, and what a command's write of a function table is compared with
+    /// ([`bind`]).
     written: BTreeMap<(u32, u32), Written>,
-    /// By resource ID, the shadowed textures whose shadow image's view an array of the set
-    /// holds, with the key a command's uses name each by (`Texture::bound_use`): a command that
-    /// binds the set and neither names one nor makes it resident is announced
-    /// (`Degradation::UnnamedShadowedTexture`).
-    shadows: BTreeMap<u64, ResourceKey>,
-    /// By resource ID, the textures whose decoded twin's view an array of the set holds where
-    /// the twin's texels are not Metal's decode exactly, with what a read of it announces
-    /// (`decoded-texel-precision`, `texture/decoded_twin.rs`): a command that binds the set may
-    /// read it through its ID, named or not.
-    twins: BTreeMap<u64, TwinRead>,
-    /// By resource ID, the textures whose raw view an array of the set holds (a heap holds them
-    /// by their raw texels alone, [`RawRead`]): a command that binds the set may read one through
-    /// its ID, named or not, through its function's decode.
-    raws: BTreeMap<u64, RawRead>,
 }
 
 /// An element a heap set holds ([`HeapWrite`]).
@@ -1047,37 +1354,9 @@ struct Written {
 
 impl SetEntry {
     /// Whether a command that binds it finds nothing to announce of what it holds: no shadowed
-    /// texture, decoded twin or raw read ([`bind`]).
+    /// texture, decoded twin or raw read in any of its image arrays ([`bind`]).
     fn notes_nothing(&self) -> bool {
-        self.shadows.is_empty() && self.twins.is_empty() && self.raws.is_empty()
-    }
-
-    /// Note texture `texture` at ID `id` among the shadowed textures the set holds a view of
-    /// where `shadow` (its arrays' writes hold its shadow image's view), else not.
-    fn shadow(&mut self, id: u64, texture: &Texture, shadow: bool) {
-        match shadow {
-            true => {
-                let key = texture.bound_use(Access::NONE, Access::NONE).key;
-                self.shadows.insert(id, key)
-            }
-            false => self.shadows.remove(&id),
-        };
-    }
-
-    /// Note texture `id` among the textures whose decoded twin's view the set holds, with what a
-    /// read of it announces, where `read` (else not); answer `read` where a command that bound
-    /// the set may yet read the view through its ID ([`pending_read`](Self::pending_read)).
-    fn twin(&mut self, id: u64, read: Option<TwinRead>) -> Option<TwinRead> {
-        let read = noted(&mut self.twins, id, read)?;
-        self.pending_read().then_some(read)
-    }
-
-    /// Note texture `id` among the textures whose raw view the set holds, with what a read of it
-    /// announces, where `read` (else not); answer `read` where a command that bound the set may
-    /// yet read the view through its ID, as [`twin`](Self::twin) does.
-    fn raw(&mut self, id: u64, read: Option<RawRead>) -> Option<RawRead> {
-        let read = noted(&mut self.raws, id, read)?;
-        self.pending_read().then_some(read)
+        self.images.iter().all(ImageArray::notes_nothing)
     }
 
     /// Whether a command that bound the set may yet read an element placed now: the set's shared
@@ -1162,6 +1441,10 @@ impl SetEntry {
             unsafe { write_sets(device, &[version.set], &raw) }?;
         }
         for write in writes {
+            // The one version alone holds an image array's elements ([`SetEntry::written`]).
+            if self.shared.is_some() && is_image(write.ty) {
+                continue;
+            }
             self.written.insert(
                 (write.binding, write.element),
                 Written {
@@ -1344,32 +1627,29 @@ impl RawRead {
     }
 }
 
-/// What [`texture_writes`] places of a texture into a set's arrays.
+/// What [`texture_writes`] places of a texture into a set's arrays: the writes, and what a read
+/// of a decoded twin's view whose texels are not Metal's decode exactly, or of a raw view, that
+/// an element is announces.
 struct TexturePlaced {
     writes: Vec<HeapWrite>,
-    /// An element is its shadow image's view.
-    shadow: bool,
-    /// An element is its decoded twin's view whose texels are not Metal's decode exactly: what a
-    /// read of it announces.
     twin: Option<TwinRead>,
-    /// An element is its raw view, which a function's read decodes: what a read of it announces.
     raw: Option<RawRead>,
 }
 
 /// The writes of texture `texture`, at ID `id`, into `arrays`: element `id` of each, which it
-/// holds as the array's class takes it (the module docs). An ID past an array's count is left
-/// out, noted. With whether an element is its shadow image's view, and what a read of its
-/// decoded twin's view, or of its raw view, announces where an element is that.
-fn texture_writes(
+/// holds as the array's class takes it (the module docs), each array noting whether its element
+/// is the texture's shadow image's view, a decoded twin's view whose texels are not Metal's
+/// decode exactly, or its raw view ([`ImageArray`]). An ID past an array's count is left out,
+/// noted.
+fn texture_writes<'a>(
     device: &Device,
-    arrays: &[ImageArray],
+    arrays: impl IntoIterator<Item = &'a mut ImageArray>,
     id: u64,
     texture: &Texture,
     notes: &mut Notes,
 ) -> Result<TexturePlaced, Error> {
     let mut placed = TexturePlaced {
-        writes: Vec::with_capacity(arrays.len()),
-        shadow: false,
+        writes: Vec::new(),
         twin: None,
         raw: None,
     };
@@ -1382,12 +1662,19 @@ fn texture_writes(
             }
         };
         let (info, shadowed, twin, raw) = texture_info(device, array, texture, notes)?;
-        placed.shadow |= shadowed;
-        if twin.is_some() {
-            placed.twin = twin;
+        match shadowed {
+            true => {
+                let key = texture.bound_use(Access::NONE, Access::NONE).key;
+                array.shadows.insert(id, key)
+            }
+            false => array.shadows.remove(&id),
+        };
+        if let Some(read) = noted(&mut array.twins, id, twin) {
+            placed.twin = Some(read);
         }
-        if raw && placed.raw.is_none() {
-            placed.raw = Some(RawRead::of(texture, id));
+        let raw = raw.then(|| RawRead::of(texture, id));
+        if let Some(read) = noted(&mut array.raws, id, raw) {
+            placed.raw.get_or_insert(read);
         }
         placed.writes.push(HeapWrite {
             binding: array.binding,
@@ -1445,11 +1732,12 @@ fn texture_info(
     }
 }
 
-/// What placing textures and writing sets announces, once no lock is held.
+/// What placing textures and writing sets announces, once no lock is held, and once the passing
+/// hold that took the textures ended (`resource_ids.rs`): it keeps no texture.
 #[derive(Default)]
 struct Notes {
-    /// A texture a class fits that it cannot view.
-    unviewable: Option<Texture>,
+    /// A texture a class fits that it cannot view: its format and resource ID.
+    unviewable: Option<(PixelFormat, u64)>,
     /// The resource ID of a shadowed texture a set holds that the command binding the set
     /// neither names nor makes resident.
     shadowed: Option<u64>,
@@ -1458,7 +1746,7 @@ struct Notes {
     /// The elements a command buffer's own version of a set was made with.
     copied: Option<usize>,
     /// A texture a set holds whose blocks a carrier holds for copies (`pvrtc.rs`).
-    unreadable: Option<Texture>,
+    unreadable: Option<super::pvrtc::Unreadable>,
     /// A sampler state a sampler table or a set's sampler array cannot hold: the first one's
     /// notice (`Degradation::UnlistedArgumentSampler`).
     unlisted: Option<(String, String)>,
@@ -1466,20 +1754,21 @@ struct Notes {
     /// whose function may read it (`Degradation::DecodedTexelPrecision`).
     twin_read: Option<TwinRead>,
     /// One placed in a set a command buffer that bound it and has not completed may read through
-    /// ([`SetEntry::twin`]): announced once, as a submission may place it on a runtime thread.
+    /// ([`SetEntry::pending_read`]): announced once, as a submission may place it on a runtime
+    /// thread.
     twin_placed: Option<TwinRead>,
     /// A texture a heap holds by its raw texels alone in a set the command binds, whose function
     /// may read it through its decode ([`RawRead`]).
     raw_read: Option<RawRead>,
     /// One placed in a set a command buffer that bound it and has not completed may read through
-    /// ([`SetEntry::raw`]): announced once, as `twin_placed` is.
+    /// ([`SetEntry::pending_read`]): announced once, as `twin_placed` is.
     raw_placed: Option<RawRead>,
 }
 
 impl Notes {
     fn unviewable(&mut self, texture: &Texture) {
         if self.unviewable.is_none() {
-            self.unviewable = Some(texture.clone());
+            self.unviewable = Some((texture.pixel_format(), texture.gpu_resource_id().0));
         }
     }
 
@@ -1537,22 +1826,17 @@ impl Notes {
 
     /// `texture` placed, into a set where `in_set`.
     fn placed(&mut self, texture: &Texture, in_set: bool) {
-        let held = || super::pvrtc::held_for_copies(texture).is_some();
-        if in_set && self.unreadable.is_none() && held() {
-            self.unreadable = Some(texture.clone());
+        if in_set && self.unreadable.is_none() {
+            self.unreadable = super::pvrtc::Unreadable::of(texture);
         }
     }
 
     /// Announce what was noted.
     fn announce(self, device: &Device) {
-        if let Some(texture) = &self.unviewable {
+        if let Some((pixel_format, id)) = self.unviewable {
             device.degrade(Degradation::UnnamedTextureUnviewable, || {
                 (
-                    format!(
-                        "{:?} texture at resource ID {}",
-                        texture.pixel_format(),
-                        texture.gpu_resource_id().0
-                    ),
+                    format!("{pixel_format:?} texture at resource ID {id}"),
                     "a heap array whose class the texture fits cannot view its format (one the \
                      device cannot sample or store without a format, or that needs its \
                      function's decode)"
@@ -1592,8 +1876,8 @@ impl Notes {
                 )
             });
         }
-        if let Some(texture) = &self.unreadable {
-            super::pvrtc::degrade_unreadable(device, [texture], "a heap set");
+        if let Some(unreadable) = &self.unreadable {
+            unreadable.announce(device, "a heap set");
         }
         if let Some(unlisted) = self.unlisted {
             device.degrade(Degradation::UnlistedArgumentSampler, || unlisted);
@@ -1757,35 +2041,240 @@ impl Drop for HeapSet {
 }
 
 /// The heap set of set-1 layout `layout` on `device`: the live one, else a new one holding every
-/// live texture (the module docs).
+/// live texture (the module docs), its layout, version and neutrals made, and its walk of the
+/// live textures made, with no lock held ([`SetEntry::unplaced`], [`Walk`]).
 pub(crate) fn heap_set(
     device: &Device,
     layout: &DescriptorSetLayout,
 ) -> Result<Arc<HeapSet>, Error> {
+    let (key, null_words) = {
+        let mut heaps = lock(&device.shared().heaps);
+        if let Some(set) = heaps.live_set(layout) {
+            return Ok(set);
+        }
+        let null_words = heaps.table(device)?.null_words();
+        heaps.next_set += 1;
+        (heaps.next_set - 1, null_words)
+    };
+    let mut entry = SetEntry::unplaced(device, layout, key, null_words)?;
+    let mut notes = Notes::default();
+    let walk = lock(&device.shared().heaps).walk(&entry);
+    let walked = walk.walk(device, &mut entry, &mut notes);
+    #[cfg(test)]
+    {
+        // Taken, then run with the lock let go.
+        let pause = lock(&device.shared().heaps).pause_making.clone();
+        if let Some(pause) = pause {
+            pause();
+        }
+    }
+    // A new set takes every live holder the walk did not once it is placed: a passing hold from
+    // then (`resource_ids.rs`).
+    let mut passing = None;
     let mut held = Vec::new();
     let mut held_samplers = Vec::new();
-    let mut notes = Notes::default();
-    let set = {
+    let (set, unused, freed) = {
         let mut heaps = lock(&device.shared().heaps);
-        match heaps
-            .by_layout
-            .get(layout)
-            .and_then(|(_, set)| set.upgrade())
-        {
-            Some(set) => Ok(set),
-            None => heaps.made_set(device, layout, (&mut held, &mut held_samplers), &mut notes),
+        let freed = heaps.give_back(&walk);
+        match (walked, heaps.live_set(layout)) {
+            (Err(error), _) => (Err(error), Some(entry), freed),
+            // Another thread placed the layout's set meanwhile: this one goes unused.
+            (Ok(()), Some(set)) => (Ok(set), Some(entry), freed),
+            (Ok(()), None) => {
+                let holders = (&mut held, &mut held_samplers);
+                let set = heaps.made_set(
+                    device,
+                    layout,
+                    (entry, &walk),
+                    holders,
+                    (&mut notes, &mut passing),
+                );
+                (set, None, freed)
+            }
         }
     };
+    // An unused set's pool and layout, and what the walk's tickets kept, go with no lock held.
+    drop(unused);
+    drop(freed);
+    // The holders go inside the passing hold, if it took one.
     drop((held, held_samplers));
+    drop(passing);
     notes.announce(device);
     set
 }
 
+/// The live textures a new set walks: how many each passing hold of the walk takes at most
+/// ([`Walk::walk`]), so a making waits for at most this many textures' elements.
+const WALK_PART: usize = 64;
+
+/// What a new heap set walks of the live textures with no lock held ([`DeviceHeaps::walk`]): its
+/// image arrays of a class no live set holds, which the walk writes each live texture into, as no
+/// set's array can give them its elements ([`DeviceHeaps::copy_arrays`]). A driver may take
+/// milliseconds over thousands of textures (the views made at their first use, the descriptor
+/// writes), while a texture made meanwhile takes the `heaps` lock to place itself, and its
+/// making waits for every passing hold (`resource_ids.rs`). So the walk takes the textures
+/// placed as it begins, each with the slot write that placed it ([`Placed::written`]), and
+/// writes their elements into the set's version, unplaced, with no lock held; the set, placed
+/// after, writes those placed since and forgets those gone since ([`DeviceHeaps::made_set`]).
+/// Its tickets keep what goes meanwhile (a gone texture's image, which holds its views, and what
+/// a rebind or a detach replaced, the module docs' **Retirement**) until the set is placed, so
+/// each view it writes lives while it does; and while they are out no storage form swaps
+/// (`texture/storage_form.rs`).
+struct Walk {
+    /// Which of the set's image arrays walk.
+    arrays: Vec<bool>,
+    /// The textures placed as it began, ascending by ID: each one's ID, the slot write that
+    /// placed it, and the texture (not held).
+    textures: Vec<(u64, u64, Weak<TextureShared>)>,
+    /// Its epochs of the retirement and of what a rebind or a detach replaced, where it walks any
+    /// texture.
+    tickets: Option<(u64, u64)>,
+}
+
+impl Walk {
+    /// Whether it found the texture at ID `id` placed by slot write `written`, which its arrays
+    /// hold as it is.
+    fn found(&self, id: u64, written: u64) -> bool {
+        (self.textures.binary_search_by_key(&id, |&(id, _, _)| id))
+            .is_ok_and(|at| self.textures[at].1 == written)
+    }
+
+    /// Write its textures into `entry`'s arrays that walk, with no lock held, in parts of
+    /// [`WALK_PART`], each part's textures taken inside a passing hold of its own, which lets the
+    /// makings waiting for it pass before the next (`resource_ids.rs`), then their elements into
+    /// the set's version, or keep them for its command buffers' own (the module docs).
+    fn walk(&self, device: &Device, entry: &mut SetEntry, notes: &mut Notes) -> Result<(), Error> {
+        let mut writes = Vec::new();
+        for part in self.textures.chunks(WALK_PART) {
+            let passing = device.passing_hold();
+            let mut held = Vec::with_capacity(part.len());
+            for (id, _, texture) in part {
+                let Some(texture) = Texture::upgrade(texture) else {
+                    continue;
+                };
+                let walks = (entry.images.iter_mut().zip(&self.arrays))
+                    .filter(|(_, &walks)| walks)
+                    .map(|(array, _)| array);
+                // A new set no command bound yet: its first binding announces what its arrays
+                // note.
+                let placed = texture_writes(device, walks, *id, &texture, notes)?;
+                writes.extend(placed.writes);
+                notes.placed(&texture, true);
+                held.push(texture);
+            }
+            // The holders go inside the passing hold.
+            drop(held);
+            drop(passing);
+            device.let_makings_pass();
+            #[cfg(test)]
+            {
+                // Taken, then run with the lock let go.
+                let pause = lock(&device.shared().heaps).pause_walking.clone();
+                if let Some(pause) = pause {
+                    pause();
+                }
+            }
+        }
+        // Into the set's one version, which no command binds and no other thread writes before
+        // the set is placed: each view the writes name lives until then (its texture's image
+        // holds it, and the tickets keep one gone meanwhile).
+        entry.write(device, writes)
+    }
+}
+
+impl SetEntry {
+    /// A new heap set of `layout`, heap set `key`, before it is placed among the device's sets,
+    /// made with no lock held ([`heap_set`]): its `VkDescriptorSetLayout`, its one version where
+    /// the device has one (a driver may clear every element of a pool as it makes it, each array
+    /// of up to 65536), and each array's element 0 its class's neutral (`null_words` the function
+    /// tables').
+    fn unplaced(
+        device: &Device,
+        layout: &DescriptorSetLayout,
+        key: u64,
+        null_words: vk::DescriptorBufferInfo,
+    ) -> Result<SetEntry, Error> {
+        let needs = set_needs(layout)?;
+        let raw_layout = Arc::new(RawLayout::create(device, layout)?);
+        // The one version every command binds, where the device lets a pending one's set be
+        // written; else each command buffer makes its own ([`bind`]).
+        let shared = match unused_while_pending(device) {
+            true => {
+                let version = SetVersion::allocate(device, &raw_layout, &needs, key)?;
+                Some(Arc::new(version))
+            }
+            false => None,
+        };
+        let mut images = Vec::new();
+        let mut samplers = Vec::new();
+        let mut neutrals = Vec::new();
+        for binding in &layout.bindings {
+            let ty: vk::DescriptorType = binding.ty.into();
+            let info = match binding.source {
+                BindingSource::Heap(HandleClass::Image(class)) => {
+                    let neutral = NeutralResource::for_image(&class)
+                        .ok_or_else(|| internal("a heap array of a class without a neutral"))?;
+                    let neutral = device.neutral_view(neutral)?;
+                    images.push(ImageArray {
+                        binding: binding.binding,
+                        class,
+                        ty,
+                        count: binding.count,
+                        neutral,
+                        shadows: BTreeMap::new(),
+                        twins: BTreeMap::new(),
+                        raws: BTreeMap::new(),
+                    });
+                    image_info(neutral)
+                }
+                BindingSource::Heap(class @ HandleClass::Sampler { compare, .. }) => {
+                    let neutral = device.neutral_sampler(compare)?;
+                    let use_ = class
+                        .sampler_use()
+                        .ok_or_else(|| internal("a sampler class without a use"))?;
+                    samplers.push(SamplerArray {
+                        binding: binding.binding,
+                        use_,
+                        count: binding.count,
+                        neutral,
+                    });
+                    sampler_info(neutral)
+                }
+                BindingSource::Heap(HandleClass::FunctionTable) => Info::Buffer(null_words),
+                _ => return Err(internal("a heap set binding of no heap array")),
+            };
+            neutrals.push(HeapWrite {
+                binding: binding.binding,
+                element: 0,
+                ty,
+                info,
+                keeper: None,
+            });
+        }
+        let mut entry = SetEntry {
+            key,
+            layout: layout.clone(),
+            raw_layout,
+            needs,
+            images,
+            samplers,
+            shared,
+            open: Vec::new(),
+            written: BTreeMap::new(),
+        };
+        entry.write(device, neutrals)?;
+        Ok(entry)
+    }
+}
+
 /// Place `texture`, a program's texture that just took its ID's slot, into the table and every
 /// heap set (the module docs). A failure to write it leaves the ID's entry the neutral's,
-/// announced.
+/// announced. The caller holds the texture, the slot's only holder, so no handle the write takes
+/// is its last: no passing hold (`resource_ids.rs`), and a making takes none.
 pub(super) fn place(device: &Device, texture: &Texture) {
-    sync(device, Slots::Changed(texture.gpu_resource_id().0));
+    let (held, written) = write(device, Slots::Changed(texture.gpu_resource_id().0));
+    drop(held);
+    written.announce(device);
 }
 
 /// The texture slots a [`sync`] writes.
@@ -1802,6 +2291,17 @@ enum Slots {
 /// Write `slots`: a changed one where its holder changed, the others whatever changed. While a
 /// batch holds the slots' writes ([`hold`]), they wait for it.
 fn sync(device: &Device, slots: Slots) {
+    // The slots' holders it takes, on whichever thread asked: a passing hold (`resource_ids.rs`).
+    let passing = device.passing_hold();
+    let (held, written) = write(device, slots);
+    drop(held);
+    drop(passing);
+    written.announce(device);
+}
+
+/// Write `slots` as [`sync`] does: the holders it took, to let go of with no lock held, and what
+/// it announces.
+fn write(device: &Device, slots: Slots) -> (Vec<Texture>, SlotsWritten) {
     let mut held = Vec::new();
     let mut notes = Notes::default();
     let failed = {
@@ -1815,10 +2315,23 @@ fn sync(device: &Device, slots: Slots) {
             }
         }
     };
-    drop(held);
-    notes.announce(device);
-    for (id, error) in failed {
-        failed_write(device, id, &error);
+    (held, SlotsWritten { notes, failed })
+}
+
+/// What writing slots announces once no lock is held, and once the passing hold that took their
+/// holders ended: the notes, and the slots whose write failed.
+struct SlotsWritten {
+    notes: Notes,
+    failed: Vec<(u64, Error)>,
+}
+
+impl SlotsWritten {
+    /// Announce it on `device`.
+    fn announce(self, device: &Device) {
+        self.notes.announce(device);
+        for (id, error) in self.failed {
+            failed_write(device, id, &error);
+        }
     }
 }
 
@@ -1847,6 +2360,9 @@ pub(super) fn hold(device: &Device) -> HeldSlots {
 impl Drop for HeldSlots {
     fn drop(&mut self) {
         let device = &self.device;
+        // The deferred writes take their slots' holders on the batch's thread, which the
+        // program's release may leave the last: a passing hold (`resource_ids.rs`).
+        let passing = device.passing_hold();
         let mut held = Vec::new();
         let mut notes = Notes::default();
         let failed = {
@@ -1861,7 +2377,12 @@ impl Drop for HeldSlots {
             }
             failed
         };
+        #[cfg(test)]
+        if let Some(pause) = lock(&device.shared().heaps).pause_holding.clone() {
+            pause();
+        }
         drop(held);
+        drop(passing);
         notes.announce(device);
         for (id, error) in failed {
             failed_write(device, id, &error);
@@ -2326,17 +2847,20 @@ pub(super) fn bind(
         // shadow through the ID, which the command's copies leave as the last encoder that named
         // it copied it (Metal's own non-resident read is undefined). One its uses name has its
         // shadow copied in (`shadow::shadow_uses`, compute's and render's alike).
-        notes.shadowed = entry
-            .shadows
-            .iter()
+        notes.shadowed = (entry.images.iter())
+            .flat_map(|array| &array.shadows)
             .find(|(_, key)| !uses.iter().any(|used| used.key == **key))
             .map(|(&id, _)| id);
         // A decoded twin whose texels are not Metal's decode exactly, which the command's
         // function may read through its ID whether or not the command names it.
-        notes.twin_read = entry.twins.values().next().cloned();
+        notes.twin_read = (entry.images.iter())
+            .find_map(|array| array.twins.values().next())
+            .cloned();
         // A texture held by its raw texels alone, which the function may read through its ID
         // and its own decode.
-        notes.raw_read = entry.raws.values().next().cloned();
+        notes.raw_read = (entry.images.iter())
+            .find_map(|array| array.raws.values().next())
+            .cloned();
         // The shared version, or the command buffer's own, made as it first binds the set.
         let own = heap.versions.iter().find(|v| v.key == set.key).cloned();
         let version = match (&entry.shared, own) {
@@ -2438,11 +2962,15 @@ pub(super) fn bound_again(
 /// no such write): the neutral element, and every image element, which holds the texture at its
 /// ID as the array's class takes it, written as the texture takes the slot (the module docs).
 pub(super) fn holds_element(ty: vk::DescriptorType, element: u32) -> bool {
-    element == metal2vulkan::bind::NEUTRAL_HEAP_ELEMENT
-        || matches!(
-            ty,
-            vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE
-        )
+    element == metal2vulkan::bind::NEUTRAL_HEAP_ELEMENT || is_image(ty)
+}
+
+/// Whether descriptors of type `ty` are an image array's elements.
+fn is_image(ty: vk::DescriptorType) -> bool {
+    matches!(
+        ty,
+        vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE
+    )
 }
 
 /// Whether two descriptors name the same objects (each held while a set holds it, so a handle

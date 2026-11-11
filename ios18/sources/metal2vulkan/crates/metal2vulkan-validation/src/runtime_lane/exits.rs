@@ -5,18 +5,23 @@
 //! or at the end of `main` while the runtime's threads hold work, run the program's code, or tear
 //! a device down. The parent checks that the child exited with status 0, not by a signal, and
 //! that its exit handlers ended within [`EXIT_LIMIT`] of its last line, or of the end of the CPU
-//! device's work its exit waits for (macOS) where that is later, less the time the exiting thread
-//! waited for a CPU meanwhile ([`exit_end`]): below the exit hook's own bound of 2 s on macOS, so a
-//! hook that waited out its bound fails too. On Linux (the GNU C library) the hook waits for
-//! nothing: where the runtime is busy as it runs, the process ends at once from it, the handlers
-//! registered before it unrun, and the exit ends at the notice the runtime writes as it ends the
-//! process ([`AT_ONCE`]), as the parent reads it: the kernel's teardown of the process after it is
+//! device's work its exit waits for where that is later, less the time the exiting thread waited
+//! for a CPU meanwhile ([`exit_end`]): below the exit hook's own bound of 2 s, so a hook that
+//! waited out its bound fails too. Where the runtime still ran its work past that bound, on Linux
+//! (the GNU C library) the hook ends the process at once, the handlers registered before it
+//! unrun, and the exit ends at the notice the runtime writes as it ends the process
+//! ([`AT_ONCE`]), as the parent reads it: the kernel's teardown of the process after it is
 //! printed, not counted. Each child reports the validation
 //! layer's messages until then, which must be none. The parent prints each exit's time, with its
-//! wall time, that wait, and how long the process took to end after its handlers. Each test that
-//! checks that time runs alone in the suite (`.config/nextest.toml`): an exit's time holds the
-//! drivers' exit handlers, which other processes' GPU work slows (NVIDIA's `vkDestroyDevice` took
-//! 54 ms alone and up to 2 s beside other lanes on an RTX 3090).
+//! wall time, that wait, and how long the process took to end after its handlers. Where the hook
+//! ran before the mark each child registers right after its first device
+//! ([`after_the_later_devices`]), the exit's time ends at the mark: the handlers registered as
+//! that device was made, its driver's and the layer's, run after it, and their time is printed,
+//! not counted (on an RTX 5080 laptop beside other GPU work, 0.5 to 7 s). Each test that checks
+//! that time runs alone in the suite (`.config/nextest.toml`): an exit's time holds the drivers'
+//! calls the hook waits for, and, where the hook ran after the mark, the drivers' exit handlers,
+//! which other processes' GPU work slows (NVIDIA's `vkDestroyDevice` took 54 ms alone and up to
+//! 2 s beside other lanes on an RTX 3090).
 //!
 //! Metal's answers (an M4 with macOS 27.0.1, each case without and with
 //! `MTL_DEBUG_LAYER=1`): every such exit was clean, in 15 to 45 ms, but one: a dropped command
@@ -27,19 +32,27 @@
 //!
 //! On a CPU device the work submitted before an exit runs on the process's own threads, so no exit
 //! handler or destructor runs beside it ([`an_exit_runs_no_handler_beside_a_cpu_device_s_work`]):
-//! on Linux the process ends at once with the exit's status, and on macOS the exit waits for the
-//! work. Measured on lavapipe, its queue thread compiling a dispatch's shader during the
+//! the exit waits for the work, and the handlers registered before the device run after it.
+//! Measured on lavapipe, its queue thread compiling a dispatch's shader during the
 //! destructors ended the process in the heap's checks, in 1 to 2 exits of 100 while a host step
 //! waited.
 
 use super::indirect_host_steps::Setup;
 use super::{
-    layer_reported_nothing_at_all, run_queue_waits, validated_device, Messages, ScratchCache,
+    at_plan, bound_buffers, encode_case, layer_reported_nothing_at_all, pipeline_state,
+    public_case, run_queue_waits, validated_device, validated_device_with, CaseResources, Messages,
+    ScratchCache,
 };
+use crate::air_library::AirLibrary;
 use crate::gpu::{DeviceType, TEST_DEVICE};
+use metal2vulkan::library::{FunctionConstantValue, FunctionConstantValues};
+use metal2vulkan::metal::{DataType, PixelFormat, TextureUsage};
+use metal2vulkan::pipeline::{ComputePipelineDescriptor, StageSource};
+use metal2vulkan_devtools::{engine_dir, llvm_assemble};
 use metal2vulkan_runtime::{
-    Buffer, CommandBuffer, CommandBufferStatus, CommandQueue, Deallocator, Device, DeviceKind,
-    EventRef, HostMemory, ResourceOptions, SharedEvent, SharedEventListener,
+    Buffer, CommandBuffer, CommandBufferStatus, CommandQueue, ComputePipelineState, Deallocator,
+    Device, DeviceKind, EventRef, HostMemory, PipelineOptions, ResourceOptions, SharedEvent,
+    SharedEventListener, Size, TextureDescriptor,
 };
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -52,8 +65,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// The longest an exit may take, from the child's last line to the end of its last exit handler
 /// ([`exit_end`]; the runtime's notice where it ended the process at once and that handler did not
-/// run, [`AT_ONCE`]), or,
-/// where the exit waits for a CPU device's work that ends later (macOS), from that work's end: the
+/// run, [`AT_ONCE`]; the mark before the first device's driver's and layer's handlers where the
+/// hook ran before it, [`after_the_later_devices`]), or,
+/// where the exit waits for a CPU device's work that ends later, from that work's end: the
 /// work runs for as long as the host's load lets it ([`CPU_WORK_TIME`]), and the exit's own part
 /// does not. Less the time the exiting thread waited for a CPU meanwhile, which is the host's
 /// load. What follows the handlers, the libraries' destructors and the kernel's teardown of the
@@ -90,9 +104,8 @@ fn in_flight() -> (u64, usize) {
 const CPU_WORK_FILL: u64 = 64 << 20;
 
 /// How long the CPU work case's work runs, as one fill's time measured before it predicts: far
-/// longer than the exit's own teardown (about 50 ms on lavapipe), so the hook finds it running
-/// (and on Linux ends the process at once), and far shorter than the hook's bound of 2 s on macOS,
-/// within which the hook waits for it. A host's load stretches it: at a load of 30 to 45, 400 ms
+/// longer than the exit's own teardown (about 50 ms on lavapipe), so the hook finds it running,
+/// and far shorter than the hook's bound of 2 s, within which the hook waits for it. A host's load stretches it: at a load of 30 to 45, 400 ms
 /// of fills ran for 1.5 s.
 const CPU_WORK_TIME: Duration = Duration::from_millis(200);
 
@@ -105,8 +118,7 @@ const FILLED: u8 = 0x5a;
 /// on the RTX 3090 (NVIDIA 615.71.09) the read of a marker it had mapped ended the process with
 /// `SIGSEGV` in every exit (3 of 3, the fault at the mapping's first byte in
 /// the handler). A CPU device's memory is the process's own, which no destructor unmaps, and only
-/// a CPU device's exit waits for the work the marker follows (macOS; on Linux it ends at once, and
-/// the handler does not run).
+/// a CPU device's exit waits for the work the marker follows.
 static MARKER: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
 
 /// A point the exit's own time may count from ([`exit_end`]): when, in milliseconds since the
@@ -167,8 +179,8 @@ fn watch_the_marker(at: NonNull<u8>) {
 }
 
 /// An exit handler the CPU work case registers before it makes its device, so that it runs after
-/// the device's exit hook where the hook returns (not where it ended the process at once, on
-/// Linux): print whether the marker's fill, submitted after the work, completed (always
+/// the device's exit hook where the hook returns (not where it ended the process at once past its
+/// bound, on Linux): print whether the marker's fill, submitted after the work, completed (always
 /// `written=0` without a marker, on a GPU), when the work ended (`seen_ms`: when
 /// [`watch_the_marker`] saw the fill complete, else now; 0 where it is not written), and whether
 /// the runtime answers that the process is exiting (`process_exiting`, which the hook's run makes
@@ -217,10 +229,49 @@ static HELD: Mutex<Option<Device>> = Mutex::new(None);
 /// closed the guard, makes no Vulkan call.
 extern "C" fn drop_the_held_device() {
     let hook_ran = metal2vulkan_runtime::process_exiting();
-    let line = format!("{REPORT}-HELD hook_ran={}\n", u8::from(hook_ran));
+    let at_ms = now_ms();
+    drop(HELD.lock().unwrap_or_else(PoisonError::into_inner).take());
+    let line = format!(
+        "{REPORT}-HELD hook_ran={} at_ms={at_ms} dropped_ms={}\n",
+        u8::from(hook_ran),
+        now_ms()
+    );
     // SAFETY: a write of the line's bytes to standard output.
     unsafe { libc::write(1, line.as_ptr().cast(), line.len()) };
-    drop(HELD.lock().unwrap_or_else(PoisonError::into_inner).take());
+}
+
+/// An exit handler the cases `program_instance_exit` and `adopted_instance_exit` register right
+/// after the program's own instance, so after the exit handler the validation layer registered
+/// as it was created (which forgets every device the layer knows), and before the program reports
+/// that instance or the runtime adopts its device: note whether the runtime's hook ran by then
+/// (`hook_ran`), as it does where the report or the adoption registered it again, after both.
+extern "C" fn after_the_program_instance() {
+    let line = format!(
+        "{REPORT}-PROGRAM-INSTANCE hook_ran={}\n",
+        u8::from(metal2vulkan_runtime::process_exiting())
+    );
+    // SAFETY: a write of the line's bytes to standard output.
+    unsafe { libc::write(1, line.as_ptr().cast(), line.len()) };
+}
+
+/// An exit handler every child registers right after its first device, so that it runs after
+/// every handler registered since (the case's own, the later instances' and devices', the hook's
+/// later registrations, [`drop_the_held_device`], the destructors the driver's compiler registered
+/// in a making) and before those registered as the first device was made (its driver's and
+/// layer's): print whether the hook ran by then (`hook_ran`), when it ran (`at_ms`), and the
+/// exiting thread's wait for a CPU until then (`queued_us`, as [`exit_end`]'s), where the exit's
+/// own part ends once the hook ran ([`exits_cleanly`]).
+extern "C" fn after_the_later_devices() {
+    let hook_ran = metal2vulkan_runtime::process_exiting();
+    let queued = exit_thread_queued().unwrap_or_default();
+    let line = format!(
+        "{REPORT}-MARK hook_ran={} at_ms={} queued_us={}\n",
+        u8::from(hook_ran),
+        now_ms(),
+        queued.as_micros()
+    );
+    // SAFETY: a write of the line's bytes to standard output.
+    unsafe { libc::write(1, line.as_ptr().cast(), line.len()) };
 }
 
 /// The longest [`release_the_gate`] waits for the gate's work to be submitted once it opened the
@@ -353,6 +404,43 @@ fn fill(command_buffer: &CommandBuffer, buffer: &Buffer, length: u64) {
     blit.end_encoding().unwrap();
 }
 
+/// A compute state of `fold_config_kernel` (the fixture's `fold_config`), its two layers' opcodes
+/// from the clock (shifted by `salt` bits), so no earlier process asked the driver for the same
+/// pipeline and the driver compiles it rather than finding it in a cache of its own. Where every
+/// dispatch has `threads` threads a threadgroup, its creation makes that region's pipeline on the
+/// calling thread; else it makes none.
+fn configured(device: &Device, threads: Option<u32>, salt: u32) -> ComputePipelineState {
+    let air = llvm_assemble(&engine_dir().join("fold_config_kernel.ll")).unwrap();
+    let library = device.new_library_with_air(&air).unwrap();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.subsec_nanos());
+    let opcodes = |shift: u32| {
+        (nanos >> (shift + salt))
+            .to_le_bytes()
+            .map(|byte| byte % 16)
+    };
+    let byte = |ty, value: u8| FunctionConstantValue::new(ty, vec![value]);
+    let constants = FunctionConstantValues::defaults()
+        .with_index(0, byte(DataType::Bool, 0))
+        .with_index(1, byte(DataType::Bool, 1))
+        .with_index(2, byte(DataType::Bool, 1))
+        .with_index(3, byte(DataType::UChar, 1))
+        .with_index(4, byte(DataType::UChar, 2))
+        .with_index(5, FunctionConstantValue::new(DataType::UChar4, opcodes(0)))
+        .with_index(6, FunctionConstantValue::new(DataType::UChar4, opcodes(3)))
+        .with_index(7, byte(DataType::UChar, 2));
+    let function = library
+        .new_function_with_name_constant_values("fold_config", &constants)
+        .unwrap();
+    let mut descriptor =
+        ComputePipelineDescriptor::new(StageSource::Function(function.function_descriptor()));
+    descriptor.required_threads_per_threadgroup = threads.map(|threads| [threads, 1, 1]);
+    device
+        .new_compute_pipeline_state(&descriptor, &PipelineOptions::default())
+        .unwrap()
+}
+
 /// A command buffer of `queue` that fills 16 bytes of a new buffer.
 fn small(queue: &CommandQueue) -> CommandBuffer {
     let buffer = queue
@@ -395,7 +483,11 @@ fn child() {
         unsafe { libc::atexit(read_the_marker) };
     }
     let messages = Messages::default();
-    let device = validated_device(TEST_DEVICE, &messages, &cache).unwrap();
+    let device = validated_device_with(TEST_DEVICE, &messages, &cache, at_plan).unwrap();
+    // Right after the device: the hook's later registrations, and every handler a case registers,
+    // run before it, and the device's driver's and layer's handlers after it.
+    // SAFETY: a handler with no arguments that never unwinds.
+    unsafe { libc::atexit(after_the_later_devices) };
     let case = case.as_str();
     match case {
         "pending_held_exit" => {
@@ -441,7 +533,51 @@ fn child() {
             stepping.commit().unwrap();
             exit_now(case, &messages);
         }
+        "making_exit" | "first_making_exit" => {
+            // A state whose creation makes its pipeline to its end on this thread: the making's
+            // driver call, the driver's compile, returns before the exit. `first_making_exit`
+            // makes none, so the pool's making below is the process's first of the kernel, and
+            // the driver's compiler makes its statics for it while it runs.
+            if case == "making_exit" {
+                drop(configured(&device, Some(64), 0));
+            }
+            // A state whose creation makes none: its first dispatch hands its region's making to
+            // the device's pool and goes on (`pipeline/dispatch_making.rs`), and the child exits
+            // while the pool's thread is in the driver's compile.
+            let pending = configured(&device, None, 3);
+            let queue = device.new_command_queue().unwrap();
+            let buffer = device
+                .new_buffer(64 * 4, ResourceOptions::shared())
+                .unwrap();
+            let command_buffer = queue.command_buffer().unwrap();
+            let mut encoder = command_buffer.compute_command_encoder().unwrap();
+            encoder.set_compute_pipeline_state(&pending).unwrap();
+            encoder.set_buffer(Some(&buffer), 0, 0).unwrap();
+            encoder.set_bytes(&[0; 80], 1).unwrap();
+            encoder.set_buffer(Some(&buffer), 0, 2).unwrap();
+            encoder
+                .dispatch_threadgroups(Size::new(2, 1, 1), Size::new(32, 1, 1))
+                .unwrap();
+            encoder.end_encoding().unwrap();
+            command_buffer.commit().unwrap();
+            // The pool's pieces held as the child exits (its making in progress where 1), and the
+            // hook's registrations: one after each making's driver call.
+            println!(
+                "{REPORT}-MAKING pool_busy={} {:?}",
+                device.work_counts().pipeline_pool_busy,
+                metal2vulkan_runtime::exit_registrations()
+            );
+            exit_now(case, &messages);
+        }
         "cpu_work_exit" => {
+            // The device's submission checks run on a thread of their own, whose sections register
+            // the hook again (`exit_guard.rs`, "Registered again"): they end first, so that the
+            // hook's last registration comes before `release_the_gate`'s, and the hook runs after
+            // it.
+            assert!(
+                device.settle_submit_checks(WAIT),
+                "{case}: the submission checks answered"
+            );
             // Long work held at a gate, then a fill of a shared marker after it on the same queue;
             // the process exits with both held, and `release_the_gate`, first in the exit, opens
             // the gate and waits until both are submitted: the device runs the work as the
@@ -494,14 +630,31 @@ fn child() {
             // device made and dropped first: its making's sections register the hook again after
             // each entry point's first call since the first device's, which the last one's then
             // do not.
-            drop(validated_device(TEST_DEVICE, &messages, &cache).unwrap());
+            drop(validated_device_with(TEST_DEVICE, &messages, &cache, at_plan).unwrap());
             // SAFETY: a handler with no arguments that never unwinds.
             unsafe { libc::atexit(drop_the_held_device) };
             let before = metal2vulkan_runtime::exit_registrations();
-            let last = validated_device(TEST_DEVICE, &messages, &cache).unwrap();
+            let last = validated_device_with(TEST_DEVICE, &messages, &cache, at_plan).unwrap();
             let after = metal2vulkan_runtime::exit_registrations();
             println!("{REPORT}-REGISTRATIONS before={before:?} after={after:?}");
             *HELD.lock().unwrap_or_else(PoisonError::into_inner) = Some(last);
+            exit_now(case, &messages);
+        }
+        "program_instance_exit" | "adopted_instance_exit" => {
+            // The runtime's threads in sections at the exit: a loop without bound runs on.
+            super::predication::loop_without_bound(&device, 3);
+            // The program's own instance and device, with the validation layer, whose exit
+            // handler the instance's creation registers; then a handler of the case's after it.
+            let adopted = super::presenting::Adopted::open(false).unwrap();
+            // SAFETY: a handler with no arguments that never unwinds.
+            unsafe { libc::atexit(after_the_program_instance) };
+            if case == "program_instance_exit" {
+                metal2vulkan_runtime::program_instance_made();
+            } else {
+                // Kept to the process's end, as the instance and device it adopts are.
+                std::mem::forget(adopted.runtime(&cache));
+            }
+            std::mem::forget(adopted);
             exit_now(case, &messages);
         }
         "pending_plain_event_exit" => {
@@ -662,6 +815,9 @@ fn child() {
             }
             exit_now(case, &messages);
         }
+        "released_import_exit" | "released_import_teardown_exit" => {
+            released_import(device, case, &messages);
+        }
         "handler_drops_last_exit" => {
             let (told, learn) = mpsc::channel();
             {
@@ -682,6 +838,154 @@ fn child() {
         }
         other => panic!("no case {other}"),
     }
+}
+
+/// The kernel the released-import cases dispatch after their fills: it samples a texture through a
+/// sampler, both named by the IDs its argument buffer holds, so its command buffer binds the
+/// device's heap set, which reaches every live texture.
+const ID_READER: &str =
+    "sample-an-unsigned-texture-through-a-sampler-held-beside-it-in-an-argument-buffer";
+
+/// How long the released-import cases' fills keep the GPU busy, as one fill's time predicts.
+const BUSY: Duration = Duration::from_millis(60);
+
+/// The fills that keep the device busy for about [`BUSY`]: a buffer's length and how many fills
+/// of it, as 16 fills' time measured on `queue` predicts on a GPU (16 to 1024 of them); on a CPU
+/// device [`in_flight`]'s.
+fn held_fills(device: &Device, queue: &CommandQueue) -> (u64, usize) {
+    let (length, fills) = in_flight();
+    if TEST_DEVICE == DeviceType::Cpu {
+        return (length, fills);
+    }
+    let buffer = device
+        .new_buffer(length, ResourceOptions::private())
+        .unwrap();
+    let command_buffer = queue.command_buffer().unwrap();
+    fills_of(&command_buffer, &buffer, length, 16);
+    let start = Instant::now();
+    command_buffer.commit().unwrap();
+    command_buffer.wait_until_completed_for(WAIT).unwrap();
+    let each = (start.elapsed() / 16).as_nanos().max(1);
+    let fills = usize::try_from(BUSY.as_nanos() / each)
+        .unwrap_or(1024)
+        .clamp(16, 1024);
+    (length, fills)
+}
+
+/// Encode `fills` fills of `buffer`'s first `length` bytes, in one blit encoder.
+fn fills_of(command_buffer: &CommandBuffer, buffer: &Buffer, length: u64, fills: usize) {
+    let mut blit = command_buffer.blit_command_encoder().unwrap();
+    for _ in 0..fills {
+        blit.fill_buffer(buffer, 0..length, FILLED).unwrap();
+    }
+    blit.end_encoding().unwrap();
+}
+
+/// The released-import cases, in reims-vgpu's shape (a texture over a surface released with the
+/// surface while a command buffer that binds the device's heap set runs): twice, a texture over a
+/// no-copy buffer of fresh host pages, whose deallocator unmaps them; a command buffer of fills
+/// that keep the device busy for about [`BUSY`], then a dispatch that reads another texture
+/// through its ID ([`ID_READER`]); the texture and its buffer released once the command buffer is
+/// scheduled, while the fills run.
+///
+/// - `released_import_exit`: each command buffer and deallocator waited for, then everything let
+///   go of but the device, which the process keeps (a static of the program's), and the process
+///   exits at the end of `main`, the runtime still releasing what the program let go of.
+/// - `released_import_teardown_exit`: the second command buffer's completed handler tells the
+///   program, which has let go of everything, the device included, and exits at once: the command
+///   buffer's release on the handler thread lets go of the device's last reference, so its
+///   teardown runs as the process exits.
+fn released_import(device: Device, case: &str, messages: &Messages) {
+    // As reims-vgpu's test: the device's own checks end first.
+    let _ = device.settle_in_place_checks(WAIT);
+    let _ = device.settle_queue_switch_check(WAIT);
+    let _ = device.settle_submit_checks(WAIT);
+    let queue = device.new_command_queue().unwrap();
+    let reader = public_case(ID_READER).unwrap();
+    let state = pipeline_state(&device, &reader).unwrap();
+    let resources = CaseResources::new(&device, &reader).unwrap();
+    let buffers = bound_buffers(&device, &reader.compute, &resources).unwrap();
+    let (length, fills) = held_fills(&device, &queue);
+    let filled = device
+        .new_buffer(length, ResourceOptions::private())
+        .unwrap();
+    let page = host_page();
+    let len = (64 * 32 * 4usize).div_ceil(page) * page;
+    let teardown = case == "released_import_teardown_exit";
+    for round in 0..2 {
+        let (freed, seen) = mpsc::channel();
+        let memory = anonymous(len);
+        let deallocator: Deallocator = Box::new(move |at: NonNull<u8>, length: u64| {
+            // SAFETY: the pages `anonymous` mapped for this buffer alone, which nothing reads
+            // any more.
+            let unmapped = unsafe { libc::munmap(at.as_ptr().cast(), length as usize) } == 0;
+            let _ = freed.send(unmapped);
+        });
+        // SAFETY: the pages stay mapped until the deallocator runs.
+        let made = unsafe {
+            device.new_buffer_with_bytes_no_copy(
+                HostMemory::new(memory),
+                len as u64,
+                ResourceOptions::shared(),
+                Some(deallocator),
+            )
+        };
+        let buffer = match made {
+            Ok(buffer) => buffer,
+            Err(error) => {
+                // A device that refuses the import typed: nothing to release.
+                println!("{REPORT}-SKIPPED {case}: {error}");
+                exit_now(case, messages);
+            }
+        };
+        let mut descriptor = TextureDescriptor::texture_2d(PixelFormat::BGRA8Unorm, 64, 32, false);
+        descriptor.usage = TextureUsage::SHADER_READ;
+        descriptor.resource_options = ResourceOptions::shared();
+        let texture = buffer.new_texture(&descriptor, 0, 64 * 4).unwrap();
+        let command_buffer = queue.command_buffer().unwrap();
+        fills_of(&command_buffer, &filled, length, fills);
+        let mut encoder = command_buffer.compute_command_encoder().unwrap();
+        encode_case(&mut encoder, &state, &reader.compute, &buffers, &resources).unwrap();
+        encoder.end_encoding().unwrap();
+        let (told, learn) = mpsc::channel();
+        command_buffer
+            .add_completed_handler(Box::new(move |_: &CommandBuffer| {
+                let _ = told.send(());
+            }))
+            .unwrap();
+        command_buffer.commit().unwrap();
+        command_buffer.wait_until_scheduled().unwrap();
+        let running = command_buffer.status() == CommandBufferStatus::Scheduled;
+        drop((texture, buffer));
+        println!(
+            "{REPORT}-ROUND {case} round={round} fills={fills} running={}",
+            u8::from(running)
+        );
+        if teardown && round == 1 {
+            drop((
+                command_buffer,
+                queue,
+                state,
+                resources,
+                buffers,
+                filled,
+                device,
+            ));
+            learn.recv_timeout(WAIT).expect("the handler ran");
+            exit_now(case, messages);
+        }
+        learn.recv_timeout(WAIT).expect("the handler ran");
+        assert_eq!(command_buffer.status(), CommandBufferStatus::Completed);
+        assert_eq!(
+            seen.recv_timeout(WAIT),
+            Ok(true),
+            "the deallocator unmapped the pages"
+        );
+    }
+    // The program keeps its device for the process's life; the rest it lets go of, and its
+    // releases run as the process exits.
+    std::mem::forget(device);
+    report(case, messages);
 }
 
 /// The host's page size.
@@ -798,7 +1102,13 @@ fn stdout_line<'a>(exited: &'a Exited, start: &str) -> Option<&'a str> {
 /// within [`EXIT_LIMIT`] of the child's last line, or of the end of
 /// the CPU device's work the exit waits for where that is later (the marker's `seen_ms`), less the
 /// time the exiting thread waited for a CPU since (`queued_us`; none where the child gave no
-/// count). What each child did, in order.
+/// count). Where the child marked the end of the handlers registered since its first device
+/// ([`after_the_later_devices`]) and the hook ran before the mark, the exit's part ends at the
+/// mark: the handlers after it are those registered as the first device was made, its driver's and
+/// the layer's, and the hook's first registration, whose run finds no device and makes no Vulkan
+/// call (`exit_guard::hook`), so their time is the driver's and the layer's (on an RTX 5080 laptop
+/// beside other GPU work, 454 to 997 ms where the rest of the exit took 2 ms, and 1.5 to 5.9 s
+/// beside the runtime suite), printed and not bounded. What each child did, in order.
 fn exits_cleanly(cases: &[&str]) -> Vec<Exited> {
     let mut all = Vec::new();
     for &case in cases {
@@ -855,13 +1165,29 @@ fn exits_cleanly(cases: &[&str]) -> Vec<Exited> {
                 .parse()
                 .ok()
         };
+        // Where the child marked the end of the handlers registered since its first device, the
+        // hook's run among them, the exit's part ends at the mark: its first device's driver's and
+        // layer's handlers after it are printed, not counted.
+        let mark = stdout_line(&exited, &format!("{REPORT}-MARK "))
+            .filter(|mark| mark.split_whitespace().any(|pair| pair == "hook_ran=1"));
+        let mark_field = |name: &str| -> Option<u128> {
+            mark?
+                .split_whitespace()
+                .find_map(|pair| pair.strip_prefix(name)?.strip_prefix('='))?
+                .parse()
+                .ok()
+        };
         // Where the runtime ended the process at once, the exit's part ends at its notice: the
         // kernel's teardown of the process after it is printed, not counted.
         let handled_ms = end_field("at_ms").or(*at_once_ms).unwrap_or(*ended_ms);
-        let wall = Duration::from_millis(handled_ms.saturating_sub(from_ms) as u64);
-        let queued = end_field("queued_us").map_or(Duration::ZERO, |us| {
-            Duration::from_micros(u64::try_from(us).unwrap_or(u64::MAX))
-        });
+        let own_ms = mark_field("at_ms").unwrap_or(handled_ms);
+        let wall = Duration::from_millis(own_ms.saturating_sub(from_ms) as u64);
+        let queued = mark_field("queued_us")
+            .or_else(|| end_field("queued_us"))
+            .map_or(Duration::ZERO, |us| {
+                Duration::from_micros(u64::try_from(us).unwrap_or(u64::MAX))
+            });
+        let first_device = mark_field("at_ms").map(|mark| handled_ms.saturating_sub(mark));
         let took = wall.saturating_sub(queued);
         let after = Duration::from_millis(ended_ms.saturating_sub(handled_ms) as u64);
         let work = Duration::from_millis(from_ms.saturating_sub(at_ms) as u64);
@@ -881,7 +1207,7 @@ fn exits_cleanly(cases: &[&str]) -> Vec<Exited> {
         let skipped = stdout.contains(&format!("{REPORT}-SKIPPED {case}"));
         println!(
             "runtime exit, {case}: {} ms ({} ms of wall time, less {} ms the exiting thread \
-             waited for a CPU; the process ended {} ms after its handlers){}{}",
+             waited for a CPU; the process ended {} ms after its handlers){}{}{}",
             took.as_millis(),
             wall.as_millis(),
             queued.as_millis(),
@@ -898,6 +1224,13 @@ fn exits_cleanly(cases: &[&str]) -> Vec<Exited> {
                 " (host memory refused)"
             } else {
                 ""
+            },
+            match first_device {
+                Some(ms) => format!(
+                    "; then the first device's driver's and layer's handlers, not counted, \
+                     {ms} ms"
+                ),
+                None => String::new(),
             }
         );
         // The child exits before its message list goes, so its count is printed here.
@@ -943,27 +1276,60 @@ fn exits_from_the_runtime_s_threads_are_clean() {
 /// An exit while a batch waits at its host step's gate for the work before it: the scheduler ends
 /// at its next section, and what is pending stays pending. The same work ran once to completion
 /// before, so that its pipelines are made and no driver's making of one is in progress at the
-/// exit: the hook waits for such a making on macOS, and on Linux ends the process at once, which
-/// the runtime's `the_hook_waits_past_its_bound_for_a_making_in_progress` and
-/// `a_busy_exit_ends_at_once_with_its_status` test.
+/// exit: the hook waits for such a making up to its own bound, which the runtime's
+/// `the_hook_waits_past_its_bound_for_a_making_in_progress` tests.
 #[test]
 fn an_exit_while_a_host_step_waits_is_clean() {
     exits_cleanly(&["host_step_pending_exit"]);
 }
 
+/// An exit while a pool's thread makes a dispatch's pipeline, after a pipeline made to its end on
+/// the program's thread, both new to the driver (`configured`): the hook, registered again after
+/// the first making's driver call, runs before every destructor the driver's compiler registered
+/// in it, and waits for the second making before them. Seen before: on an RTX 5080 a consumer's
+/// test process ended with `SIGSEGV` at `0x18` inside `libnvidia-glvkspirv.so`, the driver's SPIR-V
+/// compiler, during its exit after its test passed (one test of a whole run under load).
+///
+/// The exit's own part ends at the mark the child registers right after its device
+/// ([`after_the_later_devices`]): the hook's handlers, its wait for the making, and the compiler's
+/// destructors run before it, the device's driver's and layer's handlers after it. On an RTX 5080
+/// laptop beside the runtime suite, the part before the mark ended 8 to 41 ms after the last line,
+/// with the making ended by then, and the handlers after it took 1.5 to 5.9 s, printed and not
+/// bounded ([`exits_cleanly`]).
+///
+/// And the same exit with no making before the pool's (`first_making_exit`): the pool's making is
+/// the process's first of the kernel, so the driver's compiler makes its statics, and registers
+/// their destructors, while it runs, and the registrar registers the hook again after them
+/// (`exit_guard.rs`, "Registered again"). Measured on lavapipe before the registrar: in 1 of 3
+/// such exits, destructors LLVM registered 1 to 2 ms before the exit ran before the hook, the
+/// compile going on.
+#[test]
+fn an_exit_mid_making_is_clean() {
+    let cases = ["making_exit", "first_making_exit"];
+    for (case, exited) in cases.into_iter().zip(exits_cleanly(&cases)) {
+        // Where the hook ended the process at once, no handler after it ran ([`AT_ONCE`]).
+        let marked = stdout_line(&exited, &format!("{REPORT}-MARK ")).is_some();
+        assert!(
+            marked || exited.at_once_ms.is_some(),
+            "{case}: no mark between the hook's handlers and the driver's"
+        );
+        let line = stdout_line(&exited, &format!("{REPORT}-MAKING "))
+            .unwrap_or_else(|| panic!("{case}: no line of its making"));
+        println!("{case}: {line}");
+        assert!(
+            case != "making_exit" || !line.contains("at_makings: 0,"),
+            "{case}: no making registered the hook again: {line}"
+        );
+    }
+}
+
 /// An exit while a CPU device runs work submitted before it (fills it runs for about
 /// [`CPU_WORK_TIME`], then a fill of a shared marker) runs no exit handler beside that work, which
-/// runs on the process's own threads:
-/// - on Linux (the GNU C library), where the hook learns the exit's status, the hook finds the work
-///   running and ends the process at once with that status (0), with one line on standard error
-///   ([`AT_ONCE`]): the handlers registered before the device ([`read_the_marker`], [`exit_end`])
-///   do not run. Metal's process ends 1.2 to 2.0 ms after `exit` with work in flight (M3 Max, macOS
-///   27.0.1);
-/// - elsewhere (macOS) the hook waits for the work: the marker is written by the time
-///   [`read_the_marker`] runs, after the device's hook. The exit's own time counts from the work's
-///   end, which a thread watching the marker sees: the work's own time follows the host's load
-///   (1.585 s from the last line to the end of an exit beside other lanes at a load of 30 to 45, 47
-///   to 58 ms alone, on lavapipe).
+/// runs on the process's own threads: the hook waits for the work, and the marker is written by
+/// the time [`read_the_marker`] runs, after the device's hook, with no notice that the exit ended
+/// at once ([`AT_ONCE`]). The exit's own time counts from the work's end, which a thread watching
+/// the marker sees: the work's own time follows the host's load (1.585 s from the last line to the
+/// end of an exit beside other lanes at a load of 30 to 45, 47 to 58 ms alone, on lavapipe).
 ///
 /// That is the interleaving of an exit with a dispatch in flight on lavapipe, made certain: the
 /// work waits at a gate until the exit has begun, where a handler that runs before the device's
@@ -971,9 +1337,9 @@ fn an_exit_while_a_host_step_waits_is_clean() {
 /// hook starts, for far longer than the exit's own teardown. Without the hook's wait the marker was
 /// unwritten in 4 of 20 exits with a fixed 512 MiB of fills, which lavapipe ran within the
 /// teardown's 50 ms in the other 16. On a GPU the hook does not wait for the work (as Metal's exit
-/// does not), and the exit, with the work started in it, is clean: on Linux it ends at once where
-/// another thread is in a section as the hook runs (the completion waiter's wait for the work),
-/// else the hook returns and the marker's handler runs. The gate makes the work's state as the exit
+/// does not), and the exit, with the work started in it, is clean: the hook waits for the sections
+/// in progress (the completion waiter's wait for the work), returns, and the marker's handler
+/// runs. The gate makes the work's state as the exit
 /// begins certain on every device and at any load: before it, the child read the status once the
 /// work was submitted, and on an RTX 3090 (NVIDIA 615.71.09) beside 24 CPU spinners the GPU
 /// finished the work (15 to 18 fills of 64 MiB, sized by one fill's 11 to 13 ms round trip there)
@@ -1026,38 +1392,20 @@ fn an_exit_runs_no_handler_beside_a_cpu_device_s_work() {
         "the exit's notice was written {notices} times: {}",
         what()
     );
-    let at_once = notices == 1;
-    let hook_learns_status = cfg!(all(target_os = "linux", target_env = "gnu"));
-    assert!(
-        !at_once || hook_learns_status,
-        "the exit ended at once where the hook learns no status: {}",
+    assert_eq!(
+        notices,
+        0,
+        "the exit ended at once, its work running past the hook's bound: {}",
         what()
     );
-    if at_once {
-        for line in [&marker, &format!("{REPORT}-END ")] {
-            assert!(
-                stdout_line(&exited, line).is_none(),
-                "a handler registered before the device's hook ran after the exit ended at once \
-                 ({}): {}",
-                line.trim_end(),
-                what()
-            );
-        }
-    } else {
-        assert_eq!(
-            field(&marker, "exiting"),
-            Some(1),
-            "the runtime did not answer that the process is exiting: {}",
-            what()
-        );
-    }
-    if cpu && hook_learns_status {
-        assert!(
-            at_once,
-            "the exit did not end at once with the CPU device's work in flight: {}",
-            what()
-        );
-    } else if cpu {
+    assert_eq!(
+        field(&marker, "exiting"),
+        Some(1),
+        "the handler registered before the device did not run, or the runtime did not answer that \
+         the process is exiting: {}",
+        what()
+    );
+    if cpu {
         assert_eq!(
             field(&marker, "written"),
             Some(1),
@@ -1066,15 +1414,11 @@ fn an_exit_runs_no_handler_beside_a_cpu_device_s_work() {
         );
     }
     println!(
-        "runtime exit, {case} on a {}: {}",
+        "runtime exit, {case} on a {}: the device's hook returned, and the handlers before it ran",
         match cpu {
             true => "CPU device",
             false => "GPU",
         },
-        match at_once {
-            true => "ended at once from the device's hook",
-            false => "the device's hook returned, and the handlers before it ran",
-        }
     );
 }
 
@@ -1099,6 +1443,15 @@ fn exits_right_after_learning_of_completion_are_clean() {
     ]);
 }
 
+/// An exit after a texture over a no-copy buffer's host pages was released while a command buffer
+/// that binds the device's heap set ran (reims-vgpu's shape): with the device kept for the
+/// process's life, the runtime still releasing what the program let go of, and with the device's
+/// last reference let go of on the handler thread, its teardown racing the exit.
+#[test]
+fn exits_after_a_released_import_are_clean() {
+    exits_cleanly(&["released_import_exit", "released_import_teardown_exit"]);
+}
+
 /// An exit handler of the program's, registered between two devices, finds the hook ran, and
 /// drops the later device: the validation layer registers an exit handler at each instance, which
 /// forgets every device it knows, after which its next call for one ends the process. The hook
@@ -1115,6 +1468,51 @@ fn an_exit_handler_registered_before_an_instance_runs_after_the_hook() {
         line.contains("hook_ran=1"),
         "the handler ran before the hook: {line}"
     );
+    let at = |start: &str, name: &str| -> Option<u128> {
+        stdout_line(&exited[0], start)?
+            .split_whitespace()
+            .find_map(|pair| pair.strip_prefix(name)?.strip_prefix('='))?
+            .parse()
+            .ok()
+    };
+    let last = at(&format!("{REPORT} instance_after_handler_exit "), "at_ms");
+    let held = at(&format!("{REPORT}-HELD "), "at_ms");
+    let dropped = at(&format!("{REPORT}-HELD "), "dropped_ms");
+    let mark = at(&format!("{REPORT}-MARK "), "at_ms");
+    let end = at(&format!("{REPORT}-END "), "at_ms");
+    if let (Some(last), Some(held), Some(dropped), Some(mark), Some(end)) =
+        (last, held, dropped, mark, end)
+    {
+        println!(
+            "runtime exit, instance_after_handler_exit's parts: {} ms to the program's handler \
+             (the hook, the last instance's handlers), {} ms its drop of the last device, {} ms \
+             the second device's handlers, {} ms the first device's",
+            held.saturating_sub(last),
+            dropped.saturating_sub(held),
+            mark.saturating_sub(dropped),
+            end.saturating_sub(mark)
+        );
+    }
+}
+
+/// An instance the program makes itself, reported (`program_instance_made`) or the instance of a
+/// device the runtime adopts (`Device::from_raw`), registers the exit hook again after the exit
+/// handler the validation layer registers as the instance is created, which forgets every device
+/// the layer knows: the hook runs first and closes the guard, so no call of the runtime's (here a
+/// loop without bound's, which runs on its own thread) reaches the layer after its handler ran.
+/// Before, on the M3 Max, a child that made its own instance after its device while a loop without
+/// bound ran on ended with `SIGABRT` inside the layer in 2 and 3 exits of 20 (the layer's lookup
+/// of the device, at the loop's next call).
+#[test]
+fn an_instance_the_program_made_registers_the_exit_hook_after_its_layer_s_handler() {
+    for exited in exits_cleanly(&["program_instance_exit", "adopted_instance_exit"]) {
+        let line = stdout_line(&exited, &format!("{REPORT}-PROGRAM-INSTANCE "))
+            .unwrap_or_else(|| panic!("no line from the handler: {}", exited.stdout));
+        assert!(
+            line.contains("hook_ran=1"),
+            "the layer's handler ran before the hook: {line}"
+        );
+    }
 }
 
 /// A command buffer whose program dropped every handle but the shared event it waits for stays
@@ -1162,9 +1560,12 @@ fn a_dropped_command_buffer_completes_once_its_event_is_signalled() {
 
 /// Devices made again in a long-lived process register the exit hook no more while what they
 /// load stays loaded: with one device held, whose instance keeps the Vulkan loader, the driver and
-/// the layers loaded, 16 devices made and dropped after two that warm up add no registration at a
-/// device, one after each of their instances (a layer registers an exit handler at each), and the
-/// sections' registrations stay within their bound.
+/// the layers loaded, 16 devices made and dropped after two that warm up add a registration at a
+/// device only where the process loaded a shared object as that device was made (a host's driver
+/// manifest whose library the loader loads and drops again at each instance loads one at each;
+/// where nothing loads, none), one after each of their instances (a layer registers an exit
+/// handler at each), and the sections' registrations stay within their bound (one after each
+/// pipeline making, priming's included, aside).
 #[test]
 fn devices_made_again_register_the_exit_hook_no_more() {
     let cache = ScratchCache::new().unwrap();
@@ -1175,14 +1576,25 @@ fn devices_made_again_register_the_exit_hook_no_more() {
             drop(validated_device(TEST_DEVICE, &messages, cache.path()).unwrap());
         }
         let before = metal2vulkan_runtime::exit_registrations();
+        let mut loads = before.loads;
+        let mut made_after_a_load = 0;
         for _ in 0..16 {
             drop(validated_device(TEST_DEVICE, &messages, cache.path()).unwrap());
+            let now = metal2vulkan_runtime::exit_registrations().loads;
+            if now.is_none() || now != loads {
+                made_after_a_load += 1;
+            }
+            loads = now;
         }
         let after = metal2vulkan_runtime::exit_registrations();
-        println!("runtime exit registrations: {before:?}, then after 16 devices {after:?}");
+        println!(
+            "runtime exit registrations: {before:?}, then after 16 devices, {made_after_a_load} \
+             of them made as the process loaded a shared object, {after:?}"
+        );
         assert_eq!(
-            after.at_devices, before.at_devices,
-            "devices made again registered the hook"
+            after.at_devices - before.at_devices,
+            made_after_a_load,
+            "devices made again registered the hook past one per device made after a load"
         );
         assert_eq!(
             after.at_instances - before.at_instances,
@@ -1190,7 +1602,12 @@ fn devices_made_again_register_the_exit_hook_no_more() {
             "each instance made registers the hook once after it"
         );
         assert!(
-            after.total - after.at_devices - after.at_instances <= after.section_bound,
+            after.total
+                - after.at_devices
+                - after.at_instances
+                - after.at_makings
+                - after.during_makings
+                <= after.section_bound,
             "the sections registered past their bound: {after:?}"
         );
         drop(held);

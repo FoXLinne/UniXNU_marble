@@ -50,6 +50,7 @@ use std::sync::{Arc, Mutex};
 use super::{DispatchMemo, DispatchTables};
 use crate::address_map::SamplerMaps;
 use crate::argument_table::Stamp;
+use crate::binding::CommandUses;
 use crate::device::lock;
 use crate::function_table::VisibleFunctionTable;
 use crate::heap_sets;
@@ -73,7 +74,7 @@ pub(in crate::compute) struct LiveDispatch {
     pub(in crate::compute) state: BindState,
     /// The state's shape, `None` where a change may have changed it.
     shape: Option<Arc<BindShape>>,
-    /// The count of the device's sampler IDs' slots' changes (`Device::sampler_slots_changed`)
+    /// The count of the device's sampler IDs' slots' changes (`DeviceShared::sampler_slots_changed`)
     /// at which the state's argument samplers are every live sampler state, `None` where they are
     /// not (none listed yet, or those a variant's set-1 arrays hold alone).
     listed_at: Option<u64>,
@@ -87,6 +88,9 @@ pub(in crate::compute) struct LiveDispatch {
     pub(in crate::compute) shadows: ResidentShadows,
     /// The first texture the encoder made resident whose bytes a carrier holds for copies alone.
     pub(in crate::compute) unreadable: ResidentUnreadable,
+    /// The last dispatch's uses (`binding::command_uses_into`), whose storage the next one's
+    /// take, as a draw's take the last draw's (`LiveBind::uses`).
+    uses: CommandUses,
 }
 
 /// What a kept state's kernel table was read from at the dispatch that read it last
@@ -173,7 +177,8 @@ impl LiveDispatch {
         } else {
             // Only the slots calls changed since it was read, where the table keeps them.
             let in_part = read_under.is_some_and(|stamp| {
-                table.refresh_changed((&mut *kept, stamp), read, (maps, views), &mut reshape)
+                let kept = (&mut *kept, stamp);
+                table.refresh_changed(kept, read, (maps, views), &mut reshape, counts)
             });
             if !in_part {
                 table.refresh_reading(kept, read, (maps, views), &mut reshape);
@@ -307,11 +312,17 @@ impl LiveDispatch {
         self.memo = DispatchMemo::default();
     }
 
-    /// Its state and memo, read, beside the shadows of its resident textures, kept.
+    /// Its state and memo, read, beside the shadows of its resident textures and the last
+    /// dispatch's uses, kept.
     pub(in crate::compute) fn parts(
         &mut self,
-    ) -> (&BindState, &DispatchMemo, &mut ResidentShadows) {
-        (&self.state, &self.memo, &mut self.shadows)
+    ) -> (
+        &BindState,
+        &DispatchMemo,
+        &mut ResidentShadows,
+        &mut CommandUses,
+    ) {
+        (&self.state, &self.memo, &mut self.shadows, &mut self.uses)
     }
 }
 

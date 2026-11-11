@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-11",
+  "mode": "offline",
+  "observations": [
+    {
+      "source": "lock2-drop-00/haptics.json + lock2-drop-01/haptics.json",
+      "pid": 101,
+      "speaker_starts": 7,
+      "speaker_stops": 7,
+      "last_start_errno": 0,
+      "change_between_captures": false
+    },
+    {
+      "source": "用户反馈",
+      "sequence": [
+        "设置调整缩放或语言触发软重启",
+        "扬声器恢复播放",
+        "锁屏后失声"
+      ]
+    },
+    {
+      "source": "22H384 CoreAudio, HALS_PlugInStream::SetPropertyData",
+      "address": "0x1bb914728..0x1bb914814",
+      "finding": "sact写入转交插件，宿主通过命令门更新内部+0x64缓存；插件通知路径另经HALS_Object::PropertiesChanged"
+    },
+    {
+      "source": "AudioServerPlugIn.h SetPropertyData contract",
+      "finding": "属性设置完成通过宿主通知确认；原插件IsActive设置省略通知"
+    },
+    {
+      "source": "vad-route/globals.json + vad-codec/globals.json",
+      "finding": "原始Actuator对象vtable相对0x630758，设备ID36，端口vector占16字节；虚拟Actuator UID查询为0，继续检查虚拟设备发布和选择条件"
+    },
+    {
+      "source": "22H384 VirtualAudio",
+      "address": "0x33b45c..0x33b510",
+      "finding": "DeviceSupportsHaptics为真时添加虚拟设备类型13；该阶段之后包含设备集合过滤/合并，MG答案作为创建入口条件使用"
+    }
+  ],
+  "changes": [
+    "IsActive改用原子存储，值变化时通知宿主，通知允许同步回读",
+    "诊断插件通过独立串行队列每5秒读取状态，64条循环记录；启动15秒后开始",
+    "记录默认输出、序列化listener状态、类别和模式、活动端口类型、6个设备的存活/运行/hog和双向流活动位",
+    "保留HAL查询开始/结束标记，用于定位查询等待点",
+    "USB采集按每条记录的开始/结束序号过滤覆盖期间的数据，解码按时间排序"
+  ],
+  "tests": [
+    "主机HAL PCM、生命周期、多客户、时间线与按流属性检查通过",
+    "通知回调回读且互斥锁可取得；重复设置维持通知计数；恢复活动值通知通过",
+    "模拟HAL路由活动/停止、虚拟设备缺失、查询错误与64条循环覆盖通过",
+    "Python解码器64位时间、错误符号、环形顺序和写入中记录丢弃通过",
+    "iOS18 arm64e插件和探针构建、签名通过"
+  ],
+  "qualification": "设备锁屏复现待执行；通知契约缺口与锁屏失声根因的关联待三阶段快照核对",
+  "upstream": "scripts/update_upstream.sh完成85仓库更新；build/upstream/latest.json保留整合结果",
+  "device_followup": {
+    "route_capture": "lock-offline-stuck-00/haptics.json",
+    "locking_source": "MobileKeyBag getter 0x1b9a24698 -> __get_device_lock_state -> aks selector17 DER sls",
+    "state0_capture": "state0-lock-check.log",
+    "state0_result": "MediaExperience locked0，screen_blanked0；音频通道未建立",
+    "late_client_evidence": "state0-dead/state.json；native_adsp_text含open: adsp_apps，gClients已登记adsp_apps但up mask3仅前两个通道；Speaker errno2",
+    "fix": "QcomGlink保留提前到达的OPEN并在客户端登记后确认；主机4249项通过，内核链接中"
+  }
+}

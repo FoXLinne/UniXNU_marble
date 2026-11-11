@@ -7,7 +7,10 @@ use std::ffi::CStr;
 /// No Metal counterpart: the Vulkan objects behind a runtime device, with the function tables the
 /// runtime loaded for them: what the caller needs to read the device, or to make its own objects
 /// on it (a surface's swapchain, for example). The runtime keeps owning all of them; the
-/// references live as long as the borrow of the device.
+/// references live as long as the borrow of the device. A root handle's are of the `VkDevice`
+/// that served at the [`Device::raw`] call: after a recovery from its loss, that `VkDevice` stays
+/// alive until a later `raw` call of a root handle, so what the caller made with it is destroyed
+/// first (`Device::raw`).
 #[non_exhaustive]
 #[derive(Clone, Copy)]
 pub struct DeviceHandles<'a> {
@@ -29,8 +32,11 @@ pub struct DeviceHandles<'a> {
     /// the runtime creates where every queue family is equivalent (the same flags, queue count,
     /// timestamp bits and transfer granularity, as MoltenVK's) takes queues of all of them, so
     /// its queues run side by side; its buffers and images are then concurrent among all these
-    /// families, and a buffer or image the caller wraps must be too. An adopted device has its
-    /// one family. [`CommandQueue::with_vk_queue`](super::super::CommandQueue::with_vk_queue)
+    /// families, and a buffer or image the caller wraps must be too. Where it also reserved a
+    /// queue of another family for its staging copies (a family of transfers alone, a copy
+    /// engine; or, where no memory the host caches holds a texture's image, one of compute work,
+    /// as on an RX 7900 XTX), its own buffers are concurrent among these families and that one. An adopted device has its one
+    /// family. [`CommandQueue::with_vk_queue`](super::super::CommandQueue::with_vk_queue)
     /// names the family of each queue's own `VkQueue`.
     pub queue_families: &'a [u32],
     /// The extra queues the device made for the caller
@@ -74,8 +80,9 @@ pub struct ReservedQueue {
 /// [`DeviceHandles::extra_queues`] returns. The runtime never submits to it: the caller is its
 /// only submitter, and synchronizes its submissions to it externally, as Vulkan requires. It
 /// lives as long as the device. Where its family is not one of
-/// [`DeviceHandles::queue_families`], the device's own buffers and images are not shared with
-/// it: a submission to it uses only the caller's objects made to be shared with its family.
+/// [`DeviceHandles::queue_families`], the device's own images are not shared with it, nor its
+/// buffers unless its family is that of the queue the device reserved for its staging copies:
+/// a submission to it uses only the caller's objects made to be shared with its family.
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ExtraQueue {
@@ -159,8 +166,20 @@ impl Device {
     /// [`Device::with_loader_word`] lists them) then fault, even through
     /// [`DeviceHandles::device`], so the caller loads its commands through
     /// [`Device::device_proc_addr`] and makes those calls inside [`Device::with_loader_word`].
+    ///
+    /// A root handle's (the device the program made, and its clones) are of the `VkDevice` that
+    /// serves at the call. Once a recovery made a new one (`Degradation::DeviceRecovered`,
+    /// [`Device::recover_for_test`]), they stay valid until a later call of a root handle's
+    /// returns the new one's; after that the caller uses them no more. The lost `VkDevice` stays
+    /// alive until then, though the runtime's own objects made on it went, so the caller
+    /// destroys what it made with these handles (a swapchain, an import) before that call. A
+    /// queue lent through [`CommandQueue::with_vk_queue`](super::super::CommandQueue::with_vk_queue)
+    /// comes with the `VkDevice` it belongs to: the new one from the recovery on.
     pub unsafe fn raw(&self) -> DeviceHandles<'_> {
-        let shared = self.shared();
+        let shared = match &self.0 {
+            super::Pin::Generation(shared) => &**shared,
+            super::Pin::Root(root) => root.line.lend(&self.current()),
+        };
         let instance = &shared.instance;
         DeviceHandles {
             entry: &instance.entry,
@@ -192,9 +211,14 @@ impl Device {
     /// loader's own and read it at every call; the caller makes those inside
     /// [`Device::with_loader_word`], which lists them.
     pub fn device_proc_addr(&self, name: &CStr) -> vk::PFN_vkVoidFunction {
+        self.current().device_proc_addr_now(name)
+    }
+
+    /// [`Device::device_proc_addr`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn device_proc_addr_now(&self, name: &CStr) -> vk::PFN_vkVoidFunction {
         let shared = self.shared();
         let handle = shared.vk().handle();
-        self.with_loader_word(|| {
+        self.with_loader_word_now(|| {
             // SAFETY: the device is live while `self` is, made from this instance, and its first
             // word is the loader's again; `name` is NUL-terminated.
             unsafe {
@@ -229,13 +253,26 @@ impl Device {
     ///
     /// The caller makes such calls inside `call`. The loader's entry points for a queue or a
     /// command buffer read that object's own word: a queue's is put back by
-    /// [`CommandQueue::with_vk_queue`](super::super::CommandQueue::with_vk_queue). A driver
-    /// thread that writes the word again between the restore and the loader's read (a message
-    /// about the device from MoltenVK's completion handlers) is not guarded against. On every
-    /// other driver the word never changes, and the restore writes nothing.
+    /// [`CommandQueue::with_vk_queue`](super::super::CommandQueue::with_vk_queue). `call` runs
+    /// under the word's lock, which the runtime's own calls the loader serves take too, and its
+    /// submission checks' thread across its submissions, and across each whole step of theirs on a
+    /// device whose word was found overwritten, the driver's completion of their submissions
+    /// included (on MoltenVK, with each activity logged at once, each names the device): none of
+    /// them writes the word between this restore and the loader's read, and `call` may wait for
+    /// one such step. So `call` makes the loader's calls alone, and uses none of the runtime's
+    /// queues: a [`CommandQueue::with_vk_queue`](super::super::CommandQueue::with_vk_queue)
+    /// inside it may wait for the checks' thread, which waits for `call`. A driver thread that
+    /// writes the word on its own between the restore and the loader's read for work other than
+    /// the checks' (a message about the device as one of the program's command buffers completes,
+    /// from MoltenVK's completion handlers) is not guarded against. On every other driver the
+    /// word never changes, and the restore writes nothing.
     pub fn with_loader_word<R>(&self, call: impl FnOnce() -> R) -> R {
+        self.current().with_loader_word_now(call)
+    }
+
+    /// [`Device::with_loader_word`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn with_loader_word_now<R>(&self, call: impl FnOnce() -> R) -> R {
         // SAFETY: the device is live while `self` is.
-        unsafe { self.shared().loader_word.restore() };
-        call()
+        unsafe { self.shared().loader_word.restored(call) }
     }
 }

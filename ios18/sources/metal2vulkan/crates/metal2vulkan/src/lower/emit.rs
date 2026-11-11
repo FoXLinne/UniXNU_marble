@@ -188,6 +188,10 @@ pub struct EmitCx<'a> {
     /// where `live` holds. In a workgroup-uniform block every invocation is live or none is, so
     /// every lane takes part as active (a result nobody is live for is never stored).
     pub active: Option<SValue>,
+    /// The flag a predicated walk starts `live` from, computed in the function's entry: whether
+    /// the invocation is one of its partial object threadgroup's threads (`dispatch::emit_entry`).
+    /// `None`: every invocation runs the body.
+    pub(crate) entry_live: Option<SValue>,
     /// The memory-plan slots a buffer store emitted so far merges a partial word into, through
     /// the sub-word store's two atomics, which read the word they modify. Whether a store merges
     /// depends on the leaf the lowering chose and on the units the slot's views hold on the
@@ -206,6 +210,11 @@ pub struct EmitCx<'a> {
     /// `stage_io::emit_entry` finds before the body (`stage_io::MergedRead`): defined in the
     /// function's straight-line entry, so every later block of the function may read them.
     pub(crate) merged_draw: Option<crate::bind::MergedVertex>,
+    /// The texel of each storage-form color attachment a fragment function reads, by Metal
+    /// color index, at the invocation's pixel (and sample), which `fragment::emit_entry` reads
+    /// before the body: defined in the function's straight-line entry, inside the interlock, so
+    /// every use of the color in a later block takes the one texel (`fragment::fetch::value`).
+    pub(crate) fetched: Vec<(u32, SValue)>,
 }
 
 /// A value that is the same wherever an invocation computes it, so a block computes it once, and
@@ -251,11 +260,13 @@ impl<'a> EmitCx<'a> {
             entry_block: None,
             live: None,
             active: None,
+            entry_live: None,
             merged: BTreeSet::new(),
             localized: None,
             fault: None,
             sampling: Default::default(),
             merged_draw: None,
+            fetched: Vec::new(),
         }
     }
 
@@ -669,11 +680,13 @@ impl<'a> Emitter<'a> {
                 entry_block: None,
                 live: None,
                 active: None,
+                entry_live: None,
                 merged: BTreeSet::new(),
                 localized: None,
                 fault: None,
                 sampling: Default::default(),
                 merged_draw: None,
+                fetched: Vec::new(),
             },
             vars: None,
             phis,
@@ -1106,6 +1119,10 @@ impl CodeEmitter for Emitter<'_> {
 
     fn predicated(&self) -> bool {
         self.cx.plan.families.simd.predication.is_some()
+    }
+
+    fn entry_live(&self) -> Option<SValue> {
+        self.cx.entry_live
     }
 
     fn syncs(&self, b: crate::air::ir::BlockId) -> bool {

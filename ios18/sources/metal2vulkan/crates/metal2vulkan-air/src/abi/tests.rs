@@ -207,7 +207,8 @@ fn kernel_roles_decode() {
     assert_eq!(
         e.stage,
         Stage::Kernel {
-            max_total_threads: None
+            max_total_threads: None,
+            work_group_size: None
         }
     );
     assert!(e.outputs.is_empty());
@@ -305,6 +306,138 @@ fn missing_key_is_refused() {
     let sampler = vec![I(2), S("air.sampler")];
     let k = Kernel::with(&[buffer_arg(0), texture_arg(1), sampler, gid_arg(3)]);
     expect_abi(k.decode(), AbiError::MissingKey);
+}
+
+/// An argument Apple's OpenCL compiler passes by value at location `location`, `size` bytes
+/// (`air.constant`, as written for a `float k` or a `struct S s` parameter), with the extra
+/// operands `extra` before its type name.
+fn constant_arg<'a>(i: u64, location: u64, size: u64, extra: &[O<'a>]) -> Vec<O<'a>> {
+    let mut ops = vec![
+        I(i),
+        S("air.constant"),
+        S("air.location_index"),
+        I(location),
+        I(1),
+    ];
+    ops.extend_from_slice(extra);
+    ops.extend([
+        S("air.arg_type_size"),
+        I(size),
+        S("air.arg_type_align_size"),
+        I(4),
+        S("air.arg_type_name"),
+        S("S"),
+        S("air.arg_name"),
+        S("s"),
+    ]);
+    ops
+}
+
+/// A by-value argument (`air.constant`) is a read-only constant buffer at its location holding
+/// exactly its own bytes, its layout the struct's where it states one. Its node states no access
+/// and no address space and takes neither; it needs its size; it is a constant-space pointer; and
+/// only a kernel takes one.
+#[test]
+fn a_by_value_argument_is_a_constant_buffer_of_its_own_size() {
+    let slot = |i| Slot {
+        index: AbiInt::Const(i),
+        count: AbiInt::Const(1),
+    };
+    let k = Kernel::with(&[
+        buffer_arg(0),
+        texture_arg(1),
+        constant_arg(2, 4, 8, &[]),
+        gid_arg(3),
+    ]);
+    let abi = k.decode().expect("a by-value argument decodes");
+    let p = &abi.entries[0].params[2];
+    assert_eq!(
+        p.role,
+        ParamRole::Buffer(BufferArg {
+            location: slot(4),
+            access: Access::Read,
+            space: AddrSpace::Constant,
+            buffer_size: Some(8),
+            layout: None,
+            raster_order_group: None,
+        })
+    );
+    assert_eq!((p.ty.size, p.ty.align), (Some(8), Some(4)));
+    assert_eq!(p.name, Some(DiagName::new("s")));
+    // A struct's members are its layout.
+    let mut b = ModuleBuilder::new();
+    let params = kernel_params(&mut b);
+    let void = b.void();
+    let f = entry_fn(&mut b, "k", void, &params);
+    let leaf = leaf_layout(&mut b);
+    let args = [
+        buffer_arg(0),
+        texture_arg(1),
+        constant_arg(2, 4, 4, &[S("air.struct_type_info"), N(leaf)]),
+        gid_arg(3),
+    ];
+    let arg_nodes: Vec<_> = args.iter().map(|a| N(node(&mut b, a))).collect();
+    let inputs = node(&mut b, &arg_nodes);
+    let outputs = node(&mut b, &[]);
+    let e = node(&mut b, &[F(f), N(outputs), N(inputs)]);
+    b.named_md("air.kernel", &[e]);
+    let abi = decode(&b.finish().unwrap(), &PointeeTable::default(), &mut meter())
+        .expect("a by-value struct decodes");
+    let ParamRole::Buffer(arg) = &abi.entries[0].params[2].role else {
+        panic!("{:?}", abi.entries[0].params[2])
+    };
+    let layout = arg
+        .layout
+        .and_then(|r| abi.struct_info(r))
+        .expect("its layout");
+    assert_eq!(layout.members.len(), 1);
+    assert_eq!(arg.buffer_size, Some(4));
+    // An access or an address space is a key the role does not take.
+    for extra in [&[S("air.read")][..], &[S("air.address_space"), I(2)]] {
+        let k = Kernel::with(&[
+            buffer_arg(0),
+            texture_arg(1),
+            constant_arg(2, 4, 8, extra),
+            gid_arg(3),
+        ]);
+        expect_abi(k.decode(), AbiError::UnknownKey);
+    }
+    // Without its size it holds no known bytes.
+    let sizeless: Vec<_> = constant_arg(2, 4, 8, &[])
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| !(5..=6).contains(i))
+        .map(|(_, o)| o)
+        .collect();
+    let k = Kernel::with(&[buffer_arg(0), texture_arg(1), sizeless, gid_arg(3)]);
+    expect_abi(k.decode(), AbiError::MissingKey);
+    // A device pointer is not one.
+    let k = Kernel::with(&[
+        constant_arg(0, 4, 8, &[]),
+        texture_arg(1),
+        sampler_arg(2),
+        gid_arg(3),
+    ]);
+    expect_abi(k.decode(), AbiError::RoleTypeMismatch);
+    // A vertex function takes none, where a kernel's same node reaches the type check.
+    let by_value: &[O<'_>] = &[
+        I(0),
+        S("air.constant"),
+        S("air.location_index"),
+        I(0),
+        I(1),
+        S("air.arg_type_size"),
+        I(4),
+    ];
+    let position: &[O<'_>] = &[S("air.position")];
+    expect_abi(
+        single_io("air.vertex", by_value, Some(position)),
+        AbiError::UnknownKey,
+    );
+    expect_abi(
+        single_io("air.kernel", by_value, None),
+        AbiError::RoleTypeMismatch,
+    );
 }
 
 /// `buffer_arg(i)` without its `air.address_space` key and value, as an older compiler writes a
@@ -474,7 +607,8 @@ fn kernel_attributes_and_predicates() {
     assert_eq!(
         e.stage,
         Stage::Kernel {
-            max_total_threads: Some(64)
+            max_total_threads: Some(64),
+            work_group_size: None
         }
     );
     assert_eq!(
@@ -548,8 +682,60 @@ fn an_unread_stage_attribute_is_refused_by_its_key() {
     assert_eq!(
         abi.entries[0].stage,
         Stage::Kernel {
-            max_total_threads: Some(32)
+            max_total_threads: Some(32),
+            work_group_size: None
         }
+    );
+}
+
+/// OpenCL C's `reqd_work_group_size(64, 1, 1)` (`air.work_group_size`, as Apple's OpenCL compiler
+/// writes it after the kernel's argument list) is the kernel's required size. Each dimension is
+/// at least 1, it is stated once, and only a kernel states it.
+#[test]
+fn a_kernel_s_required_work_group_size_decodes() {
+    let size = |b: &mut ModuleBuilder, x| N(node(b, &[S("air.work_group_size"), I(x), I(1), I(1)]));
+    let abi = kernel_with_attribute(|b| size(b, 64)).expect("a required size decodes");
+    assert_eq!(
+        abi.entries[0].stage,
+        Stage::Kernel {
+            max_total_threads: None,
+            work_group_size: Some([64, 1, 1]),
+        }
+    );
+    assert_eq!(abi.entries[0].stage.work_group_size(), Some([64, 1, 1]));
+    expect_abi(kernel_with_attribute(|b| size(b, 0)), AbiError::BadValue);
+    let mut b = ModuleBuilder::new();
+    let params = kernel_params(&mut b);
+    let void = b.void();
+    let f = entry_fn(&mut b, "k", void, &params);
+    let args = [buffer_arg(0), texture_arg(1), sampler_arg(2), gid_arg(3)];
+    let arg_nodes: Vec<_> = args.iter().map(|a| N(node(&mut b, a))).collect();
+    let inputs = node(&mut b, &arg_nodes);
+    let outputs = node(&mut b, &[]);
+    let [once, twice] = [size(&mut b, 64), size(&mut b, 32)];
+    let e = node(&mut b, &[F(f), N(outputs), N(inputs), once, twice]);
+    b.named_md("air.kernel", &[e]);
+    let m = b.finish().unwrap();
+    expect_abi(
+        decode(&m, &PointeeTable::default(), &mut meter()),
+        AbiError::BadValue,
+    );
+    let position: &[O<'_>] = &[S("air.position")];
+    let mut b = ModuleBuilder::new();
+    let i32t = b.int(32);
+    let ret = b.float();
+    let f = entry_fn(&mut b, "v", ret, &[i32t]);
+    let out = node(&mut b, position);
+    let outs = node(&mut b, &[N(out)]);
+    let id = node(&mut b, &[I(0), S("air.vertex_id")]);
+    let ins = node(&mut b, &[N(id)]);
+    let attr = size(&mut b, 64);
+    let e = node(&mut b, &[F(f), N(outs), N(ins), attr]);
+    b.named_md("air.vertex", &[e]);
+    let m = b.finish().unwrap();
+    expect_abi(
+        decode(&m, &PointeeTable::default(), &mut meter()),
+        AbiError::UnknownStageAttribute(DiagName::new("air.work_group_size")),
     );
 }
 
@@ -2480,6 +2666,47 @@ fn module_level_metadata_decodes() {
     assert_eq!(abi.producer, Some(DiagName::new("producer")));
 }
 
+/// A module Metal links at run time from several (Core Image's kernels) merges their option
+/// lists, so an option may repeat; each repeat states the option it already stated.
+#[test]
+fn a_repeated_compile_option_states_it_once() {
+    let options = |list: &[&str]| {
+        module_with(|b| {
+            let nodes: Vec<_> = list.iter().map(|&o| node(b, &[S(o)])).collect();
+            b.named_md("air.compile_options", &nodes);
+        })
+        .map(|abi| abi.compile)
+    };
+    let once = [
+        "air.compile.denorms_disable",
+        "air.compile.fast_math_enable",
+        "air.compile.framebuffer_fetch_disable",
+    ];
+    let twice: Vec<&str> = once.iter().chain(once.iter()).copied().collect();
+    let want = CompileOptions {
+        fast_math: Some(true),
+        denorms_disable: true,
+        framebuffer_fetch: Some(false),
+    };
+    assert_eq!(options(&once).unwrap(), want);
+    assert_eq!(options(&twice).unwrap(), want);
+    // Repeated next to each other, and each kind of option alone.
+    assert_eq!(
+        options(&[
+            "air.compile.fast_math_disable",
+            "air.compile.fast_math_disable",
+            "air.compile.denorms_disable",
+            "air.compile.denorms_disable",
+        ])
+        .unwrap(),
+        CompileOptions {
+            fast_math: Some(false),
+            denorms_disable: true,
+            framebuffer_fetch: None,
+        }
+    );
+}
+
 #[test]
 fn closed_module_level_sets() {
     // Unknown named metadata.
@@ -2498,15 +2725,26 @@ fn closed_module_level_sets() {
         }),
         AbiError::UnknownKey,
     );
-    // Contradictory compile options.
-    expect_abi(
-        module_with(|b| {
-            let a = node(b, &[S("air.compile.fast_math_enable")]);
-            let c = node(b, &[S("air.compile.fast_math_disable")]);
-            b.named_md("air.compile_options", &[a, c]);
-        }),
-        AbiError::BadValue,
-    );
+    // Contradictory compile options, alone and after a repeat of the first.
+    for list in [
+        &[
+            "air.compile.fast_math_enable",
+            "air.compile.fast_math_disable",
+        ][..],
+        &[
+            "air.compile.framebuffer_fetch_disable",
+            "air.compile.framebuffer_fetch_disable",
+            "air.compile.framebuffer_fetch_enable",
+        ],
+    ] {
+        expect_abi(
+            module_with(|b| {
+                let nodes: Vec<_> = list.iter().map(|&o| node(b, &[S(o)])).collect();
+                b.named_md("air.compile_options", &nodes);
+            }),
+            AbiError::BadValue,
+        );
+    }
     // Unknown module flag.
     expect_abi(
         module_with(|b| {
@@ -4612,6 +4850,7 @@ fn reach_entry(roles: Vec<ParamRole>) -> EntryPoint {
         func: FuncId::new(0),
         stage: Stage::Kernel {
             max_total_threads: None,
+            work_group_size: None,
         },
         params: roles
             .into_iter()

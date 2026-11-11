@@ -78,6 +78,10 @@ assoc-const	metal2vulkan::bind::ChromaSampleModule::SHAPE_WORDS	pub const SHAPE_
 assoc-const	metal2vulkan::bind::ChromaSampleModule::TEXELS_BINDING	pub const TEXELS_BINDING: u32
 assoc-const	metal2vulkan::bind::ColorResolveModules::SET	pub const SET: u32
 assoc-const	metal2vulkan::bind::ColorResolveModules::SOURCE_BINDING	pub const SOURCE_BINDING: u32
+assoc-const	metal2vulkan::bind::DepthClampModule::DEPTHS_BINDING	pub const DEPTHS_BINDING: u32
+assoc-const	metal2vulkan::bind::DepthClampModule::LOCAL_SIZE	pub const LOCAL_SIZE: u32
+assoc-const	metal2vulkan::bind::DepthClampModule::PUSH_BYTES	pub const PUSH_BYTES: u32
+assoc-const	metal2vulkan::bind::DepthClampModule::SET	pub const SET: u32
 assoc-const	metal2vulkan::bind::DepthSplitModule::DESTINATION_BINDING	pub const DESTINATION_BINDING: u32
 assoc-const	metal2vulkan::bind::DepthSplitModule::LOCAL_SIZE	pub const LOCAL_SIZE: u32
 assoc-const	metal2vulkan::bind::DepthSplitModule::SET	pub const SET: u32
@@ -217,6 +221,7 @@ assoc-const	metal2vulkan::bind::MipmapFilterModule::SOURCE_BINDING	pub const SOU
 assoc-const	metal2vulkan::bind::NeutralResource::SINK_BYTES	pub const SINK_BYTES: u32
 assoc-const	metal2vulkan::bind::PagesCopy::ALL	pub const ALL: [PagesCopy; 2]
 assoc-const	metal2vulkan::bind::PagesCopyModule::CONSECUTIVE_BINDING	pub const CONSECUTIVE_BINDING: u32
+assoc-const	metal2vulkan::bind::PagesCopyModule::ENTRY_WORDS	pub const ENTRY_WORDS: u32
 assoc-const	metal2vulkan::bind::PagesCopyModule::LOCAL_SIZE	pub const LOCAL_SIZE: u32
 assoc-const	metal2vulkan::bind::PagesCopyModule::PAGE_BYTES	pub const PAGE_BYTES: u32
 assoc-const	metal2vulkan::bind::PagesCopyModule::PUSH_BYTES	pub const PUSH_BYTES: u32
@@ -328,8 +333,8 @@ assoc-const	metal2vulkan::bind::ShadowMergeModule::LOCAL_SIZE	pub const LOCAL_SI
 assoc-const	metal2vulkan::bind::ShadowMergeModule::PUSH_BYTES	pub const PUSH_BYTES: u32
 assoc-const	metal2vulkan::bind::ShadowMergeModule::SET	pub const SET: u32
 assoc-const	metal2vulkan::bind::ShadowMergeModule::WORDS	pub const WORDS: u32
-assoc-const	metal2vulkan::bind::ShadowMergeRead::ALL	pub const ALL: [ShadowMergeRead; 6]
-assoc-const	metal2vulkan::bind::ShadowTexelView::ALL	pub const ALL: [ShadowTexelView; 4]
+assoc-const	metal2vulkan::bind::ShadowMergeRead::ALL	pub const ALL: [ShadowMergeRead; 8]
+assoc-const	metal2vulkan::bind::ShadowTexelView::ALL	pub const ALL: [ShadowTexelView; 6]
 assoc-const	metal2vulkan::bind::StatusBits::ABSENT_ARGUMENT_READ	pub const ABSENT_ARGUMENT_READ: StatusBits
 assoc-const	metal2vulkan::bind::StatusBits::CUBIC_ARGUMENT_SAMPLER	pub const CUBIC_ARGUMENT_SAMPLER: StatusBits
 assoc-const	metal2vulkan::bind::StatusBits::INDEX_POOL_OVERFLOW	pub const INDEX_POOL_OVERFLOW: StatusBits
@@ -450,6 +455,7 @@ assoc-const	metal2vulkan::metal::sampler::SamplerWord::MIN_LINEAR	pub const MIN_
 assoc-const	metal2vulkan::metal::sampler::SamplerWord::MIP_FILTER	pub const MIP_FILTER: u32
 assoc-const	metal2vulkan::metal::sampler::SamplerWord::MIP_FILTER_SHIFT	pub const MIP_FILTER_SHIFT: u32
 assoc-const	metal2vulkan::metal::sampler::SamplerWord::PIXEL_COORDINATES	pub const PIXEL_COORDINATES: u32
+assoc-const	metal2vulkan::metal::sampler::SamplerWord::READ_STATE	pub const READ_STATE: u32
 assoc-const	metal2vulkan::metal::sampler::SamplerWord::REDUCTION	pub const REDUCTION: u32
 assoc-const	metal2vulkan::metal::sampler::SamplerWord::REDUCTION_SHIFT	pub const REDUCTION_SHIFT: u32
 assoc-const	metal2vulkan::pipeline::AccessSet::READ	pub const READ: AccessSet
@@ -553,6 +559,10 @@ assoc-const-value	metal2vulkan::bind::ChromaSampleModule::SHAPE_WORDS	5
 assoc-const-value	metal2vulkan::bind::ChromaSampleModule::TEXELS_BINDING	2
 assoc-const-value	metal2vulkan::bind::ColorResolveModules::SET	0
 assoc-const-value	metal2vulkan::bind::ColorResolveModules::SOURCE_BINDING	0
+assoc-const-value	metal2vulkan::bind::DepthClampModule::DEPTHS_BINDING	0
+assoc-const-value	metal2vulkan::bind::DepthClampModule::LOCAL_SIZE	64
+assoc-const-value	metal2vulkan::bind::DepthClampModule::PUSH_BYTES	16
+assoc-const-value	metal2vulkan::bind::DepthClampModule::SET	0
 assoc-const-value	metal2vulkan::bind::DepthSplitModule::DESTINATION_BINDING	1
 assoc-const-value	metal2vulkan::bind::DepthSplitModule::LOCAL_SIZE	8
 assoc-const-value	metal2vulkan::bind::DepthSplitModule::SET	0
@@ -692,6 +702,7 @@ assoc-const-value	metal2vulkan::bind::MipmapFilterModule::SOURCE_BINDING	0
 assoc-const-value	metal2vulkan::bind::NeutralResource::SINK_BYTES	64
 assoc-const-value	metal2vulkan::bind::PagesCopy::ALL	[PagesCopy::Gather, PagesCopy::Scatter]
 assoc-const-value	metal2vulkan::bind::PagesCopyModule::CONSECUTIVE_BINDING	1
+assoc-const-value	metal2vulkan::bind::PagesCopyModule::ENTRY_WORDS	3
 assoc-const-value	metal2vulkan::bind::PagesCopyModule::LOCAL_SIZE	128
 assoc-const-value	metal2vulkan::bind::PagesCopyModule::PAGE_BYTES	4096
 assoc-const-value	metal2vulkan::bind::PagesCopyModule::PUSH_BYTES	16
@@ -803,8 +814,8 @@ assoc-const-value	metal2vulkan::bind::ShadowMergeModule::LOCAL_SIZE	64
 assoc-const-value	metal2vulkan::bind::ShadowMergeModule::PUSH_BYTES	16
 assoc-const-value	metal2vulkan::bind::ShadowMergeModule::SET	0
 assoc-const-value	metal2vulkan::bind::ShadowMergeModule::WORDS	4
-assoc-const-value	metal2vulkan::bind::ShadowMergeRead::ALL	[ShadowMergeRead::Words(ShadowTexelView::R32Uint), ShadowMergeRead::Words(ShadowTexelView::R8G8B8A8Uint), ShadowMergeRead::Words(ShadowTexelView::R32G32Uint), ShadowMergeRead::Words(ShadowTexelView::R32G32B32A32Uint), ShadowMergeRead::B8G8R8A8Unorm, ShadowMergeRead::R8G8B8A8Unorm]
-assoc-const-value	metal2vulkan::bind::ShadowTexelView::ALL	[ShadowTexelView::R32Uint, ShadowTexelView::R8G8B8A8Uint, ShadowTexelView::R32G32Uint, ShadowTexelView::R32G32B32A32Uint]
+assoc-const-value	metal2vulkan::bind::ShadowMergeRead::ALL	[ShadowMergeRead::Words(ShadowTexelView::R32Uint), ShadowMergeRead::Words(ShadowTexelView::R8G8B8A8Uint), ShadowMergeRead::Words(ShadowTexelView::R32G32Uint), ShadowMergeRead::Words(ShadowTexelView::R32G32B32A32Uint), ShadowMergeRead::Words(ShadowTexelView::R8Uint), ShadowMergeRead::Words(ShadowTexelView::R16Uint), ShadowMergeRead::B8G8R8A8Unorm, ShadowMergeRead::R8G8B8A8Unorm]
+assoc-const-value	metal2vulkan::bind::ShadowTexelView::ALL	[ShadowTexelView::R32Uint, ShadowTexelView::R8G8B8A8Uint, ShadowTexelView::R32G32Uint, ShadowTexelView::R32G32B32A32Uint, ShadowTexelView::R8Uint, ShadowTexelView::R16Uint]
 assoc-const-value	metal2vulkan::bind::StatusBits::ABSENT_ARGUMENT_READ	StatusBits(1 <<4)
 assoc-const-value	metal2vulkan::bind::StatusBits::CUBIC_ARGUMENT_SAMPLER	StatusBits(1 <<6)
 assoc-const-value	metal2vulkan::bind::StatusBits::INDEX_POOL_OVERFLOW	StatusBits(1 <<3)
@@ -925,6 +936,7 @@ assoc-const-value	metal2vulkan::metal::sampler::SamplerWord::MIN_LINEAR	1 <<1
 assoc-const-value	metal2vulkan::metal::sampler::SamplerWord::MIP_FILTER	0b11 <<Self::MIP_FILTER_SHIFT
 assoc-const-value	metal2vulkan::metal::sampler::SamplerWord::MIP_FILTER_SHIFT	3
 assoc-const-value	metal2vulkan::metal::sampler::SamplerWord::PIXEL_COORDINATES	1 <<0
+assoc-const-value	metal2vulkan::metal::sampler::SamplerWord::READ_STATE	Self::MIP_FILTER | Self::ADDRESS[0] | Self::ADDRESS[1] | Self::ADDRESS[2] | Self::BORDER
 assoc-const-value	metal2vulkan::metal::sampler::SamplerWord::REDUCTION	0b11 <<Self::REDUCTION_SHIFT
 assoc-const-value	metal2vulkan::metal::sampler::SamplerWord::REDUCTION_SHIFT	19
 assoc-const-value	metal2vulkan::pipeline::AccessSet::READ	AccessSet
@@ -1191,10 +1203,12 @@ enum	metal2vulkan-air::intrinsics::SamplerOp	#[derive(Clone, Copy, Debug, Partia
 enum	metal2vulkan-air::intrinsics::Sign	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum Sign
 enum	metal2vulkan-air::intrinsics::SimdMatrix	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum SimdMatrix
 enum	metal2vulkan-air::intrinsics::Sync	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum Sync
+enum	metal2vulkan-air::intrinsics::Template	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] pub enum Template
 enum	metal2vulkan-air::intrinsics::Tensor	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum Tensor
 enum	metal2vulkan-air::intrinsics::TexOp	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum TexOp
 enum	metal2vulkan-air::intrinsics::TexRole	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum TexRole
 enum	metal2vulkan-air::intrinsics::ThreadScope	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum ThreadScope
+enum	metal2vulkan-air::intrinsics::WorkItem	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum WorkItem
 enum	metal2vulkan-air::ir::AddrSpace	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum AddrSpace
 enum	metal2vulkan-air::ir::AtomicRmwOp	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum AtomicRmwOp
 enum	metal2vulkan-air::ir::BinOp	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum BinOp
@@ -1269,6 +1283,9 @@ enum	metal2vulkan-runtime::HeapProblem	#[derive(Clone, Copy, Debug, PartialEq, E
 enum	metal2vulkan-runtime::HeapType	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum HeapType
 enum	metal2vulkan-runtime::HostBacking	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum HostBacking
 enum	metal2vulkan-runtime::IdPlacement	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum IdPlacement
+enum	metal2vulkan-runtime::InPlaceAccess	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum InPlaceAccess
+enum	metal2vulkan-runtime::InPlaceRefusal	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum InPlaceRefusal
+enum	metal2vulkan-runtime::InPlaceRowEnds	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum InPlaceRowEnds
 enum	metal2vulkan-runtime::IndirectCommand	#[derive(Clone, Debug)] #[non_exhaustive] pub enum IndirectCommand
 enum	metal2vulkan-runtime::IndirectCommandBufferProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum IndirectCommandBufferProblem
 enum	metal2vulkan-runtime::IndirectDispatch	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum IndirectDispatch
@@ -1279,6 +1296,7 @@ enum	metal2vulkan-runtime::LimitRow	#[derive(Clone, Copy, Debug, PartialEq, Eq, 
 enum	metal2vulkan-runtime::LoadAction	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum LoadAction
 enum	metal2vulkan-runtime::MacClass	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum MacClass
 enum	metal2vulkan-runtime::MappedSampling	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum MappedSampling
+enum	metal2vulkan-runtime::MemoryExport	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum MemoryExport
 enum	metal2vulkan-runtime::MemoryKind	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum MemoryKind
 enum	metal2vulkan-runtime::MessageSeverity	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum MessageSeverity
 enum	metal2vulkan-runtime::MipmapProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum MipmapProblem
@@ -1312,7 +1330,9 @@ enum	metal2vulkan-runtime::SparseTextureRegionAlignmentMode	#[derive(Clone, Copy
 enum	metal2vulkan-runtime::StorageMode	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum StorageMode
 enum	metal2vulkan-runtime::StoreAction	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum StoreAction
 enum	metal2vulkan-runtime::SurfaceYCbCrMatrix	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum SurfaceYCbCrMatrix
+enum	metal2vulkan-runtime::TexturePlacement	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum TexturePlacement
 enum	metal2vulkan-runtime::TextureProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum TextureProblem
+enum	metal2vulkan-runtime::TextureShadowReason	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum TextureShadowReason
 enum	metal2vulkan-runtime::ViewProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum ViewProblem
 enum	metal2vulkan-runtime::VisibilityProblem	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum VisibilityProblem
 enum	metal2vulkan-runtime::VisibilityResultMode	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum VisibilityResultMode
@@ -1404,6 +1424,7 @@ enum	metal2vulkan::device::BatchOrderPolicy	#[cfg_attr(feature = "serde", derive
 enum	metal2vulkan::device::CompletionPolicy	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum CompletionPolicy
 enum	metal2vulkan::device::Containment	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum Containment
 enum	metal2vulkan::device::ContainmentPolicy	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum ContainmentPolicy
+enum	metal2vulkan::device::DontCareColorPolicy	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum DontCareColorPolicy
 enum	metal2vulkan::device::DriverFact	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum DriverFact
 enum	metal2vulkan::device::DriverWorkaround	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum DriverWorkaround
 enum	metal2vulkan::device::Exposure	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum Exposure
@@ -1434,6 +1455,7 @@ enum	metal2vulkan::device::VkFeature	#[cfg_attr(feature = "serde", derive(serde:
 enum	metal2vulkan::device::VkLimit	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum VkLimit
 enum	metal2vulkan::device::VkProperty	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum VkProperty
 enum	metal2vulkan::device::WideLinePolicy	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum WideLinePolicy
+enum	metal2vulkan::device::YCbCrInPlacePolicy	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum YCbCrInPlacePolicy
 enum	metal2vulkan::error::AbiError	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum AbiError
 enum	metal2vulkan::error::Attachment	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum Attachment
 enum	metal2vulkan::error::BindError	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum BindError
@@ -1442,6 +1464,7 @@ enum	metal2vulkan::error::BitstreamError	#[derive(Clone, Debug, PartialEq, Eq)] 
 enum	metal2vulkan::error::BudgetExceeded	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum BudgetExceeded
 enum	metal2vulkan::error::CanonError	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum CanonError
 enum	metal2vulkan::error::Capability	#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum Capability
+enum	metal2vulkan::error::ComputePipelineProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum ComputePipelineProblem
 enum	metal2vulkan::error::ConstantRecord	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum ConstantRecord
 enum	metal2vulkan::error::ContainerError	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum ContainerError
 enum	metal2vulkan::error::DescriptorError	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum DescriptorError
@@ -1459,6 +1482,7 @@ enum	metal2vulkan::error::LinearNeed	#[derive(Clone, Copy, Debug, PartialEq, Eq,
 enum	metal2vulkan::error::LinkProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum LinkProblem
 enum	metal2vulkan::error::LowerFamily	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum LowerFamily
 enum	metal2vulkan::error::MeshPipelineProblem	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum MeshPipelineProblem
+enum	metal2vulkan::error::MetalAnswer	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum MetalAnswer
 enum	metal2vulkan::error::Needs	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub enum Needs
 enum	metal2vulkan::error::Permanence	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum Permanence
 enum	metal2vulkan::error::PrivateRenderField	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum PrivateRenderField
@@ -1512,6 +1536,7 @@ enum	metal2vulkan::pipeline::SamplerRef	#[cfg_attr(feature = "serde", derive(ser
 enum	metal2vulkan::pipeline::SlotClass	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum SlotClass
 enum	metal2vulkan::pipeline::SlotInterface	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub enum SlotInterface
 enum	metal2vulkan::pipeline::SnapshotForm	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum SnapshotForm
+enum	metal2vulkan::pipeline::SnapshotRefusal	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum SnapshotRefusal
 enum	metal2vulkan::pipeline::SpecKey	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum SpecKey
 enum	metal2vulkan::pipeline::Stage	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub enum Stage
 enum	metal2vulkan::pipeline::StageSource	#[derive(Clone, Debug, PartialEq, Eq)] pub enum StageSource
@@ -1577,9 +1602,11 @@ field	metal2vulkan-air::LinkedSamplerGroup.states	pub states: Vec<SamplerState>
 field	metal2vulkan-air::Lockstep.barriers	pub barriers: Vec<crate::ir::InstId>
 field	metal2vulkan-air::Lockstep.device	pub device: u32
 field	metal2vulkan-air::Lockstep.emulated	pub emulated: bool
+field	metal2vulkan-air::Lockstep.rows	pub rows: bool
 field	metal2vulkan-air::SpecRequest.call_stack_depth	pub call_stack_depth: u32
 field	metal2vulkan-air::SpecRequest.constants	pub constants: BTreeMap<u32, ConstValue>
 field	metal2vulkan-air::SpecRequest.entry	pub entry: String
+field	metal2vulkan-air::SpecRequest.open_cl_mode	pub open_cl_mode: bool
 field	metal2vulkan-air::abi::AirAbi.air_version	pub air_version: Option<Version>
 field	metal2vulkan-air::abi::AirAbi.compile	pub compile: CompileOptions
 field	metal2vulkan-air::abi::AirAbi.core_image_kernels	pub core_image_kernels: Vec<CoreImageKernel>
@@ -1988,8 +2015,11 @@ field	metal2vulkan-runtime::AddressRange.start	pub start: GpuAddress
 field	metal2vulkan-runtime::BinaryArchiveDescriptor.url	pub url: Option<PathBuf>
 field	metal2vulkan-runtime::BinaryArchiveMiss.function	pub function: String
 field	metal2vulkan-runtime::BinaryArchiveMiss.pipeline	pub pipeline: ArchivedPipeline
+field	metal2vulkan-runtime::BufferDescriptor.aligned_byte	pub aligned_byte: Option<u64>
 field	metal2vulkan-runtime::BufferDescriptor.contents	pub contents: BufferContents<'a>
+field	metal2vulkan-runtime::BufferDescriptor.exported_as	pub exported_as: Option<MemoryExport>
 field	metal2vulkan-runtime::BufferDescriptor.length	pub length: u64
+field	metal2vulkan-runtime::BufferDescriptor.padding_unobserved	pub padding_unobserved: bool
 field	metal2vulkan-runtime::BufferDescriptor.placement	pub placement: AddressPlacement
 field	metal2vulkan-runtime::BufferDescriptor.pool_slot	pub pool_slot: Option<(&'a AddressPool, u64)>
 field	metal2vulkan-runtime::BufferDescriptor.range_of	pub range_of: Option<&'a Buffer>
@@ -2017,12 +2047,26 @@ field	metal2vulkan-runtime::DebugMessage.kind	pub kind: MessageKind
 field	metal2vulkan-runtime::DebugMessage.severity	pub severity: MessageSeverity
 field	metal2vulkan-runtime::DebugMessage.text	pub text: String
 field	metal2vulkan-runtime::DegradeNotice.call	pub call: Option<EncoderCall>
+field	metal2vulkan-runtime::DegradeNotice.command_buffer	pub command_buffer: Option<ObjectId>
 field	metal2vulkan-runtime::DegradeNotice.cost	pub cost: &'static str
 field	metal2vulkan-runtime::DegradeNotice.degradation	pub degradation: Degradation
 field	metal2vulkan-runtime::DegradeNotice.misplaced	pub misplaced: Option<MisplacedNotice>
 field	metal2vulkan-runtime::DegradeNotice.object	pub object: String
 field	metal2vulkan-runtime::DegradeNotice.object_id	pub object_id: Option<ObjectId>
 field	metal2vulkan-runtime::DegradeNotice.reason	pub reason: String
+field	metal2vulkan-runtime::DeviceCheckWork.aside_nanos	pub aside_nanos: u64
+field	metal2vulkan-runtime::DeviceCheckWork.queue_submissions	pub queue_submissions: u64
+field	metal2vulkan-runtime::DeviceCheckWork.steps_aside	pub steps_aside: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_buffer_bindings	pub vk_buffer_bindings: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_buffer_views_destroyed	pub vk_buffer_views_destroyed: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_buffers_destroyed	pub vk_buffers_destroyed: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_buffers_made	pub vk_buffers_made: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_image_bindings	pub vk_image_bindings: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_image_views_made	pub vk_image_views_made: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_images_destroyed	pub vk_images_destroyed: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_images_made	pub vk_images_made: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_memory_allocations	pub vk_memory_allocations: u64
+field	metal2vulkan-runtime::DeviceCheckWork.vk_memory_freed	pub vk_memory_freed: u64
 field	metal2vulkan-runtime::DeviceHandles.device	pub device: &'a ash::Device
 field	metal2vulkan-runtime::DeviceHandles.entry	pub entry: &'a ash::Entry
 field	metal2vulkan-runtime::DeviceHandles.extra_queues	pub extra_queues: &'a [ExtraQueue]
@@ -2033,6 +2077,8 @@ field	metal2vulkan-runtime::DeviceHandles.queue_families	pub queue_families: &'a
 field	metal2vulkan-runtime::DeviceHandles.queue_family	pub queue_family: u32
 field	metal2vulkan-runtime::DeviceHandles.reserved_queues	pub reserved_queues: &'a [ReservedQueue]
 field	metal2vulkan-runtime::DeviceOptions.announce_each	pub announce_each: BTreeSet<crate::Degradation>
+field	metal2vulkan-runtime::DeviceOptions.assume_submissions_merge	pub assume_submissions_merge: bool
+field	metal2vulkan-runtime::DeviceOptions.color_attachment_limit	pub color_attachment_limit: Option<u32>
 field	metal2vulkan-runtime::DeviceOptions.device_extensions	pub device_extensions: Vec<CString>
 field	metal2vulkan-runtime::DeviceOptions.extra_queues	pub extra_queues: Vec<vk::QueueFlags>
 field	metal2vulkan-runtime::DeviceOptions.fail_in_place_check	pub fail_in_place_check: bool
@@ -2047,8 +2093,10 @@ field	metal2vulkan-runtime::DeviceOptions.lowering_refuses	pub lowering_refuses:
 field	metal2vulkan-runtime::DeviceOptions.mac_class	pub mac_class: Option<crate::MacClass>
 field	metal2vulkan-runtime::DeviceOptions.messages	pub messages: Option<MessageSink>
 field	metal2vulkan-runtime::DeviceOptions.optional_device_extensions	pub optional_device_extensions: Vec<CString>
+field	metal2vulkan-runtime::DeviceOptions.pending_audit	pub pending_audit: bool
 field	metal2vulkan-runtime::DeviceOptions.pipeline_records	pub pipeline_records: Option<Arc<dyn Fn(crate::PipelineRecord) + Send + Sync>>
 field	metal2vulkan-runtime::DeviceOptions.policy	pub policy: DevicePolicy
+field	metal2vulkan-runtime::DeviceOptions.queue_limits	pub queue_limits: Option<QueueLimits>
 field	metal2vulkan-runtime::DeviceOptions.record_executions	pub record_executions: bool
 field	metal2vulkan-runtime::DeviceOptions.reserved_queues	pub reserved_queues: u32
 field	metal2vulkan-runtime::DeviceOptions.shader_cache	pub shader_cache: ShaderCacheOptions
@@ -2118,6 +2166,12 @@ field	metal2vulkan-runtime::ExecutedCommands.commands	pub commands: Vec<Executed
 field	metal2vulkan-runtime::ExecutedCommands.read	pub read: RecordsRead
 field	metal2vulkan-runtime::ExecutedCommands.unread_states_can_encode	pub unread_states_can_encode: bool
 field	metal2vulkan-runtime::ExecutedCommands.writable	pub writable: Vec<IndirectCommandBuffer>
+field	metal2vulkan-runtime::ExportedMemory.allocation_size	pub allocation_size: u64
+field	metal2vulkan-runtime::ExportedMemory.dedicated	pub dedicated: bool
+field	metal2vulkan-runtime::ExportedMemory.fd	pub fd: OwnedFd
+field	metal2vulkan-runtime::ExportedMemory.length	pub length: u64
+field	metal2vulkan-runtime::ExportedMemory.memory_type_index	pub memory_type_index: u32
+field	metal2vulkan-runtime::ExportedMemory.offset	pub offset: u64
 field	metal2vulkan-runtime::ExtensionFeature.extension	pub extension: &'static str
 field	metal2vulkan-runtime::ExtensionFeature.feature	pub feature: &'static str
 field	metal2vulkan-runtime::ExtraQueue.family	pub family: u32
@@ -2254,6 +2308,7 @@ field	metal2vulkan-runtime::PhysicalDeviceIdentity.drm_render	pub drm_render: Op
 field	metal2vulkan-runtime::PhysicalDeviceIdentity.kind	pub kind: DeviceKind
 field	metal2vulkan-runtime::PhysicalDeviceIdentity.name	pub name: String
 field	metal2vulkan-runtime::PhysicalDeviceIdentity.pci_bus	pub pci_bus: Option<(u32, u32, u32, u32)>
+field	metal2vulkan-runtime::PhysicalDeviceIdentity.recommended_max_working_set_size	pub recommended_max_working_set_size: Option<u64>
 field	metal2vulkan-runtime::PhysicalDeviceIdentity.registry_id	pub registry_id: u64
 field	metal2vulkan-runtime::PhysicalDeviceIdentity.vendor_id	pub vendor_id: u32
 field	metal2vulkan-runtime::PipelineOptions.binary_archives	pub binary_archives: Vec<BinaryArchive>
@@ -2266,6 +2321,8 @@ field	metal2vulkan-runtime::PixelFormatInfo.cast_class	pub cast_class: u64
 field	metal2vulkan-runtime::PixelFormatInfo.flags	pub flags: u64
 field	metal2vulkan-runtime::PixelFormatInfo.name	pub name: &'static str
 field	metal2vulkan-runtime::PixelFormatInfo.words	pub words: [u64; 4]
+field	metal2vulkan-runtime::QueueLimits.presenting	pub presenting: u32
+field	metal2vulkan-runtime::QueueLimits.round_robin	pub round_robin: u32
 field	metal2vulkan-runtime::RawDevice.announce_each	pub announce_each: BTreeSet<crate::Degradation>
 field	metal2vulkan-runtime::RawDevice.device	pub device: vk::Device
 field	metal2vulkan-runtime::RawDevice.device_extensions	pub device_extensions: Vec<CString>
@@ -2501,6 +2558,14 @@ field	metal2vulkan-runtime::WorkCounts.argument_objects_retained	pub argument_ob
 field	metal2vulkan-runtime::WorkCounts.argument_samplers_taken	pub argument_samplers_taken: u64
 field	metal2vulkan-runtime::WorkCounts.argument_tables_held_at_bind	pub argument_tables_held_at_bind: u64
 field	metal2vulkan-runtime::WorkCounts.argument_tables_retained	pub argument_tables_retained: u64
+field	metal2vulkan-runtime::WorkCounts.attached_read_slots	pub attached_read_slots: u64
+field	metal2vulkan-runtime::WorkCounts.attached_read_slots_any_level	pub attached_read_slots_any_level: u64
+field	metal2vulkan-runtime::WorkCounts.attached_read_slots_apart	pub attached_read_slots_apart: u64
+field	metal2vulkan-runtime::WorkCounts.attached_read_slots_first_level	pub attached_read_slots_first_level: u64
+field	metal2vulkan-runtime::WorkCounts.attached_read_slots_narrowed	pub attached_read_slots_narrowed: u64
+field	metal2vulkan-runtime::WorkCounts.attached_read_slots_one_level	pub attached_read_slots_one_level: u64
+field	metal2vulkan-runtime::WorkCounts.attached_read_slots_reaching	pub attached_read_slots_reaching: u64
+field	metal2vulkan-runtime::WorkCounts.attached_read_slots_written	pub attached_read_slots_written: u64
 field	metal2vulkan-runtime::WorkCounts.attachment_clears_recorded	pub attachment_clears_recorded: u64
 field	metal2vulkan-runtime::WorkCounts.attachment_read_clears	pub attachment_read_clears: u64
 field	metal2vulkan-runtime::WorkCounts.attachment_read_splits	pub attachment_read_splits: u64
@@ -2522,10 +2587,16 @@ field	metal2vulkan-runtime::WorkCounts.batches_with_one_pending	pub batches_with
 field	metal2vulkan-runtime::WorkCounts.batches_with_two_or_three_pending	pub batches_with_two_or_three_pending: u64
 field	metal2vulkan-runtime::WorkCounts.bind_views_worked_out	pub bind_views_worked_out: u64
 field	metal2vulkan-runtime::WorkCounts.block_decode_passes	pub block_decode_passes: u64
+field	metal2vulkan-runtime::WorkCounts.blocks_ahead_hurried	pub blocks_ahead_hurried: u64
+field	metal2vulkan-runtime::WorkCounts.blocks_ahead_past_quiet_wait	pub blocks_ahead_past_quiet_wait: u64
+field	metal2vulkan-runtime::WorkCounts.blocks_ahead_unused	pub blocks_ahead_unused: u64
+field	metal2vulkan-runtime::WorkCounts.blocks_ahead_waited_for	pub blocks_ahead_waited_for: u64
 field	metal2vulkan-runtime::WorkCounts.bound_notices_made	pub bound_notices_made: u64
 field	metal2vulkan-runtime::WorkCounts.bound_offsets_moved	pub bound_offsets_moved: u64
 field	metal2vulkan-runtime::WorkCounts.bounded_run_draws	pub bounded_run_draws: u64
 field	metal2vulkan-runtime::WorkCounts.bounded_shadow_copies	pub bounded_shadow_copies: u64
+field	metal2vulkan-runtime::WorkCounts.buffer_blocks_made_ahead	pub buffer_blocks_made_ahead: u64
+field	metal2vulkan-runtime::WorkCounts.buffer_blocks_made_in_place	pub buffer_blocks_made_in_place: u64
 field	metal2vulkan-runtime::WorkCounts.calibration_deviation_most	pub calibration_deviation_most: u64
 field	metal2vulkan-runtime::WorkCounts.calibration_disagreements	pub calibration_disagreements: u64
 field	metal2vulkan-runtime::WorkCounts.calibration_readings	pub calibration_readings: u64
@@ -2554,6 +2625,7 @@ field	metal2vulkan-runtime::WorkCounts.command_buffers_unsubmitted	pub command_b
 field	metal2vulkan-runtime::WorkCounts.command_pools_made	pub command_pools_made: u64
 field	metal2vulkan-runtime::WorkCounts.commands_noted_as_before	pub commands_noted_as_before: u64
 field	metal2vulkan-runtime::WorkCounts.commands_recorded	pub commands_recorded: CommandsRecorded
+field	metal2vulkan-runtime::WorkCounts.commands_uncounted	pub commands_uncounted: u64
 field	metal2vulkan-runtime::WorkCounts.commit_refusals_held	pub commit_refusals_held: u64
 field	metal2vulkan-runtime::WorkCounts.commits_handed_off	pub commits_handed_off: u64
 field	metal2vulkan-runtime::WorkCounts.commits_taken_in	pub commits_taken_in: u64
@@ -2570,20 +2642,27 @@ field	metal2vulkan-runtime::WorkCounts.completion_waiter_parks_timed_out	pub com
 field	metal2vulkan-runtime::WorkCounts.compute_pipeline_create_nanos	pub compute_pipeline_create_nanos: u64
 field	metal2vulkan-runtime::WorkCounts.copied_copy_in_bytes	pub copied_copy_in_bytes: u64
 field	metal2vulkan-runtime::WorkCounts.copied_copy_in_bytes_skipped	pub copied_copy_in_bytes_skipped: u64
+field	metal2vulkan-runtime::WorkCounts.copied_copy_ins_unused	pub copied_copy_ins_unused: u64
 field	metal2vulkan-runtime::WorkCounts.copied_dropped_bytes	pub copied_dropped_bytes: u64
 field	metal2vulkan-runtime::WorkCounts.copied_heaps_made	pub copied_heaps_made: u64
 field	metal2vulkan-runtime::WorkCounts.copied_host_buffers_degraded	pub copied_host_buffers_degraded: u64
+field	metal2vulkan-runtime::WorkCounts.copied_host_buffers_device_refused	pub copied_host_buffers_device_refused: u64
 field	metal2vulkan-runtime::WorkCounts.copied_host_buffers_made	pub copied_host_buffers_made: u64
 field	metal2vulkan-runtime::WorkCounts.copied_host_buffers_refused	pub copied_host_buffers_refused: u64
 field	metal2vulkan-runtime::WorkCounts.copied_host_buffers_shared	pub copied_host_buffers_shared: u64
 field	metal2vulkan-runtime::WorkCounts.copied_merge_back_bytes	pub copied_merge_back_bytes: u64
 field	metal2vulkan-runtime::WorkCounts.copied_merges_compared	pub copied_merges_compared: u64
 field	metal2vulkan-runtime::WorkCounts.copied_merges_skipped	pub copied_merges_skipped: u64
+field	metal2vulkan-runtime::WorkCounts.copied_read_only_memory	pub copied_read_only_memory: u64
 field	metal2vulkan-runtime::WorkCounts.copied_rebind_images_made	pub copied_rebind_images_made: u64
 field	metal2vulkan-runtime::WorkCounts.copied_rebind_pages_made	pub copied_rebind_pages_made: u64
 field	metal2vulkan-runtime::WorkCounts.copied_rebind_pages_moved	pub copied_rebind_pages_moved: u64
+field	metal2vulkan-runtime::WorkCounts.copied_textures_in_place	pub copied_textures_in_place: u64
+field	metal2vulkan-runtime::WorkCounts.copied_unwritable_pages	pub copied_unwritable_pages: u64
 field	metal2vulkan-runtime::WorkCounts.copy_regions_split	pub copy_regions_split: u64
 field	metal2vulkan-runtime::WorkCounts.copy_sites	pub copy_sites: [CopySite; 32]
+field	metal2vulkan-runtime::WorkCounts.coverage_pools_made	pub coverage_pools_made: u64
+field	metal2vulkan-runtime::WorkCounts.coverage_queries	pub coverage_queries: u64
 field	metal2vulkan-runtime::WorkCounts.cpu_block_decodes	pub cpu_block_decodes: u64
 field	metal2vulkan-runtime::WorkCounts.creation_dispatch_pipelines_drawn	pub creation_dispatch_pipelines_drawn: u64
 field	metal2vulkan-runtime::WorkCounts.creation_dispatch_pipelines_made	pub creation_dispatch_pipelines_made: u64
@@ -2595,11 +2674,14 @@ field	metal2vulkan-runtime::WorkCounts.creations_left_making	pub creations_left_
 field	metal2vulkan-runtime::WorkCounts.dedicated_memory_blocks_live	pub dedicated_memory_blocks_live: u64
 field	metal2vulkan-runtime::WorkCounts.depth_attachments_moved	pub depth_attachments_moved: u64
 field	metal2vulkan-runtime::WorkCounts.depth_instances_held	pub depth_instances_held: u64
+field	metal2vulkan-runtime::WorkCounts.depth_uploads_clamped	pub depth_uploads_clamped: u64
 field	metal2vulkan-runtime::WorkCounts.descriptor_keys_built	pub descriptor_keys_built: u64
 field	metal2vulkan-runtime::WorkCounts.detached_storage_reaches	pub detached_storage_reaches: u64
+field	metal2vulkan-runtime::WorkCounts.device_checks	pub device_checks: DeviceCheckWork
 field	metal2vulkan-runtime::WorkCounts.device_copy_textures	pub device_copy_textures: u64
 field	metal2vulkan-runtime::WorkCounts.device_memory_allocated	pub device_memory_allocated: u64
 field	metal2vulkan-runtime::WorkCounts.device_memory_overflows	pub device_memory_overflows: u64
+field	metal2vulkan-runtime::WorkCounts.device_recoveries	pub device_recoveries: u64
 field	metal2vulkan-runtime::WorkCounts.device_wide_line_draws	pub device_wide_line_draws: u64
 field	metal2vulkan-runtime::WorkCounts.dirty_copies_in_gated	pub dirty_copies_in_gated: u64
 field	metal2vulkan-runtime::WorkCounts.dirty_copies_in_skipped	pub dirty_copies_in_skipped: u64
@@ -2634,22 +2716,69 @@ field	metal2vulkan-runtime::WorkCounts.draw_shapes_made	pub draw_shapes_made: u6
 field	metal2vulkan-runtime::WorkCounts.draw_shapes_reused	pub draw_shapes_reused: u64
 field	metal2vulkan-runtime::WorkCounts.draw_states_recorded	pub draw_states_recorded: u64
 field	metal2vulkan-runtime::WorkCounts.draws_as_before	pub draws_as_before: u64
+field	metal2vulkan-runtime::WorkCounts.draws_carry_stopped	pub draws_carry_stopped: u64
+field	metal2vulkan-runtime::WorkCounts.draws_carry_stopped_attached	pub draws_carry_stopped_attached: u64
+field	metal2vulkan-runtime::WorkCounts.draws_carry_stopped_other	pub draws_carry_stopped_other: u64
+field	metal2vulkan-runtime::WorkCounts.draws_carry_stopped_stale	pub draws_carry_stopped_stale: u64
+field	metal2vulkan-runtime::WorkCounts.draws_counted_past_early_masks	pub draws_counted_past_early_masks: u64
 field	metal2vulkan-runtime::WorkCounts.draws_dropped_still_making	pub draws_dropped_still_making: u64
 field	metal2vulkan-runtime::WorkCounts.draws_dropped_unmade	pub draws_dropped_unmade: u64
+field	metal2vulkan-runtime::WorkCounts.draws_moved	pub draws_moved: u64
+field	metal2vulkan-runtime::WorkCounts.draws_moved_inside	pub draws_moved_inside: u64
 field	metal2vulkan-runtime::WorkCounts.draws_pushing_set_zero	pub draws_pushing_set_zero: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebind_stopped	pub draws_rebind_stopped: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebind_stopped_arguments	pub draws_rebind_stopped_arguments: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebind_stopped_arguments_fetch_window	pub draws_rebind_stopped_arguments_fetch_window: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebind_stopped_arguments_other	pub draws_rebind_stopped_arguments_other: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebind_stopped_arguments_reach	pub draws_rebind_stopped_arguments_reach: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebind_stopped_arguments_route	pub draws_rebind_stopped_arguments_route: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebind_stopped_arguments_tables	pub draws_rebind_stopped_arguments_tables: u64
 field	metal2vulkan-runtime::WorkCounts.draws_rebound	pub draws_rebound: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebound_arguments	pub draws_rebound_arguments: u64
+field	metal2vulkan-runtime::WorkCounts.draws_rebound_carried	pub draws_rebound_carried: u64
+field	metal2vulkan-runtime::WorkCounts.draws_restated	pub draws_restated: u64
 field	metal2vulkan-runtime::WorkCounts.draws_settled	pub draws_settled: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept	pub draws_unkept: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_barrier	pub draws_unkept_barrier: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_index_copied	pub draws_unkept_index_copied: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_instance	pub draws_unkept_instance: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_instance_later	pub draws_unkept_instance_later: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_instance_steps	pub draws_unkept_instance_steps: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_making	pub draws_unkept_making: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_other	pub draws_unkept_other: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_shadowed	pub draws_unkept_shadowed: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_tables	pub draws_unkept_tables: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_tables_heap	pub draws_unkept_tables_heap: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_tables_writing	pub draws_unkept_tables_writing: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_writing	pub draws_unkept_writing: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unkept_writing_resident	pub draws_unkept_writing_resident: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept	pub draws_unlike_kept: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_arguments_alone	pub draws_unlike_kept_arguments_alone: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_call	pub draws_unlike_kept_call: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_command_buffer	pub draws_unlike_kept_command_buffer: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_counts	pub draws_unlike_kept_counts: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_index_buffer	pub draws_unlike_kept_index_buffer: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_index_offset	pub draws_unlike_kept_index_offset: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_pipeline	pub draws_unlike_kept_pipeline: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_tessellation	pub draws_unlike_kept_tessellation: u64
+field	metal2vulkan-runtime::WorkCounts.draws_unlike_kept_under	pub draws_unlike_kept_under: u64
 field	metal2vulkan-runtime::WorkCounts.driver_diagnostics_withheld	pub driver_diagnostics_withheld: u64
 field	metal2vulkan-runtime::WorkCounts.empty_memory_blocks_live	pub empty_memory_blocks_live: u64
 field	metal2vulkan-runtime::WorkCounts.encoder_command_buffers_begun	pub encoder_command_buffers_begun: u64
 field	metal2vulkan-runtime::WorkCounts.encoder_primaries_begun_ahead	pub encoder_primaries_begun_ahead: u64
+field	metal2vulkan-runtime::WorkCounts.encoders_barriered_at_open	pub encoders_barriered_at_open: u64
 field	metal2vulkan-runtime::WorkCounts.encoders_reencoded	pub encoders_reencoded: u64
 field	metal2vulkan-runtime::WorkCounts.event_signals_behind_merge	pub event_signals_behind_merge: u64
 field	metal2vulkan-runtime::WorkCounts.event_waits_met	pub event_waits_met: u64
+field	metal2vulkan-runtime::WorkCounts.exported_dma_buf_images	pub exported_dma_buf_images: u64
+field	metal2vulkan-runtime::WorkCounts.fd_blocks_awaited	pub fd_blocks_awaited: u64
+field	metal2vulkan-runtime::WorkCounts.fd_blocks_refused	pub fd_blocks_refused: u64
+field	metal2vulkan-runtime::WorkCounts.fd_buffer_blocks_made	pub fd_buffer_blocks_made: u64
+field	metal2vulkan-runtime::WorkCounts.fd_buffer_blocks_plain	pub fd_buffer_blocks_plain: u64
 field	metal2vulkan-runtime::WorkCounts.feedback_loop_alias_images	pub feedback_loop_alias_images: u64
+field	metal2vulkan-runtime::WorkCounts.feedback_loop_shadow_images	pub feedback_loop_shadow_images: u64
 field	metal2vulkan-runtime::WorkCounts.fence_waits	pub fence_waits: u64
 field	metal2vulkan-runtime::WorkCounts.fences_made	pub fences_made: u64
-field	metal2vulkan-runtime::WorkCounts.fills_by_transfers	pub fills_by_transfers: u64
 field	metal2vulkan-runtime::WorkCounts.fills_recorded	pub fills_recorded: u64
 field	metal2vulkan-runtime::WorkCounts.finales_apart	pub finales_apart: u64
 field	metal2vulkan-runtime::WorkCounts.finales_folded	pub finales_folded: u64
@@ -2695,17 +2824,22 @@ field	metal2vulkan-runtime::WorkCounts.heads_held_for_event_values	pub heads_hel
 field	metal2vulkan-runtime::WorkCounts.heads_held_for_host_steps	pub heads_held_for_host_steps: u64
 field	metal2vulkan-runtime::WorkCounts.heads_held_for_reencodes	pub heads_held_for_reencodes: u64
 field	metal2vulkan-runtime::WorkCounts.heads_waiting_at_their_gate	pub heads_waiting_at_their_gate: u64
+field	metal2vulkan-runtime::WorkCounts.heap_arrays_copied	pub heap_arrays_copied: u64
 field	metal2vulkan-runtime::WorkCounts.heap_sample_move_images_lent	pub heap_sample_move_images_lent: u64
 field	metal2vulkan-runtime::WorkCounts.heap_sample_move_images_made	pub heap_sample_move_images_made: u64
+field	metal2vulkan-runtime::WorkCounts.heap_shadow_cpu_copies	pub heap_shadow_cpu_copies: u64
 field	metal2vulkan-runtime::WorkCounts.heap_slot_writes_deferred	pub heap_slot_writes_deferred: u64
 field	metal2vulkan-runtime::WorkCounts.heap_slots_rewritten	pub heap_slots_rewritten: u64
 field	metal2vulkan-runtime::WorkCounts.heap_tables_worked_out	pub heap_tables_worked_out: u64
 field	metal2vulkan-runtime::WorkCounts.heap_texture_block_compressed_layouts	pub heap_texture_block_compressed_layouts: u64
 field	metal2vulkan-runtime::WorkCounts.heap_texture_lossless_layouts	pub heap_texture_lossless_layouts: u64
 field	metal2vulkan-runtime::WorkCounts.heap_texture_untiled_layouts	pub heap_texture_untiled_layouts: u64
+field	metal2vulkan-runtime::WorkCounts.heap_textures_refit	pub heap_textures_refit: u64
 field	metal2vulkan-runtime::WorkCounts.heap_textures_tiled	pub heap_textures_tiled: u64
 field	metal2vulkan-runtime::WorkCounts.held_depths_released	pub held_depths_released: u64
 field	metal2vulkan-runtime::WorkCounts.host_alias_lookups	pub host_alias_lookups: u64
+field	metal2vulkan-runtime::WorkCounts.host_copy_blocks_made_in_place	pub host_copy_blocks_made_in_place: u64
+field	metal2vulkan-runtime::WorkCounts.host_copy_blocks_readied	pub host_copy_blocks_readied: u64
 field	metal2vulkan-runtime::WorkCounts.host_deallocators_delayed	pub host_deallocators_delayed: u64
 field	metal2vulkan-runtime::WorkCounts.host_holds_looked_up	pub host_holds_looked_up: u64
 field	metal2vulkan-runtime::WorkCounts.host_import_fds_kept	pub host_import_fds_kept: u64
@@ -2739,13 +2873,29 @@ field	metal2vulkan-runtime::WorkCounts.host_mappings_queried	pub host_mappings_q
 field	metal2vulkan-runtime::WorkCounts.host_pointer_import_bytes_made	pub host_pointer_import_bytes_made: u64
 field	metal2vulkan-runtime::WorkCounts.host_pointer_imports_made	pub host_pointer_imports_made: u64
 field	metal2vulkan-runtime::WorkCounts.host_ram_chunk_bytes	pub host_ram_chunk_bytes: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_chunk_import_nanos	pub host_ram_chunk_import_nanos: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_chunks_faulted_ahead	pub host_ram_chunks_faulted_ahead: u64
 field	metal2vulkan-runtime::WorkCounts.host_ram_chunks_given_back	pub host_ram_chunks_given_back: u64
 field	metal2vulkan-runtime::WorkCounts.host_ram_chunks_imported	pub host_ram_chunks_imported: u64
 field	metal2vulkan-runtime::WorkCounts.host_ram_chunks_imported_ahead	pub host_ram_chunks_imported_ahead: u64
 field	metal2vulkan-runtime::WorkCounts.host_ram_chunks_live	pub host_ram_chunks_live: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_chunks_released	pub host_ram_chunks_released: u64
 field	metal2vulkan-runtime::WorkCounts.host_ram_copies	pub host_ram_copies: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_copies_staged	pub host_ram_copies_staged: u64
 field	metal2vulkan-runtime::WorkCounts.host_ram_copy_bytes	pub host_ram_copy_bytes: u64
 field	metal2vulkan-runtime::WorkCounts.host_ram_copy_dispatches	pub host_ram_copy_dispatches: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_copy_import_wait_nanos	pub host_ram_copy_import_wait_nanos: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_copy_import_waits	pub host_ram_copy_import_waits: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_copy_regions	pub host_ram_copy_regions: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_dma_buf_imports	pub host_ram_dma_buf_imports: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_dma_buf_imports_failed	pub host_ram_dma_buf_imports_failed: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_pointer_imports_failed	pub host_ram_pointer_imports_failed: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_run_list_import_nanos	pub host_ram_run_list_import_nanos: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_run_list_imports	pub host_ram_run_list_imports: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_scatters_staged	pub host_ram_scatters_staged: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_staged_drain_nanos	pub host_ram_staged_drain_nanos: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_staged_fill_nanos	pub host_ram_staged_fill_nanos: u64
+field	metal2vulkan-runtime::WorkCounts.host_ram_staged_fills_gated	pub host_ram_staged_fills_gated: u64
 field	metal2vulkan-runtime::WorkCounts.host_range_lookups	pub host_range_lookups: u64
 field	metal2vulkan-runtime::WorkCounts.host_rebind_imports_covered	pub host_rebind_imports_covered: u64
 field	metal2vulkan-runtime::WorkCounts.host_rebind_imports_made	pub host_rebind_imports_made: u64
@@ -2764,6 +2914,7 @@ field	metal2vulkan-runtime::WorkCounts.host_texel_copies	pub host_texel_copies: 
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_check_failed	pub host_texture_shadows_check_failed: u64
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_check_pending	pub host_texture_shadows_check_pending: u64
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_exact	pub host_texture_shadows_exact: u64
+field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_freed_after_move	pub host_texture_shadows_freed_after_move: u64
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_refused_detached	pub host_texture_shadows_refused_detached: u64
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_refused_dma_buf	pub host_texture_shadows_refused_dma_buf: u64
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_refused_image	pub host_texture_shadows_refused_image: u64
@@ -2773,11 +2924,17 @@ field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_refused_rows	pub hos
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_refused_source	pub host_texture_shadows_refused_source: u64
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_render_target	pub host_texture_shadows_render_target: u64
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_shader_write	pub host_texture_shadows_shader_write: u64
+field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_store_width	pub host_texture_shadows_store_width: u64
 field	metal2vulkan-runtime::WorkCounts.host_texture_shadows_unchecked	pub host_texture_shadows_unchecked: u64
 field	metal2vulkan-runtime::WorkCounts.host_textures_in_place	pub host_textures_in_place: u64
+field	metal2vulkan-runtime::WorkCounts.host_textures_in_place_written	pub host_textures_in_place_written: u64
+field	metal2vulkan-runtime::WorkCounts.host_textures_moved_in_place	pub host_textures_moved_in_place: u64
 field	metal2vulkan-runtime::WorkCounts.idle_submits	pub idle_submits: u64
 field	metal2vulkan-runtime::WorkCounts.image_blits_recorded	pub image_blits_recorded: u64
+field	metal2vulkan-runtime::WorkCounts.image_blocks_made_ahead	pub image_blocks_made_ahead: u64
+field	metal2vulkan-runtime::WorkCounts.image_blocks_made_in_place	pub image_blocks_made_in_place: u64
 field	metal2vulkan-runtime::WorkCounts.images_started_on_the_host	pub images_started_on_the_host: u64
+field	metal2vulkan-runtime::WorkCounts.images_started_zeroed	pub images_started_zeroed: u64
 field	metal2vulkan-runtime::WorkCounts.in_place_checks_failed	pub in_place_checks_failed: u64
 field	metal2vulkan-runtime::WorkCounts.in_place_checks_passed	pub in_place_checks_passed: u64
 field	metal2vulkan-runtime::WorkCounts.in_place_checks_recalled	pub in_place_checks_recalled: u64
@@ -2798,6 +2955,7 @@ field	metal2vulkan-runtime::WorkCounts.instance_splits_attached_read	pub instanc
 field	metal2vulkan-runtime::WorkCounts.instance_splits_barrier	pub instance_splits_barrier: u64
 field	metal2vulkan-runtime::WorkCounts.instance_splits_execution	pub instance_splits_execution: u64
 field	metal2vulkan-runtime::WorkCounts.instance_splits_feedback	pub instance_splits_feedback: u64
+field	metal2vulkan-runtime::WorkCounts.instance_splits_interlocked_writes	pub instance_splits_interlocked_writes: u64
 field	metal2vulkan-runtime::WorkCounts.instance_splits_memoryless_write	pub instance_splits_memoryless_write: u64
 field	metal2vulkan-runtime::WorkCounts.instance_splits_pending_pipeline	pub instance_splits_pending_pipeline: u64
 field	metal2vulkan-runtime::WorkCounts.instance_splits_shape	pub instance_splits_shape: u64
@@ -2805,18 +2963,27 @@ field	metal2vulkan-runtime::WorkCounts.instance_splits_tile_dispatch	pub instanc
 field	metal2vulkan-runtime::WorkCounts.instance_splits_tile_memory	pub instance_splits_tile_memory: u64
 field	metal2vulkan-runtime::WorkCounts.instance_splits_visibility	pub instance_splits_visibility: u64
 field	metal2vulkan-runtime::WorkCounts.internal_submissions	pub internal_submissions: u64
+field	metal2vulkan-runtime::WorkCounts.joins_withheld_from_old_heads	pub joins_withheld_from_old_heads: u64
 field	metal2vulkan-runtime::WorkCounts.joins_withheld_from_unshared	pub joins_withheld_from_unshared: u64
 field	metal2vulkan-runtime::WorkCounts.kept_backings_made	pub kept_backings_made: u64
 field	metal2vulkan-runtime::WorkCounts.kept_bytes_passes	pub kept_bytes_passes: u64
 field	metal2vulkan-runtime::WorkCounts.kept_contexts_made	pub kept_contexts_made: u64
+field	metal2vulkan-runtime::WorkCounts.kept_draws_carried	pub kept_draws_carried: u64
+field	metal2vulkan-runtime::WorkCounts.kept_draws_carry_dropped_between	pub kept_draws_carry_dropped_between: u64
+field	metal2vulkan-runtime::WorkCounts.kept_draws_carry_dropped_layout	pub kept_draws_carry_dropped_layout: u64
+field	metal2vulkan-runtime::WorkCounts.kept_draws_carry_dropped_under	pub kept_draws_carry_dropped_under: u64
 field	metal2vulkan-runtime::WorkCounts.kept_resident_keys_compared	pub kept_resident_keys_compared: u64
+field	metal2vulkan-runtime::WorkCounts.kept_texels_passes	pub kept_texels_passes: u64
 field	metal2vulkan-runtime::WorkCounts.line_band_draws	pub line_band_draws: u64
+field	metal2vulkan-runtime::WorkCounts.linear_alignments_probed	pub linear_alignments_probed: u64
+field	metal2vulkan-runtime::WorkCounts.linear_alignments_recalled	pub linear_alignments_recalled: u64
 field	metal2vulkan-runtime::WorkCounts.linear_merge_scratches_made	pub linear_merge_scratches_made: u64
 field	metal2vulkan-runtime::WorkCounts.linear_merge_scratches_reused	pub linear_merge_scratches_reused: u64
 field	metal2vulkan-runtime::WorkCounts.linear_merges_recorded	pub linear_merges_recorded: u64
 field	metal2vulkan-runtime::WorkCounts.linear_merges_taken_over	pub linear_merges_taken_over: u64
 field	metal2vulkan-runtime::WorkCounts.linear_passes_in_place	pub linear_passes_in_place: u64
 field	metal2vulkan-runtime::WorkCounts.linear_passes_through_copies	pub linear_passes_through_copies: u64
+field	metal2vulkan-runtime::WorkCounts.linear_runs_reloaded	pub linear_runs_reloaded: u64
 field	metal2vulkan-runtime::WorkCounts.linked_pipelines_shared	pub linked_pipelines_shared: u64
 field	metal2vulkan-runtime::WorkCounts.linked_use_questions_asked	pub linked_use_questions_asked: u64
 field	metal2vulkan-runtime::WorkCounts.live_tables_uploaded	pub live_tables_uploaded: u64
@@ -2840,6 +3007,8 @@ field	metal2vulkan-runtime::WorkCounts.own_pixel_reads	pub own_pixel_reads: u64
 field	metal2vulkan-runtime::WorkCounts.owned_descriptor_pools	pub owned_descriptor_pools: u64
 field	metal2vulkan-runtime::WorkCounts.owned_kernel_spirv_bytes	pub owned_kernel_spirv_bytes: u64
 field	metal2vulkan-runtime::WorkCounts.owned_kernels_made	pub owned_kernels_made: u64
+field	metal2vulkan-runtime::WorkCounts.page_buffer_blocks_made	pub page_buffer_blocks_made: u64
+field	metal2vulkan-runtime::WorkCounts.page_buffer_blocks_plain	pub page_buffer_blocks_plain: u64
 field	metal2vulkan-runtime::WorkCounts.passes_not_inline_actions	pub passes_not_inline_actions: u64
 field	metal2vulkan-runtime::WorkCounts.passes_not_inline_actions_dont_care_load	pub passes_not_inline_actions_dont_care_load: u64
 field	metal2vulkan-runtime::WorkCounts.passes_not_inline_actions_resolve	pub passes_not_inline_actions_resolve: u64
@@ -2854,6 +3023,7 @@ field	metal2vulkan-runtime::WorkCounts.passes_not_inline_memoryless	pub passes_n
 field	metal2vulkan-runtime::WorkCounts.passes_not_inline_memoryless_writes	pub passes_not_inline_memoryless_writes: u64
 field	metal2vulkan-runtime::WorkCounts.passes_not_inline_stand_ins	pub passes_not_inline_stand_ins: u64
 field	metal2vulkan-runtime::WorkCounts.passes_not_inline_storage	pub passes_not_inline_storage: u64
+field	metal2vulkan-runtime::WorkCounts.picks_with_none_busy	pub picks_with_none_busy: u64
 field	metal2vulkan-runtime::WorkCounts.pipeline_layouts_made	pub pipeline_layouts_made: u64
 field	metal2vulkan-runtime::WorkCounts.pipeline_layouts_shared	pub pipeline_layouts_shared: u64
 field	metal2vulkan-runtime::WorkCounts.pipeline_libraries_made	pub pipeline_libraries_made: u64
@@ -2861,9 +3031,13 @@ field	metal2vulkan-runtime::WorkCounts.pipeline_pool_busy	pub pipeline_pool_busy
 field	metal2vulkan-runtime::WorkCounts.pipelines_linked	pub pipelines_linked: u64
 field	metal2vulkan-runtime::WorkCounts.pipelines_pooled	pub pipelines_pooled: u64
 field	metal2vulkan-runtime::WorkCounts.pitched_host_images	pub pitched_host_images: u64
+field	metal2vulkan-runtime::WorkCounts.plain_buffer_blocks_made	pub plain_buffer_blocks_made: u64
 field	metal2vulkan-runtime::WorkCounts.pooled_backings_made	pub pooled_backings_made: u64
 field	metal2vulkan-runtime::WorkCounts.pooled_memory_blocks_freed	pub pooled_memory_blocks_freed: u64
 field	metal2vulkan-runtime::WorkCounts.pooled_memory_blocks_made	pub pooled_memory_blocks_made: u64
+field	metal2vulkan-runtime::WorkCounts.pooled_pitched_images	pub pooled_pitched_images: u64
+field	metal2vulkan-runtime::WorkCounts.pooled_texture_shadows_freed_after_move	pub pooled_texture_shadows_freed_after_move: u64
+field	metal2vulkan-runtime::WorkCounts.pooled_textures_moved_in_place	pub pooled_textures_moved_in_place: u64
 field	metal2vulkan-runtime::WorkCounts.predicated_loop_runs_again	pub predicated_loop_runs_again: u64
 field	metal2vulkan-runtime::WorkCounts.prefixed_starts	pub prefixed_starts: u64
 field	metal2vulkan-runtime::WorkCounts.primaries_begun_ahead	pub primaries_begun_ahead: u64
@@ -2882,7 +3056,36 @@ field	metal2vulkan-runtime::WorkCounts.queue_switch_checks_recalled	pub queue_sw
 field	metal2vulkan-runtime::WorkCounts.queue_switch_checks_run	pub queue_switch_checks_run: u64
 field	metal2vulkan-runtime::WorkCounts.queues_gone_long	pub queues_gone_long: u64
 field	metal2vulkan-runtime::WorkCounts.queues_sharing_a_vk_queue	pub queues_sharing_a_vk_queue: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_by_coverage	pub reading_draws_by_coverage: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_pinned	pub reading_draws_pinned: u64
 field	metal2vulkan-runtime::WorkCounts.reading_draws_snapshotted	pub reading_draws_snapshotted: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_area	pub reading_draws_split_area: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_coverage	pub reading_draws_split_coverage: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_device_lacks	pub reading_draws_split_device_lacks: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_not_in_place	pub reading_draws_split_not_in_place: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_one_image	pub reading_draws_split_one_image: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_other_attachment	pub reading_draws_split_other_attachment: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_other_format	pub reading_draws_split_other_format: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_pass_shape	pub reading_draws_split_pass_shape: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_slot_left_out	pub reading_draws_split_slot_left_out: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_stand_in	pub reading_draws_split_stand_in: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_storage_binding	pub reading_draws_split_storage_binding: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel	pub reading_draws_split_unreadable_own_pixel: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_atomic	pub reading_draws_split_unreadable_own_pixel_atomic: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_branch	pub reading_draws_split_unreadable_own_pixel_branch: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_coherent	pub reading_draws_split_unreadable_own_pixel_coherent: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_derivative	pub reading_draws_split_unreadable_own_pixel_derivative: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_group_operation	pub reading_draws_split_unreadable_own_pixel_group_operation: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_image_write	pub reading_draws_split_unreadable_own_pixel_image_write: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_interlock	pub reading_draws_split_unreadable_own_pixel_interlock: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_other	pub reading_draws_split_unreadable_own_pixel_other: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_sample	pub reading_draws_split_unreadable_own_pixel_sample: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_store	pub reading_draws_split_unreadable_own_pixel_store: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_undefined_operand	pub reading_draws_split_unreadable_own_pixel_undefined_operand: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_unreadable_own_pixel_writes_memory	pub reading_draws_split_unreadable_own_pixel_writes_memory: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_variant_refused	pub reading_draws_split_variant_refused: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_views	pub reading_draws_split_views: u64
+field	metal2vulkan-runtime::WorkCounts.reading_draws_split_visibility_query	pub reading_draws_split_visibility_query: u64
 field	metal2vulkan-runtime::WorkCounts.reencodes_refused	pub reencodes_refused: u64
 field	metal2vulkan-runtime::WorkCounts.registrations_waited	pub registrations_waited: u64
 field	metal2vulkan-runtime::WorkCounts.render_encoders_ended	pub render_encoders_ended: u64
@@ -2932,6 +3135,7 @@ field	metal2vulkan-runtime::WorkCounts.row_copy_regions	pub row_copy_regions: u6
 field	metal2vulkan-runtime::WorkCounts.row_copy_regions_most	pub row_copy_regions_most: u64
 field	metal2vulkan-runtime::WorkCounts.run_bound_buffers_made	pub run_bound_buffers_made: u64
 field	metal2vulkan-runtime::WorkCounts.run_imports_live	pub run_imports_live: u64
+field	metal2vulkan-runtime::WorkCounts.run_imports_made	pub run_imports_made: u64
 field	metal2vulkan-runtime::WorkCounts.sampler_sets_destroyed	pub sampler_sets_destroyed: u64
 field	metal2vulkan-runtime::WorkCounts.sampler_sets_made	pub sampler_sets_made: u64
 field	metal2vulkan-runtime::WorkCounts.sampler_sets_shared	pub sampler_sets_shared: u64
@@ -3007,6 +3211,11 @@ field	metal2vulkan-runtime::WorkCounts.shadow_texels_first_copied_in_surfaces	pu
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_first_copy_in_carried	pub shadow_texels_first_copy_in_carried: u64
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_first_copy_in_carried_large_surfaces	pub shadow_texels_first_copy_in_carried_large_surfaces: u64
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_kept	pub shadow_texels_kept: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_never_stood_dropped	pub shadow_texels_never_stood_dropped: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_never_stood_end	pub shadow_texels_never_stood_end: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_never_stood_not_current	pub shadow_texels_never_stood_not_current: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_never_stood_partial	pub shadow_texels_never_stood_partial: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_never_stood_unmet	pub shadow_texels_never_stood_unmet: u64
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_recopied_after_changes	pub shadow_texels_recopied_after_changes: u64
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_recopied_after_dropped_writes	pub shadow_texels_recopied_after_dropped_writes: u64
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_recopied_after_other_shadows	pub shadow_texels_recopied_after_other_shadows: u64
@@ -3022,6 +3231,17 @@ field	metal2vulkan-runtime::WorkCounts.shadow_texels_recopied_in_mapped_buffers	
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_recopied_in_private_buffers	pub shadow_texels_recopied_in_private_buffers: u64
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_recopied_in_surfaces	pub shadow_texels_recopied_in_surfaces: u64
 field	metal2vulkan-runtime::WorkCounts.shadow_texels_skipped_by_standing	pub shadow_texels_skipped_by_standing: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_after_encoder_writes	pub shadow_texels_unskipped_after_encoder_writes: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_between_instances	pub shadow_texels_unskipped_between_instances: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_command_buffer	pub shadow_texels_unskipped_command_buffer: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_image_written	pub shadow_texels_unskipped_image_written: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_let_go	pub shadow_texels_unskipped_let_go: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_never_stood	pub shadow_texels_unskipped_never_stood: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_recorded_whole	pub shadow_texels_unskipped_recorded_whole: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_stood	pub shadow_texels_unskipped_stood: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_truth_written	pub shadow_texels_unskipped_truth_written: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_unnamed_since	pub shadow_texels_unskipped_unnamed_since: u64
+field	metal2vulkan-runtime::WorkCounts.shadow_texels_unskipped_unstanding	pub shadow_texels_unskipped_unstanding: u64
 field	metal2vulkan-runtime::WorkCounts.shadowed_textures	pub shadowed_textures: u64
 field	metal2vulkan-runtime::WorkCounts.shadows_over_fresh_pages	pub shadows_over_fresh_pages: u64
 field	metal2vulkan-runtime::WorkCounts.shadows_sharing_truth	pub shadows_sharing_truth: u64
@@ -3049,10 +3269,14 @@ field	metal2vulkan-runtime::WorkCounts.stamped_buffers_reused	pub stamped_buffer
 field	metal2vulkan-runtime::WorkCounts.stand_in_bytes	pub stand_in_bytes: u64
 field	metal2vulkan-runtime::WorkCounts.stand_in_copies_made	pub stand_in_copies_made: u64
 field	metal2vulkan-runtime::WorkCounts.stand_in_copies_made_at_draws	pub stand_in_copies_made_at_draws: u64
+field	metal2vulkan-runtime::WorkCounts.stand_ins_after_pins	pub stand_ins_after_pins: u64
 field	metal2vulkan-runtime::WorkCounts.stand_ins_made	pub stand_ins_made: u64
 field	metal2vulkan-runtime::WorkCounts.storage_forms_taken	pub storage_forms_taken: u64
 field	metal2vulkan-runtime::WorkCounts.storage_placeholder_attachments	pub storage_placeholder_attachments: u64
 field	metal2vulkan-runtime::WorkCounts.storage_placeholders_made	pub storage_placeholders_made: u64
+field	metal2vulkan-runtime::WorkCounts.submit_check_calls	pub submit_check_calls: u64
+field	metal2vulkan-runtime::WorkCounts.submit_checks_recalled	pub submit_checks_recalled: u64
+field	metal2vulkan-runtime::WorkCounts.submit_checks_run	pub submit_checks_run: u64
 field	metal2vulkan-runtime::WorkCounts.submit_infos	pub submit_infos: u64
 field	metal2vulkan-runtime::WorkCounts.submit_stalls_idle	pub submit_stalls_idle: u64
 field	metal2vulkan-runtime::WorkCounts.submit_stalls_on_work	pub submit_stalls_on_work: u64
@@ -3071,14 +3295,18 @@ field	metal2vulkan-runtime::WorkCounts.trail_waits_blocked	pub trail_waits_block
 field	metal2vulkan-runtime::WorkCounts.two_plane_draws	pub two_plane_draws: u64
 field	metal2vulkan-runtime::WorkCounts.uncached_host_images	pub uncached_host_images: u64
 field	metal2vulkan-runtime::WorkCounts.unlisted_argument_sampler_buffers	pub unlisted_argument_sampler_buffers: u64
+field	metal2vulkan-runtime::WorkCounts.unobserved_padding_aliases	pub unobserved_padding_aliases: u64
 field	metal2vulkan-runtime::WorkCounts.unrun_instances_ended	pub unrun_instances_ended: u64
 field	metal2vulkan-runtime::WorkCounts.untouched_passes_skipped	pub untouched_passes_skipped: u64
 field	metal2vulkan-runtime::WorkCounts.upload_chunks_in_device_memory	pub upload_chunks_in_device_memory: u64
+field	metal2vulkan-runtime::WorkCounts.uses_noted_covered	pub uses_noted_covered: u64
 field	metal2vulkan-runtime::WorkCounts.variant_pipelines_made	pub variant_pipelines_made: u64
 field	metal2vulkan-runtime::WorkCounts.variants_taken_back	pub variants_taken_back: u64
 field	metal2vulkan-runtime::WorkCounts.view_shadows	pub view_shadows: u64
 field	metal2vulkan-runtime::WorkCounts.views_through_swizzle	pub views_through_swizzle: u64
 field	metal2vulkan-runtime::WorkCounts.visibility_queries_begun	pub visibility_queries_begun: u64
+field	metal2vulkan-runtime::WorkCounts.vk_devices_live	pub vk_devices_live: u64
+field	metal2vulkan-runtime::WorkCounts.vk_devices_made	pub vk_devices_made: u64
 field	metal2vulkan-runtime::WorkCounts.wait_behind_idle_stall_longest_nanos	pub wait_behind_idle_stall_longest_nanos: u64
 field	metal2vulkan-runtime::WorkCounts.wakes_command_buffer_waiters	pub wakes_command_buffer_waiters: u64
 field	metal2vulkan-runtime::WorkCounts.wakes_completion_waiters	pub wakes_completion_waiters: u64
@@ -3100,6 +3328,7 @@ field	metal2vulkan-runtime::WorkCounts.ycbcr_planes_bound	pub ycbcr_planes_bound
 field	metal2vulkan-runtime::WorkCounts.ycbcr_planes_images	pub ycbcr_planes_images: u64
 field	metal2vulkan-runtime::WorkCounts.ycbcr_planes_images_bound	pub ycbcr_planes_images_bound: u64
 field	metal2vulkan-runtime::WorkCounts.ycbcr_planes_images_kept_conversion	pub ycbcr_planes_images_kept_conversion: u64
+field	metal2vulkan-runtime::WorkCounts.ycbcr_planes_images_kept_exportable_block	pub ycbcr_planes_images_kept_exportable_block: u64
 field	metal2vulkan-runtime::WorkCounts.ycbcr_planes_images_kept_layout	pub ycbcr_planes_images_kept_layout: u64
 field	metal2vulkan-runtime::WorkCounts.ycbcr_planes_images_kept_memory	pub ycbcr_planes_images_kept_memory: u64
 field	metal2vulkan-runtime::WorkCounts.ycbcr_refreshes	pub ycbcr_refreshes: u64
@@ -3233,6 +3462,9 @@ field	metal2vulkan::bind::BufferRange.offset	pub offset: u64
 field	metal2vulkan::bind::BufferRange.range	pub range: u64
 field	metal2vulkan::bind::ByteRange.len	pub len: u64
 field	metal2vulkan::bind::ByteRange.offset	pub offset: u64
+field	metal2vulkan::bind::CheckDrawModules.fragment	pub fragment: Arc<[u32]>
+field	metal2vulkan::bind::CheckDrawModules.requirements	pub requirements: Requirements
+field	metal2vulkan::bind::CheckDrawModules.vertex	pub vertex: Arc<[u32]>
 field	metal2vulkan::bind::ChromaSampleModule.requirements	pub requirements: Requirements
 field	metal2vulkan::bind::ChromaSampleModule.spirv	pub spirv: Arc<[u32]>
 field	metal2vulkan::bind::ColorResolveModules.fragment	pub fragment: Arc<[u32]>
@@ -3248,6 +3480,8 @@ field	metal2vulkan::bind::ContinuedResult.first	pub first: u32
 field	metal2vulkan::bind::ContinuedResult.low_half	pub low_half: bool
 field	metal2vulkan::bind::ContinuedResult.offset	pub offset: u64
 field	metal2vulkan::bind::ContinuedResult.sum	pub sum: bool
+field	metal2vulkan::bind::DepthClampModule.requirements	pub requirements: Requirements
+field	metal2vulkan::bind::DepthClampModule.spirv	pub spirv: Arc<[u32]>
 field	metal2vulkan::bind::DepthSplitModule.requirements	pub requirements: Requirements
 field	metal2vulkan::bind::DepthSplitModule.spirv	pub spirv: Arc<[u32]>
 field	metal2vulkan::bind::DepthStencilCopyModules.fragment	pub fragment: Arc<[u32]>
@@ -3678,6 +3912,7 @@ field	metal2vulkan::bind::TileThreadgroupMemory.arguments	pub arguments: BTreeMa
 field	metal2vulkan::bind::TileThreadgroupMemory.length	pub length: u32
 field	metal2vulkan::bind::TiledLevelMove.across	pub across: u32
 field	metal2vulkan::bind::TiledLevelMove.chain_stride	pub chain_stride: u32
+field	metal2vulkan::bind::TiledLevelMove.clamps_depth	pub clamps_depth: bool
 field	metal2vulkan::bind::TiledLevelMove.extent	pub extent: [u32; 2]
 field	metal2vulkan::bind::TiledLevelMove.images	pub images: u32
 field	metal2vulkan::bind::TiledLevelMove.region_bytes	pub region_bytes: u32
@@ -3845,6 +4080,7 @@ field	metal2vulkan::device::DeviceDescription.vendor_id	pub vendor_id: u32
 field	metal2vulkan::device::DevicePolicy.batch_order	pub batch_order: BatchOrderPolicy
 field	metal2vulkan::device::DevicePolicy.completion	pub completion: CompletionPolicy
 field	metal2vulkan::device::DevicePolicy.containment	pub containment: ContainmentPolicy
+field	metal2vulkan::device::DevicePolicy.dont_care_colors	pub dont_care_colors: DontCareColorPolicy
 field	metal2vulkan::device::DevicePolicy.extended_range_blits	pub extended_range_blits: ExtendedRangeBlitPolicy
 field	metal2vulkan::device::DevicePolicy.half_chains	pub half_chains: HalfChainPolicy
 field	metal2vulkan::device::DevicePolicy.handle_domain	pub handle_domain: HandleDomain
@@ -3858,6 +4094,7 @@ field	metal2vulkan::device::DevicePolicy.pointer_domain	pub pointer_domain: Poin
 field	metal2vulkan::device::DevicePolicy.queue_sharing	pub queue_sharing: QueueSharingPolicy
 field	metal2vulkan::device::DevicePolicy.render_lowering	pub render_lowering: RenderLoweringPolicy
 field	metal2vulkan::device::DevicePolicy.wide_lines	pub wide_lines: WideLinePolicy
+field	metal2vulkan::device::DevicePolicy.ycbcr_in_place_reads	pub ycbcr_in_place_reads: YCbCrInPlacePolicy
 field	metal2vulkan::device::DriverDiagnostic.id	pub id: i32
 field	metal2vulkan::device::DriverDiagnostic.id_name	pub id_name: &'static str
 field	metal2vulkan::device::DriverDiagnostic.text	pub text: Cow<'static, str>
@@ -3922,6 +4159,7 @@ field	metal2vulkan::device::ImageCaps.storage_extended_formats	pub storage_exten
 field	metal2vulkan::device::ImageCaps.storage_multisample	pub storage_multisample: bool
 field	metal2vulkan::device::ImageCaps.storage_read_without_format	pub storage_read_without_format: bool
 field	metal2vulkan::device::ImageCaps.storage_write_without_format	pub storage_write_without_format: bool
+field	metal2vulkan::device::Limits.early_fragment_multisample_coverage_after_sample_counting	pub early_fragment_multisample_coverage_after_sample_counting: bool
 field	metal2vulkan::device::Limits.framebuffer_color_sample_counts	pub framebuffer_color_sample_counts: vk::SampleCountFlags
 field	metal2vulkan::device::Limits.framebuffer_depth_sample_counts	pub framebuffer_depth_sample_counts: vk::SampleCountFlags
 field	metal2vulkan::device::Limits.framebuffer_integer_color_sample_counts	pub framebuffer_integer_color_sample_counts: vk::SampleCountFlags
@@ -4217,6 +4455,7 @@ field	metal2vulkan::pipeline::ComputePipelineDescriptor.kernel	pub kernel: Stage
 field	metal2vulkan::pipeline::ComputePipelineDescriptor.max_call_stack_depth	pub max_call_stack_depth: u32
 field	metal2vulkan::pipeline::ComputePipelineDescriptor.max_total_threads_per_threadgroup	pub max_total_threads_per_threadgroup: Option<u32>
 field	metal2vulkan::pipeline::ComputePipelineDescriptor.needs_custom_border_color_samplers	pub needs_custom_border_color_samplers: bool
+field	metal2vulkan::pipeline::ComputePipelineDescriptor.open_cl_mode_enabled	pub open_cl_mode_enabled: bool
 field	metal2vulkan::pipeline::ComputePipelineDescriptor.required_threads_per_threadgroup	pub required_threads_per_threadgroup: Option<[u32; 3]>
 field	metal2vulkan::pipeline::ComputePipelineDescriptor.stage_input	pub stage_input: Option<StageInputDescriptor>
 field	metal2vulkan::pipeline::ComputePipelineDescriptor.support_adding_binary_functions	pub support_adding_binary_functions: bool
@@ -4311,6 +4550,7 @@ field	metal2vulkan::pipeline::GraphicsState.topology	pub topology: vk::Primitive
 field	metal2vulkan::pipeline::GraphicsState.vertex_writes_memory	pub vertex_writes_memory: bool
 field	metal2vulkan::pipeline::GraphicsState.writes_depth	pub writes_depth: bool
 field	metal2vulkan::pipeline::GraphicsState.writes_point_size	pub writes_point_size: bool
+field	metal2vulkan::pipeline::GraphicsState.writes_sample_mask	pub writes_sample_mask: bool
 field	metal2vulkan::pipeline::GraphicsState.writes_viewport_index	pub writes_viewport_index: bool
 field	metal2vulkan::pipeline::ImageHandleClass.access	pub access: ImageAccess
 field	metal2vulkan::pipeline::ImageHandleClass.arrayed	pub arrayed: bool
@@ -4322,6 +4562,10 @@ field	metal2vulkan::pipeline::ImageHandleClass.sampled_type	pub sampled_type: Sa
 field	metal2vulkan::pipeline::InputAttachmentUse.color_index	pub color_index: u32
 field	metal2vulkan::pipeline::InputAttachmentUse.format_class	pub format_class: SampledType
 field	metal2vulkan::pipeline::InputAttachmentUse.input_attachment_index	pub input_attachment_index: u32
+field	metal2vulkan::pipeline::LevelReads.any	pub any: bool
+field	metal2vulkan::pipeline::LevelReads.named	pub named: Option<u32>
+field	metal2vulkan::pipeline::LevelReads.sampled	pub sampled: Vec<SampledLevels>
+field	metal2vulkan::pipeline::LevelReads.slot	pub slot: u32
 field	metal2vulkan::pipeline::LineBandState.primitive	pub primitive: BandPrimitive
 field	metal2vulkan::pipeline::LineBandState.push_offset	pub push_offset: u32
 field	metal2vulkan::pipeline::LinkedFunction.constants	pub constants: FunctionConstantValues
@@ -4361,6 +4605,7 @@ field	metal2vulkan::pipeline::LoweringInputs.max_call_stack_depth	pub max_call_s
 field	metal2vulkan::pipeline::LoweringInputs.merged_draws	pub merged_draws: bool
 field	metal2vulkan::pipeline::LoweringInputs.multisampled	pub multisampled: bool
 field	metal2vulkan::pipeline::LoweringInputs.object_payload	pub object_payload: Option<u32>
+field	metal2vulkan::pipeline::LoweringInputs.open_cl_mode	pub open_cl_mode: bool
 field	metal2vulkan::pipeline::LoweringInputs.primitive_id_indices	pub primitive_id_indices: Option<crate::metal::IndexType>
 field	metal2vulkan::pipeline::LoweringInputs.primitive_id_varying	pub primitive_id_varying: bool
 field	metal2vulkan::pipeline::LoweringInputs.primitive_varyings	pub primitive_varyings: BTreeSet<VaryingKey>
@@ -4444,6 +4689,7 @@ field	metal2vulkan::pipeline::PipelineInterface.numbered_samplers	pub numbered_s
 field	metal2vulkan::pipeline::PipelineInterface.push	pub push: Vec<PushPlacement>
 field	metal2vulkan::pipeline::PipelineInterface.reaches_command_buffers	pub reaches_command_buffers: bool
 field	metal2vulkan::pipeline::PipelineInterface.slots	pub slots: BTreeMap<SlotRef, SlotInterface>
+field	metal2vulkan::pipeline::PipelineInterface.stage_in	pub stage_in: Vec<crate::pipeline::stage_io::StageInFetch>
 field	metal2vulkan::pipeline::PipelineInterface.texture_writing_stages	pub texture_writing_stages: Vec<Stage>
 field	metal2vulkan::pipeline::PipelineInterface.threadgroup	pub threadgroup: Vec<ThreadgroupArgument>
 field	metal2vulkan::pipeline::PipelineLayout.push_constants	pub push_constants: Vec<PushConstantRange>
@@ -4461,6 +4707,7 @@ field	metal2vulkan::pipeline::PrivateRenderState.fragment_depth_compare_clamp_ma
 field	metal2vulkan::pipeline::PrivateRenderState.logic_operation	pub logic_operation: u64
 field	metal2vulkan::pipeline::PrivateRenderState.logic_operation_enabled	pub logic_operation_enabled: bool
 field	metal2vulkan::pipeline::PrivateRenderState.needs_custom_border_color_samplers	pub needs_custom_border_color_samplers: bool
+field	metal2vulkan::pipeline::PrivateRenderState.open_gl_mode_enabled	pub open_gl_mode_enabled: bool
 field	metal2vulkan::pipeline::PrivateRenderState.point_coord_lower_left	pub point_coord_lower_left: bool
 field	metal2vulkan::pipeline::PrivateRenderState.point_size_output_vs	pub point_size_output_vs: bool
 field	metal2vulkan::pipeline::PrivateRenderState.point_smooth_enabled	pub point_smooth_enabled: bool
@@ -4527,6 +4774,14 @@ field	metal2vulkan::pipeline::ResourceSlot.kind	pub kind: ResourceKind
 field	metal2vulkan::pipeline::ResourceSlot.stage	pub stage: Stage
 field	metal2vulkan::pipeline::RuntimeDependency.fact	pub fact: RuntimeFact
 field	metal2vulkan::pipeline::RuntimeDependency.mechanism	pub mechanism: Mechanism
+field	metal2vulkan::pipeline::SampledLevels.computed	pub computed: bool
+field	metal2vulkan::pipeline::SampledLevels.highest_lod_bits	pub highest_lod_bits: Option<u32>
+field	metal2vulkan::pipeline::SampledLevels.sampler	pub sampler: crate::pipeline::sym::SamplerRef
+field	metal2vulkan::pipeline::SamplerLevels.bias	pub bias: f32
+field	metal2vulkan::pipeline::SamplerLevels.finite_texels	pub finite_texels: bool
+field	metal2vulkan::pipeline::SamplerLevels.linear	pub linear: bool
+field	metal2vulkan::pipeline::SamplerLevels.max_lod	pub max_lod: f32
+field	metal2vulkan::pipeline::SamplerLevels.min_lod	pub min_lod: f32
 field	metal2vulkan::pipeline::SamplerSlot.compare	pub compare: bool
 field	metal2vulkan::pipeline::SamplerSlot.coordinate_sensitive	pub coordinate_sensitive: bool
 field	metal2vulkan::pipeline::ShaderTestsUse.depth	pub depth: StandInUse
@@ -4562,12 +4817,14 @@ field	metal2vulkan::pipeline::StageInputLayoutDescriptor.step_rate	pub step_rate
 field	metal2vulkan::pipeline::StageInputLayoutDescriptor.stride	pub stride: Option<u32>
 field	metal2vulkan::pipeline::StageModule.constant_blob	pub constant_blob: Option<Arc<[u8]>>
 field	metal2vulkan::pipeline::StageModule.entry_point	pub entry_point: String
+field	metal2vulkan::pipeline::StageModule.level_reads	pub level_reads: Vec<LevelReads>
 field	metal2vulkan::pipeline::StageModule.own_pixel_textures	pub own_pixel_textures: Vec<u32>
 field	metal2vulkan::pipeline::StageModule.precision_notes	pub precision_notes: Vec<PrecisionNote>
 field	metal2vulkan::pipeline::StageModule.private_bytes	pub private_bytes: u64
 field	metal2vulkan::pipeline::StageModule.reconvergence	pub reconvergence: Reconvergence
 field	metal2vulkan::pipeline::StageModule.required_subgroup_size	pub required_subgroup_size: Option<u32>
 field	metal2vulkan::pipeline::StageModule.rounded_colors	pub rounded_colors: Vec<u32>
+field	metal2vulkan::pipeline::StageModule.snapshot_refusals	pub snapshot_refusals: Vec<(u32, SnapshotRefusal)>
 field	metal2vulkan::pipeline::StageModule.snapshot_textures	pub snapshot_textures: Vec<u32>
 field	metal2vulkan::pipeline::StageModule.specialization	pub specialization: SpecializationLayout
 field	metal2vulkan::pipeline::StageModule.specialized_notes	pub specialized_notes: Vec<SpecializedNote>
@@ -4731,12 +4988,16 @@ fn	metal2vulkan-air::specialize_dynamic	pub fn specialize_dynamic(d: Decoded, r:
 fn	metal2vulkan-air::specialize_linked	pub fn specialize_linked(d: Decoded, r: &SpecRequest, linked: &[LinkedModule], m: &mut Meter) -> Result<Entry, Error>
 fn	metal2vulkan-runtime::host_time	pub fn host_time() -> f64
 fn	metal2vulkan-runtime::process_exiting	pub fn process_exiting() -> bool
+fn	metal2vulkan-runtime::program_instance_made	pub fn program_instance_made()
 fn	metal2vulkan-runtime::sampler_border_color	pub fn sampler_border_color(raw: u64) -> SamplerBorderColor
 fn	metal2vulkan::ash_interop::sampler_create_info	pub fn sampler_create_info<'a>(desc: &vk::SamplerDesc, reduction: &'a mut ash::vk::SamplerReductionModeCreateInfo<'static>, border: &'a mut ash::vk::SamplerBorderColorComponentMappingCreateInfoEXT<'static>) -> ash::vk::SamplerCreateInfo<'a>
 fn	metal2vulkan::bind::astc_decode_module	pub fn astc_decode_module(device: &Device, decode: AstcDecode, texels: AstcTexels) -> Result<BlockDecodeModule, Error>
+fn	metal2vulkan::bind::check_draw_modules	pub fn check_draw_modules(device: &Device) -> Result<CheckDrawModules, Error>
 fn	metal2vulkan::bind::chroma_decode_module	pub fn chroma_decode_module(device: &Device, decode: ChromaDecode) -> Result<BlockDecodeModule, Error>
 fn	metal2vulkan::bind::chroma_sample_module	pub fn chroma_sample_module(device: &Device) -> Result<ChromaSampleModule, Error>
+fn	metal2vulkan::bind::clamped_depth	pub const fn clamped_depth(bits: u32) -> u32
 fn	metal2vulkan::bind::color_resolve_modules	pub fn color_resolve_modules(device: &Device, format: ColorResolveFormat, samples: u32, source: ResolveSource, feature: Feature) -> Result<ColorResolveModules, Error>
+fn	metal2vulkan::bind::depth_clamp_module	pub fn depth_clamp_module(device: &Device) -> Result<DepthClampModule, Error>
 fn	metal2vulkan::bind::depth_split_module	pub fn depth_split_module(device: &Device, form: DepthStandInForm, feature: Feature) -> Result<DepthSplitModule, Error>
 fn	metal2vulkan::bind::depth_stencil_copy_modules	pub fn depth_stencil_copy_modules(device: &Device, copy: DepthStencilCopy, feature: Feature) -> Result<DepthStencilCopyModules, Error>
 fn	metal2vulkan::bind::depth_stencil_resolve_modules	pub fn depth_stencil_resolve_modules(device: &Device, draw: DepthStencilResolveDraw, feature: Feature) -> Result<DepthStencilResolveModules, Error>
@@ -4822,6 +5083,7 @@ fn	metal2vulkan::metal::format::block_extent	pub fn block_extent(pf: PixelFormat
 fn	metal2vulkan::metal::format::bound_texel_format	pub fn bound_texel_format(pf: PixelFormat) -> u32
 fn	metal2vulkan::metal::format::byte_format	pub fn byte_format(pf: PixelFormat) -> Option<vk::Format>
 fn	metal2vulkan::metal::format::color_record	pub fn color_record(formats: &[Option<PixelFormat>]) -> Option<Vec<Option<(u32, u32)>>>
+fn	metal2vulkan::metal::format::copies_only	pub fn copies_only(pf: PixelFormat) -> bool
 fn	metal2vulkan::metal::format::direct_format	pub fn direct_format(pf: PixelFormat) -> Option<vk::Format>
 fn	metal2vulkan::metal::format::explicit_imageblock_sample_length	pub fn explicit_imageblock_sample_length(data_size: u32, alignment: u32, colors: u32) -> Option<u32>
 fn	metal2vulkan::metal::format::extended_range_blend	pub fn extended_range_blend(pf: PixelFormat, profile: &DeviceProfile) -> Result<(), Unsupported>
@@ -5149,6 +5411,7 @@ macro-member	metal2vulkan-runtime::Degradation::DeviceNanEncoding	DeviceNanEncod
 macro-member	metal2vulkan-runtime::Degradation::DevicePackConversion	DevicePackConversion = "device-pack-conversion";
 macro-member	metal2vulkan-runtime::Degradation::DevicePointSize	DevicePointSize = "device-point-size";
 macro-member	metal2vulkan-runtime::Degradation::DeviceRayIntersection	DeviceRayIntersection = "device-ray-intersection";
+macro-member	metal2vulkan-runtime::Degradation::DeviceRecovered	DeviceRecovered = "device-recovered", Performance,
 macro-member	metal2vulkan-runtime::Degradation::DeviceRoundedResolve	DeviceRoundedResolve = "device-rounded-resolve", Precision,
 macro-member	metal2vulkan-runtime::Degradation::DeviceSampleLevel	DeviceSampleLevel = "device-sample-level";
 macro-member	metal2vulkan-runtime::Degradation::DeviceSampling	DeviceSampling = "device-sampling";
@@ -5177,6 +5440,7 @@ macro-member	metal2vulkan-runtime::Degradation::ExtendedRangeBlendSource	Extende
 macro-member	metal2vulkan-runtime::Degradation::ExtendedRangeBlendsStoredCodes	ExtendedRangeBlendsStoredCodes = "extended-range-blends-stored-codes", Precision,
 macro-member	metal2vulkan-runtime::Degradation::ExtendedRangeFloatBlendSource	ExtendedRangeFloatBlendSource = "extended-range-float-blend-source";
 macro-member	metal2vulkan-runtime::Degradation::ExtendedRangeResolve	ExtendedRangeResolve = "extended-range-resolve", Precision,
+macro-member	metal2vulkan-runtime::Degradation::ExtrapolatedInterpolation	ExtrapolatedInterpolation = "extrapolated-interpolation";
 macro-member	metal2vulkan-runtime::Degradation::F16FmaDoubleRounding	F16FmaDoubleRounding = "f16-fma-double-rounding";
 macro-member	metal2vulkan-runtime::Degradation::F16IntConvDoubleRounding	F16IntConvDoubleRounding = "f16-int-conv-double-rounding";
 macro-member	metal2vulkan-runtime::Degradation::FastMathRewrites	FastMathRewrites = "fast-math-rewrites";
@@ -5199,6 +5463,7 @@ macro-member	metal2vulkan-runtime::Degradation::HalfOutputPrecision	HalfOutputPr
 macro-member	metal2vulkan-runtime::Degradation::HalfSampleFilter	HalfSampleFilter = "half-sample-filter";
 macro-member	metal2vulkan-runtime::Degradation::HalfTexelConversion	HalfTexelConversion = "half-texel-conversion";
 macro-member	metal2vulkan-runtime::Degradation::HeapDepthStencilApart	HeapDepthStencilApart = "heap-depth-stencil-apart", Precision,
+macro-member	metal2vulkan-runtime::Degradation::HeapOnePlaneLayout	HeapOnePlaneLayout = "heap-one-plane-layout", Precision,
 macro-member	metal2vulkan-runtime::Degradation::HeapSetCopied	HeapSetCopied = "heap-set-copied", Precision,
 macro-member	metal2vulkan-runtime::Degradation::HeapTextureBlockCompressedLayout	HeapTextureBlockCompressedLayout = "heap-texture-block-compressed-layout", Precision,
 macro-member	metal2vulkan-runtime::Degradation::HeapTextureCompressed	HeapTextureCompressed = "heap-texture-compressed", Precision,
@@ -5265,7 +5530,6 @@ macro-member	metal2vulkan-runtime::Degradation::QuadsSplitByClipping	QuadsSplitB
 macro-member	metal2vulkan-runtime::Degradation::QueueSharing	QueueSharing = "queue-sharing", Performance,
 macro-member	metal2vulkan-runtime::Degradation::RasterizationRateMap	RasterizationRateMap = "rasterization-rate-map";
 macro-member	metal2vulkan-runtime::Degradation::RateMapResetUnencoded	RateMapResetUnencoded = "rate-map-reset-unencoded", Precision,
-macro-member	metal2vulkan-runtime::Degradation::ReadOnlyPagesWritten	ReadOnlyPagesWritten = "read-only-pages-written", Precision,
 macro-member	metal2vulkan-runtime::Degradation::ReductionOrder	ReductionOrder = "reduction-order";
 macro-member	metal2vulkan-runtime::Degradation::ReleasedCommandState	ReleasedCommandState = "released-command-state", Precision,
 macro-member	metal2vulkan-runtime::Degradation::RenderPassSplit	RenderPassSplit = "render-pass-split", Performance,
@@ -5299,6 +5563,8 @@ macro-member	metal2vulkan-runtime::Degradation::SrgbTexelDecode	SrgbTexelDecode 
 macro-member	metal2vulkan-runtime::Degradation::StagedTextureBuffer	StagedTextureBuffer = "staged-texture-buffer", Performance,
 macro-member	metal2vulkan-runtime::Degradation::StagedTextureCopy	StagedTextureCopy = "staged-texture-copy", Performance,
 macro-member	metal2vulkan-runtime::Degradation::StaleDetachedReach	StaleDetachedReach = "stale-detached-reach", Precision,
+macro-member	metal2vulkan-runtime::Degradation::SurfaceTexelsApart	SurfaceTexelsApart = "surface-texels-apart", Precision,
+macro-member	metal2vulkan-runtime::Degradation::SurfaceTexelsTail	SurfaceTexelsTail = "surface-texels-tail", Precision,
 macro-member	metal2vulkan-runtime::Degradation::SynthesizedGeometryStage	SynthesizedGeometryStage = "synthesized-geometry-stage", Performance,
 macro-member	metal2vulkan-runtime::Degradation::TessellationFactorEdgeCases	TessellationFactorEdgeCases = "tessellation-factor-edge-cases";
 macro-member	metal2vulkan-runtime::Degradation::TessellationFactorInstance	TessellationFactorInstance = "tessellation-factor-instance";
@@ -5333,6 +5599,7 @@ macro-member	metal2vulkan-runtime::Degradation::UntimedCommandBuffer	UntimedComm
 macro-member	metal2vulkan-runtime::Degradation::VertexSimdgroupGrouping	VertexSimdgroupGrouping = "vertex-simdgroup-grouping";
 macro-member	metal2vulkan-runtime::Degradation::ViewBaseTexelOffset	ViewBaseTexelOffset = "view-base-texel-offset";
 macro-member	metal2vulkan-runtime::Degradation::VisibilityCountPerColor	VisibilityCountPerColor = "visibility-count-per-color", Precision,
+macro-member	metal2vulkan-runtime::Degradation::VisibilityPastEarlyMask	VisibilityPastEarlyMask = "visibility-past-early-mask", Precision,
 macro-member	metal2vulkan-runtime::Degradation::WideEdgeDepthBias	WideEdgeDepthBias = "wide-edge-depth-bias", Precision,
 macro-member	metal2vulkan-runtime::Degradation::WordResolve	WordResolve = "word-resolve", Precision,
 macro-member	metal2vulkan-runtime::Degradation::WrappedImageLayoutTransitions	WrappedImageLayoutTransitions = "wrapped-image-layout-transitions", Performance,
@@ -7262,7 +7529,7 @@ macro-template	metal2vulkan-air::metal_flags!	( $(#[$meta:meta])* $name:ident = 
 macro-template	metal2vulkan-air::vk_bit!	( $(#[$meta:meta])* $name:ident($raw:ty) = $vk:literal in $flags:ident { $($konst:ident = $value:literal, $vkname:literal;)* } aliases { $($alias:literal => $target:ident;)* } ) => { $(#[$meta])* #[repr(transparent)] #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)] #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[cfg_attr(feature = "serde", serde(try_from = "u32", into = "u32"))] pub struct $name($raw); impl $name { $( #[doc = concat!("`", $vkname, "`.")] pub const $konst: $name = $name($value); )* pub const VK_NAME: &'static str = $vk; pub const KNOWN: &'static [$name] = &[$($name::$konst),*]; const NAMES: &'static [($name, &'static str)] = &[$(($name::$konst, $vkname)),*]; const ALIASES: &'static [(&'static str, $name)] = &[$(($alias, $name::$target)),*]; pub const fn from_raw(raw: $raw) -> Option<$name> { let mut i = 0; while i < Self::KNOWN.len() { if Self::KNOWN[i].0 == raw { return Some(Self::KNOWN[i]); } i += 1; } None } pub const fn from_flags(flags: $flags) -> Option<$name> { Self::from_raw(flags.as_raw()) } pub const fn as_raw(self) -> $raw { self.0 } pub const fn flags(self) -> $flags { $flags::from_raw(self.0) } pub fn name(self) -> &'static str { Self::NAMES .iter() .find(|(v, _)| *v == self) .map(|(_, n)| *n) .expect("a single-bit value is always a named bit") } pub fn from_name(name: &str) -> Option<$name> { Self::NAMES .iter() .find(|(_, n)| *n == name) .map(|(v, _)| *v) .or_else(|| Self::ALIASES.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)) } } impl ::std::convert::TryFrom<$raw> for $name { type Error = $raw; fn try_from(raw: $raw) -> Result<$name, $raw> { $name::from_raw(raw).ok_or(raw) } } impl From<$name> for $raw { fn from(bit: $name) -> $raw { bit.0 } } impl From<$name> for $flags { fn from(bit: $name) -> $flags { bit.flags() } } impl ::std::fmt::Debug for $name { fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result { f.write_str(self.name()) } } };
 macro-template	metal2vulkan-air::vk_enum!	( $(#[$meta:meta])* $name:ident($raw:ty) = $vk:literal { $($konst:ident = $value:literal, $vkname:literal;)* } aliases { $($alias:literal => $target:ident;)* } ) => { $(#[$meta])* #[repr(transparent)] #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)] #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[cfg_attr(feature = "serde", serde(transparent))] pub struct $name($raw); impl $name { $( #[doc = concat!("`", $vkname, "`.")] pub const $konst: $name = $name($value); )* pub const VK_NAME: &'static str = $vk; pub const KNOWN: &'static [$name] = &[$($name::$konst),*]; const NAMES: &'static [($name, &'static str)] = &[$(($name::$konst, $vkname)),*]; const ALIASES: &'static [(&'static str, $name)] = &[$(($alias, $name::$target)),*]; pub const fn from_raw(raw: $raw) -> $name { $name(raw) } pub const fn as_raw(self) -> $raw { self.0 } pub fn name(self) -> Option<&'static str> { Self::NAMES.iter().find(|(v, _)| *v == self).map(|(_, n)| *n) } pub fn is_known(self) -> bool { self.name().is_some() } pub fn from_name(name: &str) -> Option<$name> { Self::NAMES .iter() .find(|(_, n)| *n == name) .map(|(v, _)| *v) .or_else(|| Self::ALIASES.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)) } } impl ::std::fmt::Debug for $name { fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result { match self.name() { Some(name) => f.write_str(name), None => write!(f, "{}({})", $vk, self.0), } } } };
 macro-template	metal2vulkan-air::vk_flags!	( $(#[$meta:meta])* $name:ident($raw:ty) = $vk:literal { $($konst:ident = $value:literal, $vkname:literal;)* } aliases { $($alias:literal => $target:ident;)* } ) => { $(#[$meta])* #[repr(transparent)] #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)] #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[cfg_attr(feature = "serde", serde(transparent))] pub struct $name($raw); impl $name { $( #[doc = concat!("`", $vkname, "`.")] pub const $konst: $name = $name($value); )* pub const VK_NAME: &'static str = $vk; pub const KNOWN: &'static [($name, &'static str)] = &[$(($name::$konst, $vkname)),*]; const ALIASES: &'static [(&'static str, $name)] = &[$(($alias, $name::$target)),*]; pub const fn empty() -> $name { $name(0) } pub const fn from_raw(raw: $raw) -> $name { $name(raw) } pub const fn as_raw(self) -> $raw { self.0 } pub const fn is_empty(self) -> bool { self.0 == 0 } pub const fn contains(self, other: $name) -> bool { self.0 & other.0 == other.0 } pub const fn intersects(self, other: $name) -> bool { self.0 & other.0 != 0 } pub const fn union(self, other: $name) -> $name { $name(self.0 | other.0) } pub const fn intersection(self, other: $name) -> $name { $name(self.0 & other.0) } pub const fn difference(self, other: $name) -> $name { $name(self.0 & !other.0) } pub const fn known_bits() -> $name { let mut bits: $raw = 0; let mut i = 0; while i < Self::KNOWN.len() { let v = Self::KNOWN[i].0 .0; if v.count_ones() == 1 { bits |= v; } i += 1; } $name(bits) } pub fn name(self) -> Option<&'static str> { Self::KNOWN.iter().find(|(v, _)| *v == self).map(|(_, n)| *n) } pub fn from_name(name: &str) -> Option<$name> { Self::KNOWN .iter() .find(|(_, n)| *n == name) .map(|(v, _)| *v) .or_else(|| Self::ALIASES.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)) } } impl ::std::ops::BitOr for $name { type Output = $name; fn bitor(self, rhs: $name) -> $name { self.union(rhs) } } impl ::std::ops::BitOrAssign for $name { fn bitor_assign(&mut self, rhs: $name) { *self = self.union(rhs); } } impl ::std::ops::BitAnd for $name { type Output = $name; fn bitand(self, rhs: $name) -> $name { self.intersection(rhs) } } impl ::std::ops::BitAndAssign for $name { fn bitand_assign(&mut self, rhs: $name) { *self = self.intersection(rhs); } } impl ::std::fmt::Debug for $name { fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result { if let Some(name) = self.name() { return f.write_str(name); } let mut rest = self.0; let mut first = true; for (v, n) in Self::KNOWN { if v.0.count_ones() == 1 && rest & v.0 != 0 { if !first { f.write_str(" | ")?; } f.write_str(n)?; rest &= !v.0; first = false; } } if rest != 0 || first { if !first { f.write_str(" | ")?; } write!(f, "{:#x}", rest)?; } Ok(()) } } };
-macro-template	metal2vulkan-runtime::commands!	( v1_0 { $($v0:ident $f0:ident $n0:literal ($($a0:ident: $t0:ty),*) $(-> $r0:ty)?;)* } v1_3 { $($v3:ident $f3:ident $n3:literal ($($a3:ident: $t3:ty),*) $(-> $r3:ty)?;)* } extension { $($ve:ident $fe:ident $ne:literal ($($ae:ident: $te:ty),*) $(-> $re:ty)?;)* } ) => { #[derive(Clone, Copy, PartialEq, Eq, Debug)] pub(crate) enum Command { $($v0,)* $($v3,)* $($ve,)* } impl Command { pub(crate) const ALL: &'static [Command] = &[ $(Command::$v0,)* $(Command::$v3,)* $(Command::$ve,)* ]; pub(crate) const COUNT: usize = Command::ALL.len(); pub(crate) fn name(self) -> &'static CStr { match self { $(Command::$v0 => $n0,)* $(Command::$v3 => $n3,)* $(Command::$ve => $ne,)* } } } #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)] pub struct CommandsRecorded { $( #[doc = concat!("The calls of `", stringify!($v0), "`.")] pub $f0: u64, )* $( #[doc = concat!("The calls of `", stringify!($v3), "`.")] pub $f3: u64, )* $( #[doc = concat!("The calls of `", stringify!($ve), "`.")] pub $fe: u64, )* } impl CommandsRecorded { fn read(shards: &[Shard; SHARDS + 1]) -> CommandsRecorded { let sum = |command: Command| { let counts = shards.iter().map(|shard| &shard.0[command as usize]); counts.map(|count| count.load(Ordering::Relaxed)).sum() }; CommandsRecorded { $($f0: sum(Command::$v0),)* $($f3: sum(Command::$v3),)* $($fe: sum(Command::$ve),)* } } } struct Real { $($f0: [AtomicPtr<c_void>; SLOTS],)* $($f3: [AtomicPtr<c_void>; SLOTS],)* $($fe: [AtomicPtr<c_void>; SLOTS],)* } static REAL: Real = Real { $($f0: [const { AtomicPtr::new(std::ptr::null_mut()) }; SLOTS],)* $($f3: [const { AtomicPtr::new(std::ptr::null_mut()) }; SLOTS],)* $($fe: [const { AtomicPtr::new(std::ptr::null_mut()) }; SLOTS],)* }; commands!(@thunks $($v0 $f0 $n0 ($($a0: $t0),*) $(-> $r0)?;)*); commands!(@thunks $($v3 $f3 $n3 ($($a3: $t3),*) $(-> $r3)?;)*); commands!(@thunks $($ve $fe $ne ($($ae: $te),*) $(-> $re)?;)*); pub(super) fn thunk<const S: usize>(command: Command) -> *const c_void { match command { $(Command::$v0 => $f0::<S> as *const c_void,)* $(Command::$v3 => $f3::<S> as *const c_void,)* $(Command::$ve => $fe::<S> as *const c_void,)* } } pub(super) fn store(index: usize, command: Command, real: *const c_void) { let real = real.cast_mut(); match command { $(Command::$v0 => REAL.$f0[index].store(real, Ordering::Release),)* $(Command::$v3 => REAL.$f3[index].store(real, Ordering::Release),)* $(Command::$ve => REAL.$fe[index].store(real, Ordering::Release),)* } } pub(super) fn clear(index: usize) { $(REAL.$f0[index].store(std::ptr::null_mut(), Ordering::Release);)* $(REAL.$f3[index].store(std::ptr::null_mut(), Ordering::Release);)* $(REAL.$fe[index].store(std::ptr::null_mut(), Ordering::Release);)* } pub(super) fn route_tables<const S: usize>( v1_0: &mut ash::DeviceFnV1_0, v1_3: &mut ash::DeviceFnV1_3, ) { $( store(S, Command::$v0, v1_0.$f0 as *const c_void); v1_0.$f0 = $f0::<S>; )* $( store(S, Command::$v3, v1_3.$f3 as *const c_void); v1_3.$f3 = $f3::<S>; )* } }; (@thunks $($v:ident $f:ident $n:literal ($($a:ident: $t:ty),*) $(-> $r:ty)?;)*) => { $( unsafe extern "system" fn $f<const S: usize>( command_buffer: vk::CommandBuffer, $($a: $t,)* ) $(-> $r)? { let at = held(); crate::shards::add(at, &COUNTS[S][at].0[Command::$v as usize], 1); let real = REAL.$f[S].load(Ordering::Acquire); if real.is_null() { missing($n); } unsafe { let real = std::mem::transmute::< *mut c_void, unsafe extern "system" fn(vk::CommandBuffer, $($t,)*) $(-> $r)?, >(real); real(command_buffer, $($a,)*) } } )* };
+macro-template	metal2vulkan-runtime::commands!	( v1_0 { $($v0:ident $f0:ident $n0:literal ($($a0:ident: $t0:ty),*) $(-> $r0:ty)?;)* } v1_3 { $($v3:ident $f3:ident $n3:literal ($($a3:ident: $t3:ty),*) $(-> $r3:ty)?;)* } extension { $($ve:ident $fe:ident $ne:literal ($($ae:ident: $te:ty),*) $(-> $re:ty)?;)* } ) => { #[derive(Clone, Copy, PartialEq, Eq, Debug)] pub(crate) enum Command { $($v0,)* $($v3,)* $($ve,)* } impl Command { pub(crate) const ALL: &'static [Command] = &[ $(Command::$v0,)* $(Command::$v3,)* $(Command::$ve,)* ]; pub(crate) const COUNT: usize = Command::ALL.len(); pub(crate) fn name(self) -> &'static CStr { match self { $(Command::$v0 => $n0,)* $(Command::$v3 => $n3,)* $(Command::$ve => $ne,)* } } } #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)] pub struct CommandsRecorded { $( #[doc = concat!("The calls of `", stringify!($v0), "`.")] pub $f0: u64, )* $( #[doc = concat!("The calls of `", stringify!($v3), "`.")] pub $f3: u64, )* $( #[doc = concat!("The calls of `", stringify!($ve), "`.")] pub $fe: u64, )* } impl CommandsRecorded { fn read(shards: &[Shard; SHARDS + 1]) -> CommandsRecorded { let sum = |command: Command| { let counts = shards.iter().map(|shard| &shard.0[command as usize]); counts.map(|count| count.load(Ordering::Relaxed)).sum() }; CommandsRecorded { $($f0: sum(Command::$v0),)* $($f3: sum(Command::$v3),)* $($fe: sum(Command::$ve),)* } } } struct Real { $($f0: [AtomicPtr<c_void>; SLOTS],)* $($f3: [AtomicPtr<c_void>; SLOTS],)* $($fe: [AtomicPtr<c_void>; SLOTS],)* } static REAL: Real = Real { $($f0: [const { AtomicPtr::new(std::ptr::null_mut()) }; SLOTS],)* $($f3: [const { AtomicPtr::new(std::ptr::null_mut()) }; SLOTS],)* $($fe: [const { AtomicPtr::new(std::ptr::null_mut()) }; SLOTS],)* }; commands!(@thunks $($v0 $f0 $n0 ($($a0: $t0),*) $(-> $r0)?;)*); commands!(@thunks $($v3 $f3 $n3 ($($a3: $t3),*) $(-> $r3)?;)*); commands!(@thunks $($ve $fe $ne ($($ae: $te),*) $(-> $re)?;)*); pub(super) fn thunk<const S: usize>(command: Command) -> *const c_void { match command { $(Command::$v0 => $f0::<S> as *const c_void,)* $(Command::$v3 => $f3::<S> as *const c_void,)* $(Command::$ve => $fe::<S> as *const c_void,)* } } pub(super) fn store(index: usize, command: Command, real: *const c_void) { let real = real.cast_mut(); match command { $(Command::$v0 => REAL.$f0[index].store(real, Ordering::Release),)* $(Command::$v3 => REAL.$f3[index].store(real, Ordering::Release),)* $(Command::$ve => REAL.$fe[index].store(real, Ordering::Release),)* } } pub(super) fn real(index: usize, command: Command) -> *const c_void { let real = match command { $(Command::$v0 => REAL.$f0[index].load(Ordering::Acquire),)* $(Command::$v3 => REAL.$f3[index].load(Ordering::Acquire),)* $(Command::$ve => REAL.$fe[index].load(Ordering::Acquire),)* }; real.cast_const() } pub(super) fn clear(index: usize) { $(REAL.$f0[index].store(std::ptr::null_mut(), Ordering::Release);)* $(REAL.$f3[index].store(std::ptr::null_mut(), Ordering::Release);)* $(REAL.$fe[index].store(std::ptr::null_mut(), Ordering::Release);)* } pub(super) fn route_tables<const S: usize>( v1_0: &mut ash::DeviceFnV1_0, v1_3: &mut ash::DeviceFnV1_3, ) { $( store(S, Command::$v0, v1_0.$f0 as *const c_void); v1_0.$f0 = $f0::<S>; )* $( store(S, Command::$v3, v1_3.$f3 as *const c_void); v1_3.$f3 = $f3::<S>; )* } }; (@thunks $($v:ident $f:ident $n:literal ($($a:ident: $t:ty),*) $(-> $r:ty)?;)*) => { $( unsafe extern "system" fn $f<const S: usize>( command_buffer: vk::CommandBuffer, $($a: $t,)* ) $(-> $r)? { let at = held(); crate::shards::add(at, &COUNTS[S][at].0[Command::$v as usize], 1); let real = REAL.$f[S].load(Ordering::Acquire); if real.is_null() { missing($n); } unsafe { let real = std::mem::transmute::< *mut c_void, unsafe extern "system" fn(vk::CommandBuffer, $($t,)*) $(-> $r)?, >(real); real(command_buffer, $($a,)*) } } )* };
 macro-template	metal2vulkan-runtime::degradations!	( runtime { $( $(#[doc = $doc:literal])* $kind:ident = $code:literal, $category:ident, $cost:literal; )* } notes { $( $(#[doc = $note_doc:literal])* $note:ident = $note_code:literal; )* } ) => { #[non_exhaustive] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub enum Degradation { $($(#[doc = $doc])* $kind,)* $( #[doc = concat!( "A pipeline stage records [`PrecisionNote::", stringify!($note), "`]." )] $(#[doc = $note_doc])* $note, )* } impl Degradation { pub const ALL: &'static [Degradation] = &[$(Degradation::$kind,)* $(Degradation::$note,)*]; pub const fn code(self) -> &'static str { match self { $(Degradation::$kind => concat!("metal2vulkan-degrade-", $code),)* $(Degradation::$note => concat!("metal2vulkan-degrade-", $note_code),)* } } pub const fn category(self) -> DegradationCategory { match self { $(Degradation::$kind => DegradationCategory::$category,)* $(Degradation::$note => DegradationCategory::Precision,)* } } pub const fn cost(self) -> &'static str { match self { $(Degradation::$kind => $cost,)* $(Degradation::$note => NOTE_COST,)* } } pub const fn precision_note(self) -> Option<PrecisionNote> { match self { $(Degradation::$kind => None,)* $(Degradation::$note => Some(PrecisionNote::$note),)* } } pub const fn from_precision_note(note: PrecisionNote) -> Degradation { match note { $(PrecisionNote::$note => Degradation::$note,)* } } } };
 macro-template	metal2vulkan-runtime::exposures!	($($exposure:expr => [$($feature:ident),* $(,)?];)*) => { impl VkFeature { pub const ALL: &'static [VkFeature] = &[$($(VkFeature::$feature),*),*]; pub fn exposure(self) -> Exposure { match self { $($(VkFeature::$feature)|* => $exposure,)* } } } };
 macro-template	metal2vulkan-runtime::flag_set!	( $(#[$doc:meta])* $name:ident { $($(#[$fdoc:meta])* $flag:ident = $bit:expr),* $(,)? } $(#[$all:meta])* ALL ) => { $(#[$doc])* #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] pub struct $name(u8); impl $name { pub const NONE: $name = $name(0); $($(#[$fdoc])* pub const $flag: $name = $name($bit);)* $(#[$all])* pub const ALL: &'static [($name, &'static str)] = &[$(($name::$flag, stringify!($flag))),*]; pub const fn union(self, other: $name) -> $name { $name(self.0 | other.0) } pub const fn contains(self, other: $name) -> bool { self.0 & other.0 == other.0 } #[cfg(test)] pub const fn bits(self) -> u8 { self.0 } } };
@@ -7302,6 +7569,7 @@ method	metal2vulkan-air::abi::Member::handle	pub fn handle(&self) -> Option<AbiH
 method	metal2vulkan-air::abi::ParamRole::handle	pub fn handle(&self) -> Option<AbiHandle>
 method	metal2vulkan-air::abi::SamplerState::from_words	pub fn from_words(words: [u64; 2]) -> Option<SamplerState>
 method	metal2vulkan-air::abi::Stage::max_total_threads	pub fn max_total_threads(&self) -> Option<u32>
+method	metal2vulkan-air::abi::Stage::work_group_size	pub fn work_group_size(&self) -> Option<[u32; 3]>
 method	metal2vulkan-air::bitcode::AttrList::resolve	pub fn resolve(&self, types: &BitcodeTypes, arity: usize, pointee: impl Fn(usize) -> Option<u32>, keep_enums: bool, m: &mut Meter) -> Result<Option<ResolvedAttrs>, Error>
 method	metal2vulkan-air::bitcode::BitcodeTypes::get	pub fn get(&self, idx: u64) -> Option<BcType>
 method	metal2vulkan-air::bitcode::BitcodeTypes::params	pub fn params(&self, idx: u64) -> Option<&[u32]>
@@ -7439,6 +7707,7 @@ method	metal2vulkan-air::intrinsics::AtomicSpace::space	pub const fn space(self)
 method	metal2vulkan-air::intrinsics::BoolReduce::signature	pub fn signature(&self) -> Signature
 method	metal2vulkan-air::intrinsics::Coherent::signature	pub fn signature(&self) -> Signature
 method	metal2vulkan-air::intrinsics::Convert::signature	pub fn signature(&self) -> Signature
+method	metal2vulkan-air::intrinsics::DeclClass::template	pub fn template(self) -> Option<Template>
 method	metal2vulkan-air::intrinsics::Derivative::signature	pub fn signature(&self) -> Signature
 method	metal2vulkan-air::intrinsics::Elem::bits	pub const fn bits(self) -> u32
 method	metal2vulkan-air::intrinsics::Elem::is_float	pub const fn is_float(self) -> bool
@@ -7500,11 +7769,13 @@ method	metal2vulkan-air::intrinsics::SimdMatrix::signature	pub fn signature(&sel
 method	metal2vulkan-air::intrinsics::SimdgroupSize::signature	pub fn signature(&self) -> Signature
 method	metal2vulkan-air::intrinsics::Sync::barrier_order	pub fn barrier_order(&self) -> Option<MemoryOrder>
 method	metal2vulkan-air::intrinsics::Sync::signature	pub fn signature(&self) -> Signature
+method	metal2vulkan-air::intrinsics::Template::bind	pub fn bind(self, args: &[Value], consts: &ConstTable) -> Result<Bound, IntrinsicError>
 method	metal2vulkan-air::intrinsics::Tensor::signature	pub fn signature(&self) -> Signature
 method	metal2vulkan-air::intrinsics::Texture::layout	pub fn layout(&self) -> Layout<TexRole>
 method	metal2vulkan-air::intrinsics::Texture::signature	pub fn signature(&self) -> Signature
 method	metal2vulkan-air::intrinsics::Texture::ulong	pub fn ulong(&self) -> bool
 method	metal2vulkan-air::intrinsics::ThreadScope::from_raw	pub fn from_raw(v: u64) -> Option<ThreadScope>
+method	metal2vulkan-air::intrinsics::WorkItem::signature	pub fn signature(&self) -> Signature
 method	metal2vulkan-air::ir::AddrSpace::from_raw	pub fn from_raw(n: u32) -> Result<AddrSpace, Unsupported>
 method	metal2vulkan-air::ir::AddrSpace::raw	pub const fn raw(self) -> u32
 method	metal2vulkan-air::ir::Align::bytes	pub fn bytes(self) -> u64
@@ -7670,6 +7941,7 @@ method	metal2vulkan-runtime::ArgumentEncoder::set_textures	pub fn set_textures(&
 method	metal2vulkan-runtime::ArgumentEncoder::set_visible_function_table	pub fn set_visible_function_table(&self, table: Option<&VisibleFunctionTable>, index: u32) -> Result<(), Error>
 method	metal2vulkan-runtime::ArgumentEncoder::set_visible_function_tables	pub fn set_visible_function_tables(&self, tables: &[Option<&VisibleFunctionTable>], first: u32) -> Result<(), Error>
 method	metal2vulkan-runtime::BinaryArchive::add_compute_pipeline_functions	pub fn add_compute_pipeline_functions(&self, descriptor: &ComputePipelineDescriptor) -> Result<(), Error>
+method	metal2vulkan-runtime::BinaryArchive::add_mesh_render_pipeline_functions	pub fn add_mesh_render_pipeline_functions(&self, descriptor: &MeshPipelineDescriptor) -> Result<(), Error>
 method	metal2vulkan-runtime::BinaryArchive::add_render_pipeline_functions	pub fn add_render_pipeline_functions(&self, descriptor: &RenderPipelineDescriptor) -> Result<(), Error>
 method	metal2vulkan-runtime::BinaryArchive::add_tile_render_pipeline_functions	pub fn add_tile_render_pipeline_functions(&self, descriptor: &TileRenderPipelineDescriptor) -> Result<(), Error>
 method	metal2vulkan-runtime::BinaryArchive::device	pub fn device(&self) -> &Device
@@ -7684,6 +7956,8 @@ method	metal2vulkan-runtime::BlitCommandEncoder::copy_from_host_ram	pub fn copy_
 method	metal2vulkan-runtime::BlitCommandEncoder::copy_from_texture_to_buffer	pub fn copy_from_texture_to_buffer(&mut self, source_texture: &Texture, source_slice: u64, source_level: u64, source_origin: Origin, source_size: Size, destination_buffer: &Buffer, destination_offset: u64, destination_bytes_per_row: u64, destination_bytes_per_image: u64, options: BlitOption) -> Result<(), Error>
 method	metal2vulkan-runtime::BlitCommandEncoder::copy_from_texture_to_texture	pub fn copy_from_texture_to_texture(&mut self, source_texture: &Texture, source_slice: u64, source_level: u64, source_origin: Origin, source_size: Size, destination_texture: &Texture, destination_slice: u64, destination_level: u64, destination_origin: Origin) -> Result<(), Error>
 method	metal2vulkan-runtime::BlitCommandEncoder::copy_indirect_command_buffer	pub fn copy_indirect_command_buffer(&mut self, source: &IndirectCommandBuffer, source_range: Range<u64>, destination: &IndirectCommandBuffer, destination_index: u64) -> Result<(), Error>
+method	metal2vulkan-runtime::BlitCommandEncoder::copy_runs_from_host_ram	pub fn copy_runs_from_host_ram(&mut self, ram: &HostRam, runs: &[(u64, Range<u64>)], destination: &Buffer) -> Result<(), Error>
+method	metal2vulkan-runtime::BlitCommandEncoder::copy_runs_to_host_ram	pub fn copy_runs_to_host_ram(&mut self, source: &Buffer, ram: &HostRam, runs: &[(u64, Range<u64>)]) -> Result<(), Error>
 method	metal2vulkan-runtime::BlitCommandEncoder::copy_texture	pub fn copy_texture(&mut self, source_texture: &Texture, destination_texture: &Texture) -> Result<(), Error>
 method	metal2vulkan-runtime::BlitCommandEncoder::copy_texture_slices	pub fn copy_texture_slices(&mut self, source_texture: &Texture, source_slice: u64, source_level: u64, destination_texture: &Texture, destination_slice: u64, destination_level: u64, slice_count: u64, level_count: u64) -> Result<(), Error>
 method	metal2vulkan-runtime::BlitCommandEncoder::copy_to_host_ram	pub fn copy_to_host_ram(&mut self, source: &Buffer, source_offset: u64, ram: &HostRam, runs: &[Range<u64>]) -> Result<(), Error>
@@ -7711,6 +7985,9 @@ method	metal2vulkan-runtime::Buffer::cpu_cache_mode	pub fn cpu_cache_mode(&self)
 method	metal2vulkan-runtime::Buffer::detach_backing	pub fn detach_backing(&self) -> Result<bool, Error>
 method	metal2vulkan-runtime::Buffer::device	pub fn device(&self) -> &Device
 method	metal2vulkan-runtime::Buffer::did_modify_range	pub fn did_modify_range(&self, range: Range<u64>) -> Result<(), Error>
+method	metal2vulkan-runtime::Buffer::export_memory_dma_buf	pub fn export_memory_dma_buf(&self) -> Result<ExportedMemory, Error>
+method	metal2vulkan-runtime::Buffer::export_memory_fd	pub fn export_memory_fd(&self) -> Result<ExportedMemory, Error>
+method	metal2vulkan-runtime::Buffer::external_write_done	pub fn external_write_done(&self) -> Result<(), Error>
 method	metal2vulkan-runtime::Buffer::gpu_address	pub fn gpu_address(&self) -> GpuAddress
 method	metal2vulkan-runtime::Buffer::hazard_tracking_mode	pub fn hazard_tracking_mode(&self) -> HazardTrackingMode
 method	metal2vulkan-runtime::Buffer::heap	pub fn heap(&self) -> Option<&Heap>
@@ -7723,15 +8000,22 @@ method	metal2vulkan-runtime::Buffer::make_aliasable	pub fn make_aliasable(&self)
 method	metal2vulkan-runtime::Buffer::new_linear_texture	pub fn new_linear_texture(&self, descriptor: &TextureDescriptor, offset: u64, bytes_per_row: u64, _bytes_per_image: u64) -> Result<Texture, Error>
 method	metal2vulkan-runtime::Buffer::new_texture	pub fn new_texture(&self, descriptor: &TextureDescriptor, offset: u64, bytes_per_row: u64) -> Result<Texture, Error>
 method	metal2vulkan-runtime::Buffer::new_texture_with_iosurface_plane	pub fn new_texture_with_iosurface_plane(&self, descriptor: &TextureDescriptor, plane: IoSurfacePlane) -> Result<Texture, Error>
+method	metal2vulkan-runtime::Buffer::new_tiled_texture	pub fn new_tiled_texture(&self, descriptor: &TextureDescriptor, offset: u64, bytes_per_row: u64) -> Result<Texture, Error>
 method	metal2vulkan-runtime::Buffer::object_id	pub fn object_id(&self) -> ObjectId
 method	metal2vulkan-runtime::Buffer::rebind_bytes_no_copy	pub unsafe fn rebind_bytes_no_copy(&self, memory: HostMemory, deallocator: Option<Deallocator>, keep_alive: Option<KeepAlive>) -> Result<(), Error>
 method	metal2vulkan-runtime::Buffer::resource_options	pub fn resource_options(&self) -> ResourceOptions
 method	metal2vulkan-runtime::Buffer::set_label	pub fn set_label(&self, label: &str)
 method	metal2vulkan-runtime::Buffer::set_purgeable_state	pub fn set_purgeable_state(&self, state: PurgeableState) -> Result<PurgeableState, Error>
 method	metal2vulkan-runtime::Buffer::storage_mode	pub fn storage_mode(&self) -> StorageMode
+method	metal2vulkan-runtime::Buffer::texture_placement	pub fn texture_placement(&self, descriptor: &TextureDescriptor, offset: u64, bytes_per_row: u64) -> Result<TexturePlacement, Error>
+method	metal2vulkan-runtime::Buffer::texture_placement_with_iosurface_plane	pub fn texture_placement_with_iosurface_plane(&self, descriptor: &TextureDescriptor, plane: IoSurfacePlane) -> Result<TexturePlacement, Error>
+method	metal2vulkan-runtime::Buffer::tiled_texture_placement	pub fn tiled_texture_placement(&self, descriptor: &TextureDescriptor, offset: u64, bytes_per_row: u64) -> Result<TexturePlacement, Error>
 method	metal2vulkan-runtime::Buffer::vk_buffer	pub unsafe fn vk_buffer(&self) -> (vk::Buffer, u64)
 method	metal2vulkan-runtime::Buffer::vk_host_memory	pub unsafe fn vk_host_memory(&self) -> Option<VkHostMemory>
 method	metal2vulkan-runtime::BufferDescriptor::new	pub fn new(length: u64, resource_options: ResourceOptions, contents: BufferContents<'a>) -> BufferDescriptor<'a>
+method	metal2vulkan-runtime::BufferDescriptor::with_aligned_byte	pub fn with_aligned_byte(self, byte: u64) -> BufferDescriptor<'a>
+method	metal2vulkan-runtime::BufferDescriptor::with_exported_as	pub fn with_exported_as(self, export: MemoryExport) -> BufferDescriptor<'a>
+method	metal2vulkan-runtime::BufferDescriptor::with_padding_unobserved	pub fn with_padding_unobserved(self) -> BufferDescriptor<'a>
 method	metal2vulkan-runtime::BufferDescriptor::with_placement	pub fn with_placement(self, placement: AddressPlacement) -> BufferDescriptor<'a>
 method	metal2vulkan-runtime::BufferDescriptor::with_pool_slot	pub fn with_pool_slot(self, pool: &'a AddressPool, offset: u64) -> BufferDescriptor<'a>
 method	metal2vulkan-runtime::BufferDescriptor::with_range_of	pub fn with_range_of(self, buffer: &'a Buffer) -> BufferDescriptor<'a>
@@ -7768,6 +8052,7 @@ method	metal2vulkan-runtime::CommandBuffer::gpu_end_time	pub fn gpu_end_time(&se
 method	metal2vulkan-runtime::CommandBuffer::gpu_start_time	pub fn gpu_start_time(&self) -> Result<f64, Error>
 method	metal2vulkan-runtime::CommandBuffer::kernel_end_time	pub fn kernel_end_time(&self) -> f64
 method	metal2vulkan-runtime::CommandBuffer::kernel_start_time	pub fn kernel_start_time(&self) -> f64
+method	metal2vulkan-runtime::CommandBuffer::object_id	pub fn object_id(&self) -> ObjectId
 method	metal2vulkan-runtime::CommandBuffer::refusal	pub fn refusal(&self) -> Option<Error>
 method	metal2vulkan-runtime::CommandBuffer::render_command_encoder	pub fn render_command_encoder(&self, descriptor: &RenderPassDescriptor) -> Result<RenderCommandEncoder, Error>
 method	metal2vulkan-runtime::CommandBuffer::resource_state_command_encoder	pub fn resource_state_command_encoder(&self) -> Result<ResourceStateCommandEncoder, Error>
@@ -7787,7 +8072,7 @@ method	metal2vulkan-runtime::CommandQueue::device	pub fn device(&self) -> &Devic
 method	metal2vulkan-runtime::CommandQueue::label	pub fn label(&self) -> Option<String>
 method	metal2vulkan-runtime::CommandQueue::set_label	pub fn set_label(&self, label: &str)
 method	metal2vulkan-runtime::CommandQueue::vk_queue_sharing	pub fn vk_queue_sharing(&self) -> (usize, bool)
-method	metal2vulkan-runtime::CommandQueue::with_vk_queue	pub unsafe fn with_vk_queue<R>(&self, f: impl FnOnce(vk::Queue, u32) -> R) -> R
+method	metal2vulkan-runtime::CommandQueue::with_vk_queue	pub unsafe fn with_vk_queue<R>(&self, f: impl FnOnce(&ash::Device, vk::Queue, u32) -> R) -> R
 method	metal2vulkan-runtime::CommitFailure::new	pub fn new(code: u64) -> CommitFailure
 method	metal2vulkan-runtime::ComputeCommandEncoder::dispatch_threadgroups	pub fn dispatch_threadgroups(&mut self, groups: Size, threads: Size) -> Result<(), Error>
 method	metal2vulkan-runtime::ComputeCommandEncoder::dispatch_threadgroups_indirect	pub fn dispatch_threadgroups_indirect(&mut self, indirect_buffer: &Buffer, indirect_buffer_offset: u64, threads: Size) -> Result<(), Error>
@@ -7873,14 +8158,18 @@ method	metal2vulkan-runtime::Device::enabled	pub fn enabled(&self) -> &EnableSet
 method	metal2vulkan-runtime::Device::enables_extension	pub fn enables_extension(&self, name: &std::ffi::CStr) -> bool
 method	metal2vulkan-runtime::Device::family_blockers	pub fn family_blockers(&self, family: GpuFamily) -> Vec<RowAudit>
 method	metal2vulkan-runtime::Device::family_rows	pub fn family_rows(&self, family: GpuFamily) -> Vec<RowAudit>
+method	metal2vulkan-runtime::Device::fresh_pages_pay	pub fn fresh_pages_pay(&self) -> bool
 method	metal2vulkan-runtime::Device::from_raw	pub unsafe fn from_raw(raw: RawDevice, policy: DevicePolicy) -> Result<Device, Error>
 method	metal2vulkan-runtime::Device::heap_buffer_size_and_align	pub fn heap_buffer_size_and_align(&self, length: u64, _options: ResourceOptions) -> SizeAndAlign
 method	metal2vulkan-runtime::Device::heap_texture_size_and_align	pub fn heap_texture_size_and_align(&self, descriptor: &TextureDescriptor) -> Result<SizeAndAlign, Error>
 method	metal2vulkan-runtime::Device::host_range_remapped	pub fn host_range_remapped(&self, bytes: NonNull<u8>, length: u64)
+method	metal2vulkan-runtime::Device::identities_with	pub fn identities_with(options: &DeviceOptions) -> Result<Vec<PhysicalDeviceIdentity>, Error>
 method	metal2vulkan-runtime::Device::imports_shared_host_pointers	pub fn imports_shared_host_pointers(&self) -> Result<bool, Error>
+method	metal2vulkan-runtime::Device::in_place_check_line	pub fn in_place_check_line(&self) -> u64
 method	metal2vulkan-runtime::Device::in_place_check_report	pub fn in_place_check_report(&self) -> Vec<String>
 method	metal2vulkan-runtime::Device::in_place_check_took	pub fn in_place_check_took(&self) -> Option<Duration>
 method	metal2vulkan-runtime::Device::metal_heap_texture_size_and_align	pub fn metal_heap_texture_size_and_align(&self, descriptor: &TextureDescriptor) -> Result<Option<SizeAndAlign>, Error>
+method	metal2vulkan-runtime::Device::minimum_linear_texture_alignment_for_pixel_format	pub fn minimum_linear_texture_alignment_for_pixel_format(&self, format: PixelFormat) -> Result<u64, Error>
 method	metal2vulkan-runtime::Device::name	pub fn name(&self) -> &str
 method	metal2vulkan-runtime::Device::new_argument_encoder_with_arguments	pub fn new_argument_encoder_with_arguments(&self, arguments: &[ArgumentDescriptor]) -> Result<ArgumentEncoder, Error>
 method	metal2vulkan-runtime::Device::new_argument_encoder_with_buffer_binding	pub fn new_argument_encoder_with_buffer_binding(&self, binding: &BufferBinding) -> Result<ArgumentEncoder, Error>
@@ -7902,6 +8191,8 @@ method	metal2vulkan-runtime::Device::new_depth_stencil_state	pub fn new_depth_st
 method	metal2vulkan-runtime::Device::new_dynamic_library	pub fn new_dynamic_library(&self, library: &Library) -> Result<DynamicLibrary, Error>
 method	metal2vulkan-runtime::Device::new_dynamic_library_with_url	pub fn new_dynamic_library_with_url(&self, url: &Path) -> Result<DynamicLibrary, Error>
 method	metal2vulkan-runtime::Device::new_event	pub fn new_event(&self) -> Result<Event, Error>
+method	metal2vulkan-runtime::Device::new_exportable_buffer	pub fn new_exportable_buffer(&self, length: u64, options: ResourceOptions) -> Result<Buffer, Error>
+method	metal2vulkan-runtime::Device::new_exportable_shared_event	pub fn new_exportable_shared_event(&self) -> Result<SharedEvent, Error>
 method	metal2vulkan-runtime::Device::new_fence	pub fn new_fence(&self) -> Fence
 method	metal2vulkan-runtime::Device::new_heap	pub fn new_heap(&self, descriptor: &HeapDescriptor) -> Result<Heap, Error>
 method	metal2vulkan-runtime::Device::new_heap_with_bytes_no_copy	pub unsafe fn new_heap_with_bytes_no_copy(&self, memory: HostMemory, descriptor: &HeapDescriptor, deallocator: Option<Deallocator>, keep_alive: Option<KeepAlive>) -> Result<Heap, Error>
@@ -7931,10 +8222,12 @@ method	metal2vulkan-runtime::Device::new_tile_render_pipeline_state	pub fn new_t
 method	metal2vulkan-runtime::Device::new_tile_render_pipeline_state_with_reflection	pub fn new_tile_render_pipeline_state_with_reflection(&self, descriptor: &TileRenderPipelineDescriptor, options: &PipelineOptions) -> Result<(RenderPipelineState, Option<RenderPipelineReflection>), Error>
 method	metal2vulkan-runtime::Device::pixel_format_capabilities	pub fn pixel_format_capabilities(&self, format: PixelFormat) -> FormatCapabilities
 method	metal2vulkan-runtime::Device::pixel_format_info	pub fn pixel_format_info(&self, raw: u64) -> PixelFormatInfo
+method	metal2vulkan-runtime::Device::pointer_imports_follow_their_address	pub fn pointer_imports_follow_their_address(&self) -> bool
 method	metal2vulkan-runtime::Device::private_properties	pub fn private_properties(&self) -> PrivateProperties
 method	metal2vulkan-runtime::Device::properties	pub fn properties(&self) -> &DeviceProperties
 method	metal2vulkan-runtime::Device::queue_switch_check_report	pub fn queue_switch_check_report(&self) -> String
 method	metal2vulkan-runtime::Device::raw	pub unsafe fn raw(&self) -> DeviceHandles<'_>
+method	metal2vulkan-runtime::Device::recover_for_test	pub fn recover_for_test(&self) -> Result<(), Error>
 method	metal2vulkan-runtime::Device::registry_id	pub fn registry_id(&self) -> u64
 method	metal2vulkan-runtime::Device::registry_ids_with	pub fn registry_ids_with(options: &DeviceOptions) -> Result<Vec<u64>, Error>
 method	metal2vulkan-runtime::Device::reserve_address_pool	pub fn reserve_address_pool(&self, placement: AddressPlacement, length: u64) -> Result<AddressPool, Error>
@@ -7943,6 +8236,7 @@ method	metal2vulkan-runtime::Device::sampler_id_pool_size	pub fn sampler_id_pool
 method	metal2vulkan-runtime::Device::sampler_ids_live	pub fn sampler_ids_live(&self) -> u64
 method	metal2vulkan-runtime::Device::settle_in_place_checks	pub fn settle_in_place_checks(&self, timeout: Duration) -> bool
 method	metal2vulkan-runtime::Device::settle_queue_switch_check	pub fn settle_queue_switch_check(&self, timeout: Duration) -> bool
+method	metal2vulkan-runtime::Device::settle_submit_checks	pub fn settle_submit_checks(&self, timeout: Duration) -> bool
 method	metal2vulkan-runtime::Device::shader_cache_directory	pub fn shader_cache_directory(&self) -> &Path
 method	metal2vulkan-runtime::Device::shader_cache_statistics	pub fn shader_cache_statistics(&self) -> ShaderCacheStatistics
 method	metal2vulkan-runtime::Device::shares_vk_queues	pub fn shares_vk_queues(&self) -> bool
@@ -7950,6 +8244,8 @@ method	metal2vulkan-runtime::Device::sparse_tile_size	pub fn sparse_tile_size(&s
 method	metal2vulkan-runtime::Device::sparse_tile_size_for_page	pub fn sparse_tile_size_for_page(&self, _texture_type: TextureType, pixel_format: PixelFormat, sample_count: u64, page: SparsePageSize) -> Size
 method	metal2vulkan-runtime::Device::sparse_tile_size_in_bytes	pub fn sparse_tile_size_in_bytes(&self) -> u64
 method	metal2vulkan-runtime::Device::sparse_tile_size_in_bytes_for_page	pub fn sparse_tile_size_in_bytes_for_page(&self, page: SparsePageSize) -> u64
+method	metal2vulkan-runtime::Device::submissions_merge	pub fn submissions_merge(&self) -> bool
+method	metal2vulkan-runtime::Device::submit_check_report	pub fn submit_check_report(&self) -> String
 method	metal2vulkan-runtime::Device::supports_32bit_msaa	pub fn supports_32bit_msaa(&self) -> bool
 method	metal2vulkan-runtime::Device::supports_family	pub fn supports_family(&self, family: i64) -> bool
 method	metal2vulkan-runtime::Device::system_default	pub fn system_default() -> Result<Device, Error>
@@ -7967,7 +8263,6 @@ method	metal2vulkan-runtime::DeviceProperties::are_programmable_sample_positions
 method	metal2vulkan-runtime::DeviceProperties::are_raster_order_groups_supported	pub fn are_raster_order_groups_supported(&self) -> Result<bool, RuntimeGap>
 method	metal2vulkan-runtime::DeviceProperties::drops_gpu_writes_to_read_only_memory	pub fn drops_gpu_writes_to_read_only_memory(&self) -> bool
 method	metal2vulkan-runtime::DeviceProperties::is_depth24_stencil8_pixel_format_supported	pub fn is_depth24_stencil8_pixel_format_supported(&self) -> Result<bool, RuntimeGap>
-method	metal2vulkan-runtime::DeviceProperties::minimum_linear_texture_alignment_for_pixel_format	pub fn minimum_linear_texture_alignment_for_pixel_format(&self, format: PixelFormat) -> Result<u64, Error>
 method	metal2vulkan-runtime::DeviceProperties::supports_primitive_type	pub fn supports_primitive_type(&self, raw: u64) -> bool
 method	metal2vulkan-runtime::DeviceProperties::supports_pull_model_interpolation	pub fn supports_pull_model_interpolation(&self) -> Result<bool, RuntimeGap>
 method	metal2vulkan-runtime::DeviceProperties::supports_rasterization_rate_map_with_layer_count	pub fn supports_rasterization_rate_map_with_layer_count(&self, count: u64) -> Result<bool, RuntimeGap>
@@ -8067,6 +8362,9 @@ method	metal2vulkan-runtime::HostMemory::with_import_gate	pub fn with_import_gat
 method	metal2vulkan-runtime::HostMemory::with_runs	pub fn with_runs(self, resolver: RunResolver) -> HostMemory
 method	metal2vulkan-runtime::HostRam::new	pub unsafe fn new(ranges: &[(NonNull<u8>, u64)], keep_alive: Option<KeepAlive>) -> Result<HostRam, Error>
 method	metal2vulkan-runtime::HostRam::with_dirty_pages	pub fn with_dirty_pages<D>(mut self, source: Arc<D>) -> HostRam where D: DirtyPages + ?Sized + 'static, D::Watch: 'static,
+method	metal2vulkan-runtime::HostRam::with_dma_buf	pub fn with_dma_buf(mut self, source: DmaBufSource) -> HostRam
+method	metal2vulkan-runtime::HostRam::with_dma_buf_of_runs	pub fn with_dma_buf_of_runs(mut self, source: DmaBufRunsSource, most_runs: usize) -> HostRam
+method	metal2vulkan-runtime::HostRam::with_largest_dma_buf	pub fn with_largest_dma_buf(mut self, bytes: u64) -> HostRam
 method	metal2vulkan-runtime::IndirectBufferBinding::new	pub fn new(address: GpuAddress, attribute_stride: Option<u64>) -> IndirectBufferBinding
 method	metal2vulkan-runtime::IndirectCommandBuffer::allocated_size	pub fn allocated_size(&self) -> u64
 method	metal2vulkan-runtime::IndirectCommandBuffer::as_resource	pub fn as_resource(&self) -> ResourceRef<'_>
@@ -8395,6 +8693,7 @@ method	metal2vulkan-runtime::ScissorRect::new	pub fn new(x: u64, y: u64, width: 
 method	metal2vulkan-runtime::ShaderCacheError::new	pub fn new(path: Option<PathBuf>, kind: std::io::ErrorKind, message: &str) -> ShaderCacheError
 method	metal2vulkan-runtime::ShaderCacheOptions::in_directory	pub fn in_directory(directory: impl Into<PathBuf>) -> ShaderCacheOptions
 method	metal2vulkan-runtime::SharedEvent::device	pub fn device(&self) -> Option<&Device>
+method	metal2vulkan-runtime::SharedEvent::export_semaphore_fd	pub fn export_semaphore_fd(&self) -> Result<OwnedFd, Error>
 method	metal2vulkan-runtime::SharedEvent::label	pub fn label(&self) -> Option<String>
 method	metal2vulkan-runtime::SharedEvent::new_shared_event_handle	pub fn new_shared_event_handle(&self) -> SharedEventHandle
 method	metal2vulkan-runtime::SharedEvent::notify_listener	pub fn notify_listener(&self, listener: &SharedEventListener, value: u64, block: SharedEventNotification)
@@ -8558,11 +8857,16 @@ method	metal2vulkan::bind::BindingPlan::instantiate_draw_apart_into	pub fn insta
 method	metal2vulkan::bind::BindingPlan::instantiate_draw_into	pub fn instantiate_draw_into(&self, state: &BindState, draw: &DrawCall, commands: &mut DrawCommands) -> Result<(), BindError>
 method	metal2vulkan::bind::BindingPlan::instantiate_replay	pub fn instantiate_replay(&self, state: &BindState, threads_per_group: [u32; 3]) -> Result<DispatchCommands, BindError>
 method	metal2vulkan::bind::BindingPlan::rebind_draw_slots_into	pub fn rebind_draw_slots_into(&self, state: &BindState, slots: &[SlotRef], commands: &mut DrawCommands) -> Result<bool, BindError>
+method	metal2vulkan::bind::BindingPlan::rebind_draw_slots_with	pub fn rebind_draw_slots_with(&self, rebinds: &SlotRebinds, state: &BindState, commands: &mut DrawCommands) -> Result<bool, BindError>
+method	metal2vulkan::bind::BindingPlan::redraw_apart_into	pub fn redraw_apart_into(&self, state: &BindState, (from, draw): (&DrawCall, &DrawCall), commands: &mut DrawCommands) -> Result<bool, BindError>
 method	metal2vulkan::bind::BindingPlan::relisted_sampler_tables	pub fn relisted_sampler_tables(&self, device: &crate::device::Device, samplers: &[crate::bind::ArgumentSampler], placement: HeapPlacement) -> Result<Option<Vec<crate::bind::instantiate::DescriptorBytes>>, BindError>
 method	metal2vulkan::bind::BindingPlan::sampler_tables	pub fn sampler_tables(&self) -> Vec<(u32, u32)>
+method	metal2vulkan::bind::BindingPlan::slot_rebinds	pub fn slot_rebinds(&self, slots: &[SlotRef]) -> Option<SlotRebinds>
+method	metal2vulkan::bind::BindingPlan::slot_rebinds_into	pub fn slot_rebinds_into(&self, slots: &[SlotRef], into: &mut SlotRebinds) -> bool
 method	metal2vulkan::bind::BindingPlan::specialized_value	pub fn specialized_value(&self, key: SpecKey) -> Option<u64>
 method	metal2vulkan::bind::BlockDecodeModule::shape	pub fn shape([width, height, depth]: [u32; 3]) -> [u8; Self::SHAPE_WORDS as usize * 4]
 method	metal2vulkan::bind::BoundAccelerationStructure::new	pub fn new(instance_count: u32) -> BoundAccelerationStructure
+method	metal2vulkan::bind::BoundBuffer::same_shape	pub fn same_shape(&self, other: &BoundBuffer, view_base_alignment: u32) -> bool
 method	metal2vulkan::bind::BoundBuffer::shape	pub fn shape(&self, view_base_alignment: u32) -> BufferShape
 method	metal2vulkan::bind::BoundSampler::new	pub fn new(desc: SamplerDescriptor) -> BoundSampler
 method	metal2vulkan::bind::BoundSampler::shape	pub fn shape(&self) -> BoundSamplerShape
@@ -8594,6 +8898,8 @@ method	metal2vulkan::bind::CompensatedViewport::with_mirrors	pub fn with_mirrors
 method	metal2vulkan::bind::CompensatedViewport::with_vertex_clamp	pub fn with_vertex_clamp(self, vertex_clamp: [f32; 2]) -> CompensatedViewport
 method	metal2vulkan::bind::ContinuedResult::in_low_half	#[must_use] pub fn in_low_half(self) -> ContinuedResult
 method	metal2vulkan::bind::ContinuedResult::new	pub fn new(offset: u64, first: u32, count: u32, sum: bool) -> ContinuedResult
+method	metal2vulkan::bind::DepthClampModule::groups	pub fn groups(width: u32, rows: u32, images: u32) -> [u32; 3]
+method	metal2vulkan::bind::DepthClampModule::shape	pub fn shape(first: u32, width: u32, row_words: u32, image_words: u32) -> [u8; 16]
 method	metal2vulkan::bind::DepthStencilResolveDraw::new	pub fn new(pick: DepthPick, samples: u32, write: ResolveWrite) -> DepthStencilResolveDraw
 method	metal2vulkan::bind::Dispatch::threads_per_group	pub fn threads_per_group(&self) -> [u32; 3]
 method	metal2vulkan::bind::DrawMergeModule::push_constants	pub fn push_constants(header: u64, status: u64) -> Vec<u8>
@@ -8709,7 +9015,7 @@ method	metal2vulkan::bind::MipmapFilterKernel::fetches	pub fn fetches(&self) -> 
 method	metal2vulkan::bind::NeutralResource::for_image	pub fn for_image(class: &ImageHandleClass) -> Option<NeutralResource>
 method	metal2vulkan::bind::NeutralResource::format	pub fn format(&self) -> Option<vk::Format>
 method	metal2vulkan::bind::ObjectFold::bytes	pub fn bytes(&self) -> Vec<u8>
-method	metal2vulkan::bind::PagesCopyModule::entry	pub fn entry(scattered: u32, consecutive: u32) -> [u8; 8]
+method	metal2vulkan::bind::PagesCopyModule::entry	pub fn entry(scattered: u32, consecutive: u32, words: u32) -> [u8; 12]
 method	metal2vulkan::bind::PagesCopyModule::groups	pub fn groups(entries: u32) -> [u32; 3]
 method	metal2vulkan::bind::PagesCopyModule::shape	pub fn shape(first_entry: u32, first_word: u32) -> [u8; 16]
 method	metal2vulkan::bind::PlaneBytes::new	pub fn new(color: u32, alpha: u32, blit: u32, end: u32) -> PlaneBytes
@@ -8831,6 +9137,7 @@ method	metal2vulkan::bind::ShadowMergeModule::groups	pub fn groups(count: u32) -
 method	metal2vulkan::bind::ShadowMergeModule::shape	pub fn shape(width: u32, count: u32, row_words: u32, first_word: u32) -> [u8; 16]
 method	metal2vulkan::bind::ShadowMergeRead::words	pub fn words(self) -> u32
 method	metal2vulkan::bind::ShadowTexelView::words	pub fn words(self) -> u32
+method	metal2vulkan::bind::SlotRebinds::slots	pub fn slots(&self) -> &[SlotRef]
 method	metal2vulkan::bind::SparseTileMap::byte_len	pub fn byte_len(&self) -> u64
 method	metal2vulkan::bind::SparseTileMap::is_mapped	pub fn is_mapped(&self, level: u32, slice: u32, texel: [u32; 3]) -> bool
 method	metal2vulkan::bind::SparseTileMap::new	pub fn new(texture_type: TextureType, extent: [u32; 3], levels: u32, slices: u32, tile: [u32; 3], first_level_in_tail: u32) -> Result<SparseTileMap, TileMapError>
@@ -8856,6 +9163,7 @@ method	metal2vulkan::bind::TextureFacts::offset_base_axes	pub fn offset_base_axe
 method	metal2vulkan::bind::TextureFacts::shape	pub fn shape(&self) -> TextureShape
 method	metal2vulkan::bind::TileThreadgroupArgument::new	pub fn new(length: u32, offset: u32) -> TileThreadgroupArgument
 method	metal2vulkan::bind::TileThreadgroupMemory::new	pub fn new(length: u32) -> TileThreadgroupMemory
+method	metal2vulkan::bind::TiledLevelMove::clamping_depth	pub const fn clamping_depth(self) -> TiledLevelMove
 method	metal2vulkan::bind::TiledLevelMove::invocations	pub const fn invocations(&self, into_tight: bool) -> u32
 method	metal2vulkan::bind::TiledLevelMove::new	pub const fn new(unit: u32, extent: [u32; 2], images: u32, tile: [u32; 2], across: u32, tiled_first: u32, chain_stride: u32, tight_first: u32, region_bytes: u32) -> TiledLevelMove
 method	metal2vulkan::bind::TiledTexelsModule::invocations	pub fn invocations(levels: &[TiledLevelMove], into_tight: bool) -> u32
@@ -9211,6 +9519,7 @@ method	metal2vulkan::pipeline::GraphicsState::new	pub fn new(topology: vk::Primi
 method	metal2vulkan::pipeline::HandleClass::sampler	pub fn sampler(use_: crate::metal::sampler::SamplerUse) -> HandleClass
 method	metal2vulkan::pipeline::HandleClass::sampler_use	pub fn sampler_use(self) -> Option<crate::metal::sampler::SamplerUse>
 method	metal2vulkan::pipeline::InputAttachmentUse::new	pub fn new(color_index: u32, input_attachment_index: u32, format_class: SampledType) -> InputAttachmentUse
+method	metal2vulkan::pipeline::LevelReads::highest_level	pub fn highest_level(&self, sampled: impl Fn(&SampledLevels) -> Option<u32>) -> Option<u32>
 method	metal2vulkan::pipeline::LinkedFunction::name	pub fn name(&self) -> &str
 method	metal2vulkan::pipeline::LinkedFunction::new	pub fn new(function: Function) -> LinkedFunction
 method	metal2vulkan::pipeline::LinkedFunction::with_constants	pub fn with_constants(mut self, constants: FunctionConstantValues) -> LinkedFunction
@@ -9259,6 +9568,10 @@ method	metal2vulkan::pipeline::ResourceSlot::separate_sampler_use	pub fn separat
 method	metal2vulkan::pipeline::ResourceSlot::separate_texture	pub fn separate_texture(stage: Stage, texture: u32, c: CombinedSampler) -> Option<ResourceSlot>
 method	metal2vulkan::pipeline::ResourceSlot::separate_texture_of	pub fn separate_texture_of(&self) -> Option<(u32, CombinedSampler)>
 method	metal2vulkan::pipeline::RuntimeDependency::new	pub fn new(fact: RuntimeFact, mechanism: Mechanism) -> RuntimeDependency
+method	metal2vulkan::pipeline::SampledLevels::highest_lod	pub fn highest_lod(&self) -> Option<f32>
+method	metal2vulkan::pipeline::SampledLevels::level	pub fn level(&self, s: SamplerLevels) -> Option<u32>
+method	metal2vulkan::pipeline::SamplerLevels::finite_texels	pub fn finite_texels(format: vk::Format) -> bool
+method	metal2vulkan::pipeline::SamplerLevels::of	pub fn of(desc: &vk::SamplerDesc, finite_texels: bool) -> SamplerLevels
 method	metal2vulkan::pipeline::SamplerRef::constexpr_address_modes	pub fn constexpr_address_modes(self) -> Option<[crate::metal::SamplerAddressMode; 3]>
 method	metal2vulkan::pipeline::SnapshotForm::format	pub fn format(self) -> vk::Format
 method	metal2vulkan::pipeline::SnapshotForm::of	pub fn of(format: vk::Format, ty: SampledType) -> SnapshotForm
@@ -9541,7 +9854,7 @@ struct	metal2vulkan-runtime::Buffer	#[derive(Clone)] pub struct Buffer(Arc<Buffe
 struct	metal2vulkan-runtime::BufferDescriptor	#[derive(Debug, Default)] #[non_exhaustive] pub struct BufferDescriptor<'a>
 struct	metal2vulkan-runtime::ClearColor	#[derive(Clone, Copy, Debug, PartialEq)] pub struct ClearColor
 struct	metal2vulkan-runtime::CommandBuffer	#[derive(Clone)] pub struct CommandBuffer(Arc<CommandBufferShared>)
-struct	metal2vulkan-runtime::CommandQueue	#[derive(Clone)] pub struct CommandQueue(Arc<QueueShared>)
+struct	metal2vulkan-runtime::CommandQueue	#[derive(Clone)] pub struct CommandQueue(Arc<QueueLine>)
 struct	metal2vulkan-runtime::CommitFailure	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct CommitFailure
 struct	metal2vulkan-runtime::ComputeCommandEncoder	pub struct ComputeCommandEncoder
 struct	metal2vulkan-runtime::ComputePipelineState	#[derive(Clone)] pub struct ComputePipelineState(Arc<StateShared>)
@@ -9550,7 +9863,8 @@ struct	metal2vulkan-runtime::CopySite	#[derive(Clone, Copy, Debug, Default, Part
 struct	metal2vulkan-runtime::DebugMessage	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct DebugMessage
 struct	metal2vulkan-runtime::DegradeNotice	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct DegradeNotice
 struct	metal2vulkan-runtime::DepthStencilState	#[derive(Clone)] pub struct DepthStencilState(Arc<Shared>)
-struct	metal2vulkan-runtime::Device	pub struct Device(Arc<DeviceShared>, holds::Share)
+struct	metal2vulkan-runtime::Device	pub struct Device(Pin, holds::Share)
+struct	metal2vulkan-runtime::DeviceCheckWork	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)] pub struct DeviceCheckWork
 struct	metal2vulkan-runtime::DeviceHandles	#[derive(Clone, Copy)] #[non_exhaustive] pub struct DeviceHandles<'a>
 struct	metal2vulkan-runtime::DeviceOptions	#[derive(Clone, Default)] #[non_exhaustive] pub struct DeviceOptions
 struct	metal2vulkan-runtime::DeviceProperties	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct DeviceProperties
@@ -9565,6 +9879,7 @@ struct	metal2vulkan-runtime::EndedEncoder	#[derive(Clone, Debug, PartialEq, Eq)]
 struct	metal2vulkan-runtime::Event	#[derive(Clone)] pub struct Event(Arc<EventShared>)
 struct	metal2vulkan-runtime::ExecutedCommand	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct ExecutedCommand
 struct	metal2vulkan-runtime::ExecutedCommands	#[derive(Clone, Debug)] #[non_exhaustive] pub struct ExecutedCommands
+struct	metal2vulkan-runtime::ExportedMemory	#[derive(Debug)] #[non_exhaustive] pub struct ExportedMemory
 struct	metal2vulkan-runtime::ExtensionFeature	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct ExtensionFeature
 struct	metal2vulkan-runtime::ExtraQueue	#[derive(Clone, Copy, PartialEq, Eq)] #[non_exhaustive] pub struct ExtraQueue
 struct	metal2vulkan-runtime::FailedPipeline	#[derive(Clone, Debug)] #[non_exhaustive] pub struct FailedPipeline
@@ -9579,7 +9894,7 @@ struct	metal2vulkan-runtime::HeapDescriptor	#[derive(Clone, Copy, Debug, Partial
 struct	metal2vulkan-runtime::HostBytes	#[derive(Clone, Copy, Debug)] pub struct HostBytes<'a>
 struct	metal2vulkan-runtime::HostMemory	pub struct HostMemory
 struct	metal2vulkan-runtime::HostRam	pub struct HostRam
-struct	metal2vulkan-runtime::HostRamUse	#[must_use = "dropping the use lets go of the RAM at once"] pub struct HostRamUse
+struct	metal2vulkan-runtime::HostRamUse	#[must_use = "dropping the use lets go of the RAM at once"] pub struct HostRamUse(Arc<RamUseCell>)
 struct	metal2vulkan-runtime::ImportRequest	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct ImportRequest
 struct	metal2vulkan-runtime::IndirectBufferBinding	#[derive(Clone, Copy, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct IndirectBufferBinding
 struct	metal2vulkan-runtime::IndirectCommandBuffer	#[derive(Clone)] pub struct IndirectCommandBuffer(Arc<IcbShared>)
@@ -9610,6 +9925,7 @@ struct	metal2vulkan-runtime::PipelineOptions	#[derive(Clone, Debug, Default)] #[
 struct	metal2vulkan-runtime::PipelineRecord	#[derive(Clone)] pub struct PipelineRecord
 struct	metal2vulkan-runtime::PixelFormatInfo	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct PixelFormatInfo
 struct	metal2vulkan-runtime::PrivateProperties	#[derive(Clone, Debug, PartialEq, Eq)] pub struct PrivateProperties
+struct	metal2vulkan-runtime::QueueLimits	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] pub struct QueueLimits
 struct	metal2vulkan-runtime::RasterizationRateMap	#[derive(Clone)] pub struct RasterizationRateMap(Arc<MapShared>)
 struct	metal2vulkan-runtime::RawDevice	#[derive(Clone)] #[non_exhaustive] pub struct RawDevice
 struct	metal2vulkan-runtime::Region	#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)] pub struct Region
@@ -9684,12 +10000,14 @@ struct	metal2vulkan::bind::BoundsRunDraw	#[derive(Clone, Copy, Debug, PartialEq,
 struct	metal2vulkan::bind::BufferExtent	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct BufferExtent
 struct	metal2vulkan::bind::BufferRange	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct BufferRange
 struct	metal2vulkan::bind::ByteRange	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct ByteRange
+struct	metal2vulkan::bind::CheckDrawModules	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct CheckDrawModules
 struct	metal2vulkan::bind::ChromaSampleModule	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct ChromaSampleModule
 struct	metal2vulkan::bind::ColorResolveFormat	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct ColorResolveFormat
 struct	metal2vulkan::bind::ColorResolveModules	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct ColorResolveModules
 struct	metal2vulkan::bind::CompensatedViewport	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, Default, PartialEq)] #[non_exhaustive] pub struct CompensatedViewport
 struct	metal2vulkan::bind::ComputeTemplate	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct ComputeTemplate
 struct	metal2vulkan::bind::ContinuedResult	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct ContinuedResult
+struct	metal2vulkan::bind::DepthClampModule	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct DepthClampModule
 struct	metal2vulkan::bind::DepthSplitModule	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct DepthSplitModule
 struct	metal2vulkan::bind::DepthStencilCopyModules	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct DepthStencilCopyModules
 struct	metal2vulkan::bind::DepthStencilResolveDraw	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub struct DepthStencilResolveDraw
@@ -9796,6 +10114,7 @@ struct	metal2vulkan::bind::ShadowCopyBackModule	#[derive(Clone, Debug, PartialEq
 struct	metal2vulkan::bind::ShadowCopyInModule	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct ShadowCopyInModule
 struct	metal2vulkan::bind::ShadowMergeImageModule	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct ShadowMergeImageModule
 struct	metal2vulkan::bind::ShadowMergeModule	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct ShadowMergeModule
+struct	metal2vulkan::bind::SlotRebinds	#[derive(Clone, Debug, Default, PartialEq, Eq)] pub struct SlotRebinds
 struct	metal2vulkan::bind::SparseTileMap	#[derive(Clone, Debug, PartialEq, Eq)] pub struct SparseTileMap
 struct	metal2vulkan::bind::StageInRegion	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub struct StageInRegion
 struct	metal2vulkan::bind::StageShape	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub struct StageShape
@@ -9933,6 +10252,7 @@ struct	metal2vulkan::pipeline::FunctionHandle	#[cfg_attr(feature = "serde", deri
 struct	metal2vulkan::pipeline::GraphicsState	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct GraphicsState
 struct	metal2vulkan::pipeline::ImageHandleClass	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] #[non_exhaustive] pub struct ImageHandleClass
 struct	metal2vulkan::pipeline::InputAttachmentUse	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct InputAttachmentUse
+struct	metal2vulkan::pipeline::LevelReads	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct LevelReads
 struct	metal2vulkan::pipeline::LineBandState	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct LineBandState
 struct	metal2vulkan::pipeline::LinkedFunction	#[derive(Clone, Debug, PartialEq, Eq)] #[non_exhaustive] pub struct LinkedFunction
 struct	metal2vulkan::pipeline::LinkedFunctions	#[derive(Clone, Debug, Default, PartialEq, Eq)] #[non_exhaustive] pub struct LinkedFunctions
@@ -9954,6 +10274,8 @@ struct	metal2vulkan::pipeline::RenderPipelineDescriptor	#[derive(Clone, Debug, P
 struct	metal2vulkan::pipeline::RenderPipelineKeys	#[derive(Clone, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct RenderPipelineKeys
 struct	metal2vulkan::pipeline::ResourceSlot	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct ResourceSlot
 struct	metal2vulkan::pipeline::RuntimeDependency	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct RuntimeDependency
+struct	metal2vulkan::pipeline::SampledLevels	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct SampledLevels
+struct	metal2vulkan::pipeline::SamplerLevels	#[derive(Clone, Copy, Debug, PartialEq)] #[non_exhaustive] pub struct SamplerLevels
 struct	metal2vulkan::pipeline::SamplerSlot	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct SamplerSlot
 struct	metal2vulkan::pipeline::ShaderTestsUse	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct ShaderTestsUse
 struct	metal2vulkan::pipeline::ShadowStencilUse	#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))] #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] #[non_exhaustive] pub struct ShadowStencilUse
@@ -10100,7 +10422,6 @@ trait-impl	metal2vulkan-runtime::HostMemory impl fe impl Sync	unsafe impl Sync f
 trait-impl	metal2vulkan-runtime::HostMemory impl std::fmt::Debug	impl std::fmt::Debug for HostMemory
 trait-impl	metal2vulkan-runtime::HostRam impl Drop	impl Drop for HostRam
 trait-impl	metal2vulkan-runtime::HostRam impl std::fmt::Debug	impl std::fmt::Debug for HostRam
-trait-impl	metal2vulkan-runtime::HostRamUse impl Drop	impl Drop for HostRamUse
 trait-impl	metal2vulkan-runtime::HostRamUse impl std::fmt::Debug	impl std::fmt::Debug for HostRamUse
 trait-impl	metal2vulkan-runtime::ImportRequest impl fe impl Send	unsafe impl Send for ImportRequest
 trait-impl	metal2vulkan-runtime::ImportRequest impl fe impl Sync	unsafe impl Sync for ImportRequest
@@ -10258,6 +10579,7 @@ trait-item	metal2vulkan::cache::PipelineArtifact::to_bytes	fn to_bytes(&self) ->
 trait-item	metal2vulkan::cache::PipelineArtifact::write_to	fn write_to(&self, out: &mut dyn std::io::Write) -> std::io::Result<()>
 type	metal2vulkan-air::container::Hash256	pub type Hash256 = [u8; 32]
 type	metal2vulkan-runtime::Deallocator	pub type Deallocator = Box<dyn FnOnce(NonNull<u8>, u64) + Send + 'static>
+type	metal2vulkan-runtime::DmaBufRunsSource	pub type DmaBufRunsSource = Arc<dyn Fn(&[DmaBufRequest]) -> std::io::Result<DmaBufChunk> + Send + Sync + 'static>
 type	metal2vulkan-runtime::DmaBufSource	pub type DmaBufSource = Arc<dyn Fn(DmaBufRequest) -> std::io::Result<Vec<DmaBufChunk>> + Send + Sync + 'static>
 type	metal2vulkan-runtime::ExecutedCommandsHandler	pub type ExecutedCommandsHandler = Arc<dyn Fn(&ExecutedCommands) + Send + Sync + 'static>
 type	metal2vulkan-runtime::Handler	pub type Handler = Box<dyn FnOnce(&CommandBuffer) + Send + 'static>
@@ -10426,7 +10748,7 @@ variant	metal2vulkan-air::abi::Sampling::Centroid	Centroid
 variant	metal2vulkan-air::abi::Sampling::Interpolant	Interpolant
 variant	metal2vulkan-air::abi::Sampling::Sample	Sample
 variant	metal2vulkan-air::abi::Stage::Fragment	Fragment { early_fragment_tests: bool }
-variant	metal2vulkan-air::abi::Stage::Kernel	Kernel { max_total_threads: Option<u32> }
+variant	metal2vulkan-air::abi::Stage::Kernel	Kernel { max_total_threads: Option<u32>, work_group_size: Option<[u32; 3]> }
 variant	metal2vulkan-air::abi::Stage::Mesh	Mesh { max_total_threads: Option<u32> }
 variant	metal2vulkan-air::abi::Stage::Object	Object { max_total_threads: Option<u32>, max_mesh_threadgroups: Option<u32> }
 variant	metal2vulkan-air::abi::Stage::Vertex	Vertex { patch: Option<PatchInfo> }
@@ -10586,7 +10908,6 @@ variant	metal2vulkan-air::error::Limit::WorkUnits	WorkUnits
 variant	metal2vulkan-air::error::LinkProblem::Ambiguous	Ambiguous
 variant	metal2vulkan-air::error::LinkProblem::DataLayout	DataLayout
 variant	metal2vulkan-air::error::LinkProblem::NotVisible	NotVisible
-variant	metal2vulkan-air::error::LinkProblem::Signature	Signature
 variant	metal2vulkan-air::error::LinkProblem::UnresolvedConstant	UnresolvedConstant { index: u32 }
 variant	metal2vulkan-air::error::MissingInput::DynamicLibrary	DynamicLibrary { install_name: DiagName }
 variant	metal2vulkan-air::error::MissingInput::DynamicSymbol	DynamicSymbol { symbol: DiagName }
@@ -10652,6 +10973,7 @@ variant	metal2vulkan-air::intrinsics::AirIntrinsic::SimdgroupSize	SimdgroupSize(
 variant	metal2vulkan-air::intrinsics::AirIntrinsic::Sync	Sync(Sync)
 variant	metal2vulkan-air::intrinsics::AirIntrinsic::Tensor	Tensor(Tensor)
 variant	metal2vulkan-air::intrinsics::AirIntrinsic::Texture	Texture(Texture)
+variant	metal2vulkan-air::intrinsics::AirIntrinsic::WorkItem	WorkItem(WorkItem)
 variant	metal2vulkan-air::intrinsics::AsyncCopy::Copy2d	Copy2d { dst: AddrSpace, src: AddrSpace }
 variant	metal2vulkan-air::intrinsics::AsyncCopy::IsNullEvent	IsNullEvent
 variant	metal2vulkan-air::intrinsics::AsyncCopy::NullEvent	NullEvent
@@ -10875,6 +11197,7 @@ variant	metal2vulkan-air::intrinsics::LlvmIntrinsic::Int	Int { op: LlvmIntOp, ty
 variant	metal2vulkan-air::intrinsics::LlvmIntrinsic::Memcpy	Memcpy { dst: AddrSpace, src: AddrSpace, len: Elem, volatile: bool }
 variant	metal2vulkan-air::intrinsics::LlvmIntrinsic::Memmove	Memmove { dst: AddrSpace, src: AddrSpace, len: Elem, volatile: bool }
 variant	metal2vulkan-air::intrinsics::LlvmIntrinsic::Memset	Memset { dst: AddrSpace, len: Elem, volatile: bool }
+variant	metal2vulkan-air::intrinsics::LlvmIntrinsic::NarrowInt	NarrowInt { op: LlvmIntOp, bits: u8 }
 variant	metal2vulkan-air::intrinsics::LodMode::Bias	Bias
 variant	metal2vulkan-air::intrinsics::LodMode::Level	Level
 variant	metal2vulkan-air::intrinsics::MatElem::BF16	BF16
@@ -10924,6 +11247,7 @@ variant	metal2vulkan-air::intrinsics::MathFn::HAdd	HAdd(Sign)
 variant	metal2vulkan-air::intrinsics::MathFn::IClamp	IClamp(Sign)
 variant	metal2vulkan-air::intrinsics::MathFn::IMax	IMax(Sign)
 variant	metal2vulkan-air::intrinsics::MathFn::IMax3	IMax3(Sign)
+variant	metal2vulkan-air::intrinsics::MathFn::IMedian3	IMedian3(Sign)
 variant	metal2vulkan-air::intrinsics::MathFn::IMin	IMin(Sign)
 variant	metal2vulkan-air::intrinsics::MathFn::IMin3	IMin3(Sign)
 variant	metal2vulkan-air::intrinsics::MathFn::Ilogb	Ilogb
@@ -11038,11 +11362,14 @@ variant	metal2vulkan-air::intrinsics::SimdMatrix::Store8x8	Store8x8 { elem: MatE
 variant	metal2vulkan-air::intrinsics::SimdMatrix::Store8x8Legacy	Store8x8Legacy { elem: MatElem, space: AddrSpace }
 variant	metal2vulkan-air::intrinsics::Sync::Barrier	Barrier { name: BarrierName, flags: MemFlags, order: Option<MemoryOrder>, scope: ThreadScope, memory: ThreadScope }
 variant	metal2vulkan-air::intrinsics::Sync::Fence	Fence { flags: MemFlags, order: MemoryOrder, scope: ThreadScope }
+variant	metal2vulkan-air::intrinsics::Template::Air	Air(AirIntrinsic)
+variant	metal2vulkan-air::intrinsics::Template::Llvm	Llvm(LlvmIntrinsic)
 variant	metal2vulkan-air::intrinsics::Tensor::DescriptorSize	DescriptorSize
 variant	metal2vulkan-air::intrinsics::Tensor::Extent	Extent
 variant	metal2vulkan-air::intrinsics::Tensor::InitStrided	InitStrided { data: AddrSpace }
 variant	metal2vulkan-air::intrinsics::Tensor::Slice	Slice
 variant	metal2vulkan-air::intrinsics::TexOp::Atomic	Atomic(AtomicOp)
+variant	metal2vulkan-air::intrinsics::TexOp::BlockRead	BlockRead
 variant	metal2vulkan-air::intrinsics::TexOp::CalculateLod	CalculateLod { clamped: bool }
 variant	metal2vulkan-air::intrinsics::TexOp::Fence	Fence
 variant	metal2vulkan-air::intrinsics::TexOp::Gather	Gather { component: Option<Component>, compare: bool, offset: bool }
@@ -11055,6 +11382,9 @@ variant	metal2vulkan-air::intrinsics::TexOp::SampleGrad	SampleGrad { compare: bo
 variant	metal2vulkan-air::intrinsics::TexOp::Write	Write
 variant	metal2vulkan-air::intrinsics::TexOp::WriteImageblockSlice	WriteImageblockSlice
 variant	metal2vulkan-air::intrinsics::TexRole::Access	Access
+variant	metal2vulkan-air::intrinsics::TexRole::BlockSize	BlockSize
+variant	metal2vulkan-air::intrinsics::TexRole::BlockStatus	BlockStatus
+variant	metal2vulkan-air::intrinsics::TexRole::BlockTexels	BlockTexels
 variant	metal2vulkan-air::intrinsics::TexRole::CompareRef	CompareRef
 variant	metal2vulkan-air::intrinsics::TexRole::Component	Component
 variant	metal2vulkan-air::intrinsics::TexRole::Coord	Coord
@@ -11083,6 +11413,8 @@ variant	metal2vulkan-air::intrinsics::ThreadScope::Device	Device
 variant	metal2vulkan-air::intrinsics::ThreadScope::Simdgroup	Simdgroup
 variant	metal2vulkan-air::intrinsics::ThreadScope::Thread	Thread
 variant	metal2vulkan-air::intrinsics::ThreadScope::Threadgroup	Threadgroup
+variant	metal2vulkan-air::intrinsics::WorkItem::GlobalOffset	GlobalOffset
+variant	metal2vulkan-air::intrinsics::WorkItem::WorkDim	WorkDim
 variant	metal2vulkan-air::ir::AddrSpace::Constant	Constant = 2
 variant	metal2vulkan-air::ir::AddrSpace::Device	Device = 1
 variant	metal2vulkan-air::ir::AddrSpace::MeshOutput	MeshOutput = 7
@@ -11131,6 +11463,7 @@ variant	metal2vulkan-air::ir::Callee::Air	Air { decl: FuncId, op: AirIntrinsic }
 variant	metal2vulkan-air::ir::Callee::Direct	Direct(FuncId)
 variant	metal2vulkan-air::ir::Callee::Indirect	Indirect { callee: Value, fn_ty: TypeId }
 variant	metal2vulkan-air::ir::Callee::Llvm	Llvm { decl: FuncId, op: LlvmIntrinsic }
+variant	metal2vulkan-air::ir::Callee::Unbound	Unbound { decl: FuncId, template: Template }
 variant	metal2vulkan-air::ir::Callee::UnknownIntrinsic	UnknownIntrinsic(FuncId)
 variant	metal2vulkan-air::ir::CastOp::AddrSpaceCast	AddrSpaceCast
 variant	metal2vulkan-air::ir::CastOp::Bitcast	Bitcast
@@ -11432,15 +11765,14 @@ variant	metal2vulkan-runtime::DriverFact::Bc6hBlockDecodeIsMetals	Bc6hBlockDecod
 variant	metal2vulkan-runtime::DriverFact::Bc7BlockDecodeIsMetals	Bc7BlockDecodeIsMetals
 variant	metal2vulkan-runtime::DriverFact::BlendlessColorAttachmentsWarn	BlendlessColorAttachmentsWarn
 variant	metal2vulkan-runtime::DriverFact::ChannelBlockDecodeIsMetals	ChannelBlockDecodeIsMetals
+variant	metal2vulkan-runtime::DriverFact::ClearedDepthAtStandardPositions	ClearedDepthAtStandardPositions
 variant	metal2vulkan-runtime::DriverFact::ColorBlockDecodeIsMetals	ColorBlockDecodeIsMetals
 variant	metal2vulkan-runtime::DriverFact::ColorClearIsMetals	ColorClearIsMetals
-variant	metal2vulkan-runtime::DriverFact::ColorClearTakesEitherCode	ColorClearTakesEitherCode
 variant	metal2vulkan-runtime::DriverFact::ColorImagesLieAsMetalHeapTextures	ColorImagesLieAsMetalHeapTextures
 variant	metal2vulkan-runtime::DriverFact::ColorResolveAverageIsMetals	ColorResolveAverageIsMetals
 variant	metal2vulkan-runtime::DriverFact::CompressedImagesHideAliasedWrites	CompressedImagesHideAliasedWrites
 variant	metal2vulkan-runtime::DriverFact::ConstantOffsetUniformReadsPreloaded	ConstantOffsetUniformReadsPreloaded
 variant	metal2vulkan-runtime::DriverFact::DepthImageKeepsDenormals	DepthImageKeepsDenormals
-variant	metal2vulkan-runtime::DriverFact::DepthImageKeepsValuesOutsideUnitRange	DepthImageKeepsValuesOutsideUnitRange
 variant	metal2vulkan-runtime::DriverFact::DepthStencilImagesLieApart	DepthStencilImagesLieApart
 variant	metal2vulkan-runtime::DriverFact::DepthStencilImagesStayGpuOptimized	DepthStencilImagesStayGpuOptimized
 variant	metal2vulkan-runtime::DriverFact::DepthTestComparesMagnitudes	DepthTestComparesMagnitudes
@@ -11448,17 +11780,17 @@ variant	metal2vulkan-runtime::DriverFact::DepthTestKeepsDenormals	DepthTestKeeps
 variant	metal2vulkan-runtime::DriverFact::DontCareStoreIsMetals	DontCareStoreIsMetals
 variant	metal2vulkan-runtime::DriverFact::DontCareStoreIsOneOfMetals	DontCareStoreIsOneOfMetals
 variant	metal2vulkan-runtime::DriverFact::DynamicRestartWarns	DynamicRestartWarns
-variant	metal2vulkan-runtime::DriverFact::FillCompiledPerCommandPool	FillCompiledPerCommandPool
 variant	metal2vulkan-runtime::DriverFact::FirstSparseResourceWaitsForQueues	FirstSparseResourceWaitsForQueues
 variant	metal2vulkan-runtime::DriverFact::FragmentDepthKeepsDepth16Codes	FragmentDepthKeepsDepth16Codes
 variant	metal2vulkan-runtime::DriverFact::FragmentDepthStoresUnchanged	FragmentDepthStoresUnchanged
 variant	metal2vulkan-runtime::DriverFact::HostTransferImagesKeepTheirBytes	HostTransferImagesKeepTheirBytes
 variant	metal2vulkan-runtime::DriverFact::InterlockOrdersDraws	InterlockOrdersDraws
+variant	metal2vulkan-runtime::DriverFact::InterlockedDrawsRaceUnderLoad	InterlockedDrawsRaceUnderLoad
 variant	metal2vulkan-runtime::DriverFact::InterlockedPassSplitNoSlower	InterlockedPassSplitNoSlower
 variant	metal2vulkan-runtime::DriverFact::LineTiesAreMetals	LineTiesAreMetals
 variant	metal2vulkan-runtime::DriverFact::MultisampleColorImagesLieAsMetalHeapTextures	MultisampleColorImagesLieAsMetalHeapTextures
 variant	metal2vulkan-runtime::DriverFact::MultisampledDepthFasterOutOfGeneral	MultisampledDepthFasterOutOfGeneral
-variant	metal2vulkan-runtime::DriverFact::PointerImportsFollowTheirAddress	PointerImportsFollowTheirAddress
+variant	metal2vulkan-runtime::DriverFact::PlainAllocationsHoldSubmissions	PlainAllocationsHoldSubmissions
 variant	metal2vulkan-runtime::DriverFact::PositionedDepthReadAtStandardPositions	PositionedDepthReadAtStandardPositions
 variant	metal2vulkan-runtime::DriverFact::QueueFailuresReportedByMessenger	QueueFailuresReportedByMessenger
 variant	metal2vulkan-runtime::DriverFact::RobustIndexFetchReadsZero	RobustIndexFetchReadsZero
@@ -11469,7 +11801,6 @@ variant	metal2vulkan-runtime::DriverFact::SemaphoreOperationsStallSubmits	Semaph
 variant	metal2vulkan-runtime::DriverFact::ShadowCopyBackDispatchFaster	ShadowCopyBackDispatchFaster
 variant	metal2vulkan-runtime::DriverFact::ShadowCopyInDispatchFaster	ShadowCopyInDispatchFaster
 variant	metal2vulkan-runtime::DriverFact::SignallingSubmitsStallEvery1024	SignallingSubmitsStallEvery1024
-variant	metal2vulkan-runtime::DriverFact::SubmissionsWithoutSignalsMerge	SubmissionsWithoutSignalsMerge
 variant	metal2vulkan-runtime::DriverFact::SubpixelSnapIsMetals	SubpixelSnapIsMetals
 variant	metal2vulkan-runtime::DriverFact::TileStoreIsMetals	TileStoreIsMetals
 variant	metal2vulkan-runtime::DriverFact::TimestampPoolsAreCounterSampleBuffers	TimestampPoolsAreCounterSampleBuffers
@@ -11797,6 +12128,18 @@ variant	metal2vulkan-runtime::HostBacking::InHostRam	InHostRam
 variant	metal2vulkan-runtime::IdPlacement::Any	Any
 variant	metal2vulkan-runtime::IdPlacement::At	At(ResourceId)
 variant	metal2vulkan-runtime::IdPlacement::Outside	Outside
+variant	metal2vulkan-runtime::InPlaceAccess::Reads	Reads
+variant	metal2vulkan-runtime::InPlaceAccess::Renders	Renders
+variant	metal2vulkan-runtime::InPlaceAccess::Writes	Writes
+variant	metal2vulkan-runtime::InPlaceRefusal::Detached	Detached
+variant	metal2vulkan-runtime::InPlaceRefusal::DmaBuf	DmaBuf
+variant	metal2vulkan-runtime::InPlaceRefusal::Image	Image
+variant	metal2vulkan-runtime::InPlaceRefusal::Pitch	Pitch
+variant	metal2vulkan-runtime::InPlaceRefusal::Placement	Placement
+variant	metal2vulkan-runtime::InPlaceRefusal::Rows	Rows
+variant	metal2vulkan-runtime::InPlaceRefusal::Source	Source
+variant	metal2vulkan-runtime::InPlaceRowEnds::InLines	InLines
+variant	metal2vulkan-runtime::InPlaceRowEnds::OnLines	OnLines
 variant	metal2vulkan-runtime::IndirectCommand::Compute	Compute(EncodedComputeCommand)
 variant	metal2vulkan-runtime::IndirectCommand::Render	Render(EncodedRenderCommand)
 variant	metal2vulkan-runtime::IndirectCommandBufferProblem::CommandKind	CommandKind
@@ -11890,6 +12233,8 @@ variant	metal2vulkan-runtime::MacClass::IntelOrAmd	IntelOrAmd
 variant	metal2vulkan-runtime::MappedSampling::ConstexprSampler	ConstexprSampler
 variant	metal2vulkan-runtime::MappedSampling::Handles	Handles
 variant	metal2vulkan-runtime::MappedSampling::SharedSamplerSlot	SharedSamplerSlot
+variant	metal2vulkan-runtime::MemoryExport::DmaBuf	DmaBuf
+variant	metal2vulkan-runtime::MemoryExport::OpaqueFd	OpaqueFd
 variant	metal2vulkan-runtime::MemoryKind::Device	Device
 variant	metal2vulkan-runtime::MemoryKind::Heap	Heap
 variant	metal2vulkan-runtime::MemoryKind::Host	Host
@@ -11968,6 +12313,7 @@ variant	metal2vulkan-runtime::PrivateFlag::SupportsSimdReduction	SupportsSimdRed
 variant	metal2vulkan-runtime::PrivateFlag::SupportsSimdShuffleAndFill	SupportsSimdShuffleAndFill
 variant	metal2vulkan-runtime::PrivateFlag::SupportsTexture2dMultisampleArray	SupportsTexture2dMultisampleArray
 variant	metal2vulkan-runtime::PrivateFlag::SupportsTileShaders	SupportsTileShaders
+variant	metal2vulkan-runtime::Problem::AlignedByteNoCopy	AlignedByteNoCopy
 variant	metal2vulkan-runtime::Problem::AlreadyCommitted	AlreadyCommitted
 variant	metal2vulkan-runtime::Problem::ArgumentEncoder	ArgumentEncoder(ArgumentEncoderProblem)
 variant	metal2vulkan-runtime::Problem::AttachmentNotAFormat	AttachmentNotAFormat { attachment: Attachment, format: PixelFormat }
@@ -11984,6 +12330,7 @@ variant	metal2vulkan-runtime::Problem::DynamicLibraryFunction	DynamicLibraryFunc
 variant	metal2vulkan-runtime::Problem::EmptyThreadgroup	EmptyThreadgroup
 variant	metal2vulkan-runtime::Problem::EncoderAbandoned	EncoderAbandoned
 variant	metal2vulkan-runtime::Problem::EncoderOpen	EncoderOpen
+variant	metal2vulkan-runtime::Problem::ExportedNoCopy	ExportedNoCopy
 variant	metal2vulkan-runtime::Problem::ForeignObject	ForeignObject
 variant	metal2vulkan-runtime::Problem::FunctionTable	FunctionTable(FunctionTableProblem)
 variant	metal2vulkan-runtime::Problem::HandlerAfterCommit	HandlerAfterCommit
@@ -12003,13 +12350,16 @@ variant	metal2vulkan-runtime::Problem::LongTextureBufferFillPattern	LongTextureB
 variant	metal2vulkan-runtime::Problem::MaxCommandBufferCount	MaxCommandBufferCount
 variant	metal2vulkan-runtime::Problem::Mipmap	Mipmap(MipmapProblem)
 variant	metal2vulkan-runtime::Problem::NoPipelineState	NoPipelineState
+variant	metal2vulkan-runtime::Problem::NotExportable	NotExportable
 variant	metal2vulkan-runtime::Problem::NotShareable	NotShareable
 variant	metal2vulkan-runtime::Problem::OffsetOutOfRange	OffsetOutOfRange { offset: u64, length: u64 }
 variant	metal2vulkan-runtime::Problem::OutsidePlacement	OutsidePlacement
+variant	metal2vulkan-runtime::Problem::PaddingUnobservedNoCopy	PaddingUnobservedNoCopy
 variant	metal2vulkan-runtime::Problem::PointSizeTopology	PointSizeTopology
 variant	metal2vulkan-runtime::Problem::ProtectedEncoder	ProtectedEncoder { options: u64 }
 variant	metal2vulkan-runtime::Problem::RangeOutOfBounds	RangeOutOfBounds { offset: u64, size: u64, length: u64 }
 variant	metal2vulkan-runtime::Problem::RasterSampleCount	RasterSampleCount { count: u32 }
+variant	metal2vulkan-runtime::Problem::RasterizedVoidVertex	RasterizedVoidVertex
 variant	metal2vulkan-runtime::Problem::RateMap	RateMap(RateMapProblem)
 variant	metal2vulkan-runtime::Problem::Rebind	Rebind(RebindProblem)
 variant	metal2vulkan-runtime::Problem::RenderPass	RenderPass(RenderPassProblem)
@@ -12056,6 +12406,8 @@ variant	metal2vulkan-runtime::RebindProblem::NotHostMemory	NotHostMemory
 variant	metal2vulkan-runtime::RecordsRead::Commit	Commit
 variant	metal2vulkan-runtime::RecordsRead::Gpu	Gpu
 variant	metal2vulkan-runtime::RecordsRead::HostStep	HostStep
+variant	metal2vulkan-runtime::Refusal::ArgumentBufferSamplerCount	ArgumentBufferSamplerCount { required: u64, available: u64 }
+variant	metal2vulkan-runtime::Refusal::ArgumentBufferTextureCount	ArgumentBufferTextureCount { required: u64, available: u64 }
 variant	metal2vulkan-runtime::Refusal::NoPublishedColumn	NoPublishedColumn
 variant	metal2vulkan-runtime::Refusal::NotACatalystProcess	NotACatalystProcess
 variant	metal2vulkan-runtime::Refusal::PointSizeRange	PointSizeRange
@@ -12119,6 +12471,7 @@ variant	metal2vulkan-runtime::RowState::Gap	Gap(RuntimeGap)
 variant	metal2vulkan-runtime::RowState::NotADeviceFeature	NotADeviceFeature(Framework)
 variant	metal2vulkan-runtime::RowState::Refused	Refused(Refusal)
 variant	metal2vulkan-runtime::RuntimeGap::AccelerationStructures	AccelerationStructures
+variant	metal2vulkan-runtime::RuntimeGap::AdoptedDeviceRecovery	AdoptedDeviceRecovery
 variant	metal2vulkan-runtime::RuntimeGap::ColorAttachmentGroups	ColorAttachmentGroups
 variant	metal2vulkan-runtime::RuntimeGap::ColorAttachmentMapping	ColorAttachmentMapping
 variant	metal2vulkan-runtime::RuntimeGap::CommandReplay	CommandReplay
@@ -12129,9 +12482,12 @@ variant	metal2vulkan-runtime::RuntimeGap::DepthStencilResolve	DepthStencilResolv
 variant	metal2vulkan-runtime::RuntimeGap::DetachTextures	DetachTextures
 variant	metal2vulkan-runtime::RuntimeGap::DetachedTexelAccess	DetachedTexelAccess
 variant	metal2vulkan-runtime::RuntimeGap::DeviceNotifications	DeviceNotifications
+variant	metal2vulkan-runtime::RuntimeGap::DmaBufExport	DmaBufExport
 variant	metal2vulkan-runtime::RuntimeGap::EmptyFillPattern	EmptyFillPattern
 variant	metal2vulkan-runtime::RuntimeGap::ExecutionRangeOffFour	ExecutionRangeOffFour { offset: u64 }
 variant	metal2vulkan-runtime::RuntimeGap::ExecutionRangePastBuffer	ExecutionRangePastBuffer { offset: u64, length: u64 }
+variant	metal2vulkan-runtime::RuntimeGap::ExportableMemory	ExportableMemory
+variant	metal2vulkan-runtime::RuntimeGap::ExportableSemaphore	ExportableSemaphore
 variant	metal2vulkan-runtime::RuntimeGap::ExtensionEnable	ExtensionEnable(VkExtension)
 variant	metal2vulkan-runtime::RuntimeGap::FeatureEnable	FeatureEnable(VkFeature)
 variant	metal2vulkan-runtime::RuntimeGap::FunctionTablePastMaxBufferLength	FunctionTablePastMaxBufferLength { count: u64, max_buffer_length: u64 }
@@ -12142,7 +12498,6 @@ variant	metal2vulkan-runtime::RuntimeGap::HiddenDepthStencil	HiddenDepthStencil
 variant	metal2vulkan-runtime::RuntimeGap::ImageblockMasters	ImageblockMasters
 variant	metal2vulkan-runtime::RuntimeGap::IndirectCommandBufferPastMaxBufferLength	IndirectCommandBufferPastMaxBufferLength { count: u64, max_buffer_length: u64 }
 variant	metal2vulkan-runtime::RuntimeGap::IndirectCommandPastSize	IndirectCommandPastSize { index: u64, size: u64 }
-variant	metal2vulkan-runtime::RuntimeGap::IndirectCommandUnstridedBuffer	IndirectCommandUnstridedBuffer { index: u32 }
 variant	metal2vulkan-runtime::RuntimeGap::IndirectDrawArguments	IndirectDrawArguments
 variant	metal2vulkan-runtime::RuntimeGap::IndirectImageblockSize	IndirectImageblockSize { width: u64, height: u64 }
 variant	metal2vulkan-runtime::RuntimeGap::IndirectRenderCommands	IndirectRenderCommands
@@ -12151,6 +12506,7 @@ variant	metal2vulkan-runtime::RuntimeGap::IoCommandQueues	IoCommandQueues
 variant	metal2vulkan-runtime::RuntimeGap::LayeredPass	LayeredPass
 variant	metal2vulkan-runtime::RuntimeGap::LibrarySource	LibrarySource
 variant	metal2vulkan-runtime::RuntimeGap::LossyTextureCompression	LossyTextureCompression
+variant	metal2vulkan-runtime::RuntimeGap::MadeBeforeRecovery	MadeBeforeRecovery
 variant	metal2vulkan-runtime::RuntimeGap::MappedTextureSampling	MappedTextureSampling { map: AddressModeMap, through: MappedSampling }
 variant	metal2vulkan-runtime::RuntimeGap::MemorylessSurfacePlane	MemorylessSurfacePlane
 variant	metal2vulkan-runtime::RuntimeGap::Metal4Api	Metal4Api
@@ -12221,6 +12577,11 @@ variant	metal2vulkan-runtime::SurfaceYCbCrMatrix::Itu709	Itu709
 variant	metal2vulkan-runtime::SurfaceYCbCrMatrix::Other	Other
 variant	metal2vulkan-runtime::SurfaceYCbCrMatrix::P3D65	P3D65
 variant	metal2vulkan-runtime::SurfaceYCbCrMatrix::Smpte240M	Smpte240M
+variant	metal2vulkan-runtime::TexturePlacement::InPlace	InPlace
+variant	metal2vulkan-runtime::TexturePlacement::NotHostPages	NotHostPages
+variant	metal2vulkan-runtime::TexturePlacement::OtherShape	OtherShape
+variant	metal2vulkan-runtime::TexturePlacement::Pending	Pending
+variant	metal2vulkan-runtime::TexturePlacement::Shadow	Shadow(TextureShadowReason)
 variant	metal2vulkan-runtime::TextureProblem::ArrayLength	ArrayLength
 variant	metal2vulkan-runtime::TextureProblem::CubeNotSquare	CubeNotSquare
 variant	metal2vulkan-runtime::TextureProblem::ExtentForFormat	ExtentForFormat
@@ -12240,6 +12601,16 @@ variant	metal2vulkan-runtime::TextureProblem::Unspecialized	Unspecialized
 variant	metal2vulkan-runtime::TextureProblem::UsageForFormat	UsageForFormat
 variant	metal2vulkan-runtime::TextureProblem::ViewOnlyFormat	ViewOnlyFormat
 variant	metal2vulkan-runtime::TextureProblem::ZeroExtent	ZeroExtent
+variant	metal2vulkan-runtime::TextureShadowReason::BytesBetweenRows	BytesBetweenRows
+variant	metal2vulkan-runtime::TextureShadowReason::CheckFailed	CheckFailed { access: InPlaceAccess, row_ends: InPlaceRowEnds }
+variant	metal2vulkan-runtime::TextureShadowReason::DeviceCopy	DeviceCopy
+variant	metal2vulkan-runtime::TextureShadowReason::LinearCost	LinearCost { bytes: u64 }
+variant	metal2vulkan-runtime::TextureShadowReason::Mipmapped	Mipmapped { levels: u32 }
+variant	metal2vulkan-runtime::TextureShadowReason::PastLength	PastLength
+variant	metal2vulkan-runtime::TextureShadowReason::Policy	Policy
+variant	metal2vulkan-runtime::TextureShadowReason::Refused	Refused(InPlaceRefusal)
+variant	metal2vulkan-runtime::TextureShadowReason::StoreWidth	StoreWidth { texel_bytes: u64 }
+variant	metal2vulkan-runtime::TextureShadowReason::Unchecked	Unchecked { access: InPlaceAccess, row_ends: InPlaceRowEnds }
 variant	metal2vulkan-runtime::ViewProblem::BufferSlices	BufferSlices
 variant	metal2vulkan-runtime::ViewProblem::FormatIncompatible	FormatIncompatible
 variant	metal2vulkan-runtime::ViewProblem::LevelRange	LevelRange
@@ -12545,10 +12916,12 @@ variant	metal2vulkan::bind::ShadowMergeRead::R8G8B8A8Unorm	R8G8B8A8Unorm
 variant	metal2vulkan::bind::ShadowMergeRead::Words	Words(ShadowTexelView)
 variant	metal2vulkan::bind::ShadowMergeStores::Blocks	Blocks
 variant	metal2vulkan::bind::ShadowMergeStores::Words	Words
+variant	metal2vulkan::bind::ShadowTexelView::R16Uint	R16Uint
 variant	metal2vulkan::bind::ShadowTexelView::R32G32B32A32Uint	R32G32B32A32Uint
 variant	metal2vulkan::bind::ShadowTexelView::R32G32Uint	R32G32Uint
 variant	metal2vulkan::bind::ShadowTexelView::R32Uint	R32Uint
 variant	metal2vulkan::bind::ShadowTexelView::R8G8B8A8Uint	R8G8B8A8Uint
+variant	metal2vulkan::bind::ShadowTexelView::R8Uint	R8Uint
 variant	metal2vulkan::bind::StatusWord::MeshFaultDraw	MeshFaultDraw
 variant	metal2vulkan::bind::StatusWord::MeshFaultGroups	MeshFaultGroups
 variant	metal2vulkan::bind::StatusWord::MeshFaultObjects	MeshFaultObjects
@@ -12683,19 +13056,20 @@ variant	metal2vulkan::device::Containment::On	On { robust: Robustness }
 variant	metal2vulkan::device::Containment::UnsafeOff	UnsafeOff
 variant	metal2vulkan::device::ContainmentPolicy::Contained	Contained
 variant	metal2vulkan::device::ContainmentPolicy::UnsafeOff	UnsafeOff
+variant	metal2vulkan::device::DontCareColorPolicy::Driver	Driver
+variant	metal2vulkan::device::DontCareColorPolicy::Kept	Kept
 variant	metal2vulkan::device::DriverFact::Bc6hBlockDecodeIsMetals	Bc6hBlockDecodeIsMetals
 variant	metal2vulkan::device::DriverFact::Bc7BlockDecodeIsMetals	Bc7BlockDecodeIsMetals
 variant	metal2vulkan::device::DriverFact::BlendlessColorAttachmentsWarn	BlendlessColorAttachmentsWarn
 variant	metal2vulkan::device::DriverFact::ChannelBlockDecodeIsMetals	ChannelBlockDecodeIsMetals
+variant	metal2vulkan::device::DriverFact::ClearedDepthAtStandardPositions	ClearedDepthAtStandardPositions
 variant	metal2vulkan::device::DriverFact::ColorBlockDecodeIsMetals	ColorBlockDecodeIsMetals
 variant	metal2vulkan::device::DriverFact::ColorClearIsMetals	ColorClearIsMetals
-variant	metal2vulkan::device::DriverFact::ColorClearTakesEitherCode	ColorClearTakesEitherCode
 variant	metal2vulkan::device::DriverFact::ColorImagesLieAsMetalHeapTextures	ColorImagesLieAsMetalHeapTextures
 variant	metal2vulkan::device::DriverFact::ColorResolveAverageIsMetals	ColorResolveAverageIsMetals
 variant	metal2vulkan::device::DriverFact::CompressedImagesHideAliasedWrites	CompressedImagesHideAliasedWrites
 variant	metal2vulkan::device::DriverFact::ConstantOffsetUniformReadsPreloaded	ConstantOffsetUniformReadsPreloaded
 variant	metal2vulkan::device::DriverFact::DepthImageKeepsDenormals	DepthImageKeepsDenormals
-variant	metal2vulkan::device::DriverFact::DepthImageKeepsValuesOutsideUnitRange	DepthImageKeepsValuesOutsideUnitRange
 variant	metal2vulkan::device::DriverFact::DepthStencilImagesLieApart	DepthStencilImagesLieApart
 variant	metal2vulkan::device::DriverFact::DepthStencilImagesStayGpuOptimized	DepthStencilImagesStayGpuOptimized
 variant	metal2vulkan::device::DriverFact::DepthTestComparesMagnitudes	DepthTestComparesMagnitudes
@@ -12703,17 +13077,17 @@ variant	metal2vulkan::device::DriverFact::DepthTestKeepsDenormals	DepthTestKeeps
 variant	metal2vulkan::device::DriverFact::DontCareStoreIsMetals	DontCareStoreIsMetals
 variant	metal2vulkan::device::DriverFact::DontCareStoreIsOneOfMetals	DontCareStoreIsOneOfMetals
 variant	metal2vulkan::device::DriverFact::DynamicRestartWarns	DynamicRestartWarns
-variant	metal2vulkan::device::DriverFact::FillCompiledPerCommandPool	FillCompiledPerCommandPool
 variant	metal2vulkan::device::DriverFact::FirstSparseResourceWaitsForQueues	FirstSparseResourceWaitsForQueues
 variant	metal2vulkan::device::DriverFact::FragmentDepthKeepsDepth16Codes	FragmentDepthKeepsDepth16Codes
 variant	metal2vulkan::device::DriverFact::FragmentDepthStoresUnchanged	FragmentDepthStoresUnchanged
 variant	metal2vulkan::device::DriverFact::HostTransferImagesKeepTheirBytes	HostTransferImagesKeepTheirBytes
 variant	metal2vulkan::device::DriverFact::InterlockOrdersDraws	InterlockOrdersDraws
+variant	metal2vulkan::device::DriverFact::InterlockedDrawsRaceUnderLoad	InterlockedDrawsRaceUnderLoad
 variant	metal2vulkan::device::DriverFact::InterlockedPassSplitNoSlower	InterlockedPassSplitNoSlower
 variant	metal2vulkan::device::DriverFact::LineTiesAreMetals	LineTiesAreMetals
 variant	metal2vulkan::device::DriverFact::MultisampleColorImagesLieAsMetalHeapTextures	MultisampleColorImagesLieAsMetalHeapTextures
 variant	metal2vulkan::device::DriverFact::MultisampledDepthFasterOutOfGeneral	MultisampledDepthFasterOutOfGeneral
-variant	metal2vulkan::device::DriverFact::PointerImportsFollowTheirAddress	PointerImportsFollowTheirAddress
+variant	metal2vulkan::device::DriverFact::PlainAllocationsHoldSubmissions	PlainAllocationsHoldSubmissions
 variant	metal2vulkan::device::DriverFact::PositionedDepthReadAtStandardPositions	PositionedDepthReadAtStandardPositions
 variant	metal2vulkan::device::DriverFact::QueueFailuresReportedByMessenger	QueueFailuresReportedByMessenger
 variant	metal2vulkan::device::DriverFact::RobustIndexFetchReadsZero	RobustIndexFetchReadsZero
@@ -12724,7 +13098,6 @@ variant	metal2vulkan::device::DriverFact::SemaphoreOperationsStallSubmits	Semaph
 variant	metal2vulkan::device::DriverFact::ShadowCopyBackDispatchFaster	ShadowCopyBackDispatchFaster
 variant	metal2vulkan::device::DriverFact::ShadowCopyInDispatchFaster	ShadowCopyInDispatchFaster
 variant	metal2vulkan::device::DriverFact::SignallingSubmitsStallEvery1024	SignallingSubmitsStallEvery1024
-variant	metal2vulkan::device::DriverFact::SubmissionsWithoutSignalsMerge	SubmissionsWithoutSignalsMerge
 variant	metal2vulkan::device::DriverFact::SubpixelSnapIsMetals	SubpixelSnapIsMetals
 variant	metal2vulkan::device::DriverFact::TileStoreIsMetals	TileStoreIsMetals
 variant	metal2vulkan::device::DriverFact::TimestampPoolsAreCounterSampleBuffers	TimestampPoolsAreCounterSampleBuffers
@@ -12738,6 +13111,7 @@ variant	metal2vulkan::device::DriverWorkaround::DiscardDropsSimdgroupStores	Disc
 variant	metal2vulkan::device::DriverWorkaround::DontInlineKeepsCalls	DontInlineKeepsCalls
 variant	metal2vulkan::device::DriverWorkaround::EarlyTestsDropMultisampledImageWrites	EarlyTestsDropMultisampledImageWrites
 variant	metal2vulkan::device::DriverWorkaround::FunctionsInlinedAtEveryCall	FunctionsInlinedAtEveryCall
+variant	metal2vulkan::device::DriverWorkaround::HalfConversionFusedWithArithmetic	HalfConversionFusedWithArithmetic
 variant	metal2vulkan::device::DriverWorkaround::HalfConversionPairFolded	HalfConversionPairFolded
 variant	metal2vulkan::device::DriverWorkaround::InterpolationNeedsTheWholeQuad	InterpolationNeedsTheWholeQuad
 variant	metal2vulkan::device::DriverWorkaround::LoadsForwardedIntoLoops	LoadsForwardedIntoLoops
@@ -12745,6 +13119,7 @@ variant	metal2vulkan::device::DriverWorkaround::LocalizedLoadsForwardedPastAtomi
 variant	metal2vulkan::device::DriverWorkaround::MemoryWritingFragmentsRunPerSample	MemoryWritingFragmentsRunPerSample
 variant	metal2vulkan::device::DriverWorkaround::MeshIndexComponentStoresMisplaced	MeshIndexComponentStoresMisplaced
 variant	metal2vulkan::device::DriverWorkaround::NarrowMaskAfterSignedClamp	NarrowMaskAfterSignedClamp
+variant	metal2vulkan::device::DriverWorkaround::PerspectiveReadsExtrapolated	PerspectiveReadsExtrapolated
 variant	metal2vulkan::device::DriverWorkaround::RegisterAllocatorOverflowsLargeModules	RegisterAllocatorOverflowsLargeModules
 variant	metal2vulkan::device::DriverWorkaround::TessellatorNotMetals	TessellatorNotMetals
 variant	metal2vulkan::device::DriverWorkaround::VertexGroupingNotApples	VertexGroupingNotApples
@@ -13180,7 +13555,6 @@ variant	metal2vulkan::device::VkProperty::CenterFragCoordDepth	CenterFragCoordDe
 variant	metal2vulkan::device::VkProperty::ColorAttachmentSampleCount	ColorAttachmentSampleCount(vk::Format, u32)
 variant	metal2vulkan::device::VkProperty::DenormIndependence32BitOnly	DenormIndependence32BitOnly
 variant	metal2vulkan::device::VkProperty::DenormIndependenceAll	DenormIndependenceAll
-variant	metal2vulkan::device::VkProperty::DepthImageKeepsValuesOutsideUnitRange	DepthImageKeepsValuesOutsideUnitRange
 variant	metal2vulkan::device::VkProperty::DepthResolveMode	DepthResolveMode(ResolveMode)
 variant	metal2vulkan::device::VkProperty::DeviceSampling	DeviceSampling
 variant	metal2vulkan::device::VkProperty::FilterMinmaxSingleComponentFormats	FilterMinmaxSingleComponentFormats
@@ -13238,6 +13612,8 @@ variant	metal2vulkan::device::VkProperty::SubgroupStage	SubgroupStage(Stage)
 variant	metal2vulkan::device::VkProperty::VariableSampleLocations	VariableSampleLocations
 variant	metal2vulkan::device::WideLinePolicy::Device	Device
 variant	metal2vulkan::device::WideLinePolicy::Exact	Exact
+variant	metal2vulkan::device::YCbCrInPlacePolicy::Exact	Exact
+variant	metal2vulkan::device::YCbCrInPlacePolicy::Model	Model
 variant	metal2vulkan::error::AbiError::BadSamplerState	BadSamplerState
 variant	metal2vulkan::error::AbiError::BadValue	BadValue
 variant	metal2vulkan::error::AbiError::ContainerMismatch	ContainerMismatch
@@ -13272,7 +13648,6 @@ variant	metal2vulkan::error::BindError::MissingGuestAddress	MissingGuestAddress 
 variant	metal2vulkan::error::BindError::MissingPrimitiveType	MissingPrimitiveType
 variant	metal2vulkan::error::BindError::MissingStageInRegion	MissingStageInRegion
 variant	metal2vulkan::error::BindError::MissingThreadgroupMemory	MissingThreadgroupMemory { index: u32 }
-variant	metal2vulkan::error::BindError::MissingVertexStride	MissingVertexStride { slot: SlotRef }
 variant	metal2vulkan::error::BindError::NeedsVariant	NeedsVariant { variant: Box<crate::cache::VariantKey> }
 variant	metal2vulkan::error::BindError::PatchControlPoints	PatchControlPoints { given: u32, expected: u32 }
 variant	metal2vulkan::error::BindError::PatchIndexRange	PatchIndexRange { needed: u64, limit: u64 }
@@ -13311,6 +13686,8 @@ variant	metal2vulkan::error::Capability::Feature	Feature(VkFeature)
 variant	metal2vulkan::error::Capability::Format	Format { format: vk::Format, usage: FormatUsage }
 variant	metal2vulkan::error::Capability::Limit	Limit { limit: VkLimit, required: u64, available: u64 }
 variant	metal2vulkan::error::Capability::Property	Property(VkProperty)
+variant	metal2vulkan::error::ComputePipelineProblem::MaxThreadsDiffer	MaxThreadsDiffer { specified: u32, max: u32 }
+variant	metal2vulkan::error::ComputePipelineProblem::MaxThreadsOverLimit	MaxThreadsOverLimit { max: u32, limit: u32 }
 variant	metal2vulkan::error::ConstantRecord::BlockAddress	BlockAddress
 variant	metal2vulkan::error::ConstantRecord::Byte	Byte
 variant	metal2vulkan::error::ConstantRecord::Compare	Compare
@@ -13334,7 +13711,8 @@ variant	metal2vulkan::error::ContainerError::NoAirSlice	NoAirSlice
 variant	metal2vulkan::error::ContainerError::Truncated	Truncated { need: u64, have: u64 }
 variant	metal2vulkan::error::ContainerError::UnsupportedContainerVersion	UnsupportedContainerVersion { major: u16, minor: u16 }
 variant	metal2vulkan::error::DescriptorError::AmbiguousEntry	AmbiguousEntry { requested: DiagName }
-variant	metal2vulkan::error::DescriptorError::ColorAttachment	ColorAttachment { index: u32 }
+variant	metal2vulkan::error::DescriptorError::ColorAttachment	ColorAttachment { index: u32, metal: MetalAnswer }
+variant	metal2vulkan::error::DescriptorError::ComputePipeline	ComputePipeline { problem: ComputePipelineProblem }
 variant	metal2vulkan::error::DescriptorError::DeviceDescription	DeviceDescription { detail: String }
 variant	metal2vulkan::error::DescriptorError::DuplicateColorOutput	DuplicateColorOutput { color: u32, index: u32 }
 variant	metal2vulkan::error::DescriptorError::DuplicateFunctionConstant	DuplicateFunctionConstant { index: u32 }
@@ -13348,8 +13726,10 @@ variant	metal2vulkan::error::DescriptorError::MaxCallStackDepth	MaxCallStackDept
 variant	metal2vulkan::error::DescriptorError::MaxTessellationFactor	MaxTessellationFactor { factor: u32, partition_mode: crate::metal::TessellationPartitionMode }
 variant	metal2vulkan::error::DescriptorError::MeshPipeline	MeshPipeline { problem: MeshPipelineProblem }
 variant	metal2vulkan::error::DescriptorError::MissingStage	MissingStage { stage: Stage }
+variant	metal2vulkan::error::DescriptorError::OpenClMode	OpenClMode { compiled: bool }
 variant	metal2vulkan::error::DescriptorError::PixelFormatUsage	PixelFormatUsage { format: u32, usage: FormatUsage }
 variant	metal2vulkan::error::DescriptorError::PlaceholderEnumValue	PlaceholderEnumValue { ty: &'static str, value: u32 }
+variant	metal2vulkan::error::DescriptorError::RasterizedVoidVertex	RasterizedVoidVertex
 variant	metal2vulkan::error::DescriptorError::SamplerLodClamp	SamplerLodClamp
 variant	metal2vulkan::error::DescriptorError::SpecializationConflict	SpecializationConflict { key: SpecKey }
 variant	metal2vulkan::error::DescriptorError::StageInputAttribute	StageInputAttribute { attribute: u32 }
@@ -13589,7 +13969,6 @@ variant	metal2vulkan::error::LinearNeed::SampleCount	SampleCount(u32)
 variant	metal2vulkan::error::LinkProblem::Ambiguous	Ambiguous
 variant	metal2vulkan::error::LinkProblem::DataLayout	DataLayout
 variant	metal2vulkan::error::LinkProblem::NotVisible	NotVisible
-variant	metal2vulkan::error::LinkProblem::Signature	Signature
 variant	metal2vulkan::error::LinkProblem::UnresolvedConstant	UnresolvedConstant { index: u32 }
 variant	metal2vulkan::error::LowerFamily::Access	Access
 variant	metal2vulkan::error::LowerFamily::Arith	Arith
@@ -13611,6 +13990,8 @@ variant	metal2vulkan::error::MeshPipelineProblem::RequiredEmptyAxis	RequiredEmpt
 variant	metal2vulkan::error::MeshPipelineProblem::RequiredOverLimit	RequiredOverLimit { stage: Stage, threads: u64, limit: u32 }
 variant	metal2vulkan::error::MeshPipelineProblem::RequiredOverMax	RequiredOverMax { stage: Stage, threads: u64, max: u32 }
 variant	metal2vulkan::error::MeshPipelineProblem::RequiredWithoutObjectFunction	RequiredWithoutObjectFunction { required: [u32; 3] }
+variant	metal2vulkan::error::MetalAnswer::EndsProcess	EndsProcess
+variant	metal2vulkan::error::MetalAnswer::NilWithError	NilWithError
 variant	metal2vulkan::error::Needs::AnyOf	AnyOf(Vec<Vec<Capability>>)
 variant	metal2vulkan::error::Needs::DeviceCapability	DeviceCapability(&'static str)
 variant	metal2vulkan::error::Needs::DriverDefect	DriverDefect(DriverWorkaround)
@@ -13655,9 +14036,11 @@ variant	metal2vulkan::error::RuntimeDriverDefect::PushedDescriptorsStaleAfterPip
 variant	metal2vulkan::error::RuntimeDriverDefect::ReadsCommandBuffersAfterTheirSignal	ReadsCommandBuffersAfterTheirSignal
 variant	metal2vulkan::error::RuntimeDriverDefect::SetLayoutSupportUnderstated	SetLayoutSupportUnderstated
 variant	metal2vulkan::error::RuntimeDriverDefect::TenBitCodesReadAsWords	TenBitCodesReadAsWords
+variant	metal2vulkan::error::RuntimeDriverDefect::TrimmedCommandBufferFailsResubmission	TrimmedCommandBufferFailsResubmission
 variant	metal2vulkan::error::RuntimeDriverDefect::TwoPlaneChromaMisplaced	TwoPlaneChromaMisplaced
 variant	metal2vulkan::error::RuntimeDriverDefect::UnpinnablePagesBreakHostMemory	UnpinnablePagesBreakHostMemory
 variant	metal2vulkan::error::RuntimeDriverDefect::VolumeBlitsUnfiltered	VolumeBlitsUnfiltered
+variant	metal2vulkan::error::RuntimeDriverDefect::VolumeResolveFirstPlane	VolumeResolveFirstPlane
 variant	metal2vulkan::error::RuntimeDriverDefect::WaitForAnyObjectLosesASignal	WaitForAnyObjectLosesASignal
 variant	metal2vulkan::error::RuntimeInput::AlphaTest	AlphaTest
 variant	metal2vulkan::error::RuntimeInput::ColorWrites	ColorWrites
@@ -13742,6 +14125,7 @@ variant	metal2vulkan::metal::format::Footprint::Tiled	Tiled { bytes: u32, block:
 variant	metal2vulkan::metal::format::Footprint::TwoPlanes	TwoPlanes
 variant	metal2vulkan::metal::format::FormatEmulation::AlphaInRed	AlphaInRed
 variant	metal2vulkan::metal::format::FormatEmulation::Bfloat	Bfloat
+variant	metal2vulkan::metal::format::FormatEmulation::CopiesOnly	CopiesOnly
 variant	metal2vulkan::metal::format::FormatEmulation::Decoded	Decoded
 variant	metal2vulkan::metal::format::FormatEmulation::DepthInCombined	DepthInCombined
 variant	metal2vulkan::metal::format::FormatEmulation::DepthWidened	DepthWidened
@@ -13878,6 +14262,7 @@ variant	metal2vulkan::pipeline::PrecisionNote::DeviceVertexConversion	DeviceVert
 variant	metal2vulkan::pipeline::PrecisionNote::DiscardDropsSimdgroupStores	DiscardDropsSimdgroupStores
 variant	metal2vulkan::pipeline::PrecisionNote::ExtendedRangeBlendSource	ExtendedRangeBlendSource
 variant	metal2vulkan::pipeline::PrecisionNote::ExtendedRangeFloatBlendSource	ExtendedRangeFloatBlendSource
+variant	metal2vulkan::pipeline::PrecisionNote::ExtrapolatedInterpolation	ExtrapolatedInterpolation
 variant	metal2vulkan::pipeline::PrecisionNote::F16FmaDoubleRounding	F16FmaDoubleRounding
 variant	metal2vulkan::pipeline::PrecisionNote::F16IntConvDoubleRounding	F16IntConvDoubleRounding
 variant	metal2vulkan::pipeline::PrecisionNote::FastMathRewrites	FastMathRewrites
@@ -14005,6 +14390,7 @@ variant	metal2vulkan::pipeline::RuntimeFact::AmplificationDraws	AmplificationDra
 variant	metal2vulkan::pipeline::RuntimeFact::AnisotropicSampler	AnisotropicSampler { slot: SlotRef }
 variant	metal2vulkan::pipeline::RuntimeFact::BaseVertexInstance	BaseVertexInstance
 variant	metal2vulkan::pipeline::RuntimeFact::BicubicTexels	BicubicTexels { slot: SlotRef }
+variant	metal2vulkan::pipeline::RuntimeFact::BorderTexels	BorderTexels { slot: SlotRef }
 variant	metal2vulkan::pipeline::RuntimeFact::BufferRangeLimit	BufferRangeLimit { slot: SlotRef }
 variant	metal2vulkan::pipeline::RuntimeFact::CallStackDepth	CallStackDepth { depth: u32 }
 variant	metal2vulkan::pipeline::RuntimeFact::ConstantLanes	ConstantLanes { slot: SlotRef }
@@ -14038,6 +14424,7 @@ variant	metal2vulkan::pipeline::RuntimeFact::MergedDraws	MergedDraws
 variant	metal2vulkan::pipeline::RuntimeFact::MeshLastFirst	MeshLastFirst
 variant	metal2vulkan::pipeline::RuntimeFact::MovableStorageWrites	MovableStorageWrites { early_variant: bool }
 variant	metal2vulkan::pipeline::RuntimeFact::ObjectThreadgroupArena	ObjectThreadgroupArena { static_bytes: u32, payload: Option<u32> }
+variant	metal2vulkan::pipeline::RuntimeFact::OpenClMode	OpenClMode
 variant	metal2vulkan::pipeline::RuntimeFact::OutOfBoundsAlpha	OutOfBoundsAlpha { slot: SlotRef }
 variant	metal2vulkan::pipeline::RuntimeFact::PartialObjectThreadgroups	PartialObjectThreadgroups
 variant	metal2vulkan::pipeline::RuntimeFact::PredicationVote	PredicationVote
@@ -14046,7 +14433,9 @@ variant	metal2vulkan::pipeline::RuntimeFact::QuadPrimitiveIds	QuadPrimitiveIds
 variant	metal2vulkan::pipeline::RuntimeFact::RenderTargetArrayLength	RenderTargetArrayLength { layer_dropped: bool }
 variant	metal2vulkan::pipeline::RuntimeFact::ReplayBindings	ReplayBindings
 variant	metal2vulkan::pipeline::RuntimeFact::ResourcePresence	ResourcePresence { slot: SlotRef }
+variant	metal2vulkan::pipeline::RuntimeFact::RotatedInputBlend	RotatedInputBlend { color: u32, blend: crate::pipeline::lower_inputs::BlendEquation, kept: crate::vk::ColorComponentFlags }
 variant	metal2vulkan::pipeline::RuntimeFact::RotatedWeights	RotatedWeights
+variant	metal2vulkan::pipeline::RuntimeFact::RowLockstep	RowLockstep
 variant	metal2vulkan::pipeline::RuntimeFact::SampleCount	SampleCount
 variant	metal2vulkan::pipeline::RuntimeFact::SamplerCoordinates	SamplerCoordinates { slot: SlotRef }
 variant	metal2vulkan::pipeline::RuntimeFact::SamplerReduction	SamplerReduction { slot: SlotRef }
@@ -14109,12 +14498,29 @@ variant	metal2vulkan::pipeline::SnapshotForm::Uint16	Uint16
 variant	metal2vulkan::pipeline::SnapshotForm::Uint8	Uint8
 variant	metal2vulkan::pipeline::SnapshotForm::Unorm16	Unorm16
 variant	metal2vulkan::pipeline::SnapshotForm::Unorm8	Unorm8
+variant	metal2vulkan::pipeline::SnapshotRefusal::Atomic	Atomic
+variant	metal2vulkan::pipeline::SnapshotRefusal::Branch	Branch
+variant	metal2vulkan::pipeline::SnapshotRefusal::Coherent	Coherent
+variant	metal2vulkan::pipeline::SnapshotRefusal::Derivative	Derivative
+variant	metal2vulkan::pipeline::SnapshotRefusal::GroupOperation	GroupOperation
+variant	metal2vulkan::pipeline::SnapshotRefusal::ImageWrite	ImageWrite
+variant	metal2vulkan::pipeline::SnapshotRefusal::Interlock	Interlock
+variant	metal2vulkan::pipeline::SnapshotRefusal::Other	Other
+variant	metal2vulkan::pipeline::SnapshotRefusal::Sample	Sample
+variant	metal2vulkan::pipeline::SnapshotRefusal::Store	Store
+variant	metal2vulkan::pipeline::SnapshotRefusal::UndefinedOperand	UndefinedOperand
+variant	metal2vulkan::pipeline::SnapshotRefusal::WritesMemory	WritesMemory
 variant	metal2vulkan::pipeline::SpecKey::AmplificationCount	AmplificationCount
 variant	metal2vulkan::pipeline::SpecKey::BicubicTexels	BicubicTexels(SlotRef)
+variant	metal2vulkan::pipeline::SpecKey::BorderTexels	BorderTexels(SlotRef)
 variant	metal2vulkan::pipeline::SpecKey::BoundSamplerWord	BoundSamplerWord(SlotRef)
 variant	metal2vulkan::pipeline::SpecKey::BoundTexelFormat	BoundTexelFormat(SlotRef)
 variant	metal2vulkan::pipeline::SpecKey::ConstantLanes	ConstantLanes(SlotRef)
+variant	metal2vulkan::pipeline::SpecKey::FilteringArgumentSampler	FilteringArgumentSampler
 variant	metal2vulkan::pipeline::SpecKey::FlatLocalSize	FlatLocalSize
+variant	metal2vulkan::pipeline::SpecKey::HeapNanFamilies	HeapNanFamilies(Stage)
+variant	metal2vulkan::pipeline::SpecKey::HeapRawTextures	HeapRawTextures(Stage)
+variant	metal2vulkan::pipeline::SpecKey::HeapYCbCrTextures	HeapYCbCrTextures(Stage)
 variant	metal2vulkan::pipeline::SpecKey::ImageblockHeight	ImageblockHeight
 variant	metal2vulkan::pipeline::SpecKey::ImageblockWidth	ImageblockWidth
 variant	metal2vulkan::pipeline::SpecKey::LocalSize	LocalSize(Axis)
@@ -14135,6 +14541,7 @@ variant	metal2vulkan::pipeline::SpecKey::SamplerAnisotropy	SamplerAnisotropy(Slo
 variant	metal2vulkan::pipeline::SpecKey::SamplerMinLevel	SamplerMinLevel(SlotRef)
 variant	metal2vulkan::pipeline::SpecKey::SamplerState	SamplerState { slot: SlotRef, fields: u32 }
 variant	metal2vulkan::pipeline::SpecKey::SparseTexture	SparseTexture(SlotRef)
+variant	metal2vulkan::pipeline::SpecKey::StageInReach	StageInReach
 variant	metal2vulkan::pipeline::SpecKey::TexelFormat	TexelFormat(SlotRef)
 variant	metal2vulkan::pipeline::SpecKey::TextureSwizzle	TextureSwizzle(SlotRef)
 variant	metal2vulkan::pipeline::SpecKey::TgLength	TgLength(u32)

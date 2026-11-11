@@ -3,8 +3,28 @@
 //! image (`shadow.rs`) over these texels.
 //!
 //! - **Metal's rules** decide which textures a buffer backs and where they lie in it
-//!   (`linear_plan.rs`); what Metal stops is refused `Invalid`, and an array whose texels run
-//!   past its buffer's length, which Metal makes, `NotImplemented`.
+//!   (`linear_plan.rs`); what Metal stops is refused `Invalid`, and an IOSurface plane past its
+//!   surface of a shape that keeps no tail (below), which Metal makes, `NotImplemented`.
+//! - **Tails.** A 2D texture, an array or a texture buffer whose texels run past its buffer's
+//!   length, which plain Metal makes up to the buffer's allocation (`linear_plan.rs`'s
+//!   **Length**), and a colour texture of an IOSurface plane whose texels run past the buffer
+//!   standing for its surface (`linear_plan.rs`'s **Beyond the plane's rows**: announced
+//!   `SurfaceTexelsTail`), keep the texels' bytes past the length in a tail of their own
+//!   ([`Texels::past`]): a runtime `Shared` buffer of its bytes from the first to the last (a
+//!   texture buffer's from its functions' first, its offset rounded down to 16), zero when made.
+//!   Its texels inside the length are the buffer's bytes, as every texture's over a buffer are.
+//!   A 2D texture or array is a shadow image whose copies go through the tail, as a staging
+//!   buffer: in, the buffer's bytes inside the length into the tail and the tail into the image;
+//!   back, the image into the tail and the tail's rows inside the length into the buffer. A
+//!   texture buffer's bindings view the tail, as a staged texture buffer's view its staging
+//!   buffer, with the same copies in and back but the image. A merge back takes its current
+//!   bytes from both and gives them back to both (`shadow_merge.rs`). The CPU's `replace_region` and `get_bytes`, and a
+//!   blit's rows, take each row's bytes inside the length from the buffer and the rest from the
+//!   tail; a copy between such texels and an image goes through a scratch buffer of the
+//!   encoder, as those rows (`blit_texture.rs`). The tail's uses are the buffer's bytes past its
+//!   length, by the same key, so the tracker orders them as the texels' own. Metal's texels there
+//!   are the memory after the buffer's, another allocation's bytes (docs/API.md's accepted
+//!   differences); the tail answers every path alike and reaches no allocation but its own.
 //! - **Texture buffers** are the buffer's bytes ([`Texels`]), viewed as a texel buffer where a
 //!   function binds them: in the format the binding plan names, over the range it gives, made at
 //!   the first bind that needs it and kept with the texture. Their uses are uses of the buffer's
@@ -36,10 +56,11 @@ use super::degradation::Degradation;
 use super::device::lock;
 use super::error::{internal, invalid, nil, vulkan, Error, Problem, RuntimeGap};
 use super::exit_guard;
+use super::in_place::{Padding, RowEnds};
 use super::key_hash::KeyMap;
 use super::linear_plan::{
-    is_linear, plan_buffer_texture, plane_rows_share_bytes, BufferFacts, BufferLayout,
-    BufferRefusal, BufferTexture, BufferTextureCall, BufferTextureProblem, Placed,
+    apart_from_plane, is_linear, plan_buffer_texture, plane_rows_share_bytes, BufferFacts,
+    BufferLayout, BufferRefusal, BufferTexture, BufferTextureCall, BufferTextureProblem, Placed,
     LINEAR_ALIGNMENT,
 };
 use super::resource::{Identity, ResourceKey};
@@ -57,6 +78,7 @@ use super::texture::{IdUse, Texture};
 use super::texture_descriptor::{
     Creator, Refused, TextureDescriptor, TextureLayout, TextureProblem,
 };
+use super::texture_placement::TexturePlacement;
 use super::tracker::{Access, Use, UseRange};
 use super::two_planes;
 use super::values::{CpuCacheMode, HazardTrackingMode, ResourceOptions, StorageMode};
@@ -120,6 +142,30 @@ pub(super) struct Texels {
     pub(super) objects: ObjectsToken,
     /// The texels lie in an IOSurface's plane (`Buffer::new_texture_with_iosurface_plane`).
     surface: bool,
+    /// The tail of a 2D texture, an array or a texture buffer whose texels run past the buffer's
+    /// length (`linear_plan.rs`'s **Length**), which holds the texels' bytes there: a runtime
+    /// `Shared` buffer of the bytes from the texels' first to their last, laid out as in the
+    /// buffer from its start (`Texels::tail_base`), zero when made. Its bytes inside the buffer's
+    /// length mirror the buffer's for the shadow's copies, which go through it
+    /// ([`Texels::shadow_copies`], `into_texture_buffer`); every other access to the texels (the
+    /// CPU's, a blit's rows) takes the bytes inside the length from the buffer and those past it
+    /// from here ([`Texels::past`]). `None` for texels inside their buffer.
+    tail: Option<Buffer>,
+    /// Where the texels' bytes in place end: the buffer's length, but for a 2D array of more than
+    /// one slice over an IOSurface plane, whose slices past the first lie in the tail from their
+    /// first byte on (`linear_plan::Placed::kept`). The tail holds the texels' bytes from here.
+    kept: u64,
+}
+
+/// Where a texture's texels past its buffer's length lie ([`Texels::past`]): the buffer's bytes
+/// from `length` on are the tail's, byte `v` of the buffer's space at `v - rebase` of the tail.
+/// `length` is the buffer's own, but a 2D array's over an IOSurface plane whose slices past the
+/// first lie in the tail ([`Texels::kept`]), where it is the second slice's first byte.
+#[derive(Clone, Copy)]
+pub(super) struct Past<'a> {
+    pub(super) tail: &'a Buffer,
+    pub(super) length: u64,
+    pub(super) rebase: u64,
 }
 
 /// A block-compressed texture's blocks in its texels' layout ([`Texels::blocks`]).
@@ -224,6 +270,15 @@ pub struct IoSurfacePlane {
 }
 
 impl IoSurfacePlane {
+    /// Refused: a surface made with `kIOSurfaceClientDirection`, whatever the value
+    /// ([`AppleOnly::SurfaceClientDirection`]).
+    fn refuse_client_direction(&self) -> Result<(), Error> {
+        match self.client_direction {
+            Some(_) => Err(Error::AppleOnly(AppleOnly::SurfaceClientDirection)),
+            None => Ok(()),
+        }
+    }
+
     /// A plane at `offset` of the buffer standing for the surface, rows `bytes_per_row` apart,
     /// of a surface with planes or not (`planar`), made without `kIOSurfaceClientDirection`,
     /// with no YCbCr facts.
@@ -266,7 +321,7 @@ pub(super) enum TexelsHome {
 
 /// The bytes of one texel of `pf`, the block of its direct Vulkan format (the bytes Metal's
 /// format has, for every format the runtime holds exactly); `None` without one.
-fn texel_bytes(pf: PixelFormat) -> Option<u64> {
+pub(super) fn texel_bytes(pf: PixelFormat) -> Option<u64> {
     byte_format(pf)
         .and_then(|format| format.block())
         .map(|block| u64::from(block.size))
@@ -295,6 +350,20 @@ enum Whose {
     Program,
     /// The runtime's own (`Buffer::new_runtime_texture`): no ID.
     Runtime,
+}
+
+/// What a texture over a buffer's making does (`Buffer::make_texture_over`): make the texture, or
+/// answer where it would lie ([`Buffer::texture_placement`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Goal {
+    Make,
+    Ask,
+}
+
+/// What a texture over a buffer's making gives for its [`Goal`].
+enum Over {
+    Made(Texture),
+    Asked(TexturePlacement),
 }
 
 impl Whose {
@@ -331,12 +400,24 @@ impl Buffer {
     /// under `write_swizzle_enabled`, which Metal makes (`NotImplemented(WriteSwizzle)`). A texture
     /// buffer of more than one level is stopped (`BufferTextureProblem::MipmapLevelCount`), as
     /// Metal's validation stops it here.
+    ///
+    /// A 2D texture or a texture buffer whose texels run past the buffer's length, which plain
+    /// Metal makes up to the buffer's `allocatedSize` (and answers nil past it, `Nil` with
+    /// `BufferTextureProblem::PastAllocation`), is made: its texels inside the length are the
+    /// buffer's bytes, and those past it lie in a tail the texture keeps, zero when made, which
+    /// its functions, blits and CPU calls read and write alike. Metal's texels there are the
+    /// memory after the buffer's, another allocation's bytes, which its writes there change
+    /// (docs/API.md's accepted differences). Such a 2D texture is a shadow image, announced
+    /// `shadowed-texture`; such a texture buffer's functions view its tail, announced
+    /// `staged-texture-buffer`.
     pub fn new_texture(
         &self,
         descriptor: &TextureDescriptor,
         offset: u64,
         bytes_per_row: u64,
     ) -> Result<Texture, Error> {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
         self.texture_over(
             "new_texture",
             descriptor,
@@ -374,9 +455,10 @@ impl Buffer {
     /// before. The bytes-per-image argument is ignored, as plain Metal ignores it: its
     /// validation alone asserts that it is a multiple of 128.
     ///
-    /// Refused as [`new_texture`](Self::new_texture) is; also an array whose texels run past
-    /// the buffer's length where Metal makes it (`NotImplemented`); an array whose slices end past
-    /// the buffer's `allocatedSize` (`Nil`, as Metal answers nil).
+    /// Refused as [`new_texture`](Self::new_texture) is; also an array whose slices end past the
+    /// buffer's `allocatedSize` (`Nil`, as Metal answers nil). An array whose texels run past the
+    /// buffer's length short of that is made as `new_texture` makes a 2D texture there, its
+    /// texels past the length in its tail.
     pub fn new_linear_texture(
         &self,
         descriptor: &TextureDescriptor,
@@ -384,12 +466,77 @@ impl Buffer {
         bytes_per_row: u64,
         _bytes_per_image: u64,
     ) -> Result<Texture, Error> {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
         self.texture_over(
             "new_linear_texture",
             descriptor,
             offset,
             bytes_per_row,
             (BufferTextureCall::Linear, Whose::Program),
+            None,
+        )
+    }
+
+    /// `newTiledTextureWithDescriptor:offset:bytesPerRow:` (SPI; the device's
+    /// `newTiledTextureWithBytesNoCopy:length:descriptor:offset:bytesPerRow:` makes its texture
+    /// over a no-copy buffer through it): as [`new_texture`](Self::new_texture), and also a 2D
+    /// texture of more than one level, its first level's texels the buffer's bytes from `offset`,
+    /// rows `bytes_per_row` apart, as a one-level texture's are, and its other levels apart from
+    /// the buffer. A texture of one level is the one `new_texture` makes, in place where that is.
+    ///
+    /// A texture of more levels is one image of its own holding every level, in the
+    /// `GENERAL` layout like every image here: no Vulkan image lays its first level over the
+    /// buffer's rows and its others elsewhere (a linear image has one level, and a sparse one is
+    /// laid out by the driver). Its first level is a copy of the buffer's bytes, held as a shadow
+    /// of a one-level texture's are (`shadow.rs`): the encoders copy the bytes in before a
+    /// command buffer's commands that use the texture, wherever the CPU or another command wrote
+    /// them since, and copy back what their commands wrote through it by the end of the encoder
+    /// that wrote it, so a write of the first level reaches the buffer's bytes once that work
+    /// completes, as on a Mac. Its other levels are the image's own memory, zero when made in a
+    /// `Shared` or `Managed` texture, as Metal's new texture's, which nothing copies. Every level is
+    /// a blit's source and destination (`generate_mipmaps` included: the texture is an image to a
+    /// blit, its first level copied in from the bytes first), its functions sample it with mip
+    /// filtering, and `get_bytes` and `replace_region` reach its first level in the buffer's bytes
+    /// and the others in the image. It takes the buffer's resource options, as `new_texture`'s
+    /// texture does: over a `Managed` buffer, `synchronize_resource` moves the first level's
+    /// bytes as the buffer's, and the other levels need none, as the runtime's own `Managed`
+    /// textures need none (the CPU reads what the GPU last wrote there, synchronized or not).
+    /// What differs from a Mac, where the first level aliases the bytes: a CPU write of the bytes
+    /// made while a command buffer that uses the texture runs reaches it at the next copy in, not
+    /// at once; a view in a format the image takes no Vulkan view of, and a binding beyond the
+    /// texture's usage, are refused (`Unsupported`), where a texture of one level over a buffer
+    /// takes them through a shadow of the bytes; and while the buffer's bytes are detached
+    /// (`detach_backing`) its first level reads their last texels, which the detach loads into
+    /// its image, where a texture over the bytes alone presents a stand-in of zeros: an unnamed
+    /// read reads them, and so does `get_bytes`, whose write of that level, `replace_region`, is
+    /// refused meanwhile (`NotImplemented(DetachedTexelAccess)`), as a one-level texture's is. Its
+    /// other levels keep their texels through the detach, read and written as before, as a Mac's
+    /// texture's own memory holds them. Announced once (`shadowed-texture`, naming the levels),
+    /// counted in `WorkCounts::shadowed_textures`, its copies in
+    /// `WorkCounts::shadow_texels_copied_in` and `shadow_texels_copied_back` (its first level's
+    /// texels alone). A command's use of its other levels alone takes no copy (a blit into or
+    /// out of one, a pass into one, `generate_mipmaps`' writes), and its copies back and merges
+    /// dispatch and fetch through views of its first level as a one-level texture's do.
+    ///
+    /// Refused as [`new_texture`](Self::new_texture) is, but for the levels: more levels than the
+    /// extent's full chain (`Invalid`, `TextureProblem`), and a texture buffer of more than one
+    /// (`BufferTextureProblem::MipmapLevelCount`). A texture buffer's offset is held to 16 bytes,
+    /// as [`new_linear_texture`](Self::new_linear_texture)'s is: the SPI's is not measured.
+    pub fn new_tiled_texture(
+        &self,
+        descriptor: &TextureDescriptor,
+        offset: u64,
+        bytes_per_row: u64,
+    ) -> Result<Texture, Error> {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
+        self.texture_over(
+            "new_tiled_texture",
+            descriptor,
+            offset,
+            bytes_per_row,
+            (BufferTextureCall::Tiled, Whose::Program),
             None,
         )
     }
@@ -433,7 +580,14 @@ impl Buffer {
     ///   follows the command, the GPU pitch and the row count (`linear_plan.rs`'s **Rows that
     ///   overlap**); a kernel, the only writer such a plane takes here, moves its winner with the
     ///   threadgroup shape, so the earlier row's bytes are one of its answers. Announced once by
-    ///   [`Degradation::CollidingSurfaceRowWrites`].
+    ///   [`Degradation::CollidingSurfaceRowWrites`];
+    /// - a colour 2D texture whose rows are wider than the `bytes_per_row` of a plane of a
+    ///   surface with planes at an offset and pitch that are multiples of 16, and a colour 1D
+    ///   texture wider than one row there, are made as the M3 Max lays them out on every path:
+    ///   row `y` from the offset plus `y` x `bytes_per_row`, the whole row, for the GPU and the
+    ///   CPU alike, so the 2D texture's rows share bytes, any whole number of texels, a byte
+    ///   shared by as many rows as reach it. They are held as the rows above that share bytes
+    ///   are, announced once by the same notice.
     ///
     /// Refused: a surface made with `kIOSurfaceClientDirection`, SPI
     /// ([`AppleOnly::SurfaceClientDirection`]); what
@@ -443,17 +597,45 @@ impl Buffer {
     /// pitch or offset, or rows that end past it, which plain Metal asserts on); what Metal makes
     /// over a plane of a surface with planes and lays out no one way across the GPUs measured
     /// (`NotImplemented(SurfacePlaneShape)`, which carries the measurements: rows wider than the
-    /// plane's, more than one level, another type, a 2D array of slices, a texture buffer or BC
-    /// texture at an offset or pitch off 16 bytes); `Memoryless` storage, which plain
+    /// plane's of a format but a colour one or off 16 bytes, more than one level, a 3D or
+    /// multisample texture of a format but a colour one, a 2D array of slices of such a format
+    /// or off 16 bytes, another type, a BC texture of 16-byte blocks at an offset or pitch off
+    /// 16 bytes and one of 8-byte blocks off them or under 16 bytes a row; a cube or cube array
+    /// there plain Metal asserts on, `Invalid`); `Memoryless` storage, which plain
     /// Metal makes and serves on the CPU while its GPU uses fail the command buffer
     /// (`NotImplemented(MemorylessSurfacePlane)`, which carries the measurement); rows that
     /// overlap on Metal's GPU where no shadow of the runtime's holds them
     /// (`NotImplemented(OverlappingSurfaceRows)`: a plane a render pass stores into, a two-plane
     /// YCbCr, two-plane extended-range, 4:2:2, depth or stencil one, and a blit that addresses
     /// such a plane's rows as bytes; `linear_plan.rs`); a plane's own rows or its GPU texels past
-    /// the buffer, which Metal's surface holds in its pages
-    /// (`NotImplemented(TexelsPastBufferLength)`); and as [`new_texture`](Self::new_texture)
-    /// refuses a format or an image.
+    /// the buffer, of a shape that keeps no tail (`NotImplemented(TexelsPastBufferLength)`: a
+    /// two-plane YCbCr, two-plane extended-range, 4:2:2, depth, stencil, BC or rotated one); and
+    /// as [`new_texture`](Self::new_texture) refuses a format or an image.
+    ///
+    /// A colour texture of a plane of a surface with planes whose texels run past the buffer
+    /// standing for the surface is made: Metal makes it and lays those texels out in no one place
+    /// (its blits read zeros there, its kernels zeros and the plane's rows again 32 KiB on, its
+    /// `getBytes` other memory, and its writes keep to the surface; an Apple M3 Max under macOS
+    /// 27.0.1). The runtime keeps them in a tail of the texture's own, zero when made, which every
+    /// path reads and writes alike, and its texels inside the surface are the buffer's bytes
+    /// (the module's **Tails**). Announced once by [`Degradation::SurfaceTexelsTail`].
+    ///
+    /// A colour 2D texture of more than one level, a 3D texture and a 2D multisample one over a
+    /// plane of a surface with planes are made in memory of their own, zero when made in every
+    /// storage mode, as [`Device::new_texture`](crate::Device::new_texture) makes one otherwise:
+    /// Metal makes each and lays out its texels in no one place there, its first level's and
+    /// slice's among them (an Apple M3 Max under macOS 27.0.1, whose GPU reads them from other
+    /// bytes than its writes and its CPU put them; the x86 Macs keep the first level and slice
+    /// over the plane). Announced once by [`Degradation::SurfaceTexelsApart`].
+    ///
+    /// A colour 2D array of more than one slice over a plane of a surface with planes whose
+    /// offset and `bytesPerRow` are multiples of 16 is made with its first slice over the plane,
+    /// the buffer's bytes as a 2D texture's there, and its slices past the first in a tail of the
+    /// texture's own, zero when made, which every path reads and writes alike: Metal keeps the
+    /// first slice over the plane on every path and lays the others out in no one place (the M3
+    /// Max's blits and `getBytes` read the second at the plane's offset, its kernels one image
+    /// on, and its writes land at the plane's offset). Announced once by
+    /// [`Degradation::SurfaceTexelsTail`].
     ///
     /// A depth or stencil texture (`Depth16Unorm`, `Depth32Float`, `Depth32Float_Stencil8`,
     /// `Stencil8`, `X32_Stencil8`) over a plane of a surface with planes is made as Metal makes
@@ -467,9 +649,12 @@ impl Buffer {
     /// `BufferTextureProblem::NotLinear`).
     ///
     /// A BC1 to BC7 texture over a surface's rows (2D, over a plane of a surface with planes at an
-    /// offset and pitch that are multiples of 16) is made as the x86 Macs make it, where the M3
-    /// Max answers nil: row `j` of its blocks at the plane's offset + `j` x `bytes_per_row`, which
-    /// its samples, blits and CPU calls take (`linear_plan.rs`'s **Block-compressed surfaces**).
+    /// offset and pitch that are multiples of 16, or for BC1 and BC4, whose blocks are 8 bytes,
+    /// at an offset and pitch the block divides, at least 16 a row) is made as the x86 Macs make
+    /// it, where the M3 Max answers nil: row `j` of its blocks at the plane's offset + `j` x
+    /// `bytes_per_row`, unrounded, which its samples, blits and CPU calls take (`linear_plan.rs`'s
+    /// **Block-compressed surfaces**; at an offset off 16 the UHD 630's CPU calls take the plane
+    /// from byte 0).
     /// Over a surface without planes Metal stops a row of blocks wider than the surface's
     /// (`RowPitch`) and rows of texels past it (`PastBuffer`). Every other compressed format is
     /// stopped as over a buffer (`NotLinear`).
@@ -511,9 +696,9 @@ impl Buffer {
         descriptor: &TextureDescriptor,
         plane: IoSurfacePlane,
     ) -> Result<Texture, Error> {
-        if plane.client_direction.is_some() {
-            return Err(Error::AppleOnly(AppleOnly::SurfaceClientDirection));
-        }
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
+        plane.refuse_client_direction()?;
         let texture = self.texture_over(
             "new_texture_with_iosurface_plane",
             descriptor,
@@ -533,6 +718,101 @@ impl Buffer {
         Ok(texture)
     }
 
+    /// Where a texture [`new_texture`](Self::new_texture) makes of the same arguments lies if
+    /// made now: in place over the buffer's host pages, a shadow pending the device's check, a
+    /// shadow and why, or a texture the device's check does not decide ([`TexturePlacement`]). A
+    /// runtime extension: Metal has no such query, as a Mac's GPU works on a texture over the
+    /// caller's pages in place.
+    ///
+    /// The answer is the making's own decision, the same functions' (the device's policy, the
+    /// texture's usage and texel size, the buffer's bytes detached, copied or past their length,
+    /// a discrete GPU's device copy, the device's check's verdicts for the pages' kind, the
+    /// texture's accesses and how its texels lie in the device's lines of memory, and the image
+    /// in place's making up to its bind: the driver's linear image at the texture's pitch, else
+    /// the `DRM_FORMAT_MOD_LINEAR` one, its requirements against the bytes' place and memory
+    /// type, rows that share bytes), taken after every check the making runs before it makes
+    /// anything: an argument `new_texture` refuses is refused here alike, with the same error.
+    /// Where the image in place is the answer, the query makes it unbound and releases it: one or
+    /// two `VkImage`s where the texture's declared plan is made in place, a pair more for each
+    /// wider plan the making would try first (the feedback loop usage, and the storage usage)
+    /// where it is refused; nothing is bound or submitted. What only the bind shows is not known
+    /// here: over pages imported as dma-bufs, the caller's source's dma-buf and the driver's
+    /// import of it ([`TexturePlacement::InPlace`]); and a making that runs out of memory or meets
+    /// a lost device fails, as this query may in making those images. The answer is the buffer's
+    /// and the device's state as the call reads them: a detach, a rebind, or the check's verdicts
+    /// after it may change what a texture made later takes. A pending verdict starts the device's
+    /// check, as the making's does
+    /// ([`Device::settle_in_place_checks`](crate::Device::settle_in_place_checks) says when its
+    /// verdicts are known). It counts and announces nothing.
+    pub fn texture_placement(
+        &self,
+        descriptor: &TextureDescriptor,
+        offset: u64,
+        bytes_per_row: u64,
+    ) -> Result<TexturePlacement, Error> {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
+        let over = (offset, bytes_per_row);
+        let asked = (BufferTextureCall::Texture, Whose::Program, Goal::Ask);
+        self.placement_over("new_texture", descriptor, over, asked, None)
+    }
+
+    /// Where a texture [`new_tiled_texture`](Self::new_tiled_texture) makes of the same arguments
+    /// lies if made now, as [`texture_placement`](Self::texture_placement) answers it for
+    /// [`new_texture`](Self::new_texture): for a texture of more than one level,
+    /// `Shadow(TextureShadowReason::Mipmapped)` over any buffer. Refused as that call refuses its
+    /// arguments. A runtime extension: Metal has no such query.
+    pub fn tiled_texture_placement(
+        &self,
+        descriptor: &TextureDescriptor,
+        offset: u64,
+        bytes_per_row: u64,
+    ) -> Result<TexturePlacement, Error> {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
+        let over = (offset, bytes_per_row);
+        let asked = (BufferTextureCall::Tiled, Whose::Program, Goal::Ask);
+        self.placement_over("new_tiled_texture", descriptor, over, asked, None)
+    }
+
+    /// Where a texture [`new_texture_with_iosurface_plane`](Self::new_texture_with_iosurface_plane)
+    /// makes of the same arguments lies if made now, as
+    /// [`texture_placement`](Self::texture_placement) answers it for
+    /// [`new_texture`](Self::new_texture), and refused as that call refuses its arguments. A
+    /// runtime extension: Metal has no such query.
+    pub fn texture_placement_with_iosurface_plane(
+        &self,
+        descriptor: &TextureDescriptor,
+        plane: IoSurfacePlane,
+    ) -> Result<TexturePlacement, Error> {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
+        plane.refuse_client_direction()?;
+        let over = (plane.offset, plane.bytes_per_row);
+        let form = BufferTextureCall::IoSurfacePlane {
+            planar: plane.planar,
+        };
+        let asked = (form, Whose::Program, Goal::Ask);
+        let call = "new_texture_with_iosurface_plane";
+        self.placement_over(call, descriptor, over, asked, plane.ycbcr)
+    }
+
+    /// The placement [`make_texture_over`](Self::make_texture_over) answers for `asked`, for
+    /// Metal's `call`.
+    fn placement_over(
+        &self,
+        call: &'static str,
+        descriptor: &TextureDescriptor,
+        over: (u64, u64),
+        asked: (BufferTextureCall, Whose, Goal),
+        ycbcr_surface: Option<IoSurfaceYCbCr>,
+    ) -> Result<TexturePlacement, Error> {
+        match self.make_texture_over(call, descriptor, over, asked, ycbcr_surface)? {
+            Over::Asked(placement) => Ok(placement),
+            Over::Made(_) => Err(internal("a texture's placement made the texture")),
+        }
+    }
+
     /// The texture of `descriptor` over the buffer that `call` (made through `form`) makes, over
     /// a surface of `surface`'s YCbCr facts where given, `whose` it is. Over a heap's buffer it is
     /// among the heap's textures while it lives: `useHeap:` makes every resource the heap holds
@@ -548,26 +828,35 @@ impl Buffer {
         ycbcr_surface: Option<IoSurfaceYCbCr>,
     ) -> Result<Texture, Error> {
         let over = (offset, bytes_per_row);
-        let texture =
-            self.make_texture_over(call, descriptor, over, (form, whose), ycbcr_surface)?;
+        let made = (form, whose, Goal::Make);
+        let texture = match self.make_texture_over(call, descriptor, over, made, ycbcr_surface)? {
+            Over::Made(texture) => texture,
+            Over::Asked(_) => return Err(internal("a texture's making answered a placement")),
+        };
         if let Some(heap) = self.heap() {
             heap.hold_texture(&texture);
         }
         Ok(texture)
     }
 
-    /// [`texture_over`](Self::texture_over)'s texture, at `offset` with `bytes_per_row` (`over`).
+    /// [`texture_over`](Self::texture_over)'s texture, at `offset` with `bytes_per_row` (`over`),
+    /// made where `goal` makes it; else where it would lie, answered after every check its making
+    /// runs before it makes anything ([`texture_placement`](Self::texture_placement)).
     fn make_texture_over(
         &self,
         call: &'static str,
         descriptor: &TextureDescriptor,
         (offset, bytes_per_row): (u64, u64),
-        (form, whose): (BufferTextureCall, Whose),
+        (form, whose, goal): (BufferTextureCall, Whose, Goal),
         ycbcr_surface: Option<IoSurfaceYCbCr>,
-    ) -> Result<Texture, Error> {
+    ) -> Result<Over, Error> {
         // A detach waits for none being made over the bytes (`detach.rs`), nor does a rebind of
-        // them while they are detached, so whether they are holds while it is made.
-        let _making = self.making_texture();
+        // them while they are detached, so whether they are holds while it is made. A question
+        // holds nothing: its answer is the bytes' state as it reads them.
+        let _making = match goal {
+            Goal::Make => self.making_texture(),
+            Goal::Ask => None,
+        };
         let detached = self.detached();
         // A YCbCr format is made over a surface's planes with their facts (`ycbcr.rs`).
         let asked_format = descriptor.pixel_format;
@@ -594,7 +883,9 @@ impl Buffer {
                 };
                 ResourceOptions::new(storage, cache, hazard)
             }
-            BufferTextureCall::Texture | BufferTextureCall::Linear => self.resource_options(),
+            BufferTextureCall::Texture | BufferTextureCall::Linear | BufferTextureCall::Tiled => {
+                self.resource_options()
+            }
         };
         let descriptor = &TextureDescriptor {
             resource_options: options,
@@ -743,7 +1034,10 @@ impl Buffer {
         };
         if let Some((rotation, stored)) = rotation {
             if self.device().is_lost() {
-                return Err(Error::DeviceLost);
+                return Err(self.device().lost_refusal());
+            }
+            if goal == Goal::Ask {
+                return Ok(Over::Asked(TexturePlacement::OtherShape));
             }
             let rows = Texels::new(
                 self.clone(),
@@ -752,18 +1046,45 @@ impl Buffer {
                 descriptor,
             );
             let stored = Texels::placed(self.clone(), stored, texel_bytes, descriptor);
-            return self.device().new_rotated_texture(
-                call,
-                [rows, stored].map(|texels| texels.with_options(options).over_surface(surface)),
-                descriptor,
-                (&layout, rotation),
-                id_use,
-            );
+            return self
+                .device()
+                .new_rotated_texture(
+                    call,
+                    [rows, stored].map(|texels| texels.with_options(options).over_surface(surface)),
+                    descriptor,
+                    (&layout, rotation),
+                    id_use,
+                )
+                .map(Over::Made);
+        }
+        // A texture over a plane whose texels Metal lays out in no one place, its first level's
+        // and slice's among them, lies in memory of its own (`linear_plan.rs`'s **Beyond the
+        // plane's rows**).
+        if apart_from_plane(&texture) {
+            if storage == StorageMode::Memoryless {
+                return Err(Error::NotImplemented(RuntimeGap::MemorylessSurfacePlane));
+            }
+            if goal == Goal::Ask {
+                return Ok(Over::Asked(TexturePlacement::OtherShape));
+            }
+            let made = self
+                .device()
+                .surface_texture_apart(call, descriptor, id_use)?;
+            self.degrade_apart(&layout, offset, bytes_per_row);
+            return Ok(Over::Made(made));
         }
         let placed = plan_buffer_texture(&texture, &buffer)
             .map_err(|refusal| refusal_error(call, refusal))?;
         if self.device().is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.device().lost_refusal());
+        }
+        // A texture of a surface's two planes, a texture buffer and a converted texture take no
+        // image in place.
+        let other = alpha_plane.is_some()
+            || converted.is_some()
+            || layout.texture_type == TextureType::TextureBuffer;
+        if goal == Goal::Ask && other {
+            return Ok(Over::Asked(TexturePlacement::OtherShape));
         }
         if let Some(alpha) = alpha_plane {
             let texels = Texels::placed(self.clone(), placed, texel_bytes, descriptor)
@@ -771,42 +1092,62 @@ impl Buffer {
                 .over_surface(surface);
             return self
                 .device()
-                .new_surface_planes_texture(call, texels, descriptor, &layout, id_use, alpha);
+                .new_surface_planes_texture(call, texels, descriptor, &layout, id_use, alpha)
+                .map(Over::Made);
         }
         if let Some((planes, span)) = converted {
             let texels = Texels::placed(self.clone(), placed, texel_bytes, descriptor)
                 .with_options(options)
                 .over_surface(surface);
-            return self.device().new_converted_texture(
-                call,
-                texels,
-                descriptor,
-                &layout,
-                id_use,
-                (&planes, span),
-            );
+            return self
+                .device()
+                .new_converted_texture(call, texels, descriptor, &layout, id_use, (&planes, span))
+                .map(Over::Made);
         }
         if layout.texture_type == TextureType::TextureBuffer {
-            // Over a surface's plane, of the descriptor's options (`Buffer::new_texture_with_iosurface_plane`).
-            let texels = Texels::new(self.clone(), placed.gpu, texel_bytes, descriptor)
+            // Over a surface's plane, of the descriptor's options (`Buffer::new_texture_with_iosurface_plane`):
+            // its CPU calls at the plane's offset and its functions from the offset rounded down
+            // to 16 (`into_texture_buffer`), as Metal reads a plane's.
+            let texels = Texels::new(self.clone(), placed.cpu, texel_bytes, descriptor)
                 .with_options(options)
                 .over_surface(surface)
                 .into_texture_buffer()?;
-            Ok(texels.texture(descriptor, &layout, id_use))
+            let tail = surface && texels.tail.is_some();
+            let texture = texels.texture(descriptor, &layout, id_use);
+            if tail {
+                self.degrade_surface_tail(&layout, &placed);
+            }
+            Ok(Over::Made(texture))
         } else {
             let texels = Texels::placed(self.clone(), placed, texel_bytes, descriptor)
                 .with_options(options)
                 .over_surface(surface);
+            // Where it would lie: the route its making takes (`texture/route.rs`), with no tail
+            // made for texels past the buffer's length, which the route asks alone.
+            if goal == Goal::Ask {
+                let past = texels.runs_past();
+                let asked = (descriptor, &layout);
+                let placement = self
+                    .device()
+                    .placement_over_buffer(call, &texels, asked, past)?;
+                return Ok(Over::Asked(placement));
+            }
+            // Texels past the buffer's length lie in a tail of their own (`linear_plan.rs`).
+            let texels = texels.with_tail()?;
+            let tail = surface && texels.tail.is_some();
             let texture = self
                 .device()
                 .new_texture_over_buffer(call, texels, descriptor, &layout, id_use)?;
+            if tail {
+                self.degrade_surface_tail(&layout, &placed);
+            }
             if placed.narrow {
                 self.degrade_narrow_rows(&layout, &placed);
             }
             if placed.gpu.shared_bytes() != 0 {
                 self.degrade_colliding_rows(&layout, &placed);
             }
-            Ok(texture)
+            Ok(Over::Made(texture))
         }
     }
 }
@@ -818,7 +1159,8 @@ impl Buffer {
 /// extent's plan does not hold it to. Refused as that texture is, and
 /// (`NotImplemented(RotatedTexture)`) for a plane whose offset or `bytesPerRow` is off 16 bytes,
 /// or a format of a texel size other than 1, 2, 4, 8 or 16 bytes (a 4:2:2 one among them), whose
-/// rotation is not measured.
+/// rotation is not measured; and (`NotImplemented(TexelsPastBufferLength)`) for a stored frame
+/// past the buffer standing for the surface, whose turned texels are not measured there.
 ///
 /// A rotated plane's `bytesPerRow` must be a multiple of 16 here, so its GPU rows lie at the
 /// pitch itself and never share bytes, which no shadow of a turned frame holds
@@ -852,6 +1194,11 @@ pub(super) fn turned_plane(
     };
     let placed =
         plan_buffer_texture(&stored, buffer).map_err(|refusal| refusal_error(call, refusal))?;
+    // A stored frame past the buffer standing for the surface has no tail: its turned texels
+    // are not measured there.
+    if placed.gpu.end().max(placed.cpu.end()) > buffer.length {
+        return Err(Error::NotImplemented(RuntimeGap::TexelsPastBufferLength));
+    }
     Ok((rotation, placed))
 }
 
@@ -911,6 +1258,57 @@ impl Buffer {
                  the first as memory-dependent bytes",
                 placed.gpu.row_pitch, placed.gpu.offset
             );
+            (object, reason)
+        });
+    }
+
+    /// Announce `SurfaceTexelsApart` for a texture of `layout` over the IOSurface plane at `offset`,
+    /// `bytes_per_row` a row, made in memory of its own (`linear_plan.rs`'s **Beyond the plane's
+    /// rows**).
+    fn degrade_apart(&self, layout: &TextureLayout, offset: u64, bytes_per_row: u64) {
+        self.device().degrade(Degradation::SurfaceTexelsApart, || {
+            let [width, height, depth] = layout.extent;
+            let object = format!(
+                "{width}x{height}x{depth} {:?} {:?} texture of {} levels and {} samples over an \
+                 IOSurface plane at offset {offset}, {bytes_per_row} bytes a row",
+                layout.texture_type, layout.pixel_format, layout.levels, layout.samples
+            );
+            let reason = "Metal lays such a texture's texels over a plane in no one place, its \
+                          first level's and slice's among them: its GPU reads them from other \
+                          bytes than its writes and its CPU put them"
+                .to_owned();
+            (object, reason)
+        });
+    }
+
+    /// Announce `SurfaceTexelsTail` for an IOSurface plane of `layout` placed as `placed`, whose
+    /// texels run past the buffer standing for its surface, or a 2D array's slices past its
+    /// first, into the texture's tail, once it is made (`linear_plan.rs`'s **Beyond the plane's
+    /// rows**).
+    fn degrade_surface_tail(&self, layout: &TextureLayout, placed: &Placed) {
+        self.device().degrade(Degradation::SurfaceTexelsTail, || {
+            let [width, height, _] = layout.extent;
+            let slices = match layout.layers {
+                1 => String::new(),
+                layers => format!(" of {layers} slices"),
+            };
+            let object = format!(
+                "{width}x{height} {:?} texture{slices} of an IOSurface plane at offset {}, {} \
+                 bytes a row",
+                layout.pixel_format, placed.cpu.offset, placed.cpu.row_pitch
+            );
+            let end = placed.gpu.end().max(placed.cpu.end());
+            let reason = match placed.kept {
+                Some(kept) => format!(
+                    "Metal lays its slices past the first in no one place: they lie from byte \
+                     {kept} of the buffer's space on, in the tail"
+                ),
+                None => format!(
+                    "its texels run to byte {end} of the {} bytes standing for its surface, and \
+                     Metal lays those past the surface in no one place",
+                    self.length()
+                ),
+            };
             (object, reason)
         });
     }
@@ -1101,6 +1499,9 @@ impl Texels {
     ) -> Texels {
         let mut texels = Texels::new(buffer, placed.gpu, texel_bytes, descriptor);
         texels.cpu = placed.cpu;
+        if let Some(kept) = placed.kept {
+            texels.kept = kept.min(texels.kept);
+        }
         texels
     }
 
@@ -1229,6 +1630,87 @@ impl Texels {
         self.texel_bytes
     }
 
+    /// Over a copied host buffer (`copied.rs`), how the texels lie in the device's lines of memory
+    /// of `line` bytes over the caller's pages themselves, from their address
+    /// (`in_place::RowEnds::of`), and whether a shader's writes may change their rows' padding
+    /// there (`in_place::Padding::of`): as [`rows`](Self::rows) and [`padding`](Self::padding)
+    /// answer them over an import of the pages, which the buffer's rebind may make, where
+    /// [`rows`](Self::rows) answers them in its copy. `None` over any other buffer.
+    pub(super) fn over_caller_pages(&self, line: u64) -> Option<(RowEnds, Padding)> {
+        if !self.buffer.copied() {
+            return None;
+        }
+        let start = self.buffer.contents()?.as_ptr().addr() as u64;
+        let padding = Padding::of(start, &self.layout, line, self.padding_owned());
+        Some((
+            RowEnds::of(start, &self.layout, line),
+            padding.declared(self.buffer.padding_unobserved()),
+        ))
+    }
+
+    /// Whether the texels' buffer is a copied host buffer (`copied.rs`) whose copy lies in fresh
+    /// pages the runtime mapped and imported by their pointer (`fresh_pages.rs`), not in memory
+    /// the device allocates.
+    pub(super) fn copy_in_fresh_pages(&self) -> bool {
+        self.buffer.copied()
+            && (self.buffer.host_pages()).is_some_and(|pages| pages.over_own_pages())
+    }
+
+    /// Where the buffer's bytes start, for the device's lines of memory: their address, where the
+    /// CPU addresses them; else, in the runtime's own memory (a `Private` buffer's, or a copied
+    /// host buffer's copy, which the GPU uses in the stead of the caller's pages, `copied.rs`),
+    /// their offset in its memory object, from whose start the lines count (a
+    /// `VkMappedMemoryRange`'s offset is a multiple of `nonCoherentAtomSize` from it, and the
+    /// runtime maps a block from its start); `None` over the caller's `VkBuffer`.
+    fn line_start(&self) -> Option<u64> {
+        if self.buffer.copied() {
+            return Some(self.buffer.memory().1);
+        }
+        match self.buffer.contents() {
+            Some(at) => Some(at.as_ptr().addr() as u64),
+            None if self.buffer.caller_memory().is_none() => Some(self.buffer.memory().1),
+            None => None,
+        }
+    }
+
+    /// How the texels lie in the device's lines of memory of `line` bytes
+    /// (`in_place::RowEnds::of`): from where the buffer's bytes start in them
+    /// ([`line_start`](Self::line_start)) and where the GPU's commands find the texels
+    /// (`layout`). Over the caller's `VkBuffer` they share a line as far as anything shows.
+    pub(super) fn rows(&self, line: u64) -> RowEnds {
+        match self.line_start() {
+            Some(start) => RowEnds::of(start, &self.layout, line),
+            None => RowEnds::InLines,
+        }
+    }
+
+    /// Whether a shader's writes may change the texels' rows' padding, in the device's lines of
+    /// memory of `line` bytes (`in_place::Padding::of`): rows over a buffer's bytes of the CPU's
+    /// or the runtime's memory ([`line_start`](Self::line_start)), no IOSurface plane's
+    /// ([`Texels::padding_owned`]), whose rows, each to its pitch, share no line with bytes past
+    /// them; and a render pass's too, where the buffer declares that padding unobserved
+    /// (`in_place::Padding::Unobserved`, `BufferDescriptor::padding_unobserved`).
+    pub(super) fn padding(&self, line: u64) -> Padding {
+        match self.line_start() {
+            Some(start) => {
+                let padding = Padding::of(start, &self.layout, line, self.padding_owned());
+                padding.declared(self.buffer.padding_unobserved())
+            }
+            None => Padding::Kept,
+        }
+    }
+
+    /// Whether the texels' rows' padding is their buffer's own (`in_place::Padding`): they lie
+    /// over a buffer's rows, no IOSurface plane's, and the buffer holds their last row to its
+    /// pitch.
+    pub(super) fn padding_owned(&self) -> bool {
+        let to_pitch = BufferLayout {
+            row_bytes: self.layout.row_pitch,
+            ..self.layout
+        };
+        !self.surface && to_pitch.end() <= self.buffer.length()
+    }
+
     /// The texture's resource options (the `options` field), its hazard tracking mode resolved.
     pub(super) fn options(&self) -> ResourceOptions {
         self.options
@@ -1264,21 +1746,21 @@ impl Texels {
         }
     }
 
-    /// Whether the texels lie in the buffer: every texture's but a rotated one's whose rows run
-    /// past it (`rotated_rows`).
+    /// Whether the texels lie in the buffer, or past its length in their tail (the module's
+    /// **Tails**): every texture's but a rotated one's whose rows run past it (`rotated_rows`).
     pub(super) fn reached(&self) -> bool {
-        self.span().end <= self.buffer.length()
+        self.tail.is_some() || self.span().end <= self.buffer.length()
     }
 
     /// Whether Metal's GPU reads and writes two of the texels' rows over bytes they share: an
-    /// IOSurface plane's at its pitch rounded down to 16, the one shape that does
-    /// ([`plane_rows_share_bytes`]). The shadow's copies hold the sharing
+    /// IOSurface plane's at its pitch rounded down to 16, or wider than its pitch, the shapes
+    /// that do ([`plane_rows_share_bytes`]). The shadow's copies hold the sharing
     /// ([`plane_copy_regions`]); a blit that would write the rows as bytes does not and is refused
     /// instead, as is a copy between them and an image texture either way, while a blit that reads
     /// them into a buffer is served: a write must settle which of two rows leaves the shared bytes
     /// behind and Metal settles it no one way, while a read settles nothing (`blit_texture.rs`).
     pub(super) fn plane_rows_overlap(&self) -> bool {
-        plane_rows_share_bytes(&self.layout, &self.cpu)
+        plane_rows_share_bytes(&self.layout)
     }
 
     /// The texels of a texture of `descriptor` at `placed` in `buffer`, `texel_bytes` each.
@@ -1314,13 +1796,75 @@ impl Texels {
             alpha: None,
             objects: ObjectsToken::default(),
             surface: false,
+            tail: None,
+            kept: buffer.length(),
             buffer,
         }
+    }
+
+    /// These texels with their tail where they run past the bytes they keep in place (the
+    /// buffer's length, or a 2D array's second slice, [`Texels::kept`]), made as
+    /// [`Device::own_buffer`] makes a buffer: all zero.
+    fn with_tail(self) -> Result<Texels, Error> {
+        if !self.runs_past() {
+            return Ok(self);
+        }
+        let end = self.layout.end().max(self.cpu.end()).max(self.shader.end());
+        let hazard = self.options.hazard_tracking_mode()?;
+        let options = ResourceOptions::new(StorageMode::Shared, CpuCacheMode::DefaultCache, hazard);
+        let span = end - self.tail_base();
+        let tail = (self.buffer.device()).own_buffer(span.next_multiple_of(4), options)?;
+        Ok(Texels {
+            tail: Some(tail),
+            ..self
+        })
+    }
+
+    /// Whether the texels run past the bytes they keep in place (the buffer's length, or a 2D
+    /// array's second slice, [`Texels::kept`]): where [`with_tail`](Self::with_tail) gives them a
+    /// tail.
+    pub(super) fn runs_past(&self) -> bool {
+        self.layout.end().max(self.cpu.end()).max(self.shader.end()) > self.kept
+    }
+
+    /// Where the texels' bytes past the buffer's length lie, where they run past it: from the
+    /// buffer's length on (a 2D array's second slice on, [`Texels::kept`]), each byte `v` of the
+    /// buffer's space at `v - rebase` of the tail.
+    pub(super) fn past(&self) -> Option<Past<'_>> {
+        self.tail.as_ref().map(|tail| Past {
+            tail,
+            length: self.kept,
+            rebase: self.tail_base(),
+        })
+    }
+
+    /// The byte of the buffer's space the tail's first byte stands for: the texels' first, as
+    /// the GPU, the CPU or a function lays them out (a texture buffer's functions read it from its
+    /// offset rounded down to 16 bytes, `into_texture_buffer`).
+    fn tail_base(&self) -> u64 {
+        self.layout
+            .offset
+            .min(self.cpu.offset)
+            .min(self.shader.offset)
     }
 
     /// What holds the texels' bytes, as the CPU may write them (`shadow::Backing`).
     pub(super) fn backing(&self) -> Backing {
         Backing::of(&self.buffer, self.surface)
+    }
+
+    /// Whether only the runtime's commands write the texels' bytes, as a shadow of them finds
+    /// (`ShadowCopies::only_commands_write`): a tracked texture's over a buffer of private or
+    /// memoryless storage the runtime allocated. A shadow of these may stand across command
+    /// buffers, copied in once (`shadow_standing.rs`); a shadow of others copies them in at every
+    /// command buffer that uses it, as the CPU or work the runtime does not order may have written
+    /// them.
+    pub(super) fn only_commands_write(&self) -> bool {
+        let private = matches!(
+            self.backing(),
+            Backing::PrivateBuffer | Backing::PrivateSurface
+        );
+        self.tracked() && private
     }
 
     /// Where the CPU's `replace_region` and `get_bytes` find the texels.
@@ -1358,7 +1902,8 @@ impl Texels {
     /// device's `minTexelBufferOffsetAlignment`, which the binding plan holds a view's offset to,
     /// divides the functions' offset in the buffer's `VkBuffer`; else through a staging buffer of
     /// their own, at its start (a no-copy buffer's bytes, or Metal's offset, need not lie at a
-    /// multiple of it). Refused as `new_buffer` refuses the staging buffer.
+    /// multiple of it), and through their tail where they run past the buffer's length, which no
+    /// view of the buffer reaches. Refused as `new_buffer` refuses the staging buffer.
     fn into_texture_buffer(self) -> Result<Texels, Error> {
         let mut texels = self;
         let placed = texels.layout;
@@ -1366,17 +1911,22 @@ impl Texels {
             offset: placed.offset - placed.offset % LINEAR_ALIGNMENT,
             ..placed
         };
+        // Texels past the buffer's length lie in a tail of their own (the module's **Tails**),
+        // which their bindings view, as a staging buffer's: no view of the buffer reaches them.
+        let mut texels = texels.with_tail()?;
         let (raw, at) = (texels.buffer).at_for(texels.shader.offset, ReadApart::Texture);
         let device = texels.buffer.device();
         let limits = device.compile_device().profile().limits();
-        if at.is_multiple_of(limits.min_texel_buffer_offset_alignment.max(1)) {
+        let past = texels.tail.is_some();
+        if !past && at.is_multiple_of(limits.min_texel_buffer_offset_alignment.max(1)) {
             return Ok(texels);
         }
         let staging = texels.staging(&texels.shader, at)?;
         let layout = &texels.shader;
         let shadow = staging.buffer.identity();
         let (bytes, tracked) = texels.buffer.tracked(layout.offset..layout.end());
-        let shadow_range = UseRange::Bytes(0..staging.into.size);
+        // Every byte of the texels' its bindings view, those past the length among them.
+        let shadow_range = UseRange::Bytes(0..layout.end() - layout.offset);
         let copies = ShadowCopies {
             source: ShadowSource::Bytes {
                 buffer: ShadowBuffer::of(&texels.buffer, raw),
@@ -1399,16 +1949,23 @@ impl Texels {
             texels.layout.offset,
             limits.min_texel_buffer_offset_alignment,
         );
+        let length = texels.buffer.length();
         texels
             .buffer
             .device()
             .degrade(Degradation::StagedTextureBuffer, || {
                 let object = format!("texture buffer over a buffer at offset {offset}");
-                let reason = format!(
-                    "its texels start at byte {at} of the buffer's VkBuffer, and the device views \
-                     texels only at multiples of {alignment} bytes \
-                     (minTexelBufferOffsetAlignment)"
-                );
+                let reason = match past {
+                    true => format!(
+                        "its texels run past the buffer's {length} bytes, where no view of the \
+                         buffer's VkBuffer reaches: those lie in a tail of the texture's own"
+                    ),
+                    false => format!(
+                        "its texels start at byte {at} of the buffer's VkBuffer, and the device \
+                         views texels only at multiples of {alignment} bytes \
+                         (minTexelBufferOffsetAlignment)"
+                    ),
+                };
                 (object, reason)
             });
         Ok(texels)
@@ -1449,15 +2006,20 @@ impl Texels {
     /// its image's view of its own 8-bit unsigned normalized format, where given so
     /// (`shadow_merge.rs`). Refused as `new_buffer` refuses the staging buffer.
     /// Whether these texels take a device copy on `device` (`texture.rs`, `dirty_pages.rs`): on
-    /// a discrete GPU, tracked, over host pages whose memory carries a log, where the shadow's
-    /// copy in is one region straight from the texels' place in the buffer's `VkBuffer` (one
-    /// slice, rows that share no bytes, a first texel at a multiple of the texel's size there),
-    /// the copy in a log decides.
+    /// a discrete GPU, a `Managed` texture over a buffer's bytes (not an IOSurface plane's),
+    /// tracked, over host pages whose memory carries a log, where the shadow's copy in is one
+    /// region straight from the texels' place in the buffer's `VkBuffer` (one slice, rows that
+    /// share no bytes, a first texel at a multiple of the texel's size there), the copy in a log
+    /// decides. A `Managed` resource on a Mac with a discrete GPU is two copies, the system
+    /// memory's and the GPU's own; a `Shared` texture and an IOSurface's are the system memory's
+    /// alone, which that GPU reads across the bus, so they take none.
     pub(super) fn device_copy(&self, device: &Device) -> bool {
         let layout = &self.layout;
         // The looks at the pages last: each takes their lock (`WorkCounts::no_copy_lies_read`),
         // which a texture on any other GPU never needs.
         device.properties().kind == crate::DeviceKind::Discrete
+            && !self.surface
+            && matches!(self.options.storage_mode(), Ok(StorageMode::Managed))
             && self.tracked()
             && layout.slices == 1
             && layout.shared_bytes() == 0
@@ -1481,7 +2043,8 @@ impl Texels {
             true => 4,
             false => self.texel_bytes,
         };
-        let staging = if at.is_multiple_of(align) {
+        // Texels past the buffer's length go through their tail, which holds them.
+        let staging = if at.is_multiple_of(align) && self.tail.is_none() {
             None
         } else {
             Some(self.staging(layout, at)?)
@@ -1532,23 +2095,31 @@ impl Texels {
     /// The staging buffer of a shadowed texture or a texture buffer over the texels laid out as
     /// `layout`, which start at `at` of the buffer's `VkBuffer`: the texels' bytes from the first
     /// to the last, at its start, of the texture's hazard tracking, in a buffer of whole 4-byte
-    /// words (the rotation kernel's, `rotated.rs`, binds them all).
+    /// words (the rotation kernel's, `rotated.rs`, binds them all). Texels past the buffer's
+    /// length take their tail, whose bytes past the length are the texels' own: the copies
+    /// between it and the buffer move the bytes inside the length alone ([`inside_rows`]).
     fn staging(&self, layout: &BufferLayout, at: u64) -> Result<ShadowStaging, Error> {
         let span = layout.end() - layout.offset;
-        let hazard = self.options.hazard_tracking_mode()?;
-        let options =
-            ResourceOptions::new(StorageMode::Private, CpuCacheMode::DefaultCache, hazard);
-        let buffer = self
-            .buffer
-            .device()
-            .own_buffer(span.next_multiple_of(4), options)?;
+        let buffer = match &self.tail {
+            Some(tail) => tail.clone(),
+            None => {
+                let hazard = self.options.hazard_tracking_mode()?;
+                let options =
+                    ResourceOptions::new(StorageMode::Private, CpuCacheMode::DefaultCache, hazard);
+                (self.buffer.device()).own_buffer(span.next_multiple_of(4), options)?
+            }
+        };
         let (_, start) = buffer.at(0);
-        let back = staged_rows_back(layout, start, at);
+        let inside = match self.tail {
+            Some(_) => self.kept.saturating_sub(layout.offset).min(span),
+            None => span,
+        };
+        let back = inside_rows(staged_rows_back(layout, start, at), at, inside);
         Ok(ShadowStaging {
             into: vk::BufferCopy {
                 src_offset: at,
                 dst_offset: start,
-                size: span,
+                size: inside,
             },
             back,
             buffer,
@@ -1717,6 +2288,9 @@ impl Texels {
         let mut packed = vec![0u8; host.packed_len() as usize];
         host.pack(bytes, &mut packed);
         let (start, inside) = self.region_layout(region, host);
+        if let Some(past) = self.past() {
+            return self.write_past(call, (start, &inside), &packed, past);
+        }
         let (target, end) = self.bytes(call, start, inside.host_len())?;
         let n = host.row_bytes as usize;
         for (at, from) in inside.rows() {
@@ -1731,6 +2305,75 @@ impl Texels {
         self.buffer.upload(start..end)
     }
 
+    /// The mapped bytes the CPU reaches the texels' bytes `start..start + len` of the buffer's
+    /// space through, where the texels run past its length (`past`): the part inside the length
+    /// in the buffer's, the rest in the tail's, each `(where its bytes go in the run, its first
+    /// byte, its length)`. Refused as [`bytes`](Self::bytes) refuses the buffer's.
+    fn past_runs(
+        &self,
+        call: &'static str,
+        (start, len): (u64, u64),
+        past: Past<'_>,
+    ) -> Result<Vec<(usize, *mut u8, usize)>, Error> {
+        let private = || invalid(call, Problem::Copy(CopyProblem::CpuAccessPrivate));
+        let end = start + len;
+        let mut runs = Vec::with_capacity(2);
+        if start < past.length {
+            let contents = self.buffer.contents().ok_or_else(private)?;
+            // SAFETY: `start..past.length` lies in the buffer's mapped bytes.
+            let first = unsafe { contents.as_ptr().add(start as usize) };
+            runs.push((0, first, (end.min(past.length) - start) as usize));
+        }
+        if end > past.length {
+            let from = start.max(past.length);
+            let contents = past.tail.contents().ok_or_else(private)?;
+            let at = from - past.rebase;
+            if at + (end - from) > past.tail.length() {
+                return Err(internal("a texture's rows past its tail"));
+            }
+            // SAFETY: `at..at + (end - from)` lies in the tail's mapped bytes (checked above).
+            let first = unsafe { contents.as_ptr().add(at as usize) };
+            runs.push(((from - start) as usize, first, (end - from) as usize));
+        }
+        Ok(runs)
+    }
+
+    /// [`write`](Self::write) of texels that run past the buffer's length: each row's bytes
+    /// inside the length into the buffer's, the rest into the tail's.
+    fn write_past(
+        &self,
+        call: &'static str,
+        (start, inside): (u64, &HostLayout),
+        packed: &[u8],
+        past: Past<'_>,
+    ) -> Result<(), Error> {
+        let n = inside.row_bytes;
+        let mut end = start;
+        for (at, from) in inside.rows() {
+            let row = start + at as u64;
+            for (into, target, len) in self.past_runs(call, (row, n), past)? {
+                // SAFETY: each run lies in the buffer's or the tail's mapped bytes
+                // (`past_runs`); a write racing the GPU's use of them is the program's.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(packed[from + into..].as_ptr(), target, len)
+                };
+            }
+            end = end.max(row + n);
+        }
+        // The buffer's own bytes written, as `write` reports and uploads them.
+        let end = end.min(past.length);
+        if start < end {
+            let contents = self
+                .buffer
+                .contents()
+                .ok_or_else(|| invalid(call, Problem::Copy(CopyProblem::CpuAccessPrivate)))?;
+            let at = contents.as_ptr() as u64 + start;
+            self.buffer.wrote_host(at..at + (end - start));
+            self.buffer.upload(start..end)?;
+        }
+        Ok(())
+    }
+
     /// `getBytes` of `region` into `bytes` laid out as `host` (checked by the texture): from the
     /// buffer's mapped bytes, a host copy's where it has one, which `synchronize_resource` updates,
     /// as Metal's managed texture needs `synchronizeTexture` on a device without unified memory.
@@ -1743,6 +2386,19 @@ impl Texels {
     ) -> Result<(), Error> {
         let mut packed = vec![0u8; host.packed_len() as usize];
         let (start, inside) = self.region_layout(region, host);
+        if let Some(past) = self.past() {
+            for (at, to) in inside.rows() {
+                let row = start + at as u64;
+                for (into, source, len) in self.past_runs(call, (row, host.row_bytes), past)? {
+                    // SAFETY: as in `write_past`.
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(source, packed[to + into..].as_mut_ptr(), len)
+                    };
+                }
+            }
+            host.unpack(&packed, bytes);
+            return Ok(());
+        }
         let (source, _) = self.bytes(call, start, inside.host_len())?;
         let n = host.row_bytes as usize;
         for (at, to) in inside.rows() {
@@ -1843,6 +2499,21 @@ pub(super) fn staged_rows_back(layout: &BufferLayout, start: u64, at: u64) -> Ve
     back
 }
 
+/// `back`, copies of rows from a staging buffer into a buffer's `VkBuffer` whose texels start at
+/// its byte `at`, cut to the texels' first `inside` bytes: a texture's whose texels run past the
+/// buffer's length, whose bytes past it its tail keeps ([`Texels::staging`]). A row past them is
+/// dropped, and one across them cut there.
+pub(super) fn inside_rows(back: Vec<vk::BufferCopy>, at: u64, inside: u64) -> Vec<vk::BufferCopy> {
+    let end = at + inside;
+    back.into_iter()
+        .filter(|row| row.dst_offset < end)
+        .map(|row| vk::BufferCopy {
+            size: row.size.min(end - row.dst_offset),
+            ..row
+        })
+        .collect()
+}
+
 /// The regions that copy the texels laid out as `layout`, `texel_bytes` each (of a block each,
 /// where `blocks` gives a block-compressed texture's: its rows of blocks are copied as the texels
 /// they hold, its last block of a row and of a column covering its texels alone), starting at
@@ -1853,26 +2524,30 @@ pub(super) fn staged_rows_back(layout: &BufferLayout, start: u64, at: u64) -> Ve
 /// of every texel size.
 ///
 /// Where consecutive rows share bytes (an IOSurface plane's on Metal's GPU,
-/// `linear_plan::iosurface_gpu_layout`: 1 to 15 bytes, a whole number of texels, between
-/// consecutive rows alone), no one region states a slice: a region addresses its rows one
-/// `bufferRowLength` apart, which is at least its width
+/// `linear_plan::iosurface_gpu_layout`, and a heap's one-plane YCbCr texture's,
+/// `texture/heap.rs`'s `heap_planes`: 1 to 15 bytes, a whole number of texels, between
+/// consecutive rows alone; and a plane's whose rows are wider than its pitch, any whole number
+/// of texels, a byte shared by as many rows as reach it), no one region states a slice: a region
+/// addresses its rows one `bufferRowLength` apart, which is at least its width
 /// (`VUID-vkCmdCopyBufferToImage-bufferRowLength-00195`), and the shared bytes hold a texel of
-/// each of two rows. Each slice takes two regions instead, split at the texels the sharing
-/// covers:
+/// each of two rows or more. Each slice takes two regions instead, split at the texels the
+/// sharing covers:
 ///
-/// - going in, every row's shared head and the rest of every row. Their sources share the bytes,
-///   which a copy into an image allows: a memory location may not be read by a source region and
-///   written by a destination region of one copy
+/// - going in, every row's shared head (in pieces no wider than the pitch, where the head is
+///   wider: a region's `bufferRowLength` covers its width) and the rest of every row, which is
+///   one pitch wide. Their sources share the bytes, which a copy into an image allows: a memory
+///   location may not be read by a source region and written by a destination region of one copy
 ///   (`VUID-vkCmdCopyBufferToImage-pRegions-00173`), nor written by two destination regions
-///   (`-12483`), and the two regions' image texels are disjoint and together every texel;
-/// - going back, the rest of every row, and the head of row 0 alone. Those tile the slice's bytes
+///   (`-12483`), and the regions' image texels are disjoint and together every texel;
+/// - going back, the rest of every row, and the head of row 0 alone (one row, its
+///   `bufferRowLength` 0 where the head is wider than the pitch). Those tile the slice's bytes
 ///   exactly once, so no byte is written by two destination regions
-///   (`VUID-vkCmdCopyImageToBuffer-pRegions-12485`), and every shared byte takes the earlier
-///   row's tail. Metal leaves there whichever row its own command wrote last, an order that
-///   follows the command, the GPU pitch and the row count rather than one rule
-///   (`linear_plan.rs`'s **Rows that overlap**); a kernel, the only writer such a plane takes,
-///   moves its winner with the threadgroup shape, so the earlier row's tail is one of its answers
-///   ([`Degradation::CollidingSurfaceRowWrites`]).
+///   (`VUID-vkCmdCopyImageToBuffer-pRegions-12485`), and every shared byte takes the earliest
+///   row's that reaches it. Metal leaves there whichever row its own command wrote last, an order
+///   that follows the command, the GPU pitch and the row count rather than one rule
+///   (`linear_plan.rs`'s **Rows that overlap**); a kernel, the only GPU writer such a plane
+///   takes, moves its winner with the threadgroup shape, so the earliest row's bytes are one of
+///   its answers ([`Degradation::CollidingSurfaceRowWrites`]).
 pub(super) fn plane_copy_regions(
     layout: &BufferLayout,
     (texel_bytes, blocks): (u64, Option<Blocks>),
@@ -1921,9 +2596,30 @@ pub(super) fn plane_copy_regions(
     let head = (shared / texel_bytes) as u32;
     let (mut into, mut back) = (Vec::new(), Vec::new());
     for slice in 0..slices {
-        into.push(region(slice, start, 0, head, rows));
+        // The head in pieces no wider than the pitch, where rows wider than their pitch share
+        // more than a pitch's bytes: a region's rows lie its `bufferRowLength` apart.
+        let mut x = 0;
+        while x < head {
+            let units = pitch.min(head - x);
+            into.push(region(
+                slice,
+                start + u64::from(x) * texel_bytes,
+                x,
+                units,
+                rows,
+            ));
+            x += units;
+        }
         into.push(region(slice, start + shared, head, width - head, rows));
-        back.push(region(slice, start, 0, head, 1));
+        // Row 0's head is one row, whose bytes lie one after another however wide it is.
+        let row_zero = region(slice, start, 0, head, 1);
+        back.push(match head > pitch {
+            true => vk::BufferImageCopy {
+                buffer_row_length: 0,
+                ..row_zero
+            },
+            false => row_zero,
+        });
         back.push(region(slice, start + shared, head, width - head, rows));
     }
     (into, back)

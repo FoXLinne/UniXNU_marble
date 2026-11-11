@@ -48,6 +48,16 @@
 //! read selects its out-of-bounds alpha by. An element is below [`TABLE_CAPACITY`], so the bit is
 //! never an element's.
 //!
+//! **Border texels**. A texture entry's flags also hold Metal's border texels of the resident
+//! texture, its pixel format's and swizzle's ([`FLAG_BORDER_TEXELS`]), which a Metal 4.1 read
+//! through a sampler hands back at an index outside the level on a border axis. A module with such
+//! a read of a heap texture calls the search's indexed form ([`Lookup::Indexed`]): the handle is
+//! the element with the found entry's index in its top 16 bits ([`HANDLE_ENTRY`]), by which the
+//! read loads the entry's border texels ([`border_texels`]), and each use that reads another of
+//! the entry's flags loads them there too ([`flagged_handle`]): the handle has no room for the
+//! border texels beside the flags the flagged form carries. An entry's index is below
+//! [`TABLE_CAPACITY`] as an element is, so the two never overlap.
+//!
 //! **Heap samplers** (the sampler half). A sampler handle loaded from an argument buffer is the
 //! guest's resource id of an `MTLSamplerState`, searched in the stage's **sampler table**
 //! (`Synthetic(SamplerTable)`), the handle table's layout over the argument buffers' samplers: a
@@ -382,13 +392,23 @@ pub const ENTRY_ID_HI: u32 = 1;
 pub const ENTRY_ELEMENT: u32 = 2;
 /// Word of an entry holding the flags: for a sampler, its
 /// [`SamplerWord`](crate::metal::sampler::SamplerWord); for a texture,
-/// [`FLAG_OUT_OF_BOUNDS_ALPHA_ONE`], and the index of its texel class in [`FLAG_TEXEL_CLASS`], every other bit 0.
+/// [`FLAG_OUT_OF_BOUNDS_ALPHA_ONE`], [`FLAG_RED_BLUE`], its border texels in
+/// [`FLAG_BORDER_TEXELS`], and the index of its texel class in [`FLAG_TEXEL_CLASS`], every other
+/// bit 0.
 pub const ENTRY_FLAGS: u32 = 3;
 /// The flag of a texture entry whose pixel format has no alpha
 /// (`metal::format::out_of_bounds_alpha_one`): Metal's out-of-bounds read of such a texture
 /// bound to a slot returns alpha 1 (MSL 4.1 section 2.9.1), which a read through the table takes
 /// too; no heap texture was measured.
 pub const FLAG_OUT_OF_BOUNDS_ALPHA_ONE: u32 = 1 << 1;
+/// The flag of a texture entry whose pixel format a storage view may hold through its RGBA-order
+/// twin, red and blue exchanged (`metal::format::red_blue_exchanged`: `BGRA8Unorm`,
+/// `BGRA8Unorm_sRGB`, `BGR10A2Unorm`), which tells such a member from the red-first format of its
+/// texel class (`RGBA8Unorm`, `RGBA8Unorm_sRGB`, `RGB10A2Unorm`): a storage access through a heap
+/// handle exchanges the channels of a member its storage array views so
+/// (`bind::heap::storage_conversions`). A handle carries it beside its class
+/// ([`HANDLE_RED_BLUE`]).
+pub const FLAG_RED_BLUE: u32 = 1 << 2;
 /// The field of a texture entry's flags holding the index of its texel class in
 /// `metal::texel_format::heap_classes`: the class a slot bound to the texture would state in its
 /// `TexelFormat` specialization, `OTHER` (index 0) for a swizzled texture, by which a function
@@ -403,11 +423,33 @@ pub const HANDLE_TEXEL_CLASS: u32 = FLAG_TEXEL_CLASS;
 /// The bit of a heap handle that carries its entry's [`FLAG_OUT_OF_BOUNDS_ALPHA_ONE`], in a
 /// module whose search carries it ([`Lookup::Flagged`]'s `alpha`).
 pub const HANDLE_ALPHA_ONE: u32 = 1 << 31;
+/// The bit of a heap handle that carries its entry's [`FLAG_RED_BLUE`], in a module whose search
+/// carries the texel class ([`Lookup::Flagged`]'s `class`).
+pub const HANDLE_RED_BLUE: u32 = 1 << 30;
+/// The field of a texture entry's flags holding Metal's border texels of its texture
+/// (`metal::sampler::border_texels` of its pixel format and swizzle, the layout of a slot's
+/// `BorderTexels` specialization moved up by the field's first bit): bit `3c + b` of the field is
+/// set where channel `c` (red 0 to alpha 3) of the border texel for border color `b`
+/// (`MTLSamplerBorderColor`'s value) reads 1. A Metal 4.1 read through a sampler of an argument
+/// buffer's texture hands it back at an index outside the level on a border axis, from the entry
+/// its handle names ([`Lookup::Indexed`], [`border_texels`]).
+pub const FLAG_BORDER_TEXELS: u32 = 0xfff << 3;
+/// The field of a heap handle holding the index of the handle-table entry its search found, in a
+/// module whose search yields it beside the element ([`Lookup::Indexed`]).
+pub const HANDLE_ENTRY: u32 = 0xffff << 16;
 // Every element is below the table's capacity, so no carried bit is an element's, and the
-// carried fields do not overlap.
+// carried fields do not overlap; an entry's index is below the capacity too, so it fits its field,
+// above every element's bits.
 const _: () = assert!(TABLE_CAPACITY <= 1 << HANDLE_TEXEL_CLASS.trailing_zeros());
 const _: () = assert!(HANDLE_TEXEL_CLASS & HANDLE_ALPHA_ONE == 0);
+const _: () = assert!((HANDLE_TEXEL_CLASS | HANDLE_ALPHA_ONE) & HANDLE_RED_BLUE == 0);
 const _: () = assert!(FLAG_TEXEL_CLASS & FLAG_OUT_OF_BOUNDS_ALPHA_ONE == 0);
+const _: () = assert!((FLAG_TEXEL_CLASS | FLAG_OUT_OF_BOUNDS_ALPHA_ONE) & FLAG_RED_BLUE == 0);
+const _: () = assert!(
+    (FLAG_TEXEL_CLASS | FLAG_OUT_OF_BOUNDS_ALPHA_ONE | FLAG_RED_BLUE) & FLAG_BORDER_TEXELS == 0
+);
+const _: () = assert!(TABLE_CAPACITY <= 1 << HANDLE_ENTRY.trailing_zeros());
+const _: () = assert!(TABLE_CAPACITY <= 1 << HANDLE_ENTRY.count_ones());
 
 /// Unrolled steps of the handle-table search.
 pub const SEARCH_STEPS: u32 = 16;
@@ -1300,18 +1342,48 @@ pub enum Lookup {
     /// The entry's element with flags of its entry beside it: where `alpha`, its
     /// [`FLAG_OUT_OF_BOUNDS_ALPHA_ONE`] in [`HANDLE_ALPHA_ONE`], the handle of a module whose
     /// shader-checked heap read observes the alpha; where `class`, its [`FLAG_TEXEL_CLASS`] in
-    /// [`HANDLE_TEXEL_CLASS`], the handle of a module that reads a heap texture's texel class. Every heap access masks them off ([`Lookup::element_mask`]).
-    Flagged { alpha: bool, class: bool },
+    /// [`HANDLE_TEXEL_CLASS`], the handle of a module that reads a heap texture's texel class;
+    /// where `red_blue`, its [`FLAG_RED_BLUE`] in [`HANDLE_RED_BLUE`], the handle of a module whose
+    /// storage access converts a member by it (`bind::heap::storage_conversions`). Every heap
+    /// access masks them off ([`Lookup::element_mask`]).
+    Flagged {
+        alpha: bool,
+        class: bool,
+        red_blue: bool,
+    },
+    /// The entry's element with the entry's index beside it, in [`HANDLE_ENTRY`] (0 for a miss,
+    /// the null entry's): the handle of a module whose read through a sampler of a heap texture
+    /// may hand back its border texels, which its entry holds ([`FLAG_BORDER_TEXELS`],
+    /// [`border_texels`]). The handle has no room for them beside the flags `Flagged` carries, so
+    /// it carries none: a use reads the ones its module reads (`alpha`, `class` and `red_blue`
+    /// as `Flagged`'s) from the entry, in the handle `Flagged` would have yielded
+    /// ([`flagged_handle`]). Every heap access masks the index off ([`Lookup::element_mask`]).
+    Indexed {
+        alpha: bool,
+        class: bool,
+        red_blue: bool,
+    },
     /// The index of the entry found, 0 (the null entry) for a miss: the handle of an argument
     /// buffer's sampler, whose uses read the entry's element and word ([`entry_field`]).
     Entry,
 }
 
 impl Lookup {
-    /// The entry flags this form carries into the handle, each with the left shift that moves it
-    /// there.
+    /// The entry flags this form's uses read in the handle, each with the left shift that moves it
+    /// there: the ones `Flagged`'s search carries into it, and those `Indexed`'s uses read from
+    /// the entry ([`flagged_handle`]).
     fn carried(self) -> Vec<(u32, u32)> {
-        let Lookup::Flagged { alpha, class } = self else {
+        let (Lookup::Flagged {
+            alpha,
+            class,
+            red_blue,
+        }
+        | Lookup::Indexed {
+            alpha,
+            class,
+            red_blue,
+        }) = self
+        else {
             return Vec::new();
         };
         let alpha = alpha.then_some((
@@ -1319,13 +1391,21 @@ impl Lookup {
             HANDLE_ALPHA_ONE.trailing_zeros() - FLAG_OUT_OF_BOUNDS_ALPHA_ONE.trailing_zeros(),
         ));
         let class = class.then_some((FLAG_TEXEL_CLASS, 0));
-        alpha.into_iter().chain(class).collect()
+        let red_blue = red_blue.then_some((
+            FLAG_RED_BLUE,
+            HANDLE_RED_BLUE.trailing_zeros() - FLAG_RED_BLUE.trailing_zeros(),
+        ));
+        alpha.into_iter().chain(class).chain(red_blue).collect()
     }
 
-    /// The bits of a handle this form yields that are its element, where it carries flags beside
-    /// it: every bit but the carried ones. An element is below [`TABLE_CAPACITY`], so no carried
-    /// bit is ever an element's.
+    /// The bits of a handle this form yields that are its element, where it carries anything
+    /// beside it: every bit but the carried flags (`Flagged`), or but the entry's index
+    /// (`Indexed`). An element is below [`TABLE_CAPACITY`], so no carried bit is ever an
+    /// element's.
     pub fn element_mask(self) -> Option<u32> {
+        if let Lookup::Indexed { .. } = self {
+            return Some(!HANDLE_ENTRY);
+        }
         let carried = self
             .carried()
             .into_iter()
@@ -1333,6 +1413,68 @@ impl Lookup {
         (carried != 0).then_some(!carried)
     }
 }
+
+/// `word` with each of `form`'s carried fields of the entry flags `flags` (both `u32`) moved into
+/// its handle bits ([`Lookup::carried`]).
+fn carry(
+    fb: &mut FunctionBuilder<'_>,
+    word: SValue,
+    flags: SValue,
+    form: Lookup,
+) -> BResult<SValue> {
+    let mut word = word;
+    for (carried_flags, shift) in form.carried() {
+        let mask = k32(fb, carried_flags)?;
+        let carried = fb.binary(BinOp::BitwiseAnd, flags, mask)?;
+        let shift = k32(fb, shift)?;
+        let carried = fb.binary(BinOp::ShiftLeftLogical, carried, shift)?;
+        word = fb.binary(BinOp::BitwiseOr, word, carried)?;
+    }
+    Ok(word)
+}
+
+/// The index of the entry an [`Lookup::Indexed`] handle `h` (a `u32`) names: its
+/// [`HANDLE_ENTRY`], 0 (the null entry) for a null handle or a missed id.
+fn indexed_entry(fb: &mut FunctionBuilder<'_>, h: SValue) -> BResult<SValue> {
+    let shift = k32(fb, HANDLE_ENTRY.trailing_zeros())?;
+    fb.binary(BinOp::ShiftRightLogical, h, shift)
+}
+
+/// The handle a [`Lookup::Flagged`] search of `form`'s fields would have yielded for the
+/// [`Lookup::Indexed`] handle `h` (a `u32`) of the handle table `t`: its element, with the flags
+/// `form`'s uses read of the entry its [`HANDLE_ENTRY`] names moved where `Flagged` carries them
+/// (the null entry's, all clear, for a null handle).
+pub fn flagged_handle(
+    fb: &mut FunctionBuilder<'_>,
+    t: Table,
+    h: SValue,
+    form: Lookup,
+) -> BResult<SValue> {
+    let k = indexed_entry(fb, h)?;
+    let mask = k32(fb, !HANDLE_ENTRY)?;
+    let element = fb.binary(BinOp::BitwiseAnd, h, mask)?;
+    let flags = entry_field(fb, t, k, EntryField::Flags)?;
+    carry(fb, element, flags, form)
+}
+
+/// The border texels of the texture of the [`Lookup::Indexed`] handle `h` (a `u32`) of the
+/// handle table `t`: its entry's [`FLAG_BORDER_TEXELS`], moved down to bit 0 (the layout of a
+/// slot's `BorderTexels` specialization); 0 for a null handle (the null entry's).
+pub fn border_texels(fb: &mut FunctionBuilder<'_>, t: Table, h: SValue) -> BResult<SValue> {
+    let k = indexed_entry(fb, h)?;
+    let flags = entry_field(fb, t, k, EntryField::Flags)?;
+    let shift = k32(fb, FLAG_BORDER_TEXELS.trailing_zeros())?;
+    let bits = fb.binary(BinOp::ShiftRightLogical, flags, shift)?;
+    let mask = k32(
+        fb,
+        FLAG_BORDER_TEXELS >> FLAG_BORDER_TEXELS.trailing_zeros(),
+    )?;
+    fb.binary(BinOp::BitwiseAnd, bits, mask)
+}
+
+/// An upper estimate of [`flagged_handle`]'s or [`border_texels`]'s words: the entry's index, its
+/// flags word ([`ENTRY_FIELD_WORDS`]), and the fields' moves with their constants.
+pub const INDEXED_FLAGS_WORDS: u32 = ENTRY_FIELD_WORDS + 64;
 
 /// A field of a handle-table entry that a use reads by the entry's index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1395,9 +1537,9 @@ pub fn last_entry(fb: &mut FunctionBuilder<'_>, t: Table) -> BResult<SValue> {
 /// [`NEUTRAL_ELEMENT`]. Entry 0 is the null entry (id 0), so the search always finds an entry,
 /// and every entry it reads is below the table's length (`OpArrayLength`). An entry array
 /// compares each id as one `u64`; a word view compares its two words. [`Lookup::Flagged`] also
-/// moves the found entry's flags it carries into their handle bits (a miss is
-/// [`NEUTRAL_ELEMENT`] without them), and [`Lookup::Entry`] yields the found entry's index in
-/// place of its element, 0 for a miss.
+/// moves the found entry's flags it carries into their handle bits, [`Lookup::Indexed`] the found
+/// entry's index into [`HANDLE_ENTRY`] (a miss is [`NEUTRAL_ELEMENT`] without either), and
+/// [`Lookup::Entry`] yields the found entry's index in place of its element, 0 for a miss.
 pub fn lookup(
     fb: &mut FunctionBuilder<'_>,
     t: Table,
@@ -1467,20 +1609,22 @@ pub fn lookup(
         // The null entry, index 0, for a miss.
         return fb.select(hit, base, zero);
     }
-    let mut element = entry_field(fb, t, base, EntryField::Element)?;
-    let carried = form.carried();
-    if !carried.is_empty() {
-        let flags = entry_field(fb, t, base, EntryField::Flags)?;
-        for (carried_flags, shift) in carried {
-            let mask = k32(fb, carried_flags)?;
-            let carried = fb.binary(BinOp::BitwiseAnd, flags, mask)?;
-            let shift = k32(fb, shift)?;
-            let carried = fb.binary(BinOp::ShiftLeftLogical, carried, shift)?;
-            element = fb.binary(BinOp::BitwiseOr, element, carried)?;
+    let element = entry_field(fb, t, base, EntryField::Element)?;
+    let handle = match form {
+        // The entry's index beside the element.
+        Lookup::Indexed { .. } => {
+            let shift = k32(fb, HANDLE_ENTRY.trailing_zeros())?;
+            let entry = fb.binary(BinOp::ShiftLeftLogical, base, shift)?;
+            fb.binary(BinOp::BitwiseOr, element, entry)?
         }
-    }
+        _ if form.carried().is_empty() => element,
+        _ => {
+            let flags = entry_field(fb, t, base, EntryField::Flags)?;
+            carry(fb, element, flags, form)?
+        }
+    };
     let neutral = k32(fb, NEUTRAL_ELEMENT)?;
-    fb.select(hit, element, neutral)
+    fb.select(hit, handle, neutral)
 }
 
 /// An upper estimate of [`define_lookup`]'s words, counted once per module: per search step, over
@@ -1488,10 +1632,14 @@ pub fn lookup(
 /// a word view, two word reads (about 20 words each) and a five-instruction compare; then the
 /// entry's id and element, and the function's own instructions and types. The flagged form also
 /// reads the entry's flags (a word read) and moves each carried field (three instructions and two
-/// constants); the entry form reads no element.
+/// constants); the indexed form moves the entry's index (two instructions and a constant); the
+/// entry form reads no element.
 pub fn lookup_routine_words(int64: bool, form: Lookup) -> u32 {
     let step = if int64 { 48 } else { 96 };
-    let carried = 48 * form.carried().len() as u32;
+    let carried = match form {
+        Lookup::Indexed { .. } => 16,
+        _ => 48 * form.carried().len() as u32,
+    };
     SEARCH_STEPS * step + 160 + carried
 }
 
@@ -1717,6 +1865,16 @@ mod tests {
     /// `form`, and writes each element after them. The table is an entry array when `int64`, else
     /// a word view.
     fn lookup_module(int64: bool, form: Lookup) -> BResult<crate::spirv::ir::TypedModule> {
+        search_module(int64, form, |_, _, h| Ok(vec![h]))
+    }
+
+    /// [`lookup_module`] writing the words `per_key` makes of each key's handle (`per_key` of the
+    /// function, the table and the handle), each key's words after the keys in turn.
+    fn search_module(
+        int64: bool,
+        form: Lookup,
+        per_key: impl Fn(&mut FunctionBuilder<'_>, Table, SValue) -> BResult<Vec<SValue>>,
+    ) -> BResult<crate::spirv::ir::TypedModule> {
         use crate::pipeline::sym::{ResourceKind, ResourceSlot, Stage};
         use crate::spirv::builder::ModuleBuilder;
         use crate::spirv::ir::{ExecMode, ExecModel, MemAccess, Type};
@@ -1731,6 +1889,7 @@ mod tests {
         let search = define_lookup(&mut b, t, form)?;
         let void = b.ty(Type::Void)?;
         let mut f = b.function(void)?;
+        let mut at = 2 * KEYS;
         for i in 0..KEYS {
             let at_lo = k32(&mut f, 2 * i)?;
             let at_hi = k32(&mut f, 2 * i + 1)?;
@@ -1739,9 +1898,12 @@ mod tests {
             let e = f
                 .call(search, &[lo, hi])?
                 .expect("the search returns the element");
-            let at = k32(&mut f, 2 * KEYS + i)?;
-            let p = views::word_ptr(&mut f, io, at)?.expect("a storage view is writable");
-            f.store(p, e, MemAccess::default())?;
+            for word in per_key(&mut f, t, e)? {
+                let to = k32(&mut f, at)?;
+                let p = views::word_ptr(&mut f, io, to)?.expect("a storage view is writable");
+                f.store(p, word, MemAccess::default())?;
+                at += 1;
+            }
         }
         f.ret(None)?;
         let id = f.finish()?;
@@ -1757,18 +1919,31 @@ mod tests {
     /// several sizes up to [`TABLE_CAPACITY`] entries (the null id, present ids, absent ids between
     /// and beyond them) gets [`lookup_host`]'s element, through an entry array (`u64` ids) and a
     /// word view. [`Lookup::Flagged`] also carries a found entry's [`FLAG_OUT_OF_BOUNDS_ALPHA_ONE`]
-    /// in [`HANDLE_ALPHA_ONE`] where it carries the alpha, and its texel class where it carries
-    /// that, carrying no other bit of the entry, and [`Lookup::Entry`] yields the index
+    /// in [`HANDLE_ALPHA_ONE`] where it carries the alpha, its texel class where it carries that,
+    /// and its [`FLAG_RED_BLUE`] in [`HANDLE_RED_BLUE`] where it carries that, carrying no other
+    /// bit of the entry; [`Lookup::Indexed`] carries the found entry's index in [`HANDLE_ENTRY`]
+    /// beside the element, whatever flags its uses read; and [`Lookup::Entry`] yields the index
     /// of the last entry of the key's id, 0 for a miss.
     #[test]
     fn the_emitted_search_matches_the_host_model() {
         for int64 in [true, false] {
-            let flagged = |alpha, class| Lookup::Flagged { alpha, class };
+            let flagged = |alpha, class, red_blue| Lookup::Flagged {
+                alpha,
+                class,
+                red_blue,
+            };
             for form in [
                 Lookup::Element,
-                flagged(true, false),
-                flagged(false, true),
-                flagged(true, true),
+                flagged(true, false, false),
+                flagged(false, true, false),
+                flagged(false, false, true),
+                flagged(true, true, false),
+                flagged(true, true, true),
+                Lookup::Indexed {
+                    alpha: true,
+                    class: true,
+                    red_blue: false,
+                },
                 Lookup::Entry,
             ] {
                 emitted_search_matches_the_host_model(int64, form);
@@ -1779,18 +1954,38 @@ mod tests {
     /// Each flagged form's element mask clears exactly the bits it carries.
     #[test]
     fn a_flagged_handle_masks_off_the_bits_it_carries() {
-        let flagged = |alpha, class| Lookup::Flagged { alpha, class }.element_mask();
+        let flagged = |alpha, class, red_blue| {
+            Lookup::Flagged {
+                alpha,
+                class,
+                red_blue,
+            }
+            .element_mask()
+        };
         assert_eq!(Lookup::Element.element_mask(), None);
         assert_eq!(Lookup::Entry.element_mask(), None);
-        assert_eq!(flagged(false, false), None);
-        assert_eq!(flagged(true, false), Some(!HANDLE_ALPHA_ONE));
+        assert_eq!(flagged(false, false, false), None);
+        assert_eq!(flagged(true, false, false), Some(!HANDLE_ALPHA_ONE));
         assert_eq!(HANDLE_TEXEL_CLASS, 0x1fff << 16);
-        assert_eq!(flagged(false, true), Some(!HANDLE_TEXEL_CLASS));
+        assert_eq!(flagged(false, true, false), Some(!HANDLE_TEXEL_CLASS));
+        assert_eq!(flagged(false, false, true), Some(!HANDLE_RED_BLUE));
         assert_eq!(
-            flagged(true, true),
-            Some(!(HANDLE_ALPHA_ONE | HANDLE_TEXEL_CLASS)),
+            flagged(true, true, true),
+            Some(!(HANDLE_ALPHA_ONE | HANDLE_TEXEL_CLASS | HANDLE_RED_BLUE)),
             "every carried field is masked off, and the element's 16 bits stay"
         );
+        for (alpha, class, red_blue) in [(false, false, false), (true, true, true)] {
+            let indexed = Lookup::Indexed {
+                alpha,
+                class,
+                red_blue,
+            };
+            assert_eq!(
+                indexed.element_mask(),
+                Some(0xffff),
+                "an indexed handle's entry is masked off, whatever flags its uses read"
+            );
+        }
     }
 
     /// The flags of the test tables' entry of `element`: none on the null entry, else its low six
@@ -1800,7 +1995,107 @@ mod tests {
         if element == NEUTRAL_ELEMENT {
             return 0;
         }
-        (element % 64) | ((element.wrapping_mul(2_654_435_761) >> 7) & FLAG_TEXEL_CLASS)
+        (element % 64)
+            | ((element.wrapping_mul(2_654_435_761) >> 7) & FLAG_TEXEL_CLASS)
+            | ((element.wrapping_mul(40_503) << 3) & FLAG_BORDER_TEXELS)
+    }
+
+    /// The bytes of table `t`, each entry's flags [`flags`] of its element.
+    fn table_bytes(t: &[(u64, u32)]) -> Vec<u8> {
+        t.iter()
+            .flat_map(|(id, e)| {
+                [*id as u32, (*id >> 32) as u32, *e, flags(*e)]
+                    .into_iter()
+                    .flat_map(u32::to_le_bytes)
+            })
+            .collect()
+    }
+
+    /// An indexed handle's uses read its entry's flags: over the CPU interpreter, every key of a
+    /// table gets, from [`flagged_handle`], the handle the flagged search of the same fields yields
+    /// (its element and the fields carried, nothing else), and from [`border_texels`] its entry's
+    /// [`FLAG_BORDER_TEXELS`] moved down to bit 0; a missed or null id the null entry's, all 0.
+    #[test]
+    fn an_indexed_handle_reads_its_entry_s_flags() {
+        use crate::pipeline::sym::{ResourceKind, ResourceSlot, Stage};
+        use crate::spirv::interp::{run, Buffer, Config, Resources};
+        let sym = |index| ResourceSlot {
+            stage: Stage::Kernel,
+            kind: ResourceKind::Buffer,
+            index,
+        };
+        for int64 in [true, false] {
+            for (alpha, class, red_blue) in [(true, true, true), (false, true, false)] {
+                let indexed = Lookup::Indexed {
+                    alpha,
+                    class,
+                    red_blue,
+                };
+                let flagged = Lookup::Flagged {
+                    alpha,
+                    class,
+                    red_blue,
+                };
+                let m = search_module(int64, indexed, |fb, t, h| {
+                    Ok(vec![
+                        flagged_handle(fb, t, h, indexed)?,
+                        border_texels(fb, t, h)?,
+                    ])
+                })
+                .expect("module");
+                let t = table(17);
+                let bytes = table_bytes(&t);
+                for chunk in keys(&t).chunks(KEYS as usize) {
+                    let mut io: Vec<u8> = Vec::new();
+                    for i in 0..KEYS as usize {
+                        let id = chunk.get(i).copied().unwrap_or(0);
+                        io.extend((id as u32).to_le_bytes());
+                        io.extend(((id >> 32) as u32).to_le_bytes());
+                    }
+                    io.extend(vec![0xAA; 8 * KEYS as usize]);
+                    let res = Resources {
+                        buffers: vec![
+                            Buffer {
+                                slot: Some(sym(0)),
+                                address: None,
+                                bytes: bytes.clone(),
+                            },
+                            Buffer {
+                                slot: Some(sym(1)),
+                                address: None,
+                                bytes: io,
+                            },
+                        ],
+                        push: Vec::new(),
+                        spec: Default::default(),
+                    };
+                    let out = run(&m, &Config::default(), res).expect("run");
+                    let io = &out.buffers[1];
+                    let word = |w: usize| {
+                        let at = 4 * (2 * KEYS as usize + w);
+                        u32::from_le_bytes(io[at..at + 4].try_into().expect("word"))
+                    };
+                    for (i, id) in chunk.iter().enumerate() {
+                        let e = lookup_host(&t, *id);
+                        let carried = |on: bool, flag: u32, bit: u32| match on {
+                            true if flags(e) & flag != 0 => bit,
+                            _ => 0,
+                        };
+                        let want = e
+                            | carried(alpha, FLAG_OUT_OF_BOUNDS_ALPHA_ONE, HANDLE_ALPHA_ONE)
+                            | carried(red_blue, FLAG_RED_BLUE, HANDLE_RED_BLUE)
+                            | match class {
+                                true => flags(e) & FLAG_TEXEL_CLASS,
+                                false => 0,
+                            };
+                        assert_eq!(flagged.element_mask().map(|m| want & m), Some(e));
+                        assert_eq!(word(2 * i), want, "int64 {int64} {indexed:?} id {id:#x}");
+                        let border = (flags(e) & FLAG_BORDER_TEXELS) >> 3;
+                        assert_eq!(word(2 * i + 1), border, "int64 {int64} id {id:#x}");
+                    }
+                }
+            }
+        }
     }
 
     fn emitted_search_matches_the_host_model(int64: bool, form: Lookup) {
@@ -1814,14 +2109,7 @@ mod tests {
         };
         for n in [1, 2, 3, 5, 17, 100, TABLE_CAPACITY as usize] {
             let t = table(n);
-            let bytes: Vec<u8> = t
-                .iter()
-                .flat_map(|(id, e)| {
-                    [*id as u32, (*id >> 32) as u32, *e, flags(*e)]
-                        .into_iter()
-                        .flat_map(u32::to_le_bytes)
-                })
-                .collect();
+            let bytes = table_bytes(&t);
             assert_eq!(bytes.len(), n * TABLE_ENTRY_BYTES as usize);
             let all = keys(&t);
             // The interesting keys of the large table: its ends, its middle, and absent ones.
@@ -1868,13 +2156,22 @@ mod tests {
                     };
                     let want = match form {
                         Lookup::Element => e,
-                        Lookup::Flagged { alpha, class } => {
+                        Lookup::Flagged {
+                            alpha,
+                            class,
+                            red_blue,
+                        } => {
                             e | carried(alpha, FLAG_OUT_OF_BOUNDS_ALPHA_ONE, HANDLE_ALPHA_ONE)
+                                | carried(red_blue, FLAG_RED_BLUE, HANDLE_RED_BLUE)
                                 | match class {
                                     true => flags(e) & FLAG_TEXEL_CLASS,
                                     false => 0,
                                 }
                         }
+                        Lookup::Indexed { .. } => match t.iter().rposition(|(k, _)| k == id) {
+                            Some(i) => e | (i as u32) << HANDLE_ENTRY.trailing_zeros(),
+                            None => NEUTRAL_ELEMENT,
+                        },
                         Lookup::Entry => {
                             t.iter().rposition(|(k, _)| k == id).map_or(0, |i| i as u32)
                         }

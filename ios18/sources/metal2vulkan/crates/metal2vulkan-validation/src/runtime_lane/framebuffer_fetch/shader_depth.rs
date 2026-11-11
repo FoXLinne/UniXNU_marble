@@ -41,7 +41,7 @@
 //! draw, typed, `NotImplemented(FramebufferFetch)` at `Attachment::Depth`, and the case stops
 //! there.
 
-use super::{form, halves, library, through_inputs, TEXELS};
+use super::{fetches, form, halves, library, through_inputs, TEXELS};
 use crate::runtime_lane::buffer_with;
 use crate::runtime_lane::degrade_notices::counts;
 use crate::runtime_lane::memoryless::memoryless_options;
@@ -350,6 +350,9 @@ fn at_four_samples_a_fetch_under_a_written_depth_test_stores_what_metal_s_later_
 fn cases_at(samples: u32, memoryless: bool) {
     use Drawn::{Other, Plain, Tested};
     let (messages, cache, lane) = lane();
+    if !fetches(&lane.device) {
+        return;
+    }
     let device = lane.device.name().to_owned();
     let created = std::time::Instant::now();
     let kit = Kit::new(&lane, samples);

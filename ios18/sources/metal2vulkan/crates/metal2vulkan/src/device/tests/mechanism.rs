@@ -90,6 +90,7 @@ fn every_fact() -> Vec<RuntimeFact> {
         RuntimeFact::StorageTextureNumericType { slot },
         RuntimeFact::OutOfBoundsAlpha { slot },
         RuntimeFact::BicubicTexels { slot },
+        RuntimeFact::BorderTexels { slot },
         RuntimeFact::StorageTextureLevels { slot },
         RuntimeFact::StorageTextureLevelViews { slot },
         RuntimeFact::SparseTexture {
@@ -128,6 +129,8 @@ fn every_fact() -> Vec<RuntimeFact> {
         RuntimeFact::ViewportCount,
         RuntimeFact::AliasedImageblock { data_size: 24 },
         RuntimeFact::CallStackDepth { depth: 8 },
+        RuntimeFact::OpenClMode,
+        RuntimeFact::RowLockstep,
         RuntimeFact::FlatGrid,
         RuntimeFact::SparseTextureWrites {
             slot,
@@ -205,6 +208,18 @@ fn every_fact() -> Vec<RuntimeFact> {
                     crate::metal::PixelFormat::BGRA10XR,
                 );
                 c.blending_enabled = true;
+                crate::pipeline::lower_inputs::BlendEquation::of(&c).expect("a blend")
+            },
+            kept: crate::vk::ColorComponentFlags::empty(),
+        },
+        RuntimeFact::RotatedInputBlend {
+            color: 0,
+            blend: {
+                let mut c = crate::pipeline::ColorAttachmentDescriptor::new(
+                    crate::metal::PixelFormat::ARGB8Unorm,
+                );
+                c.blending_enabled = true;
+                c.destination_rgb_blend_factor = crate::metal::BlendFactor::DestinationAlpha;
                 crate::pipeline::lower_inputs::BlendEquation::of(&c).expect("a blend")
             },
             kept: crate::vk::ColorComponentFlags::empty(),
@@ -357,6 +372,10 @@ fn variant(f: &RuntimeFact) -> usize {
         RuntimeFact::MeshLastFirst => 71,
         RuntimeFact::YCbCrInPlace { .. } => 65,
         RuntimeFact::PartialObjectThreadgroups => 89,
+        RuntimeFact::RotatedInputBlend { .. } => 90,
+        RuntimeFact::OpenClMode => 91,
+        RuntimeFact::RowLockstep => 92,
+        RuntimeFact::BorderTexels { .. } => 93,
     }
 }
 
@@ -364,7 +383,7 @@ fn variant(f: &RuntimeFact) -> usize {
 fn mechanism_is_total_over_every_fact_and_profile() {
     let facts = every_fact();
     let covered: std::collections::BTreeSet<usize> = facts.iter().map(variant).collect();
-    assert_eq!(covered, (0..90).collect(), "every_fact misses a variant");
+    assert_eq!(covered, (0..94).collect(), "every_fact misses a variant");
     for (stem, _) in super::committed_profiles() {
         let dev = device(&stem);
         let p = dev.profile();
@@ -384,6 +403,7 @@ fn mechanism_is_total_over_every_fact_and_profile() {
                 | RuntimeFact::TileFunction
                 | RuntimeFact::OutOfBoundsAlpha { .. }
                 | RuntimeFact::BicubicTexels { .. }
+                | RuntimeFact::BorderTexels { .. }
                 | RuntimeFact::SparseTexture {
                     sparse_arm: true, ..
                 }
@@ -411,7 +431,8 @@ fn mechanism_is_total_over_every_fact_and_profile() {
                 | RuntimeFact::StorageTextureWriteRounding { .. }
                 | RuntimeFact::HeapWriteRounding { .. }
                 | RuntimeFact::HeapCrossClassNeutral { .. }
-                | RuntimeFact::ObjectThreadgroupArena { .. } => Mechanism::PlanTimeCheck,
+                | RuntimeFact::ObjectThreadgroupArena { .. }
+                | RuntimeFact::RowLockstep => Mechanism::PlanTimeCheck,
                 RuntimeFact::DispatchGrid
                 | RuntimeFact::TileThreadgroup { .. }
                 | RuntimeFact::PartialObjectThreadgroups => Mechanism::RegionSelected,
@@ -482,6 +503,7 @@ fn mechanism_is_total_over_every_fact_and_profile() {
                 | RuntimeFact::ShaderStencilTest { .. }
                 | RuntimeFact::TileImageblock { .. }
                 | RuntimeFact::ExtendedRangeInputBlend { .. }
+                | RuntimeFact::RotatedInputBlend { .. }
                 | RuntimeFact::WordInputMerge { .. } => Mechanism::RenderPassContract,
                 RuntimeFact::ExecutionStatus => match f.buffer_access {
                     crate::device::profile::BufferAccess::Addressed => Mechanism::PushConstant,
@@ -498,6 +520,7 @@ fn mechanism_is_total_over_every_fact_and_profile() {
                 | RuntimeFact::TexelFormat { .. } => Mechanism::PushConstant,
                 RuntimeFact::AliasedImageblock { .. } => Mechanism::None,
                 RuntimeFact::CallStackDepth { .. }
+                | RuntimeFact::OpenClMode
                 | RuntimeFact::AbsentArgumentRead { .. }
                 | RuntimeFact::SynthesizedGeometry { .. } => Mechanism::None,
             };

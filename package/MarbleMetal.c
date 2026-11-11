@@ -11,6 +11,25 @@
 #include <kern/kalloc.h>
 #include <pexpert/pexpert.h>
 int native_marble_metal_prepare(proc_t, user_addr_t);
+boolean_t native_marble_haptics_vnode(vfs_context_t, vnode_t, struct componentname *);
+boolean_t native_marble_haptics_vnode(vfs_context_t context, vnode_t vnode, struct componentname *component)
+{
+    uint32_t enabled = 0;
+    PE_parse_boot_argn("marble-haptics", &enabled, sizeof(enabled));
+    proc_t process = vfs_context_proc(context);
+    if (enabled < 2 || !process || strcmp(process->p_name, "audiomxd")) return FALSE;
+    char path[MAXPATHLEN];
+    int length = sizeof(path);
+    if (vn_getpath(vnode, path, &length)) return FALSE;
+    if (component)
+        return vnode_vtype(vnode) == VDIR && !strcmp(path, "/dev") &&
+            ((component->cn_namelen == sizeof("marble-haptics") - 1 &&
+              !memcmp(component->cn_nameptr, "marble-haptics", sizeof("marble-haptics") - 1)) ||
+             (component->cn_namelen == sizeof("marble-speaker") - 1 &&
+              !memcmp(component->cn_nameptr, "marble-speaker", sizeof("marble-speaker") - 1)));
+    return vnode_vtype(vnode) == VCHR &&
+        (!strcmp(path, "/dev/marble-haptics") || !strcmp(path, "/dev/marble-speaker"));
+}
 volatile int native_bindfs_boot_mount;
 volatile int native_gpu_addon_stage = 0;
 volatile int native_gpu_addon_status = -1;
@@ -18,6 +37,8 @@ volatile int native_gpu_addon2_stage = 0;
 volatile int native_gpu_addon2_status = -1;
 volatile int native_gpu_addon3_stage = 0;
 volatile int native_gpu_addon3_status = -1;
+volatile int marble_haptics_overlay_stage[2];
+volatile int marble_haptics_overlay_status[2];
 static void
 native_gpu_addon_mount(proc_t p, user_addr_t scratch, user_addr_t offset, const char *source, size_t source_size,
     const char *point, size_t point_size, const char *visible, const char *own, volatile int *stage, volatile int *status)
@@ -375,6 +396,27 @@ int native_marble_metal_prepare(proc_t process, user_addr_t scratch)
             &wifi_stage, &wifi_status);
         printf("MarbleWifi: launchd cache mount=%d/%d\n", wifi_stage, wifi_status);
         if (wifi_status) return wifi_status;
+    }
+    uint32_t haptics = 0;
+    PE_parse_boot_argn("marble-haptics", &haptics, sizeof(haptics));
+    if (haptics >= 2) {
+        static const char hal[] = "/private/var/ngpu/haptics-hal";
+        static const char tunings[] = "/private/var/ngpu/haptics-tunings";
+        native_gpu_addon_mount(process, scratch, 0x400, hal, sizeof(hal),
+            "/System/Library/Audio/Plug-Ins/HAL", sizeof("/System/Library/Audio/Plug-Ins/HAL"),
+            "/System/Library/Audio/Plug-Ins/HAL/AirPlayHalogen.driver/Info.plist",
+            "/System/Library/Audio/Plug-Ins/HAL/MarbleHaptics.driver/Info.plist",
+            &marble_haptics_overlay_stage[0], &marble_haptics_overlay_status[0]);
+        if (marble_haptics_overlay_status[0]) return marble_haptics_overlay_status[0];
+        native_gpu_addon_mount(process, scratch, 0x400, tunings, sizeof(tunings),
+            "/Library/Audio/Tunings", sizeof("/Library/Audio/Tunings"),
+            "/Library/Audio/Tunings/N841/Haptics/hapticengineconfig.plist",
+            "/Library/Audio/Tunings/D84/Haptics/hapticengineconfig.plist",
+            &marble_haptics_overlay_stage[1], &marble_haptics_overlay_status[1]);
+        printf("MarbleHaptics: HAL overlay=%d/%d tunings=%d/%d\n",
+            marble_haptics_overlay_stage[0], marble_haptics_overlay_status[0],
+            marble_haptics_overlay_stage[1], marble_haptics_overlay_status[1]);
+        if (marble_haptics_overlay_status[1]) return marble_haptics_overlay_status[1];
     }
     return native_gpu_addon3_status;
 }

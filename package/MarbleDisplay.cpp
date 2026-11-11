@@ -165,8 +165,18 @@ void native_marble_display_timing_request(void)
     }
 }
 
+static IOService *mainPowerDisplay;
+extern "C" void native_marble_display_backlight_state(bool);
+void native_marble_display_backlight_state(bool on)
+{
+    // 22H384 PLDisplayAgent registers its legacy power interest on the
+    // service returned by IOMobileFramebufferGetMainDisplay.
+    if (mainPowerDisplay) mainPowerDisplay->messageClients(on?0xe0014100u:0xe0014101u);
+}
+
 void native_legacy_registration_observed(IOService *display)
 {
+    if (!mainPowerDisplay) mainPowerDisplay=display;
     ++marble_display_registered;
     IOLog("MarbleDisplay: registered %s\n", display->getName());
 }

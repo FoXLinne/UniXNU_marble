@@ -1,0 +1,856 @@
+{
+  "format": 1,
+  "case": "xr-gradient-bgra10xr-blended-x4",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "xr_gradients.ll",
+      "entry": "xrg_vertex",
+      "source_sha256": "fc12f72c062a0d9180a63f23806032a8abf23abe763c4d8d5533483b52cfaa88"
+    },
+    {
+      "fixture": "xr_gradients.air.ll",
+      "entry": "xrg_vertex",
+      "source_sha256": "14c2f44192dbf6d35de26d85942bc2f379c5134bc2d1ac356702b056124ef52a"
+    },
+    {
+      "fixture": "xr_gradients.ll",
+      "entry": "xrg_radial_float",
+      "source_sha256": "fc12f72c062a0d9180a63f23806032a8abf23abe763c4d8d5533483b52cfaa88"
+    },
+    {
+      "fixture": "xr_gradients.air.ll",
+      "entry": "xrg_radial_float",
+      "source_sha256": "14c2f44192dbf6d35de26d85942bc2f379c5134bc2d1ac356702b056124ef52a"
+    },
+    {
+      "fixture": "xr_gradients.ll",
+      "entry": "xrg_linear_half",
+      "source_sha256": "fc12f72c062a0d9180a63f23806032a8abf23abe763c4d8d5533483b52cfaa88"
+    },
+    {
+      "fixture": "xr_gradients.air.ll",
+      "entry": "xrg_linear_half",
+      "source_sha256": "14c2f44192dbf6d35de26d85942bc2f379c5134bc2d1ac356702b056124ef52a"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "gradients:air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "fc12f72c062a0d9180a63f23806032a8abf23abe763c4d8d5533483b52cfaa88"
+                        }
+                      }
+                    },
+                    {
+                      "name": "gradients:air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "14c2f44192dbf6d35de26d85942bc2f379c5134bc2d1ac356702b056124ef52a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "format",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "53b6aa9c2a74dcdabd8a780295d95aab78fb23e1766e98f712aeabc7292f6c24"
+                        }
+                      }
+                    },
+                    {
+                      "name": "blend",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "4e4c7eacf3c90cb6bcbb1b319f4974ca3753209e44cdb2e941e37a4722aaae40"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pipeline-radial",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f131b283abd85958c88879321d6d975004b59881eb0a9e9ef0752fc53c3fdc45"
+                        }
+                      }
+                    },
+                    {
+                      "name": "pipeline-linear",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f744d69ba02a12b83f3c4790929bf0e33fd573aaa36d9f7ab2e1d7235e9858f5"
+                        }
+                      }
+                    },
+                    {
+                      "name": "target",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "aa63c60d996804df813c7156b99f9c16bfb4abd1a8fb35e0ef4eaea0701fdbb8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "clear",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e8c62dfa10f9caf3eb4a2a7362b54b7afcbd06c65701596331176b0e9fc3b9a1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "corners-full",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "63ed26623314c98ed00a41a010fa0402e0a5297d0fc12dab33dea25ca199c515"
+                        }
+                      }
+                    },
+                    {
+                      "name": "corners-part",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b275383c2ea74e21f3fdfd73ba966de2d36bc7e0cb2fddd6d988eff5153e6844"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:radial-stops",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "328aa4bc13f91d21d1362b4e8cbfdc00c03ab1fc5991a1ad2cfc6c39f493013b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:radial-info",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5075e84a732bb7d4ffa9ab46908c73ec79c2230db06ac8a1f4c3f38e3f749c6a"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:linear-stops",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "9a37b3e0ca21b8823c54ed2d07ea8ef11208648d3f61ea0faef0b286b4c465d0"
+                        }
+                      }
+                    },
+                    {
+                      "name": "buffer:linear-info",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "f22f134ecf90de25c6d6a9052521b6b41f29065ccc51e5f96cff3ffbbcd6c87c"
+                        }
+                      }
+                    },
+                    {
+                      "name": "resolve",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "c0fa5e9f17edb21606ae7e04bdf352dd65c7a0cbd36baa7b5219badc854f3cec"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library/gradients",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/radial",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "pipeline/linear",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/radial-stops",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/radial-info",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/linear-stops",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/linear-info",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "target",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "resolve",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "buffer/texels",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "render",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "program",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "status",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Completed",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "read-back",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "texels",
+                  "observed": {
+                    "value": {
+                      "bytes": "wHsAc0BtgN/AfcB0wG+A30CAAHfAcYDfwIJAeQB0gN9AhYB7AHaA34CHgH0AeIDfwImAf8B5gN+Ai0CBQHuA30CNwILAfIDfwI4AhAB+gN/Aj0CFAH+A38CQAIbAf4DfQJGAhgCAgN9AkYCGQICA30CRQIYAgIDfgJDAhYB/gN/AjwCFwH6A34COAITAfYDfAI3AgoB8gN+AiwCBQHuA34CJQH+AeYDfQIdAfcB3gN8AhUB7wHWA34CCAHnAc4DfAIDAdoBxgN+AfYB0QG+A38B7wHIAbYDfgHrAcUBqgN+AeYBwwGeA30B4QG8AZYDfAHdAboBigN8AdgBtAGCA34B9gHSAb4DfQIAAd8BxgN8Ag4B5AHSA38CFAHyAdoDfQIhAfoB4gN/AioCAwHqA3wCNgIKAfIDfQI+AhEB+gN8AkUCGAICA34CSgIdAgYDfwJPAiECCgN/AlICJAIOA30CVAIqAg4DfgJVAisCDgN9AlQCKgIOA38CUgIkAg4DfwJOAiECCgN+AkoCHAIGA38CQAIbAf4DfAI9AhAB+gN/AjECCQHyA34CKQICAeoDfAIgAfkB4gN+AhcB7QHaA38CCQHnAc4DfAIDAdoBxgN8AfQB0AG+A34B7gHKAbIDfQHpAccBpgN8AeUBwAGeA38B3AG9AZIDfwHbAbYBhgN/Af4B2QHGA38CCQHnAc4DfwIUAfEB2gN+AiIB+wHiA30CLAIEAe4DfAI6Ag0B9gN+AkMCFgH+A38CSwIdAgYDfwJSAiQCDgN+AlkCLgISA38CXgIzAhYDfAJlAjYCGgN+AmQCOAIeA38CLAJoAkYDfgJnAjQCHgN/AmECNgIaA38CXQIyAhYDfQJYAi0CEgN+AlECJwIKA34CSgIcAgYDfAJCAhUB/gN+AjQCDAH2A3wCLwIDAeoDfQIhAfoB4gN9AhYB7AHaA30CCAHmAc4DfgH9AdgBxgN+AfIBzgG6A3wB7QHKAa4DfwHkAccBogN+AeMBvwGWA30B3gG4AY4DfAIKAeEBzgN8AhUB7wHWA30CIQH6AeIDfQIsAgQB7gN9AjoCDgH2A3wCRQIYAgIDfwJOAiECCgN9AlsCKQISA30CYAI1AhoDfQJrAjsCHgN8AnACQAImA3wCdQJEAioDfQJaAl8COgN8AgcCmAJ6A30CQQJvAlYDfAJ0AkQCKgN/AmwCQAImA3wCagI6Ah4DfAJjAjACGgN8AloCKAISA30CTQIjAgYDfwJAAhoB/gN/AjUCDQH2A38CKgIDAeoDfwIfAfQB4gN/AhAB7gHWA34CBQHjAcoDfgH5AdUBwgN8AfABzQG2A34B6wHFAaoDfQHlAcEBngN8AeABvgGSA3wCEQHoAdYDfQIdAfcB3gN+AikCAgHqA38CNQINAfYDfAJEAhsB/gN8AlMCIQIKA38CWgIvAhIDfgJkAjkCHgN8AnECQQImA30CeQJIAi4DfAKDAk4CMgN9AoQCVwI2A30CSgJ+AloDfQISAp8ChgN/AhcClQKSA3wCUQJxAmoDfwJ+Ak0CMgN8AngCSwIqA38CbAJAAiYDfQJnAjcCGgN+AlkCLgISA34CTgIgAgoDfgJDAhYB/gN9AjQCDwHyA30CKAIAAeoDfwIYAfUB3gN+AgwB6gHSA30CAAHfAcYDfAH0AdABvgN9Ae0ByAGyA3wB6AHHAaIDfgHjAb8BlgN/AhQB8gHaA30CJQH9AeYDfwIxAgkB8gN8AkICFQH+A34CTgIgAgoDfwJaAi8CEgN8AmkCOgIeA38CcAJEAioDfwJ+Ak0CMgN8AosCVQI6A3wCkgJcAkIDfgKXAmECRgN+AhYCqwKKA34CHAKlApoDfAInApoCogN8AioCkQKqA30CXwJwAnoDfwKGAlQCOgN9An0CTAIyA34CcwJCAiYDfgJkAjgCHgN9AlgCLgISA3wCTAIjAgYDfwI8AhcB+gN9AjACCAHyA38CIwH4AeYDfgIXAewB2gN8AgoB4QHOA34B+gHVAcIDfAHwAc0BtgN+AeoBxAGqA3wB5QHAAZ4DfgIeAfQB4gN8Ai8CAAHuA38COAIQAfoDfQJJAhwCBgN/AlYCKAISA30CZwI0Ah4DfwJzAkMCJgN8AoMCTgIyA3wCjgJZAj4DfwKUAmYCRgN8AqQCewJiA34CZgKiAo4DfAIpAroCsgN8AjACtQLCA30CNAKtAsoDfAI4AqMCygN9AjkCkwLGA38CZgJwAoYDfwKJAlsCOgN/An4CTQIyA30CcgJCAiYDfAJmAjYCGgN+AlUCKgIOA38CRAIeAgIDfQI7Ag4B9gN/AioCAgHqA3wCHQH2Ad4DfgIMAeoB0gN8AgMB2gHGA34B8gHOAboDfAHsAckBrgN+AecBwAGiA3wCJAH8AeYDfwIxAgkB8gN+AkMCFgH+A30CUAImAgoDfAJiAjMCFgN/Am8CPAImA30CfQJMAjIDfwKKAlgCPgN9ApoCZAJKA38CqwKBAnYDfwK7ApsCmgN/AngCvgK+A30COQLKAtoDfQJBAsUC6gN/AkYCvQLyA30CSQKxAvIDfQJJAqMC6gN/AkYCjwLeA30CbwJvAooDfgKIAlsCOgN8An8CSgIuA30CbgI+AiIDfgJcAjECFgN/Ak8CIQIKA3wCQQIUAf4DfQIzAgcB7gN+AiIB+wHiA38CEQHuAdYDfQIHAd4BygN+AfYB0gG+A34B7gHJAbIDfAHoAcQBpgN9AigCAAHqA3wCOgINAfYDfwJEAh4CAgN/AlYCKAISA38CZAI5Ah4DfwJ3AkYCKgN+AoUCVAI6A30ClwJgAkYDfgKpAoICcgN+Ar0CowKiA3wC0QK/As4DfgI8AtgC6gN+AkoC2QMCA3wCVwLWAxIDfQJbAs0DGgN+AlkCwwMWA30CWAKxAw4DfQJXApoC/gN/AkwChwLqA38CbAJrAo4DfAKHAlICNgN9AnUCRQIqA30CZwI3AhoDfQJUAioCDgN+AkYCGQICA34CNAIMAfYDfwImAf8B5gN8AhgB8gHaA30CCwHiAc4DfgH6AdUBwgN/Ae8ByAG2A30B6gHHAaYDfAIvAgAB7gN8Aj4CEQH6A3wCTAIiAgYDfAJfAiwCFgN8Am4CPgIiA30CfQJMAjIDfQKMAl4CPgN9AqICcwJaA3wCuwKUApYDfgLOArgCzgN9ApEC3AL2A34CTgLkAw4DfAJfAukDKgN+AmUC6wM6A34CaQLhA0IDfgJpAtMDOgN/AmUCvQMuA34CYgKnAxoDfwJZAo8DAgN+AlQCdALiA34CcAJjAn4DfwJ7AkoCLgN/AmgCPAIiA34CWQIuAhIDfgJKAh0CBgN+AjgCEwH2A38CKgICAeoDfwIYAfUB3gN8Ag4B5AHSA30B/AHYAcYDfAHxAc8BtgN+AesBxQGqA38CLgIGAe4DfwI8AhcB+gN/Ak8CIQIKA3wCYgIzAhYDfQJxAkECJgN9AoECUAI2A38CkAJiAkIDfgKoAoECcgN+AsACqgKuA38C2gLOAuoDfwKdAuwDFgN9Al4C8QMuA30CbAL8A1IDfAJ5Av0DZgN/AnoC8wNmA30CewLfA1oDfAJ3AsQDSgN9Am4CrQMyA30CZAKWAxYDfwJiAnsC4gN/AmMCZAK+A34CcQJXAmoDfgJvAj8CIgN+AlwCMQIWA30CTQIjAgYDfQI+AhIB+gN9AiwCBAHuA30CHgH3Ad4DfgIMAeoB0gN/Af4B2QHGA30B8QHNAboDfwHrAccBqgN8AjMCBwHuA3wCQgIVAf4DfQJRAicCCgN+AmACNQIaA38CcwJDAiYDfAKHAlICNgN+ApcCYAJGA38CrAKJAn4DfALJArECvgN+AuIC2QL+A3wCVwLoAxoDfAJqAvkDRgN8An0DCgNyA38CiAMTA44DfgKLAvwDigN8AocC5AN2A30CfQLPA1oDfQJ2ArEDQgN9AnACmQMWA34CbgJ9AuIDfQJvAmQCtgN+Am8CWQKeA3wCcAJJAlYDfAJiAjMCFgN/Ak8CIQIKA38CPAIXAfoDfgItAgUB7gN/Ah8B9AHiA38CDQHrAdIDfAIDAdoBxgN+AfIBzgG6A38B6AHIAa4DfQIzAgcB7gN9AkICFQH+A30CUQInAgoDfgJgAjUCGgN/AnMCQwImA3wChwJSAjYDfgKXAmECRgN/Aq0CiwJ+A30CygKzAr4DfAKWAtoC+gN9AlkC6wMiA34CbQL5A1IDfwKCAwsDfgN8ApUDFwOiA30CkAMAA5YDfgKLAuUDfgN+AoACzANmA3wCfQKxA0IDfgJ7ApUDDgN/AnUCfALaA30CdgJnAqoDfgJ2AlgClgN+AnUCTQJ+A38CagI7Aj4DfwJPAiECCgN/AjwCFwH6A38CLQIGAe4DfwIfAfQB4gN/Ag0B6wHSA3wCAwHaAcYDfgHyAc4BugN/AegByAGuA3wCMgIGAe4DfAJBAhQB/gN8AlACJgIKA3wCYwIwAhoDfQJyAkICJgN+AoICUAI2A3wClQJjAkIDfAKvAoICdgN9AscCqAK2A3wCbgLRAvYDfgJYAuIDIgN+Am4C7ANOA38CfgL6A3IDfwKJAvwDigN9Ao0C8wOGA30CiALfA3YDfgKDAsADYgN9AoMCqAMyA38CfgKSAv4DfAJ8AnoCygN/AnsCYQKiA38CewJWAooDfAJ/AkgCdgN8An8CPgJeA30CZwIoAioDfgI/AhIB+gN+AiwCBQHuA34CHgH0AeIDfwIMAeoB0gN/Af8B2gHGA30B8gHNAboDfwHrAccBqgN9AiwCBAHuA30CPwISAfoDfQJNAiMCBgN+AlwCMQIWA34CbwI/AiIDfwJ+Ak0CMgN/Ao0CXwI+A3wCpwJ3AmIDfAK9Ap4CngN9AkUCxALyA3wCWQLQAxoDfQJoAtwDPgN/AncC4gNaA30CgALkA24DfAKGAtsDbgN/AoICyQNmA34CggK2A0YDfwKAAqADGgN9AoACiALqA38CfwJuArYDfwJ/Al4ClgN8AoMCUAKCA3wCgAJKAmoDfAKAAjwCVgN/AnwCMwI+A30CXwIZAhIDfwIqAgMB6gN8AhwB9gHeA30CDwHlAdIDfgH9AdgBxgN9AfEBzAG6A38B6wHGAaoDfgIpAgIB6gN9AjsCDwH2A30CSQIcAgYDfQJYAi0CEgN9AmoCOwIeA30CeQJIAi4DfQKLAlYCOgN9ApoCZwJGA3wCcgKaAp4DfgJBArQC5gN+AlMCvwMGA30CYwLHAyYDfgJvAssDPgN/AnYCywNOA38CegLDA1IDfAJ9ArQDSgN8AoACpwMiA34CgQKRAvoDfgKDAngCzgN8AoECZAKiA34CggJaAooDfwKDAk0CdgN/AoMCQwJeA38CgAI6AkoDfgKAAi0CNgN9AoECIAIiA3wCVgIKAfoDfQIaAfMB2gN+AggB5wHOA38B+wHWAcIDfAHwAc0BtgN+AeoBxAGqA30CJQH+AeYDfQI3AgoB8gN8AkQCGwH+A38CUgIkAg4DfgJgAjUCGgN9AnICQgImA3wCgAJSAjIDfwKNAl8CPgN8Ai0CmQKyA3wCPgKjAtIDfwJKAqsC8gN9AlgCsgMOA3wCZgKzAyIDfAJsArEDMgN8AnECqQM2A38CdwKeAx4DfAJ8ApEC/gN/An8CfgLWA38CfwJoAq4DfgKCAl8CkgN8AoQCVgJ+A30ChQJIAmoDfgKGAjwCVgN9AocCMwI+A30ChAIqAioDfwKBAh4CFgN+AoECEgICA34CSgH4AeYDfgIFAeMBygN8AfsB0wG+A34B7wHKAbIDfAHpAcUBpgN8AiAB+QHiA34CLQIFAe4DfQI+AhIB+gN8AkwCIgIGA34CWQIuAhIDfAJqAjoCHgN+AnYCRgIqA34CagJjAk4DfAIoAo8CqgN+AjYCjwK+A38CQAKXAtoDfAJQApsC8gN+AlkCmgMGA30CYgKVAxIDfAJoApADDgN9AnMChgLyA38CdgJ7AtIDfwJ7AmgCsgN/AnwCYQKaA34CgwJUAoYDfAKFAkwCcgN+AocCQAJeA38ChAI7AkYDfwKFAi8CMgN+AoYCIwIeA30ChAIYAg4DfwKAAgwB+gN9AoECAQHmA3wCQQHpAc4DfwHwAdABvgN9Ae0BygGuA38B5wHBAaIDfgIaAfAB3gN/AicB/wHmA30CNAIPAfIDfwJAAhsB/gN9AlECJwIKA34CXQIyAhYDfwJoAj0CIgN9AkoCZAJmA30CJgKAAq4DfQIwAoICugN/AjsCfgLGA30CRwJ/AtYDfgJPAn8C5gN9AlcCeALyA30CYwJ1At4DfgJrAm0CxgN+AnICZwKuA3wCewJcAp4DfgJ/AlUCigN9AoMCTgJ2A3wChQJGAmIDfgKHAjoCTgN/AoUCMwI6A38ChwInAiYDfgKEAhwCFgN9AoYCEQICA38CgwIGAe4DfQKAAf8B2gN/An0B8QHKA38CNwHbAbYDfwHrAcYBqgN9AeUBwQGeA34CEAHuAdYDfAIgAfkB4gN9AiwCBAHuA34COAITAfYDfwJHAhoCAgN/AlMCJQIOA38CXgIzAhYDfgIVAnkCngN9AiMCdwKqA3wCLQJ0AroDfgI3AnACxgN+AjwCcgLOA34CRAJsAtoDfQJSAmgC0gN9Al4CZALCA38CZgJjAq4DfAJwAl4CngN+AnYCVAKOA3wCfgJNAnoDfAKCAkcCZgN/AoECPAJWA30ChAI1AkIDfgKGAioCLgN+AoQCIwIaA34ChgIUAgoDfQKEAg0B9gN/AoECAwHiA30CgwH1AdIDfgJ8Ae8BvgN/AnwB5QGuA34CDwHLAaIDfwHjAb0BmgN+AggB5wHOA38CFAHyAdoDfAInAfgB5gN8AjMCBwHuA3wCPgIRAfoDfAJIAh8CAgN9Ai8CSgJOA38CEgJtAp4DfQIcAm4CqgN/AiUCagK2A3wCMwJlAsIDfAI4AmcCygN9AkECYALOA38CTwJeAr4DfgJbAloCrgN8AmcCVQKeA30CbgJRAo4DfAJ3AksCegN+AnkCRgJqA34CfQI/AlYDfQKAAjUCRgN/AoACLwIyA30ChgIgAiIDfQKFAhoCDgN9AocCDAH+A3wChQIGAeoDfgKDAfgB2gN8AoEB8gHGA34CfwHlAbYDfAKBAeMBogN/AnwB3gGWA3wCCAHHAZIDfgIBAdwBygN+AgwB6gHSA34CGwHwAd4DfgIlAf4B5gN9AjMCBwHuA3wCPQIRAfoDfQIkAkACSgN/Ag8CYAKeA3wCGAJgAqoDfgIiAlwCtgN+AisCWgK+A34CMwJXAsYDfwI+AlYCugN8AkwCVwKqA3wCWAJQAp4DfQJgAkwCjgN+AmsCRAJ+A30CcQJDAmoDfwJ3AjoCWgN/AnsCMAJKA38CfAIvAjYDfQKDAiECJgN+AoICGwISA38CgQIRAgIDfwKAAggB8gN+AoIB/gHeA3wCgAH1Ac4DfgJ+AegBvgN/AloB3AGuA34CDwHKAaIDfwHgAcEBmgN+Ad8BugGOA30B+AHUAcIDfAIHAd4BygN8AhEB6wHSA38CGwHxAd4DfQIlAf4B5gN/Ai4CBgHuA3wCAgJbAo4DfgIIAlsCmgN8AhUCVwKmA3wCHgJRArIDfAInAk8CugN/Ai0CTwK2A30CPwJIAqoDfgJJAkkCmgN9AlUCRgKKA38CXQJDAnoDfwJlAj8CagN+Am8CNgJaA3wCdQIyAkoDfAJ6AikCOgN8An4CIAIqA34CfgIbAhYDfAKCAhECBgN9AoECCAH2A30CgAIDAeIDfQJhAfAB0gN9AhoB2AHCA38B7wHIAbYDfgHqAcUBqgN9AeYBwgGeA3wB4QG/AZIDfAHcAbgBigN9AfEBzAG6A34B+gHVAcIDfQIHAd4BygN/Ag0B6wHSA30CGgHzAdoDfwIKAiYCMgN8Af8CTgKOA34CBQJNApoDfgINAkgCpgN+AhYCRgKuA38CHwJDArIDfgIuAkECpgN/AjgCQgKWA38CRgI8AooDfgJTAjkCegN/AlsCNQJqA3wCZgIyAloDfwJpAi4CSgN8AnMCJgI6A30CdAIhAioDfQJ5AhkCGgN/AnkCEAIKA3wCZwIBAfIDfgIqAe8B1gN/AiEB5AHOA30B+QHUAcIDfAHwAc8BtgN/AegByAGuA38B5wHBAaIDfgHiAb8BlgN9Ad4BuAGOA30B2QG2AYIDfQHtAcoBrgN9AfEBzAG6A34B+QHVAcIDfwICAd0BygN9Ag8B5QHSA34CAwIZAi4DfAH4AkUCjgN9AgECQAKaA30CCgI+AqIDfAITAjsCqgN+Ah0COQKiA3wCLAI7ApIDfAI6AjQChgN8AkcCMgJ2A38CTAIzAmYDfAJYAiwCWgN8AmMCJQJKA38CZgIiAjoDfQJtAh4CKgN+AnICFgIaA38CXQILAf4DfQItAfQB4gN8Ag4B5AHSA34CAQHcAcoDfQH4AdQBwgN8AfEBzwG2A3wB7AHJAa4DfAHoAccBogN/AeMBvQGaA38B3wG7AY4DfgHbAbUBhgN+AdYBswF6A3wB6QHFAaYDfAHtAcoBrgN8AfEBzwG2A3wB+wHTAb4DfAIDAdoBxgN/AekCPAKCA38B8QI7AooDfAH+AjUClgN/AgICMwKeA34CDAIyAp4DfAIfAi8CjgN+AikCLQKCA34CNwIrAnIDfQJAAikCZgN/AkkCJgJWA3wCVQIjAkYDfAJdAh0COgN/AlACEwIWA38CLAH9Ae4DfgIXAe0B2gN/Ag0B6wHSA38CBgHgAc4DfwH+AdoBxgN/AfYB0gG+A3wB8AHOAbYDfAHsAckBrgN8AegBxAGmA3wB5AHCAZoDfwHcAb0BkgN/AdgBuwGGA38B1wGyAX4DfwHTAa0BdgN8AeQBwwGaA3wB6AHEAaYDfAHsAcgBrgN/Ae8ByAG2A30B6wIAAhoDfgHmAjMCfgN/Ae4CLQKKA34B9gIrApIDfgH/AiYCmgN9Ag4CJAKOA34CGQImAn4DfwInAiACcgN/AjECIgJiA34CPgIcAlYDfQI9AhMCKgN+AicB+gHyA34CFwHsAdoDfgITAekB1gN9Ag8B5QHSA3wCCgHhAc4DfQIAAd8BxgN/AfoB1QHCA38B8wHPAboDfwHvAcsBsgN/AesBxwGqA38B5AHHAaIDfAHkAcIBmgN8AeABvQGSA3wB3AG4AYoDfAHYAbcBfgN8AdQBswF2A34B0gGuAXIDfAHgAb0BkgN/AeABwQGaA38B5wHBAaIDfgHqAcUBqgN9AeACFgJCA38B4wIlAn4DfQHrAiMChgN9AfMCHAKSA30B/QIdAooDfwIIAh8CegN9AhsCGQJuA34CHAIPAjoDfQIVAfAB8gN/AhUB8QHuA38CCQHnAc4DfQILAeIBzgN/AgUB4AHOA38CAgHdAcoDfwH+AdkBxgN+AfkB1QHCA3wB9AHQAb4DfAHwAc4BtgN9Ae0BywGuA34B6gHEAaoDfgHnAcABogN/AeMBvAGaA38B3AG8AZIDfAHcAbgBigN8AdgBtAGCA3wB1AGwAXoDfgHSAa4BcgN+AdIBrgFyA38B2AG4AYoDfwHfAbsBjgN+AeIBvwGWA30B5QHCAZ4DfQHdAiQCcgN+AeACIgJ6A3wB6gIbAoIDfwHuAhUChgN+AfsCAQJKA30CBgIDAj4DfAIDAeMB5gN+AfoB1QHCA3wB/wHXAcIDfAH/AdcBwgN8Af8B1gHCA34B+gHVAcIDfAH4AdcBvgN9AfUB0QG+A30B8gHNAboDfwHsAc0BtgN9Ae0BywGuA34B6wHGAaoDfAHoAccBogN9AeUBwQGeA34B4gG+AZYDfgHfAboBjgN/AdsBtwGGA3wB2AG3AX4DfAHUAbMBdgN+AdIBrgFyA34B0gGuAXIDfgHSAa4BcgN/AdcBsgF+A34B2wG1AYYDfQHeAbgBjgN8AdwB8wH6A3wB3gIeAm4DfgHhAhsCdgN/AecB/QJKA3wB7QHbAdoDfAHsAcgBrgN9Ae0ByAGyA34B7wHKAbIDfwHvAcgBtgN8AfABzgG2A3wB8AHOAbYDfAHwAc0BtgN/Ae8ByAG2A34B7wHKAbIDfQHtAcsBrgN/AegByAGuA34B6gHEAaoDfwHkAccBogN9AeUBwgGeA38B4wG8AZoDfAHgAb4BkgN9Ad0BuwGKA34B2gG0AYYDfwHXAbEBfgN8AdQBsgF2A34B0gGuAXIDfgHSAa4BcgN+AdIBrgFyA34B0gGuAXIDfwHTAa0BdgN+AdYBswF6A30B2QG2AYIDfQHbAekB9gN+Ad0B0QHGA3wB4AG+AZIDfgHjAb8BlgN8AeQBwAGeA34B5gHDAZ4DfwHkAcYBogN8AekBxQGmA30B6QHHAaYDfgHqAcQBqgN+AeoBxAGqA34B6gHEAaoDfQHpAcYBpgN8AekBxQGmA38B5wHCAaIDfgHmAcMBngN8AeQBwwGaA34B4gG/AZYDfAHgAb4BkgN+Ad4BuQGOA38B2wG3AYYDfAHZAbUBggN+AdYBswF6A38B0wGsAXYDfgHSAa4BcgN+AdIBrgFyA34B0gGuAXIDfgHSAa4BcgN+AdIBrgFyA34B0gGuAXIDfgHSAa4BcgN8AdQBswF2A38B1wGxAX4DfQHZAbYBggN/AdsBtwGGA30B3QG7AYoDfwHfAbsBjgN8AeEBvwGSA34B4gG+AZYDfwHjAbwBmgN/AeABwQGaA3wB5AHCAZoDfAHkAcMBmgN8AeQBwgGaA38B4AHBAZoDfgHjAbwBmgN9AeIBvQGWA3wB4AG+AZIDfwHfAbsBjgN9Ad0BuwGKA38B2wG2AYYDfQHZAbYBggN+AdcBsAF+A3wB1AGzAXYDfgHSAa4BcgN+AdIBrgFyA34B0gGuAXIDfgHSAa4BcgN+AdIBrgFyA34B0gGuAXIDfgHSAa4BcgN8="
+                    },
+                    "shape": {
+                      "bytes": {
+                        "region": {
+                          "texture": {
+                            "level": 0,
+                            "slice": 0,
+                            "aspect": "color",
+                            "sample": 0,
+                            "origin": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "size": [
+                              32,
+                              32,
+                              1
+                            ]
+                          }
+                        },
+                        "element": "u16",
+                        "row_offset": 0,
+                        "row_elements": 128,
+                        "row_pitch": 256,
+                        "rows": 32,
+                        "image_pitch": 8192,
+                        "images": 1,
+                        "gaps": "ignored"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "degraded": [
+        "metal2vulkan-degrade-dont-care-store",
+        "metal2vulkan-degrade-extended-range-resolve",
+        "metal2vulkan-degrade-fetch-through-scratch",
+        "metal2vulkan-degrade-half-output-fast-math-blend",
+        "metal2vulkan-degrade-render-pass-split",
+        "metal2vulkan-degrade-sample-planes",
+        "metal2vulkan-degrade-shader-resolve"
+      ],
+      "bounds": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 2,
+        "argument_objects_retained": 4,
+        "argument_samplers_taken": 2,
+        "argument_tables_held_at_bind": 1,
+        "argument_tables_retained": 2,
+        "bare_starts": 1,
+        "batches_submitted_by_waiters": 1,
+        "batches_with_none_pending": 1,
+        "blocks_ahead_waited_for": 1,
+        "bound_notices_made": 2,
+        "color_resolve_passes_made": 1,
+        "command_barriers": 1,
+        "command_buffers_begun": 7,
+        "command_buffers_begun_batch_barriers": 1,
+        "command_buffers_begun_batch_work": 1,
+        "command_buffers_begun_encoders": 2,
+        "command_buffers_begun_secondaries": 3,
+        "command_buffers_submitted": 4,
+        "commands_recorded.begin_command_buffer": 7,
+        "commands_recorded.cmd_begin_render_pass": 3,
+        "commands_recorded.cmd_bind_descriptor_sets": 4,
+        "commands_recorded.cmd_bind_pipeline": 4,
+        "commands_recorded.cmd_clear_color_image": 3,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_copy_buffer_to_image": 1,
+        "commands_recorded.cmd_copy_image": 1,
+        "commands_recorded.cmd_copy_image_to_buffer": 1,
+        "commands_recorded.cmd_dispatch": 1,
+        "commands_recorded.cmd_draw": 3,
+        "commands_recorded.cmd_end_render_pass": 3,
+        "commands_recorded.cmd_execute_commands": 2,
+        "commands_recorded.cmd_pipeline_barrier": 17,
+        "commands_recorded.cmd_push_constants": 5,
+        "commands_recorded.cmd_set_blend_constants": 2,
+        "commands_recorded.cmd_set_cull_mode": 2,
+        "commands_recorded.cmd_set_depth_bias": 2,
+        "commands_recorded.cmd_set_depth_compare_op": 2,
+        "commands_recorded.cmd_set_depth_test_enable": 2,
+        "commands_recorded.cmd_set_depth_write_enable": 2,
+        "commands_recorded.cmd_set_front_face": 2,
+        "commands_recorded.cmd_set_primitive_restart_enable": 2,
+        "commands_recorded.cmd_set_primitive_topology": 2,
+        "commands_recorded.cmd_set_scissor": 3,
+        "commands_recorded.cmd_set_stencil_compare_mask": 2,
+        "commands_recorded.cmd_set_stencil_op": 2,
+        "commands_recorded.cmd_set_stencil_reference": 2,
+        "commands_recorded.cmd_set_stencil_test_enable": 2,
+        "commands_recorded.cmd_set_stencil_write_mask": 2,
+        "commands_recorded.cmd_set_viewport": 3,
+        "commands_recorded.end_command_buffer": 7,
+        "commits_handed_off": 1,
+        "commits_taken_in": 1,
+        "completed_waits": 4,
+        "completed_where_seen": 1,
+        "completion_arms": 1,
+        "completion_arms_after_a_wake": 1,
+        "completion_waiter_parks": 1,
+        "creation_pipelines_drawn": 2,
+        "creation_pipelines_made": 2,
+        "creation_render_pipelines_drawn": 2,
+        "creation_render_pipelines_made": 2,
+        "descriptor_keys_built": 2,
+        "device_memory_allocated": 205520896,
+        "draw_shapes_made": 2,
+        "draw_states_recorded": 38,
+        "draws_settled": 2,
+        "draws_unkept": 2,
+        "draws_unkept_instance": 2,
+        "draws_unkept_instance_later": 2,
+        "draws_unkept_shadowed": 2,
+        "draws_unkept_writing": 2,
+        "driver_diagnostics_withheld": 4,
+        "encoder_command_buffers_begun": 5,
+        "fence_waits": 1,
+        "finales_folded": 1,
+        "functions_shared": 4,
+        "functions_translated": 5,
+        "gate_waits": 1,
+        "gate_waits_slept": 1,
+        "graphics_pipelines_looked_up": 2,
+        "heap_tables_worked_out": 4,
+        "host_steps_recorded": 1,
+        "image_blocks_made_ahead": 1,
+        "image_blocks_made_in_place": 1,
+        "instance_splits_interlocked_writes": 1,
+        "linked_use_questions_asked": 4,
+        "new_buffer_bytes_cleared": 8496,
+        "object_churn.buffers_parked": 6,
+        "object_churn.buffers_recycled": 6,
+        "object_churn.images_evicted": 2,
+        "object_churn.images_own_memory": 5,
+        "object_churn.images_parked": 5,
+        "object_churn.images_recycled": 5,
+        "object_churn.textures_image": 5,
+        "object_churn.vk_image_bindings": 4,
+        "object_churn.vk_image_views_made": 5,
+        "object_churn.vk_images_destroyed": 2,
+        "object_churn.vk_images_made": 4,
+        "owned_descriptor_pools": 1,
+        "owned_kernel_spirv_bytes": 1288,
+        "owned_kernels_made": 1,
+        "passes_not_inline_layouts": 1,
+        "pipeline_layouts_made": 2,
+        "pipeline_layouts_shared": 4,
+        "plain_buffer_blocks_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "queue_submissions": 1,
+        "queues_sharing_a_vk_queue": 1,
+        "render_encoders_ended": 1,
+        "render_passes_begun_instances": 2,
+        "render_passes_made": 4,
+        "resident_textures_looked_at": 1,
+        "scheduled_where_submitted": 1,
+        "scheduler_passes": 1,
+        "scheduler_passes_by_waiters": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_commit": 1,
+        "shader_modules_made": 5,
+        "shader_modules_shared": 4,
+        "slot_returns": 1,
+        "spare_command_pools_taken": 1,
+        "stage_entries_shared": 24,
+        "stage_entries_specialized": 3,
+        "stage_tables_read": 8,
+        "submit_infos": 1,
+        "trail_waits": 1,
+        "unrun_instances_ended": 1,
+        "variant_pipelines_made": 2,
+        "wakes_completion_waiters": 1,
+        "wakes_spared": 7
+      },
+      "moving": {
+        "gate_waits_slept": 0
+      },
+      "composed": {
+        "argument_samplers_taken": 2,
+        "blocks_ahead_waited_for": 1,
+        "commands_recorded.cmd_copy_buffer": 1,
+        "commands_recorded.cmd_pipeline_barrier": 15,
+        "device_memory_allocated": 205520896,
+        "functions_translated": 5,
+        "host_steps_recorded": 0,
+        "image_blocks_made_ahead": 1,
+        "image_blocks_made_in_place": 0,
+        "owned_kernel_spirv_bytes": 1288,
+        "owned_kernels_made": 1,
+        "plain_buffer_blocks_made": 2,
+        "queues_sharing_a_vk_queue": 0,
+        "render_passes_made": 4,
+        "stage_entries_shared": 16,
+        "stage_entries_specialized": 3
+      },
+      "ceilings": {
+        "addressable_buffers_made": 1,
+        "arena_pools_made": 2,
+        "pipeline_layouts_made": 2,
+        "pooled_memory_blocks_made": 3,
+        "shader_modules_made": 5
+      },
+      "per_state": {
+        "pipelines": 4,
+        "states": 2
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 6.08 and ours at 6.32; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 279,
+      "times": {
+        "case": "xr-gradient-bgra10xr-blended-x4",
+        "calls": 12,
+        "in_calls": 37914415,
+        "on_cpu": 1564126,
+        "blocked": 36381333,
+        "elsewhere": 8196625,
+        "spend": 46110707,
+        "spend_least": 45097334,
+        "spend_most": 60617582,
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 6625,
+            "on_cpu": 6792,
+            "blocked": 0,
+            "wall_least": 6041,
+            "wall_most": 7250,
+            "wall_total": 50792,
+            "on_cpu_total": 51541,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 28435834,
+            "on_cpu": 798167,
+            "blocked": 27640209,
+            "wall_least": 27382667,
+            "wall_most": 33168000,
+            "wall_total": 28435834,
+            "on_cpu_total": 798167,
+            "blocked_total": 27640209
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8250,
+            "on_cpu": 8500,
+            "blocked": 0,
+            "wall_least": 6708,
+            "wall_most": 13750,
+            "wall_total": 8250,
+            "on_cpu_total": 8500,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 8670709,
+            "on_cpu": 321917,
+            "blocked": 8348792,
+            "wall_least": 8473292,
+            "wall_most": 9801875,
+            "wall_total": 8670709,
+            "on_cpu_total": 321917,
+            "blocked_total": 8348792
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 83083,
+            "on_cpu": 83375,
+            "blocked": 0,
+            "wall_least": 81500,
+            "wall_most": 7570750,
+            "wall_total": 295792,
+            "on_cpu_total": 296583,
+            "blocked_total": 0
+          },
+          {
+            "call": "target",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 16167,
+            "on_cpu": 16334,
+            "blocked": 0,
+            "wall_least": 15625,
+            "wall_most": 17417,
+            "wall_total": 53042,
+            "on_cpu_total": 53375,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 5375,
+            "on_cpu": 5542,
+            "blocked": 0,
+            "wall_least": 5167,
+            "wall_most": 5875,
+            "wall_total": 5375,
+            "on_cpu_total": 5542,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 6.08 and ours at 6.32; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 283,
+      "times": {
+        "case": "xr-gradient-bgra10xr-blended-x4",
+        "calls": 12,
+        "in_calls": 17304416,
+        "on_cpu": 13800290,
+        "blocked": 3519042,
+        "elsewhere": 4983084,
+        "spend": 22287500,
+        "spend_least": 21430542,
+        "spend_most": 29179460,
+        "degraded": [
+          "metal2vulkan-degrade-dont-care-store",
+          "metal2vulkan-degrade-extended-range-resolve",
+          "metal2vulkan-degrade-fetch-through-scratch",
+          "metal2vulkan-degrade-half-output-fast-math-blend",
+          "metal2vulkan-degrade-render-pass-split",
+          "metal2vulkan-degrade-sample-planes",
+          "metal2vulkan-degrade-shader-resolve"
+        ],
+        "per_call": [
+          {
+            "call": "buffer",
+            "least_calls": 4,
+            "most_calls": 4,
+            "wall": 4334,
+            "on_cpu": 4541,
+            "blocked": 0,
+            "wall_least": 4000,
+            "wall_most": 5708,
+            "wall_total": 49001,
+            "on_cpu_total": 50166,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1232875,
+            "on_cpu": 1234750,
+            "blocked": 0,
+            "wall_least": 1154333,
+            "wall_most": 1277917,
+            "wall_total": 1232875,
+            "on_cpu_total": 1234750,
+            "blocked_total": 0
+          },
+          {
+            "call": "read_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2541,
+            "on_cpu": 2792,
+            "blocked": 0,
+            "wall_least": 1833,
+            "wall_most": 4167,
+            "wall_total": 2541,
+            "on_cpu_total": 2792,
+            "blocked_total": 0
+          },
+          {
+            "call": "render",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 2977209,
+            "on_cpu": 1581333,
+            "blocked": 1209626,
+            "wall_least": 2676500,
+            "wall_most": 3670541,
+            "wall_total": 2977209,
+            "on_cpu_total": 1581333,
+            "blocked_total": 1209626
+          },
+          {
+            "call": "render_pipeline",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 6457458,
+            "on_cpu": 5267041,
+            "blocked": 1104541,
+            "wall_least": 5667709,
+            "wall_most": 8362000,
+            "wall_total": 13028833,
+            "on_cpu_total": 10798041,
+            "blocked_total": 2294958
+          },
+          {
+            "call": "target",
+            "least_calls": 2,
+            "most_calls": 2,
+            "wall": 50875,
+            "on_cpu": 51292,
+            "blocked": 0,
+            "wall_least": 48875,
+            "wall_most": 139792,
+            "wall_total": 176125,
+            "on_cpu_total": 176875,
+            "blocked_total": 0
+          },
+          {
+            "call": "zeroed_buffer",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 6541,
+            "on_cpu": 6750,
+            "blocked": 0,
+            "wall_least": 6292,
+            "wall_most": 23084,
+            "wall_total": 6541,
+            "on_cpu_total": 6750,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

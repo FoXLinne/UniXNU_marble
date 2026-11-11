@@ -19,7 +19,9 @@
 //!    as undefined as the constant.
 //! 5. **Pointer erasure**: casts between identical erased pointer types disappear, so typed- and
 //!    opaque-pointer bitcode of one program canonicalize identically. Each defined function is
-//!    erased in place before inlining, so the inlined body is built erased.
+//!    erased in place before inlining, so the inlined body is built erased. Before it, each call
+//!    passing a thread-memory argument `byval` makes the callee's copy (an `alloca` and an
+//!    `llvm.memcpy`) and passes it plainly (`byval`).
 //! 6. **Inlining**: every direct call to a defined function is inlined into the entry, after a
 //!    memoized size pre-pass checked against `Limit::InlinedInstructions`; a call cycle is
 //!    `Unsupported{Recursion}`. Between the pre-pass and building the inlined body, a value use of
@@ -29,14 +31,18 @@
 //!    call through a table a switch over the functions it may call; the direct calls this makes are
 //!    inlined in turn, round after round, until none is made.
 //! 7. **SCCP** over the inlined entry, including `air.is_function_constant_defined`, loads of
-//!    bound constants, and loads of the integer fields of a constant-space global whose value is
-//!    its initializer (`const_loads`); unreachable blocks are deleted. A value use of an unsupplied
+//!    bound constants, loads of the integer fields of a constant-space global whose value is
+//!    its initializer (`const_loads`), the integer `llvm.*` operations on constants, and the
+//!    float operations a constant operand decides whatever the others hold (a NaN operand, and a
+//!    product by a zero under `nnan` and `nsz`); unreachable blocks are deleted. A call whose immediates were not constants where it was
+//!    decoded (`Callee::Unbound`: an internal function's parameter passed on to the intrinsic) is
+//!    bound where they now are, each inlined copy with its own call site's constants. A value use of an unsupplied
 //!    constant that survives is `Error::NeedsInput(FunctionConstant)`. **Unrolling**: a loop whose
 //!    trip count SCCP made constant, and whose counter decides a branch of its body, is unrolled
 //!    within fixed ceilings, and SCCP runs again over the copies; the result is kept where it is
 //!    no larger than the loops it replaces (`unroll`).
-//! 8. **Post-check**: no unknown intrinsic, indirect call, or call to an undefined non-intrinsic
-//!    function survives, and no reachable branch tests `undef`. A table call's refused candidate,
+//! 8. **Post-check**: no unknown or unbound intrinsic, indirect call, or call to an undefined
+//!    non-intrinsic function survives, and no reachable branch tests `undef`. A table call's refused candidate,
 //!    a table call no linked function answers, and a function pointer used as a value are refused
 //!    here, as stubs are. Indirect calls, calls to functions of a dynamic library, and ray
 //!    intersection are refused as their typed features, not implemented yet, naming the callee; a
@@ -58,7 +64,9 @@
 //!    and vector members' accesses, joined by `insertvalue` or split by `extractvalue`
 //!    (`aggregates`). **Global built-in
 //!    variables**: each `air.get_*` read of a program-scope built-in becomes a read of a built-in
-//!    parameter appended to the entry (`global_builtin`).
+//!    parameter appended to the entry (`global_builtin`); in OpenCL mode, first, the entry takes
+//!    the three hidden buffers and each OpenCL C work-item read becomes a read of its built-in or
+//!    of the first buffer ([`opencl`]).
 //! 10. **ABI resolution and pruning**: predicate-gated parameters and outputs that are off
 //!     disappear from the entry point, a read of an absent argument takes its absent value (the
 //!     null reference of a resource argument) or is refused, global-valued ABI integers become
@@ -69,8 +77,11 @@
 //! Inlining runs before SCCP: SCCP over the one inlined body sees each call's constant arguments,
 //! which per-function SCCP could not, and deletes the callees' dead paths with the caller's.
 
+mod adapt;
 mod aggregates;
 mod async_copy;
+mod block_read;
+mod byval;
 mod command_writes;
 mod const_loads;
 mod devirt;
@@ -93,6 +104,7 @@ mod link;
 #[cfg(test)]
 mod link_tests;
 mod matmul2d;
+pub mod opencl;
 mod out;
 mod pieces;
 mod prune;
@@ -157,6 +169,11 @@ pub struct SpecRequest {
     /// The pipeline's `maxCallStackDepth`: it sizes the explicit call stack of a recursion through
     /// visible functions. 0 is taken as 1, Metal's default.
     pub call_stack_depth: u32,
+    /// The entry is a kernel of a compute pipeline of OpenCL mode (`openCLModeEnabled`, Apple
+    /// SPI): it takes three hidden buffers before its own, each of its buffer-indexed arguments
+    /// sits 3 past its index, and OpenCL C's work-item functions read the dispatch's values
+    /// ([`opencl`]). Any other entry than a kernel specializes as without it.
+    pub open_cl_mode: bool,
 }
 
 /// The constexpr samplers of one linked function that a pipeline state numbers
@@ -281,6 +298,13 @@ pub struct Lockstep {
     /// make exact, left out because the device's lockstep orders their pairs as Apple's does. The
     /// module then requires the property. 0 elsewhere.
     pub device: u32,
+    /// Every inserted barrier orders only pairs whose threads meet where a simdgroup spans two
+    /// rows of its threadgroup (two of its threads then share their position's `x`, or hold
+    /// different `y`s or `z`s): in a threadgroup whose simdgroups each lie within one row (a single row, or rows of a
+    /// multiple of 32 threads) no pair conflicts. Decided where a subgroup barrier keeps a 32-lane
+    /// tier (maximal reconvergence on 32-lane subgroups, without the device's own lockstep);
+    /// `false` elsewhere and where no barrier is inserted.
+    pub rows: bool,
 }
 
 impl Lockstep {
@@ -365,6 +389,7 @@ fn writes_texture(op: &AirIntrinsic) -> bool {
         | TexOp::SampleGrad { .. }
         | TexOp::Gather { .. }
         | TexOp::Read
+        | TexOp::BlockRead
         | TexOp::Fence
         | TexOp::Query(_)
         | TexOp::IsNull
@@ -388,7 +413,9 @@ fn calls(module: &Module, ep: &EntryPoint, wanted: impl Fn(&AirIntrinsic) -> boo
         .any(|inst| match &inst.kind {
             InstKind::Call(call) => match call.callee {
                 Callee::Air { op, .. } => wanted(&op),
-                Callee::Indirect { .. } | Callee::UnknownIntrinsic(_) => true,
+                Callee::Indirect { .. } | Callee::UnknownIntrinsic(_) | Callee::Unbound { .. } => {
+                    true
+                }
                 Callee::Llvm { .. } => false,
                 Callee::Direct(f) => declared(f) && !ep.is_control_point_function(f),
             },
@@ -525,6 +552,8 @@ pub fn specialize_dynamic(
     // the inliner copies erased bodies and the inlined body, as large as the entry's whole call
     // tree, is never rebuilt to erase it (that copy beside the inlined body was a translation's
     // ledger peak).
+    // Each `byval` argument's copy, made at its call, so the inliner takes the call.
+    byval::explicit(&mut parts, m)?;
     let emap = erase::erase_consts(&mut parts.consts, m)?;
     erase::erase_globals(parts.globals.values_mut(), &emap);
     erase_functions(&mut parts, &emap, m)?;
@@ -580,6 +609,8 @@ pub fn specialize_dynamic(
     // A kernel's simdgroup asynchronous copies complete when their calls return, shared by the
     // simdgroup's lanes, and each wait is a simdgroup barrier.
     let body = async_copy::expand(body, &mut parts, ep, m)?;
+    // Metal 4.1's block reads are the reads of their texels.
+    let body = block_read::expand(body, &mut parts, ep.func, m)?;
 
     // SCCP. The body it read is freed as soon as it has run.
     let solved = solve(&body, &mut parts, &fcs, &name, m)?;
@@ -666,6 +697,14 @@ pub fn specialize_dynamic(
     } else {
         body
     };
+    // OpenCL mode: the three hidden buffers appended to the entry, and each OpenCL work-item read
+    // a read of its built-in or of the first buffer, which the global built-ins below take.
+    let (body, hidden) = if req.open_cl_mode && matches!(ep.stage, Stage::Kernel { .. }) {
+        let (body, first) = opencl::expand(body, &mut parts, func, m)?;
+        (body, Some(first))
+    } else {
+        (body, None)
+    };
     // Global built-in variables: each read becomes a read of a built-in parameter added to the
     // entry, but one Metal refuses in the entry's stage.
     let (body, global_builtins) = global_builtin::expand(body, &mut parts, func, &ep.stage, m)?;
@@ -690,6 +729,10 @@ pub fn specialize_dynamic(
     // The lane parameters `matmul2d`'s lowering added.
     if let Some(lanes) = lanes {
         ep.params.extend(lanes.bindings());
+    }
+    // OpenCL mode's indices and hidden buffers.
+    if let Some(first) = hidden {
+        ep = opencl::entry(ep, first)?;
     }
     // The built-in parameters the global built-ins' reads became.
     ep.params.extend(global_builtins);
@@ -1303,7 +1346,8 @@ pub fn select<'a>(module: &Module, abi: &'a AirAbi, entry: &str) -> Result<&'a E
 }
 
 /// Each refusal carries the call's location in the inlined body (the entry's function, block, and
-/// instruction) and names its callee's symbol where it has one. Indirect calls devirtualization
+/// instruction) and names its callee's symbol where it has one. A call whose immediates are still
+/// not constants (`Callee::Unbound`) is `InvalidInput(Intrinsic(ImmediateNotConstant))`. Indirect calls devirtualization
 /// left (a function pointer loaded from memory or computed, a table that is no entry parameter),
 /// calls to functions this module does not define (linking), and unknown intrinsics of a typed
 /// family (`intrinsics::UNDECODED_FEATURES`) are refused as their features, not implemented yet;
@@ -1368,7 +1412,7 @@ fn post_check(
                         }
                         Some(Stub::Refused(Error::Unsupported(u))) => Ok(u.clone()),
                         Some(Stub::Refused(e)) => Err(e.clone()),
-                        Some(Stub::Resolved(_)) => {
+                        Some(Stub::Resolved { .. }) => {
                             Err(invariant("a call to a resolved stub survived linking"))
                         }
                         // A dynamic-library import, or a declaration no library can define.
@@ -1381,6 +1425,11 @@ fn post_check(
                 };
             let refusal = match call.callee {
                 Callee::Air { .. } | Callee::Llvm { .. } => continue,
+                // An immediate that inlining and constant propagation did not make a constant.
+                Callee::Unbound { .. } => {
+                    let kind = InputErrorKind::Intrinsic(IntrinsicError::ImmediateNotConstant);
+                    return Err(InputError::new(kind, at).into());
+                }
                 // The decoder keeps a call through a function's own constant address indirect when
                 // the call's function type is not the function's (`bitcode::function`): its callee
                 // is still that one function, so it is classified by the function, not as dynamic.

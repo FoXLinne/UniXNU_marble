@@ -137,7 +137,10 @@ fn observes(callee: &Callee) -> bool {
         Callee::Air { op, .. } => op,
         Callee::Llvm { .. } => return false,
         // Canonicalization inlines every defined callee; what remains is not the kernel's own.
-        Callee::Direct(_) | Callee::Indirect { .. } | Callee::UnknownIntrinsic(_) => return true,
+        Callee::Direct(_)
+        | Callee::Indirect { .. }
+        | Callee::UnknownIntrinsic(_)
+        | Callee::Unbound { .. } => return true,
     };
     let scoped =
         |scope: ThreadScope| matches!(scope, ThreadScope::Threadgroup | ThreadScope::Simdgroup);
@@ -171,6 +174,8 @@ fn observes(callee: &Callee) -> bool {
         | AirIntrinsic::FunctionConstant(_)
         | AirIntrinsic::FunctionTable(_)
         | AirIntrinsic::IndirectCommand(_) => false,
+        // The dispatch's offset and dimension count, which every threadgroup reads alike.
+        AirIntrinsic::WorkItem(_) => false,
         // A global built-in read canonicalization left a call (its lane is no constant, and
         // lowering refuses it) reads its built-in as the parameter would.
         AirIntrinsic::GlobalBuiltin(g) => partition_builtin(g.var.builtin()),

@@ -8,6 +8,8 @@
 
 mod address;
 mod address_map;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod aligned_byte;
 mod amplification;
 mod apple_only;
 mod argument_buffers;
@@ -16,6 +18,10 @@ mod argument_encoder;
 mod argument_sampler_count;
 #[cfg(debug_assertions)]
 mod argument_table;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod attached_levels;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod attached_read_standing;
 mod attachmentless;
 mod attributes;
 mod batches;
@@ -33,8 +39,18 @@ mod blit_holds;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod blit_order;
 mod blit_plan;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod blocks_ahead;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod buffer_tail_device;
 mod buffer_texture;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod caller_queue_writes;
 mod capabilities;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod carried_draws;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod clip_bursts;
 mod color_reformat;
 mod command_buffer;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
@@ -65,6 +81,10 @@ mod copied_log_device;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod copied_present_bench;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod copies_beside_a_held_wait;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod copies_only_reads;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod copy_bounds;
 mod copy_plan;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
@@ -72,7 +92,11 @@ mod core_image_libraries;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod cpu_copy_layouts;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod cpu_copy_times;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod creation_prediction_kinds;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod creation_prediction_reach;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod creation_split;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
@@ -85,6 +109,8 @@ mod depth_ranges;
 mod depth_stencil_resolve;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod derived_once;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod described_row_copies;
 mod descriptor_arena;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod descriptor_key_at_draw;
@@ -97,9 +123,16 @@ mod device;
 #[cfg(any(m2v_cpu_icd, all(m2v_gpu, m2v_gpu_hazards)))]
 mod device_memory_overflow;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod device_recovery;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod device_recovery_carry;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod device_recovery_no_copy;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod device_registry;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod direct_arguments_from_compiled;
+mod dirty_bytes_of;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod dirty_pages_device;
 mod dirty_reports;
@@ -107,6 +140,8 @@ mod dirty_runs;
 mod dirty_runs_bench;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod dispatch_pending;
+#[cfg(all(unix, any(m2v_gpu, m2v_cpu_icd)))]
+mod dma_buf_export;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod draw_again;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
@@ -130,9 +165,17 @@ mod event_timeline;
 mod event_vk_signal;
 mod exactness;
 mod exit_guard;
+#[cfg(all(unix, any(m2v_gpu, m2v_cpu_icd)))]
+mod exported_memory;
+#[cfg(all(unix, any(m2v_gpu, m2v_cpu_icd)))]
+mod exported_semaphore;
+#[cfg(all(unix, any(m2v_gpu, m2v_cpu_icd)))]
+mod exported_textures;
 mod families;
 mod fences;
 mod fill_value;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod first_host_texture;
 mod first_moves;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod footprint_locks;
@@ -151,13 +194,25 @@ mod general_form;
 mod gpu_pools;
 mod gpu_time;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod hand_out_waits;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod handler_orders;
 mod heap;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod heap_allocated_size;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod heap_border_texels;
 mod heap_footprint_formats;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod heap_one_plane_rows;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod heap_refused_notice;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod heap_set_copies;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod heap_set_unlocked;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod heap_set_walk;
 mod heap_sets;
 mod heap_tiled;
 mod heap_tiled_blocks;
@@ -178,6 +233,14 @@ mod host_ram_copy_bench;
 mod host_ram_copy_device;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod host_ram_device;
+#[cfg(all(any(m2v_gpu, m2v_cpu_icd), target_os = "linux"))]
+mod host_ram_dma_buf;
+#[cfg(m2v_gpu)]
+mod host_ram_first_fill_bench;
+#[cfg(all(m2v_gpu, target_os = "linux"))]
+mod host_ram_listed_bench;
+#[cfg(all(m2v_gpu, target_os = "linux"))]
+mod host_ram_surface_fill_bench;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod host_ram_window_bench;
 #[cfg(all(any(m2v_gpu, m2v_cpu_icd), target_os = "linux"))]
@@ -191,6 +254,8 @@ mod image_plan;
 mod in_place;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod in_place_check;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod in_place_storage;
 mod inbox;
 mod indirect_command_buffer;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
@@ -211,22 +276,38 @@ mod kept_heap_uses;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod kept_images;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod kept_shadowed_draws;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod kept_variants;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod kernel_end_device;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod layer_claim;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod learned_coverage;
 mod left;
+mod linear_alignment;
 mod linear_attachment;
 mod linear_plan;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod linear_runs;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod linked_pipelines_shared;
+mod listed_extensions;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod mac_class;
 mod making;
 mod managed;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod many_passes;
 mod memo;
 mod memory;
+#[cfg(m2v_gpu)]
+mod memory_block_bench;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod memory_frees;
+#[cfg(m2v_gpu)]
+mod memory_make_hold_bench;
 mod memory_reads;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod merge_scratch;
@@ -245,11 +326,21 @@ mod multisample_buffer_layouts;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod nan_signs;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod narrow_writes_device;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod neutral_zeros_shared;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod no_copy_lies;
 mod noted_apart;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod notice_command_buffers;
 mod numbered_samplers;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod opencl_kernels;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod opencl_mode;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod opengl_mode;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod optional_extensions;
 mod options;
@@ -259,7 +350,14 @@ mod owned_kernel_builds;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod owned_pushes;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod padding_unobserved;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod pass_end_tiles;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod passing_holds;
+mod pending_audit;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod pending_audit_device;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod pending_rebind;
 mod pipeline;
@@ -267,6 +365,8 @@ mod pipeline;
 mod pipeline_wait_order;
 #[cfg(unix)]
 mod pixel_format_info;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod point_size_notices;
 #[cfg(all(any(m2v_gpu, m2v_cpu_icd), target_os = "linux"))]
 mod pointer_residency;
 mod pool_room;
@@ -276,7 +376,13 @@ mod pool_room_creations;
 mod posted_frees;
 mod private_properties;
 mod push_raw_writes;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod query_reset_gap;
 mod queue;
+mod queue_limits;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod queue_limits_device;
+mod queue_quiet;
 mod queue_share;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod queue_share_device;
@@ -291,9 +397,13 @@ mod rebind_behind_a_wait;
 mod rebind_descriptor_slip;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod rebind_making_wait;
+#[cfg(all(m2v_gpu, target_os = "linux"))]
+mod reclaim_submit_bench;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod recorded_at_the_call;
 mod recorder_shards;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod recorder_slots;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod recycle;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
@@ -332,9 +442,15 @@ mod sampler_prunes;
 mod sampler_release;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod sampler_sets;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod sampler_table_binders;
 mod scheduler;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod scheduler_wakes;
+#[cfg(all(m2v_gpu, target_os = "linux"))]
+mod scroll_bos;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod self_read_storage;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod set_zero_at_offsets;
 mod shader_cache;
@@ -360,15 +476,29 @@ mod shadow_twins;
 mod shared_draw_locks;
 #[cfg(all(unix, any(m2v_gpu, m2v_cpu_icd)))]
 mod shared_pointers;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod short_row_kinds;
+mod snapshot_area;
 mod sorted_chunks;
 mod spares;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod spares_bench;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod spares_latency;
 mod sparse;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod srgb_fetch_images;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod stage_entries_shared;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod staged_work_teardown;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod staging_waits;
 mod stand_in;
 mod storage_form;
+mod submit_check;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod submit_check_device;
 mod submit_stalls;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod submit_stalls_idle;
@@ -379,15 +509,22 @@ mod surface_two_planes;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod teardown_threads;
 mod texture;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod texture_aggregates;
 mod texture_descriptor;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod texture_facts;
+mod texture_placement;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod texture_placement_device;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod texture_resource_options;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod tile_pending;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod tile_rebind_making_wait;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod tiled_texture_device;
 mod tracker;
 mod trails;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
@@ -413,7 +550,6 @@ mod waiter_submits;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod warm;
 mod warm_record;
-mod word_fill;
 mod word_samples;
 mod wrapped;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
@@ -425,3 +561,11 @@ mod ycbcr_device;
 mod ycbcr_in_place_loop;
 #[cfg(any(m2v_gpu, m2v_cpu_icd))]
 mod ycbcr_refresh;
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+mod zeroed_start;
+
+/// How long a device test waits for the device's submission checks to answer
+/// (`Device::settle_submit_checks`): their run takes milliseconds alone, longer beside the
+/// suite's other devices.
+#[cfg(any(m2v_gpu, m2v_cpu_icd))]
+pub(crate) const SETTLE: std::time::Duration = std::time::Duration::from_secs(60);

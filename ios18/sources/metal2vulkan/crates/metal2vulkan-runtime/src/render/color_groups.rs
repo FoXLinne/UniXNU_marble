@@ -77,7 +77,7 @@
 
 use super::extended_shadow::ExtendedShadows;
 use super::{
-    reads_handles, DrawingState, Opening, RenderLog, RenderLowering, RenderPipelineState,
+    reads_handles, DrawingState, Lowering, Opening, RenderLog, RenderLowering, RenderPipelineState,
     RenderStateKind,
 };
 use crate::attachment_stand_in::{self, StandInCopies};
@@ -415,9 +415,9 @@ fn twin(
 /// An ended pass of a render encoder: its core, what it made resident, its log, and what its
 /// later color groups draw.
 pub(super) struct Ended {
-    pub(super) core: EncoderCore,
+    pub(super) core: Box<EncoderCore>,
     pub(super) residency: Residency,
-    pub(super) log: Option<RenderLog>,
+    pub(super) log: Option<Box<RenderLog>>,
     pub(super) later: Option<Box<Later>>,
 }
 
@@ -426,10 +426,10 @@ impl Ended {
     /// from the first group's `log`: the core they leave. A pass of one group has none
     /// (`later` `None`), and its end calls nothing here.
     pub(super) fn later_groups(
-        mut core: EncoderCore,
+        mut core: Box<EncoderCore>,
         later: &Later,
         log: Option<&RenderLog>,
-    ) -> Result<EncoderCore, Error> {
+    ) -> Result<Box<EncoderCore>, Error> {
         let log = log.ok_or_else(|| internal("a pass of several color groups without its log"))?;
         for group in 1..later.group.groups() {
             let mut encoder = RenderLowering::later_group(core, later, group, log)?;
@@ -451,11 +451,11 @@ impl RenderLowering {
     /// The encoder of later group `group` of the pass `later` and `log` describe, over `core`
     /// (the module docs).
     fn later_group(
-        core: EncoderCore,
+        core: Box<EncoderCore>,
         later: &Later,
         group: u32,
         log: &RenderLog,
-    ) -> Result<Box<RenderLowering>, Error> {
+    ) -> Result<Lowering, Error> {
         const CALL: &str = "end_encoding";
         let grouping = ColorGroup::of(later.group.present.clone(), later.group.width, group)
             .ok_or_else(|| internal("a later color group of a pass in one"))?;
@@ -468,7 +468,7 @@ impl RenderLowering {
         let shape = PassShape::of(&layout)?;
         let compatible = render_target::shared_compatible_pass(&device, &shape)?;
         let draws = core.command_buffer().begin_draws(&compatible)?;
-        let extended = ExtendedShadows::of(&descriptor, &layout, rate_map.is_some());
+        let extended = ExtendedShadows::of(&device, &descriptor, &layout, rate_map.is_some());
         let opening = Opening::new(
             &descriptor,
             (layout, extended),
@@ -486,7 +486,9 @@ impl RenderLowering {
                 counting: false,
             })),
         );
-        Ok(RenderLowering::assemble(core, draws, opening))
+        // A later group's encoder starts from no carried draw: a group's pass carries none
+        // (`render/carried.rs`).
+        Ok(RenderLowering::assemble(core, draws, opening, None))
     }
 
     /// Whether a later group's decisive call ran otherwise than the first group's.

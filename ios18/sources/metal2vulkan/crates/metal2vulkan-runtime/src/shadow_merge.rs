@@ -20,23 +20,31 @@
 //!   with no copy of its shadow between, copies the staging buffer that copy filled with the
 //!   heap's bytes: the bytes a move of its texels out of the image would leave there, without
 //!   the move (`ShadowCopies::record_kept_from_staging`, `WorkCounts::shadow_keeps_from_staging`).
+//!   A heap's tiled texture with a depth aspect, of any sample count, keeps the heap's bytes as
+//!   its image stands for them, not its image's, which the copy in may have changed
+//!   (`texture/heap_tiled.rs`): that staging buffer as the shadow's last copy left it, the bytes
+//!   its copy in read or those its last copy back or merge wrote, never the heap's bytes as the
+//!   keep runs, which hold another writer's writes since the copy in.
 //! - **Merged in place**, where the texture's first byte is a whole word of its buffer, its last
-//!   byte's word lies in the buffer, and the bytes lie in pages when the merge is planned (not
-//!   detached, `detach.rs`): the shadow's texels are copied into the *changed* part, and the merge
-//!   kernel binds the buffer's own bytes as its current buffer, from the texture's first byte
-//!   rounded down to 256 (the largest `minStorageBufferOffsetAlignment`), its first word pushed,
-//!   to its last byte's word. A word whose kept and changed words are equal is neither read nor
-//!   written: the bytes the commands left, those between the rows and those past the last texel
-//!   in its word keep whatever another writer wrote there meanwhile. In a word they changed, each
-//!   byte they changed becomes the texture's, and the others keep the buffer's: another writer's
-//!   write to the word's other bytes during the merge itself is a race the merge does not order.
+//!   byte's word lies in the buffer, none of its bytes lie in its tail, and the bytes lie in pages
+//!   when the merge is planned (not detached, `detach.rs`): the shadow's texels are copied into the
+//!   *changed* part, and the merge kernel binds the buffer's own bytes as its current buffer, from
+//!   the texture's first byte rounded down to 256 (the largest `minStorageBufferOffsetAlignment`),
+//!   its first word pushed, to its last byte's word. A word whose kept and changed words are equal
+//!   is neither read nor written: the bytes the commands left, those between the rows and those
+//!   past the last texel in its word keep whatever another writer wrote there meanwhile. In a word
+//!   they changed, each byte they changed becomes the texture's, and the others keep the buffer's:
+//!   another writer's write to the word's other bytes during the merge itself is a race the merge
+//!   does not order.
 //! - **Merged through a copy** elsewhere (a texture's first byte inside a word, through a staging
-//!   buffer, or a last word past its buffer; never recorded over detached bytes): the shadow's
-//!   texels are copied into the *changed* part, and the buffer's bytes from the texture's first to
-//!   its last into the *current* part. One dispatch of the merge kernel then takes, in each byte of
-//!   the current part, the changed part's byte where it differs from the kept one, and the current
-//!   part is copied back into the buffer: another writer's write to the texture's bytes between
-//!   that copy and the copy back is undone (`docs/FAST-PATHS.md`'s known gaps).
+//!   buffer, a last word past its buffer, or bytes in its tail: texels past the buffer's length, or
+//!   a 2D array's slices past its first over an IOSurface plane, `buffer_texture.rs`; never
+//!   recorded over detached bytes): the shadow's texels are copied into the *changed* part, and the
+//!   buffer's bytes from the texture's first to its last into the *current* part. One dispatch of
+//!   the merge kernel then takes, in each byte of the current part, the changed part's byte where
+//!   it differs from the kept one, and the current part is copied back into the buffer: another
+//!   writer's write to the texture's bytes between that copy and the copy back is undone
+//!   (`docs/FAST-PATHS.md`'s known gaps).
 //! - **Cut.** Where a merge after commands that write through the texture goes in place over one
 //!   region's texels, the keep holds the rectangle the encoder's commands write in, where they
 //!   bound it (`ShadowUse::area`: a pass's attachment it loads, inside its draws' scissors), else
@@ -186,6 +194,11 @@ impl ScratchSpares {
         Some(spares.swap_remove(at))
     }
 
+    /// Let go of every kept buffer: the shadow merges no more (`texture/storage_form.rs`).
+    pub(super) fn let_go(&self) {
+        lock(&self.0).clear();
+    }
+
     /// Keep `buffer` for a later merge, the smallest kept going past [`KEPT_SCRATCHES`].
     pub(super) fn give(&self, buffer: Buffer) {
         let mut buffers = lock(&self.0);
@@ -263,6 +276,55 @@ struct Merged {
     /// from the rectangle's first word to its last (its kernel writes words of the rectangle
     /// alone, the module docs), else every byte of the texture's.
     written: Range<u64>,
+    /// Where the texture's bytes past those it keeps in its buffer lie (past the buffer's length,
+    /// or a 2D array's second slice on over an IOSurface plane, `Texels::kept`), where it has
+    /// such bytes: its tail, the staging buffer its copies go through (`buffer_texture.rs`). A
+    /// merge through a copy takes the current part's bytes past those from there and gives them
+    /// back there.
+    tail: Option<MergeTail>,
+}
+
+/// A texture's tail as a merge reaches it ([`Merged::tail`]): `inside` bytes of the texture's
+/// lie in its buffer from its first, and the rest in `raw` from `at` on.
+#[derive(Clone, Copy)]
+struct MergeTail {
+    raw: vk::Buffer,
+    at: u64,
+    inside: u64,
+}
+
+impl Merged {
+    /// The copies between the texture's bytes (`span` of them from its first) and `current`, a
+    /// merge's current part, each `(the bytes' VkBuffer, the copy)` as the bytes go into the
+    /// part: one of every byte, or, where its texels run past its buffer's length, one of those
+    /// inside it and one of those in its tail. A copy back swaps each one's ends.
+    fn current_copies(&self, current: Part, span: u64) -> Vec<(vk::Buffer, vk::BufferCopy)> {
+        let Some(tail) = self.tail else {
+            let copy = vk::BufferCopy {
+                src_offset: self.first,
+                dst_offset: current.at,
+                size: span,
+            };
+            return vec![(self.buffer, copy)];
+        };
+        let inside = tail.inside.min(span);
+        let parts = [
+            (self.buffer, self.first, 0, inside),
+            (tail.raw, tail.at, inside, span - inside),
+        ];
+        parts
+            .into_iter()
+            .filter(|&(.., size)| size > 0)
+            .map(|(raw, from, into, size)| {
+                let copy = vk::BufferCopy {
+                    src_offset: from,
+                    dst_offset: current.at + into,
+                    size,
+                };
+                (raw, copy)
+            })
+            .collect()
+    }
 }
 
 /// The rectangle of a shadow's texels a merge is cut to (the module docs).
@@ -282,9 +344,11 @@ struct Cut {
 enum Changed {
     /// Copied into the changed part (by the copy back's dispatch where the device runs one faster
     /// and the shadow takes it, `shadow_copy_back.rs`), which `bind::shadow_merge_module` reads.
+    /// The dispatch is boxed: it holds its kernel's and binds' device handles, and the other
+    /// variant holds nothing.
     Copied {
         part: Part,
-        dispatch: Option<CopyBack>,
+        dispatch: Option<Box<CopyBack>>,
     },
     /// Fetched from the shadow through its unsigned-integer view, or its own 8-bit unsigned
     /// normalized view, by `bind::shadow_merge_image_module`: no copy.
@@ -361,23 +425,38 @@ impl ShadowMerge {
             // only a buffer's bytes merge back (`ShadowCopies::merges_back`).
             return Err(internal("a merge of an image's shadow"));
         };
+        let span = bytes.end - bytes.start;
+        // A staging buffer that holds fewer of the buffer's bytes than the texture spans is its
+        // tail: its texels run past the bytes it keeps in the buffer (`buffer_texture.rs`).
+        let tail = copies
+            .staged_bytes()
+            .filter(|staging| staging.into.size < span)
+            .map(|staging| MergeTail {
+                raw: staging.raw(),
+                at: staging.into.dst_offset + staging.into.size,
+                inside: staging.into.size,
+            });
         let mut merged = Merged {
             buffer: buffer.raw(),
             key: *key,
             bytes: bytes.clone(),
             first,
             written: bytes.clone(),
+            tail,
         };
-        let span = merged.bytes.end - merged.bytes.start;
         // A window binds the bytes only while they lie in pages: a detached buffer's `VkBuffer` is
         // the device's stand-in, smaller than any window, and a binding past a buffer's size is
         // invalid (VUID-VkDescriptorBufferInfo-range-00342). The encoder records nothing of a
         // command over detached bytes (`EncoderCore::skips`), so their merge, planned through a
         // copy, whose windows bind the scratch alone, is never recorded.
         // In place, the merge reads and writes whole words, up to the last byte's word, which
-        // must lie in the buffer's bytes.
+        // must lie in the buffer's bytes, and the buffer's alone: a texture with a tail merges
+        // through a copy, whose current part takes the tail's bytes from the tail. A 2D array's
+        // slices past its first over an IOSurface plane lie in its tail even where the buffer's
+        // bytes run on past them: those bytes are the plane's own, which the array never writes.
         let rounded = span.next_multiple_of(4);
         let in_place = copies.merges_back()
+            && merged.tail.is_none()
             && first.is_multiple_of(4)
             && first + rounded <= buffer.end()
             && merged.buffer != vk::Buffer::null();
@@ -744,7 +823,7 @@ impl ShadowMerge {
         let changed = match changed {
             Some(part) => Changed::Copied {
                 part,
-                dispatch: dispatched_out(device, copies, part, cut.as_ref()),
+                dispatch: dispatched_out(device, copies, part, cut.as_ref()).map(Box::new),
             },
             None => {
                 device.shared().counts.shadow_merge_fetched();
@@ -1105,12 +1184,7 @@ impl ShadowMerge {
         command_buffer: vk::CommandBuffer,
         (copies, moves): (&ShadowCopies, Option<&SampleMoves>),
     ) {
-        let Merged {
-            buffer,
-            ref bytes,
-            first,
-            ..
-        } = self.merged;
+        let Merged { ref bytes, .. } = self.merged;
         let span = bytes.end - bytes.start;
         // SAFETY: the caller's contract; each part holds the texture's bytes, and the sets bind
         // windows inside the parts and, in place, inside the texture's bytes (and the shadow's
@@ -1127,16 +1201,9 @@ impl ShadowMerge {
                 Changed::Fetched => {}
             }
             if let Some(current) = self.current {
-                device.cmd_copy_buffer(
-                    command_buffer,
-                    buffer,
-                    current.raw,
-                    &[vk::BufferCopy {
-                        src_offset: first,
-                        dst_offset: current.at,
-                        size: span,
-                    }],
-                );
+                for (bytes, copy) in self.merged.current_copies(current, span) {
+                    device.cmd_copy_buffer(command_buffer, bytes, current.raw, &[copy]);
+                }
             }
             let copied = !matches!(self.changed, Changed::Fetched) || self.current.is_some();
             if copied {
@@ -1163,16 +1230,14 @@ impl ShadowMerge {
             // bytes' next use.
             Barrier::everything().record(device, command_buffer);
             if let Some(current) = self.current {
-                device.cmd_copy_buffer(
-                    command_buffer,
-                    current.raw,
-                    buffer,
-                    &[vk::BufferCopy {
-                        src_offset: current.at,
-                        dst_offset: first,
-                        size: span,
-                    }],
-                );
+                for (bytes, copy) in self.merged.current_copies(current, span) {
+                    let back = vk::BufferCopy {
+                        src_offset: copy.dst_offset,
+                        dst_offset: copy.src_offset,
+                        size: copy.size,
+                    };
+                    device.cmd_copy_buffer(command_buffer, current.raw, bytes, &[back]);
+                }
             }
         }
     }
@@ -1219,7 +1284,9 @@ fn unorm_read(format: Format) -> Option<ShadowMergeRead> {
 
 /// `plan`, a shadow's image, made to take its [`UnormView`]: sampled usage, with the kernel's read
 /// ([`unorm_read`]). `None`, `plan` unchanged, for an image of another format, of more than one
-/// level or slice, or of a format the device does not sample. Sampled usage changes nothing of
+/// slice, or of a format the device does not sample. An image of more levels takes it, its view of
+/// the first level alone: a tiled texture's shadow, whose copies move that level alone
+/// (`Buffer::new_tiled_texture`). Sampled usage changes nothing of
 /// the texture MoltenVK makes for the image: MoltenVK 1.4.1 gives a texture
 /// `MTLTextureUsageShaderRead` for transfer-source usage, which every shadow has, as for sampled
 /// usage (`MVKPixelFormats::getMTLTextureUsage`), and the view, of the image's own format and
@@ -1228,11 +1295,11 @@ pub(super) fn with_unorm_view(
     mut plan: ImagePlan,
     facts: &ImageFacts<'_>,
 ) -> (ImagePlan, Option<ShadowMergeRead>) {
-    let single = plan.levels == 1 && plan.layers == 1 && plan.extent[2] == 1;
+    let one_slice = plan.layers == 1 && plan.extent[2] == 1;
     let sampled = facts
         .optimal(plan.format)
         .contains(FormatFeatureFlags2::SAMPLED_IMAGE);
-    let read = unorm_read(plan.format).filter(|_| single && sampled);
+    let read = unorm_read(plan.format).filter(|_| one_slice && sampled);
     if read.is_some() {
         plan.usage |= ImageUsageFlags::SAMPLED;
     }

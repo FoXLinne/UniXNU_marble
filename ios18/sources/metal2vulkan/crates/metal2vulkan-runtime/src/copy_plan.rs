@@ -111,15 +111,16 @@ pub enum CopyProblem {
     /// not measured).
     Offset,
     /// A `bytesPerRow` that is not a multiple of the copy unit, or that does not cover a row,
-    /// where plain Metal's answer is undefined or not measured: a blit out of a texture whose
-    /// rows overlap (Metal's writes race), Metal's aligned path into a texture at a pitch below a
-    /// row (it reads garbage at 0) or from an offset of 16 or more, a depth or stencil format
-    /// other than `Depth32Float`, a texture over a buffer, and a CPU copy of a texture over a
+    /// where plain Metal's answer is undefined or not measured: Metal's aligned path into a
+    /// texture at a pitch of 0 (it reads garbage) or from an offset of 16 or more, a depth or
+    /// stencil format other than `Depth32Float` or a texture over a buffer at a pitch off the
+    /// copy unit or of 0 for more than one row, a multisampled texture's copy out at a pitch
+    /// below a row (where its rows lie is not measured), and a CPU copy of a texture over a
     /// buffer or of a pitch of 0 for more than one row and image (other layouts copy where plain
-    /// Metal places the rows).
+    /// Metal places the rows, a blit's rows out of a texture that overlap in turn, the later
+    /// row's bytes standing).
     ///
-    /// Basis: unknown (undefined or unmeasured by the shapes listed above — Metal's writes race
-    /// where the rows overlap — and no run on record names a device or release).
+    /// Basis: unknown (undefined or unmeasured by the shapes listed above).
     BytesPerRow,
     /// Bytes past the end of the buffer: of a no-copy buffer read from, past the end of its
     /// host pages, which plain Metal reads up to. Past that, and past another buffer's length,
@@ -462,6 +463,16 @@ impl HostLayout {
     /// The bytes of the tightly packed staging layout.
     pub(super) fn packed_len(&self) -> u64 {
         self.row_bytes * self.rows * self.images
+    }
+
+    /// The tightly packed layout of the same rows and images: host bytes
+    /// [`pack`](Self::pack) wrote, read as the host buffer.
+    pub(super) fn packed(&self) -> HostLayout {
+        HostLayout {
+            bytes_per_row: self.row_bytes,
+            bytes_per_image: self.row_bytes * self.rows,
+            ..*self
+        }
     }
 
     /// Whether the host buffer's layout is the tightly packed one: each row at its packed

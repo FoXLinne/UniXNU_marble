@@ -289,8 +289,10 @@ fn layouts_counted(before: &WorkCounts, after: &WorkCounts) -> [u64; 4] {
 /// A plain texture in a heap over host pages lies in Metal's tiles (the module docs): its
 /// answered size holds them; the bytes it is made over, `replaceRegion`, a blit into it, the CPU's
 /// writes and a buffer's over the bytes meet its texels there, and `getBytes` and a blit out of it
-/// read them; no byte between them changes. Counted tiled, with no layout notice; made with no
-/// zeros (`WorkCounts::images_started_on_the_host`, `staging_submissions`, `staging_moves_queued`).
+/// read them; no byte between them changes, and its CPU copies are made in the heap's bytes with
+/// no submission (`WorkCounts::heap_shadow_cpu_copies`). Counted tiled, with no layout notice;
+/// made with no zeros (`WorkCounts::images_started_on_the_host`, `staging_submissions`,
+/// `staging_moves_queued`).
 #[test]
 fn a_host_heap_s_plain_texture_lies_in_metal_s_tiles() {
     on_device(|device, messages| {
@@ -346,8 +348,9 @@ fn a_host_heap_s_plain_texture_lies_in_metal_s_tiles() {
             mapping.fill(0);
 
             // `replaceRegion` writes the texels into Metal's tiles; `getBytes` and a blit read
-            // them back.
+            // them back. Both CPU copies are made in the heap's bytes on the host.
             let first = named(len, 1);
+            let copied = device.work_counts();
             texture
                 .replace_region(plain.region(), 0, 0, &first, plain.row(), 0)
                 .unwrap();
@@ -360,6 +363,15 @@ fn a_host_heap_s_plain_texture_lies_in_metal_s_tiles() {
                 .get_bytes(&mut read, plain.row(), 0, plain.region(), 0, 0)
                 .unwrap();
             assert_eq!(read, first, "{what}: getBytes");
+            let read_back = device.work_counts();
+            assert_eq!(
+                (
+                    read_back.heap_shadow_cpu_copies - copied.heap_shadow_cpu_copies,
+                    read_back.internal_submissions - copied.internal_submissions,
+                ),
+                (2, 0),
+                "{what}: replaceRegion and getBytes in the heap's bytes, with no submission"
+            );
             assert_eq!(blit_out(&queue, &texture, &plain), first, "{what}: a blit");
 
             // A blit into the texture lands in the tiles, no other byte.
@@ -1231,7 +1243,8 @@ fn block_rows_lie_as_metal_lays_them_out(device: &Device, messages: &Messages) {
 /// layout notice, each sample of each found in the heap's bytes where Metal's tiles place it after
 /// a blit naming it, and bytes written there read back by a blit
 /// (`heap_textures::sample_round_trip`). The size query answers at least Metal's for each on every
-/// device (66048 and 65536 bytes at 128).
+/// device (66048 and 65536 bytes at 128). Once everything over the heap went and the pages were
+/// unmapped, a command buffer of the same queue runs and reads the resolved texels.
 #[test]
 fn a_host_heap_s_multisample_textures_hold_their_samples_in_metal_s_tiles() {
     use super::heap_textures::sample_round_trip;
@@ -1332,8 +1345,24 @@ fn a_host_heap_s_multisample_textures_hold_their_samples_in_metal_s_tiles() {
             );
             assert_eq!((off, read_off), (0, 0), "{what}: samples off Metal's tiles");
         }
-        drop((texture, resolved, heap));
+        // The pass and its command buffer hold the texture, which holds the heap and its import
+        // of the pages: they all go before the pages, as the heap's contract asks.
+        drop((command_buffer, pass, texture, heap));
         drop(mapping);
+        // A command buffer committed once the pages are unmapped runs: no import of them is left
+        // (RADV lists every imported memory in every kernel submission, and the kernel refuses
+        // one that lists pages no longer mapped).
+        let plain = Plain {
+            format: PixelFormat::RGBA8Unorm,
+            unit: 4,
+            extent: [64, 64],
+        };
+        let texels = blit_out(&queue, &resolved, &plain);
+        assert!(
+            texels.chunks(4).all(|texel| texel == [51, 102, 153, 255]),
+            "resolved after the unmap: {:?}",
+            &texels[..16]
+        );
         eprintln!("HEAPLAYOUT multisample: compressed and uncompressed held in Metal's tiles");
     });
 }

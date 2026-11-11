@@ -10,6 +10,11 @@
 //!   `commit_and_submit` in turn, never waiting for a command buffer (a wait would submit for
 //!   itself), see every command buffer complete within a bound: a commit whose wake was lost
 //!   would leave its batches in the inbox of an idle thread that sleeps until woken.
+//! - **Woken by a committing thread's pass as by the batch's hand-off.** A `commit_and_submit`
+//!   that submits its batch itself, after an idle gap, wakes the sleeping thread once after its
+//!   submission where the batch may wait in a group, which every other pass leaves to the thread,
+//!   and leaves it asleep elsewhere (`scheduler/mod.rs`, "A committing thread may submit for
+//!   itself"): the thread sleeps and wakes as it does where such batches are its own.
 //! - **Never behind a submission.** A commit that finds no pass under way wakes the thread without
 //!   the lock a pass holds across its `vkQueueSubmit`: with the `VkQueue` held and that lock held,
 //!   no pass counted, a commit from another thread returns at once.
@@ -17,10 +22,12 @@
 //! Device tests: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
 //! `m2v_cpu_icd`), on the kind of device the cfg selects.
 
+use crate::tests::SETTLE;
 use crate::{
     Buffer, CommandBuffer, CommandQueue, Device, DeviceKind, DeviceOptions, ResourceOptions,
     WorkCounts,
 };
+use metal2vulkan::device::CompletionPolicy;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
@@ -91,6 +98,19 @@ fn settle(completed: &AtomicU64, count: u64, what: &str) {
     }
 }
 
+/// Wait until the scheduler's thread sleeps (`Scheduler::asleep`), failing where it stays awake
+/// for [`BOUND`]: what the last commit or completion set going is over, and no pass is under way.
+fn asleep(device: &Device, what: &str) {
+    let since = Instant::now();
+    while !device.shared().scheduler.asleep() {
+        assert!(
+            since.elapsed() < BOUND,
+            "{what}: the scheduler's thread stayed awake for {BOUND:?}"
+        );
+        std::thread::sleep(Duration::from_micros(50));
+    }
+}
+
 /// The wakings the thread's notifies and nudges count between `before` and `after`, and the
 /// sleeps they may end: those the thread began between the two, and the one it may have been in
 /// as `before` was read, counted as it began, before `before`. A waking of that one is counted in
@@ -109,8 +129,8 @@ fn wakings_and_sleeps(before: &WorkCounts, after: &WorkCounts) -> (u64, u64) {
     )
 }
 
-/// Bursts of commits made faster than the scheduler's thread wakes, each after an idle gap: the
-/// thread is notified at most once a sleep.
+/// Bursts of commits made faster than the scheduler's thread wakes, each once the thread sleeps
+/// ([`asleep`]): the thread is notified at most once a sleep.
 #[test]
 fn a_burst_of_commits_wakes_the_sleeping_thread_once() {
     let device = device();
@@ -119,8 +139,7 @@ fn a_burst_of_commits_wakes_the_sleeping_thread_once() {
     let completed = Arc::new(AtomicU64::new(0));
     let before = device.work_counts();
     for burst in 0..10u64 {
-        // The thread sleeps by now.
-        std::thread::sleep(Duration::from_millis(5));
+        asleep(&device, &format!("burst {burst}"));
         let committed: Vec<CommandBuffer> = (0..BURST)
             .map(|at| counted_fill(&queue, &target, at as u8, &completed))
             .collect();
@@ -195,6 +214,53 @@ fn commits_with_idle_gaps_lose_no_wake() {
     );
 }
 
+/// Commits made with `commit_and_submit` alone, each once the thread sleeps ([`asleep`], not after
+/// a time, which the last commit's waking and pass may outlast under load) and each submitted by
+/// its committing thread: where the device's batches may wait in a group
+/// (`CompletionPolicy::Grouped` and its check found the merge, `command_buffer/group.rs`), each
+/// wakes the sleeping thread once, counted as a commit's waking; elsewhere none wakes it.
+#[test]
+fn a_commit_and_submit_wakes_the_sleeping_thread_only_for_a_batch_that_may_group() {
+    const COMMITS: u64 = 10;
+    let device = device();
+    assert!(
+        device.settle_submit_checks(SETTLE),
+        "the submission checks never answered"
+    );
+    let groups = device.compile_device().policy().completion == CompletionPolicy::Grouped
+        && device.submissions_merge();
+    let queue = device.new_command_queue().unwrap();
+    let target = device.new_buffer(256, ResourceOptions::private()).unwrap();
+    let completed = Arc::new(AtomicU64::new(0));
+    // The first use of the queue and the target, untimed and uncounted.
+    counted_fill(&queue, &target, 0, &completed)
+        .commit()
+        .unwrap();
+    settle(&completed, 1, "the first");
+    let before = device.work_counts();
+    for at in 1..=COMMITS {
+        asleep(&device, &format!("commit {at}"));
+        let command_buffer = counted_fill(&queue, &target, at as u8, &completed);
+        command_buffer.commit_and_submit().unwrap();
+        settle(&completed, at + 1, &format!("commit {at}"));
+    }
+    let after = device.work_counts();
+    let by_commit = after.scheduler_wakes_commit - before.scheduler_wakes_commit;
+    let at_commit = after.batches_submitted_at_commit - before.batches_submitted_at_commit;
+    println!(
+        "batches grouping {groups}: {by_commit} wakings by a commit, {at_commit} batches \
+         submitted at commit, {COMMITS} commits"
+    );
+    assert_eq!(at_commit, COMMITS, "a batch was left to the thread");
+    match groups {
+        true => assert_eq!(
+            by_commit, COMMITS,
+            "a commit_and_submit of a batch that may group left the sleeping thread asleep"
+        ),
+        false => assert_eq!(by_commit, 0, "a commit_and_submit woke the sleeping thread"),
+    }
+}
+
 /// A commit that finds no pass under way wakes the scheduler's thread without the lock a pass
 /// holds across its `vkQueueSubmit` (`scheduler/inbox.rs`, "Posted, never passed"). A pass
 /// counted only after the commit looked for one can take that lock before the commit's wake, and
@@ -216,7 +282,7 @@ fn a_commit_returns_while_the_lock_a_submission_holds_is_held() {
             // SAFETY: the closure keeps no handle and calls nothing of the runtime's; it waits
             // only for this test's release, past the commit's bound.
             unsafe {
-                queue.with_vk_queue(|_, _| {
+                queue.with_vk_queue(|_, _, _| {
                     held.send(()).unwrap();
                     let _ = released.recv_timeout(2 * BOUND);
                 })
@@ -224,8 +290,8 @@ fn a_commit_returns_while_the_lock_a_submission_holds_is_held() {
         })
     };
     holding.recv_timeout(BOUND).unwrap();
-    // The thread sleeps by now: no pass is under way.
-    std::thread::sleep(Duration::from_millis(5));
+    // No pass is under way.
+    asleep(&device, "before the lock");
     let (returned, committer) = device.shared().scheduler.under_lock(|| {
         let (done, returns) = mpsc::channel();
         let committer = std::thread::spawn(move || {

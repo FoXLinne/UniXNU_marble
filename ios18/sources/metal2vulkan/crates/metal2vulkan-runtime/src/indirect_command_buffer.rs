@@ -65,7 +65,7 @@
 
 use super::address::{AddressPlacement, Place, RecordsId};
 use super::buffer::{Buffer, Modes};
-use super::degradation::Degradation;
+use super::degradation::{Degradation, NoticesFor};
 use super::depth_stencil::DepthStencilState;
 use super::device::lock;
 use super::error::{internal, invalid, Error, MemoryKind, Problem, RuntimeGap};
@@ -536,6 +536,18 @@ impl Device {
         max_count: u64,
         options: ResourceOptions,
     ) -> Result<IndirectCommandBuffer, Error> {
+        self.at_serving(|device| {
+            device.new_indirect_command_buffer_now(descriptor, max_count, options)
+        })
+    }
+
+    /// [`Device::new_indirect_command_buffer`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_indirect_command_buffer_now(
+        &self,
+        descriptor: &IndirectCommandBufferDescriptor,
+        max_count: u64,
+        options: ResourceOptions,
+    ) -> Result<IndirectCommandBuffer, Error> {
         const CALL: &str = "new_indirect_command_buffer";
         let options = self.take_options(CALL, options);
         let modes = Modes::of(options)?;
@@ -545,7 +557,9 @@ impl Device {
         let (records, inheritance) = descriptor.records();
         // A device that claims Apple10 would draw a command with its own render states where the
         // buffer does not inherit them: not built.
-        if !descriptor.inherits_render_states() && self.supports_family(GpuFamily::Apple10.raw()) {
+        if !descriptor.inherits_render_states()
+            && self.supports_family_now(GpuFamily::Apple10.raw())
+        {
             return Err(Error::NotImplemented(RuntimeGap::IndirectRenderCommands));
         }
         let placed = records_placement(CALL, descriptor.placement)?;
@@ -1911,7 +1925,7 @@ impl IndirectCommandBuffer {
         } = set;
         if let Some(buffer) = buffer {
             if !buffer.device().same(self.device()) {
-                return Err(invalid(call, Problem::ForeignObject));
+                return Err(buffer.device().foreign(call, self.device()));
             }
         }
         // At or past the descriptor's count nothing binds the slot and no getter reads it, so
@@ -2311,6 +2325,8 @@ impl IndirectCommandBuffer {
             .map(|(&(index, record), set)| (index, record, set.as_ref()));
         let commands = self.getter_commands(read);
         let mut check = lock(check);
+        // The program's code: no command buffer's work of the runtime's.
+        let _program = NoticesFor::none();
         for (&(index, _), command) in held.iter().zip(&commands) {
             check(u64::from(index), command);
         }
@@ -3902,7 +3918,7 @@ impl IndirectComputeCommand {
         const CALL: &str = "set_compute_pipeline_state";
         self.icb.check_command_types(CALL)?;
         if !state.device().same(self.icb.device()) {
-            return Err(invalid(CALL, Problem::ForeignObject));
+            return Err(state.device().foreign(CALL, self.icb.device()));
         }
         if self.descriptor().inherit_pipeline_state {
             return Err(problem(
@@ -4521,7 +4537,7 @@ impl IndirectRenderCommand {
         const CALL: &str = "set_render_pipeline_state";
         self.icb.check_command_types(CALL)?;
         if !state.device().same(self.icb.device()) {
-            return Err(invalid(CALL, Problem::ForeignObject));
+            return Err(state.device().foreign(CALL, self.icb.device()));
         }
         if self.descriptor().inherit_pipeline_state {
             return Err(problem(
@@ -4790,7 +4806,7 @@ impl IndirectRenderCommand {
         };
         self.check_draw(CALL, IndirectCommandType::DRAW_INDEXED, &action)?;
         if !index_buffer.device().same(self.icb.device()) {
-            return Err(invalid(CALL, Problem::ForeignObject));
+            return Err(index_buffer.device().foreign(CALL, self.icb.device()));
         }
         let size = index_size(index_type);
         let offset = index_buffer_offset - index_buffer_offset % size;
@@ -5005,9 +5021,9 @@ impl IndirectRenderCommand {
             .into_iter()
             .chain(control_point_index_buffer)
             .chain([factor_buffer])
-            .any(|buffer| !buffer.device().same(device));
-        if foreign {
-            return Err(invalid(call, Problem::ForeignObject));
+            .find(|buffer| !buffer.device().same(device));
+        if let Some(buffer) = foreign {
+            return Err(buffer.device().foreign(call, device));
         }
         let draw = |problem| Err(invalid(call, Problem::Draw(problem)));
         if let Some(buffer) = patch_index_buffer {
@@ -5156,7 +5172,11 @@ impl IndirectRenderCommand {
     /// `NotImplemented(IndirectRenderCommands)` on one that does, whose commands would draw with
     /// it.
     fn render_state(&self, call: &'static str) -> Error {
-        if self.icb.device().supports_family(GpuFamily::Apple10.raw()) {
+        if self
+            .icb
+            .device()
+            .supports_family_now(GpuFamily::Apple10.raw())
+        {
             return Error::NotImplemented(RuntimeGap::IndirectRenderCommands);
         }
         problem(call, IndirectCommandBufferProblem::RenderState)
@@ -5168,8 +5188,8 @@ impl IndirectRenderCommand {
     /// first: a state of another device.
     pub fn set_depth_stencil_state(&self, state: Option<&DepthStencilState>) -> Result<(), Error> {
         const CALL: &str = "set_depth_stencil_state";
-        if state.is_some_and(|state| !state.device().same(self.icb.device())) {
-            return Err(invalid(CALL, Problem::ForeignObject));
+        if let Some(state) = state.filter(|state| !state.device().same(self.icb.device())) {
+            return Err(state.device().foreign(CALL, self.icb.device()));
         }
         Err(self.render_state(CALL))
     }

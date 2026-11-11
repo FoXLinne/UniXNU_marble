@@ -1762,8 +1762,12 @@ fn a_fast_division_leaves_its_nans_to_the_device() {
 /// An `fdiv` without `arcp` on `float`, Metal's precise division, is the device's `OpFDiv` on
 /// every profile (`arith.fdiv.native`), noted `NativeDivision`: here the interpreter's correctly
 /// rounded quotient (lane 0x42aa3a21 / 0x44c80075 gives 0x3D59E382, Metal's word, where `arcp`
-/// gives 0x3D59E381), and `0x7FC00000` for `0 / 0`. A `half` division under every flag set,
-/// `arcp` included, is the `float` quotient rounded once to `half`.
+/// gives 0x3D59E381). Metal answers `0x7FC00000` for `0 / 0`; the module selects no NaN, so the
+/// quotient is a NaN whose bits are the device's (the interpreter's are its host CPU's: x86-64's
+/// default NaN, `0xFFC00000`, has its sign set, arm64's is `0x7FC00000`), noted
+/// `NativeNanEncoding` exactly where the profile does not state the device answers Metal's
+/// (`DriverDeviation::MetalCanonicalNans`). A `half` division under every flag set, `arcp`
+/// included, is the `float` quotient rounded once to `half`.
 #[test]
 fn a_division_without_arcp_is_the_devices_quotient() {
     let xy = format!(
@@ -1778,11 +1782,12 @@ fn a_division_without_arcp_is_the_devices_quotient() {
         on("hyb", 16, 0x4200)
     );
     let half_q = (f32::from_bits(0x3EAA_A000)).to_bits();
-    let kernel = |name: &'static str, body: String, want: u32| Kernel {
+    // `want` is the stored word, or `None` for a NaN whose bits are the device's.
+    let kernel = |name: &'static str, body: String, want: Option<u32>| Kernel {
         name,
         body,
         float: true,
-        want: Some(want),
+        want,
         needs: &[],
         note: None,
     };
@@ -1790,27 +1795,27 @@ fn a_division_without_arcp_is_the_devices_quotient() {
         kernel(
             "plain_divide",
             format!("{xy}  %r = fdiv float %x, %y\n"),
-            0x3D59_E382,
+            Some(0x3D59_E382),
         ),
         kernel(
             "divide_without_arcp",
             format!("{xy}  %r = fdiv nnan ninf nsz contract float %x, %y\n"),
-            0x3D59_E382,
+            Some(0x3D59_E382),
         ),
         kernel(
             "divide_zero_by_zero",
             format!("{}  %r = fdiv float %z, %z\n", of("z", 0.0)),
-            0x7FC0_0000,
+            None,
         ),
         kernel(
             "divide_half",
             format!("{hxy}  %q = fdiv half %hx, %hy\n  %r = fpext half %q to float\n"),
-            half_q,
+            Some(half_q),
         ),
         kernel(
             "divide_half_under_arcp",
             format!("{hxy}  %q = fdiv fast half %hx, %hy\n  %r = fpext half %q to float\n"),
-            half_q,
+            Some(half_q),
         ),
     ];
     let Some(bitcode) = assemble("precise-divide", &module(&ks)) else {
@@ -1818,6 +1823,8 @@ fn a_division_without_arcp_is_the_devices_quotient() {
     };
     for stem in ["moltenvk-m3", "lavapipe", "vk12-floor"] {
         let p = profile(stem, exact_maths()).expect("profile");
+        let device_nans =
+            p.takes_driver_deviation(crate::error::DriverDeviation::MetalCanonicalNans);
         for kk in &ks {
             let what = format!("{} on {stem}", kk.name);
             let a = compile(&bitcode, kk.name, &p).unwrap_or_else(|e| panic!("{what}: {e:?}"));
@@ -1833,7 +1840,18 @@ fn a_division_without_arcp_is_the_devices_quotient() {
                 a.strategies.entries
             );
             let got = interpret(&bitcode, kk.name, &p);
-            assert_eq!(Some(got), kk.want, "{what}: {got:#x}");
+            match kk.want {
+                Some(want) => assert_eq!(got, want, "{what}: {got:#x}"),
+                None => {
+                    assert!(stores_nan(got, false), "{what}: {got:#x}");
+                    assert_eq!(
+                        a.precision.contains(&PrecisionNote::NativeNanEncoding),
+                        !device_nans,
+                        "{what}: {:?}",
+                        a.precision
+                    );
+                }
+            }
         }
     }
 }
@@ -3778,9 +3796,12 @@ fn half_sign_operations_keep_a_nan_s_payload_on_every_profile() {
 /// payload (held widened as a `float` NaN that no conversion of the device made) is not in the
 /// measurement, and records the note on both, requiring nothing (`narrow::moves_unfolded`); so
 /// is a phi of a select of the `half` against a constant with the `half` itself, which Metal's
-/// compiler is measured not to fold, where a phi of that select with a constant is folded. A
-/// `half` inserted into a struct (`{half, i8}`, a texel's shape) and extracted is the `half`
-/// itself: stored with its own bits, never widened.
+/// compiler is measured not to fold, where a phi of that select with a constant is folded. A phi
+/// of `{half, i8}` texel structs carrying the select, merged with the `half`'s or with a constant
+/// struct, is held in a function variable of the struct, whose stores the measurement does not
+/// cover (only a scalar or vector `float` variable's): noted on both profiles whatever it merges
+/// (`narrow::moves_unfolded`). A `half` inserted into a struct (`{half, i8}`) and extracted is the
+/// `half` itself: stored with its own bits, never widened.
 #[test]
 fn half_moves_are_metals_only_where_the_device_folds_them() {
     let hx = oh("hx", 0xFE01);
@@ -3831,6 +3852,20 @@ fn half_moves_are_metals_only_where_the_device_folds_them() {
             ),
             Some(0xFE01),
         ),
+        half_nan_kernel(
+            "member_merged_selection",
+            format!(
+                "{hx}{nan}{one}  br i1 %c, label %l, label %u\nl:\n  %t = select i1 %e, half %hx, half 0xH0000\n  %tm = insertvalue {{ half, i8 }} undef, half %t, 0\n  %tw = insertvalue {{ half, i8 }} %tm, i8 0, 1\n  br label %j\nu:\n  %um = insertvalue {{ half, i8 }} undef, half %hx, 0\n  %uw = insertvalue {{ half, i8 }} %um, i8 0, 1\n  br label %j\nj:\n  %p = phi {{ half, i8 }} [ %tw, %l ], [ %uw, %u ]\n  %s = extractvalue {{ half, i8 }} %p, 0\n"
+            ),
+            None,
+        ),
+        half_nan_kernel(
+            "member_merged_selection_constant",
+            format!(
+                "{hx}{nan}{one}  br i1 %c, label %l, label %u\nl:\n  %t = select i1 %e, half %hx, half 0xH0000\n  %tm = insertvalue {{ half, i8 }} undef, half %t, 0\n  %tw = insertvalue {{ half, i8 }} %tm, i8 0, 1\n  br label %j\nu:\n  br label %j\nj:\n  %p = phi {{ half, i8 }} [ %tw, %l ], [ {{ half 0xH3C00, i8 0 }}, %u ]\n  %s = extractvalue {{ half, i8 }} %p, 0\n"
+            ),
+            None,
+        ),
     ];
     let Some(bitcode) = assemble("nan-half-moves", &module(&ks)) else {
         return;
@@ -3850,7 +3885,48 @@ fn half_moves_are_metals_only_where_the_device_folds_them() {
             // A `half` stored as itself is never widened, out of a struct too; each select reads
             // it by the widening.
             assert_eq!(widens, !matches!(kk.name, "kept" | "member_kept"), "{what}");
-            let folded = moves && !matches!(kk.name, "payload_constant" | "merged_selection");
+            // An AIR phi of `{half, i8}` texel structs is held in a function variable of the
+            // struct, its incoming structs stored to it.
+            let struct_var = |ptr| {
+                use crate::spirv::ir::{StorageClass, Type as SType};
+                let ty = m.value(ptr).expect("a store's pointer").ty;
+                match m.types().get(ty) {
+                    Ok(SType::Pointer {
+                        class: StorageClass::Function,
+                        pointee,
+                    }) => matches!(m.types().get(*pointee), Ok(SType::Struct { .. })),
+                    _ => false,
+                }
+            };
+            let struct_stores = m.blocks().iter().flat_map(|b| &b.insts).any(|n| {
+                matches!(&n.inst, crate::spirv::ir::Inst::Store { ptr, .. } if struct_var(*ptr))
+            });
+            let shapes: Vec<String> = m
+                .blocks()
+                .iter()
+                .flat_map(|b| {
+                    let phis = b.phis.iter().map(|phi| {
+                        let ty = m.value(phi.result).expect("a phi's value").ty;
+                        format!("phi {:?}", m.types().get(ty))
+                    });
+                    let stores = b.insts.iter().filter_map(|n| match &n.inst {
+                        crate::spirv::ir::Inst::Store { ptr, .. } => {
+                            let ty = m.value(*ptr).expect("a store's pointer").ty;
+                            Some(format!("store to {:?}", m.types().get(ty)))
+                        }
+                        _ => None,
+                    });
+                    phis.chain(stores).collect::<Vec<_>>()
+                })
+                .collect();
+            assert_eq!(
+                struct_stores,
+                kk.name.starts_with("member_merged"),
+                "{what}: a store to a struct variable: {shapes:?}"
+            );
+            let folded = moves
+                && !matches!(kk.name, "payload_constant" | "merged_selection")
+                && !kk.name.starts_with("member_merged");
             assert_eq!(
                 a.precision.contains(&PrecisionNote::NativeNanEncoding),
                 widens && !folded,

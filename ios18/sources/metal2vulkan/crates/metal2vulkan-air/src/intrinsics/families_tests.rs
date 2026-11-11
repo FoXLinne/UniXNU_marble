@@ -760,6 +760,10 @@ const OBSERVED: &[(&str, &str)] = &[
     ("air.get_dispatch_threads_per_threadgroup.i32", "i32 (i32)"),
     ("air.get_local_linear_id.i32", "i32 ()"),
     ("air.get_quadgroups_per_threadgroup.i32", "i32 ()"),
+    // OpenCL C's `get_global_offset(d)` and `get_work_dim()` (Apple's OpenCL compiler, macOS
+    // 27.0.1).
+    ("air.get_global_offset.i32", "i32 (i32)"),
+    ("air.get_work_dim.i32", "i32 ()"),
     // Simdgroup matrices.
     (
         "air.simdgroup_matrix_8x8_load.v64f32.p3f32",
@@ -2291,7 +2295,7 @@ fn texture_immediates_bind() {
             ..
         }
     ));
-    // An access outside the qualifiers stays unknown; a non-constant flag is malformed.
+    // An access outside the qualifiers stays unknown; a non-constant flag does not bind.
     let args = [v(0), v(1), v(2), no, v(4), no, v(6), v(7), c.i32(4)];
     assert_eq!(bind(sample, &args, &c.table), Ok(Bound::Unknown));
     let args = [v(0), v(1), v(2), v(3), v(4), no, v(6), v(7), zero];
@@ -2719,7 +2723,7 @@ fn air_2_9_atomics_read_their_flags() {
         // The same call in both forms: only the flags differ.
         assert_eq!(b.flags, Some(flags), "{name}");
         assert_eq!(Atomic { flags: None, ..b }, a, "{name}");
-        // A flag bit outside Metal's five stays unknown; a non-constant one is malformed.
+        // A flag bit outside Metal's five stays unknown; a non-constant one does not bind.
         let mut args = new_args.clone();
         let at = args.len() - 2;
         args[at] = c.i32(32);

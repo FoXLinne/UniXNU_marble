@@ -467,7 +467,7 @@ pub fn select_heap_sampling(
     };
     let image = ImageRef::Heap { group, handle };
     let mut x = select_one(cx, call, image, s, None, m)?;
-    x.heap_raw = select_heap_raw(cx, call, (group, handle), s)?;
+    x.heap_raw = select_heap_raw(cx, call, (group, handle), s, m)?;
     Ok(TextureStrategy::Sampling(Box::new(x)))
 }
 
@@ -485,6 +485,7 @@ fn select_heap_raw(
     call: Call<'_>,
     (group, handle): (u32, ValueId),
     sampler: SamplerArg,
+    m: &mut Meter,
 ) -> Result<Option<super::heap_raw::HeapRaw>, Error> {
     let shape = call.t.image;
     let float = match call.t.texel {
@@ -500,7 +501,7 @@ fn select_heap_raw(
     if shape.ms || shape.depth || shape.dim == ImageDim::Buffer || !float {
         return Ok(None);
     }
-    let raw = heap_raw_sample(cx, call, (group, handle), sampler)?;
+    let raw = heap_raw_sample(cx, call, (group, handle), sampler, m)?;
     // The neutral wherever such a texture is reached, or where the runtime sampler slot's bound
     // sampler states what the emulation does not answer.
     let reads_neutral = match &raw {
@@ -529,12 +530,14 @@ fn select_heap_raw(
 /// word the emulation tests. `None` for every other call, an argument buffer's sampler's
 /// among them (whose listed states the plan does not check against its textures). It
 /// plans the group's unsigned integer class (`HeapPlan::reads_raw`), the heap's decode routines,
-/// the handle's class index, and the exact routine where it may filter.
+/// the handle's class index and the decode's note (`texture::heap_raw::plan`), and the exact
+/// routine where it may filter.
 fn heap_raw_sample(
     cx: &mut SelectCx<'_>,
     call: Call<'_>,
     (group, handle): (u32, ValueId),
     sampler: SamplerArg,
+    m: &mut Meter,
 ) -> Result<Option<super::heap_raw::HeapRaw>, Error> {
     use super::bicubic::TapAddress;
     use super::heap_raw::{HeapRaw, State};
@@ -639,17 +642,27 @@ fn heap_raw_sample(
     if moved.iter().enumerate().any(|(a, k)| *k != 0 && wraps(a)) {
         cx.precision.insert(PrecisionNote::ViewBaseTexelOffset);
     }
-    if let Some(h) = cx.families.texture.heap.get_mut(&group) {
-        h.reads_raw = true;
-    }
-    cx.families.texture.heap_raw.insert(false);
-    if half {
-        cx.families.texture.heap_raw.insert(true);
-    }
-    cx.families.access.heap_class_index = true;
-    // A linear filter's sum of the decoded taps is the device's arithmetic (`extended::filtered`).
-    if gather.is_none() && !matches!(state, State::Constant { linear: false, .. }) {
-        cx.precision.insert(PrecisionNote::BicubicFilterArithmetic);
+    // Every sample takes the `float` routine, a `half` one the `half` routine too.
+    crate::lower::texture::heap_raw::plan(cx, group, &[false, half], m)?;
+    // A linear filter's sum of the decoded taps is the device's arithmetic (`extended::filtered`):
+    // a constexpr sampler's that filters, and a runtime sampler slot's where the word bound there
+    // filters (`linear::filtering_word`), as a word that reads one texel takes that texel alone;
+    // each where a texture the stage's handles can name is held by its raw texels in a form the
+    // function filters (`SpecKey::HeapRawTextures`' `FILTERED` bit), as a bfloat form's sample
+    // reads the nearest texel and any other member's is the device's own sample.
+    if gather.is_none() {
+        use crate::bind::heap::FILTERED;
+        let note = PrecisionNote::BicubicFilterArithmetic;
+        let raw = NoteTest::equal(NoteOn::HeapRaw(cx.stage), FILTERED, FILTERED);
+        let when: Vec<crate::lower::select::NoteClause> = match state {
+            State::Constant { linear: false, .. } => Vec::new(),
+            State::Constant { .. } => vec![[raw].into()],
+            State::Slot { sampler: n } => super::linear::filtering_word(n)
+                .into_iter()
+                .map(|word| [raw, word].into())
+                .collect(),
+        };
+        cx.note_when(note, when, m)?;
     }
     Ok(Some(HeapRaw {
         state,
@@ -1051,7 +1064,7 @@ fn select_slot(
         }
         _ => sampler,
     };
-    if let Some(sample) = select_in_place(cx, call, index, &sampler, arm)? {
+    if let Some(sample) = select_in_place(cx, call, index, &sampler, arm, m)? {
         return Ok(TextureStrategy::InPlaceSample(Box::new(sample)));
     }
     match crate::lower::texture::extended_range(cx, ImageRef::Slot(index))? {
@@ -1072,6 +1085,7 @@ fn select_in_place(
     index: u32,
     sampler: &SamplerArg,
     arm: Option<bool>,
+    m: &mut Meter,
 ) -> Result<Option<super::in_place::Sample>, Error> {
     let variant = crate::lower::texture::ycbcr_in_place(cx, index)?;
     let Some((sample, samplers)) = in_place_sample(cx, call, index, sampler, arm)? else {
@@ -1090,6 +1104,11 @@ fn select_in_place(
     s.observe(call.t.image, Some(TexelClass::Float))?;
     s.uses.read = true;
     s.offset_base |= sample.offset_base;
+    // The device's own conversion samples a planes image's slot (`in_place`'s **The device's
+    // sampler**), whose answers the runtime announces where it binds one: the model is the
+    // texel buffer's.
+    let mut sample = sample;
+    sample.model &= !cx.inputs.ycbcr_planes_sampled.contains_key(&s.slot);
     // A runtime sampler's word states the filter, the coordinates, the address modes and the
     // border color.
     if let super::extended::State::Slot { sampler: n } = sample.state {
@@ -1098,19 +1117,57 @@ fn select_in_place(
         };
         r.linear = true;
     }
-    // A linear filter's exact sum (a gather sums nothing).
-    if sample.gather.is_none()
-        && !matches!(
-            sample.state,
-            super::extended::State::Constant { linear: false, .. }
-        )
-    {
+    // A linear filter's exact sum (a gather sums nothing, and the model's linear sample blends the
+    // codes; a runtime sampler's word may still take Metal's).
+    let sums = match sample.state {
+        super::extended::State::Constant { linear, .. } => linear && !sample.model,
+        super::extended::State::Slot { .. } => true,
+    };
+    if sample.gather.is_none() && sums {
         cx.families
             .sampler
             .bicubic_routines
             .insert(super::bicubic::routines::Routine::Quad);
     }
+    if sample.model {
+        model_note(cx, &sample, m)?;
+    }
     Ok(Some(sample))
+}
+
+/// The note of the model's sample `s` (`super::in_place`'s **The model**): the codes' blend, not
+/// Metal's exact filter of the format, `PrecisionNote::HalfSampleFilter` for a `half` result and
+/// `FloatSampleFilter` for a `float` one, under the clause that the slot binds a converted 4:2:0
+/// format (`SpecKey::BoundTexelFormat`, which the runtime reads at each draw or dispatch and
+/// announces as `ycbcr-filter-not-exact`), and through a runtime sampler slot that the word bound
+/// there filters linearly and addresses no border on either plane axis
+/// (`SpecKey::BoundSamplerWord`), where the sample takes the model.
+fn model_note(
+    cx: &mut SelectCx<'_>,
+    s: &super::in_place::Sample,
+    m: &mut Meter,
+) -> Result<(), Error> {
+    use crate::metal::texel_format::{PackedTexels, TexelFormat};
+    let note = match s.half {
+        true => PrecisionNote::HalfSampleFilter,
+        false => PrecisionNote::FloatSampleFilter,
+    };
+    let format = NoteTest::equal(
+        NoteOn::Bound(s.texture),
+        TexelFormat::PACKED_MASK,
+        PackedTexels::YCbCr2048.class().0,
+    );
+    let mut clause = crate::lower::select::NoteClause::from([format]);
+    if let super::extended::State::Slot { sampler: n } = s.state {
+        let on = NoteOn::BoundSampler(n);
+        let filter = SamplerWord::MIN_LINEAR | SamplerWord::MAG_LINEAR;
+        clause.insert(NoteTest::equal(on, filter, SamplerWord::LINEAR));
+        // A mode from 4 on (clamp-to-zero, clamp-to-border) addresses a border.
+        for shift in SamplerWord::ADDRESS_SHIFT.into_iter().take(2) {
+            clause.insert(NoteTest::equal(on, 4 << shift, 0));
+        }
+    }
+    cx.note_when(note, vec![clause], m)
 }
 
 /// Whether the device's own sampler Y′CbCr conversion of a planes image takes in-place sample `s`
@@ -1250,6 +1307,18 @@ fn in_place_sample(
     let coord = ops
         .get(TexRole::Coord)
         .ok_or_else(|| cx.invariant("a sampling call without a coordinate"))?;
+    // The model takes a linear sample that addresses no border and whose offset no parent's size
+    // places: a constexpr sampler's state decides now, a runtime sampler's word as it runs.
+    let model = cx.profile.fields().ycbcr_in_place_reads
+        == crate::device::YCbCrInPlacePolicy::Model
+        && gather.is_none()
+        && !offset_base
+        && match &state {
+            State::Constant {
+                linear, address, ..
+            } => *linear && !address.iter().any(|m| matches!(m, TapAddress::Border)),
+            State::Slot { .. } => true,
+        };
     let sample = super::in_place::Sample {
         texture: index,
         state,
@@ -1258,6 +1327,7 @@ fn in_place_sample(
         coord: id(cx, coord)?,
         half,
         gather,
+        model,
         result: cx.lowered_repr(Value::Inst(at), inst.ty)?,
     };
     Ok(Some((sample, samplers)))
@@ -1558,9 +1628,21 @@ fn select_extended(
     cx.families.arith.converts(form);
     let filters = !form.bfloat() && gather.is_none();
     // A linear filter's sum of the decoded taps is the device's arithmetic, as a bicubic
-    // sample's is (its 2D routine), not Metal's datapath.
-    if filters && !matches!(state, State::Constant { linear: false, .. }) {
-        cx.precision.insert(PrecisionNote::BicubicFilterArithmetic);
+    // sample's is (its 2D routine), not Metal's datapath: a constexpr sampler's that filters, and
+    // a runtime sampler slot's where the word bound there filters (`linear::filtering_word`), as a
+    // word that reads one texel of one level takes that texel alone.
+    if filters {
+        let note = PrecisionNote::BicubicFilterArithmetic;
+        match state {
+            State::Constant { linear: false, .. } => {}
+            State::Constant { .. } => {
+                cx.precision.insert(note);
+            }
+            State::Slot { sampler: n } => {
+                let when = any_of(super::linear::filtering_word(n));
+                cx.note_when(note, when, m)?;
+            }
+        }
     }
     if cubic.is_some() {
         cx.families
@@ -1569,14 +1651,22 @@ fn select_extended(
             .insert(super::bicubic::routines::Routine::Plane);
         cx.precision.insert(PrecisionNote::BicubicFilterArithmetic);
     }
-    // A linear mip filter's blend of two levels (not a 3D texture's).
-    let blends = match level {
-        Level::Base => false,
-        Level::Stated { stated, .. } => stated.linear,
-        Level::Word { .. } => form.blends_levels() && !volume,
-    };
-    if blends {
-        cx.precision.insert(PrecisionNote::BicubicFilterArithmetic);
+    // A linear mip filter's blend of two levels (not a 3D texture's): a runtime sampler slot's
+    // where the word bound there states one.
+    match level {
+        Level::Base => {}
+        Level::Stated { stated, .. } => {
+            if stated.linear {
+                cx.precision.insert(PrecisionNote::BicubicFilterArithmetic);
+            }
+        }
+        Level::Word { sampler, .. } => {
+            if form.blends_levels() && !volume {
+                let [_, linear_mip] = super::linear::filtering_word(sampler);
+                let when = any_of([linear_mip]);
+                cx.note_when(PrecisionNote::BicubicFilterArithmetic, when, m)?;
+            }
+        }
     }
     let coord = ops
         .get(TexRole::Coord)
@@ -2184,12 +2274,22 @@ fn select_one(
         _ => false,
     };
     // A filtered sample's note, where Metal's own sampler filters the slot and a two-plane YCbCr
-    // format bound there takes another filter than Metal's: the clauses test the bound format
-    // alone, which the runtime reads at each draw, whatever a runtime sampler's word states (no key
-    // carries it there).
+    // format bound there takes another filter than Metal's: the clauses test the bound format,
+    // which the runtime reads at each draw, and through a runtime sampler slot the bound word's
+    // filter (`SpecKey::BoundSamplerWord`, which the plan gives: no key carries either); a heap
+    // texture's test what its handles and an argument buffer's sampler can name. A handle names a
+    // two-plane YCbCr texture (2D, one layer) only through a 2D color class.
     let by = stat.map(|(r, _)| r);
-    if let Some((note, when)) = super::linear::filter_note(cx, &op, form, (by, image))? {
-        cx.note_when(note, when, m)?;
+    let two_plane_reach = match image {
+        ImageRef::Slot(_) => true,
+        ImageRef::Heap { .. } => {
+            shape.dim == ImageDim::D2 && !shape.array && !shape.depth && !shape.ms
+        }
+    };
+    if two_plane_reach {
+        if let Some((note, when)) = super::linear::filter_note(cx, &op, form, (by, image))? {
+            cx.note_when(note, when, m)?;
+        }
     }
     // A pixel sampler's coordinate reaches the device's sampler over the level-0 size, whose
     // texels at a texel edge or a filter step's edge are the device's arithmetic's on that

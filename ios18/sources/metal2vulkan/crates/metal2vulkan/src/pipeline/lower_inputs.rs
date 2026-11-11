@@ -206,6 +206,16 @@ pub struct LoweringInputs {
     /// `max_fragment_call_stack_depth`. Any other function compiles as without it.
     #[cfg_attr(feature = "serde", serde(default))]
     pub max_call_stack_depth: Option<u32>,
+    /// The kernel is the kernel of a compute pipeline of OpenCL mode
+    /// (`ComputePipelineDescriptor::open_cl_mode_enabled`): it takes Metal's three hidden buffers
+    /// at indices 0 to 2, each of its arguments bound at a buffer index sits 3 past its own, and
+    /// OpenCL C's work-item functions read the dispatch's values (`air::canon::opencl`).
+    /// `Device::compile_compute_pipeline` compiles a `Function` kernel under the pipeline's, and a
+    /// kernel compiled on its own for such a pipeline compiles under it too: the pipeline refuses
+    /// a kernel compiled under the other mode (`InvalidDescriptor(OpenClMode)`). Any other
+    /// function compiles as without it.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub open_cl_mode: bool,
     /// The kernel runs its dispatch's grid flat (`VariantKey::flat_grid`): the dispatch is any
     /// number of threadgroups of the variant's local size, whose invocations count the grid's
     /// threads in order (`x` fastest) from the `threads_per_grid` of the 32-byte region record at
@@ -682,9 +692,12 @@ pub struct LoweringInputs {
     /// such an attachment as `half` through the pass and rounds it to the codes once at the
     /// store, so a function that reads one in the interlocked storage form reads the shadow's texel
     /// (`ResourceKind::ExtendedShadow`) as the tile value, and a write stores the value it computes
-    /// there as well as the codes. Each is a single-sample attachment the function writes or reads
-    /// in the storage form under `framebuffer_fetch`; any other is
-    /// `NotImplemented(FramebufferFetch)`. Empty for any other function.
+    /// there as well as the codes, at the invocation's own sample in a multisampled pipeline. Each
+    /// is an attachment the function writes or reads in the storage form under
+    /// `framebuffer_fetch`, or on a device that fetches through rasterization-order input
+    /// attachments one it writes through its first output or reads, beside its input attachment
+    /// (`lower::fragment`'s `input_shadow`); any other is `NotImplemented(FramebufferFetch)`.
+    /// Empty for any other function.
     #[cfg_attr(feature = "serde", serde(default))]
     pub extended_shadows: BTreeSet<u32>,
     /// Sampled texture slots bound to a texture whose format's numeric class (`Float`, `Sint` or
@@ -912,16 +925,18 @@ pub enum FactorLane {
 /// even), a `half` one is taken as it is, and the value is stored as a kernel write stores it.
 /// Under blending Metal first clamps the output to the format's range (each color channel to the
 /// values of codes 0 and 1022 as `half`s, an `_sRGB` color channel of `BGRA10_XR_sRGB` to its
-/// decoded codes 0 and 1022, a NaN to the low end; alpha to `[0, 1]`, a NaN to 0).
+/// decoded codes 0 and 1022, a NaN to the low end; alpha to `[0, 1]`, a NaN to 0); a padded
+/// form's output it blends unclamped.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExtendedRangeColor {
     /// The attachment's format.
     pub form: metal::format::ExtendedRange,
-    /// The pipeline enables blending at the attachment, with factors one and zero for color and
-    /// alpha and the operation add (any other blend is not built): the output is clamped to the
-    /// format's range first.
+    /// The pipeline enables blending at the attachment: the output is clamped to the format's
+    /// range first, and the fragment function computes the blend over an ordered read of the
+    /// attachment (`lower::fragment`). A blend into a bfloat attachment is Metal's pipeline
+    /// error (`InvalidDescriptor(ColorAttachment)`).
     pub blended: bool,
     /// A bfloat attachment of a pipeline whose `textureWriteRoundingMode` is
     /// `metal::TextureWriteRoundingMode::NearestEven`: a `float` output rounds to `half` to
@@ -933,8 +948,8 @@ pub struct ExtendedRangeColor {
 }
 
 impl ExtendedRangeColor {
-    /// The write of an attachment of `form`, blended (with factors one and zero) where `blended`,
-    /// at the default `textureWriteRoundingMode`.
+    /// The write of an attachment of `form`, blended where `blended`, at the default
+    /// `textureWriteRoundingMode`.
     pub fn new(form: metal::format::ExtendedRange, blended: bool) -> ExtendedRangeColor {
         ExtendedRangeColor {
             form,

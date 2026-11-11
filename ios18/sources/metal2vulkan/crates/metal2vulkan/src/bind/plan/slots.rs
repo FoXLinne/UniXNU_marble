@@ -221,6 +221,9 @@ pub(crate) fn bound_value(
         SpecKey::OutOfBoundsAlpha(slot) => bound_texture(shape, slot)
             .and_then(TextureShape::out_of_bounds_alpha)
             .unwrap_or(0),
+        SpecKey::BorderTexels(slot) => bound_texture(shape, slot)
+            .and_then(TextureShape::border_texels)
+            .unwrap_or(u64::from(metal::sampler::NEUTRAL_BORDER_TEXELS)),
         SpecKey::BicubicTexels(slot) => resources.bicubic_texels(slot)?,
         SpecKey::TexelFormat(slot) => resources.texel_format(slot),
         SpecKey::UnmeasuredTexels(slot) => resources.unmeasured_texels(slot),
@@ -269,13 +272,17 @@ pub(crate) fn record_specialized(
 
 /// Record in `resources`' template the value of each key a specialized note of `stages` tests that
 /// no constant and no push carries but the bound resources decide (`SpecKey::BoundSamplerWord`),
-/// which `BindingPlan::specialized_value` gives the runtime at each draw or dispatch, where it
-/// reads such a note (`StageModule::note_clauses_bound`). Nothing pushes it: instantiation writes
-/// only the keys its push fields name.
+/// or what the command's handles can name (`SpecKey::HeapYCbCrTextures`,
+/// `SpecKey::HeapRawTextures` and `SpecKey::HeapNanFamilies`, through `reach`, the stages a used resource's render stages reach,
+/// as for the heap's members; `SpecKey::FilteringArgumentSampler`), which
+/// `BindingPlan::specialized_value` gives the runtime at
+/// each draw or dispatch, where it reads such a note (`StageModule::note_clauses_bound`). Nothing
+/// pushes it: instantiation writes only the keys its push fields name.
 pub(crate) fn record_noted<'a>(
     stages: impl IntoIterator<Item = &'a crate::pipeline::StageModule>,
     shape: &BindShape,
     resources: &mut ResourcePlanner<'_>,
+    reach: &dyn Fn(metal::RenderStages) -> Vec<Stage>,
 ) -> Result<(), BindError> {
     let tested: Vec<SpecKey> = stages
         .into_iter()
@@ -283,7 +290,16 @@ pub(crate) fn record_noted<'a>(
         .flat_map(|note| &note.when)
         .flat_map(|clause| &clause.all)
         .map(|test| test.key)
-        .filter(|key| matches!(key, SpecKey::BoundSamplerWord(_)))
+        .filter(|key| {
+            matches!(
+                key,
+                SpecKey::BoundSamplerWord(_)
+                    | SpecKey::HeapYCbCrTextures(_)
+                    | SpecKey::HeapRawTextures(_)
+                    | SpecKey::HeapNanFamilies(_)
+                    | SpecKey::FilteringArgumentSampler
+            )
+        })
         .collect();
     for key in tested {
         if resources
@@ -294,13 +310,88 @@ pub(crate) fn record_noted<'a>(
         {
             continue;
         }
-        let value = bound_value(key, shape, resources)?
-            .ok_or_else(|| internal(format!("a noted {key:?}, which no bound resource decides")))?;
+        let value = match key {
+            SpecKey::HeapYCbCrTextures(stage) => u64::from(heap_ycbcr(shape, stage, reach)),
+            SpecKey::HeapRawTextures(stage) => u64::from(heap_raw(shape, stage, reach)),
+            SpecKey::HeapNanFamilies(stage) => u64::from(heap_nan_families(shape, stage, reach)),
+            // A sampler state of any listed shape may be the one an argument buffer names.
+            SpecKey::FilteringArgumentSampler => u64::from(
+                (shape.argument_samplers.shapes.iter())
+                    .any(|s| s.linear || s.anisotropic || s.cubic),
+            ),
+            key => bound_value(key, shape, resources)?.ok_or_else(|| {
+                internal(format!("a noted {key:?}, which no bound resource decides"))
+            })?,
+        };
         let value = u32::try_from(value)
             .map_err(|_| internal(format!("a noted {key:?} of {value}, past a word")))?;
         resources.template.specialized.push((key, value));
     }
     Ok(())
+}
+
+/// Whether a heap member of `shape` that reaches `stage` (`bind::heap`'s members: a texture the
+/// command makes resident, its render stages through `reach`, or binds at a texture slot of the
+/// stage) is of a two-plane YCbCr class (`TexelFormat::two_plane_ycbcr`).
+fn heap_ycbcr(
+    shape: &BindShape,
+    stage: Stage,
+    reach: &dyn Fn(metal::RenderStages) -> Vec<Stage>,
+) -> bool {
+    crate::bind::heap::members(shape, &[stage], reach)
+        .iter()
+        .any(|m| match m.shape {
+            TextureShape::Texture { pixel_format, .. } => {
+                crate::metal::texel_format::texel_format(pixel_format).two_plane_ycbcr()
+            }
+            _ => false,
+        })
+}
+
+/// The `SpecKey::HeapRawTextures` of `stage` for `shape`: of the heap members of `shape` that reach
+/// `stage` (as for [`heap_ycbcr`]), the bit `bind::heap::HELD` where one is a texture a heap holds
+/// by its raw texels alone (`bind::heap::heap_raw_form`), which the stage's `float` read, sample or
+/// gather decodes by the device's arithmetic, and the bit `bind::heap::FILTERED` where one such is
+/// of a form whose sample the function filters (not a bfloat one).
+fn heap_raw(
+    shape: &BindShape,
+    stage: Stage,
+    reach: &dyn Fn(metal::RenderStages) -> Vec<Stage>,
+) -> u32 {
+    use crate::bind::heap::{FILTERED, HELD};
+    let mut bits = 0;
+    for m in crate::bind::heap::members(shape, &[stage], reach) {
+        let TextureShape::Texture { pixel_format, .. } = m.shape else {
+            continue;
+        };
+        if !crate::bind::heap::raw_held(&m.shape) {
+            continue;
+        }
+        bits |= HELD;
+        if crate::metal::format::ExtendedRange::of(pixel_format).is_some_and(|f| !f.bfloat()) {
+            bits |= FILTERED;
+        }
+    }
+    bits
+}
+
+/// The `SpecKey::HeapNanFamilies` of `stage` for `shape`: the bit of each family
+/// (`bind::heap::nan_family`) of the heap members of `shape` that reach `stage` (as for
+/// [`heap_ycbcr`]), whose texels a stage's `half` write may store a NaN in.
+fn heap_nan_families(
+    shape: &BindShape,
+    stage: Stage,
+    reach: &dyn Fn(metal::RenderStages) -> Vec<Stage>,
+) -> u32 {
+    crate::bind::heap::members(shape, &[stage], reach)
+        .iter()
+        .map(|m| match m.shape {
+            TextureShape::Texture { pixel_format, .. } => {
+                crate::bind::heap::nan_family(pixel_format)
+            }
+            TextureShape::Buffer { .. } => 0,
+        })
+        .fold(0, |bits, family| bits | family)
 }
 
 /// Whether `shape` binds anything at `slot`.

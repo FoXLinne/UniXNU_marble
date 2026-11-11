@@ -103,6 +103,7 @@ uint64_t nmb_buffer_length(const NmbBuffer *);
 uint64_t nmb_buffer_gpu_address(const NmbBuffer *);
 typedef bool (*NmbImportSync)(uint64_t memory, uint64_t offset, uint64_t bytes, bool acquire);
 bool nmb_buffer_sync_import(const NmbBuffer *, bool acquire, NmbImportSync);
+bool nmb_buffer_did_modify_range(NmbBuffer *, uint64_t offset, uint64_t bytes);
 
 struct NmbTextureDescriptor {
     uint64_t type, format, width, height, depth, levels, samples, array_length, usage, options;
@@ -305,6 +306,9 @@ struct NmbRenderPassDescriptor {
 NmbEncoder *nmb_render_encoder_new(NmbCommandBuffer *, const struct NmbRenderPassDescriptor *);
 bool nmb_encoder_end(NmbEncoder *);
 void nmb_encoder_discard(NmbEncoder *);
+/* Exactly one resource handle is present; usage and stages are Metal bitmasks. */
+bool nmb_encoder_use_resource(NmbEncoder *, NmbBuffer *, NmbTexture *, uint64_t usage, uint64_t stages);
+bool nmb_compute_memory_barrier(NmbEncoder *, uint64_t scope);
 
 /* stage: 0 compute, 1 vertex, 2 fragment */
 bool nmb_encoder_set_buffer(NmbEncoder *, uint32_t stage, NmbBuffer *, uint64_t offset, uint32_t index);
@@ -343,6 +347,8 @@ bool nmb_render_draw_patches(NmbEncoder *, uint32_t control_points, uint32_t pat
 bool nmb_blit_copy_buffer(NmbEncoder *, NmbBuffer *source, uint64_t source_offset, NmbBuffer *destination, uint64_t destination_offset,
                           uint64_t size);
 bool nmb_blit_fill_buffer(NmbEncoder *, NmbBuffer *, uint64_t start, uint64_t end, uint8_t value);
+bool nmb_blit_synchronize_resource(NmbEncoder *, NmbBuffer *, NmbTexture *);
+bool nmb_blit_synchronize_texture(NmbEncoder *, NmbTexture *, uint64_t slice, uint64_t level);
 /* origins and sizes are x,y,z / width,height,depth */
 bool nmb_blit_copy_texture(NmbEncoder *, NmbTexture *source, uint64_t source_slice, uint64_t source_level, const uint64_t source_origin[3],
                            const uint64_t size[3], NmbTexture *destination, uint64_t destination_slice, uint64_t destination_level,

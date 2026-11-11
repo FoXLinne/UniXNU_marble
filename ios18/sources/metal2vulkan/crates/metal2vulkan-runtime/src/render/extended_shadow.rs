@@ -9,31 +9,47 @@
 //! store pass runs.
 //!
 //! - **The shadow** is an `R16G16B16A16_SFLOAT` image of the pass's extent, in `GENERAL` like
-//!   every runtime image, holding pixel `(x, y)`'s `half` values at texel `(x, y)`; made at the
-//!   draw where it starts, one per color and pass, bound where the plan writes
-//!   `WriteSource::ExtendedShadow`. Each draw that binds it reads and writes it in the fragment
-//!   shader, inside the pixel interlock that orders the color's own storage form, so what orders
-//!   that form between draws orders it too (`InterlockedStorage`'s colors: a barrier, or the
-//!   interlock alone on a driver measured to order such draws).
-//! - **The start.** The pass's instances keep their draws for recording again
-//!   (`render/reroute.rs`) on every device while the pass has such a color, single-sampled, of
-//!   one layer, without a rasterization-rate map, fetching in the pixel interlock. At the draw
-//!   (the gate above), a color that no instance before the current one wrote (no draw, tile
-//!   dispatch or execution of render commands) starts: where the current instance's draws wrote
-//!   it, they record again first into an instance that leaves the color out of its subpass, in
-//!   its place, holding the shadow (`record_leaving_out`); else the draw's own instance holds it.
-//!   The instance that first holds it sets it before it, between barriers: to the clear color's
-//!   halves where the pass clears the color (`ExtendedRange::clear_tile_value`), else by the
+//!   every runtime image, holding pixel `(x, y)`'s `half` values at texel `(x, y)`, and in a
+//!   multisampled pass each sample's as the color's storage form holds the samples
+//!   (`framebuffer_fetch::through_planes`): a multisampled image of the pass's samples, or a 2D
+//!   array of one layer per sample (sample `s` at texel `(x, y, s)`); made at the draw where it
+//!   starts, one per color and pass, bound where the plan writes `WriteSource::ExtendedShadow`.
+//!   Each draw that binds it reads and writes it in the fragment shader, inside the pixel
+//!   interlock that orders the color's own storage form, so what orders that form between draws
+//!   orders it too (`InterlockedStorage`'s colors: a barrier, or the interlock alone on a driver
+//!   measured to order such draws). In a pass that fetches through input attachments the color
+//!   stays the subpass's, its codes read and written through its input attachment in
+//!   rasterization order, and the draw reads and writes the shadow beside it inside the pixel
+//!   interlock (`lower::fragment`'s `input_shadow`), behind the same barrier; there a multisampled
+//!   pass holds the samples in a multisampled image.
+//! - **The start.** The pass's instances keep their draws for recording again (`render/reroute.rs`)
+//!   on every device while the pass has such a color, of one layer, without a rasterization-rate
+//!   map, fetching in the pixel interlock, or through input attachments on a device whose functions
+//!   read and write the shadow beside them (the pixel interlock, fragment stores, the shadow's
+//!   format as a storage image and, at more than one sample, multisampled storage images:
+//!   `framebuffer_fetch::holds_extended_shadows`); a multisampled pass's draws do not record again,
+//!   so there a color starts at the first draw that reads it (blends into it, fetches it), not only
+//!   at one that reads what an earlier draw wrote. At the draw (the gate above), a color that no
+//!   instance before the current one wrote (no draw, tile dispatch or execution of render commands)
+//!   starts: where the current instance's draws wrote it, they record again first into an instance
+//!   that leaves the color out of its subpass (in a pass that fetches through input attachments,
+//!   one of the same shape), in its place, holding the shadow (`record_leaving_out`); else the
+//!   draw's own instance holds it. The instance that first holds it sets it before it, between
+//!   barriers: to the clear color's halves where the pass clears the color
+//!   (`ExtendedRange::clear_tile_value`, every sample), else, in a single-sampled pass, by the
 //!   shadow load of the codes (`bind::extended_shadow_module`), which writes each texel's tile
-//!   value, the fetch's own decode. A color an earlier instance wrote, or whose instance's draws
-//!   cannot record again, keeps the codes (the announcement), as does one whose start fails (its
-//!   draws' shadowed variants refused, a load the device cannot build), for the rest of the pass.
-//! - **The end.** A draw whose shadowed variant is refused (a mesh pipeline's, an amplified
-//!   draw's) gives up the shadows of the colors it writes or reads, and an execution of render
-//!   commands or a tile dispatch, whose commands write the codes alone, gives up every shadow:
-//!   the codes hold the encode of the last `half` written, and the draws after it see them, as
-//!   before the shadow. None starts again in the pass. Not while the encoder records an
-//!   execution's commands, which bind no shadow.
+//!   value, the fetch's own decode, reading the codes as a storage image (in a pass that fetches
+//!   through input attachments, where the texture's image has that usage). A color an earlier
+//!   instance wrote, or whose instance's draws cannot record again, keeps the codes (the
+//!   announcement), as does one whose start fails (its draws' shadowed variants refused, a load the
+//!   device cannot build, a multisampled pass that does not clear it), for the rest of the pass.
+//! - **The end.** A draw whose shadowed variant is refused (a mesh pipeline's, an amplified draw's,
+//!   and over input attachments one whose shadow stores the tests or the coverage could leave apart
+//!   from its codes: `lower::fragment`'s `input_shadow`) gives up the shadows of the colors it
+//!   writes or reads, and an execution of render commands or a tile dispatch, whose commands write
+//!   the codes alone, gives up every shadow: the codes hold the encode of the last `half` written,
+//!   and the draws after it see them, as before the shadow. None starts again in the pass. Not
+//!   while the encoder records an execution's commands, which bind no shadow.
 //! - **The announcement**. A draw that held a color's shadow read what Metal's tile memory holds,
 //!   so `extended-range-blends-stored-codes` names only the colors a draw read from the codes
 //!   (`degrade_extended_range_blends`, `ExtendedShadows::held`).
@@ -43,7 +59,9 @@ use crate::blit::TRANSFER;
 use crate::command_buffer::CommandBuffer;
 use crate::device::functions::Vk;
 use crate::error::{internal, Error};
+use crate::framebuffer_fetch;
 use crate::image_plan::ImagePlan;
+use crate::live_bind::LiveBind;
 use crate::owned_kernel::{OwnedKernel, OwnedModule};
 use crate::pipeline::GraphicsState as DrawingState;
 use crate::render_pass::{PassLayout, RenderPassDescriptor, Target};
@@ -75,8 +93,9 @@ pub(super) struct ExtendedShadows {
     /// The pass's colors of a measured extended-range form, by index: the form, and the halves
     /// its tile holds after the pass's clear where it clears.
     colors: BTreeMap<u32, (ExtendedRange, Option<[f32; 4]>)>,
-    /// The pass holds shadows: single-sampled, of one layer, fetching in the pixel interlock,
-    /// without a rasterization-rate map, with such a color.
+    /// The pass holds shadows: of one layer, without a rasterization-rate map, with such a color,
+    /// fetching in the pixel interlock, or through input attachments on a device whose functions
+    /// read and write the shadow beside them (`framebuffer_fetch::holds_extended_shadows`).
     holds: bool,
     /// The first instance, by index, whose draws, tile dispatches or executed commands may have
     /// written each color.
@@ -94,9 +113,10 @@ pub(super) struct ExtendedShadows {
 }
 
 impl ExtendedShadows {
-    /// The shadows of the pass `descriptor` describes, of `layout`, with a rasterization-rate
-    /// map where `rate_mapped`: none made yet.
+    /// The shadows of the pass `descriptor` describes, of `layout`, on `device`, with a
+    /// rasterization-rate map where `rate_mapped`: none made yet.
     pub(super) fn of(
+        device: &Device,
         descriptor: &RenderPassDescriptor,
         layout: &PassLayout,
         rate_mapped: bool,
@@ -105,7 +125,9 @@ impl ExtendedShadows {
             .zip(&descriptor.color_attachments)
             .filter_map(|(index, color)| {
                 let texture = color.texture.as_ref()?;
-                // Not the padded and bfloat forms, whose tile memory is unmeasured.
+                // Not the padded forms, whose shadow the translator does not build
+                // (`lower::fragment::fetch`), nor the bfloat forms, whose tile memory is
+                // unmeasured: their draws keep the codes, announced.
                 let form = ExtendedRange::of(texture.pixel_format())
                     .filter(|form| !form.padded() && !form.bfloat())?;
                 let tile = match color.load_action {
@@ -115,9 +137,13 @@ impl ExtendedShadows {
                 Some((index, (form, tile)))
             })
             .collect();
+        let profile = device.compile_device().profile();
         let holds = !colors.is_empty()
-            && !layout.fetch_inputs
-            && layout.samples == 1
+            && framebuffer_fetch::holds_extended_shadows(
+                profile,
+                layout.fetch_inputs,
+                layout.samples,
+            )
             && layout.layers == 1
             && !rate_mapped;
         ExtendedShadows {
@@ -149,6 +175,12 @@ impl ExtendedShadows {
     /// Whether the pass's instances keep their draws for recording again: it may hold shadows.
     pub(super) fn keeps_draws(&self) -> bool {
         self.holds
+    }
+
+    /// Whether the pass has a color of an extended-range form, or holds shadows: a draw kept in
+    /// another pass is not carried into it (`render/carried.rs`).
+    pub(super) fn any(&self) -> bool {
+        self.holds || !self.colors.is_empty()
     }
 
     /// Whether the pass made `color`'s shadow, whose draws took a view of the color.
@@ -206,8 +238,13 @@ impl ExtendedShadows {
                 .get(&c)
                 .filter(|_| self.live.contains(&c))
                 .ok_or_else(|| internal("a draw of a shadow the pass does not hold"))?;
-            uses.push(target.texture.image_use(0..1, 0..1, read, false)?);
-            uses.push(target.texture.image_use(0..1, 0..1, write, true)?);
+            let layers = 0..target.layers;
+            uses.push(
+                target
+                    .texture
+                    .image_use(0..1, layers.clone(), read, false)?,
+            );
+            uses.push(target.texture.image_use(0..1, layers, write, true)?);
         }
         Ok(uses)
     }
@@ -239,8 +276,9 @@ impl ExtendedShadows {
             let kind = match tile {
                 Some(values) => {
                     let write = Access::new(TRANSFER, vk::AccessFlags2::TRANSFER_WRITE);
-                    uses.push(shadow.texture.image_use(0..1, 0..1, write, true)?);
-                    FillKind::Clear(values)
+                    let layers = 0..shadow.layers;
+                    uses.push(shadow.texture.image_use(0..1, layers, write, true)?);
+                    FillKind::Clear(values, shadow.layers)
                 }
                 None => {
                     let codes = layout
@@ -305,8 +343,9 @@ impl ExtendedShadows {
 
 /// How a shadow is set before the instance that first holds it (the module docs).
 enum FillKind {
-    /// To the clear color's halves.
-    Clear([f32; 4]),
+    /// To the clear color's halves, in every layer of the shadow (one per sample where it holds
+    /// the samples as planes).
+    Clear([f32; 4], u32),
     /// By the shadow load of the codes: its set's pool, held until the command buffer completes,
     /// the kernel, its set, and the workgroups it runs.
     Load {
@@ -337,14 +376,14 @@ impl ShadowFill {
         unsafe {
             Barrier::everything().record(device, raw);
             match &self.kind {
-                FillKind::Clear(values) => {
+                FillKind::Clear(values, layers) => {
                     let colour = vk::ClearColorValue { float32: *values };
                     let range = vk::ImageSubresourceRange {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
                         base_mip_level: 0,
                         level_count: 1,
                         base_array_layer: 0,
-                        layer_count: 1,
+                        layer_count: *layers,
                     };
                     let general = vk::ImageLayout::GENERAL;
                     device.cmd_clear_color_image(raw, self.shadow, general, &colour, &[range]);
@@ -377,6 +416,41 @@ pub(super) fn reads_color(graphics: &GraphicsState, index: u32) -> bool {
             .iter()
             .any(|a| a.color_index == index)
         || color(graphics, index).is_some_and(|a| a.blend.is_some())
+}
+
+/// The colors whose shadows a state's creation predicts its first draw holds
+/// (`pipeline/predicted.rs`), for a pipeline of `graphics` whose color attachments are `colors`
+/// (each index's pixel format) at `samples`, in a pass that `holds` shadows: in a multisampled
+/// pass, each color of a measured extended-range form the draw reads ([`reads_color`]), as such a
+/// pass starts that color's shadow at the first draw that reads it where it clears the color
+/// ([`RenderLowering::start_extended_shadows`]), and a multisampled color's only contents at the
+/// pass's start that are not undefined are its clear's or its load's, a load being what a pass of
+/// memoryless samples cannot take. None in a single-sampled pass, which starts the shadow only
+/// where an earlier draw of the pass wrote the color or its clear's codes cannot hold the clear,
+/// which no creation sees: of the suite's single-sampled draws that blend into such a color, the
+/// `xr-blend-planes-*` ones blend once over a loaded target and hold no shadow. None where the pass
+/// would hold no shadow (not `holds`, [`ExtendedShadows::of`]: a device whose pass fetches through
+/// input attachments and whose functions cannot read and write the shadow beside them); the
+/// creation predicts the pass of one layer without a rasterization-rate map, Metal's defaults.
+pub(crate) fn predicted_shadows(
+    graphics: &GraphicsState,
+    colors: &[Option<PixelFormat>],
+    samples: u32,
+    holds: bool,
+) -> BTreeSet<u32> {
+    if samples <= 1 || !holds {
+        return BTreeSet::new();
+    }
+    (0u32..)
+        .zip(colors)
+        .filter(|(index, format)| {
+            format
+                .and_then(ExtendedRange::of)
+                .is_some_and(|form| !form.padded() && !form.bfloat())
+                && reads_color(graphics, *index)
+        })
+        .map(|(index, _)| index)
+        .collect()
 }
 
 /// Whether a draw of `graphics` may write color `index`: in the interlocked storage form, or
@@ -417,9 +491,14 @@ impl RenderLowering {
 
     /// Before a draw of `pipeline`, start the shadows of the colors it blends into or reads that
     /// an earlier draw of the pass wrote or whose clear their codes cannot hold (the module
-    /// docs): those no earlier instance wrote, the current instance's draws recorded again first
-    /// into one that leaves them out where they wrote them.
-    pub(super) fn start_extended_shadows(&mut self, pipeline: &DrawingState) -> Result<(), Error> {
+    /// docs), in a multisampled pass every color it blends into or reads: those no earlier
+    /// instance wrote, the current instance's draws recorded again first into one that leaves
+    /// them out where they wrote them, with the encoder's bind state `live`.
+    pub(super) fn start_extended_shadows(
+        &mut self,
+        live: &mut LiveBind,
+        pipeline: &DrawingState,
+    ) -> Result<(), Error> {
         if !self.extended.holds
             || self.replaying
             || self.rerouting
@@ -429,6 +508,10 @@ impl RenderLowering {
         }
         let graphics = &pipeline.base().graphics;
         let here = self.earlier.len();
+        // In a multisampled pass no draw records again (`render/reroute.rs`), so a shadow starts at
+        // the first draw that reads the color, before any draw of its instance wrote it, rather
+        // than at the first that reads what an earlier draw wrote.
+        let eager = self.layout.samples > 1;
         let wanted: Vec<u32> = self
             .extended
             .colors
@@ -436,7 +519,7 @@ impl RenderLowering {
             .copied()
             .filter(|c| {
                 reads_color(graphics, *c)
-                    && self.extended_written.contains(c)
+                    && (eager || self.extended_written.contains(c))
                     && !self.extended.live.contains(c)
                     && !self.extended.ended.contains(c)
             })
@@ -460,9 +543,14 @@ impl RenderLowering {
         if starting.is_empty() {
             return Ok(());
         }
+        let profile = self.core.device().compile_device().profile();
+        let samples = match framebuffer_fetch::through_planes(profile, self.layout.samples) {
+            true => ShadowSamples::Planes(self.layout.samples),
+            false => ShadowSamples::Multisampled(self.layout.samples),
+        };
         for &c in &starting {
             if !self.extended.made.contains_key(&c) {
-                let shadow = new_shadow(self.core.command_buffer(), self.layout.extent)?;
+                let shadow = new_shadow(self.core.command_buffer(), self.layout.extent, samples)?;
                 self.extended.made.insert(c, shadow);
             }
         }
@@ -475,7 +563,7 @@ impl RenderLowering {
         colors.extend(starting.iter().copied());
         colors.sort_unstable();
         colors.dedup();
-        match self.record_leaving_out(colors, pipeline)? {
+        match self.record_leaving_out(live, colors, pipeline)? {
             true => self
                 .extended
                 .fills
@@ -485,8 +573,10 @@ impl RenderLowering {
         Ok(())
     }
 
-    /// Whether the shadow of color `c` can be set before its instance: from the clear, or by the
-    /// shadow load of codes in the form's raw format, which the device builds.
+    /// Whether the shadow of color `c` can be set before its instance: from the clear, or, in a
+    /// single-sampled pass, by the shadow load of codes in the form's raw format, which the
+    /// device builds. A multisampled pass that loads the color keeps the codes: the load reads
+    /// one sample a texel.
     fn shadow_loads(&self, c: u32) -> Result<bool, Error> {
         let Some(&(form, tile)) = self.extended.colors.get(&c) else {
             return Ok(false);
@@ -494,12 +584,25 @@ impl RenderLowering {
         if tile.is_some() {
             return Ok(true);
         }
+        if self.layout.samples > 1 {
+            return Ok(false);
+        }
+        // The load reads the codes as a storage image: in a pass that fetches through input
+        // attachments, only where the texture's image has that usage.
         let raw = self
             .layout
             .colors
             .get(c as usize)
             .and_then(Option::as_ref)
-            .is_some_and(|color| color.target.format == form.raw_format());
+            .is_some_and(|color| {
+                color.target.format == form.raw_format()
+                    && (!self.layout.fetch_inputs
+                        || color
+                            .target
+                            .texture
+                            .image_plan()
+                            .is_ok_and(|plan| plan.usage.contains(ImageUsageFlags::STORAGE)))
+            });
         if !raw {
             return Ok(false);
         }
@@ -561,14 +664,39 @@ impl RenderLowering {
     }
 }
 
-/// A shadow of the pass's `extent` (the module docs).
-fn new_shadow(maker: &CommandBuffer, extent: [u32; 2]) -> Result<Target, Error> {
+/// How a shadow holds a multisampled pass's samples: as the color's storage image holds them in
+/// the interlocked storage form (`framebuffer_fetch::through_planes`), so the shadowed draws read
+/// and write each sample alike.
+#[derive(Clone, Copy)]
+enum ShadowSamples {
+    /// A multisampled image of the pass's samples (one at one sample).
+    Multisampled(u32),
+    /// A single-sample 2D array of one layer per sample of the pass's.
+    Planes(u32),
+}
+
+/// A shadow of the pass's `extent` holding its samples as `samples` says (the module docs).
+fn new_shadow(
+    maker: &CommandBuffer,
+    extent: [u32; 2],
+    samples: ShadowSamples,
+) -> Result<Target, Error> {
     let [width, height] = extent;
+    let (count, layers) = match samples {
+        ShadowSamples::Multisampled(count) => (count, 1),
+        ShadowSamples::Planes(count) => (1, count),
+    };
     let descriptor = TextureDescriptor {
-        texture_type: TextureType::Type2D,
+        texture_type: match samples {
+            ShadowSamples::Multisampled(1) => TextureType::Type2D,
+            ShadowSamples::Multisampled(_) => TextureType::Type2DMultisample,
+            ShadowSamples::Planes(_) => TextureType::Type2DArray,
+        },
         pixel_format: PixelFormat::RGBA16Float,
         width: width.into(),
         height: height.into(),
+        array_length: layers.into(),
+        sample_count: count.into(),
         usage: TextureUsage::RENDER_TARGET,
         resource_options: ResourceOptions::private(),
         ..TextureDescriptor::default()
@@ -580,8 +708,8 @@ fn new_shadow(maker: &CommandBuffer, extent: [u32; 2]) -> Result<Target, Error> 
         format: SHADOW_FORMAT,
         extent: [width, height, 1],
         levels: 1,
-        layers: 1,
-        samples: SampleCountFlags::from_raw(1),
+        layers,
+        samples: SampleCountFlags::from_raw(count),
         usage: ImageUsageFlags::STORAGE | ImageUsageFlags::TRANSFER_DST,
         view_formats: Vec::new(),
         mapping: FormatMapping::direct(SHADOW_FORMAT, ImageAspectFlags::COLOR),
@@ -596,9 +724,9 @@ fn new_shadow(maker: &CommandBuffer, extent: [u32; 2]) -> Result<Target, Error> 
         texture,
         level: 0,
         layer: 0,
-        layers: 1,
+        layers,
         format: SHADOW_FORMAT,
-        samples: 1,
+        samples: count,
         extent,
     })
 }

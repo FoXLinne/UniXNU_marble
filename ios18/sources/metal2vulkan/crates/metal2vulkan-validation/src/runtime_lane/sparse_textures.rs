@@ -13,9 +13,9 @@
 //! lacks.
 
 use super::degrade_notices::{assert_made_once, assert_once, forced, on_device};
-use super::kernel_textures::census;
+use super::kernel_textures::census_with;
 use super::resolves::{color_pass, quiet, FULL, WHITE};
-use super::{public_cases, read_buffer, shared_kinds, NamedCase};
+use super::{at_plan, public_cases, read_buffer, shared_kinds, NamedCase};
 use crate::case::Stage;
 use ash::vk;
 use metal2vulkan::bind::TileMapping;
@@ -612,7 +612,10 @@ fn indirect_updates_map_what_the_buffer_holds_when_they_run() {
         // Arguments Metal's validation stops map as plain Metal maps them (the M3 Max under macOS
         // 27.0.1): a region past its level's tiles maps the tiles inside them; one whose origin is
         // past them, of no size, or of a level or slice past the texture's maps nothing; and the
-        // regions a count names past the buffer map nothing. Each unmapped again after.
+        // regions a count names past the buffer map nothing. A slice past the texture's still
+        // charges the heap a page a tile, given back on its unmap, as a direct update's does
+        // (`sparse-mapping-a-slice-past-the-textures`; an indirect one's by the same rule,
+        // unmeasured). Each unmapped again after.
         let map = |mode, buffer: &Buffer| indirect(&queue, &texture, mode, buffer, |_| {});
         let past = words_buffer(&queue, &[1, 3, 0, 0, 2, 1, 1, 0, 0], shared);
         assert_eq!(map(TileMapping::Map, &past), None, "{name}");
@@ -635,6 +638,12 @@ fn indirect_updates_map_what_the_buffer_holds_when_they_run() {
             shared,
         );
         assert_eq!(map(TileMapping::Map, &nothing), None, "{name}");
+        assert_eq!(
+            heap.used_size(),
+            PAGE,
+            "the slice past the texture's on {name}"
+        );
+        assert_eq!(map(TileMapping::Unmap, &nothing), None, "{name}");
         assert_eq!(heap.used_size(), 0, "{name}");
         let counted = words_buffer(&queue, &[2, 0, 0, 0, 1, 1, 1, 0, 0], private);
         assert_eq!(map(TileMapping::Map, &counted), None, "{name}");
@@ -1342,7 +1351,9 @@ fn updates_through_views_map_the_texture_s_own_tiles() {
         assert_eq!(heap.used_size(), 9 * PAGE, "slice 2 unmapped on {name}");
         // Slices 1 and 2: the view's slice 2 is the texture's slice 3, past the view's; its slice
         // 3 would be the texture's slice 4, past the texture's, which the call takes and maps
-        // nothing for, as on the texture and as plain Metal takes it.
+        // nothing for, as on the texture and as plain Metal takes it, while charging the heap a
+        // page a tile until its unmap, as plain Metal charges a direct update on the texture
+        // (`sparse-mapping-a-slice-past-the-textures`; through a view by the same rule).
         let middle = array
             .new_texture_view_with_levels_slices(r32, TextureType::Type2DArray, 0..1, 1..3)
             .unwrap();
@@ -1353,8 +1364,14 @@ fn updates_through_views_map_the_texture_s_own_tiles() {
         one_update(&middle, TileMapping::Map, 3).unwrap();
         assert_eq!(
             heap.used_size(),
+            13 * PAGE,
+            "a slice past the texture's charges its tiles on {name}"
+        );
+        one_update(&middle, TileMapping::Unmap, 3).unwrap();
+        assert_eq!(
+            heap.used_size(),
             9 * PAGE,
-            "a slice past the texture's maps nothing on {name}"
+            "a slice past the texture's given back on {name}"
         );
         // An indirect update's slice 1 through the view: the texture's slice 2.
         let shared = ResourceOptions::shared();
@@ -1561,7 +1578,7 @@ fn update_slice(
 /// (`runtime_case/sparse.rs`).
 #[test]
 fn sparse_cases_match_metal() {
-    census("runtime sparse kernels", &sparse_cases());
+    census_with(at_plan, "runtime sparse kernels", &sparse_cases());
 }
 
 /// Every committed public kernel case that binds a sparse texture.

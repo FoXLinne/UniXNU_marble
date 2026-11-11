@@ -9,23 +9,24 @@
 //! mapping, the GPU through the buffer, and each reads what the other wrote. The answers expected
 //! are Metal's, as measured on an Apple M3 Max and an M4.
 
-use super::{
-    buffer_with, encode_case, pipeline_state, public_case, read_buffer, validated_device,
-    CaseResources, Messages, ScratchCache,
-};
 #[cfg(any(m2v_cpu_icd, m2v_gpu_hazards))]
-use super::{layer_reported_nothing, validated_device_with};
+use super::layer_reported_nothing;
+use super::{
+    at_plan, buffer_with, encode_case, pipeline_state, public_case, read_buffer,
+    validated_device_with, CaseResources, Messages, ScratchCache,
+};
 use crate::candidate::engine::ComputeOutput;
 use crate::gpu::TEST_DEVICE;
 use metal2vulkan::error::Feature;
 use metal2vulkan::metal::{PixelFormat, TextureUsage};
 #[cfg(any(m2v_cpu_icd, m2v_gpu_hazards))]
 use metal2vulkan::vk::DriverId;
+use metal2vulkan_runtime::DeviceOptions;
 use metal2vulkan_runtime::{
     BlitOption, Buffer, BufferContents, BufferDescriptor, CommandBuffer, CommandBufferStatus,
-    CommandQueue, CopyProblem, CpuCacheMode, Deallocator, DebugMessage, Degradation, Device, Error,
-    EventRef, HazardTrackingMode, HostMemory, Invalid, Nil, Origin, Problem, PurgeableState,
-    Region, ResourceOptions, Size, StorageMode, TextureDescriptor,
+    CommandQueue, CopyProblem, CpuCacheMode, Deallocator, DebugMessage, Device, Error, EventRef,
+    HazardTrackingMode, HostBacking, HostMemory, Invalid, Nil, Origin, Problem, PurgeableState,
+    Region, ResourceOptions, Size, StorageMode, TextureDescriptor, WorkCounts,
 };
 #[cfg(any(m2v_cpu_icd, m2v_gpu_hazards))]
 use metal2vulkan_runtime::{CommandBufferError, LayerSetting, LayerSettingValue};
@@ -410,10 +411,6 @@ pub(super) fn gpu_fill(
     run(&command_buffer);
 }
 
-/// The kind a no-copy buffer over pages the process maps read-only, made from its dma-buf source,
-/// announces once (`dma_buf_imports`'s `read_only_pages_are_made_from_the_source`, on Linux).
-pub(super) const READ_ONLY_PAGES: [Degradation; 1] = [Degradation::ReadOnlyPagesWritten];
-
 /// Bytes `i % 251` from `start`.
 pub(super) fn counting(len: usize, start: usize) -> Vec<u8> {
     (start..start + len).map(|i| (i % 251) as u8).collect()
@@ -422,7 +419,13 @@ pub(super) fn counting(len: usize, start: usize) -> Vec<u8> {
 /// Run `test` on a validated device, then check that once everything is dropped (the device
 /// last) the layer reported nothing.
 pub(super) fn on_device(test: impl FnOnce(&Device)) {
-    let messages = on_device_reporting(test);
+    on_device_with(|_| {}, test)
+}
+
+/// [`on_device`], `adjust` applied to the options of each device it makes (`at_plan` gives them
+/// their queue plan).
+pub(super) fn on_device_with(adjust: fn(&mut DeviceOptions), test: impl FnOnce(&Device)) {
+    let messages = on_device_reporting_with(adjust, test);
     assert!(
         messages.is_empty(),
         "the validation layer reported: {messages:#?}"
@@ -432,10 +435,19 @@ pub(super) fn on_device(test: impl FnOnce(&Device)) {
 /// Run `test` on a validated device; the failing messages reported once everything is dropped
 /// (the device last).
 fn on_device_reporting(test: impl FnOnce(&Device)) -> Vec<DebugMessage> {
+    on_device_reporting_with(|_| {}, test)
+}
+
+/// [`on_device_reporting`], `adjust` applied to the options of each device it makes (`at_plan` gives them
+/// their queue plan).
+fn on_device_reporting_with(
+    adjust: fn(&mut DeviceOptions),
+    test: impl FnOnce(&Device),
+) -> Vec<DebugMessage> {
     let cache = ScratchCache::new().unwrap();
     let messages = Messages::default();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), adjust).unwrap();
         test(&device);
     }
     messages.take()
@@ -702,87 +714,174 @@ fn a_deallocator_may_touch_the_command_buffer_that_held_its_buffer() {
 /// committed, so the three go in that one pass.) A blit encoder logs its calls while the device has
 /// a buffer over host pages (`replay.rs`), and its log was let go there, with the buffer's last
 /// handle, after the completion: the deallocator then ran on that thread, whose own hold on the
-/// command buffer kept the deallocator's wait from ever returning.
+/// command buffer kept the deallocator's wait from ever returning. `after` needs no GPU work, so
+/// where `filled` completed before the pass took it, its completion turn is that thread's own
+/// (`Completion::turn_owed`), which the thread makes before it runs `holding`'s handler; made
+/// after it, the handler waited for a turn only its return let go.
+///
+/// The two command queues run on one `VkQueue`, and, where the device has another, on two: a
+/// device of one `VkQueue` per family shares it between them, and one of many gives them two
+/// (the lane's devices keep each queue on the `VkQueue` the round robin gave it,
+/// `QueueSharingPolicy::PerQueue`), so each arrangement is made here on every device that has
+/// it ([`queue_where`]).
 #[test]
 fn a_deallocator_returns_whatever_thread_submits_past_its_completion() {
-    on_device(|device| {
-        let (first, second) = (
-            device.new_command_queue().unwrap(),
-            device.new_command_queue().unwrap(),
-        );
-        let opener = second.command_buffer().unwrap();
-        let (opened, open) = std::sync::mpsc::channel::<()>();
-        let (release, released) = std::sync::mpsc::channel::<()>();
-        opener
-            .add_submission_handler(Box::new(move |_: &CommandBuffer| {
-                opened.send(()).unwrap();
-                released.recv_timeout(WAIT).unwrap();
-            }))
-            .unwrap();
-        opener.commit().unwrap();
-        open.recv_timeout(WAIT)
-            .expect("the opener's submission handler ran");
-        let memory = Mapping::anonymous(GUEST_PAGE);
-        let pointer = memory.pointer();
-        let filled = first.command_buffer().unwrap();
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let deallocator: Deallocator = {
-            let filled = filled.clone();
-            Box::new(move |_: NonNull<u8>, _: u64| {
-                let status = filled.status();
-                let waited = (
-                    filled.wait_until_completed(),
-                    filled.wait_until_completed_for(WAIT),
-                );
-                drop(filled);
-                drop(memory);
-                sender.send((status, waited)).unwrap();
-            })
-        };
-        // SAFETY: the deallocator releases the mapping, after the buffer's last use.
-        let buffer = unsafe {
-            no_copy(
-                device,
-                pointer,
-                GUEST_PAGE,
-                ResourceOptions::default(),
-                Some(deallocator),
-            )
-        }
-        .unwrap();
-        let mut blit = filled.blit_command_encoder().unwrap();
-        blit.fill_buffer(&buffer, 0..64, 0x2d).unwrap();
-        blit.end_encoding().unwrap();
-        filled.commit().unwrap();
-        drop(buffer);
-        let after = first.command_buffer().unwrap();
-        let (ran, after_ran) = std::sync::mpsc::channel::<()>();
-        after
-            .add_completed_handler(Box::new(move |_: &CommandBuffer| {
-                ran.send(()).unwrap();
-            }))
-            .unwrap();
-        after.commit().unwrap();
-        let holding = second.command_buffer().unwrap();
-        holding
-            .add_submission_handler(Box::new(move |_: &CommandBuffer| {
-                after_ran
-                    .recv_timeout(WAIT)
-                    .expect("the later command buffer's completed handler ran");
-            }))
-            .unwrap();
-        holding.commit().unwrap();
-        release.send(()).unwrap();
-        let (status, waited) = receiver
-            .recv_timeout(WAIT)
-            .expect("the deallocator ran and returned");
-        assert_eq!(status, CommandBufferStatus::Completed);
-        assert_eq!(waited, (Ok(()), Ok(())));
-        for command_buffer in [&opener, &filled, &after, &holding] {
-            command_buffer.wait_until_completed_for(WAIT).unwrap();
-            assert_eq!(command_buffer.error(), None);
+    on_device_with(at_plan, |device| {
+        let first = device.new_command_queue().unwrap();
+        let on = first.vk_queue_sharing().0;
+        let shared = queue_where(device, on, true).expect("a queue on the first one's VkQueue");
+        deallocator_past_its_completion(device, &first, &shared, "one VkQueue");
+        match queue_where(device, on, false) {
+            Some(apart) => deallocator_past_its_completion(device, &first, &apart, "two VkQueues"),
+            None => eprintln!(
+                "deallocator past its completion: {} has one VkQueue",
+                device.name()
+            ),
         }
     });
+}
+
+/// A new command queue of `device` on the `VkQueue` `vk_queue` (`shared`), or on another: the
+/// first such of up to 64 made one after another, which the round robin spreads over the
+/// device's `VkQueue`s (`CommandQueue::vk_queue_sharing`). `None` where none was: a device of one
+/// `VkQueue`, for another.
+fn queue_where(device: &Device, vk_queue: usize, shared: bool) -> Option<CommandQueue> {
+    (0..64)
+        .map(|_| device.new_command_queue().unwrap())
+        .find(|queue| (queue.vk_queue_sharing().0 == vk_queue) == shared)
+}
+
+/// [`a_deallocator_returns_whatever_thread_submits_past_its_completion`] on `first` and `second`,
+/// the queues of the `arrangement` named.
+fn deallocator_past_its_completion(
+    device: &Device,
+    first: &CommandQueue,
+    second: &CommandQueue,
+    arrangement: &str,
+) {
+    let queues = (first.vk_queue_sharing().0, second.vk_queue_sharing().0);
+    let before = device.work_counts();
+    let opener = second.command_buffer().unwrap();
+    let (opened, open) = std::sync::mpsc::channel::<()>();
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    opener
+        .add_submission_handler(Box::new(move |_: &CommandBuffer| {
+            opened.send(()).unwrap();
+            released.recv_timeout(WAIT).unwrap();
+        }))
+        .unwrap();
+    opener.commit().unwrap();
+    open.recv_timeout(WAIT)
+        .expect("the opener's submission handler ran");
+    let memory = Mapping::anonymous(GUEST_PAGE);
+    let pointer = memory.pointer();
+    let filled = first.command_buffer().unwrap();
+    // The thread the deallocator began on, once it began.
+    let began: Arc<Mutex<Option<String>>> = Arc::default();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let deallocator: Deallocator = {
+        let (filled, began) = (filled.clone(), Arc::clone(&began));
+        Box::new(move |_: NonNull<u8>, _: u64| {
+            let thread = std::thread::current().name().map(str::to_owned);
+            *began.lock().unwrap() = Some(thread.unwrap_or_else(|| "(unnamed)".to_owned()));
+            let status = filled.status();
+            let waited = (
+                filled.wait_until_completed(),
+                filled.wait_until_completed_for(WAIT),
+            );
+            drop(filled);
+            drop(memory);
+            sender.send((status, waited)).unwrap();
+        })
+    };
+    // SAFETY: the deallocator releases the mapping, after the buffer's last use.
+    let buffer = unsafe {
+        no_copy(
+            device,
+            pointer,
+            GUEST_PAGE,
+            ResourceOptions::default(),
+            Some(deallocator),
+        )
+    }
+    .unwrap();
+    let mut blit = filled.blit_command_encoder().unwrap();
+    blit.fill_buffer(&buffer, 0..64, 0x2d).unwrap();
+    blit.end_encoding().unwrap();
+    filled.commit().unwrap();
+    drop(buffer);
+    let after = first.command_buffer().unwrap();
+    let (ran, after_ran) = std::sync::mpsc::channel::<()>();
+    after
+        .add_completed_handler(Box::new(move |_: &CommandBuffer| {
+            ran.send(()).unwrap();
+        }))
+        .unwrap();
+    after.commit().unwrap();
+    let holding = second.command_buffer().unwrap();
+    // What the device did, for a failure's report.
+    let report = {
+        let arrangement = arrangement.to_owned();
+        let (filled, later, began) = (filled.clone(), after.clone(), Arc::clone(&began));
+        move |device: &Device| {
+            format!(
+                "on {arrangement} {queues:?} of {}: the filled command buffer is {:?}, the later \
+                 one {:?}; the deallocator began on {:?}; {}",
+                device.name(),
+                filled.status(),
+                later.status(),
+                began.lock().unwrap(),
+                submitted_since(&before, &device.work_counts())
+            )
+        }
+    };
+    let report_there = report.clone();
+    holding
+        .add_submission_handler(Box::new(move |taken: &CommandBuffer| {
+            if after_ran.recv_timeout(WAIT).is_err() {
+                panic!(
+                    "the later command buffer's completed handler never ran {}",
+                    report_there(taken.device())
+                );
+            }
+        }))
+        .unwrap();
+    holding.commit().unwrap();
+    release.send(()).unwrap();
+    let Ok((status, waited)) = receiver.recv_timeout(WAIT) else {
+        panic!("the deallocator never returned {}", report(device));
+    };
+    assert_eq!(status, CommandBufferStatus::Completed, "{arrangement}");
+    assert_eq!(waited, (Ok(()), Ok(())), "{arrangement}");
+    for command_buffer in [&opener, &filled, &after, &holding] {
+        command_buffer.wait_until_completed_for(WAIT).unwrap();
+        assert_eq!(command_buffer.error(), None);
+    }
+    eprintln!(
+        "deallocator past its completion: on {arrangement} {queues:?} of {}",
+        device.name()
+    );
+}
+
+/// What the device's scheduler did from `before` to `after`: its submissions, by whom, and what
+/// held its heads back, for a failure's report.
+fn submitted_since(before: &WorkCounts, after: &WorkCounts) -> String {
+    let since = |field: fn(&WorkCounts) -> u64| field(after) - field(before);
+    format!(
+        "since the opener's commit, {} kernel submissions ({} batches at commit, {} grouped, {} \
+         groups kept) in {} passes; heads held for host steps {}, checks {}, earlier commits {}, \
+         event values {}, at their gate {}",
+        since(|counts| counts.queue_submissions),
+        since(|counts| counts.batches_submitted_at_commit),
+        since(|counts| counts.batches_grouped),
+        since(|counts| counts.groups_kept_pending),
+        since(|counts| counts.scheduler_passes),
+        since(|counts| counts.heads_held_for_host_steps),
+        since(|counts| counts.heads_held_for_checks),
+        since(|counts| counts.heads_held_for_earlier_commits),
+        since(|counts| counts.heads_held_for_event_values),
+        since(|counts| counts.heads_waiting_at_their_gate),
+    )
 }
 
 /// The consumer's EFI framebuffer (`display/efi.rs`): a 16-KiB-aligned mapping of the
@@ -1251,7 +1350,7 @@ fn a_deallocator_run_by_a_completion_may_report_a_remap() {
 fn remaps_reported_from_any_thread_change_no_answer() {
     const WORKERS: usize = 4;
     const ROUNDS: usize = 24;
-    on_device(|device| {
+    on_device_with(at_plan, |device| {
         let pages: Vec<Mapping> = (0..WORKERS)
             .map(|_| Mapping::anonymous(GUEST_PAGE))
             .collect();
@@ -1514,21 +1613,22 @@ fn host_memory_kinds_are_imported_or_refused_typed() {
     });
 }
 
-/// A read-only page (Metal makes the buffer, and its GPU reads it). On Linux the runtime refuses
-/// it typed before the import, as it refuses every page the process cannot write: Linux drivers
-/// pin imported pages for writing (measured at 83a57ba2: RADV refused the page,
-/// NVIDIA failed it as out of device memory, ANV made it and lost the device at the GPU's read;
-/// lavapipe read it, so there the rule refuses more than the driver would). Elsewhere (MoltenVK,
-/// which hands the range to Metal) it is made, and the GPU reads what the CPU wrote before the
-/// page became read-only. The GPU never writes the page.
+/// A read-only page (Metal makes the buffer, its GPU reads it, and its GPU's writes to it are
+/// dropped). On Linux the runtime makes the buffer over a copy of it whose GPU writes are dropped
+/// (`WorkCounts::copied_unwritable_pages`), as it does every page the process cannot write: Linux
+/// drivers pin imported pages for writing (measured at 83a57ba2: RADV refused the page, NVIDIA
+/// failed it as out of device memory, ANV made it and lost the device at the GPU's read; lavapipe
+/// read it). Elsewhere (MoltenVK, which hands the range to Metal) it is imported. Either way the
+/// GPU reads what the CPU wrote before the page became read-only; on Linux the GPU's fill of the
+/// copy leaves the page as it was.
 #[test]
-fn a_read_only_page_is_refused_on_linux_and_read_elsewhere() {
+fn a_read_only_page_is_a_copy_on_linux_and_read_elsewhere() {
     on_device(|device| {
         let memory = Mapping::anonymous(GUEST_PAGE);
         let bytes = counting(GUEST_PAGE, 3);
         memory.write(0, &bytes);
         memory.protect_read_only();
-        // SAFETY: the mapping outlives the buffer, and nothing writes the buffer.
+        // SAFETY: the mapping outlives the buffer, and the GPU writes only its copy (Linux).
         let made = unsafe {
             no_copy(
                 device,
@@ -1538,14 +1638,24 @@ fn a_read_only_page_is_refused_on_linux_and_read_elsewhere() {
                 None,
             )
         };
+        let queue = device.new_command_queue().unwrap();
+        let buffer = made.unwrap();
+        assert_eq!(gpu_read(&queue, &buffer, 0..GUEST_PAGE as u64), bytes);
         if cfg!(target_os = "linux") {
-            let error = made.unwrap_err();
-            assert!(not_importable(&error), "{error:?}");
-            eprintln!("runtime read-only page: refused");
+            assert_eq!(buffer.host_backing(), Some(HostBacking::Copied));
+            assert_eq!(
+                device.work_counts().copied_unwritable_pages,
+                1,
+                "one copy, counted"
+            );
+            gpu_fill(&queue, &buffer, 0..64, 0x5a);
+            assert_eq!(
+                memory.read(0..GUEST_PAGE),
+                bytes,
+                "the GPU's write was dropped"
+            );
+            eprintln!("runtime read-only page: a copy, read, the GPU's write dropped");
         } else {
-            let queue = device.new_command_queue().unwrap();
-            let buffer = made.unwrap();
-            assert_eq!(gpu_read(&queue, &buffer, 0..GUEST_PAGE as u64), bytes);
             eprintln!("runtime read-only page: made, read");
         }
     });
@@ -1695,7 +1805,9 @@ fn a_lost_device_s_command_buffers_let_go_of_their_pools_after_the_driver_s_comp
             command_buffer.wait_until_completed_for(WAIT).unwrap();
         }
         assert_eq!(faulting.status(), CommandBufferStatus::Error);
-        assert_eq!(faulting.error(), Some(CommandBufferError::DeviceLost));
+        // The device recovers from the loss (`device/line.rs`): the oldest incomplete command
+        // buffer fails as the hang.
+        assert_eq!(faulting.error(), Some(CommandBufferError::GpuHang));
         let drains = device.work_counts().queue_drains - before.queue_drains;
         eprintln!(
             "LOST-DEVICE-POOLS round {round}: {} committed beside the fault, {drains} drains",
@@ -1727,13 +1839,14 @@ fn a_lost_device_s_command_buffers_let_go_of_their_pools_after_the_driver_s_comp
 /// answer: completed, or, as Metal's victim of the recovery, `Execution(1)` or `PageFault`, never
 /// the failed one's error. Under the program's own MoltenVK setting that loses the device after a
 /// failure (`MVK_CONFIG_RESUME_LOST_DEVICE` off, which wins over the runtime's), MoltenVK marks the
-/// device lost before it reports, so no batch's fence can be read: the failed command buffer and
-/// every later one fail `DeviceLost`, and the device refuses new buffers `DeviceLost`;
+/// device lost before it reports, so no batch's fence can be read: the device recovers from the
+/// loss (`device/line.rs`), the failed command buffer fails as the hang (`GpuHang`) and one
+/// committed beside it as its victim (`GpuRecoveryVictim`) or completed, and the next buffer and
+/// command buffer are made on the new `VkDevice` and complete;
 /// no runtime thread reaches the lost device outside a section of the exit
 /// guard on the way (a debug build once ended the process there). MoltenVK's reports of the failure
-/// are the only messages. On MoltenVK alone: a Linux driver is refused the pages
-/// (`a_read_only_page_is_refused_on_linux_and_read_elsewhere`), and lavapipe's CPU would fault
-/// the process itself. A GPU hazard (`m2v_gpu_hazards`): it faults the GPU on purpose twice, and
+/// are the only messages. On MoltenVK alone: on Linux the buffer is a copy whose GPU writes are
+/// dropped, which no write faults (`a_read_only_page_is_a_copy_on_linux_and_read_elsewhere`). A GPU hazard (`m2v_gpu_hazards`): it faults the GPU on purpose twice, and
 /// Metal's recovery fails other processes' command buffers in flight.
 #[cfg(any(m2v_cpu_icd, m2v_gpu_hazards))]
 #[test]
@@ -1818,6 +1931,13 @@ fn a_gpu_fault_fails_its_command_buffer_and_the_queue_runs_on() {
             "runtime GPU fault, resume {resume:?}: {failed:?}; committed beside it: \
              {beside_status:?} {beside_error:?}"
         );
+        // What the runtime announced of the failure: a recovery names the command buffer it
+        // failed as the hang.
+        let notices = messages.take_notices();
+        for notice in &notices {
+            eprintln!("runtime GPU fault, resume {resume:?}: {}", notice.text);
+        }
+        messages.restore_notices(notices);
         assert_eq!(faulting.status(), CommandBufferStatus::Error, "{resume:?}");
         if resume.is_none() {
             assert_eq!(committed, Ok(()));
@@ -1844,20 +1964,23 @@ fn a_gpu_fault_fails_its_command_buffer_and_the_queue_runs_on() {
                 ),
             }
         } else {
-            assert_eq!(failed, Some(CommandBufferError::DeviceLost), "{resume:?}");
-            // Committed before or after the loss: refused at its commit, or failed with it.
+            assert_eq!(failed, Some(CommandBufferError::GpuHang), "{resume:?}");
+            // Committed before the loss: failed with it as the hang's victim, or completed.
+            assert_eq!(committed, Ok(()));
             assert!(
-                committed == Err(Error::DeviceLost)
-                    || (beside_status, beside_error)
-                        == (
+                matches!(
+                    (beside_status, beside_error),
+                    (CommandBufferStatus::Completed, None)
+                        | (
                             CommandBufferStatus::Error,
-                            Some(CommandBufferError::DeviceLost)
-                        ),
-                "{committed:?} {beside_status:?} {beside_error:?}"
+                            Some(CommandBufferError::GpuRecoveryVictim)
+                        )
+                ),
+                "{beside_status:?} {beside_error:?}"
             );
         }
         // The next command buffer, committed once the failed one completed, over a buffer made
-        // then: on a lost device the buffer's making may be refused too.
+        // then: after a loss, on the device's new `VkDevice`.
         let after = device.new_buffer(256, ResourceOptions::shared());
         let next = after.clone().and_then(|after| {
             let next = queue.command_buffer()?;
@@ -1869,25 +1992,11 @@ fn a_gpu_fault_fails_its_command_buffer_and_the_queue_runs_on() {
             Ok((next.status(), next.error()))
         });
         eprintln!("runtime GPU fault, resume {resume:?}, the next: {next:?}");
-        if resume.is_none() {
-            assert_eq!(next, Ok((CommandBufferStatus::Completed, None)));
-            assert_eq!(
-                read_buffer(after.as_ref().unwrap(), 0, 256).unwrap(),
-                vec![0xd4; 256]
-            );
-        } else {
-            assert!(
-                matches!(
-                    next,
-                    Err(Error::DeviceLost)
-                        | Ok((
-                            CommandBufferStatus::Error,
-                            Some(CommandBufferError::DeviceLost)
-                        ))
-                ),
-                "{next:?}"
-            );
-        }
+        assert_eq!(next, Ok((CommandBufferStatus::Completed, None)));
+        assert_eq!(
+            read_buffer(after.as_ref().unwrap(), 0, 256).unwrap(),
+            vec![0xd4; 256]
+        );
         let reported = messages.take();
         assert!(
             !reported.is_empty()
@@ -1910,27 +2019,37 @@ fn a_gpu_fault_fails_its_command_buffer_and_the_queue_runs_on() {
 /// Linux the runtime's check of the process's mappings, on macOS the import's answer), the
 /// deallocator dropped unrun. Nothing reaches the GPU. Each answer is printed
 /// (`REFUSED-AT-MAKING`). The driver may report each import it failed, as MoltenVK reports its
-/// failed `vkAllocateMemory`; nothing else is reported.
+/// failed `vkAllocateMemory`; nothing else is reported. A mapped page followed by one the test
+/// unmapped is made again over a fresh reservation where another thread's mapping took the
+/// unmapped page before the making looked (the page seen mapped once a buffer was made), so the
+/// making is held to memory whose page is unmapped as it looks. The copied host buffer's own
+/// mapping was such a one until it read the caller's pages before making its memory (7 of 20
+/// runs on the M3 Max at d65be37964, m3-max-5626).
 #[test]
 fn memory_metal_makes_no_buffer_over_is_refused_when_it_is_made() {
+    // The half-mapped case's tries made again, each one more failed import the driver may report.
+    let tries = AtomicUsize::new(0);
     let reported = on_device_reporting(|device| {
         let len = 2 * GUEST_PAGE;
-        // SAFETY: a fresh reservation of this test's, without access.
-        let reserved = unsafe {
-            libc::mmap(
-                std::ptr::null_mut(),
-                len,
-                libc::PROT_NONE,
-                libc::MAP_PRIVATE | libc::MAP_ANON,
-                -1,
-                0,
-            )
+        let reserve = || {
+            // SAFETY: a fresh reservation of this test's, without access.
+            let reserved = unsafe {
+                libc::mmap(
+                    std::ptr::null_mut(),
+                    len,
+                    libc::PROT_NONE,
+                    libc::MAP_PRIVATE | libc::MAP_ANON,
+                    -1,
+                    0,
+                )
+            };
+            assert_ne!(reserved, libc::MAP_FAILED, "mmap");
+            NonNull::new(reserved.cast::<u8>()).unwrap()
         };
-        assert_ne!(reserved, libc::MAP_FAILED, "mmap");
-        let at = NonNull::new(reserved.cast::<u8>()).unwrap();
+        let at = reserve();
         let seen = Arc::<Seen>::default();
         let mut answers = Vec::new();
-        let mut refused = |what: &str, length: usize| {
+        let refused = |what: &str, length: usize| {
             // SAFETY: deliberately not memory the contract asks for: the call refuses it before
             // any use, and the buffer is never made.
             let made = unsafe {
@@ -1949,22 +2068,81 @@ fn memory_metal_makes_no_buffer_over_is_refused_when_it_is_made() {
                 not_importable(&error) || matches!(error, Error::OutOfMemory(_)),
                 "{what}: {error:?}"
             );
-            answers.push(format!("{what}: {error:?}"));
+            format!("{what}: {error:?}")
         };
-        refused("pages mapped without access", GUEST_PAGE);
-        // SAFETY: the reservation's own pages: its second goes, its first is mapped readable
-        // and writable.
-        unsafe {
-            let second = at.as_ptr().add(GUEST_PAGE).cast();
-            assert_eq!(libc::munmap(second, GUEST_PAGE), 0, "munmap");
-            anonymous_in_place(at, GUEST_PAGE);
+        answers.push(refused("pages mapped without access", GUEST_PAGE));
+        // A mapped page and then one not mapped, in a reservation of their own: its second page
+        // goes, its first is mapped readable and writable. Another thread's mapping (the
+        // driver's, or one of the runtime's threads') may land in the page just unmapped before
+        // the making looks at it: then every byte is mapped, and the making rightly makes a
+        // buffer. Such a try, its page seen mapped again, is made again over a fresh reservation,
+        // so the case holds the making to memory whose second page is unmapped as it looks.
+        let mut retried = 0;
+        loop {
+            let half = reserve();
+            // SAFETY: the reservation's own pages: its second goes, its first is mapped readable
+            // and writable.
+            unsafe {
+                let second = half.as_ptr().add(GUEST_PAGE).cast();
+                assert_eq!(libc::munmap(second, GUEST_PAGE), 0, "munmap");
+                anonymous_in_place(half, GUEST_PAGE);
+            }
+            let what = "a mapped page and then one not mapped";
+            let tried = Arc::<Seen>::default();
+            // SAFETY: as `refused`'s.
+            let made = unsafe {
+                no_copy(
+                    device,
+                    half,
+                    len,
+                    ResourceOptions::default(),
+                    Some(recording(&tried, ())),
+                )
+            };
+            // SAFETY: a query of the second page's mapping, which reads and writes nothing.
+            let second_mapped = unsafe {
+                libc::msync(
+                    half.as_ptr().add(GUEST_PAGE).cast(),
+                    GUEST_PAGE,
+                    libc::MS_ASYNC,
+                )
+            } == 0;
+            match made {
+                Err(error) => {
+                    assert!(
+                        not_importable(&error) || matches!(error, Error::OutOfMemory(_)),
+                        "{what}: {error:?}"
+                    );
+                    assert_eq!(tried.runs.load(Ordering::SeqCst), 0, "{what}: ran");
+                    assert_eq!(tried.dropped.load(Ordering::SeqCst), 1, "{what}: kept");
+                    answers.push(format!("{what}: {error:?} ({retried} tries made again)"));
+                    tries.store(retried, Ordering::SeqCst);
+                    // SAFETY: the first page goes too, and with it the reservation.
+                    assert_eq!(unsafe { libc::munmap(half.as_ptr().cast(), GUEST_PAGE) }, 0);
+                    break;
+                }
+                Ok(buffer) => {
+                    assert!(
+                        second_mapped,
+                        "{what}: a buffer was made, its second page unmapped still"
+                    );
+                    assert!(
+                        retried < 8,
+                        "{what}: another mapping took the page {retried} times"
+                    );
+                    drop(buffer);
+                    retried += 1;
+                    // SAFETY: the try's first page goes; the mapping that took the second is
+                    // another's, left as it is.
+                    assert_eq!(unsafe { libc::munmap(half.as_ptr().cast(), GUEST_PAGE) }, 0);
+                }
+            }
         }
-        refused("a mapped page and then one not mapped", len);
-        // SAFETY: the first page goes too, and with it the reservation.
-        assert_eq!(unsafe { libc::munmap(at.as_ptr().cast(), GUEST_PAGE) }, 0);
-        refused("pages not mapped", GUEST_PAGE);
+        // SAFETY: the first reservation's pages go.
+        assert_eq!(unsafe { libc::munmap(at.as_ptr().cast(), len) }, 0);
+        answers.push(refused("pages not mapped", GUEST_PAGE));
         assert_eq!(seen.runs.load(Ordering::SeqCst), 0);
-        assert_eq!(seen.dropped.load(Ordering::SeqCst), 3);
+        assert_eq!(seen.dropped.load(Ordering::SeqCst), 2);
         eprintln!(
             "REFUSED-AT-MAKING {}: {}",
             device.name(),
@@ -1982,7 +2160,7 @@ fn memory_metal_makes_no_buffer_over_is_refused_when_it_is_made() {
         "the validation layer reported: {other:#?}"
     );
     assert!(
-        failed_imports.len() <= 3,
+        failed_imports.len() <= 3 + tries.load(Ordering::SeqCst),
         "more failed imports reported than made: {failed_imports:#?}"
     );
 }
@@ -1992,7 +2170,7 @@ fn memory_metal_makes_no_buffer_over_is_refused_when_it_is_made() {
 /// Metal answers nil for (`Nil`: length 0, and its descriptor form, and a length past
 /// `max_buffer_length`). (The private option bit the consumer's detached buffers
 /// send, 0x1000000, is taken: `degrade_notices`'
-/// `the_private_option_bit_is_announced_where_the_gpu_s_writes_reach_the_memory`.)
+/// `the_private_option_bit_drops_the_gpu_s_writes_to_no_copy_memory`.)
 #[test]
 fn refused_no_copy_buffers_never_run_their_deallocator() {
     on_device(|device| {

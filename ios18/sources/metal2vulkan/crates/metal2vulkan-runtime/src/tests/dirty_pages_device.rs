@@ -71,9 +71,9 @@
 //! Such a shadow sampled by a pass whose first instance records inline (`render/inline_first.rs`)
 //! takes its gated copy in before the pass, as every command before the pass does
 //! (`EncoderCore::hold_pass`): the pass's draws read the bytes the CPU wrote, the first time and
-//! after a write told to the log, and the pass stays one inline instance. So does a texture the
-//! pass only samples, which a discrete GPU makes a device copy (`WorkCounts::device_copy_textures`)
-//! and every other device reads in place (no copy, printed).
+//! after a write told to the log, and the pass stays one inline instance. So does a `Managed`
+//! texture the pass only samples, which a discrete GPU makes a device copy
+//! (`WorkCounts::device_copy_textures`) and every other device reads in place (no copy, printed).
 //!
 //! Device tests: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
 //! `m2v_cpu_icd`). The kernels are the owned fixture
@@ -82,10 +82,10 @@
 use super::blit_holds::{device, over_host, Host, Scratch, BYTES, WAIT};
 use super::encoder_holds::{bytes_of, render_state};
 use crate::{
-    Buffer, ClearColor, CommandBufferStatus, ComputePipelineState, Device, DirtyPages, DirtyStamp,
-    Error, EventRef, HostMemory, Library, LoadAction, PipelineOptions, Region,
-    RenderPassDescriptor, ResourceOptions, ScissorRect, Size, StoreAction, Texture,
-    TextureDescriptor,
+    Buffer, ClearColor, CommandBufferStatus, ComputePipelineState, CpuCacheMode, Device,
+    DirtyPages, DirtyStamp, Error, EventRef, HazardTrackingMode, HostMemory, Library, LoadAction,
+    PipelineOptions, Region, RenderPassDescriptor, ResourceOptions, ScissorRect, Size, StorageMode,
+    StoreAction, Texture, TextureDescriptor,
 };
 use metal2vulkan::metal::{PixelFormat, PrimitiveType, TextureUsage};
 use std::num::NonZeroU64;
@@ -215,12 +215,20 @@ fn delta(device: &Device, before: [u64; 5]) -> [u64; 5] {
 
 /// The buffer over `host`, its memory logged by `log`.
 fn over_logged(device: &Device, host: &Host, log: &Arc<Log>) -> Option<Buffer> {
+    over_logged_as(device, host, log, ResourceOptions::default())
+}
+
+/// [`over_logged`], of `options`.
+fn over_logged_as(
+    device: &Device,
+    host: &Host,
+    log: &Arc<Log>,
+    options: ResourceOptions,
+) -> Option<Buffer> {
     // SAFETY: the memory outlives the buffer (dropped after the device), and only the buffer's
     // commands and the test use it while it lives.
     let memory: HostMemory = unsafe { host.memory() }.with_dirty_pages(Arc::clone(log));
-    let made = unsafe {
-        device.new_buffer_with_bytes_no_copy(memory, BYTES as u64, ResourceOptions::default(), None)
-    };
+    let made = unsafe { device.new_buffer_with_bytes_no_copy(memory, BYTES as u64, options, None) };
     match made {
         Ok(buffer) => Some(buffer),
         Err(Error::Unsupported(gap)) => {
@@ -1059,6 +1067,17 @@ fn a_scattered_overwrite_of_logged_pages_merges_back_in_whole_blocks() {
 /// its rows (the next 256-byte block of a row), far right of it, and below it.
 const BESIDE: [(u64, u64); 3] = [(64, 10), (900, 40), (10, 100)];
 
+/// Raises its flag as it goes, on a panic's unwind too: a thread of a `std::thread::scope` that
+/// runs until the flag is raised ends once the thread holding this ends, however it ends, so the
+/// scope (which waits for every thread it started before it returns or unwinds) ends too.
+struct Stops<'a>(&'a AtomicBool);
+
+impl Drop for Stops<'_> {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
 #[test]
 fn a_pass_storing_its_loaded_area_keeps_a_cpu_write_beside_it() {
     const ROUNDS: usize = 8;
@@ -1128,17 +1147,23 @@ fn a_pass_storing_its_loaded_area_keeps_a_cpu_write_beside_it() {
                     }
                 }
             });
-            while !started.load(Ordering::SeqCst) {
+            // Raised as this thread leaves, a panic's unwind included: the scope waits for the
+            // writer, which runs until it is raised.
+            let stops = Stops(&stop);
+            // A writer that ended (a panic) never starts.
+            while !started.load(Ordering::SeqCst) && !writer.is_finished() {
                 std::hint::spin_loop();
             }
-            pass(
-                &device,
-                &target,
-                LoadAction::Load,
-                square,
-                [0.0, 0.0, 0.0, 1.0],
-            );
-            stop.store(true, Ordering::SeqCst);
+            if started.load(Ordering::SeqCst) {
+                pass(
+                    &device,
+                    &target,
+                    LoadAction::Load,
+                    square,
+                    [0.0, 0.0, 0.0, 1.0],
+                );
+            }
+            drop(stops);
             writer.join().unwrap()
         });
         sweeps += last.1;
@@ -1309,23 +1334,34 @@ fn draw_sampled(device: &Device, source: &Texture, target: &Texture) {
 #[test]
 fn a_logged_shadow_sampled_in_an_inline_pass_is_copied_in_before_the_pass() {
     let usage = TextureUsage::SHADER_READ | TextureUsage::SHADER_WRITE;
-    sampled_in_an_inline_pass("dirty-pages-inline", usage);
+    let options = ResourceOptions::default();
+    sampled_in_an_inline_pass("dirty-pages-inline", usage, options);
 }
 
 #[test]
 fn a_logged_device_copy_sampled_in_an_inline_pass_is_copied_in_before_the_pass() {
-    sampled_in_an_inline_pass("dirty-pages-inline-copy", TextureUsage::SHADER_READ);
+    let managed = ResourceOptions::new(
+        StorageMode::Managed,
+        CpuCacheMode::DefaultCache,
+        HazardTrackingMode::Default,
+    );
+    sampled_in_an_inline_pass(
+        "dirty-pages-inline-copy",
+        TextureUsage::SHADER_READ,
+        managed,
+    );
 }
 
-/// A texture of `usage` over logged pages, sampled by a pass recorded inline, its copies in
-/// before the pass (the module docs); nothing where the device reads it in place.
-fn sampled_in_an_inline_pass(name: &str, usage: TextureUsage) {
+/// A texture of `usage` over logged pages of a buffer of `options`, sampled by a pass recorded
+/// inline, its copies in before the pass (the module docs); nothing where the device reads it in
+/// place.
+fn sampled_in_an_inline_pass(name: &str, usage: TextureUsage, options: ResourceOptions) {
     let scratch = Scratch::new(name);
     let host = Host::new();
     let device = device(&scratch.0);
     eprintln!("DIRTY-PAGES: device {:?}", device.name());
     let log = Arc::new(Log::default());
-    let Some(buffer) = over_logged(&device, &host, &log) else {
+    let Some(buffer) = over_logged_as(&device, &host, &log, options) else {
         return;
     };
     host.fill(0x4040_4040);
@@ -1336,6 +1372,7 @@ fn sampled_in_an_inline_pass(name: &str, usage: TextureUsage) {
     let before = made(&device);
     let mut descriptor = TextureDescriptor::texture_2d(PixelFormat::RGBA8Unorm, SIDE, SIDE, false);
     descriptor.usage = usage;
+    descriptor.resource_options = options;
     let source = buffer.new_texture(&descriptor, 0, ROW).unwrap();
     let [shadowed, copied] = std::array::from_fn(|i| made(&device)[i] - before[i]);
     eprintln!("DIRTY-PAGES: {usage:?}: {shadowed} shadow, {copied} device copy made");

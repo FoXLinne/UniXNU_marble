@@ -133,6 +133,42 @@ fn waits_map_to_the_first_index_that_reaches_the_value() {
     assert_eq!(timeline.wait(3), Some(WaitFor::Reached));
 }
 
+/// A wait waits on the GPU for another `VkQueue` exactly where the signal its index names is
+/// pending on another `VkQueue`, or is the caller's: what holds the waiting batch's `VkQueue`
+/// for that other work, which its queue's long mark counts (`queue_share.rs`).
+#[test]
+fn a_wait_crosses_queues_where_its_signal_is_pending_on_another() {
+    let mut timeline = EventTimeline::new(false);
+    submit(&mut timeline, 3, 0);
+    submit(&mut timeline, 5, 1);
+    // Value 2 and 3 are index 1's, on queue 0: across from queue 1, not from queue 0.
+    assert!(timeline.waits_across(2, 1));
+    assert!(timeline.waits_across(3, 1));
+    assert!(!timeline.waits_across(3, 0));
+    // Value 4 and 5 are index 2's, on queue 1.
+    assert!(timeline.waits_across(5, 0));
+    assert!(!timeline.waits_across(4, 1));
+    // Nothing submitted reaches 6: the batch is held, and hands its `VkQueue` no wait.
+    assert!(!timeline.waits_across(6, 0));
+    // Reached: no wait at all.
+    timeline.observe(1);
+    assert!(!timeline.waits_across(3, 1));
+    assert!(timeline.waits_across(5, 0));
+    // The caller's signal is on no queue of the device's.
+    assert_eq!(
+        timeline.signal_apart(7),
+        Signal::Kept {
+            index: 3,
+            after: Some(2)
+        }
+    );
+    assert!(timeline.waits_across(7, 1));
+    // A shared event's waits are held on the host until reached: never a `VkQueue`'s.
+    let mut shared = EventTimeline::new(true);
+    submit(&mut shared, 3, 0);
+    assert!(!shared.waits_across(3, 1));
+}
+
 #[test]
 fn the_host_floor_takes_effect_at_once_and_never_on_the_semaphore() {
     // A shared event: only its value may be set.
@@ -409,4 +445,41 @@ fn a_wait_completes_after_the_signal_that_reaches_it() {
     timeline.finished(index);
     timeline.released(index);
     assert_eq!(timeline.unfinished(), 0);
+}
+
+/// A timeline carried to its device's next generation (`device/carry.rs`) starts its new
+/// semaphore at 0 with the value the host saw, its floor included: the signals the lost device
+/// was given and the host never saw are gone, a wait for a value only they reach is held until a
+/// later signal reaches it, and the next kept signal is index 1 of the new semaphore.
+#[test]
+fn a_carried_timeline_keeps_the_value_the_host_saw_and_nothing_pending() {
+    for settable in [false, true] {
+        let mut timeline = EventTimeline::<usize>::new(settable);
+        submit(&mut timeline, 3, 0);
+        submit(&mut timeline, 9, 1);
+        assert!(timeline.observe(1));
+        if settable {
+            assert!(timeline.set(5));
+        }
+        let seen = timeline.value();
+        let mut carried = timeline.carried();
+        assert_eq!(carried.settable(), settable);
+        assert_eq!((carried.value(), carried.known()), (seen, seen));
+        assert_eq!(carried.pending(), 0);
+        assert_eq!(carried.unfinished(), 0);
+        assert_eq!(carried.wait(seen), Some(WaitFor::Reached));
+        assert_eq!(carried.wait(9), None, "the lost signal of 9 never lands");
+        assert_eq!(carried.signallers(9), (None, None));
+        assert_eq!(
+            submit(&mut carried, 9, 0),
+            Signal::Kept {
+                index: 1,
+                after: None
+            }
+        );
+        // The new semaphore's counter, at 0, observes nothing.
+        assert!(!carried.observe(0));
+        assert!(carried.observe(1));
+        assert_eq!(carried.value(), 9);
+    }
 }

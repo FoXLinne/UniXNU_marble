@@ -77,14 +77,15 @@
 //!   of a texture the attachment renders in place, at the binding's own first level and slice,
 //!   with feedback loop usage (`Texture::snapshot_color`, `texture::feedback_candidate`), not
 //!   through a view of another format, and which no later fetch can render through a stand-in
-//!   (`RenderCommandEncoder::keeps_own_attachment`), no two of the colors of one image (whose
+//!   (`RenderCommandEncoder::keeps_own_attachment`: its image has `STORAGE`, which a texture of
+//!   the runtime's own without it, its device laying it out otherwise with it, takes at a later
+//!   commit where it may, noted at its reader's draw, `texture/storage_form.rs`) or which the draw
+//!   pins (below), no two of the colors of one image (whose
 //!   snapshot is one); the draw costs no more so than the split would
 //!   (`RenderCommandEncoder::snapshot_cheaper`: at any area where every such color is a texture
-//!   whose image lies over its buffer's bytes, `RenderCommandEncoder::over_bytes`; else its
-//!   scissors' area times [`SNAPSHOT_PIXEL_COST`] for each color against each color's level
-//!   times its texel bytes, whatever the snapshot's form, so a 4-byte color's reader,
-//!   `RGBA8Unorm`'s or `BGRA8Unorm`'s, takes the snapshot up to a fifth of the render area, an
-//!   `RGBA16Float` one's up to two fifths and an `RGBA32Float` one's up to four fifths); the binder keeps every such slot (in a pass with no depth or stencil attachment, on a device that also enabled
+//!   whose image lies over its buffer's bytes, `RenderCommandEncoder::over_bytes`; else by the
+//!   rule below); the binder keeps every such slot (in a pass with no depth or stencil
+//!   attachment, on a device that also enabled
 //!   `fragmentStoresAndAtomics`) and the variant is made; no slot takes the snapshot slot as
 //!   storage. The draw's instance holds those colors in the feedback loop layout from its render
 //!   pass instance's begin, which records in a secondary: where the current instance
@@ -95,22 +96,80 @@
 //!   (`WorkCounts::snapshot_inline_splits` counts the first cause). After it, an execution of
 //!   render commands, and a draw that binds such a color's image as a storage image, record into
 //!   another instance: the feedback loop layout serves neither.
+//! - **The area rule.** Which form costs less turns on the share of its scissors the draw covers,
+//!   which its recording cannot know: the snapshot draw runs at the pixels the draw covers, the
+//!   split copies the color whatever the draw covers. The rule weighs each form at the share least
+//!   favourable to it, in bytes of the split's copy: the snapshot at [`READER_COST`] and
+//!   [`SNAPSHOT_PIXEL_COST`] at each pixel its scissors bound, for each color (the draw covering
+//!   them whole), the split at [`READER_COST`] and its copy (the draw covering nothing): each
+//!   color's texels its own-pixel reads take, inside the rectangle bounding its scissors a pixel
+//!   wider each way, where the color is a texture of one level and one slice, whose copy is cut
+//!   to them (`render.rs`'s `bound_own_pixel_reads`), else every texel of its level, its texel
+//!   bytes each, whatever the snapshot's form. It takes the form whose cost there is the smaller
+//!   multiple of the other form's: the snapshot where `READER_COST * (READER_COST + pixels *
+//!   SNAPSHOT_PIXEL_COST) <= (READER_COST + bytes)^2`. A reader whose snapshot costs no more than
+//!   the split's copy where it covers its scissors whole takes it, as does a reader through large
+//!   scissors whatever it covers: a reader of a one-level, one-slice 4-byte color,
+//!   `RGBA8Unorm`'s or `BGRA8Unorm`'s, takes the snapshot through scissors whose rectangle holds
+//!   about 786,432 pixels (1024x768) or more, an `RGBA16Float` one's from about 65,536 (256x256),
+//!   and an `RGBA32Float` one's at any size. On the Iris Xe, the Radeon 780M and the RX 7900 XTX
+//!   (`runtime_lane::attachment_read_costs::snapshot_area_costs`, 30 readers a frame over private
+//!   `BGRA8Unorm` targets of 1280x720 to 3662x2039, no scissor, the split on a device that
+//!   withholds `fragmentShaderPixelInterlock`) a reader over 1.5% of the target took 0.09 to 0.43
+//!   times the split's GPU time, and one over the whole target 1.03 to 1.20 times on the Iris Xe,
+//!   1.95 to 2.30 times on the Radeon 780M and 1.30 to 2.10 times on the RX 7900 XTX.
+//! - **Learned coverage.** On a device that measures readers (`occlusionQueryPrecise`, queries
+//!   reset on the host), each reader the area rule would weigh records its drawing commands inside
+//!   a precise occlusion query, and once a pass completed, that reader's later passes are weighed
+//!   at the pixels it covered then instead (`render/coverage.rs`): the snapshot where its draw at
+//!   [`SNAPSHOT_PIXEL_COST`] for each of those pixels, for each color, costs no more than the
+//!   split's copy. A reader covering the whole target takes the split from its second pass on, one
+//!   covering 3% of it keeps the snapshot. Both forms give Metal's results; a reader whose
+//!   coverage changes takes the form its old count chose until a pass after the change completes.
+//!   In `snapshot_area_costs` a reader covering half the target or all of it took 0.99 to 1.01
+//!   times the split's GPU time on the Iris Xe, 0.95 to 1.03 on the Radeon 780M and 0.83 to 0.91
+//!   on the RX 7900 XTX, where the rule alone takes the snapshot (above).
+//! - **Pins.** A fetch of a color in the pixel interlock reads and writes its image as a storage
+//!   image, so a later fetch of a color whose image lacks `STORAGE` renders it through a stand-in
+//!   (`attachment_stand_in.rs`), which the pass's end puts in place for the whole pass, copied in
+//!   before it: a snapshot draw before the fetch would have read the texture's own image, which
+//!   the pass no longer rendered. A draw reads such a color through a snapshot all the same where
+//!   it can pin it (`RenderCommandEncoder::pins_own_attachment`): where nothing the pass's end
+//!   decides from the whole pass changes what its instances so far render, and nothing arrives
+//!   with the draw (the pass's first instance recorded inline, which ran its load actions itself,
+//!   `render/inline_first.rs`; no stand-in, memoryless color or depth/stencil attachment, every
+//!   color stored `Store`, no tile dispatch, execution, color groups or extended-range shadow; a
+//!   draw that fetches nothing and needs no hidden depth or stencil). Its instance and those
+//!   before it render each color's own image (`RenderLowering::pinned_through`), and a stand-in
+//!   arriving after them takes its attachment's texels after the last of them, as after an
+//!   instance recorded inline: the pass's end renders those instances through the colors' own
+//!   images, records each stand-in's copy in after them, the keep of one merged back into a
+//!   buffer's bytes after that (`linear_merge.rs`), and the reloads after a barrier after them
+//!   alone, and no run of passes takes the pass (`pass_runs.rs`). Once a stand-in or the hidden
+//!   depth and stencil arrived after a pin, no later draw pins (`RenderLowering::pins_frozen`):
+//!   its reader splits.
 //! - **Counted**: `WorkCounts::reading_draws_snapshotted`, and of them
-//!   `WorkCounts::snapshot_inline_splits`. With `METAL2VULKAN_LOG_PIPELINES` set,
+//!   `WorkCounts::snapshot_inline_splits` and `WorkCounts::reading_draws_pinned`; the passes whose
+//!   stand-ins arrived after a pin, `WorkCounts::stand_ins_after_pins`; each draw at its own pixels
+//!   that took the split, by the check that took it (`SplitReason`,
+//!   `WorkCounts::reading_draws_split_*`), a function whose read no snapshot serves among them. With `METAL2VULKAN_LOG_PIPELINES` set,
 //!   the first draw of each reason a draw took the split says so, once per device
 //!   (`metal2vulkan-snapshot-fallback`), and the draws the area rule weighed are counted by their
 //!   share of their colors' pixels and texel bytes, a line at 64 of them, each power of two
 //!   after, and as the device ends (`metal2vulkan-snapshot-readers`, `reader_sizes.rs`).
 
-use super::{PlanFacts, Reformat, RenderLowering};
+use super::{inline_first, PlanFacts, Reformat, RenderLowering};
 use crate::copy_plan::block_bytes;
 use crate::dynamic_state::ColorWriteMasks;
 use crate::pipeline::{GraphicsState as DrawingState, Settled};
 use crate::render_state::MAX_VIEWPORTS;
 use crate::render_target::{self, Feedback};
+use crate::render_values::StoreAction;
 use crate::texture::Texture;
+use crate::work_counts::Unreadable;
 use ash::vk;
 use metal2vulkan::bind::{BindingPlan, ImageSource, PushHole, WriteSource};
+use metal2vulkan::metal::TextureType;
 use metal2vulkan::pipeline::{SlotClass, SlotRef, SnapshotForm, Stage};
 use std::collections::BTreeSet;
 
@@ -120,6 +179,9 @@ use std::collections::BTreeSet;
 pub(super) struct Wanted {
     pub(super) slots: BTreeSet<u32>,
     pub(super) feedback: Feedback,
+    /// The colors among them that no later fetch would keep in their own images, which the
+    /// draw pins to them ([`RenderLowering::pins_own_attachment`]).
+    pub(super) pins: u32,
 }
 
 /// The form `plan` keeps fragment texture slot `slot`'s snapshot in
@@ -133,13 +195,35 @@ pub(super) fn form(plan: &BindingPlan, slot: u32) -> Option<SnapshotForm> {
     plan.variant.snapshot_textures.get(&slot).copied()
 }
 
-/// What the snapshot draw costs at each pixel a draw's scissors bound, for each color it
-/// snapshots, in bytes of the split's copy (`RenderCommandEncoder::snapshot_cheaper`): one more
-/// fragment invocation at the pixel, inside the pixel interlock, that reads the texel and stores
-/// its snapshot, and the drawing draw's read of it. The invocation's cost, not the snapshot's
-/// bytes: a snapshot of a color's codes, 4 bytes a pixel, costs about what one of the fetched
-/// lanes' bits, 16, does.
-const SNAPSHOT_PIXEL_COST: u64 = 20;
+/// What the snapshot draw costs at each pixel a draw covers, for each color it snapshots, in
+/// bytes of the split's copy (the module docs' area rule): one more fragment invocation at the
+/// pixel, inside the pixel interlock, that reads the texel and stores its snapshot, and the
+/// drawing draw's read of it. The invocation's cost, not the snapshot's bytes: a snapshot of a
+/// color's codes, 4 bytes a pixel, costs about what one of the fetched lanes' bits, 16, does.
+/// Measured at about 14 on the Iris Xe and 20 on the Radeon 780M
+/// (`runtime_lane::attachment_read_costs::snapshot_area_costs`).
+pub(super) const SNAPSHOT_PIXEL_COST: u64 = 20;
+
+/// What either form costs a draw whatever it covers, in bytes of the split's copy (the module
+/// docs' area rule): the snapshot's two barriers and its second draw, or the split's end of one
+/// render pass instance and begin of the next. Measured
+/// (`runtime_lane::attachment_read_costs::snapshot_area_costs`) at 12 to 16 microseconds a
+/// snapshot on the Iris Xe and the Radeon 780M, and up to 18 a split besides its copy, which moves
+/// a byte in 9 to 12 picoseconds on the Iris Xe and 15 on the Radeon 780M: about a mebibyte of
+/// it.
+const READER_COST: u64 = 1 << 20;
+
+/// Whether a draw takes the snapshot by the module docs' area rule: its scissors bound `pixels`
+/// pixels over all the colors it reads so, and the split's copy of those colors moves `bytes`
+/// bytes.
+pub(crate) fn snapshot_within(pixels: u64, bytes: u64) -> bool {
+    let (fixed, pixels, bytes) = (
+        u128::from(READER_COST),
+        u128::from(pixels),
+        u128::from(bytes),
+    );
+    fixed * (fixed + pixels * u128::from(SNAPSHOT_PIXEL_COST)) <= (fixed + bytes).pow(2)
+}
 
 /// Which of a draw's two Vulkan draws one recording is (the module docs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -250,8 +334,9 @@ pub(super) fn phase_hole(holes: &[PushHole]) -> Option<(vk::ShaderStageFlags, u3
 
 impl RenderLowering {
     /// What a draw of `pipeline` (its state's base) through `reformats` asks to read through
-    /// snapshots, where it can ask (the module docs' checks that come before the plan); `None`
-    /// where it reads no attachment so or takes the split.
+    /// snapshots, where it can ask (the module docs' checks that come before the area rule and
+    /// the plan, [`snapshot_by_area`](Self::snapshot_by_area) weighing it next); `None` where it
+    /// reads no attachment so or a check takes the split.
     pub(super) fn snapshot_wanted(
         &self,
         pipeline: &DrawingState,
@@ -280,44 +365,68 @@ impl RenderLowering {
                 continue;
             }
             let Some(index) = texture.snapshot_color(&self.layout) else {
-                return self.snapshot_fallback("the texture is not read where its attachment renders it in place, or its image lacks feedback loop usage");
+                // On a device without the path no image takes the feedback loop usage.
+                let reason = match self.core.device().shared().color_write_masks.is_none() {
+                    true => SplitReason::DeviceLacks,
+                    false => SplitReason::NotInPlace,
+                };
+                return self.snapshot_fallback(reason);
             };
             wanted.slots.insert(slot);
             wanted.feedback.0 |= 1 << index;
         }
         if wanted.slots.is_empty() {
+            // A function that reads, after the barrier, a texture of the pass at its own pixels
+            // in a way no snapshot serves (`StageModule::snapshot_textures`) takes the split,
+            // counted by the clauses that leave those slots out
+            // (`StageModule::snapshot_refusals`).
+            let unreadable = |slot: &u32| {
+                !fragment.snapshot_textures.contains(slot)
+                    && (self.fragment.textures.get(slot))
+                        .is_some_and(|texture| texture.attached_in(&self.layout))
+            };
+            if ordered && fragment.own_pixel_textures.iter().any(unreadable) {
+                let clauses = (fragment.snapshot_refusals.iter())
+                    .filter(|(slot, _)| unreadable(slot))
+                    .fold(Unreadable::default(), |set, &(_, why)| set.with(why));
+                unreadable_own_pixel(self.core.device(), clauses);
+            }
             return None;
         }
         let device = self.core.device();
         if device.shared().color_write_masks.is_none() {
-            return self.snapshot_fallback("the device lacks attachmentFeedbackLoopLayout, extendedDynamicState3ColorWriteMask or fragmentShaderPixelInterlock");
+            return self.snapshot_fallback(SplitReason::DeviceLacks);
         }
         if self.visibility.active() {
-            return self.snapshot_fallback("a visibility query is active");
+            return self.snapshot_fallback(SplitReason::VisibilityQuery);
         }
         if self.layout.fetch_inputs
             || self.rate_map.is_some()
             || self.layout.samples != 1
             || self.layout.layers != 1
         {
-            return self.snapshot_fallback(
-                "the pass fetches input attachments, or has a rasterization-rate map, samples or layers",
-            );
+            return self.snapshot_fallback(SplitReason::PassShape);
         }
         if reformats.iter().any(|r| wanted.feedback.has(r.index)) {
-            return self.snapshot_fallback(
-                "the draw renders the attachment through a view of another format",
-            );
+            return self.snapshot_fallback(SplitReason::OtherFormat);
         }
         let colors: Vec<usize> = (0..self.layout.colors.len())
             .filter(|&i| wanted.feedback.has(i))
             .collect();
         for &index in &colors {
-            if !self.keeps_own_attachment(index) {
-                return self.snapshot_fallback(
-                    "a framebuffer fetch of the attachment would render it through a stand-in",
-                );
+            if self.keeps_own_attachment(index) {
+                continue;
             }
+            // A texture of the runtime's own whose image lacks `STORAGE` (the device lays it
+            // out otherwise with it) takes its storage form at a later commit, where it may
+            // (`texture/storage_form.rs`): its later passes' readers need no pin.
+            if let Some(color) = self.layout.colors.get(index).and_then(Option::as_ref) {
+                color.target.texture.want_storage_form();
+            }
+            if !self.pins_own_attachment(pipeline, index) {
+                return self.snapshot_fallback(SplitReason::StandIn);
+            }
+            wanted.pins |= 1 << index;
         }
         // A texture's snapshot is its image's (`Texture::snapshot_texels`): two colors of one
         // image would copy their texels into one snapshot.
@@ -331,23 +440,120 @@ impl RenderLowering {
             .enumerate()
             .any(|(i, a)| a.is_none() || images[i + 1..].iter().any(|b| b == a));
         if shared {
-            return self.snapshot_fallback("the draw reads two attachments of one image");
-        }
-        if !self.snapshot_cheaper(pipeline, &colors) {
-            return self.snapshot_fallback(
-                "area: the snapshot draw over the draw's scissors costs more than the split's copy",
-            );
+            return self.snapshot_fallback(SplitReason::OneImage);
         }
         Some(wanted)
     }
 
+    /// Whether the draw of `pipeline` that asks to read the pass's colors through snapshots as
+    /// `wanted` ([`snapshot_wanted`](Self::snapshot_wanted)) takes them: where it costs no more
+    /// than the split ([`snapshot_cheaper`](Self::snapshot_cheaper)), weighed at what the reader
+    /// covered in the latest pass that measured it, where one did, else by the area rule; and,
+    /// where the device measures readers, the query of the pass's its drawing commands record
+    /// inside, whose count its texture keeps as the pass completes (`render/coverage.rs`). `None`
+    /// where it takes the split.
+    pub(super) fn snapshot_by_area(
+        &mut self,
+        pipeline: &DrawingState,
+        wanted: Wanted,
+    ) -> Result<(Option<Wanted>, Option<(vk::QueryPool, u32)>), crate::Error> {
+        let colors: Vec<usize> = (0..self.layout.colors.len())
+            .filter(|&i| wanted.feedback.has(i))
+            .collect();
+        let first = colors
+            .first()
+            .and_then(|&index| self.layout.colors.get(index)?.as_ref())
+            .map(|color| color.target.texture.clone());
+        // A reader over a buffer's bytes takes the snapshot at any area: nothing to learn.
+        let reader = match first {
+            Some(texture) if !self.over_bytes(&colors) => {
+                Some((self.readers.next_key(pipeline.address(), &texture), texture))
+            }
+            _ => None,
+        };
+        let learned = reader
+            .as_ref()
+            .and_then(|(key, texture)| texture.learned_coverage(*key));
+        if learned.is_some() {
+            self.core
+                .device()
+                .shared()
+                .counts
+                .reading_draw_by_coverage();
+        }
+        let within = self.snapshot_cheaper(pipeline, &colors, learned);
+        let query = match reader {
+            Some((key, texture)) => self.readers.measure(self.core.device(), &texture, key)?,
+            None => None,
+        };
+        let wanted = match (within, learned) {
+            (true, _) => Some(wanted),
+            (false, Some(_)) => self.snapshot_fallback(SplitReason::Coverage),
+            (false, None) => self.snapshot_fallback(SplitReason::Area),
+        };
+        Ok((wanted, query))
+    }
+
+    /// Whether the draw of `pipeline` reads the pass's color `index`, whose own image a later
+    /// fetch would not keep (`keeps_own_attachment`), through a snapshot of that image all the
+    /// same, pinning it (the module docs): where nothing the pass's end decides from the whole
+    /// pass changes what its instances through the draw's render, and nothing arrives with the
+    /// draw. So: the pass's first instance recorded inline, which ran the pass's load actions
+    /// itself (`render/inline_first.rs`); nothing arrived since an earlier pin
+    /// (`pins_frozen`); no stand-in, memoryless color or depth/stencil attachment in the pass,
+    /// hidden or not, every color stored `Store` (which no later call changes: so no texture over
+    /// a buffer renders through an image it keeps, `kept_bytes.rs`), and no tile dispatch,
+    /// execution of render commands, color groups or extended-range shadow that records an
+    /// instance's draws again; a draw that fetches no color and whose state needs no hidden
+    /// depth or stencil; and the color a 2D one.
+    pub(super) fn pins_own_attachment(&self, pipeline: &DrawingState, index: usize) -> bool {
+        let Some(color) = self.layout.colors.get(index).and_then(Option::as_ref) else {
+            return false;
+        };
+        let graphics = &pipeline.base().graphics;
+        let (depth, stencil) = self.layout.aspects();
+        let plain = |c: &crate::render_pass::ColorTarget| {
+            c.stand_in.is_none()
+                && !c.memoryless
+                && !super::memoryless(&c.target)
+                && c.store == StoreAction::Store
+        };
+        matches!(self.inline, inline_first::Inline::Begun(_))
+            && !self.pins_frozen
+            && self.grouped.is_none()
+            && self.dispatches.is_empty()
+            && self.executions.is_empty()
+            && !self.extended.keeps_draws()
+            && self.layout.depth_stencil.is_none()
+            && self.layout.colors.iter().flatten().all(plain)
+            && graphics.storage_attachments.is_empty()
+            && graphics.input_attachments.is_empty()
+            && !self.state.needs_hidden(depth, stencil)
+            && !crate::render_pass::not_2d(&color.target)
+    }
+
     /// Whether a draw of `pipeline` that reads the pass's `colors` through snapshots costs no
     /// more than the split would: at any area over a buffer's bytes
-    /// ([`over_bytes`](Self::over_bytes)), else by [`snapshot_weights`](Self::snapshot_weights);
-    /// counted by its size where `METAL2VULKAN_LOG_PIPELINES` is set (`reader_sizes.rs`).
-    fn snapshot_cheaper(&self, pipeline: &DrawingState, colors: &[usize]) -> bool {
-        let (covered, pixels, bytes) = self.snapshot_weights(pipeline, colors);
-        let within = self.over_bytes(colors) || covered * SNAPSHOT_PIXEL_COST <= bytes;
+    /// ([`over_bytes`](Self::over_bytes)); else, where the reader covered `learned` pixels in the
+    /// latest pass that measured it, by what the snapshot draw costs over them
+    /// (`coverage::snapshot_covers`); else by the area rule ([`snapshot_within`]) over
+    /// [`snapshot_weights`](Self::snapshot_weights); counted by its size where
+    /// `METAL2VULKAN_LOG_PIPELINES` is set (`reader_sizes.rs`).
+    fn snapshot_cheaper(
+        &self,
+        pipeline: &DrawingState,
+        colors: &[usize],
+        learned: Option<u64>,
+    ) -> bool {
+        let (covered, pixels, bytes, copied) = self.snapshot_weights(pipeline, colors);
+        let within = self.over_bytes(colors)
+            || match learned {
+                Some(drawn) => super::coverage::snapshot_covers(
+                    drawn.saturating_mul(colors.len() as u64),
+                    copied,
+                ),
+                None => snapshot_within(covered, copied),
+            };
         if crate::pipeline::creation_log_enabled() {
             let device = self.core.device();
             let line = crate::device::lock(&device.shared().reader_sizes)
@@ -359,11 +565,12 @@ impl RenderLowering {
         within
     }
 
-    /// Whether every one of the pass's `colors` renders a texture whose image lies over its
-    /// buffer's bytes (`Texture::image_over_buffer`, as a surface over host pages does, the
-    /// consumer's guest's framebuffer), whose reader takes the snapshot whatever its area: the
-    /// split's copy reads the bytes into the shadow, where the snapshot draw reads only the
-    /// pixels the draw covers. On the Iris Xe
+    /// Whether every one of the pass's `colors` renders a texture over its buffer's bytes
+    /// (`Texture::renders_bytes`: its image lies over them, or it is their shadow, as a surface
+    /// over host pages that renders is, the consumer's guest's framebuffer), whose reader takes
+    /// the snapshot whatever its area: the split's copy reads the bytes into the copy the reader
+    /// reads (through a shadow, after the instances before wrote theirs back through a keep and a
+    /// merge), where the snapshot draw reads only the pixels the draw covers. On the Iris Xe
     /// (`runtime_lane::attachment_read_costs::snapshot_crossover`, a 1920x1080 surface) the
     /// snapshot took 0.56 to 0.99 times the split's GPU time for readers through scissors of
     /// 960x540 and up, covering 1.5% to 100% of them, at most 1.08 times through the whole
@@ -372,44 +579,55 @@ impl RenderLowering {
     fn over_bytes(&self, colors: &[usize]) -> bool {
         colors.iter().all(|&index| {
             let color = self.layout.colors.get(index).and_then(Option::as_ref);
-            color.is_some_and(|color| color.target.texture.image_over_buffer())
+            color.is_some_and(|color| color.target.texture.renders_bytes())
         })
     }
 
     /// What weighs whether a draw of `pipeline` that reads the pass's `colors` through snapshots
-    /// costs no more than the split would: both forms are exact, so the draw takes the cheaper. The
-    /// snapshot draw costs [`SNAPSHOT_PIXEL_COST`] for each color at each pixel the draw covers,
-    /// which its Vulkan scissors bound (`EncoderState::vk_scissors`: each viewport's pixels within
-    /// its scissor rectangle, inside the render area); the split's copy is weighed as reading and
-    /// writing each color's every texel of the rendered level, its format's bytes each, an upper
-    /// bound: a copy of a one-level, one-slice texture's image moves only the texels around the
-    /// draw's scissors, or those the instances before changed (`ShadowCopies::cuts`), which errs
-    /// toward the snapshot. The split's pass break (each attachment stored and loaded again) is
-    /// left out, which errs toward the split. The
-    /// draw's pixels for every color (the scissors' pixels times the colors), the colors' pixels,
-    /// and their bytes; it takes the snapshot where the first times [`SNAPSHOT_PIXEL_COST`] is at
-    /// most the last.
-    fn snapshot_weights(&self, pipeline: &DrawingState, colors: &[usize]) -> (u64, u64, u64) {
+    /// costs no more than the split would: both forms are exact, so the draw takes the cheaper by
+    /// the area rule (the module docs). The snapshot draw costs [`SNAPSHOT_PIXEL_COST`] for each
+    /// color at each pixel the draw covers, at most those its Vulkan scissors bound
+    /// (`EncoderState::vk_scissors`: each viewport's pixels within its scissor rectangle, inside
+    /// the render area); the split's copy is weighed as reading and writing each color's texels
+    /// its own-pixel reads take (`render.rs`'s `own_pixel_loads`) where the color is a texture of
+    /// one level and one slice ([`copy_cut`]), else every texel of the rendered level, its
+    /// format's bytes each: an upper bound, as a later copy moves only those of them the instances
+    /// before changed, which errs toward the snapshot. The draw's pixels for every color (the
+    /// scissors' pixels times the colors), the colors' pixels, their bytes, and the bytes the
+    /// split's copy moves.
+    fn snapshot_weights(&self, pipeline: &DrawingState, colors: &[usize]) -> (u64, u64, u64, u64) {
         let selects = pipeline.base().graphics.writes_viewport_index
             || self.amplification.offsets_viewports();
         let mut rects = [vk::Rect2D::default(); MAX_VIEWPORTS];
-        let bound: u64 = self
+        let rects = self
             .state
-            .vk_scissors_in(&self.scissors, selects, &mut rects)
+            .vk_scissors_in(&self.scissors, selects, &mut rects);
+        let bound: u64 = rects
             .iter()
             .map(|r| u64::from(r.extent.width) * u64::from(r.extent.height))
             .sum();
-        let (pixels, copied) = colors
+        let drawn = super::scissors_bound(rects);
+        let (pixels, bytes, copied) = colors
             .iter()
             .filter_map(|&index| self.layout.colors.get(index)?.as_ref())
             .map(|color| {
+                let texture = &color.target.texture;
                 let [width, height] = color.target.extent;
-                let bytes = block_bytes(color.target.texture.pixel_format()).unwrap_or(0);
+                let texel = u64::from(block_bytes(texture.pixel_format()).unwrap_or(0));
                 let pixels = u64::from(width) * u64::from(height);
-                (pixels, pixels * u64::from(bytes))
+                let copied = match drawn.filter(|_| copy_cut(texture)) {
+                    Some(drawn) => super::own_pixel_loads(drawn, texture).map_or(0, |r| {
+                        u64::from(r[2] - r[0]) * u64::from(r[3] - r[1]) * texel
+                    }),
+                    None if drawn.is_none() => 0,
+                    None => pixels * texel,
+                };
+                (pixels, pixels * texel, copied)
             })
-            .fold((0, 0), |(p, c), (pixels, bytes)| (p + pixels, c + bytes));
-        (bound * colors.len() as u64, pixels, copied)
+            .fold((0, 0, 0), |(p, b, c), (pixels, bytes, copied)| {
+                (p + pixels, b + bytes, c + copied)
+            });
+        (bound * colors.len() as u64, pixels, bytes, copied)
     }
 
     /// Whether the plan `settled` for `wanted` reads through them (the module docs' checks that
@@ -420,7 +638,7 @@ impl RenderLowering {
         &self,
         settled: &Settled,
         wanted: &Wanted,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), SplitReason> {
         let plan = &settled.plan;
         let kept: BTreeSet<u32> = plan
             .variant
@@ -430,10 +648,10 @@ impl RenderLowering {
             .map(|slot| slot.index)
             .collect();
         if kept != wanted.slots || !settled.variant.pipeline().graphics.snapshot_reads {
-            return Err("the binder left a slot out");
+            return Err(SplitReason::SlotLeftOut);
         }
         if plan.views.view_mask != 0 {
-            return Err("the draw renders views");
+            return Err(SplitReason::Views);
         }
         for write in &plan.descriptors {
             let slot = match &write.source {
@@ -446,10 +664,10 @@ impl RenderLowering {
             };
             let snapshot = is_snapshot_slot(&wanted.slots, slot);
             if snapshot && write.ty == metal2vulkan::vk::DescriptorType::STORAGE_IMAGE {
-                return Err("the draw binds the texture as a storage image");
+                return Err(SplitReason::StorageBinding);
             }
             if !snapshot && self.slot_attached(slot) {
-                return Err("the draw reads another attachment's texture");
+                return Err(SplitReason::OtherAttachment);
             }
         }
         Ok(())
@@ -519,12 +737,26 @@ impl RenderLowering {
                 .any(|&c| wanted.feedback.has(c as usize))
     }
 
-    /// Say, once per device and reason, where `METAL2VULKAN_LOG_PIPELINES` is set, why a draw
-    /// that reads its pass's texture took the split; `None`, for the caller to return.
-    pub(super) fn snapshot_fallback(&self, reason: &'static str) -> Option<Wanted> {
+    /// Count why a draw that reads its pass's texture took the split, and say it, once per device
+    /// and reason, where `METAL2VULKAN_LOG_PIPELINES` is set; `None`, for the caller to return.
+    pub(super) fn snapshot_fallback(&self, reason: SplitReason) -> Option<Wanted> {
         snapshot_fallback(self.core.device(), reason);
         None
     }
+}
+
+/// Whether the split's copy of `texture` for a draw that reads it at its own pixels is cut to the
+/// texels around the draw's scissors (`render.rs`'s `bound_own_pixel_reads`): its shadow is cut to
+/// a rectangle (`ShadowCopies::cuts`) where it copies one region, one level and one slice of a 2D
+/// image (`texture/view_shadow.rs`).
+fn copy_cut(texture: &Texture) -> bool {
+    texture.mipmap_level_count() == 1
+        && texture.array_length() == 1
+        && texture.depth() == 1
+        && !matches!(
+            texture.texture_type(),
+            TextureType::Cube | TextureType::CubeArray
+        )
 }
 
 /// Whether `slot` is a fragment texture slot among `slots`.
@@ -532,26 +764,117 @@ pub(super) fn is_snapshot_slot(slots: &BTreeSet<u32>, slot: &SlotRef) -> bool {
     slot.stage == Stage::Fragment && slot.class == SlotClass::Texture && slots.contains(&slot.index)
 }
 
-/// [`RenderLowering::snapshot_fallback`]'s message, from anywhere the device is known.
-pub(super) fn snapshot_fallback(device: &crate::Device, reason: &'static str) {
+/// Why a draw that reads its pass's texture after a barrier at its own pixels takes the split
+/// (the module docs' checks, in their order), each counted by draw
+/// (`WorkCounts::reading_draws_split_*`, in this order).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SplitReason {
+    UnreadableOwnPixel,
+    NotInPlace,
+    DeviceLacks,
+    VisibilityQuery,
+    PassShape,
+    OtherFormat,
+    StandIn,
+    OneImage,
+    Coverage,
+    Area,
+    VariantRefused,
+    SlotLeftOut,
+    Views,
+    StorageBinding,
+    OtherAttachment,
+}
+
+impl SplitReason {
+    /// What the log says of it.
+    fn text(self) -> &'static str {
+        match self {
+            SplitReason::UnreadableOwnPixel => {
+                "the function reads the texture at its own pixels in a way no snapshot serves (its \
+                 read reaches a branch, a sample, a derivative or a store, or the function writes \
+                 memory)"
+            }
+            SplitReason::NotInPlace => {
+                "the texture is not read where its attachment renders it in place, or its image \
+                 lacks feedback loop usage"
+            }
+            SplitReason::DeviceLacks => {
+                "the device lacks attachmentFeedbackLoopLayout, extendedDynamicState3ColorWriteMask \
+                 or fragmentShaderPixelInterlock"
+            }
+            SplitReason::VisibilityQuery => "a visibility query is active",
+            SplitReason::PassShape => {
+                "the pass fetches input attachments, or has a rasterization-rate map, samples or \
+                 layers"
+            }
+            SplitReason::OtherFormat => {
+                "the draw renders the attachment through a view of another format"
+            }
+            SplitReason::StandIn => {
+                "a framebuffer fetch of the attachment would render it through a stand-in"
+            }
+            SplitReason::OneImage => "the draw reads two attachments of one image",
+            SplitReason::Coverage => {
+                "coverage: the snapshot draw over the pixels the reader covered when last measured \
+                 costs more than the split's copy"
+            }
+            SplitReason::Area => {
+                "area: the snapshot draw over the draw's scissors costs more than the split's copy"
+            }
+            SplitReason::VariantRefused => "the variant that reads through snapshots is refused",
+            SplitReason::SlotLeftOut => "the binder left a slot out",
+            SplitReason::Views => "the draw renders views",
+            SplitReason::StorageBinding => "the draw binds the texture as a storage image",
+            SplitReason::OtherAttachment => "the draw reads another attachment's texture",
+        }
+    }
+}
+
+/// [`RenderLowering::snapshot_fallback`]'s count and message, from anywhere the device is known:
+/// every such draw counted by `reason`, and, where `METAL2VULKAN_LOG_PIPELINES` is set, the
+/// first of each reason on the device said.
+pub(super) fn snapshot_fallback(device: &crate::Device, reason: SplitReason) {
+    device.shared().counts.reading_draw_split(reason);
+    say_fallback(device, reason, Unreadable::default());
+}
+
+/// [`snapshot_fallback`] for `SplitReason::UnreadableOwnPixel`, of a draw whose slots no snapshot
+/// serves are left out by `clauses`: counted by the reason and once under each clause, and the
+/// first draw of each set of clauses on the device said, naming them.
+fn unreadable_own_pixel(device: &crate::Device, clauses: Unreadable) {
+    let counts = &device.shared().counts;
+    counts.reading_draw_split(SplitReason::UnreadableOwnPixel);
+    counts.reading_draw_unreadable(clauses);
+    say_fallback(device, SplitReason::UnreadableOwnPixel, clauses);
+}
+
+/// Where `METAL2VULKAN_LOG_PIPELINES` is set, say the split for `reason` and `clauses` (empty but
+/// for `SplitReason::UnreadableOwnPixel`), once a device.
+fn say_fallback(device: &crate::Device, reason: SplitReason, clauses: Unreadable) {
     if !crate::pipeline::creation_log_enabled() {
         return;
     }
     let said = &device.shared().snapshot_fallbacks;
     let first = {
         let mut said = crate::device::lock(said);
-        let first = !said.contains(&reason);
+        let first = !said.contains(&(reason, clauses));
         if first {
-            said.push(reason);
+            said.push((reason, clauses));
         }
         first
     };
     if first {
-        device.inform(
-            "metal2vulkan-snapshot-fallback",
-            format!(
-                "a draw that reads its pass's texture after a barrier takes the split: {reason}"
+        let text = reason.text();
+        let message = match clauses == Unreadable::default() {
+            true => format!(
+                "a draw that reads its pass's texture after a barrier takes the split: {text}"
             ),
-        );
+            false => format!(
+                "a draw that reads its pass's texture after a barrier takes the split: {text}: {}",
+                clauses.text()
+            ),
+        };
+        device.inform("metal2vulkan-snapshot-fallback", message);
     }
 }

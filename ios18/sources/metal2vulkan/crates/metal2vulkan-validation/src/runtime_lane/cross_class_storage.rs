@@ -32,18 +32,18 @@
 //! - [`cross_class_queries_are_the_textures_size`]: a slot of another class that the function
 //!   only queries answers the texture's width and height.
 
-use super::degrade_notices::on_device;
-use super::driver_deviations::{half_nan, stage_notes};
+use super::degrade_notices::on_device_with;
+use super::driver_deviations::half_nan;
 use super::extended_range_targets::half_value;
-use super::{buffer_with, read_buffer, Messages};
+use super::{at_plan, buffer_with, read_buffer, Messages};
 use crate::air_library::AirLibrary;
 use metal2vulkan::metal::format::sampled_type;
 use metal2vulkan::metal::{PixelFormat, TextureUsage};
 use metal2vulkan::pipeline::{ComputePipelineDescriptor, PrecisionNote, SampledType, StageSource};
 use metal2vulkan_devtools::llvm_assemble_text;
 use metal2vulkan_runtime::{
-    CommandBufferStatus, ComputePipelineState, Degradation, Device, PipelineOptions, Region,
-    ResourceOptions, Size, Texture, TextureDescriptor,
+    CommandBufferStatus, ComputePipelineState, Degradation, Device, ExecutedPipeline,
+    PipelineOptions, Region, ResourceOptions, Size, Texture, TextureDescriptor,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -400,6 +400,18 @@ fn dispatch(
     texture: &Texture,
     src: &[u8],
 ) -> Result<Vec<[u32; 4]>, String> {
+    dispatch_noted(device, (pipeline, kind), texture, src).map(|(words, _)| words)
+}
+
+/// [`dispatch`], and the precision notes of the stage the dispatch ran, specialized ones included:
+/// the variant the runtime compiled for the bound texture (its format's storage choice, its
+/// cross-class input), as `CommandBuffer::executions` records it.
+fn dispatch_noted(
+    device: &Device,
+    (pipeline, kind): (&ComputePipelineState, Kind),
+    texture: &Texture,
+    src: &[u8],
+) -> Result<(Vec<[u32; 4]>, BTreeSet<PrecisionNote>), String> {
     let n = kind.threads();
     let src = buffer_with(device, src).unwrap();
     let out = buffer_with(device, &vec![0x5a; (n * 16) as usize]).unwrap();
@@ -418,15 +430,26 @@ fn dispatch(
     command_buffer.wait_until_completed_for(WAIT).unwrap();
     assert_eq!(command_buffer.status(), CommandBufferStatus::Completed);
     assert_eq!(command_buffer.error(), None);
+    let executions = command_buffer.executions();
+    let [execution] = executions.as_slice() else {
+        panic!("{} executions of one dispatch", executions.len());
+    };
+    let ExecutedPipeline::Compute(executed) = execution.pipeline() else {
+        panic!("a dispatch of a render pipeline");
+    };
+    let notes = (executed.stage.precision_notes.iter().copied())
+        .chain(executed.stage.specialized_notes.iter().map(|s| s.note))
+        .collect();
     let bytes = read_buffer(&out, 0, n * 16).unwrap();
-    Ok(bytes
+    let words = bytes
         .as_chunks::<16>()
         .0
         .iter()
         .map(|v| {
             std::array::from_fn(|k| u32::from_le_bytes(v[4 * k..4 * k + 4].try_into().unwrap()))
         })
-        .collect())
+        .collect();
+    Ok((words, notes))
 }
 
 /// What Metal answers for a `ty` result where the native slot's result is `native`: its words,
@@ -455,14 +478,6 @@ const NAN_NOTES: [PrecisionNote; 3] = [
     PrecisionNote::NativeNanEncoding,
     PrecisionNote::DeviceNanEncoding,
 ];
-
-/// Whether the stage of kernel `k` doing `kind` with `ty` texels leaves a NaN's bits to the
-/// device: it records one of [`NAN_NOTES`].
-fn leaves_nan_bits(device: &Device, kind: Kind, ty: Ty) -> bool {
-    let bitcode = llvm_assemble_text(&kernel(kind, ty)).unwrap();
-    let notes = stage_notes(device, &bitcode, "k");
-    NAN_NOTES.iter().any(|n| notes.contains(n))
-}
 
 /// Whether `got`'s words answer `want`'s for a `ty` result: the same words, but where `nan_bits`
 /// a 16-bit result's lane (the low and high halves of its first two words) that is a `half` NaN
@@ -528,9 +543,8 @@ fn neutral_announced(messages: &Messages) -> BTreeSet<Degradation> {
 /// 16 bits (a float format's: the native `half` read's bits); none announces the neutral.
 #[test]
 fn cross_class_storage_and_buffer_reads_are_the_native_words() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let mut pipelines: BTreeMap<(Kind, Ty), ComputePipelineState> = BTreeMap::new();
-        let mut nan_bits: BTreeMap<(Kind, Ty), bool> = BTreeMap::new();
         let (mut checked, mut differ, mut skipped, mut nonzero) = (0usize, 0usize, 0usize, 0usize);
         let mut nans = 0usize;
         let _ = messages.take_notices();
@@ -552,20 +566,22 @@ fn cross_class_storage_and_buffer_reads_are_the_native_words() {
                 };
                 for ty in Ty::ALL.into_iter().filter(|ty| ty.class() != class) {
                     let native = state(ty.native(class));
-                    let want = match dispatch(device, (&native, kind), &texture, &[0; 16]) {
-                        Ok(w) => w,
-                        Err(e) => {
-                            println!(
-                                "CROSS-CLASS-SKIP {}: {kind:?} of {format:?}: {e}",
-                                device.name()
-                            );
-                            skipped += 1;
-                            continue;
-                        }
-                    };
+                    let (want, native_notes) =
+                        match dispatch_noted(device, (&native, kind), &texture, &[0; 16]) {
+                            Ok(w) => w,
+                            Err(e) => {
+                                println!(
+                                    "CROSS-CLASS-SKIP {}: {kind:?} of {format:?}: {e}",
+                                    device.name()
+                                );
+                                skipped += 1;
+                                continue;
+                            }
+                        };
                     let cross = state(ty);
-                    let got = dispatch(device, (&cross, kind), &texture, &[0; 16])
-                        .unwrap_or_else(|e| panic!("{kind:?} {ty:?} over {format:?}: {e}"));
+                    let (got, cross_notes) =
+                        dispatch_noted(device, (&cross, kind), &texture, &[0; 16])
+                            .unwrap_or_else(|e| panic!("{kind:?} {ty:?} over {format:?}: {e}"));
                     checked += got.len();
                     nonzero += got.iter().filter(|w| w[..2] != [0, 0]).count();
                     // A float format's 16-bit integer result is the native `half` result's bits,
@@ -574,12 +590,11 @@ fn cross_class_storage_and_buffer_reads_are_the_native_words() {
                         true => native,
                         false => expected(native, t),
                     };
-                    let mut leaves = |t: Ty| {
-                        *nan_bits
-                            .entry((kind, t))
-                            .or_insert_with(|| leaves_nan_bits(device, kind, t))
-                    };
-                    let bits = leaves(ty) || leaves(ty.native(class));
+                    // Whether either stage the runtime ran leaves a NaN's bits to the device: it
+                    // records one of [`NAN_NOTES`].
+                    let bits = NAN_NOTES
+                        .iter()
+                        .any(|n| native_notes.contains(n) || cross_notes.contains(n));
                     let unlike = (0..got.len()).filter(|&i| got[i] != expected(want[i], ty));
                     nans += unlike.count();
                     let wrong: Vec<usize> = (0..got.len())
@@ -688,7 +703,7 @@ fn metal_store(lane: u32, sixteen: bool, bits: u32, signed: bool) -> i64 {
 /// class as through one of another; none announces the neutral.
 #[test]
 fn integer_writes_store_metals_saturated_words() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let mut pipelines: BTreeMap<(Kind, Ty), ComputePipelineState> = BTreeMap::new();
         let (mut checked, mut differ, mut skipped, mut saturated) = (0usize, 0usize, 0usize, 0);
         let _ = messages.take_notices();
@@ -773,7 +788,7 @@ fn integer_writes_store_metals_saturated_words() {
 /// `0x7fc00000`. None announces the neutral.
 #[test]
 fn integer_writes_into_float_formats_store_the_bits_as_floats() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         use PixelFormat as P;
         let mut pipelines: BTreeMap<(Kind, Ty), ComputePipelineState> = BTreeMap::new();
         let (mut checked, mut differ, mut skipped) = (0usize, 0usize, 0usize);
@@ -895,7 +910,7 @@ fn integer_writes_into_float_formats_store_the_bits_as_floats() {
 /// zero); none announces the neutral.
 #[test]
 fn cross_class_queries_are_the_textures_size() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let mut pipelines: BTreeMap<Ty, ComputePipelineState> = BTreeMap::new();
         let (mut checked, mut differ) = (0usize, 0usize);
         let _ = messages.take_notices();

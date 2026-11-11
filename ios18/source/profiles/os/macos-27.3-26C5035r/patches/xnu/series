@@ -1,0 +1,29 @@
+# OS patch paths for xnu-12377.121.6, one per line in application order.
+# No Darwin 26 XNU source is published yet; 26C5035r runs on xnu-12377 with the Darwin 26 system
+# calls and KPIs, the macOS machine options and the macOS kernel state added.
+arch:../../../patches/xnu-12377/zzz-boot-progress.patch
+arch:../../../patches/xnu-12377/darwin26-syscalls.patch
+arch:../../../patches/xnu-12377/darwin26-kpi.patch
+arch:../../../patches/xnu-12377/darwin26-shared-region.patch
+../xnu-12377/macos-machine-config.patch
+../xnu-12377/macos-target-kernel.patch
+../xnu-12377/macos-darwin26-kpi.patch
+../xnu-12377/macos-owner-data-firmlinks.patch
+../xnu-12377/macos-shared-region-size.patch
+../xnu-12377/macos-verbose-text-console.patch
+../xnu-12377/macos-user-address-space.patch
+../xnu-12377/macos-union-one-volume.patch
+../xnu-12377/macos-kqworkloop-limits.patch
+../xnu-12377/macos-exec-log.patch
+../xnu-12377/macos-apfs-boot-shim.patch
+../xnu-12377/macos-read-only-system-volume.patch
+../xnu-12377/macos-rw-held-report.patch
+../xnu-12377/macos-end-rename-swap.patch
+../xnu-12377/macos-service-port-derive-check.patch
+../xnu-12377/macos-gpu-bundles.patch
+../xnu-12377/macos-owner-root-authenticated-open.patch
+../xnu-12377/macos-hardware-volume.patch
+../xnu-12377/macos-droidvm-k27-parity.patch
+../xnu-12377/macos-app-cryptex.patch
+../xnu-12377/macos-vm-volume.patch
+../xnu-12377/macos-addon-sbin.patch

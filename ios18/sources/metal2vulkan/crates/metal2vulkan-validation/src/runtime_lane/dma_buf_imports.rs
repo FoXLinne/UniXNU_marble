@@ -18,17 +18,17 @@
 //! asks the source for nothing; a texture placed in a no-copy heap over them is an image of
 //! `DRM_FORMAT_MOD_LINEAR` over a dma-buf of its own pages, which it asks the source for too
 //! (`dma_buf_images`), or its shadow where it makes none (`dma_buf_image_fallbacks`). NVIDIA and
-//! lavapipe import the pointer, never call the source and count nothing. A driver not measured
-//! has its answers printed. Where `/dev/udmabuf` cannot be opened each test says so and passes
+//! lavapipe import the pointer, never call the source and count nothing. ANV imports the pointer
+//! of a file's mapping, refuses that of a udmabuf's mapping, and imports one dma-buf for a plain
+//! buffer but none for a sparse one (`view_route`). A driver not measured has its answers
+//! printed. Where `/dev/udmabuf` cannot be opened each test says so and passes
 //! without running.
 
 use super::degrade_notices;
 use super::first_use::{read_mark, release, scheduled, Busy, ENDED};
 use super::first_use_writes::CHECK_WAIT;
-use super::host_memory::READ_ONLY_PAGES;
-use super::host_memory::{
-    counting, gpu_fill, gpu_read, host_page, not_importable, on_device, run, Mapping,
-};
+use super::host_memory::{counting, gpu_fill, gpu_read, host_page, on_device, run, Mapping};
+use super::in_place_rows;
 use super::in_place_textures::refused;
 use super::keep_alives::eventually;
 use super::no_copy_heaps::{
@@ -46,10 +46,10 @@ use metal2vulkan::device::HostPageTexturePolicy;
 use metal2vulkan::metal::{PixelFormat, SamplerMinMagFilter, TextureUsage};
 use metal2vulkan::vk::DriverId;
 use metal2vulkan_runtime::{
-    BlitOption, Buffer, BufferContents, BufferDescriptor, CommandBuffer, CommandQueue,
-    DebugMessage, Degradation, Device, DmaBufChunk, DmaBufRequest, DmaBufSource, Error, EventRef,
-    Heap, HeapDescriptor, HeapType, HostMemory, KeepAlive, Origin, Problem, ResourceOptions,
-    RuntimeGap, Size, TextureDescriptor,
+    AddressPlacement, BlitOption, Buffer, BufferContents, BufferDescriptor, CommandBuffer,
+    CommandQueue, DebugMessage, Degradation, Device, DmaBufChunk, DmaBufRequest, DmaBufSource,
+    Error, EventRef, Heap, HeapDescriptor, HeapType, HostBacking, HostMemory, KeepAlive, Origin,
+    Problem, ResourceOptions, RuntimeGap, Size, TextureDescriptor,
 };
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::ptr::NonNull;
@@ -95,6 +95,11 @@ const PARAMETERS: &str = "/sys/module/udmabuf/parameters";
 struct Limits {
     items: usize,
     bytes: u64,
+}
+
+/// The most bytes one udmabuf of this host holds: its `size_limit_mb` (64 MiB where unread).
+pub(super) fn udmabuf_size_limit() -> u64 {
+    Limits::of_host().bytes
 }
 
 impl Limits {
@@ -205,6 +210,71 @@ impl Memfd {
             .iter()
             .all(|&(offset, size)| offset + size <= self.len));
         View::new(self.fd.as_fd(), pieces)
+    }
+
+    /// A view of the file's `pieces` `(offset, size)` in that order, mapped as a consumer maps a
+    /// view of more than one run: as udmabufs of them, each as many pieces and bytes as the host's
+    /// limits take, one after another, each one mapping (`VM_PFNMAP`).
+    pub(super) fn view_through_dma_bufs(&self, pieces: &[(usize, usize)]) -> View {
+        assert!(pieces
+            .iter()
+            .all(|&(offset, size)| offset + size <= self.len));
+        let limits = Limits::of_host();
+        let mut groups: Vec<Vec<(u64, u64)>> = vec![Vec::new()];
+        let mut bytes = 0;
+        for &(offset, size) in pieces {
+            let full = groups.last().is_some_and(|group| {
+                group.len() == limits.items || bytes + size as u64 > limits.bytes
+            });
+            if full {
+                groups.push(Vec::new());
+                bytes = 0;
+            }
+            groups
+                .last_mut()
+                .unwrap()
+                .push((offset as u64, size as u64));
+            bytes += size as u64;
+        }
+        let len: usize = pieces.iter().map(|&(_, size)| size).sum();
+        // SAFETY: a fresh reservation, then fixed shared mappings of the dma-bufs inside it.
+        unsafe {
+            let reservation = libc::mmap(
+                std::ptr::null_mut(),
+                len,
+                libc::PROT_NONE,
+                libc::MAP_PRIVATE | libc::MAP_ANON,
+                -1,
+                0,
+            );
+            assert_ne!(reservation, libc::MAP_FAILED, "mmap reservation");
+            let mut at = 0;
+            for group in &groups {
+                let size: u64 = group.iter().map(|&(_, size)| size).sum();
+                let dma_buf = udmabuf(self.fd.as_fd(), group).expect("a udmabuf of the pieces");
+                let wanted = reservation.cast::<u8>().add(at).cast();
+                let mapped = libc::mmap(
+                    wanted,
+                    size as usize,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    libc::MAP_SHARED | libc::MAP_FIXED,
+                    dma_buf.as_raw_fd(),
+                    0,
+                );
+                assert_eq!(
+                    mapped,
+                    wanted,
+                    "mmap of a udmabuf: {}",
+                    std::io::Error::last_os_error()
+                );
+                at += size as usize;
+            }
+            View {
+                at: NonNull::new(reservation.cast()).unwrap(),
+                len,
+                pieces: pieces.to_vec(),
+            }
+        }
     }
 
     /// A source of dma-bufs of `view`'s pages, as a consumer makes them: the file pieces behind
@@ -445,6 +515,43 @@ fn imports_dma_buf(device: &Device) -> Option<bool> {
     } else {
         None
     }
+}
+
+/// Whether `device` makes a heap texture over dma-buf pages an image over a dma-buf of its own
+/// pages: it imports dma-bufs (RADV) and lists `VK_EXT_image_drm_format_modifier` and
+/// `VK_EXT_queue_family_foreign`, which the runtime enables beside the imports. Where it imports
+/// dma-bufs but lists not both (RADV on the RX 550, POLARIS12), such a texture is a shadow of the
+/// heap's bytes, counted as a fallback and announced (`shadowed-texture`, naming the two); where
+/// it imports the pointer, no texture takes either route.
+fn makes_dma_buf_images(device: &Device) -> bool {
+    if imports_dma_buf(device) != Some(true) {
+        return false;
+    }
+    // SAFETY: only an instance-level query of the device's physical device, while it lives.
+    let raw = unsafe { device.raw() };
+    // SAFETY: a physical device of the instance.
+    let listed = unsafe {
+        raw.instance
+            .enumerate_device_extension_properties(raw.physical_device)
+    }
+    .expect("the device's extensions");
+    let lists = |name: &std::ffi::CStr| {
+        listed
+            .iter()
+            .any(|extension| extension.extension_name_as_c_str() == Ok(name))
+    };
+    let names = [
+        ash::ext::image_drm_format_modifier::NAME,
+        ash::ext::queue_family_foreign::NAME,
+    ];
+    let listed: Vec<_> = names.into_iter().filter(|name| lists(name)).collect();
+    if listed.len() < names.len() {
+        eprintln!(
+            "DMA-BUF-IMAGES on {}: lists {listed:?} of {names:?}: heap textures are shadows",
+            device.name()
+        );
+    }
+    listed.len() == names.len()
 }
 
 /// The device's counts of chunks imported and of sparse buffers assembled so far.
@@ -851,16 +958,15 @@ fn a_buffer_that_lies_in_a_live_import_asks_about_no_mapping() {
     });
 }
 
-/// Memfd pages a view maps read-only, with a source: the process cannot write them, so no pointer
-/// of them is imported (Linux drivers pin imported pages for writing), and the buffer is made from
-/// the source alone on a device that imports dma-bufs, whatever it does with a pointer of such
-/// memory (`ReadOnlyPagesWritten`, announced once for two such buffers over different pages). The
-/// GPU reads the CPU's bytes through it, and its writes reach the file's pages, where the CPU
-/// reads them through the file's own mapping (where Metal's leave the pages as they were). The
-/// same pages with no source are refused typed, as before, and so is the source's memory on a
-/// device that imports no dma-buf.
+/// Memfd pages a view maps read-only: the process cannot write them, so on every device the
+/// buffer over them is a copy whose GPU writes are dropped, as Metal drops them, made without a
+/// source and with one, which is never called (`WorkCounts::copied_unwritable_pages`, announced
+/// once as `copied-host-pages` for the two buffers over different pages). Neither pointer is
+/// imported (Linux drivers pin imported pages for writing), nor the pages as dma-bufs, which would
+/// take the GPU's writes. The GPU reads the CPU's bytes through each, and after its fill the
+/// file's pages, which the CPU reads through the file's own mapping, are as they were.
 #[test]
-fn read_only_pages_are_made_from_the_source() {
+fn read_only_pages_are_a_copy_whose_gpu_writes_are_dropped() {
     const TEST: &str = "dma-buf read-only pages";
     if !udmabuf_openable(TEST) {
         return;
@@ -871,55 +977,52 @@ fn read_only_pages_are_made_from_the_source() {
         let ram = Memfd::new(6 * page);
         let bytes = counting(6 * page, 9);
         ram.whole.write(0, &bytes);
-        // Whether the device's route for these pages is a dma-buf import. A device that imports
-        // the pointer instead (NVIDIA, lavapipe) has no working import for pages the process maps
-        // read-only, which it refuses the pointer of: NVIDIA's 615.71.09 answers
-        // `ERROR_OUT_OF_DEVICE_MEMORY` with the whole card free. Its answer is printed, not held
-        // to a class, since it is the driver's.
-        let route = imports_dma_buf(device) == Some(true);
-        let read_only = |notices: &[DebugMessage]| {
+        let copied = |notices: &[DebugMessage]| {
             let kind = |m: &&DebugMessage| {
-                (m.degradation.as_ref()).is_some_and(|n| READ_ONLY_PAGES.contains(&n.degradation))
+                (m.degradation.as_ref())
+                    .is_some_and(|n| n.degradation == Degradation::CopiedHostPages)
             };
             notices.iter().filter(kind).count()
         };
         let mut made = Vec::new();
-        for (pieces, at) in [([(page, 2 * page)], page), ([(4 * page, page)], 4 * page)] {
+        let cases = [
+            ([(page, 2 * page)], page, false),
+            ([(4 * page, page)], 4 * page, true),
+        ];
+        for (pieces, at, sourced) in cases {
             let view = ram.view(&pieces);
             view.protect_read_only();
             let length = pieces[0].1;
-            // SAFETY: the view outlives the buffer, and nothing is made of it.
-            let plain = unsafe {
-                device.new_buffer_with_bytes_no_copy(
-                    HostMemory::new(view.pointer(0)),
-                    length as u64,
-                    ResourceOptions::default(),
-                    None,
-                )
-            };
-            let error = plain.unwrap_err();
-            assert!(not_importable(&error), "{TEST}: no source: {error:?}");
             let calls = Calls::default();
-            let before = dma_buf_counts(device);
-            let buffer = no_copy(device, &view, 0, length, ram.source(&view, &calls));
-            let buffer = match (route, buffer) {
-                (true, Ok(buffer)) => buffer,
-                (true, made) => panic!("{TEST}: the dma-buf route: {:?}", made.err()),
-                (false, made) => {
-                    eprintln!(
-                        "{TEST}: on {}: the pages' route is not a dma-buf import: {:?}",
-                        device.name(),
-                        made.err()
-                    );
-                    return;
-                }
+            let before = device.work_counts();
+            let buffer = match sourced {
+                true => no_copy(device, &view, 0, length, ram.source(&view, &calls)),
+                // SAFETY: the view outlives the buffer, and nothing is made of it.
+                false => unsafe {
+                    device.new_buffer_with_bytes_no_copy(
+                        HostMemory::new(view.pointer(0)),
+                        length as u64,
+                        ResourceOptions::default(),
+                        None,
+                    )
+                },
             };
-            let calls = calls.lock().unwrap().clone();
-            assert_eq!(calls.len(), 1, "{TEST}: the source's calls: {calls:?}");
-            assert!(
-                dma_buf_counts(device).0 > before.0,
-                "{TEST}: no chunk imported"
+            let buffer = buffer.unwrap_or_else(|error| {
+                panic!("{TEST}: read-only pages, a source {sourced}: {error:?}")
+            });
+            let after = device.work_counts();
+            assert_eq!(
+                (
+                    after.copied_unwritable_pages - before.copied_unwritable_pages,
+                    after.dma_buf_imports - before.dma_buf_imports,
+                    after.host_pointer_imports_made - before.host_pointer_imports_made,
+                ),
+                (1, 0, 0),
+                "{TEST}: a source {sourced}: a copy, and no import"
             );
+            assert_eq!(buffer.host_backing(), Some(HostBacking::Copied));
+            let calls = calls.lock().unwrap().clone();
+            assert!(calls.is_empty(), "{TEST}: the source's calls: {calls:?}");
             assert!(
                 gpu_read(&queue, &buffer, 0..length as u64) == bytes[at..at + length],
                 "{TEST}: the GPU's read"
@@ -927,14 +1030,14 @@ fn read_only_pages_are_made_from_the_source() {
             gpu_fill(&queue, &buffer, 0..64, 0x5a);
             assert_eq!(
                 ram.whole.read(at..at + 64),
-                [0x5a; 64],
-                "{TEST}: the GPU's write in the file's pages"
+                bytes[at..at + 64],
+                "{TEST}: a source {sourced}: the GPU's write reached the file's pages"
             );
             made.push((buffer, view));
         }
-        assert_eq!(read_only(&messages.take_notices()), 1, "{TEST}: announced");
+        assert_eq!(copied(&messages.take_notices()), 1, "{TEST}: announced");
         eprintln!(
-            "{TEST}: on {}: made from the source, the GPU's writes in the pages",
+            "{TEST}: on {}: a copy with a source and without, the GPU's writes dropped",
             device.name()
         );
         drop(made);
@@ -957,8 +1060,8 @@ impl Drop for LiveAtDrop {
 
 /// A no-copy buffer's keep-alive goes once the imports of its pages are freed, as
 /// `HostMemory`'s contract has it (the pages must stay mapped until then): a buffer over two
-/// pages the process maps read-only, made from the source's dma-bufs on a device whose route for
-/// such pages is a dma-buf import ([`imports_dma_buf`]), with a keep-alive and no deallocator,
+/// memfd pages, made from the source's dma-bufs on a device whose route for such pages is a
+/// dma-buf import ([`imports_dma_buf`]), with a keep-alive and no deallocator,
 /// released; as the keep-alive drops, every import the buffer made is freed (the live dma-buf
 /// imports are back to their count before it).
 #[test]
@@ -968,8 +1071,8 @@ fn a_keep_alive_goes_after_the_imports_of_its_pages() {
         return;
     }
     degrade_notices::on_device(|device, _| {
-        // As `read_only_pages_are_made_from_the_source`: only a device whose route for these
-        // pages is a dma-buf import has imports to order the keep-alive against.
+        // Only a device whose route for these pages is a dma-buf import has imports to order the
+        // keep-alive against.
         if imports_dma_buf(device) != Some(true) {
             eprintln!(
                 "{TEST}: on {}: the pages' route is not a dma-buf import",
@@ -980,7 +1083,6 @@ fn a_keep_alive_goes_after_the_imports_of_its_pages() {
         let page = host_page();
         let ram = Memfd::new(4 * page);
         let view = ram.view(&[(page, 2 * page)]);
-        view.protect_read_only();
         let live = || device.work_counts().dma_buf_memories_live;
         let before = live();
         let seen = Arc::new(Mutex::new(None));
@@ -1020,19 +1122,22 @@ fn a_keep_alive_goes_after_the_imports_of_its_pages() {
     });
 }
 
-/// The refusals: memfd memory with no source is refused typed where the device refuses its
-/// pointer (RADV), as before; a source that fails keeps that refusal, called once; chunks that do
-/// not cover the pages, and a chunk whose descriptor is no dma-buf (the memfd itself), are the
-/// caller's misuse (`Invalid`, `DmaBuf`), their descriptors closed. Nothing is counted for any of
-/// them. Where the device imports the pointer, each is made and no source is called.
+/// Without a working source: memfd memory with no source, and with a source that fails, is no
+/// refusal, made on every device: where the device refuses its pointer (RADV) a copy of its pages
+/// (`copied.rs`), counted as the device's refusal (`WorkCounts::copied_host_buffers_device_refused`),
+/// the failing source called once, else an import of the pointer, no source called. Chunks that
+/// do not cover the pages, and a chunk whose descriptor is no dma-buf (the memfd itself), are the
+/// caller's misuse (`Invalid`, `DmaBuf`), their descriptors closed. No dma-buf import is counted
+/// for any of them. Where the device imports the pointer, each is made and no source is called.
 #[test]
-fn shared_memory_is_refused_without_a_working_source() {
+fn shared_memory_without_a_working_source_is_a_copy_and_misuse_refused() {
     const TEST: &str = "dma-buf refusals";
     on_device(|device| {
         let page = host_page();
         let ram = Memfd::new(4 * page);
         let view = ram.view(&[(page, 2 * page)]);
         let before = dma_buf_counts(device);
+        let before_copies = device.work_counts();
         let refuses = imports_dma_buf(device);
         let check =
             |what: &str, made: Result<Buffer, Error>, expected: fn(&Error) -> bool| match made {
@@ -1051,15 +1156,58 @@ fn shared_memory_is_refused_without_a_working_source() {
                 None,
             )
         };
-        check("no source", plain, not_importable);
+        let plain = plain.unwrap_or_else(|error| panic!("{TEST}: no source: {error:?}"));
+        let copied = device.work_counts().copied_host_buffers_device_refused
+            - before_copies.copied_host_buffers_device_refused;
+        let backing = plain.host_backing();
+        match refuses {
+            Some(true) => assert_eq!(
+                (backing, copied),
+                (Some(HostBacking::Copied), 1),
+                "{TEST}: no source: a copy, for the device's refusal"
+            ),
+            Some(false) => assert_eq!(
+                (backing, copied),
+                (Some(HostBacking::ImportedByPointer), 0),
+                "{TEST}: no source: the pointer's import"
+            ),
+            None => eprintln!(
+                "{TEST}: no source, on {}: {backing:?}, {copied} copied for the device's refusal",
+                device.name()
+            ),
+        }
+        drop(plain);
         let calls = Arc::new(Mutex::new(0usize));
         let counted = Arc::clone(&calls);
         let failing: DmaBufSource = Arc::new(move |_| {
             *counted.lock().unwrap() += 1;
             Err(std::io::Error::other("no dma-buf"))
         });
-        let failed = no_copy(device, &view, 0, 2 * page, failing);
-        check("a failing source", failed, not_importable);
+        // A view of its own, so that it lies in no copy the first buffer left.
+        let other = ram.view(&[(page, 2 * page)]);
+        let failed = no_copy(device, &other, 0, 2 * page, failing)
+            .unwrap_or_else(|error| panic!("{TEST}: a failing source: {error:?}"));
+        let copied = device.work_counts().copied_host_buffers_device_refused
+            - before_copies.copied_host_buffers_device_refused;
+        let backing = failed.host_backing();
+        match refuses {
+            Some(true) => assert_eq!(
+                (backing, copied),
+                (Some(HostBacking::Copied), 2),
+                "{TEST}: a failing source: a copy, for the device's refusal"
+            ),
+            Some(false) => assert_eq!(
+                (backing, copied),
+                (Some(HostBacking::ImportedByPointer), 0),
+                "{TEST}: a failing source: the pointer's import"
+            ),
+            None => eprintln!(
+                "{TEST}: a failing source, on {}: {backing:?}, {copied} copied for the device's \
+                 refusal",
+                device.name()
+            ),
+        }
+        drop(failed);
         let expected_calls = usize::from(refuses == Some(true));
         if refuses.is_some() {
             assert_eq!(*calls.lock().unwrap(), expected_calls, "{TEST}: calls");
@@ -1154,7 +1302,7 @@ fn the_source_runs_with_no_runtime_lock_held() {
         drop(texture);
         drop(buffer);
         // A heap over other pages, and a texture placed in it: the heap's call, and the texture
-        // image's (RADV).
+        // image's where the device makes one (else it is a shadow).
         let heap_size = 1 << 20;
         let heap_ram = Memfd::new(heap_size);
         let heap_view = heap_ram.view(&[(0, heap_size)]);
@@ -1178,7 +1326,8 @@ fn the_source_runs_with_no_runtime_lock_held() {
         placed.resource_options = shared();
         let counted = image_counts(device);
         let texture = heap.new_texture_at_offset(&placed, 0).unwrap();
-        check_images(TEST, device, counted, 1, 0);
+        let image = makes_dma_buf_images(device);
+        check_images(TEST, device, counted, u64::from(image), u64::from(!image));
         drop(texture);
         drop(heap);
         // A rebind of a buffer over private memory onto the view.
@@ -1515,9 +1664,9 @@ fn image_counts(device: &Device) -> (u64, u64) {
 }
 
 /// Check what making textures over dma-buf pages counted since `before`: `images` images and
-/// `fallbacks` fallbacks where the device imports dma-bufs (RADV, whose list holds
-/// `VK_EXT_image_drm_format_modifier` and `VK_EXT_queue_family_foreign`); none where it imports
-/// the pointer (NVIDIA, lavapipe), whose heap textures are images bound to the pointer's import.
+/// `fallbacks` fallbacks where the device imports dma-bufs (RADV; the caller's counts follow
+/// [`makes_dma_buf_images`]); none where it imports the pointer (NVIDIA, lavapipe), whose heap
+/// textures are images bound to the pointer's import.
 fn check_images(test: &str, device: &Device, before: (u64, u64), images: u64, fallbacks: u64) {
     let now = image_counts(device);
     let counted = (now.0 - before.0, now.1 - before.1);
@@ -1616,11 +1765,9 @@ fn sampled_textures_over_dma_buf_pages_are_in_place_where_their_pages_make_one_d
         assert!(device.settle_in_place_checks(CHECK_WAIT));
         let report = device.in_place_check_report();
         eprintln!("{TEST} on {}: the check: {report:?}", device.name());
-        let passed = |class: &str| {
-            report
-                .iter()
-                .any(|line| *line == format!("{class}: Passed"))
-        };
+        // Whether the check passed for a class, for texels that share no line with bytes beside
+        // them where `on_lines`, else for those that share one.
+        let passed = |class: &str, on_lines: bool| in_place_rows::passed(&device, class, on_lines);
         let imports = imports_dma_buf(&device);
         let queue = device.new_command_queue().unwrap();
         let page = host_page();
@@ -1647,6 +1794,8 @@ fn sampled_textures_over_dma_buf_pages_are_in_place_where_their_pages_make_one_d
         for (what, ram, view, (width, height, pitch), one) in [one_run, scattered] {
             let calls = Calls::default();
             let buffer = no_copy(&device, &view, 0, view.len, ram.source(&view, &calls)).unwrap();
+            let first = buffer.contents().map_or(0, |at| at.as_ptr() as u64);
+            let on_lines = in_place_rows::on_lines(&device, first, 4 * width, pitch as u64, height);
             let before = device.work_counts();
             let texture = buffer
                 .new_texture(
@@ -1679,7 +1828,7 @@ fn sampled_textures_over_dma_buf_pages_are_in_place_where_their_pages_make_one_d
             match imports {
                 Some(true) => {
                     assert_eq!(over_dma_buf, in_place, "{TEST}: {what}: over a dma-buf");
-                    if passed("DmaBuf") {
+                    if passed("DmaBuf", on_lines) {
                         assert_eq!((aliased, source), (one, u64::from(!one)), "{TEST}: {what}");
                     }
                 }
@@ -1690,7 +1839,7 @@ fn sampled_textures_over_dma_buf_pages_are_in_place_where_their_pages_make_one_d
                         calls.is_empty(),
                         "{TEST}: {what}: the source's calls {calls:?}"
                     );
-                    if passed("Pointer") {
+                    if passed("Pointer", on_lines) {
                         assert_eq!(
                             in_place + refused(&before, &after),
                             1,
@@ -2005,11 +2154,24 @@ fn a_heap_texture_over_dma_buf_pages_takes_its_shadow_where_the_source_fails() {
             .collect();
         match imports_dma_buf(&device) {
             Some(true) => {
-                assert_eq!(*answered.lock().unwrap(), 2, "{TEST}: the source's calls");
+                // The source is asked for the texture only where the device would make its
+                // image; else the shadow names the extensions it lacks.
+                let image = makes_dma_buf_images(&device);
+                let calls = if image { 2 } else { 1 };
+                assert_eq!(
+                    *answered.lock().unwrap(),
+                    calls,
+                    "{TEST}: the source's calls"
+                );
                 assert_eq!(notices.len(), 1, "{TEST}: {notices:?}");
                 let reason = &notices[0].reason;
+                let why = if image {
+                    "no dma-buf for a texture"
+                } else {
+                    "VK_EXT_image_drm_format_modifier"
+                };
                 assert!(
-                    reason.contains("dma-buf") && reason.contains("no dma-buf for a texture"),
+                    reason.contains("dma-buf") && reason.contains(why),
                     "{TEST}: {reason}"
                 );
                 eprintln!("{TEST}: on {}: shadowed-texture: {reason}", device.name());
@@ -2050,12 +2212,13 @@ fn heap_over(device: &Device, ram: &Memfd, view: &View, calls: &Calls) -> Heap {
 /// reads the CPU's bytes at its offset and its GPU fill lands at the file's offsets. The heap
 /// places a texture Metal may keep losslessly compressed (a 64 x 64 `RGBA8Unorm` texture only
 /// read, `heap-texture-lossless-layout`), which a heap over pages imported by their pointer binds
-/// as a linear image to its memory: where the heap's pages are imported as dma-bufs (RADV), the
-/// texture is an image of the driver's `DRM_FORMAT_MOD_LINEAR` layout at its offset, over a
-/// dma-buf of its own pages, counted, the source asked once for it; a blit's write into it reads
-/// back, and lands in the heap's pages at the texture's offset (rows 256 bytes apart, the driver's
-/// pitch for the image). Elsewhere the pointer is imported, nothing is counted or asked, and the
-/// write reads back too.
+/// as a linear image to its memory: where the heap's pages are imported as dma-bufs and the device
+/// makes such images ([`makes_dma_buf_images`]), the texture is an image of the driver's
+/// `DRM_FORMAT_MOD_LINEAR` layout at its offset, over a dma-buf of its own pages, counted, the
+/// source asked once for it; a blit's write into it reads back, and lands in the heap's pages at
+/// the texture's offset (rows 256 bytes apart, the driver's pitch for the image). Where it makes
+/// none, the texture is a shadow of the heap's bytes, counted as a fallback, the source not asked.
+/// Elsewhere the pointer is imported, nothing is counted or asked, and the write reads back too.
 #[test]
 fn a_no_copy_heap_s_texture_over_dma_buf_pages_is_an_image_over_its_own_pages() {
     const TEST: &str = "dma-buf heap texture";
@@ -2092,10 +2255,19 @@ fn a_no_copy_heap_s_texture_over_dma_buf_pages_is_an_image_over_its_own_pages() 
         let asked_before = calls.lock().unwrap().len();
         let counted = image_counts(device);
         let texture = heap.new_texture_at_offset(&descriptor, offset).unwrap();
-        check_images(TEST, device, counted, 1, 0);
+        let image = makes_dma_buf_images(device);
+        check_images(TEST, device, counted, u64::from(image), u64::from(!image));
         let asked = calls.lock().unwrap()[asked_before..].to_vec();
         let texels = (256, 256, 64);
-        check_texture_request(TEST, device, &asked, view.at, offset as usize, texels, true);
+        check_texture_request(
+            TEST,
+            device,
+            &asked,
+            view.at,
+            offset as usize,
+            texels,
+            image,
+        );
         let bytes = (4 * extent.0 * extent.1) as usize;
         let written = counting(bytes, 71);
         blit_into(&queue, &texture, extent, 4, &written);
@@ -2106,7 +2278,7 @@ fn a_no_copy_heap_s_texture_over_dma_buf_pages_is_an_image_over_its_own_pages() 
         let at = 2 * page + offset as usize;
         let file = ram.whole.read(at..at + bytes);
         match imports_dma_buf(device) {
-            Some(true) => assert!(file == written, "{TEST}: the heap's pages"),
+            Some(true) if image => assert!(file == written, "{TEST}: the heap's pages"),
             _ => eprintln!(
                 "{TEST}: on {}: the heap's pages hold the texels row by row: {}",
                 device.name(),
@@ -2121,9 +2293,11 @@ fn a_no_copy_heap_s_texture_over_dma_buf_pages_is_an_image_over_its_own_pages() 
 /// A rebind of bytes over dma-buf pages to other such pages: a no-copy buffer's texture, a shadow
 /// of the bytes, copies the new pages' texels, the new source asked once for the bytes alone,
 /// nothing counted; a no-copy heap's texture is made again as an image over a dma-buf of its own
-/// new pages (RADV), counted, the new source asked once for the bytes and once for the texture.
-/// Each then reads the new pages' bytes, and a blit's write through it lands there, the old pages
-/// keeping theirs. Elsewhere the textures are made again as before, nothing counted or asked.
+/// new pages where the device makes such images ([`makes_dma_buf_images`]), counted, the new source
+/// asked once for the bytes and once for the texture (a shadow's, once for the bytes, nothing
+/// counted). Each then reads the new pages' bytes, and a blit's write through it lands there (an
+/// image's in the new pages, the old pages keeping theirs). Elsewhere the textures are made again
+/// as before, nothing counted or asked.
 #[test]
 fn a_rebind_makes_textures_over_dma_buf_pages_again_over_the_new_pages() {
     const TEST: &str = "dma-buf texture rebind";
@@ -2134,6 +2308,7 @@ fn a_rebind_makes_textures_over_dma_buf_pages_again_over_the_new_pages() {
         let page = host_page();
         let queue = device.new_command_queue().unwrap();
         let radv = imports_dma_buf(device) == Some(true);
+        let image = makes_dma_buf_images(device);
         // A no-copy buffer's texture.
         let length = 2 * page;
         let ram = Memfd::new(8 * page);
@@ -2203,9 +2378,9 @@ fn a_rebind_makes_textures_over_dma_buf_pages_again_over_the_new_pages() {
             )
         }
         .unwrap();
-        check_images(TEST, device, counted, 1, 0);
+        check_images(TEST, device, counted, u64::from(image), 0);
         let asked = calls.lock().unwrap().len();
-        let expected = if radv { 2 } else { 0 };
+        let expected = usize::from(radv) + usize::from(image);
         assert_eq!(asked, expected, "{TEST}: the heap's new source's calls");
         let texels = counting(heap_bytes, 131);
         blit_into(&queue, &texture, extent, 4, &texels);
@@ -2213,7 +2388,7 @@ fn a_rebind_makes_textures_over_dma_buf_pages_again_over_the_new_pages() {
             blit_texels(&queue, &texture, extent, 4) == texels,
             "{TEST}: the heap's texture over the new pages"
         );
-        if radv {
+        if image {
             assert!(
                 ram.whole.read(heap_size..heap_size + heap_bytes) == texels,
                 "{TEST}: the heap's new pages"
@@ -2310,5 +2485,183 @@ fn a_rebind_between_one_chunk_and_several_keeps_a_texture_s_texels() {
             device.name()
         );
         drop((texture, buffer));
+    });
+}
+
+/// The mappings this process holds now: the lines of `/proc/self/maps`.
+fn process_mappings() -> usize {
+    std::fs::read_to_string("/proc/self/maps").map_or(0, |maps| maps.lines().count())
+}
+
+/// How a device makes a no-copy buffer over a view of single file pages ([`view_route`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ViewRoute {
+    /// Its pointer imported; the source never called.
+    Pointer,
+    /// Through this many dma-bufs its source made, asked for once.
+    DmaBufs(usize),
+    /// A copy of its pages, for the device's refusal (`copied.rs`,
+    /// `WorkCounts::copied_host_buffers_device_refused`): the pointer refused, and the source,
+    /// asked once for one dma-buf of the whole view, answered none.
+    Copied,
+}
+
+/// How `device` makes a no-copy buffer over a view of `runs` single pages of a file mapped in
+/// reverse, through udmabufs of them where `through` (`VM_PFNMAP`), else from the file: for a
+/// driver measured, `None` for any other, whose answers are printed only. RADV refuses every
+/// such pointer and assembles a sparse buffer of the source's dma-bufs, one where one udmabuf
+/// takes the pages and two past its `list_limit` (Mesa 26.2.6). ANV imports the pointer of the
+/// file's mapping, refuses the pointer of a udmabuf's (`VK_ERROR_INVALID_EXTERNAL_HANDLE`), and
+/// imports one dma-buf for a plain buffer but reports none for a sparse one, so it takes such a
+/// view in place only where one udmabuf holds it, and copies a larger one (Mesa 26.2.6 on i915).
+/// lavapipe imports every pointer.
+fn view_route(device: &Device, runs: usize, through: bool) -> Option<ViewRoute> {
+    let one_dma_buf = runs <= Limits::of_host().items;
+    match device.properties().description.driver_id {
+        Some(DriverId::MESA_RADV) => Some(ViewRoute::DmaBufs(match one_dma_buf {
+            true => 1,
+            false => 2,
+        })),
+        Some(DriverId::INTEL_OPEN_SOURCE_MESA) => Some(match (through, one_dma_buf) {
+            (false, _) => ViewRoute::Pointer,
+            (true, true) => ViewRoute::DmaBufs(1),
+            (true, false) => ViewRoute::Copied,
+        }),
+        Some(DriverId::MESA_LLVMPIPE) => Some(ViewRoute::Pointer),
+        _ => None,
+    }
+}
+
+/// A view of guest pages as a consumer's probe makes one: single pages of the file mapped in
+/// reverse order, from the file (a mapping a page) or through udmabufs of them (a mapping per
+/// udmabuf, `VM_PFNMAP`, as a consumer maps a view of several runs), a no-copy `Shared` buffer
+/// over the whole view placed outside the guest's address range (`AddressPlacement::Outside`),
+/// with a dma-buf source of its pages. Made over 64 pages, which one udmabuf takes, and over
+/// `list_limit + 1`, which take two. Each takes the route its measured driver answers
+/// ([`view_route`]), counted (`dma_buf_imports`, `dma_buf_sparse_buffers`,
+/// `host_pointer_imports_made`, and `copied_host_buffers_made` for the one route that copies); the
+/// GPU reads the CPU's bytes. Printed (`VIEW-IMPORT`): the making's answer, the source's calls,
+/// the counts, and the mappings the view and the import took.
+#[test]
+fn a_reversed_view_of_single_pages_takes_the_route_its_device_answers() {
+    const TEST: &str = "dma-buf reversed view";
+    if !udmabuf_openable(TEST) {
+        return;
+    }
+    on_device(|device| {
+        let page = host_page();
+        let queue = device.new_command_queue().unwrap();
+        let shapes = [64, Limits::of_host().items + 1]
+            .into_iter()
+            .flat_map(|runs| [(runs, false), (runs, true)]);
+        for (runs, through) in shapes {
+            let ram = Memfd::new(runs * page);
+            let pieces: Vec<(usize, usize)> =
+                (0..runs).map(|i| ((runs - 1 - i) * page, page)).collect();
+            let unviewed = process_mappings();
+            let view = match through {
+                true => ram.view_through_dma_bufs(&pieces),
+                false => ram.view(&pieces),
+            };
+            let view_mappings = process_mappings() as i64 - unviewed as i64;
+            let shape = format!(
+                "{runs} single pages in reverse, mapped {}",
+                match through {
+                    true => "through udmabufs",
+                    false => "from the file",
+                }
+            );
+            let mut expected = Vec::with_capacity(runs * page);
+            for i in 0..runs {
+                let bytes = counting(page, i);
+                ram.whole.write((runs - 1 - i) * page, &bytes);
+                expected.extend(bytes);
+            }
+            let calls = Calls::default();
+            let before = device.work_counts();
+            let mapped = process_mappings();
+            // SAFETY: the view outlives the buffer, and the source makes dma-bufs of its pages.
+            let memory =
+                unsafe { HostMemory::with_dma_buf(view.pointer(0), ram.source(&view, &calls)) };
+            let contents = BufferContents::NoCopy {
+                memory,
+                deallocator: None,
+                keep_alive: None,
+            };
+            let length = (runs * page) as u64;
+            let descriptor = BufferDescriptor::new(length, ResourceOptions::shared(), contents)
+                .with_placement(AddressPlacement::Outside);
+            let made = device.new_buffer_with_descriptor(descriptor);
+            let added = process_mappings() as i64 - mapped as i64;
+            let after = device.work_counts();
+            let calls = calls.lock().unwrap().clone();
+            let counted = (
+                after.dma_buf_imports - before.dma_buf_imports,
+                after.dma_buf_sparse_buffers - before.dma_buf_sparse_buffers,
+                after.host_pointer_imports_made - before.host_pointer_imports_made,
+                after.copied_host_buffers_made - before.copied_host_buffers_made,
+            );
+            eprintln!(
+                "VIEW-IMPORT on {}: {shape} ({view_mappings} mappings): {}; source calls \
+                 {calls:?}; dma-buf imports, sparse buffers, pointer imports and copies \
+                 {counted:?}; mappings queried {}, process mappings the making added {added}",
+                device.name(),
+                match &made {
+                    Ok(_) => "made".to_string(),
+                    Err(error) => format!("refused: {error:?}"),
+                },
+                after.host_mappings_queried - before.host_mappings_queried,
+            );
+            let route = view_route(device, runs, through);
+            let asked_once = |calls: &[(DmaBufRequest, usize)]| {
+                assert_eq!(calls.len(), 1, "{TEST}: {shape}: the source's calls");
+                let (request, answered) = calls[0];
+                assert_eq!(
+                    (request.start, request.length),
+                    (view.pointer(0), length),
+                    "{TEST}: {shape}: {request:?}"
+                );
+                (request, answered)
+            };
+            match route {
+                Some(ViewRoute::Pointer) => {
+                    assert!(calls.is_empty(), "{TEST}: {shape}: called {calls:?}");
+                    assert_eq!(counted, (0, 0, 1, 0), "{TEST}: {shape}: counted");
+                }
+                Some(ViewRoute::DmaBufs(chunks)) => {
+                    let (_, answered) = asked_once(&calls);
+                    assert_eq!(answered, chunks, "{TEST}: {shape}: chunks answered");
+                    let sparse = u64::from(chunks > 1);
+                    let expected = (chunks as u64, sparse, 0, 0);
+                    assert_eq!(counted, expected, "{TEST}: {shape}: counted");
+                }
+                Some(ViewRoute::Copied) => {
+                    let (request, answered) = asked_once(&calls);
+                    // One dma-buf of the whole view: the device assembles no buffer of several.
+                    assert_eq!(request.granule, length, "{TEST}: {shape}: {request:?}");
+                    assert_eq!(answered, 0, "{TEST}: {shape}: chunks answered");
+                    let backing = made.as_ref().map(|buffer| buffer.host_backing());
+                    assert!(
+                        matches!(backing, Ok(Some(HostBacking::Copied))),
+                        "{TEST}: {shape}: {backing:?}"
+                    );
+                    let refused = after.copied_host_buffers_device_refused
+                        - before.copied_host_buffers_device_refused;
+                    assert_eq!(
+                        (counted, refused),
+                        ((0, 0, 0, 1), 1),
+                        "{TEST}: {shape}: counted, and copies for the device's refusal"
+                    );
+                }
+                None => {}
+            }
+            if let Ok(buffer) = &made {
+                assert!(
+                    gpu_read(&queue, buffer, 0..length) == expected,
+                    "{TEST}: {shape}: the GPU's read"
+                );
+            }
+            drop(made);
+        }
     });
 }

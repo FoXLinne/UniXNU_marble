@@ -217,8 +217,9 @@ impl DeviceProfile {
     /// Whether a function reads a two-plane YCbCr texture's planes in place where its slot reads
     /// the texture only so (`bind::YCbCrInPlace`): on an integrated GPU or a CPU device, which
     /// reads host memory with no bus between; elsewhere every such texture's image of converted
-    /// texels is read. Both forms read Metal's texels exactly. The runtime reads it to state a
-    /// texture's planes (`TextureFacts::ycbcr_in_place`).
+    /// texels is read. The image holds Metal's texels exactly; the planes read in place are
+    /// sampled as `DevicePolicy::ycbcr_in_place_reads` says. The runtime reads it
+    /// to state a texture's planes (`TextureFacts::ycbcr_in_place`).
     pub fn reads_ycbcr_planes_in_place(&self) -> bool {
         self.fields.ycbcr_in_place
     }
@@ -543,6 +544,9 @@ pub struct ProfileFields {
     /// which its refresh reads across the bus once per encoder where the in-place form would read
     /// the planes there at every pass. Both forms read Metal's texels exactly.
     pub ycbcr_in_place: bool,
+    /// How a sample of planes read in place converts and filters them
+    /// (`DevicePolicy::ycbcr_in_place_reads`).
+    pub ycbcr_in_place_reads: crate::device::YCbCrInPlacePolicy,
     /// The Function storage a thread holds correctly (`device::function_storage`): a stage's
     /// private memory, its call stacks included, may take this much a thread
     /// (`VkLimit::FunctionStorageBytesPerThread`), and a vertex or fragment function on a device
@@ -1096,6 +1100,14 @@ pub struct Limits {
     /// non-strict wide line is the parallelogram whose minor-axis edges pass through its
     /// endpoints, Metal's (`setLineWidth:`); `false` where `VK_KHR_maintenance5` is not exposed.
     pub non_strict_wide_lines_use_parallelogram: bool,
+    /// `earlyFragmentMultisampleCoverageAfterSampleCounting`
+    /// (`VkPhysicalDeviceMaintenance5Properties`): under a fragment shader's `EarlyFragmentTests`,
+    /// its fragment shading and multisample coverage operations (its `SampleMask` output among
+    /// them) come after sample counting, so an occlusion query counts every sample the early tests
+    /// pass, as Metal counts under its private masks. Where `false`, Vulkan lets them come before
+    /// (the specification's fragment operations); `false` too where `VK_KHR_maintenance5` is not
+    /// exposed.
+    pub early_fragment_multisample_coverage_after_sample_counting: bool,
     /// `subPixelPrecisionBits`: the bits of a framebuffer coordinate's fraction the rasterizer
     /// keeps (4 at least).
     pub sub_pixel_precision_bits: u32,
@@ -1235,6 +1247,25 @@ pub enum DriverWorkaround {
     /// on every GPU, the others unmeasured. Such a profile rounds a `half` in another form
     /// (`lower::arith::narrow::controlled_modes`).
     HalfConversionPairFolded,
+    /// The driver's compiler fuses an `f32` addition, subtraction, multiply or fused multiply-add
+    /// into the `OpFConvert` to 16 bits of its result, rounding the exact result to `half` once,
+    /// though both are decorated `NoContraction` (which forbids combining the operation with
+    /// another instruction into a single operation), in an entry declaring `RoundingModeRTE`,
+    /// `DenormPreserve` and `SignedZeroInfNanPreserve` for 16 bits. Metal rounds the `float` result
+    /// to `half`, so where that result lies on a `half` midpoint the two differ by one unit in the
+    /// last place of the `half`. Measured with Mesa 26.2.6 on the Radeon 780M (RADV PHOENIX,
+    /// GFX11): ACO compiled the product's `OpFMul` and the narrowing as one `v_fma_mixlo_f16` (a
+    /// sum's narrowing too), and the product of 2.6822087e-7 and 1.0000001 answered `0x0005` where
+    /// Metal's `half` of the `float` product is `0x0004`; the Radeon RX 7900 XTX (RADV NAVI31,
+    /// GFX11) answered as the 780M did, 4,542 of the 253,958 product lanes off Metal's on each
+    /// (`runtime_lane::half_conversions`). On the Radeon RX 550 (RADV POLARIS12, GFX8) the
+    /// narrowing alone answers its own way (8,185 of the 253,958 lanes of a loaded `float`), every
+    /// narrowing there records `PrecisionNote::NativeHalfConversion` already, and no fusion is told
+    /// apart. A fact of RADV's compiler, keyed on RADV (`VK_DRIVER_ID_MESA_RADV`) on every GPU;
+    /// other drivers unmeasured. Such a profile keeps the conversion under the float controls, and
+    /// a module that rounds such an operation's result through it records
+    /// `PrecisionNote::NativeHalfConversion` (`lower::arith::narrow::rounds_arithmetic`).
+    HalfConversionFusedWithArithmetic,
     /// The driver refuses a fragment shader that reads both barycentric builtins,
     /// `BaryCoordKHR` and `BaryCoordNoPerspKHR`, at pipeline creation, where Metal compiles a
     /// fragment function that declares both `[[barycentric_coord, center_perspective]]` and
@@ -1274,6 +1305,23 @@ pub enum DriverWorkaround {
     /// loop, where the whole quad runs, and each pass reads its sample's value
     /// (`lower::fragment::coverage`).
     InterpolationNeedsTheWholeQuad,
+    /// The driver's `InterpolateAtSample` and `InterpolateAtOffset` of a perspective input are its
+    /// value at the pixel center extrapolated along the quad's coarse derivatives,
+    /// `f(center) + (f(tr) - f(tl)) * dx + (f(bl) - f(tl)) * dy` (`tl`, `tr`, `bl` the centers of
+    /// the quad's top-left, top-right and bottom-left pixels, `(dx, dy)` the read's distance from
+    /// the pixel center), not the perspective interpolation at that location: a first-order
+    /// answer, off by the input's curvature across the distance. A no-perspective input is linear
+    /// in the framebuffer, so its extrapolation is exact. Measured on RADV
+    /// (`VK_DRIVER_ID_MESA_RADV`), Mesa 26.2.6, on the Radeon 780M: of
+    /// `runtime_lane::pull_model_interpolation`'s values (a triangle of clip `w` 1, 2 and 4 over a
+    /// 6x6 target), the 52 offset reads and 1061 sample reads off Metal's were that form's, within
+    /// 0.005, and up to about 1.0 from Metal's in a lane whose vertices hand 3, -2 and 0.5;
+    /// the same reads of the no-perspective inputs were Metal's within the device's interpolation.
+    /// Vulkan states no precision for interpolation, so the answer is the device's own (no form
+    /// interpolates otherwise): a fragment function that reads a perspective input at a sample or
+    /// an offset there records `PrecisionNote::ExtrapolatedInterpolation` (`lower::stage_io::plan`).
+    /// It is keyed on the driver's release (`device::driver_facts`).
+    PerspectiveReadsExtrapolated,
     /// The driver reads a mesh shader's store into one component of a vector output (an
     /// `OpAccessChain` to a component of `PrimitiveLineIndicesEXT` or
     /// `PrimitiveTriangleIndicesEXT`) as a store into a later output slot, so the primitive keeps
@@ -1380,7 +1428,8 @@ pub enum DriverWorkaround {
     /// threads only of their own branch too. Without any discard, the same fragment lost 1,040 to
     /// 1,063 of its 2,584 texels a run in 98 or 99 blocks where only those helpers took the branch
     /// with the `optnone` call (the probe). There the selections whose arms hold such a
-    /// call before a storage write send their helper invocations to another arm where that is exact
+    /// call before a storage write send their helper invocations to another arm where that is exact,
+    /// and an identity simdgroup shuffle of its result follows each such call left
     /// (`spirv::helper_branches`).
     DiscardDropsSimdgroupStores,
     /// The driver's compiler keeps a call to a function declared `DontInline` a call and

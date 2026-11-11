@@ -46,6 +46,8 @@ fn stage_module_bytes_are_little_endian_words() {
         rounded_colors: Vec::new(),
         own_pixel_textures: Vec::new(),
         snapshot_textures: Vec::new(),
+        snapshot_refusals: Vec::new(),
+        level_reads: Vec::new(),
         private_bytes: 0,
         specialized_notes: Vec::new(),
         stats: ModuleStats::default(),
@@ -96,6 +98,8 @@ fn a_stage_s_notes_under_a_specialization_are_its_held_clauses() {
         rounded_colors: Vec::new(),
         own_pixel_textures: Vec::new(),
         snapshot_textures: Vec::new(),
+        snapshot_refusals: Vec::new(),
+        level_reads: Vec::new(),
         private_bytes: 0,
         specialized_notes: vec![
             SpecializedNote {
@@ -360,6 +364,7 @@ mod serde_round_trips {
                 ..Default::default()
             }),
             max_call_stack_depth: Some(8),
+            open_cl_mode: true,
             flat_grid: true,
             render_target_array_index_varying: true,
             primitive_id_varying: true,
@@ -611,6 +616,7 @@ mod serde_round_trips {
                 samples: 4,
             }),
             early_fragment_tests: true,
+            writes_sample_mask: true,
             // An emulated mesh function's records.
             mesh_records: Some(crate::pipeline::MeshRecords {
                 vertices: 3,
@@ -738,6 +744,15 @@ mod serde_round_trips {
                 ),
                 (Stage::Vertex, vec![NumberedSampler::Write]),
             ],
+            stage_in: vec![crate::pipeline::stage_io::StageInFetch {
+                format: metal::AttributeFormat::Float2,
+                buffer_index: 3,
+                offset: 8,
+                stride: None,
+                step_function: metal::StepFunction::ThreadPositionInGridY,
+                step_rate: 2,
+                index: None,
+            }],
         });
         round_trip(&RuntimeDependency {
             fact: RuntimeFact::StorageTextureFormat {

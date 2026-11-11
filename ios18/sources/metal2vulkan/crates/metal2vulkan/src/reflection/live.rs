@@ -628,6 +628,7 @@ impl<'a> Engine<'a> {
                 | AirIntrinsic::IsUniform(_)
                 | AirIntrinsic::SimdgroupSize(_)
                 | AirIntrinsic::GlobalBuiltin(_)
+                | AirIntrinsic::WorkItem(_)
                 | AirIntrinsic::FunctionConstant(_)
                 | AirIntrinsic::Interpolate(_)
                 | AirIntrinsic::AccelerationStructure(_) => false,
@@ -655,6 +656,7 @@ impl<'a> Engine<'a> {
             Callee::Llvm { op, .. } => match op {
                 LlvmIntrinsic::Float { .. }
                 | LlvmIntrinsic::Int { .. }
+                | LlvmIntrinsic::NarrowInt { .. }
                 | LlvmIntrinsic::Abs { .. }
                 | LlvmIntrinsic::Cttz { .. }
                 | LlvmIntrinsic::Ctlz { .. } => false,
@@ -669,7 +671,10 @@ impl<'a> Engine<'a> {
                 }
                 LlvmIntrinsic::Agx(_) => true,
             },
-            Callee::Direct(_) | Callee::Indirect { .. } | Callee::UnknownIntrinsic(_) => true,
+            Callee::Direct(_)
+            | Callee::Indirect { .. }
+            | Callee::UnknownIntrinsic(_)
+            | Callee::Unbound { .. } => true,
         }
     }
 

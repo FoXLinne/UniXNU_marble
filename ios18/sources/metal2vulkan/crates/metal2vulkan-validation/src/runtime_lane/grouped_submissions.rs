@@ -4,8 +4,8 @@
 //! [`BATCHES`] command buffers committed on one queue, each filling a buffer of its own with a
 //! value of its own, the first after a wait for an event the host has not raised, all wait behind
 //! that wait; once the host raises it the scheduler finds them ready together. Under the default
-//! `CompletionPolicy::Grouped`, on a driver measured to merge a submission that signals nothing
-//! into the next one (`DriverFact::SubmissionsWithoutSignalsMerge`), they go in `vkQueueSubmit`
+//! `CompletionPolicy::Grouped`, on a device whose check found a submission that signals nothing
+//! merged into the next one (the runtime's `submit_check.rs`), they go in `vkQueueSubmit`
 //! calls of up to four batches each, only the last of each signalling
 //! (`WorkCounts::grouped_submissions`,
 //! `WorkCounts::batches_grouped`), announced once ([`GROUPED`]); under `CompletionPolicy::Exact`,
@@ -34,6 +34,15 @@
 //! and each submission handler runs as its batch is taken, held or submitted, before the command
 //! buffer reads `Scheduled` and before its scheduled handler.
 //!
+//! A submission handler that waits for another queue's command buffer
+//! ([`behind_another_queue_s_handler`]): `X`, committed on one queue behind running work (`A`,
+//! then `B`), then `Y` on another queue, whose submission handler waits for `X`'s completed
+//! handler. Where the two queues submit to one `VkQueue` on a driver that merges, `X` is held and
+//! kept, `Y` joins its group, and the group goes to the driver before `Y`'s handler runs, so the
+//! handler sees `X` complete, as a scheduled handler of one Metal queue sees another queue's
+//! completed handler (probe `cross_queue_handler_waits`). Elsewhere `X` goes before the handler
+//! in any case.
+//!
 //! The event scenarios ([`event_scenario`]) signal and wait for a plain event (`MTLEvent`), whose
 //! wait chains on the `VkQueue`: a wait for a signal a held batch carries is a Vulkan wait only
 //! the group's end meets, so it sends the group and goes after it. A shared event's wait is
@@ -49,11 +58,11 @@
 
 use super::degrade_notices::counts;
 use super::{
-    layer_reported_nothing_at_all, loader, open_device, validated_device_with, Messages,
+    at_plan, layer_reported_nothing_at_all, loader, open_device, validated_device_with, Messages,
     ScratchCache, WAIT,
 };
 use crate::gpu::TEST_DEVICE;
-use metal2vulkan::device::{CompletionPolicy, DeviceDescription, DriverFact};
+use metal2vulkan::device::CompletionPolicy;
 use metal2vulkan_runtime::{
     Buffer, CommandBuffer, CommandBufferStatus, Degradation, DeviceOptions, EventRef,
     ResourceOptions, ShaderCacheOptions, WorkCounts,
@@ -88,12 +97,17 @@ fn group_ends(before: &WorkCounts, after: &WorkCounts) -> [u64; 7] {
     std::array::from_fn(|at| after[at] - before[at])
 }
 
-/// Whether the device's driver merges a submission that signals nothing into the next: the
-/// driver's fact answers it, never its name, and the runtime reads the same fact
-/// (`DriverFact::SubmissionsWithoutSignalsMerge`, the runtime's `group.rs`), so a device whose
-/// identity no lane measured takes the ungrouped path and this lane expects it.
-fn merges(description: &DeviceDescription) -> bool {
-    (description.driver_facts()).contains(&DriverFact::SubmissionsWithoutSignalsMerge)
+/// Whether the device's submissions that signal nothing merge into the next, as its check found
+/// once it answered (the runtime's `submit_check.rs`, which its `group.rs` reads): the device's
+/// own measurement, never its name nor its GPU's, so a GPU no lane measured groups where its
+/// check finds the merge, and this lane expects what the check found.
+fn merges(device: &metal2vulkan_runtime::Device) -> bool {
+    assert!(
+        device.settle_submit_checks(WAIT),
+        "the submission checks never answered"
+    );
+    eprintln!("submission checks: {}", device.submit_check_report());
+    device.submissions_merge()
 }
 
 /// Wait until a pass has taken in every command buffer committed before the call, and ended:
@@ -136,7 +150,7 @@ fn run(completion: CompletionPolicy, checked: bool) -> (u64, u64, u64, usize, bo
             options.policy.completion = completion;
         })
         .unwrap();
-        let merging = merges(&device.properties().description);
+        let merging = merges(&device);
         let queue = device.new_command_queue().unwrap();
         let event = device.new_shared_event().unwrap();
         let buffers: Vec<Buffer> = (0..BATCHES)
@@ -266,6 +280,7 @@ fn completions_wake_the_scheduler_only_once_a_head_may_go() {
     let (seen, wakes) = {
         let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
             options.policy.completion = CompletionPolicy::Exact;
+            at_plan(options)
         })
         .unwrap();
         let (first, second) = (
@@ -385,15 +400,18 @@ struct Scenario {
 /// error and fills its buffer, `E` ends at `last` (a command buffer committed after the counts
 /// are read, waiting for `E` at `last`, completes: no host call reads a plain event's value), and
 /// the layer reports nothing.
+/// Its devices take their queue plan (`at_plan`): the work of the tests that call it
+/// changes placements under the lane's queue limits.
 fn event_scenario(completion: CompletionPolicy, steps: &[Step], last: u64) -> Scenario {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     let counted = {
         let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
             options.policy.completion = completion;
+            at_plan(options)
         })
         .unwrap();
-        let merging = merges(&device.properties().description);
+        let merging = merges(&device);
         let queues = [
             device.new_command_queue().unwrap(),
             device.new_command_queue().unwrap(),
@@ -503,6 +521,8 @@ fn event_scenario(completion: CompletionPolicy, steps: &[Step], last: u64) -> Sc
 
 /// Each scenario under both policies: grouped where the driver merges under the default, alone
 /// under `Exact`; where `waits`, a group went before a batch that waits for a signal it held.
+/// Its devices take their queue plan (`at_plan`): the work of the tests that call it
+/// changes placements under the lane's queue limits.
 fn both_policies(steps: &[Step], last: u64, waits: bool) {
     let run = event_scenario(CompletionPolicy::Grouped, steps, last);
     let (grouped, ends) = (run.grouped, run.ends);
@@ -823,7 +843,7 @@ enum Carried {
 /// ([`behind_running_work`]).
 #[derive(Debug, Default)]
 struct Taken {
-    /// Groups kept, and kernel submissions made, since the one before was taken in.
+    /// Groups kept, and kernel submissions made, since the one before read `Scheduled`.
     kept: u64,
     submissions: u64,
     /// It read `Scheduled` (or later), its scheduled handler had run, and its kernel end time was
@@ -866,7 +886,7 @@ fn behind_running_work(completion: CompletionPolicy, stretch: usize, carried: Ca
             options.policy.completion = completion;
         })
         .unwrap();
-        let merging = merges(&device.properties().description);
+        let merging = merges(&device);
         let queue = device.new_command_queue().unwrap();
         let large = device
             .new_buffer(RUNNING_FILL, ResourceOptions::private())
@@ -926,10 +946,15 @@ fn behind_running_work(completion: CompletionPolicy, stretch: usize, carried: Ca
                 }
                 command_buffer.commit().unwrap();
                 taken_in(&device);
-                let counts = device.work_counts();
                 // Its scheduled handler runs on the queue's context, at once where its transition
                 // was posted as it was submitted or held.
                 command_buffer.wait_until_scheduled().unwrap();
+                // Read once it is `Scheduled`: a checked batch is held for its check in the pass
+                // that took it in, and a later pass, once the check ran, submits or holds it and
+                // keeps or sends its group; its submission handler runs once that pass's lock is
+                // free, before its transition to `Scheduled`. Read at the take-in, its own
+                // submission lands in the next one's counts.
+                let counts = device.work_counts();
                 taken.push(Taken {
                     kept: counts.groups_kept_pending - last.groups_kept_pending,
                     submissions: counts.queue_submissions - last.queue_submissions,
@@ -1098,4 +1123,482 @@ fn the_exact_completion_keeps_no_group_behind_running_work() {
         (0, 0, [0; 7]),
         "{seen:?}"
     );
+}
+
+/// What [`behind_another_queue_s_handler`] saw.
+#[derive(Debug)]
+struct HandlerWait {
+    /// The device's name.
+    device: String,
+    /// Whether the driver merges, and whether the two queues submit to one `VkQueue`.
+    merging: bool,
+    shared: bool,
+    /// The groups kept while `X` was taken in (behind `A` and `B`).
+    kept: u64,
+    /// As `Y`'s submission handler began: whether `A` still ran, and the batches that had gone
+    /// in groups and the kernel submissions made since `Y`'s commit.
+    a_ran: bool,
+    grouped: u64,
+    submissions: u64,
+    /// Whether `X`'s completed handler reached `Y`'s waiting submission handler, and after how
+    /// long.
+    reached: bool,
+    waited: std::time::Duration,
+    /// The groups by what sent them, from `Y`'s commit on ([`group_ends`]).
+    ends: [u64; 7],
+    /// What the device counted since `A`'s commit, once `A` was taken in, `B` scheduled and `X`
+    /// scheduled.
+    steps: [StepCounts; 3],
+    /// How long after `X`'s commit `A`'s completed handler ran; `None` where it ran before.
+    a_completed_after_x: Option<std::time::Duration>,
+}
+
+/// What the device counted since `A`'s commit at one step of [`behind_another_queue_s_handler`].
+#[derive(Debug, Clone, Copy)]
+struct StepCounts {
+    /// Kernel submissions made, groups kept and batches grouped.
+    submissions: u64,
+    kept: u64,
+    grouped: u64,
+    /// Batches committing threads submitted, and the scheduler's passes.
+    at_commit: u64,
+    passes: u64,
+    /// Batches submitted by the earlier batches of their `VkQueue` pending: none, one, two or
+    /// more.
+    pending: [u64; 3],
+    /// The groups by what sent them ([`group_ends`]).
+    ends: [u64; 7],
+}
+
+impl StepCounts {
+    /// The counts from `before` to `after`.
+    fn between(before: &WorkCounts, after: &WorkCounts) -> StepCounts {
+        StepCounts {
+            submissions: after.queue_submissions - before.queue_submissions,
+            kept: after.groups_kept_pending - before.groups_kept_pending,
+            grouped: after.batches_grouped - before.batches_grouped,
+            at_commit: after.batches_submitted_at_commit - before.batches_submitted_at_commit,
+            passes: after.scheduler_passes - before.scheduler_passes,
+            pending: [
+                after.batches_with_none_pending - before.batches_with_none_pending,
+                after.batches_with_one_pending - before.batches_with_one_pending,
+                (after.batches_with_two_or_three_pending + after.batches_with_four_or_more_pending)
+                    - (before.batches_with_two_or_three_pending
+                        + before.batches_with_four_or_more_pending),
+            ],
+            ends: group_ends(before, after),
+        }
+    }
+
+    /// The counts on one line.
+    fn line(&self) -> String {
+        format!(
+            "{} submissions ({} at commit; with none, one, two or more pending {:?}), {} kept, {} \
+             grouped, {} passes, group ends {:?}",
+            self.submissions,
+            self.at_commit,
+            self.pending,
+            self.kept,
+            self.grouped,
+            self.passes,
+            self.ends
+        )
+    }
+}
+
+/// The module docs' run with a handler that waits for another queue's command buffer, `A` of
+/// `stretch` times the fills its calibration takes.
+/// Its devices take their queue plan (`at_plan`): the work of the tests that call it
+/// changes placements under the lane's queue limits.
+fn behind_another_queue_s_handler(stretch: usize) -> HandlerWait {
+    let messages = Messages::default();
+    let cache = ScratchCache::new().unwrap();
+    let seen = {
+        // The default completion, which the lane's options leave for Metal's exact one: the held
+        // group is its. The device's merge check holds without its timing, so every run holds
+        // the group, on every device.
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+            options.policy.completion = CompletionPolicy::Grouped;
+            options.assume_submissions_merge = true;
+            at_plan(options)
+        })
+        .unwrap();
+        let merging = merges(&device);
+        let (first, second) = (
+            device.new_command_queue().unwrap(),
+            device.new_command_queue().unwrap(),
+        );
+        let large = device
+            .new_buffer(RUNNING_FILL, ResourceOptions::private())
+            .unwrap();
+        let buffers: Vec<Buffer> = (0..3)
+            .map(|_| device.new_buffer(BYTES, ResourceOptions::shared()).unwrap())
+            .collect();
+        let fill = |queue: &metal2vulkan_runtime::CommandQueue, at: usize| {
+            let command_buffer = queue.command_buffer().unwrap();
+            let mut blit = command_buffer.blit_command_encoder().unwrap();
+            blit.fill_buffer(&buffers[at], 0..BYTES, at as u8 + 1)
+                .unwrap();
+            blit.end_encoding().unwrap();
+            command_buffer
+        };
+        // Each queue's first command buffer, and the device's first work, before `A`.
+        let warm = fill(&second, 2);
+        warm.commit().unwrap();
+        warm.wait_until_completed_for(WAIT).unwrap();
+        let fills = running_fills(&first, &large, std::time::Duration::from_millis(100)) * stretch;
+        let running = first.command_buffer().unwrap();
+        let mut blit = running.blit_command_encoder().unwrap();
+        for at in 0..fills {
+            blit.fill_buffer(&large, 0..RUNNING_FILL, at as u8).unwrap();
+        }
+        blit.end_encoding().unwrap();
+        let before_a = device.work_counts();
+        let step = || StepCounts::between(&before_a, &device.work_counts());
+        let a_completed = Arc::new(Mutex::new(None));
+        {
+            let a_completed = Arc::clone(&a_completed);
+            running
+                .add_completed_handler(Box::new(move |_: &CommandBuffer| {
+                    *a_completed.lock().unwrap() = Some(std::time::Instant::now());
+                }))
+                .unwrap();
+        }
+        running.commit().unwrap();
+        taken_in(&device);
+        let a_taken = step();
+        let behind = fill(&first, 0);
+        behind.commit().unwrap();
+        taken_in(&device);
+        behind.wait_until_scheduled().unwrap();
+        let b_scheduled = step();
+        // `X`, held behind `A` and `B` where the driver merges.
+        let before_x = device.work_counts();
+        let x = fill(&first, 1);
+        let (completed, x_completed) = std::sync::mpsc::channel::<()>();
+        x.add_completed_handler(Box::new(move |_: &CommandBuffer| {
+            let _ = completed.send(());
+        }))
+        .unwrap();
+        let x_committed = std::time::Instant::now();
+        x.commit().unwrap();
+        taken_in(&device);
+        x.wait_until_scheduled().unwrap();
+        let kept = device.work_counts().groups_kept_pending - before_x.groups_kept_pending;
+        let steps = [a_taken, b_scheduled, step()];
+        // `Y`, whose submission handler waits for `X`'s completed handler.
+        let before_y = device.work_counts();
+        let y = fill(&second, 2);
+        let shared = first.vk_queue_sharing().0 == second.vk_queue_sharing().0;
+        let (report, reported) = std::sync::mpsc::channel();
+        {
+            let running = running.clone();
+            y.add_submission_handler(Box::new(move |taken: &CommandBuffer| {
+                let counts = taken.device().work_counts();
+                let a_ran = running.status() != CommandBufferStatus::Completed;
+                let start = std::time::Instant::now();
+                let reached = x_completed.recv_timeout(WAIT).is_ok();
+                let _ = report.send((a_ran, counts, reached, start.elapsed()));
+            }))
+            .unwrap();
+        }
+        y.commit().unwrap();
+        let (a_ran, counts, reached, waited) = reported
+            .recv_timeout(WAIT * 2)
+            .expect("Y's submission handler ran");
+        for (name, command_buffer) in [("A", &running), ("B", &behind), ("X", &x), ("Y", &y)] {
+            command_buffer.wait_until_completed_for(WAIT).unwrap();
+            assert_eq!(command_buffer.error(), None, "{name}");
+        }
+        for (at, buffer) in buffers.iter().enumerate() {
+            let wrong = (bytes_of(buffer).iter())
+                .filter(|&&byte| byte != at as u8 + 1)
+                .count();
+            assert_eq!(wrong, 0, "buffer {at}: bytes off its fill");
+        }
+        let a_completed_after_x =
+            (*a_completed.lock().unwrap()).and_then(|at| at.checked_duration_since(x_committed));
+        HandlerWait {
+            device: device.name().to_owned(),
+            merging,
+            shared,
+            kept,
+            a_ran,
+            grouped: counts.batches_grouped - before_y.batches_grouped,
+            submissions: counts.queue_submissions - before_y.queue_submissions,
+            reached,
+            waited,
+            ends: group_ends(&before_y, &device.work_counts()),
+            steps,
+            a_completed_after_x,
+        }
+    };
+    layer_reported_nothing_at_all(&messages);
+    eprintln!(
+        "GROUPED-HANDLER-WAIT on {}: Y's handler waited {:?}; groups from Y's commit by what \
+         sent them {:?}; A completed {:?} after X's commit; since A's commit, once A was taken \
+         in: {}; once B was scheduled: {}; once X was scheduled: {}; {seen:?}",
+        seen.device,
+        seen.waited,
+        seen.ends,
+        seen.a_completed_after_x,
+        seen.steps[0].line(),
+        seen.steps[1].line(),
+        seen.steps[2].line()
+    );
+    seen
+}
+
+/// A submission handler of one queue's command buffer `Y` that waits for the completed handler of
+/// `X`, committed before it on another queue, sees it, as Metal's scheduled handler does (probe
+/// `cross_queue_handler_waits`, the module docs): where the two queues submit to one `VkQueue`
+/// on a driver that merges, `X` waits held behind running work (`A`, then `B`), `Y` joins its
+/// group, and the group goes to the driver before `Y`'s handler runs, where it once stayed kept
+/// behind it until the handler gave up. `A` is made longer until it outlasts the handler's start,
+/// as [`behind_while_a_runs`] does. Nothing is asked of two command buffers of one queue: Metal
+/// runs one queue's handlers one at a time, so a handler that waits for a completed handler of its
+/// own queue never sees it there either (the probe's `scheduled-one-queue`). The device groups
+/// under the default completion with its merge check held (`DeviceOptions::assume_submissions_merge`),
+/// so the group is held on every run, not only where the check's timing read a merge; on a device
+/// whose queues take two `VkQueue`s (`shared` false) no group can hold the two, and the handler's
+/// wait alone is checked.
+#[test]
+fn a_held_group_goes_before_another_queue_s_submission_handler_runs() {
+    let mut stretch = 1;
+    let seen = loop {
+        let seen = behind_another_queue_s_handler(stretch);
+        assert!(
+            seen.merging,
+            "the merge check did not hold as assumed: {seen:?}"
+        );
+        if !seen.shared || seen.a_ran || stretch >= 1 << (BEHIND_RUNS - 1) {
+            break seen;
+        }
+        stretch *= 2;
+        eprintln!(
+            "GROUPED-HANDLER-WAIT: A ended before Y's handler began: A {stretch} times as long"
+        );
+    };
+    assert!(
+        seen.reached,
+        "X's completed handler never reached Y's: {seen:?}"
+    );
+    if seen.shared {
+        assert!(
+            seen.a_ran,
+            "A ended before Y's handler began, at every run: {seen:?}"
+        );
+        assert_eq!(seen.kept, 1, "X was not kept behind A and B: {seen:?}");
+        assert_eq!(
+            (seen.grouped, seen.submissions),
+            (2, 1),
+            "X and Y did not go in one submission before Y's handler: {seen:?}"
+        );
+    }
+}
+
+/// What [`behind_a_kept_signal`] saw.
+#[derive(Debug)]
+struct KeptSignalWait {
+    /// The device's name.
+    device: String,
+    merging: bool,
+    /// Whether the two queues submit to one `VkQueue`.
+    shared: bool,
+    /// The groups kept from `X`'s commit to its scheduling.
+    kept: u64,
+    /// Whether `A` still ran once `Y` was taken in.
+    a_ran: bool,
+    /// Whether `X`'s group went while `B` still ran (at `A`'s completion turn); `None` where no
+    /// group went before `B` completed and the wait gave up.
+    sent_while_b_ran: Option<bool>,
+    /// From `X`'s completed handler to `Y`'s.
+    y_after_x: Option<std::time::Duration>,
+    /// The groups from `Y`'s take-in by what sent them ([`group_ends`]).
+    ends: [u64; 7],
+}
+
+/// Two long command buffers `A` then `B` on one queue, of `stretch` times the fills the
+/// calibration takes; `X` behind them on that queue, which fills a buffer and signals a shared
+/// event to 1; then `Y` on another queue, unchecked, which waits for that value and fills
+/// another. Where the queues share one `VkQueue` on a driver that merges, `X` is held and kept
+/// while `A` and `B` run, and `Y`, waiting on the host for a signal the kept group carries
+/// (`event_timeline.rs`), sends no group.
+fn behind_a_kept_signal(stretch: usize) -> KeptSignalWait {
+    let messages = Messages::default();
+    let cache = ScratchCache::new().unwrap();
+    let seen = {
+        // The default completion, its merge check held, so every run holds the group, as in
+        // [`behind_another_queue_s_handler`].
+        // Its two queues take the device's queue plan (`at_plan`): one `VkQueue` where the device
+        // has one.
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+            options.policy.completion = CompletionPolicy::Grouped;
+            options.assume_submissions_merge = true;
+            at_plan(options)
+        })
+        .unwrap();
+        let merging = merges(&device);
+        let (first, second) = (
+            device.new_command_queue().unwrap(),
+            device.new_command_queue().unwrap(),
+        );
+        let large = device
+            .new_buffer(RUNNING_FILL, ResourceOptions::private())
+            .unwrap();
+        let buffers: Vec<Buffer> = (0..2)
+            .map(|_| device.new_buffer(BYTES, ResourceOptions::shared()).unwrap())
+            .collect();
+        let event = device.new_shared_event().unwrap();
+        // The second queue's first command buffer, and the device's first work, before `A`.
+        let warm = second.command_buffer().unwrap();
+        let mut blit = warm.blit_command_encoder().unwrap();
+        blit.fill_buffer(&buffers[1], 0..BYTES, 0).unwrap();
+        blit.end_encoding().unwrap();
+        warm.commit().unwrap();
+        warm.wait_until_completed_for(WAIT).unwrap();
+        let fills = running_fills(&first, &large, std::time::Duration::from_millis(100)) * stretch;
+        let long = || {
+            let command_buffer = first.command_buffer().unwrap();
+            let mut blit = command_buffer.blit_command_encoder().unwrap();
+            for at in 0..fills {
+                blit.fill_buffer(&large, 0..RUNNING_FILL, at as u8).unwrap();
+            }
+            blit.end_encoding().unwrap();
+            command_buffer
+        };
+        let completed_at = |command_buffer: &CommandBuffer| {
+            let at = Arc::new(Mutex::new(None));
+            let seen = Arc::clone(&at);
+            command_buffer
+                .add_completed_handler(Box::new(move |_: &CommandBuffer| {
+                    *seen.lock().unwrap() = Some(std::time::Instant::now());
+                }))
+                .unwrap();
+            at
+        };
+        // `A`, then `B` behind it, each submitted as it is taken in: two submissions in flight.
+        let running = long();
+        running.commit().unwrap();
+        taken_in(&device);
+        let behind = long();
+        behind.commit().unwrap();
+        taken_in(&device);
+        behind.wait_until_scheduled().unwrap();
+        // `X`, held behind `A` and `B` where the driver merges.
+        let before_x = device.work_counts();
+        let x = first.command_buffer().unwrap();
+        let mut blit = x.blit_command_encoder().unwrap();
+        blit.fill_buffer(&buffers[0], 0..BYTES, 1).unwrap();
+        blit.end_encoding().unwrap();
+        x.encode_signal_event(EventRef::from(&event), 1).unwrap();
+        let x_completed = completed_at(&x);
+        x.commit().unwrap();
+        taken_in(&device);
+        x.wait_until_scheduled().unwrap();
+        let kept = device.work_counts().groups_kept_pending - before_x.groups_kept_pending;
+        // `Y`, on the other queue, unchecked, waiting for `X`'s signal.
+        let y = second.command_buffer().unwrap();
+        y.encode_wait_for_event(EventRef::from(&event), 1).unwrap();
+        let mut blit = y.blit_command_encoder().unwrap();
+        blit.fill_buffer(&buffers[1], 0..BYTES, 2).unwrap();
+        blit.end_encoding().unwrap();
+        let y_completed = completed_at(&y);
+        y.commit().unwrap();
+        taken_in(&device);
+        let taken = device.work_counts();
+        let a_ran = running.status() != CommandBufferStatus::Completed;
+        let shared = first.vk_queue_sharing().0 == second.vk_queue_sharing().0;
+        // The first group to go after `Y`'s take-in is `X`'s: read whether `B` still ran once it
+        // had gone (the counts read first, then `B`'s status).
+        let gone = |counts: &WorkCounts| group_ends(&taken, counts).iter().sum::<u64>() > 0;
+        let deadline = std::time::Instant::now() + WAIT;
+        let sent_while_b_ran = loop {
+            let counts = device.work_counts();
+            let b_done = behind.status() == CommandBufferStatus::Completed;
+            if gone(&counts) {
+                break Some(!b_done);
+            }
+            if b_done || std::time::Instant::now() >= deadline {
+                break gone(&device.work_counts()).then_some(false);
+            }
+            std::thread::yield_now();
+        };
+        for (name, command_buffer) in [("A", &running), ("B", &behind), ("X", &x), ("Y", &y)] {
+            command_buffer.wait_until_completed_for(WAIT).unwrap();
+            assert_eq!(command_buffer.error(), None, "{name}");
+            assert_eq!(
+                command_buffer.status(),
+                CommandBufferStatus::Completed,
+                "{name}"
+            );
+        }
+        for (at, buffer) in buffers.iter().enumerate() {
+            let wrong = (bytes_of(buffer).iter())
+                .filter(|&&byte| byte != at as u8 + 1)
+                .count();
+            assert_eq!(wrong, 0, "buffer {at}: bytes off its fill");
+        }
+        let y_after_x = (*y_completed.lock().unwrap())
+            .zip(*x_completed.lock().unwrap())
+            .and_then(|(y, x)| y.checked_duration_since(x));
+        KeptSignalWait {
+            device: device.name().to_owned(),
+            merging,
+            shared,
+            kept,
+            a_ran,
+            sent_while_b_ran,
+            y_after_x,
+            ends: group_ends(&taken, &device.work_counts()),
+        }
+    };
+    layer_reported_nothing_at_all(&messages);
+    eprintln!("GROUPED-KEPT-SIGNAL on {}: {seen:?}", seen.device);
+    seen
+}
+
+/// An unchecked command buffer `Y` of one queue that waits for a shared event's value a group
+/// kept on the other queue's `VkQueue` carries (`X`'s, behind `A` and `B`) delays that group no
+/// longer than any kept group: it goes at the completion turn that leaves one submission in
+/// flight (`A`'s, `B` still running), `Y` goes once `X`'s signal landed, and every command buffer
+/// completes with its own fill. `Y` holds its wait on the host (a shared event's,
+/// `event_timeline.rs`), so it neither sends the group nor waits past that turn; a group kept
+/// past it would still be held when `B` completed. `A` and `B` are made longer until `A` outlasts
+/// `Y`'s take-in, as [`behind_while_a_runs`] does. The queues take the device's queue plan: on a
+/// device whose queues take two `VkQueue`s no group holds `X` behind work of `Y`'s `VkQueue`, and
+/// only the completions are checked.
+#[test]
+fn a_shared_event_wait_for_a_kept_group_s_signal_ends_at_the_next_completion_turn() {
+    let mut stretch = 1;
+    let seen = loop {
+        let seen = behind_a_kept_signal(stretch);
+        assert!(
+            seen.merging,
+            "the merge check did not hold as assumed: {seen:?}"
+        );
+        if !seen.shared || seen.a_ran || stretch >= 1 << (BEHIND_RUNS - 1) {
+            break seen;
+        }
+        stretch *= 2;
+        eprintln!("GROUPED-KEPT-SIGNAL: A ended before Y was taken in: A {stretch} times as long");
+    };
+    assert!(
+        seen.y_after_x.is_some(),
+        "Y completed before X, whose signal it waits for: {seen:?}"
+    );
+    if seen.shared {
+        assert!(
+            seen.a_ran,
+            "A ended before Y was taken in, at every run: {seen:?}"
+        );
+        assert_eq!(seen.kept, 1, "X was not kept behind A and B: {seen:?}");
+        assert_eq!(
+            seen.sent_while_b_ran,
+            Some(true),
+            "X's group was not sent at A's completion turn, while B ran: {seen:?}"
+        );
+        // `group_ends`' second count: a group a waiting head sent.
+        assert_eq!(seen.ends[1], 0, "Y's wait sent X's group: {seen:?}");
+    }
 }

@@ -106,7 +106,7 @@ pub enum RuntimeFact {
     /// `layout` at the stride the encoder binds it with (`setBuffer:offset:attributeStride:
     /// atIndex:` and its forms), its stage-input layout being `MTLBufferLayoutStrideDynamic`: the
     /// binder writes the bound stride into `PushField::StageInStride`, or 0 for a buffer bound
-    /// without one, as Metal reads it. A layout of a fixed stride reads its own, compiled in,
+    /// without one, as Metal reads it (`MTLAttributeStrideStatic` is its low 32 bits). A layout of a fixed stride reads its own, compiled in,
     /// whatever the bind's, and records nothing.
     StageInStride { layout: u32 },
     /// A read-only slot that Profile F's per-stage storage-buffer fallback may read through a
@@ -329,6 +329,19 @@ pub enum RuntimeFact {
     /// (`InvalidDescriptor(MaxCallStackDepth)` otherwise); a `Function` stage is compiled under
     /// its pipeline's. Nothing on the device reads it.
     CallStackDepth { depth: u32 },
+    /// The kernel was compiled as the kernel of a compute pipeline of OpenCL mode
+    /// (`LoweringInputs::open_cl_mode`): it takes the three hidden buffers at indices 0 to 2 and
+    /// its own buffer-indexed arguments 3 past their indices. A `StageSource::Compiled` kernel
+    /// serves only a pipeline of the mode it was compiled in (`InvalidDescriptor(OpenClMode)`
+    /// otherwise); a `Function` kernel is compiled under its pipeline's. Nothing on the device
+    /// reads it.
+    OpenClMode,
+    /// The kernel's only simdgroup semantics are the barriers its lockstep order took
+    /// (`lower::simd::lockstep`), on a flattened tier, and they order only pairs whose threads meet
+    /// where a simdgroup spans two rows of its threadgroup (`Lockstep::rows`). A dispatch region
+    /// of one row runs on the planned pipeline whatever its width, without whole subgroups, where
+    /// no pair meets; any other region keeps the tier's whole subgroups or emulated simdgroups.
+    RowLockstep,
     /// The kernel was compiled under `VariantKey::flat_grid` (`LoweringInputs::flat_grid`): it
     /// runs any grid in threadgroups of its own size, reading the grid from the 32-byte region
     /// record at its `PushField::ReplayRegionAddress`, which a preprocess writes beside the
@@ -614,12 +627,31 @@ pub enum RuntimeFact {
         kept: crate::vk::ColorComponentFlags,
     },
     /// On a device that orders framebuffer fetch through rasterization-order input attachments,
+    /// the function computes Metal's blend `blend` into color attachment `color`, held with its
+    /// channels rotated (`ARGB8Unorm` in `R8G8B8A8_UNORM`), where no Vulkan state on that image
+    /// gives it (`color_writes::shader_rotated_blend`): it reads the texel through the
+    /// attachment's input attachment (`RuntimeFact::FramebufferFetch`), blends its output over it
+    /// in Metal's channel order by Metal's 8-bit unorm blend, and writes the result through its
+    /// first output, rotated as every output there is. `kept` is the format's channels the
+    /// descriptor's write mask leaves out, which the attachment's write mask keeps. Link gives the
+    /// attachment no Vulkan blend, and a pipeline of another blend or write mask there is
+    /// `NeedsInput(FramebufferFetch)`.
+    RotatedInputBlend {
+        color: u32,
+        blend: crate::pipeline::lower_inputs::BlendEquation,
+        kept: crate::vk::ColorComponentFlags,
+    },
+    /// On a device that orders framebuffer fetch through rasterization-order input attachments,
     /// the function writes color attachment `color`, which renders through a view of its word
     /// (`metal::format::WordAttachment`, an 8-bit sRGB one), under a write mask of some of the
     /// word's channels: it reads the texel's word through the attachment's input attachment
     /// (`RuntimeFact::FramebufferFetch`) and writes Metal's word of its output with the fields of
     /// the channels `kept` (those of the word the descriptor's write mask leaves out) taken from
-    /// the word read. Link writes the whole word, and a pipeline of another write mask there is
+    /// the word read. Likewise an extended-range attachment whose one raw component holds three
+    /// codes (`BGR10_XR`, the two-plane forms' color word, their `_sRGB` twins) written unblended
+    /// under a mask of some of them: the function writes the kernel write's encode of its output
+    /// with the codes of the channels `kept` taken from the texel read. Link writes the whole word
+    /// (every raw component), and a pipeline of another write mask there is
     /// `NeedsInput(FramebufferFetch)`.
     WordInputMerge {
         color: u32,
@@ -743,10 +775,17 @@ pub enum RuntimeFact {
     /// (`lower::dispatch`'s partial object threadgroups): where its `DispatchRegion` (or a folded
     /// variant's region record) carries `lower::dispatch::NONUNIFORM`, it answers its
     /// threadgroup's threads, `min(L, threads_per_grid − position · L)` per axis, and its
-    /// invocations past them return before the body. Recorded for an object function whose body
-    /// holds no workgroup barrier; the binder refuses a draw that leaves a partial object
-    /// threadgroup of any other (`NotImplemented(MeshShading)`).
+    /// invocations past them run none of the body: they return before it, or, in a body that
+    /// holds a workgroup barrier, walk it predicated, never live, to each barrier. Recorded for
+    /// every object function but one whose barriers are uniform and whose predicated walk's vote
+    /// word does not fit its workgroup memory; the binder refuses a draw that leaves a partial
+    /// object threadgroup of that one (`NotImplemented(MeshShading)`).
     PartialObjectThreadgroups,
+    /// The function reads the texture bound to the slot through a sampler whose addressing may
+    /// read the border texel (Metal 4.1 `read(sampler s, ...)`): that texel is the border color in
+    /// the bound pixel format's channels, through the texture's swizzle, which the shader takes from
+    /// `SpecKey::BorderTexels`, which the binder sets from the bound texture.
+    BorderTexels { slot: SlotRef },
 }
 
 /// What one compile made of a slot of a `RuntimeFact::UniformViewRange`.

@@ -1,8 +1,9 @@
 //! Device tests of 2D textures (and 2D arrays) over no-copy buffers on the device the cfg selects.
 //! A texture over the caller's host pages is a shadow image the encoders copy the texels into and
-//! back (`shadowed-texture`), or under `HostPageTexturePolicy::InPlace` one that only reads is an
-//! image aliasing the pages where the device's check passed: either reads and writes the caller's
-//! bytes as Metal's texture over the buffer does.
+//! back (`shadowed-texture`), or under `HostPageTexturePolicy::InPlace` an image aliasing the
+//! pages where the device's check passed for each of its accesses (one that reads, renders, or a
+//! shader writes of texels of 4, 8 or 16 bytes): either reads and writes the caller's bytes as
+//! Metal's texture over the buffer does.
 //!
 //! - [`textures_over_no_copy_buffers_read_and_write_the_caller_s_pages`], under the validation
 //!   layer: the consumer's surface formats (and `BGR10_XR`, an extended-range format held in an
@@ -20,10 +21,10 @@
 //!   (`WorkCounts::shadowed_textures`) and made without zeroing its image (`shadows_zeroed`,
 //!   `images_started_on_the_host`: its copy in writes every texel first), and making it, and
 //!   making it again, asks the driver no format's modifier features (`modifier_feature_queries`);
-//!   under `InPlace`, once the device's check answered, one of `ShaderRead` usage alone is in place
-//!   (`vk_image` answers its image, `host_textures_in_place`) or a shadow counted by why, and every
-//!   other a shadow. The second making takes the same form. Each texture's form is printed
-//!   (`NOCOPY-TEXTURE`).
+//!   under `InPlace`, once the device's check answered, each is in place (`vk_image` answers its
+//!   image, `host_textures_in_place`) or a shadow counted by why, but one with `ShaderWrite` usage
+//!   of 1- or 2-byte texels, which no check covers, a shadow. The second making takes the same
+//!   form. Each texture's form is printed (`NOCOPY-TEXTURE`).
 //! - [`two_slice_arrays_over_no_copy_buffers_read_and_write_the_caller_s_pages`], under the
 //!   validation layer: two-slice `RGBA8Unorm` 2D arrays made by the linear call, a 4x4 sampled one
 //!   and an 8x8 render target, read and written a slice at a time at Metal's slice places
@@ -32,7 +33,10 @@
 //!   per format and row pitch (packed, and padded by 64 bytes): render passes over the texture that
 //!   load, blend and store, and clear and blend, match a private texture of the same bytes byte
 //!   for byte, read through the texture and through the buffer, the bytes between padded rows
-//!   untouched (`NOCOPY-BLEND`).
+//!   untouched (`NOCOPY-BLEND`). But a clear's channel, and a blend over it, may stand a code
+//!   from the private texture's on a device whose clear is not Metal's conversion, as Vulkan
+//!   leaves a clear's rounding to the device, which may round it by the image
+//!   ([`clear_codes_apart`]), where each image's clear announces `device-color-conversion`.
 //! - [`surface_frame_costs`], without the validation layer, report only (built in release for the
 //!   numbers): the consumer's display surface, a 1920x1080 `RGBA16Float` or `BGRA8Unorm` texture
 //!   of an IOSurface plane over a no-copy buffer of the surface's pages, written each frame by a
@@ -43,7 +47,7 @@
 //!   and fastest GPU time of a frame's command buffer and of the whole frame on the host (encoding
 //!   to completion), and what the device announced.
 
-use super::degrade_notices::counts;
+use super::degrade_notices::{clear_conversions, counts};
 use super::first_use_writes::CHECK_WAIT;
 use super::host_memory::{counting, no_copy, not_importable, Mapping, GUEST_PAGE};
 use super::{
@@ -52,7 +56,7 @@ use super::{
 };
 use crate::air_library::AirLibrary;
 use crate::gpu::TEST_DEVICE;
-use metal2vulkan::device::HostPageTexturePolicy;
+use metal2vulkan::device::{DriverFact, HostPageTexturePolicy};
 use metal2vulkan::metal::{
     BlendFactor, ColorWriteMask, PixelFormat, PrimitiveType, TextureType, TextureUsage,
 };
@@ -358,10 +362,12 @@ fn read_and_write_the_caller_s_pages_under(
             );
             let shadowed = counted.shadowed_textures - before.shadowed_textures;
             let in_place = counted.host_textures_in_place - before.host_textures_in_place;
-            // Under `Shadow`, and for a texture that renders or writes, a shadow; under `InPlace`
-            // one that only reads may be in place, counted so.
-            let may_alias =
-                policy == HostPageTexturePolicy::InPlace && usage == TextureUsage::SHADER_READ;
+            // Under `Shadow`, and for a texture that writes through a shader whose texels are of
+            // a width the device's check stores none of (1 or 2 bytes), a shadow; under `InPlace`
+            // every other may be in place, counted so.
+            let writes = usage.contains(TextureUsage::SHADER_WRITE);
+            let may_alias = policy == HostPageTexturePolicy::InPlace
+                && (!writes || [4, 8, 16].contains(&texel));
             assert!(
                 !made || may_alias,
                 "{what}: a texture over host pages aliased"
@@ -891,8 +897,29 @@ fn upload(queue: &CommandQueue, texture: &Texture, bytes: &[u8], bpr: u64) {
     assert_eq!(command_buffer.error(), None);
 }
 
-/// The texels of `a` and `b` (`texel` bytes each) that differ, and the first.
-fn differing(a: &[u8], b: &[u8], texel: u64) -> (usize, Option<usize>) {
+/// The codes a clear's channel, and a blend over it, may stand from another image's clear of the
+/// same value on `device`: none where its clear is Metal's conversion
+/// (`DriverFact::ColorClearIsMetals`), else one. Vulkan lets a clear store either code nearest a
+/// normalized channel's value and leaves a float's rounding to the device, which ANV on the Iris
+/// Xe of RPL-P takes by the image: (0.1, 0.2, 0.3, 0.4) clears an `RGBA8Unorm` or `BGRA8Unorm`
+/// channel's 0.1 (25.5 codes) to `0x1a` in a private optimal image and to `0x19` in an image in
+/// place over the pages or in a shadow that takes its word view
+/// (`DriverFact::ShadowCopyBackDispatchFaster`), and an `RGBA16Float` blend of 0.6 at alpha 0.5
+/// over its clear's 0.3 stores `0x3733` in the private image and `0x3732` in place.
+pub(super) fn clear_codes_apart(device: &Device) -> u32 {
+    let facts = &device.properties().driver_facts;
+    u32::from(!facts.contains(&DriverFact::ColorClearIsMetals))
+}
+
+/// The texels of `a` and `b` (`texel` bytes each, of four channels: a byte each, or a
+/// little-endian 16-bit code) with a channel more than `codes` codes apart, and the first.
+pub(super) fn differing_by(a: &[u8], b: &[u8], texel: u64, codes: u32) -> (usize, Option<usize>) {
+    let width = (texel / 4).max(1) as usize;
+    let code = |c: &[u8]| {
+        c.iter()
+            .rev()
+            .fold(0u32, |v, &byte| v << 8 | u32::from(byte))
+    };
     let mut count = 0;
     let mut first = None;
     for (i, (x, y)) in a
@@ -900,7 +927,11 @@ fn differing(a: &[u8], b: &[u8], texel: u64) -> (usize, Option<usize>) {
         .zip(b.chunks_exact(texel as usize))
         .enumerate()
     {
-        if x != y {
+        let apart = x
+            .chunks_exact(width)
+            .zip(y.chunks_exact(width))
+            .any(|(x, y)| code(x).abs_diff(code(y)) > codes);
+        if apart {
             count += 1;
             first.get_or_insert(i);
         }
@@ -914,13 +945,37 @@ fn differing(a: &[u8], b: &[u8], texel: u64) -> (usize, Option<usize>) {
 /// blends over the left half, read through the texture and through the buffer in the same command
 /// buffer; a blit's write of the buffer, then a pass that loads it and blends over the right half,
 /// in one command buffer; and a pass that clears and blends over the left half. The pages hold the
-/// reference's texels after each, and the bytes between the rows stay the caller's. The form is
-/// printed (`NOCOPY-BLEND`). One test a format and pitch, each its own process.
+/// reference's texels after each, and the bytes between the rows stay the caller's. Under each
+/// setting of `host_page_textures`: under `InPlace`, once the device's check answered, the render
+/// target is in place where its check passed for an image that renders. The form is printed
+/// (`NOCOPY-BLEND`). One test a format and pitch, each its own process.
 fn passes_blend_load_and_store_as_private_textures(pf: PixelFormat, texel: u64, pad: u64) {
+    for policy in [
+        HostPageTexturePolicy::Shadow,
+        HostPageTexturePolicy::InPlace,
+    ] {
+        passes_blend_load_and_store_under(pf, texel, pad, policy);
+    }
+}
+
+/// [`passes_blend_load_and_store_as_private_textures`] on a device of `policy`.
+fn passes_blend_load_and_store_under(
+    pf: PixelFormat,
+    texel: u64,
+    pad: u64,
+    policy: HostPageTexturePolicy,
+) {
     let cache = ScratchCache::new().unwrap();
     let messages = Messages::default();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+            options.policy.host_page_textures = policy;
+            options.announce_each = [Degradation::DeviceColorConversion].into();
+        })
+        .unwrap();
+        if policy == HostPageTexturePolicy::InPlace {
+            assert!(device.settle_in_place_checks(CHECK_WAIT));
+        }
         let queue = device.new_command_queue().unwrap();
         let pipeline = blending(&device, pf);
         let row = W * texel;
@@ -940,19 +995,25 @@ fn passes_blend_load_and_store_as_private_textures(pf: PixelFormat, texel: u64, 
         d.resource_options = ResourceOptions::private();
         let private = device.new_texture(&d).unwrap();
         let what = format!(
-            "{} {W}x{H}, rows of {bpr} bytes ({})",
+            "{policy:?}, {} {W}x{H}, rows of {bpr} bytes ({})",
             pf.name(),
             form(aliased(&texture))
         );
-        let check = |round: &str, ours: &[u8], reference: &[u8]| {
+        assert!(
+            policy == HostPageTexturePolicy::InPlace || !aliased(&texture),
+            "{what}: aliased under the shadow's setting"
+        );
+        let check_by = |round: &str, ours: &[u8], reference: &[u8], codes: u32| {
             let (ours, reference) = (texel_rows(ours, bpr, row), texel_rows(reference, bpr, row));
-            let (count, first) = differing(&ours, &reference, texel);
+            let (count, first) = differing_by(&ours, &reference, texel, codes);
             assert!(
                 count == 0,
-                "{what}, {round}: {count} texels differ from the private texture's, the first \
-                 at texel {first:?}"
+                "{what}, {round}: {count} texels differ from the private texture's by more than \
+                 {codes} codes, the first at texel {first:?}"
             );
         };
+        let check =
+            |round: &str, ours: &[u8], reference: &[u8]| check_by(round, ours, reference, 0);
         // The bytes between the rows, which no pass or blit through the texture writes.
         let between = |round: &str, expected: &[u8]| {
             assert!(
@@ -1038,7 +1099,9 @@ fn passes_blend_load_and_store_as_private_textures(pf: PixelFormat, texel: u64, 
         );
         check("that pass, in the pages", &mapping.read(0..n), &reference);
         between("the blit's write and the pass", &second);
-        // A pass that clears and blends.
+        // A pass that clears and blends, each image's clear announced, within the codes its
+        // conversion may stand apart (`clear_codes_apart`).
+        messages.take_notices();
         let (reference, _) = round(
             &queue,
             &pipeline,
@@ -1051,6 +1114,7 @@ fn passes_blend_load_and_store_as_private_textures(pf: PixelFormat, texel: u64, 
             },
             bpr,
         );
+        let private_cleared = clear_conversions(&messages.take_notices());
         let (ours, _) = round(
             &queue,
             &pipeline,
@@ -1063,8 +1127,27 @@ fn passes_blend_load_and_store_as_private_textures(pf: PixelFormat, texel: u64, 
             },
             bpr,
         );
-        check("a pass that clears and blends", &ours, &reference);
-        check("that pass, in the pages", &mapping.read(0..n), &reference);
+        let ours_cleared = clear_conversions(&messages.take_notices());
+        let codes = clear_codes_apart(&device);
+        check_by("a pass that clears and blends", &ours, &reference, codes);
+        // Each image's clear of the same value announced alike, and announced where it stood
+        // apart.
+        let apart = texel_rows(&ours, bpr, row) != texel_rows(&reference, bpr, row);
+        let notices = format!("the private texture's {private_cleared}, ours {ours_cleared}");
+        assert!(
+            codes == 0 || private_cleared == ours_cleared,
+            "{what}: the clears' device-color-conversion notices: {notices}"
+        );
+        assert!(
+            !apart || (private_cleared > 0 && ours_cleared > 0),
+            "{what}: a clear apart from the private texture's, unannounced: {notices}"
+        );
+        check_by(
+            "that pass, in the pages",
+            &mapping.read(0..n),
+            &reference,
+            codes,
+        );
         between("the pass that clears", &second);
         eprintln!(
             "NOCOPY-BLEND on {}: {what}: every round as a private texture's",

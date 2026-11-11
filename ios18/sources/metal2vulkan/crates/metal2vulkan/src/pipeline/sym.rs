@@ -413,7 +413,10 @@ pub enum ResourceKind {
     /// The `half` shadow of extended-range color attachment `n` (`ResourceSlot::index` too) for
     /// the draw's render pass instance (`VariantKey::extended_shadows`): an `RGBA16_SFLOAT` 2D
     /// storage image of the attachment's extent holding Metal's tile value of each texel, which
-    /// the function's interlocked storage form reads and writes beside the attachment's codes.
+    /// the function's interlocked storage form reads and writes beside the attachment's codes. In
+    /// a multisampled pipeline it holds the samples as the attachment's storage image does: a
+    /// multisampled image of the pipeline's samples, or a 2D array of one layer per sample
+    /// (`StorageAttachmentView::SamplePlanes`'s shape).
     ExtendedShadow(u32),
     /// The snapshot of the texture bound at fragment texture slot `n` (`ResourceSlot::index` too)
     /// for a draw that reads it through one (`LoweringInputs::snapshot_textures`): an
@@ -830,6 +833,59 @@ pub enum SpecKey {
     /// known (a reading of the module alone, `StageModule::precision_notes_under`), such a test
     /// holds. A slot bound to no sampler takes 0.
     BoundSamplerWord(SlotRef),
+    /// Boolean: a texture the stage's handles can name is of a two-plane YCbCr class (its
+    /// `metal::texel_format::TexelFormat::PACKED` field `YCbCr2048`, `YCbCr8192` or
+    /// `YCbCrExtended8192`): a heap member of the command reaching the stage, one it makes
+    /// resident (`BindShape::used`) or binds at a texture slot of the stage
+    /// (`bind::heap`'s members). Read by a specialized note's test alone
+    /// ([`SpecTest`](crate::pipeline::SpecTest)), as [`BoundSamplerWord`](Self::BoundSamplerWord)
+    /// is: a plan gives it (`BindingPlan::specialized_value`), and where it is not known such a
+    /// test holds. A texture the command neither names nor makes resident, which a handle loaded
+    /// from memory may still reach and whose read Metal leaves undefined, is not counted.
+    HeapYCbCrTextures(Stage),
+    /// Two bits: 1 where a texture the stage's handles can name is one a heap holds by its raw
+    /// texels alone (`bind::heap::heap_raw_form`: an unswizzled, not sparse texture of one sample
+    /// of a form of `ExtendedRange::HEAP_READ`, whose texels the function's `float` read, sample
+    /// or gather decodes by the device's arithmetic, `PrecisionNote::DevicePackConversion`), and 2
+    /// where one such is of a form whose linear sample the function filters by the device's
+    /// arithmetic (not a bfloat form, whose sample reads the nearest texel under either filter,
+    /// `PrecisionNote::BicubicFilterArithmetic`): of the heap members of the command reaching the
+    /// stage, as for [`HeapYCbCrTextures`](Self::HeapYCbCrTextures), and read by a specialized
+    /// note's test alone, given by a plan, as that is.
+    HeapRawTextures(Stage),
+    /// Four bits: the families of the float textures the stage's handles can name whose texel may
+    /// hold a NaN a `half` write stores (`lower::texture::half_write_nans`), each a bit of
+    /// `bind::heap::nan_family`: 1 a 16-bit float format, 2 a 32-bit float one, 4 a packed
+    /// small float one (`RG11B10Float`, `RGB9E5Float`), 8 a float format of none of those and
+    /// none whose texels hold no NaN (normalized, sRGB, extended-range); of the heap members of
+    /// the command reaching the stage, as for [`HeapYCbCrTextures`](Self::HeapYCbCrTextures), and
+    /// read by a specialized note's test alone, given by a plan, as that is.
+    HeapNanFamilies(Stage),
+    /// Boolean: a sampler state an argument buffer's sampler handle can name filters: one of the
+    /// bind state's argument samplers (`BindState::argument_samplers`, every live state, its
+    /// shape in `BindShape`) has a linear minification, magnification or mip filter, anisotropy,
+    /// or a cubic filter. Which state an argument buffer holds is in its memory, which no plan
+    /// reads. Read by a specialized note's test alone, given by a plan, as
+    /// [`HeapYCbCrTextures`](Self::HeapYCbCrTextures) is.
+    FilteringArgumentSampler,
+    /// Boolean: an element that a kernel's `[[stage_in]]` fetch of a thread-position step reads
+    /// in this dispatch region may lie past the first `2^32` bytes from its bind offset (default
+    /// true). Each such element is the region's origin plus the thread's position over the step
+    /// rate, clamped to the region's last element. Where an element lies there, the fetch's reach
+    /// check reads it as zero (`lower::stage_io::fetch`). The binder sets the key to false only
+    /// where every element of the region (or of the grid, in a region of size 0 on the axis)
+    /// fits, at the layout's stride and the end of its attributes' bytes. A false key drops the
+    /// check; it answers the same everywhere it holds. An indexed step's element is whatever its
+    /// index buffer holds, which bounds nothing, so an indexed step runs its check whatever the
+    /// key says.
+    StageInReach,
+    /// Metal's border texels of the texture bound to the slot (`u32`, default a four-channel
+    /// format's without a swizzle): bit `3c + b` is set where channel `c` (0 red to 3 alpha) of the
+    /// texel a read through a sampler hands back at an index outside the level on a border axis
+    /// reads 1 for border color `b` (`MTLSamplerBorderColor`'s value), the format's channels and
+    /// the texture's swizzle deciding it (`metal::sampler::border_texels`,
+    /// `RuntimeFact::BorderTexels`).
+    BorderTexels(SlotRef),
 }
 
 impl SpecKey {
@@ -1017,8 +1073,9 @@ pub enum PushField {
     /// (`BindState::line_band`).
     LineBand,
     /// The stride (`u32`) the compute encoder binds the kernel buffer at this Metal index with
-    /// (`setBuffer:offset:attributeStride:atIndex:` and its forms), 0 where it binds none, which
-    /// a `[[stage_in]]` layout of `MTLBufferLayoutStrideDynamic` fetches at
+    /// (`setBuffer:offset:attributeStride:atIndex:` and its forms, its low 32 bits,
+    /// `MTLAttributeStrideStatic`'s `2^32 - 1` included), 0 where it binds none, which a
+    /// `[[stage_in]]` layout of `MTLBufferLayoutStrideDynamic` fetches at
     /// (`RuntimeFact::StageInStride`).
     StageInStride(u32),
     /// The draw's viewport compensation for a vertex function compiled under

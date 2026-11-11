@@ -17,9 +17,22 @@
 //! The encoder's parts and held images only grow, so their counts tell a change apart.
 //!
 //! A command noted into the same state as the last one, but with some uses changed, records
-//! only the uses that differ from the last one's at their position (`NotedApart::fresh`): each
-//! use equal to the last command's at its place, and so the host aliases' uses beside it, is in
-//! the part already, and recording it again changes nothing. Its stages widen the part as before.
+//! only the uses that differ from the last one's at their position (`NotedApart::note_fresh`):
+//! each use equal to the last command's at its place, and so the host aliases' uses beside it, is
+//! in the part already, and recording it again changes nothing. Its stages widen the part as
+//! before, and the uses kept for the next command change at those positions alone.
+//!
+//! A use of bytes the kept use at its place covers (`Use::covers`: the same resource, tracking
+//! and access types, over a range holding its own) is in the part already too: the part keeps
+//! uses by the bytes they reach, and every answer it gives by overlap holds them, as do the host
+//! aliases' uses beside it (each a range of another resource over the same bytes) and the
+//! command buffer's notes of them. It is not recorded (`WorkCounts::uses_noted_covered`), as a
+//! draw whose buffer offset moves along a buffer reads from a later offset to its end, and it is
+//! kept in place of the covering one: the kept uses stay the last command's, each of them in the
+//! part, inside a use recorded before where it was not recorded itself. A draw moved whose moved
+//! uses each lie inside the uses before them at their place (`EncoderCore::note_moved`, a draw
+//! inside) compares none of them and keeps the covering ones: each kept use is then the last
+//! command's or one covering it, in the part either way.
 //!
 //! A draw's uses may begin with those of what its encoder made resident, which draws keep from
 //! one to the next and name by identity (`binding::ReachingPrefix`, with the identity of the keys
@@ -51,7 +64,7 @@ pub(super) struct NotedApart {
     stages: vk::PipelineStageFlags2,
     /// The identities of the uses of what its encoder made resident at their start and of the
     /// keys it reached through the resident set alone, where it had them
-    /// ([`note_draw`](NotedApart::note_draw)): then `uses` holds its uses past them, and
+    /// ([`note_draw_fresh`](NotedApart::note_draw_fresh)): then `uses` holds its uses past them, and
     /// `resident` nothing.
     prefix: Option<ReachingPrefix>,
     /// Its uses as given, and the keys of them it reached through the resident set alone, in
@@ -65,9 +78,13 @@ pub(super) struct NotedApart {
     rebinds: bool,
     /// The host aliases' version then.
     aliases: u64,
-    /// The uses of the command being noted that differ from the last one's
-    /// ([`fresh`](NotedApart::fresh)), kept so their storage is too.
+    /// The uses of the command being noted that differ from the last one's, and their
+    /// positions ([`note_fresh`](NotedApart::note_fresh)), kept so their storage is too.
     fresh: Vec<Use<ResourceKey>>,
+    fresh_at: Vec<usize>,
+    /// How many of the uses of the command being noted the kept use at their position covered
+    /// ([`covered`](NotedApart::covered)).
+    covered: usize,
     /// The uses of what the encoder made resident the last draw that began with some touched
     /// (`EncoderCore::note_draw`), by identity, with its encoder's core and whether the device
     /// had a buffer over host pages then: while those stand, a draw that begins with the same
@@ -90,7 +107,17 @@ pub(super) struct NotedInto {
     pub(super) aliases: u64,
 }
 
-/// Every field, its stages by their raw value (ash's flags print nothing).
+/// What [`NotedApart::note_moved`] found of a command's moved uses: some the kept uses neither
+/// equal nor cover, recorded (with what recording them answered, and how many were covered);
+/// none but some covered, noted already; or every use the last command's, noted as before.
+pub(super) enum Moved<T> {
+    Recorded(T, usize),
+    Covered(usize),
+    AsBefore,
+}
+
+/// Every field but the count of the last command's covered uses, its stages by their raw value
+/// (ash's flags print nothing).
 impl std::fmt::Debug for NotedApart {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let NotedApart {
@@ -104,6 +131,8 @@ impl std::fmt::Debug for NotedApart {
             rebinds,
             aliases,
             fresh,
+            fresh_at,
+            covered: _,
             touched,
             #[cfg(debug_assertions)]
                 whole: _,
@@ -122,6 +151,7 @@ impl std::fmt::Debug for NotedApart {
             .field("rebinds", rebinds)
             .field("aliases", aliases)
             .field("fresh", fresh)
+            .field("fresh_at", fresh_at)
             .field("touched", touched)
             .finish()
     }
@@ -177,6 +207,107 @@ impl NotedApart {
         holds
     }
 
+    /// Whether a command with `uses`, of which it reaches the keys `resident` through the
+    /// resident set alone, noted into `into`, may be noted as the last one moved
+    /// ([`note_moved`](Self::note_moved)): the last one was noted into `into`, with no uses of
+    /// what its encoder made resident, as many uses and the same keys reached so. Its caller
+    /// knows the positions where its uses may differ from the last one's, each of the same key
+    /// and access types (a draw whose calls moved buffer offsets alone:
+    /// `render/draw_again/rebound.rs`).
+    pub(super) fn moves(
+        &self,
+        (uses, resident): (&[Use<ResourceKey>], &BTreeSet<ResourceKey>),
+        into: NotedInto,
+    ) -> bool {
+        self.core == Some(into.core)
+            && self.into() == into
+            && self.prefix.is_none()
+            && self.uses.len() == uses.len()
+            && self.resident.iter().eq(resident)
+    }
+
+    /// Whether the kept use at each position `at` equals or covers `uses`' there (a draw noted
+    /// inside: `EncoderCore::note_moved`), in builds with debug assertions.
+    #[cfg(debug_assertions)]
+    pub(super) fn covers_at(&self, uses: &[Use<ResourceKey>], at: &[usize]) -> bool {
+        at.iter()
+            .all(|&at| match (self.uses.get(at), uses.get(at)) {
+                (Some(kept), Some(used)) => kept == used || kept.covers(used),
+                _ => false,
+            })
+    }
+
+    /// Note the command [`moves`](Self::moves) answers for, whose `uses` (reaching the keys
+    /// `resident` through the resident set alone) differ from the last one's at the positions
+    /// `at` alone: `record` records those of them that the kept use at their position neither
+    /// equals nor covers, which the encoder's current part may lack (the module docs), and every
+    /// one of them that differs is kept in place. What it found ([`Moved`]). Its stages are the
+    /// last one's, its uses' access types being theirs.
+    pub(super) fn note_moved<T>(
+        &mut self,
+        (uses, resident): (&[Use<ResourceKey>], &BTreeSet<ResourceKey>),
+        at: &[usize],
+        record: impl FnOnce(vk::PipelineStageFlags2, &[Use<ResourceKey>]) -> T,
+    ) -> Moved<T> {
+        self.fresh.clear();
+        self.fresh_at.clear();
+        let mut covered = 0;
+        for &at in at {
+            let (kept, used) = (&mut self.uses[at], &uses[at]);
+            if kept == used {
+                continue;
+            }
+            // Noted already, and kept as the command's own (the module docs).
+            if kept.covers(used) {
+                kept.clone_from(used);
+                covered += 1;
+                continue;
+            }
+            self.fresh.push(used.clone());
+            self.fresh_at.push(at);
+        }
+        #[cfg(debug_assertions)]
+        {
+            let moved = |place: &usize| at.contains(place);
+            let kept = self.uses.iter().enumerate().zip(uses);
+            assert!(
+                kept.filter(|((place, _), _)| !moved(place))
+                    .all(|((_, kept), used)| kept == used),
+                "a command noted moved differs from the last one where it did not move"
+            );
+            let stages = (uses.iter()).fold(vk::PipelineStageFlags2::empty(), |all, used| {
+                all | used.read.stages | used.write.stages
+            });
+            assert!(
+                stages == self.stages,
+                "a command noted moved runs in other stages than the last one"
+            );
+        }
+        #[cfg(debug_assertions)]
+        self.note_whole((uses, resident));
+        #[cfg(not(debug_assertions))]
+        let _ = resident;
+        if self.fresh.is_empty() {
+            // Noted already, as the last one (`holds`) where every use is its.
+            return match covered {
+                0 => Moved::AsBefore,
+                covered => Moved::Covered(covered),
+            };
+        }
+        let answer = record(self.stages, &self.fresh);
+        for (&at, used) in self.fresh_at.iter().zip(&self.fresh) {
+            self.uses[at].clone_from(used);
+        }
+        Moved::Recorded(answer, covered)
+    }
+
+    /// How many uses the last [`note_fresh`](Self::note_fresh) or
+    /// [`note_draw_fresh`](Self::note_draw_fresh) found covered by the kept use at their
+    /// position, and so noted already (the module docs).
+    pub(super) fn covered(&self) -> usize {
+        self.covered
+    }
+
     /// Whether the last command was noted into `into`: then a command noted with its stages and
     /// uses, reaching the same keys through the resident set alone, is noted already
     /// ([`holds`](Self::holds)).
@@ -195,47 +326,80 @@ impl NotedApart {
         &self.uses
     }
 
-    /// Keep the command just noted, of `stages` with `uses`, of which it reached the keys
-    /// `resident` through the resident set alone, noted into `into`.
-    pub(super) fn note(
+    /// Note the command of `stages` with `uses`, of which it reaches the keys `resident` through
+    /// the resident set alone, into `into`: `record` records its uses that the encoder's current
+    /// part may lack (all of them, unless the last command noted was noted into `into`, then
+    /// those that differ from its use at the same position: the module docs), and it is kept as
+    /// the last command, its kept uses changed at those positions alone. What `record` answers.
+    pub(super) fn note_fresh<T>(
         &mut self,
         stages: vk::PipelineStageFlags2,
         (uses, resident): (&[Use<ResourceKey>], &BTreeSet<ResourceKey>),
         into: NotedInto,
-    ) {
+        record: impl FnOnce(&[Use<ResourceKey>]) -> T,
+    ) -> T {
+        let found = self.found_fresh(uses, into);
+        let answer = record(if found { &self.fresh } else { uses });
         self.core = Some(into.core);
         self.stages = stages;
         self.prefix = None;
-        // Its storage is kept from one command to the next.
-        self.uses.clear();
-        self.uses.extend_from_slice(uses);
+        self.keep(uses, found);
         self.resident.clear();
         self.resident.extend(resident);
         self.keep_into(into);
         #[cfg(debug_assertions)]
         self.note_whole((uses, resident));
+        answer
     }
 
-    /// [`note`](Self::note) a draw whose `uses` begin with those of what its encoder made
-    /// resident of the identities `prefix`: those, and its uses past them alone (the module
-    /// docs).
-    pub(super) fn note_draw(
+    /// [`note_fresh`](Self::note_fresh) a draw whose `uses` begin with those of what its encoder
+    /// made resident of the identities `prefix`: those it keeps by their identities, and its uses
+    /// past them alone, `record` recording all of them unless the last command began with the
+    /// same, then those of its uses past them that differ from the last one's at the same
+    /// position (the module docs).
+    pub(super) fn note_draw_fresh<T>(
         &mut self,
         stages: vk::PipelineStageFlags2,
         (uses, resident, prefix): (&[Use<ResourceKey>], &BTreeSet<ResourceKey>, ReachingPrefix),
         into: NotedInto,
-    ) {
+        record: impl FnOnce(&[Use<ResourceKey>]) -> T,
+    ) -> T {
+        let found = self.found_fresh_draw((uses, prefix.prefix), into);
+        let answer = record(if found { &self.fresh } else { uses });
         self.core = Some(into.core);
         self.stages = stages;
         self.prefix = Some(prefix);
-        self.uses.clear();
-        self.uses.extend_from_slice(&uses[prefix.prefix.len..]);
+        self.keep(&uses[prefix.prefix.len..], found);
         self.resident.clear();
         self.keep_into(into);
         #[cfg(debug_assertions)]
         self.note_whole((uses, resident));
         #[cfg(not(debug_assertions))]
         let _ = resident;
+        answer
+    }
+
+    /// Keep `uses` as the last command's: where `found`, those of them that differ from the kept
+    /// ones at their position are `fresh` at `fresh_at` ([`found_fresh`](Self::found_fresh)), so
+    /// only those positions change (and those past the kept ones are added, every one of them
+    /// fresh, in order); else all of them, copied.
+    fn keep(&mut self, uses: &[Use<ResourceKey>], found: bool) {
+        if !found {
+            self.uses.clear();
+            self.uses.extend_from_slice(uses);
+            return;
+        }
+        self.uses.truncate(uses.len());
+        for (&at, used) in self.fresh_at.iter().zip(&self.fresh) {
+            match self.uses.get_mut(at) {
+                Some(kept) => kept.clone_from(used),
+                None => self.uses.push(used.clone()),
+            }
+        }
+        debug_assert!(
+            *self.uses == *uses,
+            "a command noted apart kept other uses than its own"
+        );
     }
 
     /// Keep the encoder's state `into` as the last command's.
@@ -275,64 +439,67 @@ impl NotedApart {
         touched
     }
 
-    /// The uses of `uses`, a command noted into `into`, that the encoder's current part may
-    /// lack: all of them, unless the last command noted was noted into `into`, then those that
-    /// differ from its use at the same position (the module docs).
-    pub(super) fn fresh<'s>(
-        &'s mut self,
-        uses: &'s [Use<ResourceKey>],
-        into: NotedInto,
-    ) -> &'s [Use<ResourceKey>] {
+    /// Whether the last command noted was noted into `into`: then `fresh` holds the uses of
+    /// `uses` that differ from its use at the same position, which the encoder's current part may
+    /// lack (the module docs), and `fresh_at` their positions, and each use its use there covers
+    /// is kept in place of it, noted already (counted in `covered`); else the part may lack any
+    /// of them.
+    fn found_fresh(&mut self, uses: &[Use<ResourceKey>], into: NotedInto) -> bool {
+        self.covered = 0;
         if self.core != Some(into.core) || NotedApart::into(self) != into {
-            return uses;
+            return false;
         }
         self.fresh.clear();
-        let last = &self.uses;
-        let differ = |(at, used): &(usize, &Use<ResourceKey>)| last.get(*at) != Some(*used);
-        self.fresh.extend(
-            uses.iter()
-                .enumerate()
-                .filter(differ)
-                .map(|(_, used)| used.clone()),
-        );
-        &self.fresh
+        self.fresh_at.clear();
+        for (at, used) in uses.iter().enumerate() {
+            match self.uses.get_mut(at) {
+                Some(kept) if kept == used => {}
+                Some(kept) if kept.covers(used) => {
+                    kept.clone_from(used);
+                    self.covered += 1;
+                }
+                _ => {
+                    self.fresh.push(used.clone());
+                    self.fresh_at.push(at);
+                }
+            }
+        }
+        true
     }
 
-    /// [`fresh`](Self::fresh) of a draw whose `uses` begin with those of what its encoder made
-    /// resident of the identity `prefix`: all of them unless the last command began with the
-    /// same, then those of its uses past them that differ from the last one's at the same
-    /// position.
-    pub(super) fn fresh_draw<'s>(
-        &'s mut self,
-        (uses, prefix): (&'s [Use<ResourceKey>], ResidentPrefix),
+    /// [`found_fresh`](Self::found_fresh) of a draw whose `uses` begin with those of what its
+    /// encoder made resident of the identity `prefix`: only where the last command began with
+    /// the same, then of its uses past them.
+    fn found_fresh_draw(
+        &mut self,
+        (uses, prefix): (&[Use<ResourceKey>], ResidentPrefix),
         into: NotedInto,
-    ) -> &'s [Use<ResourceKey>] {
-        let same = self.prefix.is_some_and(|then| then.prefix == prefix);
-        if self.core != Some(into.core) || NotedApart::into(self) != into || !same {
-            return uses;
-        }
-        self.fresh.clear();
-        let last = &self.uses;
-        let differ = |(at, used): &(usize, &Use<ResourceKey>)| last.get(*at) != Some(*used);
-        self.fresh.extend(
-            (uses[prefix.len..].iter().enumerate())
-                .filter(differ)
-                .map(|(_, used)| used.clone()),
-        );
+    ) -> bool {
+        self.covered = 0;
+        let fresh = self.prefix.is_some_and(|then| then.prefix == prefix)
+            && self.found_fresh(&uses[prefix.len..], into);
+        // Each use found fresh differs from the last command's at its place, and each other that
+        // does is covered by it (a use past those of what the encoder made resident:
+        // `found_fresh`).
         #[cfg(debug_assertions)]
-        {
+        if fresh {
             let whole = &self.whole.0;
             let differ = |(at, used): &(usize, &Use<ResourceKey>)| whole.get(*at) != Some(*used);
+            let covered = |(at, used): &(usize, &Use<ResourceKey>)| {
+                whole.get(*at).is_some_and(|last| last.covers(used))
+            };
+            let past = prefix.len;
+            let at = |(at, _): (usize, &Use<ResourceKey>)| at;
+            let fresh_at = self.fresh_at.iter().map(|at| at + past);
             assert!(
-                uses.iter()
-                    .enumerate()
-                    .filter(differ)
-                    .map(|(_, used)| used)
-                    .eq(&self.fresh),
+                (uses.iter().enumerate())
+                    .filter(|used| differ(used) && !covered(used))
+                    .map(at)
+                    .eq(fresh_at),
                 "a draw noted apart found fresh by its uses' identity other uses than by its uses"
             );
         }
-        &self.fresh
+        fresh
     }
 
     fn into(&self) -> NotedInto {

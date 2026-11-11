@@ -116,6 +116,15 @@ pub(crate) fn vk_scaled_vertex_format(format: VertexFormat) -> Option<vk::Format
     })
 }
 
+/// The bytes an attribute of `format` takes in its element: its Vulkan format's block, the bytes
+/// a fixed-function fetch of it reads and the bytes a pulled one decodes
+/// (`lower::stage_io::fetch::Encoding::bytes`, which `tests::stage_in_element_bytes` holds equal
+/// to this for every format). `None` for `Invalid`, which no fetch decodes.
+pub(crate) fn vertex_bytes(format: VertexFormat) -> Option<u32> {
+    let f = vk_vertex_format(format).ok()?;
+    f.block().map(|b| b.size)
+}
+
 /// The alignment in bytes Vulkan's fixed-function vertex input requires of an attribute's address
 /// in `format` ("Vertex Input Address Calculation", `VUID-vkCmdDraw-format-10389`/`-10390`): the
 /// [`vk::FormatBlock::vertex_alignment`] of its Vulkan format, the component size or the whole
@@ -180,6 +189,8 @@ pub enum AttributeFetch {
 ///   Under `robustBufferAccess` a stride of 0 bounds the fetch at the bound range itself, which is
 ///   the attribute extent the pulled fetch reads.
 /// - A format the profile cannot fetch as `VERTEX_BUFFER`: pulled.
+/// - `FloatRGB9E5` (`E5B9G9R9_UFLOAT_PACK32`): pulled on every profile
+///   (`fixed_function_format`).
 /// - Every attribute on a profile whose buffer containment is checked in the shader
 ///   (`contain::encoding` is `Check::InShader`: containment on, neither `robustBufferAccess`
 ///   nor `robustBufferAccess2` enabled): pulled. Vulkan bounds fixed-function vertex input only
@@ -251,7 +262,9 @@ pub(crate) fn fetch_as(
     if contain::encoding(profile) == Check::InShader {
         return Ok(AttributeFetch::Pulled);
     }
-    if !profile.supports_format(vk_format, FormatUsage::VertexBuffer) {
+    if !fixed_function_format(vk_format)
+        || !profile.supports_format(vk_format, FormatUsage::VertexBuffer)
+    {
         return Ok(AttributeFetch::Pulled);
     }
     Ok(AttributeFetch::FixedFunction {
@@ -259,6 +272,19 @@ pub(crate) fn fetch_as(
         input_rate,
         divisor,
     })
+}
+
+/// Whether fixed-function input delivers an attribute of `vk_format` where the profile reports
+/// the format's `VERTEX_BUFFER`: every format but the shared-exponent `E5B9G9R9_UFLOAT_PACK32`
+/// (`FloatRGB9E5`), which is pulled on every profile. Vulkan requires no device to fetch that
+/// format as vertex input (its mandatory features are a sampled image's, "Mandatory Format
+/// Support: 64-bit/uneven Components"), and its decode has no rounding to leave to the device:
+/// each component `m · 2^(e - 24)` is an `f32`, and the missing fourth one is 1, Metal's and
+/// Vulkan's alike. So the module's decode (`lower::stage_io::fetch`) answers what a conformant
+/// fixed-function fetch answers, on a device whose fetch does not (lavapipe's reports the bit
+/// and answers 0 in the fourth component and other values in the first three) too.
+fn fixed_function_format(vk_format: vk::Format) -> bool {
+    vk_format != vk::Format::E5B9G9R9_UFLOAT_PACK32
 }
 
 /// Every Vulkan vertex format a Metal vertex format maps to, its own ([`vk_vertex_format`]) or
@@ -503,6 +529,46 @@ mod tests {
             fetch(&plain, float3, S::PerPatch, 1),
             Err(Unsupported::not_implemented(Feature::Tessellation).into())
         );
+    }
+
+    /// `FloatRGB9E5` is pulled at every step on a device that reports `E5B9G9R9_UFLOAT_PACK32`'s
+    /// `VERTEX_BUFFER` (`fixed_function_format`), while `FloatRG11B10`, the other packed float
+    /// format, stays fixed function there.
+    #[test]
+    fn shared_exponent_attributes_are_pulled_where_the_device_fetches_them() {
+        let mut desc = floor();
+        for f in [
+            vk::Format::E5B9G9R9_UFLOAT_PACK32,
+            vk::Format::B10G11R11_UFLOAT_PACK32,
+        ] {
+            desc.formats.formats.insert(
+                f,
+                FormatProperties {
+                    buffer: vk::FormatFeatureFlags2::VERTEX_BUFFER,
+                    ..FormatProperties::default()
+                },
+            );
+        }
+        let dev = Device::new(desc, DevicePolicy::default()).unwrap();
+        assert!(dev.profile().supports_format(
+            vk::Format::E5B9G9R9_UFLOAT_PACK32,
+            FormatUsage::VertexBuffer
+        ));
+        use VertexStepFunction as S;
+        for (step, rate) in [(S::PerVertex, 1), (S::PerInstance, 1)] {
+            assert_eq!(
+                attribute_fetch(VertexFormat::FloatRGB9E5, step, rate, dev.profile()),
+                Ok(AttributeFetch::Pulled),
+                "{step:?}"
+            );
+            assert!(matches!(
+                attribute_fetch(VertexFormat::FloatRG11B10, step, rate, dev.profile()),
+                Ok(AttributeFetch::FixedFunction {
+                    format: vk::Format::B10G11R11_UFLOAT_PACK32,
+                    ..
+                })
+            ));
+        }
     }
 
     /// Without buffer robustness Vulkan does not bound fixed-function vertex input

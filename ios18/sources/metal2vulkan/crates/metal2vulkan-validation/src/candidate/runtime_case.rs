@@ -85,20 +85,25 @@ use std::sync::{Arc, Mutex, OnceLock};
 mod commands;
 mod host_wait_gap;
 pub(crate) mod imageblock;
+mod input_index_gap;
 mod layer_claim;
+mod query_reset_gap;
 mod raster_order_gap;
 mod render;
 mod sparse;
 mod tile;
 pub use commands::{encoded_execution, pipeline_states, CaseCommands, TemplateState};
-/// The lane's own check of the creation messages a device heard reads it too
-/// (`runtime_lane::creation_heard_checked`).
-#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
-pub(crate) use layer_claim::loader_layer_message;
+/// The engine executor's sink and the lane's own instances pass the loader's reports of driver
+/// manifests it ignored as `Messages` does (`layer_claim`).
+pub(crate) use layer_claim::IgnoredDrivers;
 pub use layer_claim::{
     layer_reported_nothing, layer_reported_nothing_at_all, nothing_reported_without_the_layer,
     EnabledLayers, LayerClaim, LAYERS_DROPPED,
 };
+/// The lane's own check of the creation messages a device heard reads them too
+/// (`runtime_lane::creation_heard_checked`).
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+pub(crate) use layer_claim::{loader_duplicate_layer_message, loader_layer_message};
 pub use render::{
     commit_render, encoded_mesh, encoded_render, mesh_pipeline_state, render_pipeline_descriptor,
     render_pipeline_state, CommittedRender, EncodedRender, MeshInputs, RenderInputs,
@@ -197,15 +202,20 @@ pub(crate) fn report_each_message() {
 /// degrade notices (`DebugMessage::degradation`), which fail nothing. Bounded so a flood cannot
 /// grow without limit.
 ///
-/// Two layer gaps pass, on the layer releases whose source was read with their cause in place:
+/// Four layer gaps pass, on the layer releases whose source was read with their cause in place:
 /// the layer's synchronization validation forgetting a semaphore chain once the host waited on a
-/// timeline (`runtime_case/host_wait_gap.rs`); and the layer's synchronization validation not
+/// timeline (`runtime_case/host_wait_gap.rs`); the layer's synchronization validation not
 /// reading rasterization-order attachment access, so that it reports an input attachment read of
 /// the runtime's pipelines made with it (named so) after an earlier draw's color write
-/// (`runtime_case/raster_order_gap.rs`). Each message passed prints a `LAYER-GAP` line with the
-/// layer's source, and a test's count of them prints once its messages go. On any other release
-/// each fails, marked "re-read WaitForSemaphore in layer X.Y.Z" or "re-read the input attachment
-/// ordering in layer X.Y.Z".
+/// (`runtime_case/raster_order_gap.rs`); the layer's check of a host query reset reporting the
+/// whole pool in use where the valid usage speaks of the range reset
+/// (`runtime_case/query_reset_gap.rs`); and the layer's link-time check of a fragment shader's
+/// input attachments reading a pipeline made against a `VkRenderPass` as one made for dynamic
+/// rendering (`runtime_case/input_index_gap.rs`). Each message passed prints a `LAYER-GAP` line
+/// with the layer's source, and a test's count of them prints once its messages go. On any other
+/// release each fails, marked "re-read WaitForSemaphore in layer X.Y.Z", "re-read the input
+/// attachment ordering in layer X.Y.Z", "re-read vkResetQueryPool in layer X.Y.Z" or "re-read the
+/// link-time input attachment check in layer X.Y.Z".
 ///
 /// One message about the driver passes too, once the runtime announced it: the layer's report
 /// of a vertex module's subgroup operations outside `subgroupSupportedStages`
@@ -291,6 +301,11 @@ impl Drop for Reported {
     }
 }
 
+/// The id name of the informational message a device sends where its queue limits
+/// (`DeviceOptions::queue_limits`) changed a placement from what its queue plan gives, which fails
+/// a run ([`Messages::sink`]).
+pub const QUEUE_LIMITS_REACHED: &str = "metal2vulkan-queue-limits-reached";
+
 /// The `specVersion` of the validation layer the runtime's loader offers, read once.
 static LAYER_VERSION: OnceLock<Option<u32>> = OnceLock::new();
 
@@ -340,12 +355,26 @@ impl Messages {
     }
 
     /// The failing messages reported so far, removed, with the loader's own messages about a
-    /// layer it could not provide that no device of this list explained (`layer_claim`).
+    /// layer it could not provide that no device of this list explained, and without its reports
+    /// of driver manifests it ignored, each printed (`layer_claim`).
     pub fn take(&self) -> Vec<DebugMessage> {
         let mut reported = self.0.lock().unwrap_or_else(|p| p.into_inner());
         let mut unexplained = reported.layers.release();
         let mut failing = reported.failing.split_off(0);
         unexplained.append(&mut failing);
+        let ignored = layer_claim::IgnoredDrivers::of_messages(&unexplained);
+        unexplained.retain(|message| {
+            let host = ignored.explains(&message.id_name, &message.text);
+            if host {
+                eprintln!(
+                    "LANE-LOADER-DRIVER {}: passed, the loader's own report of a driver manifest \
+                     it ignored: {}",
+                    reported.test,
+                    message.text.replace('\n', " ")
+                );
+            }
+            !host
+        });
         unexplained
     }
 
@@ -411,7 +440,8 @@ impl Messages {
     }
 
     /// How many of the layer gaps' messages passed so far (`runtime_case/host_wait_gap.rs`,
-    /// `runtime_case/raster_order_gap.rs`).
+    /// `runtime_case/raster_order_gap.rs`, `runtime_case/query_reset_gap.rs`,
+    /// `runtime_case/input_index_gap.rs`).
     pub fn layer_gaps(&self) -> usize {
         self.0.lock().unwrap_or_else(|p| p.into_inner()).layer_gaps
     }
@@ -471,6 +501,21 @@ impl Messages {
             {
                 return;
             }
+            // A device placed a queue otherwise than its queue plan gives, under the queue limits
+            // the lane makes its devices with (`DeviceOptions::queue_limits`,
+            // `runtime_lane::LANE_QUEUE_LIMITS`): the work depends on the plan's queues, so it
+            // fails as the layer's errors do, and the test makes its device with the plan.
+            if message.id_name == QUEUE_LIMITS_REACHED {
+                eprintln!(
+                    "QUEUE-LIMITS-REACHED {}: {}",
+                    reported.test,
+                    message.text.replace('\n', " ")
+                );
+                if reported.failing.len() < Self::MAX {
+                    reported.failing.push(message.clone());
+                }
+                return;
+            }
             if !fails {
                 return;
             }
@@ -495,6 +540,20 @@ impl Messages {
                     "UNSUPPORTED-SET {}: passed, announced as {}: {} ({}): {}",
                     reported.test,
                     Degradation::SetPastLayoutSupport.code(),
+                    message.id_name,
+                    message.id,
+                    message.text.replace('\n', " ")
+                );
+                return;
+            }
+            let index_gap = input_index_gap::shape(message.id, &message.id_name, &message.text);
+            if index_gap && layer.is_some_and(input_index_gap::read) {
+                reported.layer_gaps += 1;
+                eprintln!(
+                    "LAYER-GAP {}: passed, the layer's link-time input attachment gap ({}): {} \
+                     ({}): {}",
+                    reported.test,
+                    input_index_gap::SOURCE,
                     message.id_name,
                     message.id,
                     message.text.replace('\n', " ")
@@ -527,7 +586,38 @@ impl Messages {
                 );
                 return;
             }
+            let reset_gap = query_reset_gap::shape(message.id, &message.id_name, &message.text);
+            if reset_gap && layer.is_some_and(query_reset_gap::read) {
+                reported.layer_gaps += 1;
+                eprintln!(
+                    "LAYER-GAP {}: passed, the layer's query-reset gap ({}): {} ({}): {}",
+                    reported.test,
+                    query_reset_gap::SOURCE,
+                    message.id_name,
+                    message.id,
+                    message.text.replace('\n', " ")
+                );
+                return;
+            }
             let mut message = message.clone();
+            if reset_gap {
+                let read: Vec<String> = query_reset_gap::READ
+                    .iter()
+                    .map(|&version| host_wait_gap::release(version))
+                    .collect();
+                message.text = format!(
+                    "re-read vkResetQueryPool in layer {}: the layer's query-reset gap passes \
+                     only on the releases read ({}). {}",
+                    layer.map_or_else(|| "of an unknown release".into(), host_wait_gap::release),
+                    read.join(", "),
+                    message.text
+                );
+                eprintln!(
+                    "LAYER-GAP {}: failed, {}",
+                    reported.test,
+                    message.text.replace('\n', " ")
+                );
+            }
             if raster_gap {
                 let read: Vec<String> = raster_order_gap::READ
                     .iter()
@@ -554,6 +644,24 @@ impl Messages {
                 message.text = format!(
                     "re-read WaitForSemaphore in layer {}: the layer's host-wait gap passes only \
                      on the releases read ({}). {}",
+                    layer.map_or_else(|| "of an unknown release".into(), host_wait_gap::release),
+                    read.join(", "),
+                    message.text
+                );
+                eprintln!(
+                    "LAYER-GAP {}: failed, {}",
+                    reported.test,
+                    message.text.replace('\n', " ")
+                );
+            }
+            if index_gap {
+                let read: Vec<String> = input_index_gap::READ
+                    .iter()
+                    .map(|&version| host_wait_gap::release(version))
+                    .collect();
+                message.text = format!(
+                    "re-read the link-time input attachment check in layer {}: the layer's \
+                     link-time input attachment gap passes only on the releases read ({}). {}",
                     layer.map_or_else(|| "of an unknown release".into(), host_wait_gap::release),
                     read.join(", "),
                     message.text

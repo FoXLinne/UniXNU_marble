@@ -159,9 +159,12 @@ pub(super) struct Bound {
     /// The writes the last push that set 0 held the bindings of carried ([`Bound::pushed_set`]).
     changed: Vec<SetWrite>,
     /// The layout the last push constants were pushed with, and their writes: each write's
-    /// stages, offset and length, its bytes one after another in `push_bytes`.
+    /// stages, offset and length, and the later writes that overlap it for a stage both name, a
+    /// bit each (what a push of it pushes again after it, [`Bound::pushes`], a function of the
+    /// writes' stages, offsets and lengths alone), its bytes one after another in `push_bytes`.
+    /// The overlaps lie beside the shapes, so the record allocates no list for them.
     push_layout: vk::PipelineLayout,
-    pushes: Vec<(vk::ShaderStageFlags, u32, usize)>,
+    pushes: Vec<(vk::ShaderStageFlags, u32, usize, u64)>,
     push_bytes: Vec<u8>,
     /// `push_bytes` before the last push (builds with debug assertions: [`check_pushed`]), its
     /// storage kept from push to push, so a draw allocates as many times as without them.
@@ -379,6 +382,25 @@ impl Bound {
         true
     }
 
+    /// Whether the record holds `sets` bound from set number `first` with `layout`, set 0 with the
+    /// dynamic offsets `offsets`: binding them again sets nothing ([`sets`](Self::sets)).
+    #[inline]
+    pub(super) fn holds_sets(
+        &self,
+        layout: vk::PipelineLayout,
+        first: u32,
+        (sets, offsets): (&[vk::DescriptorSet], &[u32]),
+    ) -> bool {
+        let first = first as usize;
+        let held = |at: usize| self.sets.get(at).copied().flatten();
+        self.sets_layout == layout
+            && sets
+                .iter()
+                .enumerate()
+                .all(|(i, &set)| held(first + i) == Some(set))
+            && (first > 0 || self.offsets == offsets)
+    }
+
     /// Whether binding `sets` from set number `first` with `layout` and the dynamic offsets
     /// `offsets` sets anything: noted as bound where it does. A set holds its dynamic offsets as
     /// it was bound with them, so set 0 bound again with other offsets sets them. Only set 0
@@ -390,17 +412,10 @@ impl Bound {
         first: u32,
         (sets, offsets): (&[vk::DescriptorSet], &[u32]),
     ) -> bool {
-        let first = first as usize;
-        let held = |at: usize| self.sets.get(at).copied().flatten();
-        if self.sets_layout == layout
-            && sets
-                .iter()
-                .enumerate()
-                .all(|(i, &set)| held(first + i) == Some(set))
-            && (first > 0 || self.offsets == offsets)
-        {
+        if self.holds_sets(layout, first, (sets, offsets)) {
             return false;
         }
+        let first = first as usize;
         if first == 0 {
             self.offsets.clear();
             self.offsets.extend_from_slice(offsets);
@@ -518,15 +533,26 @@ impl Bound {
         let same_writes = self.push_layout == layout
             && self.pushes.len() == writes.len()
             && writes.len() <= Pushed::MOST
-            && (self.pushes.iter().zip(writes)).all(|(&(stages, offset, length), write)| {
+            && (self.pushes.iter().zip(writes)).all(|(&(stages, offset, length, _), write)| {
                 (stages, offset, length) == (write.0, write.1, write.2.len())
             });
+        // A later write a changed one overlaps for a stage both name, pushed again after it.
+        let overlaps = |a: &PushWrite, b: &PushWrite| {
+            let (a_end, b_end) = (a.1 as usize + a.2.len(), b.1 as usize + b.2.len());
+            a.0.intersects(b.0) && (a.1 as usize) < b_end && (b.1 as usize) < a_end
+        };
         if !same_writes {
             self.push_layout = layout;
             self.pushes.clear();
             self.push_bytes.clear();
-            for (stages, offset, bytes) in writes {
-                self.pushes.push((*stages, *offset, bytes.len()));
+            for (i, write) in writes.iter().enumerate() {
+                let (stages, offset, bytes) = write;
+                let later = (writes.iter().enumerate().skip(i + 1))
+                    .filter(|(_, later)| overlaps(write, later))
+                    .fold(0u64, |bits, (j, _)| {
+                        bits | 1u64.checked_shl(j as u32).unwrap_or(0)
+                    });
+                self.pushes.push((*stages, *offset, bytes.len(), later));
                 self.push_bytes.extend_from_slice(bytes);
             }
             return Pushed::ALL;
@@ -546,21 +572,33 @@ impl Bound {
             }
             at += write.2.len();
         }
-        // A later write a changed one overlaps for a stage both name, pushed again after it.
-        let overlaps = |a: &PushWrite, b: &PushWrite| {
-            let (a_end, b_end) = (a.1 as usize + a.2.len(), b.1 as usize + b.2.len());
-            a.0.intersects(b.0) && (a.1 as usize) < b_end && (b.1 as usize) < a_end
-        };
-        let mut pushed = changed;
-        for i in 0..writes.len() {
-            if pushed >> i & 1 == 0 {
-                continue;
-            }
-            for (j, later) in writes.iter().enumerate().skip(i + 1) {
-                if overlaps(&writes[i], later) {
-                    pushed |= 1 << j;
+        // Each pushed write's later overlapping ones, as the shapes held say, in order: a write
+        // pushed again pushes those after it again too.
+        let (mut pushed, mut rest) = (changed, changed);
+        while rest != 0 {
+            let i = rest.trailing_zeros() as usize;
+            rest &= rest - 1;
+            let again = self.pushes.get(i).map_or(0, |held| held.3) & !pushed;
+            pushed |= again;
+            rest |= again;
+        }
+        #[cfg(debug_assertions)]
+        {
+            let mut every = changed;
+            for i in 0..writes.len() {
+                if every >> i & 1 == 0 {
+                    continue;
+                }
+                for (j, later) in writes.iter().enumerate().skip(i + 1) {
+                    if overlaps(&writes[i], later) {
+                        every |= 1 << j;
+                    }
                 }
             }
+            assert_eq!(
+                pushed, every,
+                "a push's held overlaps differ from its writes'"
+            );
         }
         #[cfg(debug_assertions)]
         check_pushed(writes, &self.push_before, Pushed(pushed));

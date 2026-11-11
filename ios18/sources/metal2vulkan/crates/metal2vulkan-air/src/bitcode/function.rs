@@ -6,8 +6,8 @@
 //! local `CONSTANTS` block, then one value per non-void instruction in record order. Void
 //! instructions (stores, fences, terminators, void calls) take no value number, but every
 //! instruction takes the next [`InstId`], so an [`InstId`] is its record index less the dropped
-//! markers before it (see *Calls*). Module version 2
-//! encodes most operands relative to the next value number (32-bit wrapping, as LLVM's reader
+//! markers before it (see *Calls*). Module versions 1 and 2
+//! encode most operands relative to the next value number (32-bit wrapping, as LLVM's reader
 //! does), PHI operands as signed relative values, and switch case values and alloca sizes as
 //! absolute ids.
 //!
@@ -1461,9 +1461,19 @@ impl FnDecoder {
                     let at = Location::function(self.symbol_name(cx, self.func), None, None);
                     return Err(InputError::new(kind, at).into());
                 }
-                Err(e) => {
-                    return Err(InputError::new(InputErrorKind::Intrinsic(e), s.location()).into())
-                }
+                // An immediate this function computes, such as one of its parameters (OpenCL
+                // C's `barrier(flags)` out of line): specialization binds the call where inlining
+                // and constant propagation make it each call site's constant.
+                Err(e) => match (e, class.template()) {
+                    (IntrinsicError::ImmediateNotConstant, Some(template)) => {
+                        Callee::Unbound { decl: f, template }
+                    }
+                    (e, _) => {
+                        return Err(
+                            InputError::new(InputErrorKind::Intrinsic(e), s.location()).into()
+                        )
+                    }
+                },
             },
         };
         let call = Call {

@@ -5,7 +5,8 @@
 //! wait-all `vkWaitSemaphores`) only to the accesses of the queue that signalled it:
 //! `SyncValidator::WaitForSemaphore` calls `ApplyTaggedWait` with no queue sync tags, under
 //! "TODO: specify queue sync tags argument similar to WaitForFence" (Vulkan-ValidationLayers
-//! v1.4.357, commit e4786f7c, `layers/sync/sync_validation.cpp` line 280; still there in main
+//! v1.4.357, commit e4786f7c, `layers/sync/sync_validation.cpp` line 280; v1.4.363, commit
+//! 2ea16de8, line 282, `WaitForSemaphore` and `ApplyTaggedWait` unchanged; still there in main
 //! 4f8ac9ce of 2026-10-05, line 282). That wait also drops the waited queue's writes from the
 //! batches a semaphore chain ran through. So when a batch on `VkQueue` A was ordered before a
 //! batch on B by a semaphore, the host read B's timeline past it, and A's next batch waits for
@@ -37,9 +38,15 @@ const ID: i32 = 1544472022;
 /// The id name of the hazard.
 const ID_NAME: &str = "SYNC-HAZARD-WRITE-AFTER-WRITE";
 
-/// The start of the hazard as the layer reports it at a `vkQueueSubmit`: the hazard against a
-/// command buffer submitted earlier (`sync_error_messages.cpp`, `AddReplayInfo`).
-const SUBMIT_START: &str = "vkQueueSubmit(): WRITE_AFTER_WRITE hazard detected. ";
+/// The call the layer reports the hazard at: a `vkQueueSubmit`, against a command buffer
+/// submitted earlier.
+const SUBMIT: &str = "vkQueueSubmit(): ";
+
+/// The hazard, after the call, or after the command buffer's place in the submission where the
+/// layer names it (v1.4.363: `pSubmits[0].pCommandBuffers[1]`, `sync_submit.cpp` line 737,
+/// `submit_loc.dot(vvl::Field::pSubmits, batch_index)` then `.dot(vvl::Field::pCommandBuffers,
+/// index)`; v1.4.357 names none).
+const HAZARD: &str = "WRITE_AFTER_WRITE hazard detected. ";
 
 /// What names the queue of the command buffer being submitted.
 const CURRENT_QUEUE: &str = " submitted on the current ";
@@ -57,12 +64,19 @@ const PRIOR_QUEUE: &str = " submitted on ";
 const NO_BARRIER: &str = "\nThe current synchronization allows 0, but to prevent this hazard";
 
 /// The layer releases (`VkLayerProperties::specVersion` of `VK_LAYER_KHRONOS_validation`) whose
-/// `WaitForSemaphore` was read with the TODO in place: v1.4.357 (tag commit e4786f7c).
-pub(super) const READ: &[u32] = &[vk::make_api_version(0, 1, 4, 357)];
+/// `WaitForSemaphore` was read with the TODO in place: v1.4.357 (tag commit e4786f7c) and
+/// v1.4.363 (tag commit 2ea16de8), whose `WaitForSemaphore`, `ApplyTaggedWait` and the text the
+/// hazard's message is made of (`sync_error_messages.cpp`, `sync_reporting.cpp`,
+/// `FormatErrorMessage`) are those of v1.4.357.
+pub(super) const READ: &[u32] = &[
+    vk::make_api_version(0, 1, 4, 357),
+    vk::make_api_version(0, 1, 4, 363),
+];
 
 /// Where the TODO is, for the line each message let pass prints.
 pub(super) const SOURCE: &str = "Vulkan-ValidationLayers v1.4.357 (e4786f7c) \
-    layers/sync/sync_validation.cpp:280, SyncValidator::WaitForSemaphore: \"TODO: specify queue \
+    layers/sync/sync_validation.cpp:280 and v1.4.363 (2ea16de8) :282, \
+    SyncValidator::WaitForSemaphore: \"TODO: specify queue \
     sync tags argument similar to WaitForFence\"";
 
 /// Whether a message with this id, id name and text is the gap's: a `WRITE_AFTER_WRITE` found at
@@ -72,7 +86,10 @@ pub(super) fn shape(id: i32, id_name: &str, text: &str) -> bool {
     if id != ID || id_name != ID_NAME {
         return false;
     }
-    let Some(rest) = text.strip_prefix(SUBMIT_START) else {
+    let Some(rest) = text.strip_prefix(SUBMIT) else {
+        return false;
+    };
+    let Some(rest) = after_place(rest).strip_prefix(HAZARD) else {
         return false;
     };
     let Some(prior_at) = rest.find(PRIOR) else {
@@ -92,6 +109,23 @@ pub(super) fn shape(id: i32, id_name: &str, text: &str) -> bool {
         return false;
     };
     current_queue == prior_queue && prior.contains(NO_BARRIER)
+}
+
+/// What follows a command buffer's place in a submission, `pSubmits[N].pCommandBuffers[M] `, that
+/// `text` begins with; `text` itself where it begins with none.
+fn after_place(text: &str) -> &str {
+    let index = |text: &'static str, rest: &str| -> Option<usize> {
+        let digits = rest.strip_prefix(text)?;
+        let end = digits.find(|c: char| !c.is_ascii_digit())?;
+        (end > 0 && digits[end..].starts_with(']')).then_some(text.len() + end + 1)
+    };
+    let Some(submit) = index("pSubmits[", text) else {
+        return text;
+    };
+    let Some(buffer) = index(".pCommandBuffers[", &text[submit..]) else {
+        return text;
+    };
+    text[submit + buffer..].strip_prefix(' ').unwrap_or(text)
 }
 
 /// Whether the layer release `version` is one whose source was read with the gap in place.
@@ -147,6 +181,30 @@ mod tests {
     #[test]
     fn the_layer_s_message_is_the_gap() {
         assert!(shape(ID, ID_NAME, SEEN));
+        // As v1.4.363 reports it: the command buffer's place in the submission after the call,
+        // and the parameter before the resource.
+        let placed = SEEN
+            .replacen(
+                "vkQueueSubmit(): ",
+                "vkQueueSubmit(): pSubmits[0].pCommandBuffers[1] ",
+                1,
+            )
+            .replacen("writes to VkBuffer", "writes to dstBuffer VkBuffer", 1);
+        assert!(shape(ID, ID_NAME, &placed));
+        // Another place, or a place the layer does not print so.
+        let other = placed.replace(
+            "pSubmits[0].pCommandBuffers[1]",
+            "pSubmits[12].pCommandBuffers[3]",
+        );
+        assert!(shape(ID, ID_NAME, &other));
+        for broken in [
+            "pSubmits[].pCommandBuffers[1]",
+            "pSubmits[0].pCommandBufferInfos[1]",
+            "pSubmits[0]",
+        ] {
+            let broken = placed.replace("pSubmits[0].pCommandBuffers[1]", broken);
+            assert!(!shape(ID, ID_NAME, &broken), "{broken}");
+        }
     }
 
     #[test]
@@ -213,7 +271,9 @@ mod tests {
     #[test]
     fn only_the_releases_read_let_it_pass() {
         assert!(read(vk::make_api_version(0, 1, 4, 357)));
+        assert!(read(vk::make_api_version(0, 1, 4, 363)));
         assert!(!read(vk::make_api_version(0, 1, 4, 358)));
+        assert!(!read(vk::make_api_version(0, 1, 4, 364)));
         assert!(!read(vk::make_api_version(0, 1, 4, 341)));
         assert_eq!(release(vk::make_api_version(0, 1, 4, 358)), "1.4.358");
     }

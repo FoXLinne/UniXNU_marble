@@ -49,6 +49,7 @@ void marble_battmgr_init(MarbleBattmgr *b)
 uint32_t marble_battmgr_enable_request(uint8_t out[MARBLE_BATTMGR_ENABLE_BYTES])
 {
     header(out, MARBLE_BATTMGR_OP_REQUEST_NOTIFICATION);
+    put32(out + 4, MARBLE_BATTMGR_TYPE_NOTIFY);
     put32(out + 12, 0);    /* battery 0 */
     put32(out + 16, 0);    /* power state */
     put32(out + 20, 1);    /* low capacity notification threshold, percent */
@@ -64,7 +65,7 @@ static void skip_to_wanted(MarbleBattmgr *b)
 static void advance(MarbleBattmgr *b)
 {
     b->in_flight = 0;
-    b->cursor++;
+    b->cursor = b->sample_only ? BmFields : b->cursor + 1;
     skip_to_wanted(b);
 }
 
@@ -72,9 +73,21 @@ void marble_battmgr_refresh(MarbleBattmgr *b, int slow)
 {
     if (b->cursor != NO_CYCLE) {b->refresh_wanted = 1 + (slow != 0); return;}
     b->slow_due = slow || !(b->valid & (1u << BmFull));
+    b->sample_only = 0;
+    b->cycle_valid = 0;
     b->cursor = 0;
     b->in_flight = 0;
     skip_to_wanted(b);
+}
+
+void marble_battmgr_sample(MarbleBattmgr *b)
+{
+    if (b->cursor != NO_CYCLE) {b->sample_wanted = 1; return;}
+    b->sample_wanted = 0;
+    b->sample_only = 1;
+    b->cycle_valid = 0;
+    b->cursor = BmCurrent;
+    b->in_flight = 0;
 }
 
 uint32_t marble_battmgr_next(MarbleBattmgr *b, uint8_t out[MARBLE_BATTMGR_REQUEST_BYTES])
@@ -118,30 +131,34 @@ static void check_limit(MarbleBattmgr *b)
     b->limit_due = want;
 }
 
-/* Ends the cycle when the cursor ran past the last field; starts the remembered one. Returns 1 when a cycle ended. */
+/* Complete a refresh or current sample, then service queued work. */
 static int finish(MarbleBattmgr *b)
 {
-    if (b->cursor == NO_CYCLE || b->cursor < BmFields) return 0;
+    if (b->cursor == NO_CYCLE || b->cursor < BmFields) return BmAnswer;
+    const int result = b->sample_only ? BmSampleDone : BmCycleDone;
     b->cursor = NO_CYCLE;
-    b->cycles_done++;
-    check_limit(b);
+    b->completed_valid = b->cycle_valid;
+    if (!b->sample_only) {b->cycles_done++; check_limit(b);}
+    b->sample_only = 0;
     if (b->refresh_wanted) {
         const int slow = b->refresh_wanted == 2;
         b->refresh_wanted = 0;
         marble_battmgr_refresh(b, slow);
+    } else if (b->sample_wanted) {
+        marble_battmgr_sample(b);
     }
-    return 1;
+    return result;
 }
 
-void marble_battmgr_timeout(MarbleBattmgr *b)
+int marble_battmgr_timeout(MarbleBattmgr *b)
 {
-    if (b->limit_in_flight) {b->limit_in_flight = 0; b->limit_result = -60; b->timeouts++; return;}
-    if (b->cursor == NO_CYCLE || !b->in_flight) return;
+    if (b->limit_in_flight) {b->limit_in_flight = 0; b->limit_result = -60; b->timeouts++; return BmAnswer;}
+    if (b->cursor == NO_CYCLE || !b->in_flight) return BmAnswer;
     b->timeouts++;
     b->last_timeout = b->cursor;
     b->valid &= ~(1u << b->cursor);
     advance(b);
-    finish(b);
+    return finish(b);
 }
 
 int marble_battmgr_receive(MarbleBattmgr *b, const uint8_t *data, uint32_t length)
@@ -153,8 +170,12 @@ int marble_battmgr_receive(MarbleBattmgr *b, const uint8_t *data, uint32_t lengt
         marble_battmgr_refresh(b, 0);
         return BmNotified;
     }
+    if (opcode == MARBLE_BATTMGR_OP_REQUEST_NOTIFICATION &&
+        (type == MARBLE_BATTMGR_TYPE_REQUEST || type == MARBLE_BATTMGR_TYPE_NOTIFY)) {
+        b->enabled = 1;
+        return BmEnabled;
+    }
     if (type != MARBLE_BATTMGR_TYPE_REQUEST) {b->ignored++; return BmIgnored;}
-    if (opcode == MARBLE_BATTMGR_OP_REQUEST_NOTIFICATION) {b->enabled = 1; return BmEnabled;}
     if (opcode == MARBLE_BATTMGR_OP_USB_SET) {
         if (!b->limit_in_flight || length < 24 || le32(data + 12) != 5) {b->ignored++; return BmIgnored;}
         b->limit_result = (int32_t)le32(data + 20);
@@ -173,9 +194,10 @@ int marble_battmgr_receive(MarbleBattmgr *b, const uint8_t *data, uint32_t lengt
     } else {
         b->value[b->cursor] = (int32_t)value;
         b->valid |= 1u << b->cursor;
+        b->cycle_valid |= 1u << b->cursor;
     }
     advance(b);
-    return finish(b) ? BmCycleDone : BmAnswer;
+    return finish(b);
 }
 
 /* POWER_SUPPLY_USB_TYPE (unknown 0, SDP 1, DCP 2, CDP 3, ACA 4, C 5, PD 6, PD_DRP 7, PD_PPS 8) to the kIOPSFamilyCode values (the
@@ -215,8 +237,8 @@ void marble_battmgr_snapshot(const MarbleBattmgr *b, MarbleBatterySnapshot *s)
     s->design_mah = HAS(BmDesign) ? V(BmDesign) / 1000 : 0;
     s->cycles = HAS(BmCycles) ? V(BmCycles) : 0;
     /* The gauge reports times in seconds, and a negative or huge value when it has none. */
-    s->time_to_empty_min = HAS(BmTimeToEmpty) && V(BmTimeToEmpty) > 0 && V(BmTimeToEmpty) < 100 * 3600 ? V(BmTimeToEmpty) / 60 : -1;
-    s->time_to_full_min = HAS(BmTimeToFull) && V(BmTimeToFull) > 0 && V(BmTimeToFull) < 100 * 3600 ? V(BmTimeToFull) / 60 : -1;
+    s->time_to_empty_min = HAS(BmTimeToEmpty) && V(BmTimeToEmpty) > 0 && V(BmTimeToEmpty) != 0xffff && V(BmTimeToEmpty) < 100 * 3600 ? V(BmTimeToEmpty) / 60 : -1;
+    s->time_to_full_min = HAS(BmTimeToFull) && V(BmTimeToFull) > 0 && V(BmTimeToFull) != 0xffff && V(BmTimeToFull) < 100 * 3600 ? V(BmTimeToFull) / 60 : -1;
     if (s->external) {
         s->adapter_family = family(HAS(BmUsbType) ? V(BmUsbType) : 0);
         s->adapter_mv = HAS(BmUsbVoltage) ? V(BmUsbVoltage) / 1000 : 0;

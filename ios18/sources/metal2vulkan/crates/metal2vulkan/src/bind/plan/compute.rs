@@ -17,7 +17,7 @@
 //!   `maxComputeSharedMemorySize`. With emulated simdgroups the static part is the arena's own
 //!   (`RuntimeFact::SimdgroupEmulation`), and every region also fits the scratch of its simdgroups
 //!   beside the declared arena. A predicated walk's vote word (`RuntimeFact::PredicationVote`) is
-//!   counted beside the arena too. Local size and `MultiRegion` are per region.
+//!   counted beside the arena too. Local size, `MultiRegion` and `StageInReach` are per region.
 //! - **Variant.** The shape's storage-image choices and device-address slots, and the emulated
 //!   simdgroups of a pipeline compiled for them (`RuntimeFact::EmulatedSimdgroups`); a dispatch
 //!   adds those where its threadgroups need them (`BindingPlan::dispatch_variant`). The flat grid
@@ -51,7 +51,8 @@
 //! - **Stage-in strides**. A layout of a fixed stride reads its own, whatever stride the shape
 //!   binds its buffer with; one of `MTLBufferLayoutStrideDynamic` (`RuntimeFact::StageInStride`)
 //!   reads the bound one, which instantiation pushes (`PushField::StageInStride`, 0 for a buffer
-//!   bound without one).
+//!   bound without one). The template keeps each fetch of a thread-position step, from whose
+//!   elements each region decides `SpecKey::StageInReach`.
 //! - **Push fields.** Every placed field is one the binder fills: the root-table and status
 //!   addresses (holes the consumer fills), `DispatchRegion` (always written), `StageInRegion` (the
 //!   dispatch's `BindState::stage_in_region`), `StageInStride` (the bound buffer's attribute
@@ -683,7 +684,11 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
             continue;
         }
         let v = match c.key {
-            SpecKey::LocalSize(_) | SpecKey::FlatLocalSize | SpecKey::MultiRegion => continue,
+            // Each region decides these (`dispatch::region_specialization`).
+            SpecKey::LocalSize(_)
+            | SpecKey::FlatLocalSize
+            | SpecKey::MultiRegion
+            | SpecKey::StageInReach => continue,
             SpecKey::TgLength(n) => {
                 let len = u64::from(ks.threadgroup_lengths.get(&n).copied().unwrap_or(0));
                 let len = len.next_multiple_of(TG_ALIGN);
@@ -711,9 +716,9 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
         fixed.push((c.key, v));
     }
     record_specialized(&push, shape, &mut resources)?;
-    record_noted([&p.stage], shape, &mut resources)?;
-    // Emulated simdgroups: the reported static length also counts the scratch of the most threads,
-    // so the arena's own static part comes from the fact.
+    record_noted([&p.stage], shape, &mut resources, &|_| vec![Stage::Kernel])?;
+    // Emulated simdgroups: the arena's own static part comes from the fact (the reported static
+    // length is Metal's layout's, without the arena's minimum).
     let emulation = p.dependencies.iter().find_map(|d| match d.fact {
         RuntimeFact::SimdgroupEmulation {
             bytes_per_simdgroup,
@@ -721,8 +726,8 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
         } => Some((bytes_per_simdgroup, arena)),
         _ => None,
     });
-    // A predicated walk's vote word sits beside the arena; the reported static length counts it, so
-    // the arena's own static part is the rest.
+    // A predicated walk's vote word sits beside the arena, counted in the total beside the static
+    // part, which the reported static length is.
     let vote = if p
         .dependencies
         .iter()
@@ -734,7 +739,7 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
     };
     let static_bytes = match emulation {
         Some((_, arena)) => arena.map_or(0, u64::from),
-        None => u64::from(p.metal_info.static_threadgroup_memory_length).saturating_sub(vote),
+        None => u64::from(p.metal_info.static_threadgroup_memory_length),
     };
     // The imageblock, the arena's last region, starts 16-byte aligned.
     let static_bytes = if imageblock.is_some() {
@@ -783,6 +788,10 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
             fixed: arena_bytes(arena, regions_total.unwrap_or(0)),
             available: limits.max_compute_shared_memory_size,
         }),
+        rows: p
+            .dependencies
+            .iter()
+            .any(|d| d.fact == RuntimeFact::RowLockstep),
         tile: is_tile_function(p),
         tile_threadgroup: tile_threadgroup(p, shape)?,
     };
@@ -881,6 +890,12 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
                 .dependencies
                 .iter()
                 .any(|d| d.fact == RuntimeFact::StageInRegion),
+            stage_in_grid: match layout.iter().any(|c| c.key == SpecKey::StageInReach) {
+                true => (p.interface.stage_in.iter().copied())
+                    .filter(|f| crate::bind::dispatch::grid_axis(f).is_some())
+                    .collect(),
+                false => Vec::new(),
+            },
         }),
         views: Default::default(),
     })

@@ -4,7 +4,9 @@
 //! Metal's tables.
 
 use super::blend::{extended_ranges, native, NativeBlend};
-use super::{decode, encode, tile_read, tile_value, SOURCE_RANGE, SRGB_SOURCE_RANGE};
+use super::{
+    decode, encode, encode_keeping, tile_read, tile_value, SOURCE_RANGE, SRGB_SOURCE_RANGE,
+};
 use crate::error::Error;
 use crate::lower::arith::{FloatFmt, Form, Held};
 use crate::lower::stage_io::extended_color::bfloat_output;
@@ -56,6 +58,9 @@ enum Op {
     /// `textureWriteRoundingMode` `NearestEven` where the flag is set
     /// (`stage_io::extended_color::bfloat_output`).
     Output(bool, FloatFmt),
+    /// The encode of a `vec4` of `f32` bits (words 4 to 7) over a raw texel (words 0 to 3) that
+    /// keeps its channels the flags name, red first ([`encode_keeping`]).
+    Keep([bool; 4]),
 }
 
 impl Op {
@@ -63,6 +68,7 @@ impl Op {
     fn words(self) -> u32 {
         match self {
             Op::Blend(..) => 16,
+            Op::Keep(_) => 8,
             _ => 4,
         }
     }
@@ -168,6 +174,11 @@ fn kernel(form: ExtendedRange, op: Op) -> BResult<TypedModule> {
             };
             bfloat_output(&mut f, e, lanes, v)?
         }
+        Op::Keep(kept) => {
+            let v = f.composite_construct(uvec4, &lanes[4..8])?;
+            let v = f.convert(ConvOp::Bitcast, v, vec4)?;
+            encode_keeping(&mut f, form, v, (x, kept))?
+        }
         Op::Blend(eq, mask) => {
             let b = NativeBlend::of(&eq, mask).expect("a blend");
             let s = f.composite_construct(uvec4, &lanes[4..8])?;
@@ -176,7 +187,7 @@ fn kernel(form: ExtendedRange, op: Op) -> BResult<TypedModule> {
             let s1 = f.composite_construct(uvec4, &lanes[12..16])?;
             let s1 = f.convert(ConvOp::Bitcast, s1, vec4)?;
             let d = tile_value(&mut f, form, x)?;
-            let ranges = Some(extended_ranges(form));
+            let ranges = extended_ranges(form);
             let v = native(&mut f, &b, ranges, (s, Some(s1), d), Some(c))?;
             f.convert(ConvOp::Bitcast, v, uvec4)?
         }
@@ -639,8 +650,8 @@ const OPERATIONS: [BlendOperation; 5] = [
 
 /// The device's blend (`blend::native`) of source `s`, second source `s1` and blend color `c`
 /// over tile value `d` into `form`, storing the channels `mask`: each of `s`, `s1` and `c` clamped
-/// to the form's range (color lanes to its source range, alpha to `[0, 1]`, a NaN to the low end),
-/// then each class's `S·Fs op D·Fd` in `f32`, in the equation's order, each factor, product and
+/// to the form's range (color lanes to its source range, alpha to `[0, 1]`, a NaN to the low end;
+/// a padded form's not clamped), then each class's `S·Fs op D·Fd` in `f32`, in the equation's order, each factor, product and
 /// sum rounded once to `f32`, a factor of one its operand; `Min` and `Max` of the source and the
 /// destination; a lane the mask does not store `d`'s.
 fn native_model(
@@ -658,10 +669,10 @@ fn native_model(
     let clamp = |v: [f32; 4]| -> [f32; 4] {
         std::array::from_fn(|k| {
             let (lo, hi) = if k == 3 { (0.0, 1.0) } else { (lo, hi) };
-            if v[k].is_nan() {
-                lo
-            } else {
-                v[k].clamp(lo, hi)
+            match v[k] {
+                _ if form.padded() => v[k],
+                x if x.is_nan() => lo,
+                x => x.clamp(lo, hi),
             }
         })
     };
@@ -720,13 +731,13 @@ fn native_model(
     })
 }
 
-/// A blend into an extended-range attachment is the device's arithmetic (`blend::native`): over
-/// sources off the `half` grid, NaNs, infinities and values past the range, random texels, blend
-/// colors and second sources, every factor as each of the four factors and every operation for
-/// color and for alpha, under every class of write mask, each lane holds the `f32` model's bits
-/// ([`native_model`]): the clamp, then `S·Fs op D·Fd` in the equation's order, nothing rounded to
-/// `half` between the steps. Metal's own forms (its lerps and common factors, its fused pairs and
-/// a `half` rounding after each step) miss these bits at most lanes.
+/// A blend into an extended-range attachment, the linear padded forms' among them, is the
+/// device's arithmetic (`blend::native`): over sources off the `half` grid, NaNs, infinities and
+/// values past the range, random texels, blend colors and second sources, every factor as each of
+/// the four factors and every operation for color and for alpha, under every class of write mask,
+/// each lane holds the `f32` model's bits ([`native_model`]): the clamp (none for a padded form),
+/// then `S·Fs op D·Fd` in the equation's order, nothing rounded to `half` between the steps. Metal's own forms (its lerps and common factors, its fused pairs and a `half` rounding
+/// after each step) miss these bits at most lanes.
 #[test]
 fn every_blend_is_the_devices_arithmetic() {
     let masks = [
@@ -739,7 +750,7 @@ fn every_blend_is_the_devices_arithmetic() {
     ];
     let mut rng = Rng(0x5EED_B1E4D);
     let mut checked = 0usize;
-    for (fi, form) in EVERY_FORM.into_iter().enumerate() {
+    for (fi, form) in EVERY_FORM.into_iter().chain(PADDED).enumerate() {
         for (i, &f) in FACTORS.iter().enumerate() {
             let k = i + fi;
             let eq = BlendEquation {
@@ -802,7 +813,81 @@ fn every_blend_is_the_devices_arithmetic() {
             }
         }
     }
-    assert_eq!(checked, EVERY_FORM.len() * FACTORS.len() * 24);
+    assert_eq!(
+        checked,
+        (EVERY_FORM.len() + PADDED.len()) * FACTORS.len() * 24
+    );
+}
+
+/// The linear padded forms.
+const PADDED: [ExtendedRange; 2] = [ExtendedRange::R10X6, ExtendedRange::Rg10X12];
+
+/// Every code of a linear padded form reads its tile value, a blend's destination: the device's
+/// decode (`float(c)` times the `f32` nearest `1 / 1023`) narrowed to `half`, nearest even, blue 0
+/// and alpha 1, whatever the low 6 bits hold. Code 1023 is one: a padded form's tile holds every
+/// code, where an extended-range form's holds none above 1022.
+#[test]
+fn every_padded_code_reads_its_tile_value() {
+    let value = |c: u32| c as f32 * reciprocal(1023.0);
+    for form in PADDED {
+        let lanes: Vec<[u32; 4]> = (0..1024u32)
+            .map(|c| raw(form, [c, 1023 - c, 0, 0], c * 13))
+            .collect();
+        let got = run(form, Op::Tile, &lanes);
+        for (c, g) in (0..1024u32).zip(&got) {
+            let green = match form {
+                ExtendedRange::Rg10X12 => value(1023 - c),
+                _ => 0.0,
+            };
+            let want = [value(c), green, 0.0, 1.0].map(|v| to_half(f64::from(v), false).to_bits());
+            assert_eq!(*g, want, "{form:?} code {c}");
+        }
+        assert_eq!(f32::from_bits(got[1023][0]), 1.0, "{form:?}");
+    }
+}
+
+/// A write to a linear padded form under a mask of some of its channels keeps the others' codes
+/// ([`encode_keeping`]): each kept word its code in the top 10 bits, each written word the code of
+/// the value (`RoundEven(clamp(v, 0, 1) · 1023)`, a NaN 0), and every word's low 6 bits zero, as
+/// Metal's pass stores each word of a tile it writes.
+#[test]
+fn a_masked_padded_write_keeps_the_other_codes() {
+    let mut rng = Rng(0x000C_0DE5);
+    let code = |v: f32| {
+        let v = if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) };
+        round_even(f64::from(v * 1023.0)) as u32
+    };
+    for form in PADDED {
+        for kept in [[true, false, false, false], [false, true, false, false]] {
+            let lanes: Vec<[u32; 8]> = (0..256)
+                .map(|_| {
+                    let old = raw(
+                        form,
+                        [(rng.next() % 1024) as u32, (rng.next() % 1024) as u32, 0, 0],
+                        rng.next() as u32,
+                    );
+                    let mut w = [0u32; 8];
+                    w[..4].copy_from_slice(&old);
+                    for x in w[4..].iter_mut() {
+                        *x = rng.source().to_bits();
+                    }
+                    w
+                })
+                .collect();
+            let got = run(form, Op::Keep(kept), &lanes);
+            for (w, g) in lanes.iter().zip(&got) {
+                let word = |lane: usize| match kept[lane] {
+                    true => w[lane] >> 6 << 6,
+                    false => code(f32::from_bits(w[4 + lane])) << 6,
+                };
+                let green = match form {
+                    ExtendedRange::Rg10X12 => word(1),
+                    _ => 0,
+                };
+                assert_eq!(*g, [word(0), green, 0, 0], "{form:?} {kept:?} words {w:x?}");
+            }
+        }
+    }
 }
 
 /// A blend's placeholder factor or operation is refused as the placeholder it is; every other

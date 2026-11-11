@@ -1024,7 +1024,9 @@ fn depths_quiet(lane: Depths, messages: &Messages) {
 /// count is skipped there (the color lane checks its refusal). On a driver that keeps the depth
 /// per sample only through a copy (`DriverFact::PositionedDepthReadAtStandardPositions`) the
 /// texture's own image renders through the stand-in, announced once; elsewhere nothing is
-/// announced.
+/// announced. On a driver that stores and tests a depth its pass clears at the standard positions
+/// (`DriverFact::ClearedDepthAtStandardPositions`) each such depth is cleared before its pass,
+/// which records an attachment clear, and loaded.
 #[test]
 fn depth_takes_the_custom_positions() {
     let (messages, _cache, lane) = depth_lane();
@@ -1072,7 +1074,15 @@ fn depth_takes_the_custom_positions() {
     }
     let metal = Plane::X.depths(&P4);
 
-    // Beside a color attachment, every sample drawn.
+    // Beside a color attachment, every sample drawn. A driver that stores a depth its pass clears
+    // at the standard positions has it cleared before the pass, an attachment clear of its own.
+    let ahead = lane
+        .device
+        .properties()
+        .driver_facts
+        .contains(&DriverFact::ClearedDepthAtStandardPositions);
+    let clears = || lane.device.work_counts().attachment_clears_recorded;
+    let before = clears();
     let depth = lane.texture(float, 4, false);
     let color = lane.texture(PixelFormat::RGBA8Unorm, 4, false);
     let mut pass = DepthPass::new();
@@ -1082,6 +1092,11 @@ fn depth_takes_the_custom_positions() {
     lane.run(&pass, |_| Ok(())).unwrap();
     assert_depths(&lane.depths(&depth, 4), &metal, 1e-6, "dz_custom4_color");
     assert_eq!(lane.drawn(&color, 4), vec![true; 16], "dz_custom4_color");
+    let cleared = clears() - before;
+    assert!(
+        !ahead || cleared > 0,
+        "dz_custom4_color on {device}: no clear before the pass"
+    );
 
     // `Depth16Unorm`, each depth in 16-bit units.
     let depth = lane.texture(PixelFormat::Depth16Unorm, 4, false);
@@ -1151,7 +1166,10 @@ fn depth_takes_the_custom_positions() {
             "the stand-in's notice on {device}: {reason}"
         );
     }
-    eprintln!("the 4x depth passes on {device}: through the stand-in {planes}");
+    eprintln!(
+        "the 4x depth passes on {device}: through the stand-in {planes}, cleared ahead {ahead} \
+         ({cleared} attachment clears)"
+    );
     depths_quiet(lane, &messages);
 }
 
@@ -1341,6 +1359,51 @@ fn stencil_covers_the_samples_at_the_positions() {
         stencils(covers),
         "s8_custom4_edge on {device}"
     );
+    depths_quiet(lane, &messages);
+}
+
+/// A `Depth32Float` texture and a `Stencil8` one as one pass's two attachments at the custom
+/// positions (`dz_s8_custom4_separate`) each store what a `Depth32Float_Stencil8` texture's
+/// aspect stores there (`dsz_custom4_x`: the edge's samples left of the first column's middle
+/// 0.5 and 0x5a, the rest 1 and 0x11). No Metal probe ran this pair at custom positions; the
+/// expectation joins two measured answers: Metal tests and stores each aspect of separate
+/// textures in its own texture (`depth_stencil_scratch.rs`, whose combined scratch image is made
+/// for the positions), and a combined texture's aspects at these positions. A device that
+/// refuses the separate multisampled textures reports its refusal.
+#[test]
+fn separate_depth_and_stencil_take_the_positions() {
+    let (messages, _cache, lane) = depth_lane();
+    let device = lane.device.name().to_owned();
+    let name = "dz_s8_custom4_separate";
+    if !lane.located(4) {
+        eprintln!("{name} on {device}: no custom positions at 4");
+        depths_quiet(lane, &messages);
+        return;
+    }
+    let depth = lane.texture(PixelFormat::Depth32Float, 4, false);
+    let stencil = lane.texture(PixelFormat::Stencil8, 4, false);
+    let mut pass = DepthPass::new();
+    pass.positions = positions_of(&P4);
+    pass.depth = Some(depth.clone());
+    pass.stencil = Some(stencil.clone());
+    pass.plane = Plane::Edge;
+    match lane.run(&pass, |_| Ok(())) {
+        Ok(()) => {}
+        Err(Error::Unsupported(u)) => {
+            eprintln!("{name} on {device}: refused, {u:?}");
+            depths_quiet(lane, &messages);
+            return;
+        }
+        Err(error) => panic!("{name} on {device}: {error:?}"),
+    }
+    let covers = edge_covers(&P4);
+    let depths: Vec<f32> = covers.iter().map(|&c| if c { 0.5 } else { 1.0 }).collect();
+    assert_depths(&lane.depths(&depth, 4), &depths, 0.0, name);
+    let stencils: Vec<u8> = (covers.iter())
+        .map(|&c| if c { 0x5a } else { 0x11 })
+        .collect();
+    assert_eq!(lane.stencils(&stencil, 4), stencils, "{name} on {device}");
+    eprintln!("{name} on {device}: Metal's");
     depths_quiet(lane, &messages);
 }
 

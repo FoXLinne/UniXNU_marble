@@ -3,9 +3,11 @@
 //!
 //! Plain Metal writes a texture made without `ShaderWrite` and reads (or samples) one made without
 //! `ShaderRead`, as the texture with the usage (its validation stops each). A texture's image takes
-//! the usage its descriptor lacks where that costs it nothing (`Device::with_undeclared_usage`);
-//! elsewhere the image keeps the declared usage, so a valid program's texture keeps the driver's
-//! compression, and a slot binding that needs the usage takes an image of its own instead:
+//! the usage its descriptor lacks where that costs it nothing (`Device::with_undeclared_usage`),
+//! and an image in place over host pages where the device's check passed for what the usage lets
+//! reach the pages (`texture/in_place_image.rs`); elsewhere the image keeps the declared usage, so
+//! a valid program's texture keeps the driver's compression, and a slot binding that needs the
+//! usage takes an image of its own instead:
 //!
 //! - **The shadow** is an image of the texture's format and shape with both shader usages, made
 //!   at the first binding that needs it and kept with the texture object. Its truth is the
@@ -20,7 +22,9 @@
 //!   texture names its own image. A command that writes the texture through the shadow and
 //!   another way is refused as `shadow.rs` refuses it for an image's shadow.
 //! - **Not served.** A texture made resident for a function reading handles (the device's heap
-//!   sets bind its own image), a sparse texture, a heap's, and a pair the copies cannot serve stay
+//!   sets bind its own image), a sparse texture, a heap's, a tiled texture of more than one level
+//!   over a buffer (`Buffer::new_tiled_texture`: the bytes hold its first level alone, and its
+//!   image is a shadow of them already), and a pair the copies cannot serve stay
 //!   `NotImplemented(UndeclaredTextureUsage)`.
 //! - **Announced** once per device as `undeclared-usage-shadow` (performance), at a shadow's first
 //!   binding beyond the texture's usage.
@@ -67,6 +71,34 @@ pub(crate) struct UsageShadow {
     announced: AtomicBool,
 }
 
+/// What a binding that takes the texture's shadow needs it for (the module docs).
+#[derive(Clone, Copy)]
+enum Need {
+    /// A usage the texture's image and its usage both lack.
+    Usage,
+    /// A sampled binding of a texture that presents a color attachment of the draw's render pass
+    /// instance.
+    AttachedRead,
+    /// A storage binding of a YCbCr texture whose writes Metal stores into its planes.
+    YCbCrWrites,
+}
+
+impl Need {
+    /// Why the shadow was made, as the shadow log says it.
+    fn why(self) -> &'static str {
+        match self {
+            Need::Usage => "a binding needs a usage that the texture's image and its usage lack",
+            Need::AttachedRead => {
+                "a draw samples it where it presents a color attachment of the draw's own render \
+                 pass instance (an attached read)"
+            }
+            Need::YCbCrWrites => {
+                "a storage binding writes a YCbCr texture whose writes Metal stores into its planes"
+            }
+        }
+    }
+}
+
 /// Why a binding the shadow does not serve is refused: the runtime's gap.
 fn refused() -> Error {
     Error::Unsupported(Unsupported::not_implemented(
@@ -84,7 +116,7 @@ impl Texture {
             true => (ImageUsageFlags::STORAGE, TextureUsage::SHADER_WRITE),
             false => (ImageUsageFlags::SAMPLED, TextureUsage::SHADER_READ),
         };
-        match &self.0.storage {
+        match self.storage() {
             Storage::Image(image)
             | Storage::Alias { image, .. }
             | Storage::Shadow { image, .. } => {
@@ -110,7 +142,7 @@ impl Texture {
     ) -> Result<vk::ImageView, Error> {
         // The write shadow's texels are written, never read: no alpha reads 1 there.
         if self.takes_ycbcr_writes(storage) {
-            let shadow = self.usage_shadow(call)?;
+            let shadow = self.usage_shadow(call, Need::YCbCrWrites)?;
             let record = ViewRecord {
                 alpha_reads_one: false,
                 ..self.0.record.bound()
@@ -139,7 +171,7 @@ impl Texture {
         attached: bool,
     ) -> Result<Option<Arc<UsageShadow>>, Error> {
         if self.needs_usage_shadow(storage) {
-            let shadow = self.usage_shadow(call)?;
+            let shadow = self.usage_shadow(call, Need::Usage)?;
             if !shadow.announced.swap(true, Ordering::Relaxed) {
                 self.announce_usage_shadow(shadow.truth);
             }
@@ -148,7 +180,7 @@ impl Texture {
         if !attached || storage {
             return Ok(None);
         }
-        match self.usage_shadow(call) {
+        match self.usage_shadow(call, Need::AttachedRead) {
             Ok(shadow) => Ok(Some(shadow)),
             Err(Error::NotImplemented(_) | Error::Unsupported(_)) => Ok(None),
             Err(error) => Err(error),
@@ -175,7 +207,7 @@ impl Texture {
         (read, write): (Access, Access),
     ) -> Result<Use<ResourceKey>, Error> {
         let shadow = match self.takes_ycbcr_writes(storage) {
-            true => Some(self.usage_shadow(call)?),
+            true => Some(self.usage_shadow(call, Need::YCbCrWrites)?),
             false => self.slot_shadow(call, storage, attached)?,
         };
         let Some(shadow) = shadow else {
@@ -196,7 +228,7 @@ impl Texture {
     /// served or could not be made: the binding then binds as it would, and answers for the
     /// failure.
     pub(crate) fn attached_shadow_copies(&self, call: &'static str) -> Option<Arc<ShadowCopies>> {
-        (self.usage_shadow(call).ok()).map(|shadow| Arc::clone(&shadow.copies))
+        (self.usage_shadow(call, Need::AttachedRead).ok()).map(|shadow| Arc::clone(&shadow.copies))
     }
 
     /// The copies of the texture's shadow, where a binding made it.
@@ -204,10 +236,12 @@ impl Texture {
         (self.0.usage_shadow.get()).map(|shadow| Arc::clone(&shadow.copies))
     }
 
-    /// The texture's shadow, made at its first need (the module docs), one binding at a time; a
-    /// shadow made counts among its device's (`DeviceShared::usage_shadows_made`), which a kept
-    /// list of resident textures' shadows is listed again at (`shadow::ResidentShadows`).
-    fn usage_shadow(&self, call: &'static str) -> Result<Arc<UsageShadow>, Error> {
+    /// The texture's shadow, made at its first need (the module docs), `need` a binding's that
+    /// made it, one binding at a time; a shadow made counts among its device's
+    /// (`DeviceShared::usage_shadows_made`), which a kept list of resident textures' shadows is
+    /// listed again at (`shadow::ResidentShadows`), and is named in the shadow log
+    /// (`shadow_log.rs`).
+    fn usage_shadow(&self, call: &'static str, need: Need) -> Result<Arc<UsageShadow>, Error> {
         if let Some(shadow) = self.0.usage_shadow.get() {
             return Ok(Arc::clone(shadow));
         }
@@ -228,6 +262,7 @@ impl Texture {
             }
             false => self.new_usage_shadow(call)?,
         };
+        self.log_usage_shadow(call, need);
         let shadow = Arc::new(shadow);
         if self.0.usage_shadow.set(Arc::clone(&shadow)).is_err() {
             return Err(internal("a usage shadow made twice"));
@@ -251,7 +286,7 @@ impl Texture {
         if record.presented.rotation != 0 {
             return Err(Error::NotImplemented(RuntimeGap::RotatedTexture));
         }
-        let (image, copies, truth) = match &self.0.storage {
+        let (image, copies, truth) = match self.storage() {
             Storage::Image(image) => {
                 let base = match &image.owner {
                     Owner::ViewShadow(shadow) => &shadow.base,
@@ -269,6 +304,8 @@ impl Texture {
                 };
                 (image.shared(), copies, "its image")
             }
+            // A tiled texture's bytes hold its first level alone (the module docs).
+            Storage::Shadow { image, .. } if image.plan().levels > 1 => return Err(refused()),
             Storage::Alias { texels, .. } | Storage::Shadow { texels, .. } => {
                 let layout = TextureLayout {
                     texture_type: record.texture_type,
@@ -302,7 +339,7 @@ impl Texture {
                     (None, None),
                 )?;
                 // The texture's own image lies in the bytes too where it aliases them.
-                if matches!(self.0.storage, Storage::Alias { .. }) {
+                if matches!(self.storage(), Storage::Alias { .. }) {
                     copies.backing = copies.backing.aliased();
                 }
                 (
@@ -319,6 +356,42 @@ impl Texture {
             truth,
             announced: AtomicBool::new(false),
         })
+    }
+
+    /// Name the shadow a binding's `need` of `call` made in the shadow log (`shadow_log.rs`):
+    /// its truth, and what the texture's own image is.
+    fn log_usage_shadow(&self, call: &'static str, need: Need) {
+        if !crate::shadow_log::enabled() {
+            return;
+        }
+        let record = &self.0.record.bound();
+        let [width, height, _] = record.image_extent;
+        let texture = crate::shadow_log::Shadowed {
+            pixel_format: record.pixel_format,
+            extent: [width, height],
+            levels: record.level_count,
+            usage: record.usage,
+        };
+        let feedback = ImageUsageFlags::ATTACHMENT_FEEDBACK_LOOP_EXT;
+        let (texels, own) = match self.storage() {
+            Storage::Alias { image, texels } => {
+                let usage = match image.plan().usage.contains(feedback) {
+                    true => "with the feedback loop usage",
+                    false => "without the feedback loop usage",
+                };
+                (
+                    Some(&**texels),
+                    format!("an aliasing image over the bytes, {usage}"),
+                )
+            }
+            Storage::Shadow { texels, .. } => (Some(&**texels), "a shadow of the bytes".to_owned()),
+            Storage::Image(_) | Storage::Texels(_) => (None, "an image of its own".to_owned()),
+        };
+        let why = format!(
+            "a usage shadow: {}; the texture's own image is {own}",
+            need.why()
+        );
+        crate::shadow_log::made_of(self.device(), call, &texture, texels, &why);
     }
 
     /// Announce a binding beyond the texture's usage through its shadow, `truth` what the

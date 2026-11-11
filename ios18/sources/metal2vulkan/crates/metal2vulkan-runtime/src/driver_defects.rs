@@ -100,6 +100,28 @@ pub(super) struct Affected {
 ///   known broken through 26.2.4. Nothing is refused but a memoryless attachment at another
 ///   layer (`resolve.rs`).
 ///
+/// `VolumeResolveFirstPlane`:
+/// - Mesa's RADV (`MESA_RADV`): a render pass's color resolve into a 2D view of a 3D image
+///   (made `VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT`) whose first layer is depth plane 3 of a
+///   4x4x4 `R8G8B8A8_UNORM` volume wrote plane 0, the volume's first byte holding the resolve,
+///   three runs alike at each of two commits, on the Radeon 780M (Phoenix, `deviceID` 0x15bf),
+///   where a draw into the same kind of view writes its plane and the validation layer reports
+///   nothing (`runtime_lane::view_attachments::a_resolve_writes_the_volume_plane_it_names`).
+///   Valid usage: such a view "can be used as a framebuffer attachment that refers only to the
+///   specified range of slices" (`VkImageSubresourceRange`), and of a resolve attachment Vulkan
+///   refuses only a 3D view (`VUID-VkRenderingAttachmentInfo-resolveImageView-12471`). Nothing is
+///   refused: a color resolve into a 3D texture's planes past its first, or into more than one,
+///   goes into a scratch image of the pass's layers, copied into the planes after the pass
+///   (`resolve.rs`). Every RADV GPU takes the copy until a probe finds it clean.
+/// - NVIDIA's (`NVIDIA_PROPRIETARY`): the same resolve, of a 4x multisampled `R8G8B8A8_UNORM`
+///   attachment, into the 2D view of a 4x4x4 or a 4x4x8 volume whose first layer is depth plane 1
+///   wrote no plane, every byte of the volume as before; into the view beginning at plane 0, 2 or
+///   3 it wrote that plane alone, in any order of the four and three times over into plane 1, on
+///   the RTX 5080 Laptop GPU (`deviceID` 0x2c19, 615.71.09; 3 runs of
+///   `runtime_lane::view_attachments::a_resolve_writes_the_volume_plane_it_names` and a probe of
+///   the orders), where a draw into plane 1 through such a view writes it and the validation layer
+///   reports nothing. The same copy; every NVIDIA GPU takes it until a probe finds it clean.
+///
 /// `PipelineCacheDataCompiledAtLoad`:
 /// - MoltenVK (`MOLTENVK`): `vkCreatePipelineCache` with initial data reads each shader module's
 ///   converted MSL back (`MVKPipelineCache::readData`) through
@@ -511,6 +533,52 @@ pub(super) struct Affected {
 ///   encoders and across queues. Nothing is refused: an object over a chunk not yet imported is
 ///   bound in the chunk's import, which it waits for, never in an import of its own run
 ///   (`host_ram.rs`'s `RamOnDevice::for_object`).
+/// - Mesa's ANV (`INTEL_OPEN_SOURCE_MESA`): in one command buffer, a fill through a buffer bound in
+///   one import of a guest RAM's pages, a global memory barrier from the transfer write to the
+///   transfer read, then a copy of the same bytes through a buffer bound in another import of them
+///   read none of the fill (0 of 4096 bytes), in one blit encoder and in two, whichever of a run's
+///   import and the chunk's the fill went through, where the CPU then saw all 4096. Two command
+///   buffers of one queue, a wait for the fill's before the copy's commit, and two queues each
+///   ordered them (all 4096), and so did every way through one import (one chunk-bound buffer to
+///   another). Measured on Iris Xe Graphics (Raptor Lake-P) under Mesa 26.2.6, a probe of each way
+///   run twice; and
+///   `tests::host_ram_device::a_run_bound_and_a_chunk_bound_buffer_over_the_same_pages_order_by_their_host_bytes`
+///   and `a_run_bound_buffer_and_a_copy_of_its_pages_order_by_their_host_bytes` failed there in
+///   each of two runs. Nothing is refused, as on MoltenVK.
+///
+/// `TrimmedCommandBufferFailsResubmission`:
+/// - Mesa's ANV (`INTEL_OPEN_SOURCE_MESA`): a submission's command buffers are chained into one
+///   batch, each one's end jumping to the first batch buffer object of the next
+///   (`anv_cmd_buffer_record_chain_submit` in `anv_batch_chain.c`), and under i915 that jump adds
+///   the next one's buffer object to those its last batch buffer object names, which only its
+///   reset or begin clears (`anv_batch_bo_start`). A command buffer submitted again as recorded,
+///   as a batch's kept barriers are (`command_buffer/kept_barriers.rs`), so names at each
+///   submission the first batch buffer object of every command buffer that ever came next after
+///   it. A freed command buffer stays in its pool, its first batch buffer object with it, for the
+///   pool's later allocations (`vk_command_pool.c`), until `vkTrimCommandPool` destroys it; a
+///   batch buffer object is a slice of a larger one (`anv_slab_bo.c`), whose handle is released
+///   once every slice of it is free. The next submission that names such a handle fails:
+///   `DRM_IOCTL_I915_GEM_EXECBUFFER2` returns `ENOENT`, its object list holding an object of
+///   handle 0 (`INTEL_DEBUG=submit`), and `vkQueueSubmit` returns `VK_ERROR_DEVICE_LOST`.
+///   Measured on Iris Xe Graphics (Raptor Lake-P) under Mesa 26.2.6 on i915:
+///   `runtime_lane::predication::streams_run_what_metal_ran`, under the validation layer, which
+///   reported nothing, failed so in each of 10 runs where a spare pool's frees, uncapped on the
+///   device's free thread (`spares.rs`), trimmed the pool, and passed in each of 8 runs whose
+///   frees did not trim, 2 that freed nothing, and 3 whose kept barriers were begun with
+///   `VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT`, which ANV never chains; and
+///   `tests::spares::device::kept_barriers_run_again_after_the_command_buffers_after_them_were_freed`
+///   failed so at its 16th command buffer in each of 4 runs that trimmed, and passed in each of 3
+///   that did not. Read in Mesa main's source of 2026-11-09. Nothing is refused: a spare pool's
+///   command buffers are freed without trimming the pool there, so its later command buffers take
+///   them again; what each holds of its recording the driver releases as it frees it. That cost no
+///   memory measured on the Iris Xe (a probe, 2 runs of each way): after a command buffer of 1024
+///   blit encoders whose command buffers then went past its pool's recent uses, the process's
+///   resident memory (156.9 to 157.8 MB, 82.6 MB of it anonymous, 73 MB more than before the
+///   burst) and its buffer objects (`drm-total-system0` in the DRM file's fdinfo, 398,320 KiB in
+///   every run) were the same whether the command buffers were kept (as before the frees), freed
+///   and trimmed, or freed untrimmed: the trim returned none of what the burst grew. Under the
+///   xe kernel driver ANV names no such objects (`uses_relocs`), but no GPU of it is measured, so
+///   every ANV GPU takes the path.
 pub(super) const AFFECTED: &[Affected] = &[
     Affected {
         defect: RuntimeDriverDefect::HostTransferImagesCopiedAtBind,
@@ -546,6 +614,16 @@ pub(super) const AFFECTED: &[Affected] = &[
     Affected {
         defect: RuntimeDriverDefect::DepthStencilResolveFirstSubresource,
         driver: DriverId::MESA_LLVMPIPE,
+        clean: &[],
+    },
+    Affected {
+        defect: RuntimeDriverDefect::VolumeResolveFirstPlane,
+        driver: DriverId::MESA_RADV,
+        clean: &[],
+    },
+    Affected {
+        defect: RuntimeDriverDefect::VolumeResolveFirstPlane,
+        driver: DriverId::NVIDIA_PROPRIETARY,
         clean: &[],
     },
     Affected {
@@ -662,6 +740,16 @@ pub(super) const AFFECTED: &[Affected] = &[
     Affected {
         defect: RuntimeDriverDefect::AliasedImportBlitsUnordered,
         driver: DriverId::MOLTENVK,
+        clean: &[],
+    },
+    Affected {
+        defect: RuntimeDriverDefect::AliasedImportBlitsUnordered,
+        driver: DriverId::INTEL_OPEN_SOURCE_MESA,
+        clean: &[],
+    },
+    Affected {
+        defect: RuntimeDriverDefect::TrimmedCommandBufferFailsResubmission,
+        driver: DriverId::INTEL_OPEN_SOURCE_MESA,
         clean: &[],
     },
 ];

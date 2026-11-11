@@ -1241,6 +1241,72 @@ fn no_case_names_a_native_note() {
     assert!(named.is_empty(), "{}:\n{}", named.len(), named.join("\n"));
 }
 
+/// A failing row says which of the device's native notes its own run announced, and names no
+/// other notice there: a value the device's native answer moves is a ledger row that names the
+/// note recording it, and that note never reads as a difference, so this line is the report's one
+/// evidence that it fired in the case the row describes.
+#[test]
+fn a_failing_row_names_the_native_notes_its_run_announced() {
+    let native = Degradation::DeviceTexelConversion;
+    assert!(crate::replay::NATIVE_NOTES.contains(&native));
+    let case = WordsCase::new("words", 2);
+    let recording = recording_of(&case, case.transcript(words(&[1, 2]), "Completed", &[]), 3);
+    let render = |side: &mut StubSide| {
+        let replayed = replay_against(&case, side, &recording).unwrap();
+        assert!(
+            matches!(replayed.verdict, Verdict::Divergent { .. }),
+            "{}",
+            replayed.verdict
+        );
+        let mut report = Report::new();
+        report.add(replayed);
+        report.render()
+    };
+    let line = "the device's native notes this case announced:";
+    let noted = render(&mut StubSide::new(words(&[1, 7])).announcing(&[native]));
+    assert!(
+        noted.contains(&format!("{line} {}", native.code())),
+        "{noted}"
+    );
+    let silent = render(&mut StubSide::new(words(&[1, 7])));
+    assert!(!silent.contains(line), "{silent}");
+}
+
+/// Every accepted difference a case names is an entry of `docs/API.md` section 10, a venue's
+/// answer (`Justification::WithoutCompression`) included. A slug that names no entry justifies
+/// nothing on any venue, and a replay says so only where the site it loosens differs: the
+/// presented-Mac entry's lead-in was reworded while the compression slug kept the old words, so
+/// every site that slug loosens read divergent on the RTX 5080 and on lavapipe, and the M3 Max,
+/// whose sites match Metal's, saw nothing.
+#[test]
+fn every_accepted_difference_a_case_names_is_an_entry() {
+    let entries = accepted_differences();
+    let mut missing = Vec::new();
+    for case in crate::cases::all() {
+        for allowance in case.allowances() {
+            let (Justification::AcceptedDifference(slug) | Justification::WithoutCompression(slug)) =
+                &allowance.justified_by
+            else {
+                continue;
+            };
+            if !entries.contains(slug) {
+                missing.push(format!(
+                    "{} names {slug} at {}",
+                    case.name(),
+                    allowance.path
+                ));
+            }
+        }
+    }
+    missing.dedup();
+    assert!(
+        missing.is_empty(),
+        "{} allowance(s) name no entry of docs/API.md section 10:\n{}",
+        missing.len(),
+        missing.join("\n")
+    );
+}
+
 /// A case that names two notices separately must see **both** fire. Before the subset check the
 /// walk stopped at the first covering allowance that held, so a case declaring two announced
 /// notices read "3 named, 2 fired, 1 never fired" and its second declaration was permanently dead
@@ -2097,6 +2163,59 @@ fn a_set_diff_prints_what_is_missing_and_what_is_extra() {
     assert!(printed.contains("extra {\"d\"}"), "{printed}");
 }
 
+/// A getter's answer our side states is the venue's own limit (`Sites::device_gap`) reads as the
+/// venue's gap, `lacks-feature`, and the same answer unstated still diverges.
+///
+/// The shape is the SIMD blur's on lavapipe: a tile state whose descriptor states no limit answers
+/// 960 threads where Metal answers 1024, and the device refused the dispatch of Metal's 32x32
+/// threadgroup as its gap (`cases::tile_threadgroups`). Both directions, because a comparison that
+/// read every stated site as a gap without looking, or that never read one, would pass one alone.
+#[test]
+fn a_getter_our_side_states_is_the_devices_limit_is_the_venues_gap() {
+    let limit = "max_total_threads_per_threadgroup";
+    let facts = |threads: u64| {
+        Node::branch("state-facts", Vec::new())
+            .with(Node::leaf(limit, Observed::value(Value::Uint(threads))))
+    };
+    let metal = Transcript::new(vec![facts(1024)]);
+    let stated = {
+        let mut sites = Sites::new();
+        sites.push(facts(960));
+        sites.device_gap(
+            &format!("state-facts/{limit}"),
+            "960 threads of the pipeline, the device's limit: LocalSize",
+        );
+        sites.finish()
+    };
+    let found = compare(&metal, &stated, &[], Offered::notices(&[]));
+    assert!(found.divergences.is_empty(), "{:?}", found.divergences);
+    assert_eq!(found.device_gaps.len(), 1, "{found:?}");
+    assert_eq!(
+        found.device_gaps[0].path,
+        format!("case/state-facts/{limit}")
+    );
+    let verdict = Verdict::of(&found, &Validated::NotRun);
+    assert_eq!(verdict.word(), "lacks-feature", "{verdict}");
+    assert!(verdict.is_compliant());
+    // A stated site whose answer is Metal's is no gap at all: nothing differed.
+    let same = {
+        let mut sites = Sites::new();
+        sites.push(facts(1024));
+        sites.device_gap(&format!("state-facts/{limit}"), "LocalSize");
+        sites.finish()
+    };
+    let found = compare(&metal, &same, &[], Offered::notices(&[]));
+    assert!(found.device_gaps.is_empty(), "{found:?}");
+    assert_eq!(Verdict::of(&found, &Validated::NotRun).word(), "exact");
+
+    // The other direction: the same answer, not stated, is a divergence of ours.
+    let unstated = Transcript::new(vec![facts(960)]);
+    let found = compare(&metal, &unstated, &[], Offered::notices(&[]));
+    assert!(found.device_gaps.is_empty(), "{found:?}");
+    assert_eq!(found.divergences.len(), 1, "{found:?}");
+    assert_eq!(Verdict::of(&found, &Validated::NotRun).word(), "divergent");
+}
+
 /// **A site name held twice under one parent is reported, on either side, rather than compared by
 /// luck.**
 ///
@@ -2748,6 +2867,53 @@ fn a_refusal_reads_by_what_metals_validation_did() {
     assert!(!Verdict::of(&found, &Validated::NotRun).is_compliant());
 }
 
+/// **A venue's own answer at a site that differs on a venue presenting Metal's compression is the
+/// site's one row.** [`crate::replay::without_compression`] holds only where the venue keeps no
+/// texture compressed; on the Mac that recorded the case (MoltenVK on the M3 Max) it holds
+/// nowhere, and the site then compares as if the case loosened nothing. A difference there is the
+/// site's own divergence, or its own refusal, and the declaration adds no second row at its own
+/// path (`case/<site>/*`), which no ledger row keyed by the site could hold. On a venue keeping no
+/// compression the same difference is announced.
+#[test]
+fn a_venues_own_answer_on_a_compressing_venue_leaves_the_site_its_one_row() {
+    let leaf = |value: Value| Transcript::new(vec![Node::leaf("blit", Observed::value(value))]);
+    let allowances = vec![crate::replay::without_compression("blit")];
+    let metal = leaf(Value::Uint(0x7fc0_0000));
+    let ours = leaf(Value::Uint(0x7fc0_0001));
+    let compressing = Offered::new(&[], &Validated::NotRun);
+    let found = crate::compare::compare(&metal, &ours, &allowances, compressing);
+    assert!(found.bad_allowances.is_empty(), "{found:?}");
+    let verdict = Verdict::of(&found, &Validated::NotRun);
+    let Verdict::Divergent {
+        found: diverged, ..
+    } = &verdict
+    else {
+        panic!("the site differs on a compressing venue: {verdict}");
+    };
+    let paths: Vec<&str> = diverged.iter().map(|at| at.path.as_str()).collect();
+    assert_eq!(paths, ["case/blit"], "{verdict}");
+    // Nothing checked the claim here, and the report says why.
+    assert_eq!(found.unfired.len(), 1, "{found:?}");
+    assert_eq!(
+        found.unfired[0].why,
+        Some(Unjustified::VenueCompresses.to_string())
+    );
+
+    let refused = leaf(Value::error("Error::Invalid", Value::Absent));
+    let metal_answered = leaf(Value::ok(Value::Absent));
+    let found =
+        crate::compare::compare_run(&metal_answered, &refused, &allowances, compressing, true);
+    assert!(found.bad_allowances.is_empty(), "{found:?}");
+    assert_eq!(found.refusals.len(), 1, "{found:?}");
+    assert_eq!(found.refusals[0].documented_by, None);
+
+    let found = crate::compare::compare(&metal, &ours, &allowances, compressing.on_venue(false));
+    assert!(found.divergences.is_empty(), "{found:?}");
+    assert!(found.bad_allowances.is_empty(), "{found:?}");
+    assert_eq!(found.announced.len(), 1, "{found:?}");
+    assert_eq!(found.announced[0].path, "case/blit");
+}
+
 /// A refusal nothing documents is still exactly one refusal, and the words say plain Metal
 /// answered. This is the shape the ported lanes will mostly meet.
 #[test]
@@ -3150,16 +3316,16 @@ fn the_known_gaps_ledger_parses_and_names_real_cases() {
             .starts_with("mesh-object-draws-partial-threadgroup-")),
         "{ledger:?}"
     );
-    // The divergence rows this round left open: the fragment quad's placement on one lavapipe
-    // build, which MoltenVK answers exactly, so the rows are venue-scoped rather than global.
+    // The fragment quad's sum on a lavapipe built for 128-bit vectors, whose 4-lane fragment
+    // subgroups hold one quad each (the device's grouping, which MoltenVK does not share), so the
+    // rows are venue-scoped rather than global.
     //
-    // The scope is the build and not the implementation. These rows were measured in the gate
-    // container's arm64 lavapipe, and the suite's other lavapipe -- x86-64, `LLVM 23.1.1`,
-    // 256-bit vectors -- does not hold them. A venue field of `llvmpipe` is a substring of both
-    // device names, so it held the rows on a venue the gap was never measured on, where the
-    // retire direction then read all three as fixed. The two legs are told apart by the only thing
-    // in a venue's description that differs, which is the device name `llvmpipe` writes itself,
-    // so that is what the field carries.
+    // The scope is the vector width, which sets the subgroup's: measured on the gate container's
+    // arm64 `LLVM 21.1.8` build and on x86-64 `LLVM 23.1.4` forced to 128 bits, and absent from
+    // x86-64 lavapipe at its 256-bit default (8 lanes, two quads). A venue field of `llvmpipe`
+    // held the rows on a venue that does not hold the gap, where the retire direction read all
+    // three as fixed; one build's name missed the other 128-bit build. The width `llvmpipe`
+    // writes into its device name is what the field carries.
     let quads: Vec<&crate::known_gaps::KnownGap> = ledger
         .iter()
         .filter(|known| known.case == "discard-quad-sum-placement")
@@ -3170,19 +3336,32 @@ fn the_known_gaps_ledger_parses_and_names_real_cases() {
         driver: "vendor 0x10005 device 0x0000".to_owned(),
         api: "1.2".to_owned(),
         lossless_compression: true,
+        host: None,
     };
-    let measured = lavapipe("llvmpipe (LLVM 21.1.8, 128 bits)");
-    let other = lavapipe("llvmpipe (LLVM 23.1.1, 256 bits)");
     for known in &quads {
-        assert!(known.covers_venue(&measured), "{known:?}");
-        assert!(
-            !known.covers_venue(&other),
-            "the row holds on a lavapipe it was never measured on: {known:?}"
-        );
+        for measured in [
+            "llvmpipe (LLVM 21.1.8, 128 bits)",
+            "llvmpipe (LLVM 23.1.4, 128 bits)",
+        ] {
+            assert!(
+                known.covers_venue(&lavapipe(measured)),
+                "{measured}: {known:?}"
+            );
+        }
+        for other in [
+            "llvmpipe (LLVM 23.1.1, 256 bits)",
+            "llvmpipe (LLVM 23.1.4, 256 bits)",
+            "Apple M3 Max",
+        ] {
+            assert!(
+                !known.covers_venue(&lavapipe(other)),
+                "the row holds on a venue that does not hold the gap, {other}: {known:?}"
+            );
+        }
     }
     for known in quads {
         assert_eq!(known.expects, crate::known_gaps::Expects::Divergent);
-        assert_eq!(known.venue, "llvmpipe (LLVM 21.1.8, 128 bits)");
+        assert_eq!(known.venue, "128 bits)");
         // A divergence row says how much moved -- how many of the site's leaves differ and how
         // far -- and never where the walk first noticed, which is a property of the data and not
         // of the bug. All four texels of the kept quad differ, which the first-mismatch answer
@@ -3191,8 +3370,11 @@ fn the_known_gaps_ledger_parses_and_names_real_cases() {
             known.answer, "4 elements differ (I32), the largest difference 1",
             "{known:?}"
         );
-        // And it is honest about what is not established, which is the whole cause.
-        assert!(known.waiting_on.contains("NOT established"), "{known:?}");
+        // And it names the cause, the device's grouping, and the note that announces it.
+        assert!(
+            known.waiting_on.contains("fragment-simdgroup-grouping"),
+            "{known:?}"
+        );
     }
 
     // Every row's site must be one its case's committed recording actually holds. A row for a
@@ -3309,7 +3491,70 @@ fn venue_named(device: &str) -> Venue {
         driver: "stub".to_owned(),
         api: "none".to_owned(),
         lossless_compression: true,
+        host: None,
     }
+}
+
+/// A CPU implementation's venue names its host's widest vector instruction set (`Venue::host`),
+/// which llvmpipe's compiler targets: one Mesa 26.2.6 build (LLVM 23.1.4) stores the `x3` sites of
+/// `fetch-ordered-*-srgb` and the `one-one-subtract` site of `blend-interaction-format-srgb8` a code
+/// from Metal's at other texels on a host with AVX-512 than on one with AVX2 alone, which its device
+/// name and driver do not tell apart. Each such site holds exactly one row on each of those hosts,
+/// and a GPU's description carries no host.
+#[test]
+fn a_cpu_venue_is_told_apart_by_its_hosts_vector_set() {
+    let venue = |host: Option<&str>| crate::case::Venue {
+        device: "llvmpipe (LLVM 23.1.4, 256 bits)".to_owned(),
+        driver: "vendor 0x10005 device 0x0000".to_owned(),
+        api: "1.4".to_owned(),
+        lossless_compression: false,
+        host: host.map(str::to_owned),
+    };
+    let avx2 = venue(Some("x86-64 AVX2"));
+    let avx512 = venue(Some("x86-64 AVX-512"));
+    assert_eq!(
+        avx2.to_string(),
+        "llvmpipe (LLVM 23.1.4, 256 bits) on x86-64 AVX2 (vendor 0x10005 device 0x0000, API 1.4)"
+    );
+    assert_eq!(
+        venue(None).to_string(),
+        "llvmpipe (LLVM 23.1.4, 256 bits) (vendor 0x10005 device 0x0000, API 1.4)"
+    );
+    let ledger = crate::known_gaps::ledger().expect("the ledger parses");
+    let sites = [
+        ("fetch-ordered-rgba8unorm-srgb", "case/x3"),
+        ("fetch-ordered-rgba8unorm-srgb", "case/x3-depth"),
+        ("fetch-ordered-bgra8unorm-srgb", "case/x3"),
+        ("fetch-ordered-bgra8unorm-srgb", "case/x3-depth"),
+        (
+            "blend-interaction-format-srgb8",
+            "case/blended/one-one-subtract",
+        ),
+    ];
+    for (case, site) in sites {
+        let answers = |on: &crate::case::Venue| -> Vec<&str> {
+            ledger
+                .iter()
+                .filter(|known| known.case == case && known.site == site && known.covers_venue(on))
+                .map(|known| known.answer.as_str())
+                .collect()
+        };
+        let (two, five) = (answers(&avx2), answers(&avx512));
+        assert_eq!(
+            (two.len(), five.len()),
+            (1, 1),
+            "{case} {site}: {two:?} {five:?}"
+        );
+        assert_ne!(two, five, "{case} {site}");
+    }
+    // This host's, which names its architecture.
+    let host = crate::case::host_vector_isa();
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x86-64 ",
+        "aarch64" => "AArch64 ",
+        other => other,
+    };
+    assert!(host.starts_with(arch), "{host}");
 }
 
 /// The ledger is an expectation held in both directions, and it changes no verdict.
@@ -3709,6 +3954,49 @@ fn a_site_the_venue_lacks_is_the_venues_gap_and_not_a_refusal() {
     let mut unbuilt = StubSide::new(words(&[7])).refusing("texture", ours);
     let replayed = replay_against(&case, &mut unbuilt, &recording).unwrap();
     assert_eq!(replayed.verdict.word(), "refused");
+}
+
+/// A run that stops at a typed refusal reports that error, not a call that never answered:
+/// `cost` and `times` print and record the line [`Abort::stopped`] makes. A failure outside the
+/// runtime's typed errors still reads as a call that did not answer, and the venue's own gap as
+/// what it lacks.
+#[test]
+fn a_run_stopped_at_a_typed_refusal_reports_the_error() {
+    use metal2vulkan::error::{Feature, Unsupported};
+    let at = "MTLPixelFormatRGB10A8_2P/Type2D/makes-texture".to_owned();
+    let error =
+        metal2vulkan_runtime::Error::Unsupported(Unsupported::not_implemented(Feature::Format));
+    let refused = Abort {
+        at: at.clone(),
+        failure: Failure::of(&error),
+    };
+    assert_eq!(refused.stopped(), format!("refused {error}, at {at}"));
+    assert!(
+        refused.stopped().contains("NotImplemented"),
+        "{}",
+        refused.stopped()
+    );
+    // The same through the annotation a program's interpreter adds.
+    let stepped = Abort {
+        at: at.clone(),
+        failure: Failure::of(&error).at_step(3),
+    };
+    assert_eq!(stepped.stopped(), refused.stopped());
+    let untyped = Abort {
+        at: at.clone(),
+        failure: Failure::named("NoSuchBarrierScope", "0x9: no such bits"),
+    };
+    assert_eq!(untyped.stopped(), format!("a call did not answer, at {at}"));
+    let mut lacking = Failure::of(&error);
+    lacking.lacks = Some("the device enables no such capability".to_owned());
+    let lacks = Abort {
+        at: at.clone(),
+        failure: lacking,
+    };
+    assert_eq!(
+        lacks.stopped(),
+        format!("the device enables no such capability, at {at}")
+    );
 }
 
 #[test]
@@ -4174,10 +4462,26 @@ fn the_cost_half_reads_every_count_the_runtime_keeps() {
         !counts.iter().any(|(name, _)| name.contains("copy_sites")),
         "a site table was read as a count"
     );
+    // Nor is the device's checks' work, which is never a case's.
+    assert!(
+        !counts
+            .iter()
+            .any(|(name, _)| name.starts_with("device_checks")),
+        "the device's checks' work was read as a case's"
+    );
     assert!(crate::cost::excluded("copy_sites").is_some());
     assert!(crate::cost::excluded("row_copy_regions_most").is_some());
     assert!(crate::cost::excluded("batch_submit_nanos").is_some());
     assert!(crate::cost::excluded("queue_submissions").is_none());
+    for checks in [
+        "submit_check_calls",
+        "submit_checks_run",
+        "submit_checks_recalled",
+        "device_checks",
+        "device_checks.vk_memory_allocations",
+    ] {
+        assert!(crate::cost::excluded(checks).is_some(), "{checks}");
+    }
 }
 
 /// A field of the runtime's counts that is not a count fails the reading by name.
@@ -4796,7 +5100,17 @@ fn a_count_that_says_which_thread_arrived_first_is_never_gated() {
         "primaries_begun_ahead",
         "completed_where_seen",
         "pooled_memory_blocks_freed",
+        // The same quiet period by the allocator's cause, and the totals holding it: a whole-set
+        // replay read 1 where the measurement read 0 on four cases.
+        "memory_frees.kept_stale",
+        "memory_frees.blocks",
+        "memory_frees_posted",
+        "blocks_ahead_unused",
         "finales_folded",
+        // A waiter's own submission of batches the scheduler's thread had not reached yet:
+        // `xr-gradient-bgra10xr-srgb-unblended-x4` read 1 alone and 0 or 1 across one whole-set
+        // measurement's runs.
+        "batches_submitted_by_waiters",
     ] {
         assert!(racy(count).is_some(), "{count}");
     }
@@ -4804,6 +5118,17 @@ fn a_count_that_says_which_thread_arrived_first_is_never_gated() {
     // does what a case allocates even though what the pool hands back does not.
     assert!(racy("encoder_command_buffers_begun").is_none());
     assert!(racy("pooled_memory_blocks_made").is_none());
+    // A free by any cause but the quiet period stays gated by its own name.
+    for count in [
+        "memory_frees.dedicated",
+        "memory_frees.pooled_emptied",
+        "memory_frees.kept_for_room",
+        "memory_frees.host_import",
+        "memory_frees.own_pages",
+        "memory_frees.teardown",
+    ] {
+        assert!(racy(count).is_none(), "{count}");
+    }
     // `finales_apart` and `scheduled_where_submitted` were left gated by an earlier pass of this
     // round *because nothing had been seen to move them*. That was the wrong test, and these two
     // assertions are the reversal: "nothing has moved it" is a fact about the afternoon the
@@ -6006,15 +6331,135 @@ fn a_count_whose_ceiling_is_the_lone_run_is_gated_there() {
     }
     // A count with no row is reported whichever way it differs, so the table is the whole of the
     // exception.
-    let record = alone("WorkCounts {\n    device_memory_allocated: 268435456,\n}").fold_alone_into(
-        &held("device_memory_allocated", 0),
-        "eight runs alone".to_owned(),
-    );
+    let record = alone("WorkCounts {\n    owned_kernel_spirv_bytes: 268435456,\n}")
+        .fold_alone_into(
+            &held("owned_kernel_spirv_bytes", 0),
+            "eight runs alone".to_owned(),
+        );
     assert_eq!(
-        record.composed.get("device_memory_allocated"),
+        record.composed.get("owned_kernel_spirv_bytes"),
         Some(&268_435_456)
     );
     assert_eq!(record.gated(), 0);
+}
+
+/// A release build's cost runs name their venue apart from the debug binary's, which measured every
+/// committed record: a debug build's assertions take paths of their own (a kept draw rebound again
+/// takes the whole check at its first and every second hit), so the two builds' counts differ, and
+/// a release run held to a debug record read `point-viewport-coverage`'s 3 rebinds against the
+/// debug build's 1. Held to no record of its own profile, the release run is unmeasured.
+#[test]
+fn a_release_build_s_cost_runs_name_their_venue_apart() {
+    let (debug, release) = (
+        crate::cost::venue_of("A device", true),
+        crate::cost::venue_of("A device", false),
+    );
+    assert_eq!(debug, "A device");
+    assert_ne!(debug, release);
+    assert_eq!(
+        crate::cost::venue("A device"),
+        crate::cost::venue_of("A device", cfg!(debug_assertions))
+    );
+    let counts =
+        crate::cost::Counts::read("WorkCounts {\n    render_passes_made: 3,\n}").expect("it reads");
+    let record = crate::cost::CaseCost {
+        states: 0,
+        case: "a case".to_owned(),
+        counts: crate::cost::Counts::read("WorkCounts {\n    render_passes_made: 1,\n}")
+            .expect("it reads"),
+        least: crate::cost::Counts::read("WorkCounts {\n    render_passes_made: 1,\n}")
+            .expect("it reads"),
+        runs: 8,
+        stopped: None,
+        degraded: Vec::new(),
+        nanos: 1_000,
+    }
+    .record(&debug, "eight runs".to_owned());
+    let judged = |venue: &str| {
+        crate::cost::judge(
+            std::slice::from_ref(&record),
+            venue,
+            true,
+            &counts,
+            0,
+            None,
+            &[],
+        )
+    };
+    assert!(matches!(
+        judged(&debug),
+        crate::cost::CostVerdict::Over { .. }
+    ));
+    assert!(matches!(
+        judged(&release),
+        crate::cost::CostVerdict::Unmeasured { .. }
+    ));
+}
+
+/// A ceiling is the lone run's reading, taken again at each lone measurement: one the tree no
+/// longer reaches comes down, with the bound it set.
+///
+/// The bless writes the whole set first, which carries the earlier lone run's ceiling into the
+/// bound (`carrying_the_contrast_of`: the set cannot read a ceiling), then the cases alone, which
+/// is the only measurement that can lower it. Before, the lone fold only ever raised a ceiling, so
+/// `render-then-sample-magnified-nearest` kept `creation_pipelines_made` at 3 after its creation
+/// stopped making the pipeline no draw took: the set read 2, the bound stayed the old ceiling of 3,
+/// and the lone run's 2 was written to `composed` as though the shapes disagreed. Here both shapes
+/// read 2 after an earlier lone run read 3: the bound and the ceiling come down to 2, nothing is
+/// `composed`, and the gate bites at 3.
+#[test]
+fn a_lone_run_reading_below_a_held_ceiling_lowers_it() {
+    let count = "creation_pipelines_made";
+    let reading = |made: u64| {
+        let text = format!("WorkCounts {{\n    {count}: {made},\n}}");
+        crate::cost::CaseCost {
+            states: 2,
+            case: "a case".to_owned(),
+            counts: crate::cost::Counts::read(&text).expect("the shape reads"),
+            least: crate::cost::Counts::read(&text).expect("the shape reads"),
+            runs: 8,
+            stopped: None,
+            degraded: Vec::new(),
+            nanos: 1_000,
+        }
+    };
+    let words = || "eight runs".to_owned();
+    // The record before the change: the set read 2, the lone run 3.
+    let set_before = reading(2).record("a venue", words());
+    let before = reading(3).fold_alone_into(&set_before, words());
+    assert_eq!(before.bounds.get(count), Some(&3));
+    assert_eq!(before.ceilings.get(count), Some(&3));
+    // After it, the whole set reads 2 and carries the old ceiling into its bound ...
+    let set_after = reading(2)
+        .record("a venue", words())
+        .carrying_the_contrast_of(&before);
+    assert_eq!(set_after.bounds.get(count), Some(&3));
+    // ... and the lone run, reading 2 too, takes the ceiling again.
+    let after = reading(2).fold_alone_into(&set_after, words());
+    assert_eq!(after.bounds.get(count), Some(&2), "{after:?}");
+    assert_eq!(after.ceilings.get(count), Some(&2), "{after:?}");
+    assert!(after.composed.is_empty(), "{after:?}");
+    assert!(reading(2).apart_from(&set_after).is_empty());
+    assert_eq!(after.gated(), 1);
+    let judged = |made: u64| {
+        crate::cost::judge(
+            std::slice::from_ref(&after),
+            "a venue",
+            true,
+            &reading(made).counts,
+            2,
+            None,
+            &[],
+        )
+        .is_within()
+    };
+    assert!(judged(2));
+    assert!(!judged(3), "the bound bites at the old ceiling");
+    // A lone run reading above the held ceiling still raises it.
+    let raised = reading(4).fold_alone_into(&set_after, words());
+    assert_eq!(raised.bounds.get(count), Some(&4));
+    assert_eq!(raised.ceilings.get(count), Some(&4));
+    assert!(raised.composed.is_empty());
 }
 
 /// A case that translates a function again, where the measurement translated it once, is **over**.
@@ -6907,8 +7352,6 @@ fn every_case_carries_a_cost_recording() {
     /// produces a record, so a case is covered only where a later whole-set run includes it, and
     /// the next one empties the list again.
     ///
-    /// Empty: the last whole-set run covered every case.
-    ///
     /// A whole-set run is the only shape that pays a record: a case's counts depend on what ran
     /// before it in the same process, so a selection cannot pay one however many cases it names.
     const AFTER_THE_LAST_RUN: [&str; 0] = [];
@@ -7449,4 +7892,19 @@ fn a_recorded_refusal_is_unmeasured_and_gates_no_count() {
         "over",
         "an empty record bounds every count at zero, which is what the refusal must not do"
     );
+}
+
+/// `cost --write` takes an in-set measurement of the whole case set alone: a selection's in-set
+/// counts are of another composition than the one the gate judges (`cost::write_refusal`), and an
+/// alone measurement, whose shape no selection changes, writes from any.
+#[test]
+fn an_in_set_write_takes_the_whole_case_set_alone() {
+    use crate::cost::{write_refusal, Shape};
+    let whole = crate::cases::all().len();
+    assert_eq!(write_refusal(Shape::InSet, whole, whole), None);
+    let refused = write_refusal(Shape::InSet, 36, whole).expect("a selection of 36 is refused");
+    assert!(refused.contains(&format!("{whole} cases")), "{refused}");
+    assert!(refused.contains("holds 36"), "{refused}");
+    assert_eq!(write_refusal(Shape::Alone, 36, whole), None);
+    assert_eq!(write_refusal(Shape::Alone, whole, whole), None);
 }

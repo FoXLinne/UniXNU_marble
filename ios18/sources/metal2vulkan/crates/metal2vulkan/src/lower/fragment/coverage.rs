@@ -31,7 +31,10 @@
 //! (`DriverWorkaround::InterpolationNeedsTheWholeQuad`, RADV), the entry reads each
 //! sample-qualified varying at every sample a pipeline of the device may have before the loop,
 //! where the whole quad runs, into a `Private` array (`stage_io::read_at_every_sample`), and each
-//! pass reads its sample's element.
+//! pass reads its sample's element. That driver answers a perspective varying's read at a sample
+//! with the pixel center's value extrapolated along the quad's derivatives
+//! (`DriverWorkaround::PerspectiveReadsExtrapolated`), its own interpolation, which the module
+//! records (`PrecisionNote::ExtrapolatedInterpolation`).
 //!
 //! Metal writes each covered sample's outputs (color, depth, stencil) from that sample's own run,
 //! and keeps the sample only where the run's `[[sample_mask]]` output has the sample's bit (an M3
@@ -219,7 +222,7 @@ pub(super) fn plan(cx: &mut SelectCx<'_>) -> Result<(), Error> {
         && p.workarounds
             .contains(&DriverWorkaround::MemoryWritingFragmentsRunPerSample)
         && !((sample_id || sample_varying) && position);
-    let attachments = super::rog::declared(e)
+    let attachments = super::rog::declared(cx)
         || used(&|r| matches!(r, ParamRole::ColorInput { .. } | ParamRole::Imageblock(_)));
     let refusal = if matches!(
         e.ep.stage,

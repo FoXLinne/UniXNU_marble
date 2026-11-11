@@ -56,7 +56,7 @@ impl CommandBuffer {
             device.put_back_switch(switch);
             return false;
         };
-        let prepared = switch.prepare(&mut core);
+        let prepared = switch.prepare(device, &mut core);
         if prepared.is_empty() {
             drop(core);
             device.give_up_switch(switch, prepared);
@@ -84,6 +84,7 @@ impl CommandBuffer {
             Recorded {
                 encoder,
                 raws: recorded.raws,
+                barriered: None,
                 segments: Vec::new(),
                 summary: recorded.summary,
                 sparse: Vec::new(),
@@ -113,6 +114,7 @@ impl CommandBufferShared {
     /// ran (no check failed a submission of it, and its submission did not fail). Whether one
     /// rode on it.
     pub(crate) fn settle_storage_forms(&self) -> bool {
+        let _for = self.notices_for();
         let state = lock(&self.state);
         let Some(riding) = &state.storage_form else {
             return false;

@@ -346,6 +346,7 @@ fn derive_fields(
             desc.device_type,
             Some(vk::PhysicalDeviceType::INTEGRATED_GPU | vk::PhysicalDeviceType::CPU)
         ),
+        ycbcr_in_place_reads: policy.ycbcr_in_place_reads,
         // The device's measured value, keyed on its identity as the workarounds are, or the floor.
         function_storage: function_storage::of(desc),
         // The measured deviations, one per pipeline kind; unmeasured, Vulkan's rule, the device's
@@ -406,6 +407,9 @@ fn by_identity(desc: &DeviceDescription) -> Vec<DriverWorkaround> {
             }
             found
         }
+        // An `f32` operation fused into the conversion of its result to `half`, on every GPU it
+        // drives.
+        Some(vk::DriverId::MESA_RADV) => vec![DriverWorkaround::HalfConversionFusedWithArithmetic],
         // A register allocator that faults compiling a module past a word bound, on every GPU it
         // drives.
         Some(vk::DriverId::INTEL_OPEN_SOURCE_MESA) => {
@@ -820,12 +824,6 @@ fn enabled_caps(desc: &DeviceDescription, deviations: &BTreeSet<DriverDeviation>
     }
     if deviations.contains(&DriverDeviation::MetalUnaryDenormals) {
         properties.insert(VkProperty::MetalUnaryDenormals);
-    }
-    if desc
-        .driver_facts()
-        .contains(&crate::device::DriverFact::DepthImageKeepsValuesOutsideUnitRange)
-    {
-        properties.insert(VkProperty::DepthImageKeepsValuesOutsideUnitRange);
     }
     let l = &desc.limits;
     let sample_counts: [(vk::SampleCountFlags, fn(u32) -> VkProperty); 6] = [

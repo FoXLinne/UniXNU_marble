@@ -27,7 +27,10 @@
 //! - **The bytes.** The runtime never maps a dma-buf: `contents` stays the caller's pointer, and
 //!   the CPU's writes through it and the GPU's through the imports meet in the same pages with no
 //!   flush or invalidate (the types are host-coherent).
-//! - **Textures** placed in a heap over such pages (and their views), where the device also lists
+//! - **Textures** placed in a heap over such pages (and their views) that Metal does not tile
+//!   there (one it keeps losslessly compressed, one of a format or shape whose tiles are not
+//!   measured: `texture/heap.rs`; one Metal tiles is a shadow of its elements in Metal's tiles),
+//!   where the device also lists
 //!   `VK_EXT_image_drm_format_modifier` and `VK_EXT_queue_family_foreign` (enabled beside the
 //!   route, `create.rs`'s `dma_buf_image_names`), are each an image of `DRM_FORMAT_MOD_LINEAR` made
 //!   for dma-bufs and bound to a dedicated import (`VkMemoryDedicatedAllocateInfo`) of the one
@@ -67,10 +70,14 @@
 //! - **Rebinds** of a heap onto pages imported as dma-bufs make each such texture's image again
 //!   over its own new pages before the rebind settles (`rebind.rs`), and are refused
 //!   (`NotImplemented(RebindTextures)`) where one is not made.
-//! - **Refused** (the pointer's refusal: `Unsupported`, `HostMemory`): a source that fails, chunks
-//!   the device imports as no type the buffer takes, a driver that refuses a chunk, and a sparse
-//!   buffer whose alignment misses the granule asked. Counted: `WorkCounts::dma_buf_imports` (each
-//!   chunk) and `WorkCounts::dma_buf_sparse_buffers`.
+//! - **Not imported**: a source that fails, chunks the device imports as no type the buffer takes,
+//!   a driver that refuses a chunk, and a sparse buffer whose alignment misses the granule asked.
+//!   The pointer's refusal stands: a no-copy buffer or heap whose pointer the device refused is a
+//!   copy of the pages, as where no source is given (`copied.rs`,
+//!   `WorkCounts::copied_host_buffers_device_refused`); a rebind, memory imported only as dma-bufs
+//!   and pages whose window the device's import alignment does not cover are refused
+//!   (`Unsupported`, `HostMemory`). Counted: `WorkCounts::dma_buf_imports` (each chunk) and
+//!   `WorkCounts::dma_buf_sparse_buffers`.
 
 use super::buffer::{usage, Pages};
 use super::buffer_descriptor::HostBuffer;
@@ -80,14 +87,16 @@ use super::exit_guard::{self, Call};
 use super::host_memory::{based_size, import_refused, not_importable, ImportWindow, Importer};
 use super::host_residency::Again;
 use super::image_plan::{ImageFacts, ImagePlan};
+use super::in_place_check::Unmade;
 use super::linear_plan::{check_linear_limits, tiling_lack, viewed_formats, LinearLack};
-use super::memory::{ImportFailure, MemoryClass, Placement};
+use super::memory::{self, ImportFailure, MemoryClass, Placement};
 use super::program_objects::ProgramObject;
 use super::Device;
 use crate::release;
 use ash::vk;
 use metal2vulkan::error::RuntimeDriverDefect;
 use metal2vulkan::vk::{Format, FormatFeatureFlags2, ImageCreateFlags, SampleCountFlags};
+use std::ops::Range;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::ptr::NonNull;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -98,7 +107,9 @@ use std::time::Duration;
 /// ([`HostMemory::with_dma_buf`](crate::HostMemory::with_dma_buf)).
 ///
 /// Called on the thread making the object, with no lock of the runtime's held: for a buffer or
-/// heap (or its rebind), only where the device refuses the pointer and imports dma-bufs for it;
+/// heap (or its rebind, or a buffer's making again over the same pages at its device's recovery,
+/// on the thread that recovers, before the new `VkDevice` serves, so it makes no call on the
+/// device), only where the device refuses the pointer and imports dma-bufs for it;
 /// then once for each image the runtime makes over a texture's own pages in them (over the
 /// buffer, placed in the heap, a view of one, or remade by a rebind). A source the runtime never
 /// calls is dropped with the call; one it called is kept with the imports it made, until they go.
@@ -147,6 +158,22 @@ pub struct DmaBufRequest {
 unsafe impl Send for DmaBufRequest {}
 // SAFETY: as above.
 unsafe impl Sync for DmaBufRequest {}
+
+/// A runtime extension (Metal has none): makes one dma-buf of a list of runs of a guest RAM's
+/// host pages, for a copy by runs over them
+/// ([`HostRam::with_dma_buf_of_runs`](crate::HostRam::with_dma_buf_of_runs)); on Linux, udmabuf's
+/// `UDMABUF_CREATE_LIST`.
+///
+/// Each request of the list is whole host pages ([`DmaBufRequest`]: `start` and `length`
+/// multiples of the host page, its `granule` its `length`); the requests are by start and share
+/// no page, each inside one chunk of the RAM (they may lie in several chunks, and in several of
+/// its ranges), and at most as many as the RAM was given. It returns
+/// one [`DmaBufChunk`]: a dma-buf whose bytes are the requests' pages one after another, in
+/// order, its `length` their total. The descriptor is the runtime's from then on: Vulkan's once
+/// imported, closed otherwise. An `Err`, or a chunk of another length or no dma-buf, leaves the
+/// copy to what it takes without the source.
+pub type DmaBufRunsSource =
+    Arc<dyn Fn(&[DmaBufRequest]) -> std::io::Result<DmaBufChunk> + Send + Sync + 'static>;
 
 /// One chunk of a [`DmaBufSource`]'s answer: a dma-buf whose bytes `0..length` are the requested
 /// pages from where the chunks before it end.
@@ -256,6 +283,42 @@ impl DmaBufPages {
             source: Some(ProgramObject::new(source)),
             start: request.start.as_ptr() as u64,
             length: request.length,
+            bound: None,
+            kept_for_fds: false,
+            after_free: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// The imports of one dma-buf of a list of runs of a guest RAM's pages, the first from host
+    /// address `start` ([`Device::ram_runs_as_dma_buf`]), none imported yet: a buffer's, with no
+    /// source kept (the RAM keeps its source of run lists, and the import holds the RAM until it
+    /// is freed: `host_ram.rs`'s `RamChunk`) and no bytes held in host order (the runs lie apart),
+    /// so no texture's request is ever over them.
+    fn of_runs(device: &Device, start: NonNull<u8>) -> DmaBufPages {
+        DmaBufPages {
+            device: device.clone(),
+            memories: Vec::new(),
+            of_image: false,
+            source: None,
+            start: start.as_ptr() as u64,
+            length: 0,
+            bound: None,
+            kept_for_fds: false,
+            after_free: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// The import of a dma-buf of the runtime's own memory exported as one, `length` bytes, none
+    /// imported yet: an image's dedicated one ([`Device::bind_exported_dma_buf_image`]), with no
+    /// source and no host pages (the buffer holds the memory, and the texture the buffer's).
+    fn of_exported(device: &Device, length: u64) -> DmaBufPages {
+        DmaBufPages {
+            device: device.clone(),
+            memories: Vec::new(),
+            of_image: true,
+            source: None,
+            start: 0,
+            length,
             bound: None,
             kept_for_fds: false,
             after_free: Mutex::new(Vec::new()),
@@ -466,6 +529,212 @@ impl Device {
         Ok((buffer, placement, again))
     }
 
+    /// `span`, host pages of a guest RAM (`host_ram.rs`), imported as the one dma-buf of them
+    /// that the RAM's `source` makes: a chunk of the RAM or an object's run inside one, asked for
+    /// with a granule of its whole length, so that one import holds it. The `VkBuffer` over the
+    /// whole span, made for dma-bufs and bound to the import at its start, and its placement,
+    /// which keeps the import and the source. Refused, everything made released, as
+    /// [`Device::import_from_source`] is, where the device makes no such buffer, the source fails
+    /// or answers more than one chunk, or the driver refuses the dma-buf: each of the last three
+    /// counted (`WorkCounts::host_ram_dma_buf_imports_failed`). The driver's refusal, its own
+    /// answer to the dma-buf the source made (NVIDIA's 615.71.09 refuses every udmabuf as out of
+    /// device memory, and lets go of the descriptor it was handed: `memory.rs`'s
+    /// `import_dma_buf`), is remembered for the device's life (`RamSource::refuse_dma_bufs`):
+    /// from then on every span is refused here unasked and uncounted, and takes its pointer, so
+    /// that no later chunk pays a dma-buf, a failed import and a descriptor for nothing. A
+    /// transient failure of the driver's (memory that ran out) is remembered so too; the source's
+    /// failures are that span's alone.
+    ///
+    /// # Safety
+    ///
+    /// `span` is pages of the RAM's ranges, which stay mapped while the placement holds the
+    /// import, and the source's dma-bufs hold exactly those pages (`HostRam::with_dma_buf`).
+    pub(super) unsafe fn ram_span_as_dma_buf(
+        &self,
+        importer: &Importer,
+        span: Range<u64>,
+        source: &DmaBufSource,
+    ) -> Result<(vk::Buffer, Placement), Error> {
+        let shared = self.shared();
+        if !importer.imports_dma_bufs()
+            || !self.imports_dma_buf_buffers(vk::BufferCreateFlags::empty())
+            || shared.host_ram.refuses_dma_bufs()
+        {
+            return Err(not_importable());
+        }
+        let start = NonNull::new(span.start as *mut u8).ok_or_else(not_importable)?;
+        let length = span.end - span.start;
+        let request = DmaBufRequest {
+            start,
+            length,
+            granule: length,
+        };
+        let chunks = match source(request) {
+            Ok(chunks) if chunks.len() == 1 && answers(&chunks, &request, importer.page) => chunks,
+            answered => {
+                shared.counts.host_ram_dma_buf_import_failed();
+                return Err(match answered {
+                    Ok(_) => invalid("use_host_ram", Problem::DmaBuf),
+                    Err(_) => not_importable(),
+                });
+            }
+        };
+        // SAFETY: the caller's.
+        let imported = unsafe { self.ram_span_import(importer, chunks, request, source) };
+        if imported.is_err() {
+            shared.counts.host_ram_dma_buf_import_failed();
+            shared.host_ram.refuse_dma_bufs();
+        }
+        imported
+    }
+
+    /// The driver's import of `chunks`, the one dma-buf `source` answered `request` with
+    /// ([`Device::ram_span_as_dma_buf`]): the `VkBuffer` over it and its placement.
+    ///
+    /// # Safety
+    ///
+    /// As [`Device::ram_span_as_dma_buf`]'s, for the request's span.
+    unsafe fn ram_span_import(
+        &self,
+        importer: &Importer,
+        chunks: Vec<DmaBufChunk>,
+        request: DmaBufRequest,
+        source: &DmaBufSource,
+    ) -> Result<(vk::Buffer, Placement), Error> {
+        let length = request.length;
+        let window = ImportWindow {
+            start: request.start.as_ptr() as u64,
+            size: length,
+            offset: 0,
+        };
+        let mut pages = DmaBufPages::new(self, Arc::clone(source), request, false);
+        // SAFETY: the caller's.
+        let (buffer, memory, type_index) = unsafe {
+            self.chunks_buffer(
+                importer,
+                chunks,
+                &mut pages,
+                length,
+                &window,
+                MemoryClass::Shared,
+            )
+        }?;
+        self.shared().counts.dma_buf_imported(pages.memories.len());
+        let placement =
+            Placement::dma_buf(Arc::new(pages), memory, type_index, length, request.start);
+        Ok((buffer.raw, placement))
+    }
+
+    /// Whether the driver takes the dma-bufs a guest RAM's `source` makes of its pages
+    /// (`host_ram.rs`'s `Plan::listed`, whose chunks are those dma-bufs): asked of it by an import
+    /// of `page`, the RAM's first host page, as one ([`Device::ram_span_as_dma_buf`], which counts
+    /// a failure and remembers the driver's refusal), released at once. Not where the device
+    /// imports no dma-buf or makes no buffer for one, or the driver refused a dma-buf of a RAM's
+    /// source before (`RamSource::refuses_dma_bufs`), the source unasked; taken where the source
+    /// alone failed the page, its failures that span's alone. The page's dma-buf pins it, and
+    /// udmabuf allocates it in the guest's file where the guest never wrote it.
+    ///
+    /// # Safety
+    ///
+    /// As [`Device::ram_span_as_dma_buf`]'s, for `page`.
+    pub(super) unsafe fn ram_takes_dma_bufs(
+        &self,
+        importer: &Importer,
+        page: Range<u64>,
+        source: &DmaBufSource,
+    ) -> bool {
+        let refused = || self.shared().host_ram.refuses_dma_bufs();
+        if !importer.imports_dma_bufs()
+            || !self.imports_dma_buf_buffers(vk::BufferCreateFlags::empty())
+            || refused()
+        {
+            return false;
+        }
+        // SAFETY: the caller's.
+        match unsafe { self.ram_span_as_dma_buf(importer, page, source) } {
+            Ok((raw, placement)) => {
+                self.discard_import(raw, placement);
+                true
+            }
+            Err(_) => !refused(),
+        }
+    }
+
+    /// `runs`, host pages of a guest RAM (`host_ram.rs`: by start, sharing no page, each inside
+    /// one chunk), imported as the one dma-buf of them, their pages one after another, that the
+    /// RAM's `source` of run lists makes (`HostRam::with_dma_buf_of_runs`): the `VkBuffer` over
+    /// all their bytes, made for dma-bufs and bound to the import at its start, and its
+    /// placement, which keeps the import. Only a copy's commands name the buffer: no object is
+    /// placed in it.
+    /// Refused, everything made released, as [`Device::ram_span_as_dma_buf`] is, where the device
+    /// makes no such buffer, the source fails or answers a chunk of another length, or the driver
+    /// refuses the dma-buf; and, the source unasked, where the driver refused a dma-buf of a
+    /// RAM's source before (`RamSource::refuses_dma_bufs`). The driver's refusal of the list's is
+    /// remembered so too, for the device's life; the source's failures are that list's alone.
+    ///
+    /// # Safety
+    ///
+    /// The runs are pages of the RAM's ranges, which stay mapped while the placement holds the
+    /// import, and the source's dma-buf holds exactly those pages, in order.
+    pub(super) unsafe fn ram_runs_as_dma_buf(
+        &self,
+        importer: &Importer,
+        runs: &[Range<u64>],
+        source: &DmaBufRunsSource,
+    ) -> Result<(vk::Buffer, Placement), Error> {
+        let shared = self.shared();
+        if !importer.imports_dma_bufs()
+            || !self.imports_dma_buf_buffers(vk::BufferCreateFlags::empty())
+            || shared.host_ram.refuses_dma_bufs()
+        {
+            return Err(not_importable());
+        }
+        let requests: Option<Vec<DmaBufRequest>> = (runs.iter())
+            .map(|run| {
+                let start = NonNull::new(run.start as *mut u8)?;
+                let length = run.end.checked_sub(run.start)?;
+                Some(DmaBufRequest {
+                    start,
+                    length,
+                    granule: length,
+                })
+            })
+            .collect();
+        let requests = requests.ok_or_else(not_importable)?;
+        let start = requests.first().ok_or_else(not_importable)?.start;
+        let length: u64 = requests.iter().map(|request| request.length).sum();
+        let chunk = source(&requests).map_err(|_| not_importable())?;
+        let whole = DmaBufRequest {
+            start,
+            length,
+            granule: length,
+        };
+        if !answers(std::slice::from_ref(&chunk), &whole, importer.page) {
+            return Err(invalid("use_host_ram", Problem::DmaBuf));
+        }
+        let window = ImportWindow {
+            start: start.as_ptr() as u64,
+            size: length,
+            offset: 0,
+        };
+        let mut pages = DmaBufPages::of_runs(self, start);
+        // SAFETY: the caller's.
+        let (buffer, memory, type_index) = unsafe {
+            self.chunks_buffer(
+                importer,
+                vec![chunk],
+                &mut pages,
+                length,
+                &window,
+                MemoryClass::Shared,
+            )
+        }
+        .inspect_err(|_| shared.host_ram.refuse_dma_bufs())?;
+        shared.counts.dma_buf_imported(pages.memories.len());
+        let placement = Placement::dma_buf(Arc::new(pages), memory, type_index, length, start);
+        Ok((buffer.raw, placement))
+    }
+
     /// The pages of a released import made again from the dma-bufs `chunks` it kept, which
     /// `source` made for `request` (`host_residency.rs`), as `again` made it: a new `VkBuffer`
     /// made and bound as the first was, over imports of the same dma-bufs, so over the pages they
@@ -480,7 +749,7 @@ impl Device {
         again: &Again,
     ) -> Result<Pages, Error> {
         if self.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.lost_refusal());
         }
         let refused = |_| Error::OutOfMemory(MemoryKind::Device);
         let shared = self.shared();
@@ -657,12 +926,18 @@ impl Device {
             let types = unsafe { importer.dma_buf_types(raw_device, fd.as_fd()) }
                 .map_err(import_refused)?;
             let allowed = types & requirements.memory_type_bits;
-            let (memory, type_index) = lock(&shared.memory)
-                .import_dma_buf(raw_device, fd, length, (allowed, class), None)
-                .map_err(|failure| match failure {
-                    ImportFailure::NoMemoryType => not_importable(),
-                    ImportFailure::Vulkan(error) => import_refused(error),
-                })?;
+            let made = memory::import_dma_buf(
+                &shared.memory,
+                raw_device,
+                fd,
+                length,
+                (allowed, class),
+                None,
+            );
+            let (memory, type_index) = made.map_err(|failure| match failure {
+                ImportFailure::NoMemoryType => not_importable(),
+                ImportFailure::Vulkan(error) => import_refused(error),
+            })?;
             pages.hold(memory);
             imported.push((memory, type_index));
         }
@@ -750,6 +1025,31 @@ pub(super) struct DmaBufTexels<'a> {
     pub(super) slice_pitch: u64,
 }
 
+/// A `DRM_FORMAT_MOD_LINEAR` image with an explicit plane, unbound: the image, its memory
+/// requirements and its plane's layout as the driver reports it (`Device::explicit_plane_image`).
+pub(super) type ExplicitPlane = (vk::Image, vk::MemoryRequirements, vk::SubresourceLayout);
+
+/// A texture's texels in the runtime's own memory exported as a dma-buf (`exported_memory.rs`),
+/// which an image reaches through a dedicated import of that memory's own dma-buf
+/// ([`Device::exported_dma_buf_image_unbound`]).
+pub(super) struct ExportedTexels {
+    /// The memory, allocated exportable as a dma-buf: a shared block or the buffer's dedicated
+    /// allocation.
+    pub(super) memory: vk::DeviceMemory,
+    /// Its bytes, which its dma-buf holds.
+    pub(super) size: u64,
+    /// Its memory type, which the image's import takes too.
+    pub(super) type_index: u32,
+    /// The buffer's memory class, whose types the import ranks as the buffer's allocation did.
+    pub(super) class: MemoryClass,
+    /// The texels' first byte in the memory.
+    pub(super) at: u64,
+    /// The bytes from a row's first texel to the next row's.
+    pub(super) row_pitch: u64,
+    /// The bytes from a slice's first texel to the next slice's, for a plan of several layers.
+    pub(super) slice_pitch: u64,
+}
+
 /// A texture's image over dma-buf pages, made and bound ([`Device::dma_buf_image`]): its
 /// `VkImage`, which the caller destroys, and the import of its pages, which it drops after.
 pub(super) struct DmaBufImage {
@@ -759,12 +1059,11 @@ pub(super) struct DmaBufImage {
 
 /// The layout the driver gives a `DRM_FORMAT_MOD_LINEAR` image of its own choosing
 /// ([`Device::dma_buf_natural_layout`]): its plane's row and array pitches, and its memory's
-/// bytes and alignment, from the plane's first byte.
+/// bytes from the plane's first byte.
 pub(super) struct NaturalLayout {
     pub(super) row_pitch: u64,
     pub(super) slice_pitch: u64,
     pub(super) size: u64,
-    pub(super) alignment: u64,
 }
 
 /// The one memory plane of an image of `DRM_FORMAT_MOD_LINEAR`, whose layout Vulkan reports
@@ -799,10 +1098,18 @@ pub(super) enum DmaBufRefusal {
 
 /// An image over dma-buf pages made and not yet bound: its requirements, and the request for
 /// its pages.
-struct Unbound {
+pub(super) struct Unbound {
     raw: vk::Image,
     requirements: vk::MemoryRequirements,
     request: DmaBufRequest,
+}
+
+impl Unbound {
+    /// Release the image, which no command uses and no memory is bound to, unbound.
+    pub(super) fn release(self, device: &Device) {
+        // SAFETY: the image is live and unbound, and no command uses it.
+        unsafe { release::object(device.shared().vk(), self.raw) };
+    }
 }
 
 impl Device {
@@ -837,7 +1144,7 @@ impl Device {
 
     /// [`Device::dma_buf_image`], with the kind of each refusal ([`DmaBufRefusal`]), which a
     /// texture in place over a buffer's dma-buf pages is counted by (`in_place.rs`).
-    pub(super) fn dma_buf_image_or_why(
+    fn dma_buf_image_or_why(
         &self,
         plan: &ImagePlan,
         facts: &ImageFacts<'_>,
@@ -861,7 +1168,7 @@ impl Device {
 
     /// [`Device::dma_buf_image`]'s image made and checked, unbound, with the request for its
     /// pages; why not where the device makes none before the source is asked.
-    fn dma_buf_image_unbound(
+    pub(super) fn dma_buf_image_unbound(
         &self,
         plan: &ImagePlan,
         facts: &ImageFacts<'_>,
@@ -877,60 +1184,18 @@ impl Device {
             return Ok(Err((DmaBufRefusal::Pitch, why)));
         }
         let offset = texels.at % page;
-        let array_pitch = if plan.layers > 1 {
-            texels.slice_pitch
-        } else {
-            0
-        };
-        let planes = [vk::SubresourceLayout {
-            offset,
-            size: 0,
-            row_pitch: texels.row_pitch,
-            array_pitch,
-            depth_pitch: 0,
-        }];
-        let mut explicit = vk::ImageDrmFormatModifierExplicitCreateInfoEXT::default()
-            .drm_format_modifier(DRM_FORMAT_MOD_LINEAR)
-            .plane_layouts(&planes);
-        let dma_buf = ModifierMemory::DmaBuf;
-        let raw = match self.drm_linear_image(plan, &view_formats, &mut explicit, dma_buf)? {
-            Ok(raw) => raw,
-            Err(error) => {
-                return Ok(Err((
-                    DmaBufRefusal::Pitch,
-                    format!(
-                        "the driver refuses a DRM_FORMAT_MOD_LINEAR plane at offset {offset} of \
-                         its first page with rows {} bytes apart ({error:?})",
-                        texels.row_pitch
-                    ),
-                )))
-            }
+        let pitches = (texels.row_pitch, texels.slice_pitch);
+        let made =
+            self.explicit_plane_image(plan, &view_formats, (offset, "its first page"), pitches)?;
+        let (raw, requirements, _) = match made {
+            Ok(made) => made,
+            Err(why) => return Ok(Err(why)),
         };
         let refuse = |kind: DmaBufRefusal, why: String| {
             // SAFETY: the image is live and unbound, and no command uses it.
             unsafe { release::object(raw_device, raw) };
             Ok(Err((kind, why)))
         };
-        // Bound to a dedicated import, whether or not the driver asks one.
-        // SAFETY: `raw` is a live image of this device.
-        let requirements = unsafe { raw_device.get_image_memory_requirements(raw) };
-        // SAFETY: `raw` is a live image of a DRM format modifier's tiling, whose one memory plane
-        // is plane 0 (`VUID-vkGetImageSubresourceLayout-tiling-09433`).
-        let report = unsafe { raw_device.get_image_subresource_layout(raw, memory_plane_0()) };
-        exit_guard::called(Call::GetImageSubresourceLayout);
-        if report.offset != offset
-            || report.row_pitch != texels.row_pitch
-            || (plan.layers > 1 && report.array_pitch != array_pitch)
-        {
-            return refuse(
-                DmaBufRefusal::Pitch,
-                format!(
-                "the driver lays the plane out at offset {}, rows {} and slices {} bytes apart, \
-                 where the texels lie at offset {offset}, rows {} and slices {array_pitch} apart",
-                report.offset, report.row_pitch, report.array_pitch, texels.row_pitch
-            ),
-            );
-        }
         // The pages from the texels' first, through the image's memory.
         let first = texels.at - offset;
         let length = match requirements.size.checked_next_multiple_of(page) {
@@ -972,10 +1237,216 @@ impl Device {
         }))
     }
 
+    /// A `DRM_FORMAT_MOD_LINEAR` image of `plan` for dma-bufs, viewed as `view_formats`, its one
+    /// plane at `offset` of its memory (`within`, in words) with rows and slices `pitches` apart,
+    /// unbound and made `UNDEFINED`, with its memory requirements and its plane's layout as the
+    /// driver reports it: bound to a dedicated import, whether or not the driver asks one. Why not
+    /// where the driver refuses the layout or lays the plane out otherwise.
+    fn explicit_plane_image(
+        &self,
+        plan: &ImagePlan,
+        view_formats: &[vk::Format],
+        (offset, within): (u64, &str),
+        (row_pitch, slice_pitch): (u64, u64),
+    ) -> Result<Result<ExplicitPlane, (DmaBufRefusal, String)>, Error> {
+        let raw_device = self.shared().vk();
+        let array_pitch = if plan.layers > 1 { slice_pitch } else { 0 };
+        let planes = [vk::SubresourceLayout {
+            offset,
+            size: 0,
+            row_pitch,
+            array_pitch,
+            depth_pitch: 0,
+        }];
+        let mut explicit = vk::ImageDrmFormatModifierExplicitCreateInfoEXT::default()
+            .drm_format_modifier(DRM_FORMAT_MOD_LINEAR)
+            .plane_layouts(&planes);
+        let dma_buf = ModifierMemory::DmaBuf;
+        let raw = match self.drm_linear_image(plan, view_formats, &mut explicit, dma_buf)? {
+            Ok(raw) => raw,
+            Err(error) => {
+                return Ok(Err((
+                    DmaBufRefusal::Pitch,
+                    format!(
+                        "the driver refuses a DRM_FORMAT_MOD_LINEAR plane at offset {offset} of \
+                         {within} with rows {row_pitch} bytes apart ({error:?})"
+                    ),
+                )))
+            }
+        };
+        // SAFETY: `raw` is a live image of this device.
+        let requirements = unsafe { raw_device.get_image_memory_requirements(raw) };
+        // SAFETY: `raw` is a live image of a DRM format modifier's tiling, whose one memory plane
+        // is plane 0 (`VUID-vkGetImageSubresourceLayout-tiling-09433`).
+        let report = unsafe { raw_device.get_image_subresource_layout(raw, memory_plane_0()) };
+        exit_guard::called(Call::GetImageSubresourceLayout);
+        if report.offset != offset
+            || report.row_pitch != row_pitch
+            || (plan.layers > 1 && report.array_pitch != array_pitch)
+        {
+            // SAFETY: the image is live and unbound, and no command uses it.
+            unsafe { release::object(raw_device, raw) };
+            return Ok(Err((
+                DmaBufRefusal::Pitch,
+                format!(
+                    "the driver lays the plane out at offset {}, rows {} and slices {} bytes \
+                     apart, where the texels lie at offset {offset}, rows {row_pitch} and slices \
+                     {array_pitch} apart",
+                    report.offset, report.row_pitch, report.array_pitch
+                ),
+            )));
+        }
+        Ok(Ok((raw, requirements, report)))
+    }
+
+    /// The image of a texture over `texels` in the runtime's own memory exported as a dma-buf
+    /// (`exported_memory.rs`: a shared block of such buffers, or a buffer's dedicated allocation)
+    /// where no image binds in that memory itself (`texture.rs`'s `alias_unbound`): a
+    /// `DRM_FORMAT_MOD_LINEAR` image made for dma-bufs, its one plane at the texels' offset in the
+    /// memory with Metal's pitches, unbound, with its memory requirements and its plane's layout.
+    /// It is bound to a
+    /// dedicated import of that memory's own dma-buf ([`Device::bind_exported_dma_buf_image`]),
+    /// as an image over dma-buf pages is to one of theirs ([`Device::dma_buf_image`]): its memory
+    /// is the buffer's, through a second `VkDeviceMemory` of the same payload, which Vulkan
+    /// imports into the instance that exported it (`VkImportMemoryFdInfoKHR`; the dma-buf is the
+    /// device's own, `VUID-VkImportMemoryFdInfoKHR-fd-00668`). Why not, the image released, where
+    /// the device makes no such image for dma-bufs (the reasons of [`Device::dma_buf_image`]
+    /// before the plane's), refuses the plane, or the image's memory runs past the buffer's
+    /// memory or takes none of its type.
+    pub(super) fn exported_dma_buf_image_unbound(
+        &self,
+        plan: &ImagePlan,
+        facts: &ImageFacts<'_>,
+        texels: &ExportedTexels,
+    ) -> Result<Result<ExplicitPlane, String>, Error> {
+        let raw_device = self.shared().vk();
+        let view_formats = match self.dma_buf_image_checks(plan, facts)? {
+            Ok((_, view_formats)) => view_formats,
+            Err(why) => return Ok(Err(why)),
+        };
+        if let Some(why) = self.explicit_plane_rows(plan) {
+            return Ok(Err(why));
+        }
+        let pitches = (texels.row_pitch, texels.slice_pitch);
+        let within = (texels.at, "the buffer's memory");
+        let made = self.explicit_plane_image(plan, &view_formats, within, pitches)?;
+        let (raw, requirements, report) = match made {
+            Ok(made) => made,
+            Err((_, why)) => return Ok(Err(why)),
+        };
+        let why = if requirements.size > texels.size {
+            Some(format!(
+                "its image's memory, {} bytes, runs past the {} bytes of the buffer's memory",
+                requirements.size, texels.size
+            ))
+        } else if requirements.memory_type_bits & (1 << texels.type_index) == 0 {
+            Some(format!(
+                "its image takes none of the buffer's memory type {}",
+                texels.type_index
+            ))
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            // SAFETY: the image is live and unbound, and no command uses it.
+            unsafe { release::object(raw_device, raw) };
+            return Ok(Err(why));
+        }
+        Ok(Ok((raw, requirements, report)))
+    }
+
+    /// `raw`, an image [`exported_dma_buf_image_unbound`](Self::exported_dma_buf_image_unbound)
+    /// made over `texels` with its `requirements`, bound to a dedicated import of a new dma-buf of
+    /// the buffer's memory (`vkGetMemoryFdKHR`, as the buffer's own export), of the memory's own
+    /// type, and counted (`WorkCounts::exported_dma_buf_images`); the import is held as an image's
+    /// dedicated one (`WorkCounts::dma_buf_image_memories_live`) and freed after the image. The
+    /// driver takes the descriptor it imports and the runtime closes its own either way
+    /// (`memory::import_dma_buf`). Why not, the image released, where the device exports or
+    /// imports no such dma-buf, or the driver refuses the dma-buf, its import or its binding.
+    pub(super) fn bind_exported_dma_buf_image(
+        &self,
+        (raw, requirements, _): ExplicitPlane,
+        texels: &ExportedTexels,
+    ) -> Result<Result<DmaBufImage, String>, Error> {
+        let shared = self.shared();
+        let raw_device = shared.vk();
+        let refuse = |why: String| {
+            // SAFETY: the image is live and unbound, and no command uses it.
+            unsafe { release::object(raw_device, raw) };
+            Ok(Err(why))
+        };
+        let Ok(importer) = shared.host_import.as_ref() else {
+            return refuse("the device imports no dma-buf".to_owned());
+        };
+        let fd = match self.dma_buf_of(texels.memory) {
+            Ok(Ok(fd)) => fd,
+            Ok(Err(why)) => return refuse(why),
+            Err(error) => {
+                // SAFETY: the image is live and unbound, and no command uses it.
+                unsafe { release::object(raw_device, raw) };
+                return Err(error);
+            }
+        };
+        // SAFETY: the importer is this device's, and the descriptor a dma-buf.
+        let types = match unsafe { importer.dma_buf_types(raw_device, fd.as_fd()) } {
+            Ok(types) => types,
+            Err(error) => {
+                return refuse(format!(
+                    "the driver refuses the buffer memory's dma-buf ({error:?})"
+                ))
+            }
+        };
+        // The buffer memory's own type, dedicated to the image at its requirements' size exactly
+        // (`VUID-VkMemoryDedicatedAllocateInfo-image-01433`), within the dma-buf.
+        let allowed = (types & (1 << texels.type_index), texels.class);
+        let imported = memory::import_dma_buf(
+            &shared.memory,
+            raw_device,
+            fd,
+            requirements.size,
+            allowed,
+            Some(raw),
+        );
+        let memory = match imported {
+            Ok((memory, _)) => memory,
+            Err(ImportFailure::NoMemoryType) => {
+                return refuse(format!(
+                    "the driver imports the buffer memory's dma-buf as none of its memory type {}",
+                    texels.type_index
+                ))
+            }
+            Err(ImportFailure::Vulkan(vk::Result::ERROR_DEVICE_LOST)) => {
+                // SAFETY: the image is live and unbound, and no command uses it.
+                unsafe { release::object(raw_device, raw) };
+                return Err(Error::DeviceLost);
+            }
+            Err(ImportFailure::Vulkan(error)) => {
+                return refuse(format!(
+                    "the driver refuses the import of the buffer memory's dma-buf ({error:?})"
+                ))
+            }
+        };
+        // SAFETY: the image is unbound; the memory is its dedicated import, of its size.
+        if let Err(error) = unsafe { crate::creation::bind_image(raw_device, raw, memory, 0) } {
+            // SAFETY: nothing is bound to the memory, and no command uses it.
+            unsafe { release::object(raw_device, memory) };
+            return refuse(format!(
+                "the driver refuses to bind the import of the buffer memory's dma-buf ({error:?})"
+            ));
+        }
+        shared.counts.exported_dma_buf_image_made();
+        let mut import = DmaBufPages::of_exported(self, texels.size);
+        import.hold(memory);
+        Ok(Ok(DmaBufImage {
+            raw,
+            import: Arc::new(import),
+        }))
+    }
+
     /// `unbound`'s image bound to a dedicated import of the dma-buf the caller's source makes of
     /// its pages, of `texels`' memory type, and counted; why not, the image released, where the
     /// source fails or answers against its contract or the driver refuses the import or binding.
-    fn bind_dma_buf_image(
+    pub(super) fn bind_dma_buf_image(
         &self,
         unbound: Unbound,
         texels: &DmaBufTexels<'_>,
@@ -1034,7 +1505,8 @@ impl Device {
         // the image at its requirements' size exactly
         // (`VUID-VkMemoryDedicatedAllocateInfo-image-01433`), within the dma-buf's pages.
         let allowed = (types & (1 << texels.type_index), MemoryClass::Shared);
-        let imported = lock(&shared.memory).import_dma_buf(
+        let imported = memory::import_dma_buf(
+            &shared.memory,
             raw_device,
             chunk.fd,
             requirements.size,
@@ -1216,14 +1688,13 @@ impl Device {
             row_pitch: report.row_pitch,
             slice_pitch: report.array_pitch,
             size: requirements.size,
-            alignment: requirements.alignment,
         }))
     }
 
-    /// A `DRM_FORMAT_MOD_LINEAR` image of `plan` for `memory` (dma-bufs, or host allocations),
-    /// viewed as `view_formats`, its plane laid out as `modifier` says (an explicit layout, or the
-    /// modifier listed for the driver to lay out), made `UNDEFINED` as Vulkan makes an image of
-    /// external memory; or the driver's refusal of it.
+    /// A `DRM_FORMAT_MOD_LINEAR` image of `plan` for `memory` (dma-bufs, host allocations, or the
+    /// runtime's own memory), viewed as `view_formats`, its plane laid out as `modifier` says (an
+    /// explicit layout, or the modifier listed for the driver to lay out), made `UNDEFINED`; or the
+    /// driver's refusal of it.
     pub(super) fn drm_linear_image(
         &self,
         plan: &ImagePlan,
@@ -1232,18 +1703,23 @@ impl Device {
         memory: ModifierMemory,
     ) -> Result<Result<vk::Image, vk::Result>, Error> {
         let shared = self.shared();
-        let mut external =
-            vk::ExternalMemoryImageCreateInfo::default().handle_types(memory.handle_type());
+        let mut external = vk::ExternalMemoryImageCreateInfo::default();
         let mut list = vk::ImageFormatListCreateInfo::default();
-        let info = plan
+        let mut info = plan
             .create_info(shared.sharing(), view_formats, &mut list)
             .tiling(vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT)
             .initial_layout(vk::ImageLayout::UNDEFINED)
-            .push_next(&mut external)
             .push_next(modifier);
+        if let Some(handle) = memory.handle_type() {
+            external = external.handle_types(handle);
+            info = info.push_next(&mut external);
+        }
         // SAFETY: the device is live and enables the extension; `info` and its chain are valid
         // and within the device's limits for such an image (`modifier_image_limits`), its one
-        // plane the modifier's one (`modifier_features`), made `UNDEFINED` for external memory.
+        // plane the modifier's one (`modifier_features`), made `UNDEFINED` as Vulkan makes an
+        // image of external memory and every image of a DRM format modifier's tiling
+        // (`VUID-VkImageCreateInfo-initialLayout-12478`: `PREINITIALIZED` is for linear tiling
+        // alone).
         unsafe { crate::creation::image_or_refusal(shared.vk(), &info) }
     }
 
@@ -1341,8 +1817,7 @@ impl Device {
                 .queue_family_indices(families),
             false => modifier.sharing_mode(vk::SharingMode::EXCLUSIVE),
         };
-        let mut external =
-            vk::PhysicalDeviceExternalImageFormatInfo::default().handle_type(memory.handle_type());
+        let mut external = vk::PhysicalDeviceExternalImageFormatInfo::default();
         let mut list = vk::ImageFormatListCreateInfo::default().view_formats(view_formats);
         let mut query = vk::PhysicalDeviceImageFormatInfo2::default()
             .format(plan.format.into())
@@ -1350,13 +1825,22 @@ impl Device {
             .tiling(vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT)
             .usage(plan.usage.into())
             .flags(plan.flags.into())
-            .push_next(&mut external)
             .push_next(&mut modifier);
+        if let Some(handle) = memory.handle_type() {
+            external = external.handle_type(handle);
+            query = query.push_next(&mut external);
+        }
         if !view_formats.is_empty() {
             query = query.push_next(&mut list);
         }
+        // The import's properties are asked only beside the handle type they answer for: asked
+        // without one, the driver leaves them untouched, and the validation layer warns
+        // (`WARNING-vkGetPhysicalDeviceImageFormatProperties2-missing-external-info`).
         let mut imported = vk::ExternalImageFormatProperties::default();
-        let mut properties = vk::ImageFormatProperties2::default().push_next(&mut imported);
+        let mut properties = vk::ImageFormatProperties2::default();
+        if memory.handle_type().is_some() {
+            properties = properties.push_next(&mut imported);
+        }
         // SAFETY: the physical device is the instance's, whose device enables the extensions;
         // `query` and `properties` and their chains live for the call.
         let queried = unsafe {
@@ -1380,19 +1864,22 @@ impl Device {
             ));
         }
         let limits = properties.image_format_properties;
+        // An image of the runtime's own memory imports none.
+        if memory.handle_type().is_none() {
+            return Ok(limits);
+        }
         let features = imported.external_memory_properties.external_memory_features;
-        // An image for host allocations is bound at an offset of a buffer's import, which is no
-        // dedicated allocation.
-        let dedicated_only = memory == ModifierMemory::Host
+        // An image for host allocations is bound at an offset of a buffer's import, and one for
+        // exported memory at an offset of an exported block: neither is a dedicated allocation.
+        let dedicated_only = memory.shared_memory()
             && features.contains(vk::ExternalMemoryFeatureFlags::DEDICATED_ONLY);
-        if !features.contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE) || dedicated_only {
+        if !features.contains(memory.needs()) || dedicated_only {
             return Err(format!(
-                "it imports no {} for a DRM_FORMAT_MOD_LINEAR image of {:?} (importable {}, \
-                 dedicated only {})",
+                "its image format query refuses {} to a DRM_FORMAT_MOD_LINEAR image of {:?}, \
+                 or takes them in a dedicated allocation alone (features {:#x})",
                 memory.words(),
                 plan.format,
-                features.contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE),
-                features.contains(vk::ExternalMemoryFeatureFlags::DEDICATED_ONLY)
+                features.as_raw()
             ));
         }
         Ok(limits)
@@ -1400,6 +1887,13 @@ impl Device {
 }
 
 impl Device {
+    /// Whether the device makes `DRM_FORMAT_MOD_LINEAR` images: it enables
+    /// `VK_EXT_image_drm_format_modifier`, which it does beside its dma-buf imports
+    /// (`HostImport::makes_dma_buf_images`).
+    pub(super) fn makes_modifier_images(&self) -> bool {
+        (self.shared().host_import.as_ref()).is_ok_and(|importer| importer.makes_dma_buf_images())
+    }
+
     /// Why the device makes no `DRM_FORMAT_MOD_LINEAR` image of `plan` with an explicit plane,
     /// where its driver renders such an image's rows past its height
     /// ([`RuntimeDriverDefect::ExplicitPlaneRowsPastHeight`]) and the plan's height is no multiple
@@ -1419,28 +1913,75 @@ impl Device {
 }
 
 /// The memory a `DRM_FORMAT_MOD_LINEAR` image is made for: a dma-buf of its own pages
-/// ([`Device::dma_buf_image`]), or host pages imported by their pointer, where a texture's image in
-/// place lays its rows out at Metal's pitch (`texture/in_place_image.rs`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// ([`Device::dma_buf_image`]); host pages imported by their pointer, where a texture's image in
+/// place lays its rows out at Metal's pitch (`texture/in_place_image.rs`); or a buffer's memory of
+/// the runtime's own, where a texture over the buffer lays its rows out at Metal's pitch
+/// (`texture.rs`'s `alias_image`): with no external memory, or exported as the handle type its
+/// record names (`memory.rs`'s `Memory::bound_memory`, `exported_memory.rs`).
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum ModifierMemory {
     DmaBuf,
     Host,
+    Own,
+    Exported(vk::ExternalMemoryHandleTypeFlags),
+}
+
+impl std::fmt::Debug for ModifierMemory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModifierMemory::DmaBuf => f.write_str("DmaBuf"),
+            ModifierMemory::Host => f.write_str("Host"),
+            ModifierMemory::Own => f.write_str("Own"),
+            ModifierMemory::Exported(handle) => write!(f, "Exported({:#x})", handle.as_raw()),
+        }
+    }
 }
 
 impl ModifierMemory {
-    /// The external memory handle type the image is made for.
-    fn handle_type(self) -> vk::ExternalMemoryHandleTypeFlags {
+    /// The external memory handle type the image is made for; none for the runtime's own memory
+    /// of no export.
+    pub(super) fn handle_type(self) -> Option<vk::ExternalMemoryHandleTypeFlags> {
         match self {
-            ModifierMemory::DmaBuf => DMA_BUF,
-            ModifierMemory::Host => vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT,
+            ModifierMemory::DmaBuf => Some(DMA_BUF),
+            ModifierMemory::Host => Some(vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT),
+            ModifierMemory::Own => None,
+            ModifierMemory::Exported(handle) => Some(handle),
         }
     }
 
     /// The memory, in words.
-    fn words(self) -> &'static str {
+    pub(super) fn words(self) -> &'static str {
         match self {
             ModifierMemory::DmaBuf => "dma-bufs",
             ModifierMemory::Host => "host allocations",
+            ModifierMemory::Own => "the runtime's own memory",
+            ModifierMemory::Exported(DMA_BUF) => "the runtime's memory exported as dma-bufs",
+            ModifierMemory::Exported(_) => {
+                "the runtime's memory exported as opaque file descriptors"
+            }
+        }
+    }
+
+    /// The external memory features the image's handle type must have
+    /// (`VkExternalImageFormatProperties`): exportable for memory the runtime exports, importable
+    /// for an import.
+    pub(super) fn needs(self) -> vk::ExternalMemoryFeatureFlags {
+        match self {
+            ModifierMemory::Exported(_) => vk::ExternalMemoryFeatureFlags::EXPORTABLE,
+            ModifierMemory::DmaBuf | ModifierMemory::Host | ModifierMemory::Own => {
+                vk::ExternalMemoryFeatureFlags::IMPORTABLE
+            }
+        }
+    }
+
+    /// Whether the image is bound at an offset of memory it shares, which a handle type that
+    /// takes only a dedicated allocation (`VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT`) does
+    /// not: host allocations (a buffer's import) and the runtime's exported blocks; a dma-buf of
+    /// the image's own pages is its dedicated import.
+    pub(super) fn shared_memory(self) -> bool {
+        match self {
+            ModifierMemory::Host | ModifierMemory::Exported(_) => true,
+            ModifierMemory::DmaBuf | ModifierMemory::Own => false,
         }
     }
 }
@@ -1462,16 +2003,24 @@ unsafe impl Send for ExportedPages {}
 
 impl ExportedPages {
     /// `length` bytes of host-visible, host-coherent memory, exported as a dma-buf and mapped, of
-    /// the first such type that is host-cached and not device-local where one is (system memory as
-    /// the CPU caches it, as a guest's pages are; the check reads every byte back, which took 3.1 s
-    /// for a 3840x2160 surface's 33 MB through RADV's uncached type on the Radeon 780M, against
-    /// 7.2 ms cached), else not device-local; `None` where the device imports no dma-bufs, makes no
-    /// images over them, exports no such memory but as a dedicated allocation, or refuses it.
-    pub(super) fn make(device: &Device, length: u64) -> Option<ExportedPages> {
+    /// the first such type that is host-cached, one that is not device-local before one that is,
+    /// else the first that is not device-local, else the first: memory as the CPU caches it, as a
+    /// guest's pages are, which the check reads every byte of back. That took 3.1 s for a
+    /// 3840x2160 surface's 33 MB through RADV's uncached type on the Radeon 780M, against 7.2 ms
+    /// cached; and on the Iris Xe (ANV), whose host-visible types are all device-local, the whole
+    /// check took 19.0 s over its first type, which is uncached. Allocated with the device-address
+    /// flag where the device enables `bufferDeviceAddress`, as each of the runtime's allocations
+    /// and imports is: ANV (Mesa 26.2.6) refuses an import of a dma-buf of its own memory whose
+    /// flag differs from the allocation's (`VK_ERROR_INVALID_EXTERNAL_HANDLE`, of every memory
+    /// type), which left the check's class unchecked there. Why not, where the device imports no
+    /// dma-bufs, makes no images over them, exports no such memory but as a dedicated allocation,
+    /// each a cause that lasts, or refuses it, one that may pass (the check's note).
+    pub(super) fn make(device: &Device, length: u64) -> Result<ExportedPages, Unmade> {
         let shared = device.shared();
-        let importer = shared.host_import.as_ref().ok()?;
+        let importer = (shared.host_import.as_ref())
+            .map_err(|_| Unmade::lasting("the device imports no host memory"))?;
         if !importer.makes_dma_buf_images() {
-            return None;
+            return Err(Unmade::lasting("the device makes no images over dma-bufs"));
         }
         // The device exports a buffer's memory as a dma-buf, not only a dedicated allocation.
         let query = vk::PhysicalDeviceExternalBufferInfo::default()
@@ -1495,7 +2044,11 @@ impl ExportedPages {
         if !features.contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE)
             || features.contains(vk::ExternalMemoryFeatureFlags::DEDICATED_ONLY)
         {
-            return None;
+            return Err(Unmade::lasting(format!(
+                "the device exports a buffer's memory as a dma-buf only as a dedicated \
+                 allocation, or not at all (external memory features {:#x})",
+                features.as_raw()
+            )));
         }
         let wanted = vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
         let type_index = {
@@ -1504,25 +2057,38 @@ impl ExportedPages {
                 .map_while(|index| memory.type_flags(index).map(|flags| (index, flags)))
                 .filter(|(_, flags)| flags.contains(wanted))
                 .collect();
-            let system = |cached: bool| {
-                types.iter().find(|(_, flags)| {
-                    !flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
-                        && (!cached || flags.contains(vk::MemoryPropertyFlags::HOST_CACHED))
+            // Host-cached first, then system memory first; the first of the best.
+            (types.iter())
+                .min_by_key(|(_, flags)| {
+                    (
+                        !flags.contains(vk::MemoryPropertyFlags::HOST_CACHED),
+                        flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL),
+                    )
                 })
-            };
-            system(true)
-                .or(system(false))
-                .or(types.first())
-                .map(|&(index, _)| index)?
+                .map(|&(index, _)| index)
+                .ok_or_else(|| {
+                    Unmade::lasting("the device has no host-visible, host-coherent memory")
+                })?
         };
         let raw_device = shared.vk();
         let mut export = vk::ExportMemoryAllocateInfo::default().handle_types(DMA_BUF);
-        let info = vk::MemoryAllocateInfo::default()
+        let mut flags =
+            vk::MemoryAllocateFlagsInfo::default().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut info = vk::MemoryAllocateInfo::default()
             .allocation_size(length)
             .memory_type_index(type_index)
             .push_next(&mut export);
+        if shared.device_address {
+            info = info.push_next(&mut flags);
+        }
         // SAFETY: the device is live; the type exports dma-bufs of a buffer's memory (above).
-        let memory = unsafe { crate::creation::allocate_memory(raw_device, &info) }.ok()?;
+        let memory =
+            unsafe { crate::creation::allocate_memory(raw_device, &info) }.map_err(|error| {
+                Unmade::passing(format!(
+                    "its exportable allocation of {length} bytes of type {type_index} failed: \
+                     {error:?}"
+                ))
+            })?;
         let free = || {
             // SAFETY: the allocation is unused.
             unsafe { release::object(raw_device, memory) };
@@ -1537,14 +2103,21 @@ impl ExportedPages {
             .and_then(|mapped| NonNull::new(mapped.cast::<u8>()))
         else {
             free();
-            return None;
+            return Err(Unmade::passing(format!(
+                "its allocation of type {type_index} was not mapped"
+            )));
         };
         // SAFETY: the importer is this device's; the allocation was made exportable as a dma-buf.
-        let Ok(fd) = (unsafe { importer.exported_dma_buf(raw_device, memory) }) else {
-            free();
-            return None;
+        let fd = match unsafe { importer.exported_dma_buf(raw_device, memory) } {
+            Ok(fd) => fd,
+            Err(error) => {
+                free();
+                return Err(Unmade::passing(format!(
+                    "its allocation's dma-buf was not exported: {error:?}"
+                )));
+            }
         };
-        Some(ExportedPages {
+        Ok(ExportedPages {
             device: device.clone(),
             memory,
             start,

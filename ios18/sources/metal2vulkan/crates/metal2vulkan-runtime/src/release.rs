@@ -40,7 +40,8 @@ pub(crate) struct WholeDevice;
 /// entry point; once the process is exiting, leave it to the process's end. Whether it was
 /// released. Inside a section already (a whole drop's), it is always released. An image, a
 /// buffer or a memory released is counted at its caller's place (`churn_counts.rs`), and a memory
-/// among its device's live allocations too (`allocations.rs`).
+/// among its device's live allocations too (`allocations.rs`), its free the device's work in
+/// progress for its checks to step aside for (`step_aside.rs`).
 ///
 /// # Safety
 ///
@@ -50,8 +51,12 @@ pub(crate) unsafe fn object<T: Released>(device: &ash::Device, object: T) -> boo
     let Some(_busy) = exit_guard::enter() else {
         return false;
     };
+    let frees = matches!(T::CALL, Call::FreeMemory);
+    let allocations = frees.then(|| allocations::of(device.handle())).flatten();
+    let in_progress = allocations::Busy::of(allocations.as_deref());
     // SAFETY: the caller's.
     unsafe { object.destroy(device, Door(())) };
+    drop(in_progress);
     exit_guard::called(T::CALL);
     let counted = match T::CALL {
         Call::DestroyImage => Some(VkRelease::Image),
@@ -63,8 +68,8 @@ pub(crate) unsafe fn object<T: Released>(device: &ash::Device, object: T) -> boo
     if let Some(what) = counted {
         churn_counts::vk_released(what, Location::caller());
     }
-    if matches!(T::CALL, Call::FreeMemory) {
-        allocations::freed(device.handle());
+    if frees {
+        allocations::freed(allocations.as_deref());
     }
     true
 }
@@ -137,6 +142,37 @@ pub(crate) unsafe fn generated(commands: &Commands, object: Generated) -> bool {
     unsafe { destroy(commands.device, handle, std::ptr::null()) };
     exit_guard::called(call);
     true
+}
+
+/// Command buffers of one command pool, freed together (`vkFreeCommandBuffers`), the pool then
+/// trimmed (`vkTrimCommandPool`) where `trim`, so that the driver returns what it keeps of them: a
+/// spare pool's past its recent uses (`spares.rs`), whose pool is not trimmed where the driver
+/// fails a command buffer submitted again once one that came next after it is trimmed
+/// (`RuntimeDriverDefect::TrimmedCommandBufferFailsResubmission`, `driver_defects.rs`).
+pub(crate) struct PoolBuffers<'a> {
+    pub(crate) pool: vk::CommandPool,
+    pub(crate) buffers: &'a [vk::CommandBuffer],
+    pub(crate) trim: bool,
+}
+
+impl Released for PoolBuffers<'_> {
+    const CALL: Call = Call::FreeCommandBuffers;
+
+    unsafe fn destroy(self, device: &ash::Device, _: Door) {
+        let PoolBuffers {
+            pool,
+            buffers,
+            trim,
+        } = self;
+        // SAFETY: the caller's: none of the command buffers is pending, and it holds the pool
+        // alone.
+        unsafe { device.free_command_buffers(pool, buffers) };
+        if trim {
+            // SAFETY: as above.
+            unsafe { device.trim_command_pool(pool, vk::CommandPoolTrimFlags::empty()) };
+            exit_guard::called(Call::TrimCommandPool);
+        }
+    }
 }
 
 /// `Released` for handles a device's `vkDestroy*` or `vkFree*` releases.

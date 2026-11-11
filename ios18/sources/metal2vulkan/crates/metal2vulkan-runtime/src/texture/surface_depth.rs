@@ -123,8 +123,7 @@ impl Texture {
                 .filter(|plane| plane.aspect == unit.aspect)
                 .collect();
             let aspect = unit.aspect.into();
-            let regions: Vec<_> = regions
-                .into_iter()
+            let regions: Vec<_> = (regions.into.into_iter())
                 .filter(|region| region.image_subresource.aspect_mask == aspect)
                 .collect();
             // The plane's aspect alone: one part, of the planes given.
@@ -145,7 +144,8 @@ impl Texture {
                 })
                 .collect();
             let shape = (&planes[..], tight_len, 1);
-            let tiles = HeapTiledCopies::new(device, &staging, tiled, shape, &regions, hazard)?;
+            let tiles = (tiled, format);
+            let tiles = HeapTiledCopies::new(device, &staging, tiles, shape, &regions, hazard)?;
             let (truth, tracked) = texels.buffer.tracked(base..end);
             let copies = ShadowCopies {
                 source: ShadowSource::Bytes {
@@ -172,6 +172,17 @@ impl Texture {
                 stood: AtomicU64::new(0),
                 standing: Default::default(),
             };
+            let why = "a depth or stencil texture's tiled twin over a surface plane: Metal lays \
+                       the plane's elements in its tiles, which no image's memory holds, so its \
+                       passes render into an image of their own that the encoders move into the \
+                       tiles and back";
+            crate::shadow_log::made(
+                device,
+                "render_command_encoder",
+                (&descriptor, &layout),
+                texels,
+                why,
+            );
             let storage = Storage::Shadow {
                 image: image.shared(),
                 texels: Arc::new(texels.tiled_span(base..end, bytes)),

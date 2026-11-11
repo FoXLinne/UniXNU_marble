@@ -976,6 +976,8 @@ impl RenderLowering {
             &variant.pipeline().layout,
             &variant.pipeline().dependencies,
         )?;
+        (variant.objects())
+            .bind_sampler_tables(&variant.pipeline().layout, &variant.pipeline().dependencies);
         if commands.regions.is_empty() {
             self.core.executed(|| {
                 Execution::new(
@@ -1055,6 +1057,8 @@ impl RenderLowering {
                 .iter()
                 .map(|table| (metal2vulkan::vk::ShaderStageFlags::COMPUTE, table))
                 .collect(),
+            // A tile function's artifact states no proof that it stores nothing.
+            root_writes: true,
             push_holes: &commands.push_holes,
             uses: &commands.uses,
             blobs: pipeline_stage

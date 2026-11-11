@@ -31,8 +31,8 @@
 //! A second measurement holds a guest's shape (`submit_per_import_guest_shape`): [`GUEST_IMPORTS`]
 //! pointer imports, of which each frame's blits read [`GUEST_USED`], in frames of
 //! [`GUEST_PER_FRAME`] command buffers. It measures frames at once, every import resident, then,
-//! where the driver's pointer imports follow their address
-//! (`DriverFact::PointerImportsFollowTheirAddress`), again once the device's residency thread
+//! where the device's check found its pointer imports follow their address (the runtime's
+//! `submit_check.rs`), again once the device's residency thread
 //! released the idle ones while paced frames kept the read ones in use. Printed as
 //! `SUBMIT-GUEST-SHAPE` lines: the imports (`WorkCounts::host_imports_live`,
 //! `host_imports_resident`, `host_imports_released`, `host_imports_reimported`), a frame's wall
@@ -49,21 +49,35 @@
 //! Printed as `IMPORT-RELEASE-COST` lines: the release's 50th and 90th percentiles and its time a
 //! frame, a frame's wall time, and the releases posted.
 //!
+//! A fourth holds buffers of the runtime's own (`submit_per_fresh_page_buffer`): for each phase
+//! of [`FRESH_PHASES`], that many `Device::new_buffer`s of that length and storage, longer than half
+//! a pooled block, which lie in fresh pages imported by their pointer where the device takes them
+//! (`fresh_pages.rs` of the runtime), then a `Private` control of the same lengths. It commits
+//! [`COMMITS`] command buffers of one 4-KiB fill one at a time, each waited for, and
+//! [`GUEST_FRAMES`] frames of [`GUEST_PER_FRAME`] fills. Printed as `SUBMIT-FRESH-PAGES` lines: the
+//! fresh-page buffers the device made (`WorkCounts::fresh_page_buffers_made`, `fresh_page_bytes`),
+//! its host imports and pooled blocks live, a command buffer's time from its kernelStartTime to its
+//! kernelEndTime (50th percentile), a frame's wall time and the scheduler thread's CPU time a
+//! commit and a frame.
+//!
 //! Ignored by default: measurements, not checks. Run them by name with `--run-ignored all`; on a
 //! host without `/dev/udmabuf` access the dma-buf rows say so and are skipped.
 
 use super::commit_costs::percentiles;
 use super::commit_latency::named_cpu_us;
-use super::dma_buf_imports::{no_copy as dma_buf_no_copy, udmabuf_openable, Calls, Memfd};
+use super::dma_buf_imports::{
+    no_copy as dma_buf_no_copy, udmabuf_openable, udmabuf_size_limit, Calls, Memfd,
+};
 use super::host_memory::{no_copy, Mapping};
 use super::submit_costs::Execbuffers;
 use super::{validated_device_with, Messages, ScratchCache, WAIT};
 use crate::gpu::TEST_DEVICE;
-use metal2vulkan::device::DriverFact;
 use metal2vulkan_runtime::{
     Buffer, CommandBuffer, CommandBufferStatus, CommandQueue, Device, ResourceOptions,
 };
 use metal2vulkan_runtime::{BufferContents, BufferDescriptor, Deallocator, HostMemory, KeepAlive};
+use metal2vulkan_runtime::{HostRam, RunResolver};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// The live imports of each phase.
@@ -91,6 +105,44 @@ const GUEST_FRAMES: usize = 120;
 const GUEST_WARM: usize = 10;
 /// The frame period while the device's residency thread releases the idle imports.
 const GUEST_PERIOD: Duration = Duration::from_micros(16_667);
+
+/// The phases of `submit_per_fresh_page_buffer`: a name, how many buffers, their length and their
+/// storage.
+const FRESH_PHASES: [(&str, usize, usize, bool); 7] = [
+    ("none", 0, 0, true),
+    ("1 Shared of 64 MiB", 1, 64 << 20, true),
+    ("4 Shared of 64 MiB", 4, 64 << 20, true),
+    ("1 Shared of 256 MiB", 1, 256 << 20, true),
+    ("4 Shared of 256 MiB", 4, 256 << 20, true),
+    ("4 Private of 256 MiB", 4, 256 << 20, false),
+    ("none again", 0, 0, true),
+];
+
+/// The guest RAM of `submit_per_ram_dma_buf`: a `memfd`'s pages, as QEMU's guest RAM with
+/// `share=on`, of a guest of 8 GiB.
+const RAM_BYTES: usize = 8 << 30;
+
+/// The phases of `submit_per_ram_dma_buf`: how many dma-bufs cover the RAM's start, each of the
+/// RAM's bytes over that many rounded down to 2 MiB (none for 0): the RAM imported whole in the
+/// 64-MiB chunks of the runtime's guest RAM (`host_ram.rs` of the runtime), in 16, and in 3 (as
+/// few as keep each below RADV's `maxMemoryAllocationSize` of 4 GiB less 4 bytes).
+const RAM_PHASES: [usize; 5] = [0, 128, 16, 3, 0];
+
+/// The objects of `submit_per_ram_chunk`: one no-copy buffer of this many bytes at the start of
+/// each 64 MiB of the RAM, as a guest's objects lie across its RAM.
+const RAM_OBJECT_BYTES: usize = 2 << 20;
+/// The 64 MiB the objects of `submit_per_ram_chunk` are apart.
+const RAM_OBJECT_STRIDE: usize = 64 << 20;
+/// How long `submit_per_ram_chunk` waits after its objects went, past the first idle window of a
+/// device that releases a guest RAM's idle chunks (2 s, `host_ram.rs` of the runtime).
+const RAM_IDLE: Duration = Duration::from_secs(4);
+/// How long no chunk of `submit_per_ram_chunk`'s RAM was imported once the device's thread is
+/// done importing those asked for.
+const RAM_QUIET: Duration = Duration::from_millis(1500);
+/// The longest `submit_per_ram_chunk` waits for the chunks' imports or the runs' release.
+const RAM_WAIT: Duration = Duration::from_secs(60);
+/// The bytes of each run of `submit_per_ram_chunk`'s gathers: a guest surface's 512 KiB.
+const RAM_COPY_RUN: usize = 512 << 10;
 
 /// The kind of import a phase holds.
 #[derive(Clone, Copy, Debug)]
@@ -149,6 +201,21 @@ fn hold(device: &Device, kind: Kind, n: usize) -> Held {
             }
         }
     }
+}
+
+/// Wait for `device`'s submission checks, whose verdicts choose its paths here (whether its
+/// batches group, its long buffers take fresh pages and its idle pointer imports are released),
+/// and print them.
+fn settled(device: &Device) {
+    assert!(
+        device.settle_submit_checks(WAIT),
+        "the submission checks never answered"
+    );
+    eprintln!(
+        "SUBMIT-CHECKS {}: {}",
+        device.name(),
+        device.submit_check_report()
+    );
 }
 
 /// A command buffer of `queue` filling `target`'s 4 KiB with `value`, not committed.
@@ -251,6 +318,7 @@ fn submit_per_import() {
         options.record_executions = false;
     })
     .unwrap();
+    settled(&device);
     let queue = device.new_command_queue().unwrap();
     let target = device.new_buffer(4096, ResourceOptions::shared()).unwrap();
     let dma_bufs = udmabuf_openable("submit per import");
@@ -352,6 +420,7 @@ fn submit_per_import_guest_shape() {
         options.record_executions = false;
     })
     .unwrap();
+    settled(&device);
     let queue = device.new_command_queue().unwrap();
     let target = device.new_buffer(4096, ResourceOptions::shared()).unwrap();
     let pages = Mapping::anonymous(GUEST_IMPORTS * IMPORT_BYTES);
@@ -367,11 +436,9 @@ fn submit_per_import_guest_shape() {
         .collect();
     let used = &buffers[..GUEST_USED];
     guest_measure(&device, &queue, &target, used, "at once");
-    let follows =
-        (device.properties().driver_facts).contains(&DriverFact::PointerImportsFollowTheirAddress);
-    if !follows {
+    if !device.pointer_imports_follow_their_address() {
         eprintln!(
-            "SUBMIT-GUEST-SHAPE {}: pointer imports kept (the driver is not measured to have them \
+            "SUBMIT-GUEST-SHAPE {}: pointer imports kept (the device's check did not find them \
              follow their address)",
             device.name()
         );
@@ -471,6 +538,7 @@ fn submit_per_import_release_cost() {
             options.record_executions = false;
         })
         .unwrap();
+        settled(&device);
         let queue = device.new_command_queue().unwrap();
         let target = device.new_buffer(4096, ResourceOptions::shared()).unwrap();
         let pages = Mapping::anonymous(GUEST_IMPORTS * IMPORT_BYTES);
@@ -519,5 +587,633 @@ fn submit_per_import_release_cost() {
             after.host_import_releases_posted - before.host_import_releases_posted,
         );
         drop(buffers);
+    }
+}
+
+/// Buffers of the runtime's own, held as each phase of [`FRESH_PHASES`] says, and what one commit
+/// and one frame of fills cost beside them, printed (the module docs).
+#[test]
+#[ignore = "a measurement, not a check: run by name with --run-ignored all"]
+fn submit_per_fresh_page_buffer() {
+    let cache = ScratchCache::new().unwrap();
+    let messages = Messages::default();
+    let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+        options.layers.clear();
+        // A consumer's device keeps no execution record.
+        options.record_executions = false;
+    })
+    .unwrap();
+    settled(&device);
+    let queue = device.new_command_queue().unwrap();
+    let target = device.new_buffer(4096, ResourceOptions::shared()).unwrap();
+    for (name, count, length, shared) in FRESH_PHASES {
+        let options = match shared {
+            true => ResourceOptions::shared(),
+            false => ResourceOptions::private(),
+        };
+        let before = device.work_counts();
+        let held: Vec<Buffer> = (0..count)
+            .map(|_| device.new_buffer(length as u64, options).unwrap())
+            .collect();
+        for value in 0..WARM {
+            submitted(fill(&queue, &target, value as u8));
+        }
+        let scheduler = named_cpu_us(SCHEDULER);
+        let times: Vec<f64> = (0..COMMITS)
+            .map(|value| submitted(fill(&queue, &target, value as u8)) * 1e6)
+            .collect();
+        let per_commit = (named_cpu_us(SCHEDULER) - scheduler) / COMMITS as f64;
+        let [_, c50, c90] = percentiles(times);
+        for _ in 0..GUEST_WARM {
+            guest_frame(&queue, &target, &[]);
+        }
+        let scheduler = named_cpu_us(SCHEDULER);
+        let frames: Vec<f64> = (0..GUEST_FRAMES)
+            .map(|_| {
+                let start = Instant::now();
+                guest_frame(&queue, &target, &[]);
+                start.elapsed().as_secs_f64() * 1e6
+            })
+            .collect();
+        let per_frame = (named_cpu_us(SCHEDULER) - scheduler) / GUEST_FRAMES as f64;
+        let [_, f50, f90] = percentiles(frames);
+        let after = device.work_counts();
+        eprintln!(
+            "SUBMIT-FRESH-PAGES {}: {name}: {} fresh-page buffers made ({} MiB), {} host imports \
+             live, {} pooled blocks live; commit p50 {c50:.1} us (p90 {c90:.1}), scheduler thread \
+             {per_commit:.1} us a commit; frame of {GUEST_PER_FRAME} p50 {f50:.0} us (p90 \
+             {f90:.0}), scheduler thread {per_frame:.0} us a frame",
+            device.name(),
+            after.fresh_page_buffers_made - before.fresh_page_buffers_made,
+            (after.fresh_page_bytes - before.fresh_page_bytes) >> 20,
+            after.host_imports_live,
+            after.memory_blocks_live,
+        );
+        drop(held);
+    }
+}
+
+/// What one commit costs beside a guest RAM's pages held as dma-bufs, for each count of
+/// [`RAM_PHASES`]: the dma-bufs, each a no-copy buffer over its share of a [`RAM_BYTES`] `memfd`
+/// (one udmabuf each, where the host's udmabuf limits take it), made, then [`COMMITS`] command
+/// buffers of one 4-KiB fill one at a time, each waited for, after [`WARM`] untimed, at once
+/// (every import resident, as a guest RAM's chunks always are: one command buffer that uses each
+/// goes first). Printed as `SUBMIT-PER-IMPORT` lines (`submit_per_import`'s), with the dma-buf
+/// memories the device holds (`WorkCounts::dma_buf_memories_live`), and a `SUBMIT-PER-RAM` line
+/// after the commits: the imports still resident, and those released or imported again, which
+/// say whether the commits ran beside every one. Skipped where `/dev/udmabuf` cannot be opened.
+#[test]
+#[ignore = "a measurement, not a check: run by name with --run-ignored all"]
+fn submit_per_ram_dma_buf() {
+    if !udmabuf_openable("submit per ram dma-buf") {
+        return;
+    }
+    let cache = ScratchCache::new().unwrap();
+    let messages = Messages::default();
+    let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+        options.layers.clear();
+        // A consumer's device keeps no execution record.
+        options.record_executions = false;
+    })
+    .unwrap();
+    settled(&device);
+    let queue = device.new_command_queue().unwrap();
+    let target = device.new_buffer(4096, ResourceOptions::shared()).unwrap();
+    let ram = Memfd::new(RAM_BYTES);
+    let calls = Calls::default();
+    let source = ram.source(&ram.whole, &calls);
+    for n in RAM_PHASES {
+        let each = match n {
+            0 => 0,
+            n => (RAM_BYTES / n) & !((2 << 20) - 1),
+        };
+        let made = device.work_counts().dma_buf_imports;
+        let buffers: Vec<Buffer> = (0..n)
+            .map(|i| {
+                dma_buf_no_copy(&device, &ram.whole, i * each, each, source.clone())
+                    .unwrap_or_else(|error| panic!("{n} dma-bufs of {each} bytes: {error:?}"))
+            })
+            .collect();
+        // One command buffer that fills a word of each, so that every import is resident when
+        // the commits start however long the making took (the device's residency thread
+        // releases an import idle for its window, `host_residency.rs` of the runtime).
+        if !buffers.is_empty() {
+            let command_buffer = queue.command_buffer().unwrap();
+            let mut blit = command_buffer.blit_command_encoder().unwrap();
+            for buffer in &buffers {
+                blit.fill_buffer(buffer, 0..4, 0x5a).unwrap();
+            }
+            blit.end_encoding().unwrap();
+            submitted(command_buffer);
+        }
+        let residency = format!(
+            "of {} MiB over a {} GiB RAM, {} live dma-buf memories, at once",
+            each >> 20,
+            RAM_BYTES >> 30,
+            device.work_counts().dma_buf_memories_live
+        );
+        measure(
+            &device,
+            &queue,
+            &target,
+            (Kind::DmaBuf, n, &residency),
+            made,
+        );
+        let after = device.work_counts();
+        eprintln!(
+            "SUBMIT-PER-RAM {}: {n} after the commits: {} dma-buf memories live, {} host imports \
+             resident, {} released, {} imported again",
+            device.name(),
+            after.dma_buf_memories_live,
+            after.host_imports_resident,
+            after.host_imports_released,
+            after.host_imports_reimported,
+        );
+        drop(buffers);
+    }
+}
+
+/// What one commit costs beside a guest RAM used whole (`Device::use_host_ram`): a [`RAM_BYTES`]
+/// `memfd`, as QEMU's guest RAM with `share=on`, with a source of dma-bufs of its pages (udmabufs
+/// within the host's limits) that says how long one may be (`HostRam::with_largest_dma_buf`, the
+/// host's udmabuf `size_limit_mb`). [`COMMITS`] command buffers of one 4-KiB fill one at a time,
+/// each waited for, after [`WARM`] untimed, in four phases: before the RAM is used; with a
+/// no-copy buffer of [`RAM_OBJECT_BYTES`] at the start of each [`RAM_OBJECT_STRIDE`] of it just
+/// made over chunks not imported (its pages resolved to the RAM's own, `HostMemory::with_runs`)
+/// and used by one command buffer; once the device's thread imported the chunks, one more object
+/// was made over each stride, the first objects' run imports were released while idle and each
+/// was used again (so lies in its chunk); and [`RAM_IDLE`] after the buffers went, the chunks
+/// kept where the RAM fits in the memory the device's imports count against, else released.
+/// Then three gathers (`copy_from_host_ram`) from those chunks, encoded, committed and waited
+/// for: [`RAM_COPY_RUN`] at 16 strides of the first chunk, the same again once the device's
+/// thread settled (a released chunk imported again by then), and one at each stride. Printed as `SUBMIT-PER-IMPORT` lines (`submit_per_import`'s) and
+/// `SUBMIT-PER-RAM-CHUNK` lines: the chunks the device imported
+/// (`WorkCounts::host_ram_chunks_imported`, `host_ram_chunk_bytes`, `host_ram_chunks_live`,
+/// `host_ram_chunks_imported_ahead`, `host_ram_chunks_released`), the run imports and dma-buf
+/// memories it holds, the buffers' makings (the first, the median and the slowest), each use of
+/// the objects from commit to completion (the second, the first submission that lists the chunks
+/// just imported, pays for their page tables) and the gathers' times. The RAM in 2 MiB pages, as
+/// QEMU's guest RAM lies where it aligns the `memfd` and advises huge pages
+/// (`MADV_HUGEPAGE`) and the host's `shmem_enabled` lets it (`advise`, CachyOS's own): the main
+/// case; [`submit_per_ram_chunk_in_small_pages`] measures it in 4 KiB pages. Skipped where
+/// `/dev/udmabuf` cannot be opened.
+#[test]
+#[ignore = "a measurement, not a check: run by name with --run-ignored all"]
+fn submit_per_ram_chunk() {
+    ram_chunks(Pages::Huge);
+}
+
+/// [`submit_per_ram_chunk`] with the RAM in 4 KiB pages (`MADV_NOHUGEPAGE`), as a host whose
+/// `shmem_enabled` is `never` keeps QEMU's guest RAM.
+#[test]
+#[ignore = "a measurement, not a check: run by name with --run-ignored all"]
+fn submit_per_ram_chunk_in_small_pages() {
+    ram_chunks(Pages::Small);
+}
+
+/// The host pages a guest RAM probe's `memfd` takes.
+#[derive(Clone, Copy, Debug)]
+enum Pages {
+    /// 2 MiB pages where the host lets the advice take effect (`MADV_HUGEPAGE`).
+    Huge,
+    /// 4 KiB pages (`MADV_NOHUGEPAGE`).
+    Small,
+}
+
+/// The host's shared memory in huge pages, in MiB (`ShmemHugePages` in `/proc/meminfo`).
+fn shmem_huge_mib() -> u64 {
+    let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+    (meminfo.lines())
+        .find_map(|line| line.strip_prefix("ShmemHugePages:"))
+        .and_then(|rest| {
+            rest.trim()
+                .trim_end_matches("kB")
+                .trim()
+                .parse::<u64>()
+                .ok()
+        })
+        .map_or(0, |kib| kib >> 10)
+}
+
+/// [`submit_per_ram_chunk`]'s measurement with the RAM in `pages`.
+fn ram_chunks(pages: Pages) {
+    if !udmabuf_openable("submit per ram chunk") {
+        return;
+    }
+    let cache = ScratchCache::new().unwrap();
+    let messages = Messages::default();
+    let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+        options.layers.clear();
+        // A consumer's device keeps no execution record.
+        options.record_executions = false;
+    })
+    .unwrap();
+    settled(&device);
+    let queue = device.new_command_queue().unwrap();
+    let target = device.new_buffer(4096, ResourceOptions::shared()).unwrap();
+    let memfd = Memfd::new(RAM_BYTES);
+    let calls = Calls::default();
+    let source = memfd.source(&memfd.whole, &calls);
+    let largest = udmabuf_size_limit();
+    let start = memfd.whole.pointer(0);
+    let advice = match pages {
+        Pages::Huge => libc::MADV_HUGEPAGE,
+        Pages::Small => libc::MADV_NOHUGEPAGE,
+    };
+    let huge_before = shmem_huge_mib();
+    // SAFETY: the file's whole mapping, none of whose pages is touched yet; advice only.
+    let advised = unsafe { libc::madvise(start.as_ptr().cast(), RAM_BYTES, advice) };
+    eprintln!(
+        "SUBMIT-PER-RAM-CHUNK the RAM in {pages:?} pages: madvise {}",
+        match advised {
+            0 => "took the advice".to_string(),
+            _ => format!("failed: {}", std::io::Error::last_os_error()),
+        }
+    );
+    // SAFETY: the file's whole mapping, readable and writable while `memfd` lives, which outlives
+    // the device's use of the RAM and every object over it.
+    let ram = unsafe { HostRam::new(&[(start, RAM_BYTES as u64)], None) }
+        .unwrap()
+        .with_dma_buf(source)
+        .with_largest_dma_buf(largest);
+    let ram = Arc::new(ram);
+    let report = |phase: &str, before: &metal2vulkan_runtime::WorkCounts| {
+        let counts = device.work_counts();
+        eprintln!(
+            "SUBMIT-PER-RAM-CHUNK {}: {phase}: {} chunks imported ({} MiB, {} ahead), {} live, {} \
+             released; buffers made {} in a run's import, {} in a chunk's; {} run imports live; \
+             {} imports released while idle, {} imported again; {} dma-buf memories live; the \
+             udmabuf limit {} MiB",
+            device.name(),
+            counts.host_ram_chunks_imported - before.host_ram_chunks_imported,
+            (counts.host_ram_chunk_bytes - before.host_ram_chunk_bytes) >> 20,
+            counts.host_ram_chunks_imported_ahead - before.host_ram_chunks_imported_ahead,
+            counts.host_ram_chunks_live,
+            counts.host_ram_chunks_released - before.host_ram_chunks_released,
+            counts.run_bound_buffers_made - before.run_bound_buffers_made,
+            counts.chunk_bound_buffers_made - before.chunk_bound_buffers_made,
+            counts.run_imports_live,
+            counts.host_imports_released - before.host_imports_released,
+            counts.host_imports_reimported - before.host_imports_reimported,
+            counts.dma_buf_memories_live,
+            largest >> 20,
+        );
+    };
+    let made = device.work_counts();
+    measure(
+        &device,
+        &queue,
+        &target,
+        (Kind::DmaBuf, 0, "no guest RAM used"),
+        made.dma_buf_imports,
+    );
+    let used = device.use_host_ram(&ram).unwrap();
+    // The view is the RAM's own mapping: each object's pages are the run of its own addresses.
+    let resolver: RunResolver =
+        Arc::new(|at: u64, length: u64| Some(std::iter::once(at..at + length).collect()));
+    let object = |at: usize| -> (Buffer, Duration) {
+        // SAFETY: the RAM's pages, mapped while `memfd` lives, which outlives the buffers.
+        let memory =
+            unsafe { HostMemory::new(memfd.whole.pointer(at)) }.with_runs(Arc::clone(&resolver));
+        let began = Instant::now();
+        // SAFETY: as above.
+        let buffer = unsafe {
+            device.new_buffer_with_bytes_no_copy(
+                memory,
+                RAM_OBJECT_BYTES as u64,
+                ResourceOptions::default(),
+                None,
+            )
+        };
+        let made = began.elapsed();
+        (
+            buffer.unwrap_or_else(|error| panic!("the buffer at {at:#x}: {error:?}")),
+            made,
+        )
+    };
+    let ms = |time: Duration| time.as_secs_f64() * 1e3;
+    let makings = |what: &str, times: &[Duration]| {
+        let mut sorted = times.to_vec();
+        sorted.sort();
+        eprintln!(
+            "SUBMIT-PER-RAM-CHUNK {}: {what}: {} buffers made, the first {:.3} ms, median {:.3} \
+             ms, slowest {:.3} ms, all {:.1} ms",
+            device.name(),
+            times.len(),
+            ms(times[0]),
+            ms(sorted[sorted.len() / 2]),
+            ms(*sorted.last().unwrap()),
+            ms(sorted.iter().sum()),
+        );
+    };
+    // One command buffer that fills a word of each buffer, from commit to completion.
+    let use_each = |buffers: &[Buffer]| -> Duration {
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut blit = command_buffer.blit_command_encoder().unwrap();
+        for buffer in buffers {
+            blit.fill_buffer(buffer, 0..4, 0x5a).unwrap();
+        }
+        blit.end_encoding().unwrap();
+        let committed = Instant::now();
+        submitted(command_buffer);
+        committed.elapsed()
+    };
+    let live = |what: &str| {
+        let counts = device.work_counts();
+        format!(
+            "{what}, {} run imports live, {} live dma-buf memories",
+            counts.run_imports_live, counts.dma_buf_memories_live
+        )
+    };
+    let objects = RAM_BYTES / RAM_OBJECT_STRIDE;
+    // The first object over each chunk asks the device's thread for it and lies in its own
+    // run's import, as do the others over it until the chunk is imported.
+    let (buffers, made_first): (Vec<Buffer>, Vec<Duration>) =
+        (0..objects).map(|i| object(i * RAM_OBJECT_STRIDE)).unzip();
+    makings("an object over each 64 MiB, no chunk imported", &made_first);
+    let used_once = use_each(&buffers);
+    report(
+        &format!(
+            "an object over each 64 MiB made and used once ({:.3} ms from commit to completion)",
+            ms(used_once)
+        ),
+        &made,
+    );
+    let held = live(&format!("{objects} objects just made"));
+    measure(
+        &device,
+        &queue,
+        &target,
+        (Kind::DmaBuf, objects, &held),
+        made.dma_buf_imports,
+    );
+    // The chunks imported by the device's thread: once no import came for a while.
+    let began = Instant::now();
+    let mut last = (
+        device.work_counts().host_ram_chunks_imported,
+        Instant::now(),
+    );
+    while last.1.elapsed() < RAM_QUIET {
+        assert!(
+            began.elapsed() < RAM_WAIT,
+            "the chunks' imports never settled"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+        let imported = device.work_counts().host_ram_chunks_imported;
+        if imported != last.0 {
+            last = (imported, Instant::now());
+        }
+    }
+    // One more object over each 64 MiB, now that its chunk is imported: in the chunk.
+    let (later, made_later): (Vec<Buffer>, Vec<Duration>) = (0..objects)
+        .map(|i| object(i * RAM_OBJECT_STRIDE + RAM_OBJECT_STRIDE / 2))
+        .unzip();
+    makings(
+        "one more over each 64 MiB, the chunks imported",
+        &made_later,
+    );
+    // The first objects' run imports, which only a blit read, released once idle; their next
+    // use binds each in its chunk.
+    let began = Instant::now();
+    while device.work_counts().run_imports_live > made.run_imports_live {
+        assert!(began.elapsed() < RAM_WAIT, "the runs' imports never went");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let released = began.elapsed();
+    let used_again = use_each(&buffers);
+    report(
+        &format!(
+            "the runs' imports released {:.1} s after the chunks settled, the objects used again \
+             in the chunks, the first submission that lists them ({:.3} ms from commit to \
+             completion)",
+            released.as_secs_f64(),
+            ms(used_again)
+        ),
+        &made,
+    );
+    eprintln!(
+        "SUBMIT-PER-RAM-CHUNK the RAM in {pages:?} pages: the host's shared memory in huge \
+         pages {huge_before} MiB before it, {} MiB with its chunks imported",
+        shmem_huge_mib()
+    );
+    let in_chunks = live(&format!("{} objects in the chunks", 2 * objects));
+    measure(
+        &device,
+        &queue,
+        &target,
+        (Kind::DmaBuf, 2 * objects, &in_chunks),
+        made.dma_buf_imports,
+    );
+    drop((buffers, later));
+    std::thread::sleep(RAM_IDLE);
+    report("the objects gone, after the idle wait", &made);
+    let idle = live(&format!("the objects gone {} s", RAM_IDLE.as_secs()));
+    measure(
+        &device,
+        &queue,
+        &target,
+        (Kind::DmaBuf, 0, &idle),
+        made.dma_buf_imports,
+    );
+    // Copies over the released chunks: a guest-shape gather of 16 runs of 512 KiB 64 MiB apart
+    // in the first chunk, its runs imported alone; again once the chunk is imported; and one of
+    // a run at each 64 MiB of the RAM, more runs in a chunk than a copy imports alone.
+    let run_at = |at: usize, bytes: usize| {
+        let first = memfd.whole.pointer(at).as_ptr() as u64;
+        first..first + bytes as u64
+    };
+    let few: Vec<_> = (0..16)
+        .map(|i| run_at(i * RAM_OBJECT_STRIDE, RAM_COPY_RUN))
+        .collect();
+    let every: Vec<_> = (0..objects)
+        .map(|i| run_at(i * RAM_OBJECT_STRIDE + RAM_COPY_RUN, RAM_COPY_RUN))
+        .collect();
+    let out =
+        (device.new_buffer((objects * RAM_COPY_RUN) as u64, ResourceOptions::private())).unwrap();
+    let gather = |what: &str, runs: &[std::ops::Range<u64>]| {
+        let before = device.work_counts();
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut blit = command_buffer.blit_command_encoder().unwrap();
+        let began = Instant::now();
+        blit.copy_from_host_ram(&ram, runs, &out, 0).unwrap();
+        let encoded = began.elapsed();
+        blit.end_encoding().unwrap();
+        let committed = Instant::now();
+        let submitting = submitted(command_buffer);
+        let counts = device.work_counts();
+        eprintln!(
+            "SUBMIT-PER-RAM-CHUNK {}: {what}: a gather of {} runs of {} KiB encoded in {:.3} ms, \
+             committed to completed in {:.3} ms ({:.3} ms of it submitting); {} dma-buf imports \
+             made, {} chunks imported by then, {} live, {} released before it",
+            device.name(),
+            runs.len(),
+            runs[0].end.saturating_sub(runs[0].start) >> 10,
+            ms(encoded),
+            ms(committed.elapsed()),
+            submitting * 1e3,
+            counts.host_ram_dma_buf_imports - before.host_ram_dma_buf_imports,
+            counts.host_ram_chunks_imported - before.host_ram_chunks_imported,
+            counts.host_ram_chunks_live,
+            before.host_ram_chunks_released - made.host_ram_chunks_released,
+        );
+    };
+    gather("16 in the first chunk, after the idle wait", &few);
+    std::thread::sleep(RAM_QUIET);
+    gather("16 in the first chunk again", &few);
+    gather("one at each 64 MiB", &every);
+    report("after the copies", &made);
+    drop(used);
+}
+
+/// The chunk lengths `submit_per_ram_chunk_length` gives a listed RAM, in MiB: up to the 512 MiB
+/// a listed chunk stops at (`Device::use_host_ram`).
+const CHUNK_LENGTHS_MIB: [u64; 4] = [64, 128, 256, 512];
+
+/// The bytes of the `len` bytes at `start` that are resident (`mincore`): a shared file's pages
+/// in its page cache, which a chunk's import pins.
+fn resident_bytes(start: std::ptr::NonNull<u8>, len: usize) -> u64 {
+    // SAFETY: the system's page size, read.
+    let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
+    let mut resident = vec![0u8; len.div_ceil(page)];
+    // SAFETY: `start` is a page-aligned mapping of `len` bytes, `resident` one byte a page.
+    let answer = unsafe { libc::mincore(start.as_ptr().cast(), len, resident.as_mut_ptr()) };
+    assert_eq!(answer, 0, "mincore: {}", std::io::Error::last_os_error());
+    resident.iter().filter(|&&byte| byte & 1 != 0).count() as u64 * page as u64
+}
+
+/// What a listed RAM's chunk length costs (the module docs): for each length of
+/// [`CHUNK_LENGTHS_MIB`] (as long as the host's udmabuf limit takes), a fresh RAM of [`RAM_BYTES`]
+/// in 2 MiB pages, its dma-buf source asked for chunks that long (`HostRam::with_largest_dma_buf`),
+/// and one object at each chunk's start, so every chunk is imported and kept: the first
+/// submission that lists them, from commit to completion, a submission's 50th percentile with
+/// them all live, and the RAM's resident bytes against the bytes the objects lie over (the
+/// imports' pins of pages no object nor the program touched). Printed as
+/// `SUBMIT-PER-RAM-CHUNK-LENGTH` and `SUBMIT-PER-IMPORT` lines.
+#[test]
+#[ignore = "a measurement, not a check: run by name with --run-ignored all"]
+fn submit_per_ram_chunk_length() {
+    if !udmabuf_openable("submit per ram chunk length") {
+        return;
+    }
+    let cache = ScratchCache::new().unwrap();
+    let messages = Messages::default();
+    let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+        options.layers.clear();
+        options.record_executions = false;
+    })
+    .unwrap();
+    settled(&device);
+    let queue = device.new_command_queue().unwrap();
+    let target = device.new_buffer(4096, ResourceOptions::shared()).unwrap();
+    let limit = udmabuf_size_limit();
+    let before_all = device.work_counts();
+    measure(
+        &device,
+        &queue,
+        &target,
+        (Kind::DmaBuf, 0, "no guest RAM used"),
+        before_all.dma_buf_imports,
+    );
+    let resolver: RunResolver =
+        Arc::new(|at: u64, length: u64| Some(std::iter::once(at..at + length).collect()));
+    let until = |done: &dyn Fn(&metal2vulkan_runtime::WorkCounts) -> bool, what: &str| {
+        let began = Instant::now();
+        while !done(&device.work_counts()) {
+            assert!(began.elapsed() < RAM_WAIT, "{what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        began.elapsed()
+    };
+    for mib in CHUNK_LENGTHS_MIB {
+        let length = mib << 20;
+        if length > limit {
+            eprintln!("SUBMIT-PER-RAM-CHUNK-LENGTH {mib} MiB: past the udmabuf limit; skipped");
+            continue;
+        }
+        let memfd = Memfd::new(RAM_BYTES);
+        let calls = Calls::default();
+        let source = memfd.source(&memfd.whole, &calls);
+        let start = memfd.whole.pointer(0);
+        // SAFETY: the file's whole mapping, none of whose pages is touched yet; advice only.
+        unsafe { libc::madvise(start.as_ptr().cast(), RAM_BYTES, libc::MADV_HUGEPAGE) };
+        // SAFETY: the file's whole mapping, readable and writable while `memfd` lives, which
+        // outlives the device's use of the RAM and every object over it.
+        let ram = unsafe { HostRam::new(&[(start, RAM_BYTES as u64)], None) }
+            .unwrap()
+            .with_dma_buf(source)
+            .with_largest_dma_buf(length);
+        let ram = Arc::new(ram);
+        let before = device.work_counts();
+        let used = device.use_host_ram(&ram).unwrap();
+        let chunks = (RAM_BYTES as u64).div_ceil(length) as usize;
+        let buffers: Vec<Buffer> = (0..chunks)
+            .map(|chunk| {
+                let at = chunk * length as usize;
+                // SAFETY: the RAM's pages, mapped while `memfd` lives, which outlives the buffer.
+                let memory = unsafe { HostMemory::new(memfd.whole.pointer(at)) }
+                    .with_runs(Arc::clone(&resolver));
+                // SAFETY: as above.
+                unsafe {
+                    device.new_buffer_with_bytes_no_copy(
+                        memory,
+                        RAM_OBJECT_BYTES as u64,
+                        ResourceOptions::default(),
+                        None,
+                    )
+                }
+                .unwrap_or_else(|error| panic!("the buffer at {at:#x}: {error:?}"))
+            })
+            .collect();
+        let imported = until(
+            &|counts| {
+                counts.host_ram_chunks_imported - before.host_ram_chunks_imported == chunks as u64
+            },
+            "the chunks were never imported",
+        );
+        until(
+            &|counts| counts.run_imports_live <= before.run_imports_live,
+            "the objects' run imports never went",
+        );
+        // The first submission that lists the chunks: one fill through each object.
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut blit = command_buffer.blit_command_encoder().unwrap();
+        for buffer in &buffers {
+            blit.fill_buffer(buffer, 0..4, 0x5a).unwrap();
+        }
+        blit.end_encoding().unwrap();
+        let committed = Instant::now();
+        submitted(command_buffer);
+        let first = committed.elapsed();
+        let counts = device.work_counts();
+        let resident = resident_bytes(start, RAM_BYTES);
+        eprintln!(
+            "SUBMIT-PER-RAM-CHUNK-LENGTH {} {mib} MiB: {chunks} chunks imported in {:.1} s, {} \
+             live, {} dma-buf memories live, {} of them bound in a chunk; the first submission \
+             that lists them {:.3} ms from commit to completion; the RAM resident {} MiB of {} \
+             MiB, its objects over {} MiB",
+            device.name(),
+            imported.as_secs_f64(),
+            counts.host_ram_chunks_live - before.host_ram_chunks_live,
+            counts.dma_buf_memories_live,
+            counts.chunk_bound_buffers_made - before.chunk_bound_buffers_made,
+            first.as_secs_f64() * 1e3,
+            resident >> 20,
+            RAM_BYTES >> 20,
+            (chunks * RAM_OBJECT_BYTES) >> 20,
+        );
+        let label = format!("{chunks} chunks of {mib} MiB live, an object in each");
+        measure(
+            &device,
+            &queue,
+            &target,
+            (Kind::DmaBuf, chunks, &label),
+            before.dma_buf_imports,
+        );
+        drop((buffers, used, ram));
+        until(
+            &|counts| counts.host_ram_chunks_live <= before.host_ram_chunks_live,
+            "the chunks were never freed",
+        );
+        drop(memfd);
     }
 }

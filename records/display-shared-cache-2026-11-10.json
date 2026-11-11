@@ -1,0 +1,20 @@
+{
+  "device": "marble",
+  "build": "22H384",
+  "candidate": "safari-shared-cache-20261110",
+  "upstream_alignment": [
+    {
+      "reference": "UniXNU/Adreno740 NativeAdrenoMemory.cpp acquireDeviceWrites",
+      "local_behavior": "Invalidated all completed imported pages without cleaning CPU dirty lines",
+      "change": "Use CleanInvalidate for imported pages, matching shared implementation"
+    },
+    {
+      "reference": "UniXNU-sheng package/GpuPowerProbe.cpp sheng-gpu-owned-coherent default 0",
+      "local_behavior": "MarbleAdreno.cpp forced native_adreno_owned_coherent to 1",
+      "change": "Keep write-combined CPU mappings and noncacheable GPU mappings for GPU-owned BOs by default"
+    }
+  ],
+  "retained_fix": "Use NBTexture backingBuffer for IOSurface import synchronization",
+  "hardware_policy": "Kernel USB ownership, eight CPUs, native services",
+  "result": "build in progress; device result pending"
+}

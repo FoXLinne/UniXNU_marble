@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-11",
+  "scope": "文档、来源快照、阶段记录、仓库上传与工作区清理",
+  "device_operations": "stopped；本轮维护期间手机操作0",
+  "remote": "origin https://github.com/FoXLinne/UniXNU_marble.git",
+  "branch": "main",
+  "documentation": {
+    "current": "CURRENT.json，当前设备与功能状态入口",
+    "history": "records/archive/current-2026-11-11.json，整理前全量内容",
+    "readme": "README.md",
+    "status": "docs/STATUS.md",
+    "building": "docs/BUILDING.md",
+    "bringup": "docs/BRINGUP.md，保留历史集成接口与命令",
+    "workspace": "docs/WORKSPACE.md",
+    "records_index": "records/README.md",
+    "audio": "records/audio-2026-11-11/README.md"
+  },
+  "cleanup": {
+    "report": "records/workspace-cleanup-2026-11-11.json",
+    "files_removed": 840,
+    "logical_bytes_removed": 53046277642,
+    "observed_free_bytes_increase": 53047115776,
+    "retained": "源码、启动镜像、内核、最终addon、日志、截图、Data、seed、系统盘、IPSW、固件输入、Android与GPT备份"
+  },
+  "checks": {
+    "charging_transport": "4249 checks passed",
+    "hal": "PCM、生命周期、属性通知、回调重入、路由状态与循环覆盖通过",
+    "audio_graph": "GPR边界、TDM配置与DMA包通过",
+    "json_toml": "248份本地元数据解析通过",
+    "python": "仓库scripts顶层Python AST通过",
+    "documentation": "本轮文档相对链接通过",
+    "hardware": "本轮维护执行主机检查；锁屏音频与触觉按失败/待修复状态归档",
+    "staged_source_conflict_markers": "已检查改动的C/C++/Rust/Python/TOML源码，合并标记0",
+    "whitespace": "9个来源文件含122处空白提示，主要为补丁上下文；保留来源文本；本轮文档与维护脚本空白检查通过"
+  },
+  "source_snapshot": {
+    "path": "source_snapshot.json",
+    "sha256": "a2e0f23cdc182cea6de45ecbdbccd8dc5daac1bece58107c0bd4bc6ee76e6002"
+  },
+  "upstream": "85仓库同步记录保存；10个组件的待整合冲突清单保留",
+  "publication": "源码与文档归档；实验性音频改动保持失败候选标记"
+}

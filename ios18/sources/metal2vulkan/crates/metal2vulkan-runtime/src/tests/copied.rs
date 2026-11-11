@@ -5,7 +5,9 @@
 //! copied all the same and others refused; on Linux, a mapping of a dma-buf (`VM_PFNMAP`), which
 //! the kernel's read refuses, is copied (where `/dev/udmabuf` opens).
 
-use crate::copied::{read_caller, restore, sync, CopiedBuffers, NotCopied, Written};
+use crate::copied::{
+    read_caller, restore, sync, Copied, CopiedBuffers, CopiesReached, FirstRead, NotCopied,
+};
 use crate::dirty_pages::DirtyTally;
 use crate::resource::ResourceKey;
 use crate::work_counts::Counters;
@@ -16,6 +18,26 @@ use std::sync::Arc;
 /// `bytes` as a pointer the comparison reads or writes.
 fn at(bytes: &mut [u8]) -> NonNull<u8> {
     NonNull::new(bytes.as_mut_ptr()).unwrap()
+}
+
+/// The copy at `copy` of the `length` bytes at `pages` that `read` first reads, registered in
+/// `buffers`: the GPU's writes to it dropped where `drops_writes`.
+///
+/// # Safety
+///
+/// As [`FirstRead::of`]'s and [`CopiedBuffers::add`]'s.
+pub(super) unsafe fn add_reading(
+    buffers: &Arc<CopiedBuffers>,
+    pages: NonNull<u8>,
+    copy: NonNull<u8>,
+    length: usize,
+    read: impl FnOnce(NonNull<u8>, &mut [u8]) -> bool,
+    drops_writes: bool,
+) -> Result<Copied, NotCopied> {
+    // SAFETY: the caller's.
+    let first = unsafe { FirstRead::of(pages, length, read, drops_writes) }?;
+    // SAFETY: the caller's.
+    Ok(unsafe { buffers.add(first, pages, copy) })
 }
 
 #[test]
@@ -97,29 +119,43 @@ fn copied_merge_back_of_unwritable_pages_drops_the_gpu_s_writes() {
         true
     };
     // SAFETY: the copy and the pages are the test's, of `length` bytes, live past the answer.
-    let copied = unsafe { buffers.add_reading(at(&mut pages), at(&mut copy), length, read, true) };
+    let copied =
+        unsafe { add_reading(&buffers, at(&mut pages), at(&mut copy), length, read, true) };
     let copied = copied.unwrap();
     assert!(copied.drops_writes());
     // The GPU writes 100 bytes of the copy; the completion drops them.
     copy[1000..1100].fill(0xEE);
-    buffers.merge_back(&counts, &Written::all());
+    buffers.merge_back(&counts, &CopiesReached::all());
     assert_eq!(pages, original, "nothing written to the pages");
     assert_eq!(copy, original, "the copy holds the pages' bytes again");
     // A CPU write to the pages reaches the copy at the next commit.
     pages[7] = !pages[7];
-    buffers.copy_in(&counts, &DirtyTally::default(), Vec::new);
+    buffers.copy_in(
+        &counts,
+        &DirtyTally::default(),
+        &CopiesReached::all(),
+        Vec::new,
+    );
     assert_eq!(copy[7], pages[7]);
     drop(copied);
     // A copy of writable pages merges the GPU's writes back.
     let mut writable = original.clone();
     let mut other = vec![0_u8; length];
     // SAFETY: as above.
-    let copied =
-        unsafe { buffers.add_reading(at(&mut writable), at(&mut other), length, read, false) };
+    let copied = unsafe {
+        add_reading(
+            &buffers,
+            at(&mut writable),
+            at(&mut other),
+            length,
+            read,
+            false,
+        )
+    };
     let copied = copied.unwrap();
     assert!(!copied.drops_writes());
     other[0] = !other[0];
-    buffers.merge_back(&counts, &Written::all());
+    buffers.merge_back(&counts, &CopiesReached::all());
     assert_eq!(writable[0], other[0], "merged back");
     drop(copied);
 }
@@ -224,6 +260,52 @@ fn copied_sync_by_pages_answers_as_byte_by_byte() {
     }
 }
 
+/// The page-at-a-time restore writes exactly the bytes the GPU changed back to the snapshot's, as a
+/// byte-at-a-time one would: over lengths that end inside a block, inside an 8-byte span and on
+/// either edge, with single bytes, runs crossing a block's edge and whole blocks changed.
+#[test]
+fn copied_restore_by_pages_answers_as_byte_by_byte() {
+    let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+    let lengths = [
+        1,
+        7,
+        8,
+        9,
+        4095,
+        4096,
+        4097,
+        8191,
+        3 * 4096 + 5,
+        64 * 1024 + 3,
+    ];
+    for round in 0..200 {
+        let length = lengths[round % lengths.len()];
+        let snapshot: Vec<u8> = (0..length).map(|_| rng.next() as u8).collect();
+        let mut copy = snapshot.clone();
+        for _ in 0..rng.below(12) {
+            let at = rng.below(length);
+            copy[at] = copy[at].wrapping_add(1 + rng.below(255) as u8);
+        }
+        if rng.below(3) == 0 {
+            let start = rng.below(length);
+            let end = (start + rng.below(9000)).min(length);
+            for byte in &mut copy[start..end] {
+                *byte = rng.next() as u8;
+            }
+        }
+        let want = (copy.iter().zip(&snapshot))
+            .filter(|(copy, snapshot)| copy != snapshot)
+            .count() as u64;
+        // SAFETY: the copy is the snapshot's length.
+        let got = unsafe { restore(at(&mut copy), &snapshot) };
+        assert_eq!(got, want, "round {round}: bytes written");
+        assert!(
+            copy == snapshot,
+            "round {round}: the copy holds the agreed bytes again"
+        );
+    }
+}
+
 /// Where the kernel's read of the pages fails (a mapping it cannot pin), pages the process maps
 /// readable are read with plain loads and copied; where a page is not mapped readable, the copy
 /// is refused and nothing written; where the kernel reads them, no mapping is asked about.
@@ -244,8 +326,16 @@ fn copied_pages_the_kernel_cannot_read_are_copied_where_mapped_readable() {
         unsafe { read_caller(from, into, |_, _| false, readable) }
     };
     // SAFETY: the copy and the pages are the test's, of `length` bytes, live past the answer.
-    let copied =
-        unsafe { buffers.add_reading(at(&mut pages), at(&mut copy), length, read_readable, false) };
+    let copied = unsafe {
+        add_reading(
+            &buffers,
+            at(&mut pages),
+            at(&mut copy),
+            length,
+            read_readable,
+            false,
+        )
+    };
     assert!(copied.is_ok(), "copied");
     assert_eq!(copy, pages, "the copy holds the pages' bytes");
     assert_eq!(asked.get(), Some((start, start + length as u64)), "asked");
@@ -256,7 +346,8 @@ fn copied_pages_the_kernel_cannot_read_are_copied_where_mapped_readable() {
     };
     // SAFETY: as above; nothing reads the pages.
     let refused = unsafe {
-        buffers.add_reading(
+        add_reading(
+            &buffers,
             at(&mut pages),
             at(&mut refused_copy),
             length,
@@ -312,8 +403,12 @@ fn copied_pages_of_a_dma_buf_mapping_are_copied() {
     let mut copy = vec![0_u8; length];
     // SAFETY: the copy is the test's; the mapping is `length` bytes, readable, live past the
     // answer.
-    let copied = unsafe { buffers.add(mapping.pages, at(&mut copy), length) };
-    assert!(copied.is_ok(), "copied");
+    let first = match unsafe { CopiedBuffers::read(mapping.pages, length, false) } {
+        Ok(first) => first,
+        Err(not) => panic!("not copied: {not:?}"),
+    };
+    // SAFETY: as above.
+    let _copied = unsafe { buffers.add(first, mapping.pages, at(&mut copy)) };
     assert!(copy == pattern, "the copy holds the dma-buf's bytes");
 }
 
@@ -445,7 +540,7 @@ impl Drop for DmaBufMapping {
 }
 
 /// A merge back compares only the copies its batches may have written: those whose keys a use
-/// wrote, or every one where a command may have written memory no use names (`Written::all`),
+/// wrote, or every one where a command may have written memory no use names (`CopiesReached::all`),
 /// and every one after a batch finished with no merge (`CopiedBuffers::owe`). A copy no batch
 /// wrote keeps the GPU's change in the copy, unmerged, until a merge that takes it as written.
 #[test]
@@ -461,17 +556,35 @@ fn a_merge_back_compares_only_the_copies_its_batches_wrote() {
     let (mut pages_x, mut pages_y) = (vec![1_u8; length], vec![2_u8; length]);
     let (mut copy_x, mut copy_y) = (vec![0_u8; length], vec![0_u8; length]);
     // SAFETY: the copies and the pages are the test's, of `length` bytes, live past the answers.
-    let x = unsafe { buffers.add_reading(at(&mut pages_x), at(&mut copy_x), length, read, false) };
+    let x = unsafe {
+        add_reading(
+            &buffers,
+            at(&mut pages_x),
+            at(&mut copy_x),
+            length,
+            read,
+            false,
+        )
+    };
     // SAFETY: as above.
-    let y = unsafe { buffers.add_reading(at(&mut pages_y), at(&mut copy_y), length, read, false) };
+    let y = unsafe {
+        add_reading(
+            &buffers,
+            at(&mut pages_y),
+            at(&mut copy_y),
+            length,
+            read,
+            false,
+        )
+    };
     let (x, y) = (x.unwrap(), y.unwrap());
     let (key_x, key_y) = (ResourceKey::new(), ResourceKey::new());
     x.name(key_x);
     y.name(key_y);
     let named = |keys: &[ResourceKey]| {
-        let mut written = Written::default();
+        let mut written = CopiesReached::default();
         for key in keys {
-            written.wrote(*key);
+            written.reached(*key);
         }
         written
     };
@@ -485,19 +598,88 @@ fn a_merge_back_compares_only_the_copies_its_batches_wrote() {
     assert_eq!(pages_y[100], 0xBB, "Y merged back once a batch wrote it");
     // A command that may write memory no use names: every copy.
     copy_y[200] = 0xCC;
-    buffers.merge_back(&counts, &Written::all());
+    buffers.merge_back(&counts, &CopiesReached::all());
     assert_eq!(pages_y[200], 0xCC, "every copy compared");
     // A batch finished with no merge: the next compares every copy, once.
     copy_y[300] = 0xDD;
     buffers.owe();
-    buffers.merge_back(&counts, &Written::default());
+    buffers.merge_back(&counts, &CopiesReached::default());
     assert_eq!(
         pages_y[300], 0xDD,
         "every copy compared after a batch finished unmerged"
     );
     copy_y[400] = 0xEE;
-    buffers.merge_back(&counts, &Written::default());
+    buffers.merge_back(&counts, &CopiesReached::default());
     assert_eq!(pages_y[400], 2, "and then none again");
+    drop((x, y));
+}
+
+/// A commit's copy in takes the CPU's writes into the copies its command buffer's commands use
+/// alone (`CopiesReached`), every copy where one may reach memory no use names: a copy left alone
+/// keeps what it agreed on, and the first commit that uses it takes every write since.
+#[test]
+fn a_commit_copies_in_only_the_copies_its_commands_use() {
+    let length = 4 * 4096;
+    let buffers = Arc::new(CopiedBuffers::default());
+    let (counts, tally) = (Counters::default(), DirtyTally::default());
+    let read = |pages: NonNull<u8>, into: &mut [u8]| {
+        // SAFETY: the test's pages, `into.len()` bytes.
+        unsafe { std::ptr::copy_nonoverlapping(pages.as_ptr(), into.as_mut_ptr(), into.len()) };
+        true
+    };
+    let (mut pages_x, mut pages_y) = (vec![1_u8; length], vec![2_u8; length]);
+    let (mut copy_x, mut copy_y) = (vec![0_u8; length], vec![0_u8; length]);
+    // SAFETY: the copies and the pages are the test's, of `length` bytes, live past the answers.
+    let x = unsafe {
+        add_reading(
+            &buffers,
+            at(&mut pages_x),
+            at(&mut copy_x),
+            length,
+            read,
+            false,
+        )
+    };
+    // SAFETY: as above.
+    let y = unsafe {
+        add_reading(
+            &buffers,
+            at(&mut pages_y),
+            at(&mut copy_y),
+            length,
+            read,
+            false,
+        )
+    };
+    let (x, y) = (x.unwrap(), y.unwrap());
+    let (key_x, key_y) = (ResourceKey::new(), ResourceKey::new());
+    x.name(key_x);
+    y.name(key_y);
+    let used = |keys: &[ResourceKey]| {
+        let mut used = CopiesReached::default();
+        for key in keys {
+            used.reached(*key);
+        }
+        used
+    };
+    // The CPU writes both pages; the command buffer uses X alone.
+    pages_x[100] = 0xAA;
+    pages_y[100] = 0xBB;
+    buffers.copy_in(&counts, &tally, &used(&[key_x]), Vec::new);
+    assert_eq!(copy_x[100], 0xAA, "X copied in");
+    assert_eq!(copy_y[100], 2, "Y left alone");
+    // Another write to Y, then a command buffer that uses it: both writes are in.
+    pages_y[200] = 0xCC;
+    buffers.copy_in(&counts, &tally, &used(&[key_y]), Vec::new);
+    assert_eq!(
+        (copy_y[100], copy_y[200]),
+        (0xBB, 0xCC),
+        "Y takes every write since"
+    );
+    // A command that may reach memory no use names: every copy.
+    pages_x[300] = 0xDD;
+    buffers.copy_in(&counts, &tally, &CopiesReached::all(), Vec::new);
+    assert_eq!(copy_x[300], 0xDD, "every copy copied in");
     drop((x, y));
 }
 
@@ -517,7 +699,8 @@ fn a_copy_s_keys_are_those_of_the_pages_lying_in_it() {
     };
     let (mut pages, mut copy) = (vec![1_u8; length], vec![0_u8; length]);
     // SAFETY: the copy and the pages are the test's, of `length` bytes, live past the answer.
-    let copied = unsafe { buffers.add_reading(at(&mut pages), at(&mut copy), length, read, false) };
+    let copied =
+        unsafe { add_reading(&buffers, at(&mut pages), at(&mut copy), length, read, false) };
     let copied = copied.unwrap();
     let first = ResourceKey::new();
     copied.name(first);
@@ -533,8 +716,8 @@ fn a_copy_s_keys_are_those_of_the_pages_lying_in_it() {
     copied.name(rebound);
     copied.name(rebound);
     copied.unname(rebound);
-    let mut written = Written::default();
-    written.wrote(rebound);
+    let mut written = CopiesReached::default();
+    written.reached(rebound);
     copy[10] = 0xAB;
     buffers.merge_back(&counts, &written);
     assert_eq!(pages[10], 0xAB, "a key named still is compared");

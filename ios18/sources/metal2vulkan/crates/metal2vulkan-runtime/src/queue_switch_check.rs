@@ -31,11 +31,25 @@
 //!   (`shader_cache/store.rs`), named by the driver's identity, the check's version and the
 //!   runtime's (`queue_share::record_name`): a device of the same driver and release reads it as
 //!   it is made and runs no check. A failed run is kept nowhere.
+//! - **Out of the device's way.** Before each round the thread steps aside for the device's
+//!   allocations and frees on other threads (`step_aside.rs`): it goes on once none is in
+//!   progress and none ended for `step_aside::QUIET`, at once while a call waits for its verdict
+//!   (`Device::settle_queue_switch_check`). Its submissions are counted as the checks'
+//!   (`WorkCounts::device_checks`), not among the device's (`queue_submissions`).
 //! - **Its thread.** Each reach of the device runs inside a section of the exit guard
 //!   (`exit_guard.rs`), as every runtime thread's does: the objects' making, the submissions, each
 //!   wait of at most [`WAIT_SLICE`], and the releases. Once the process is exiting it ends,
 //!   unrecorded, and leaves its objects to the process's end. A submission refused still opens its
 //!   round's gate, so no batch submitted waits for good.
+//! - **Its queues held to the gate.** A round takes the lock of each of its `VkQueue`s, in index
+//!   order, before its first submission, and lets them go once it signalled the gate
+//!   (`QueueUses::use_queues_kept`): no other thread takes one of them while a batch there waits
+//!   for the gate, so every submission on a `VkQueue` whose lock is free completes with no more
+//!   work of the host's. A wait for a queue to idle under its lock (`Device::drain_queues`, after
+//!   a failed wait; a submission check's after a refused call) then waits for work that completes.
+//!   Were a round's queue let go between its submissions, such a wait taken meanwhile would wait
+//!   under that lock for the round's first batch, which waits for the gate, which the check
+//!   signals only after its next submission, which waits for that lock.
 //! - **Holding nothing of the device.** The check holds only the parts of the device it works
 //!   with ([`Parts`]), never a handle: a check that held one for its run would hold the device's
 //!   last once the program dropped its own while the check ran (the first moments of a device
@@ -50,16 +64,17 @@
 //!   then for the check to let its objects go, unrecorded and its verdict `Unchecked`, before the
 //!   check's thread drops its shares of the device's parts and ends.
 
+use crate::allocations::Allocations;
 use crate::command_buffer::fences::Fences;
 use crate::device::functions::{Functions, Vk};
-use crate::device::relay::{By, QueueUses};
+use crate::device::relay::{By, Mark, QueueUses};
 use crate::device::submit_stalls::Uses;
 use crate::device::{Device, QueueSlot};
 use crate::error::{vulkan, Error};
 use crate::exit_guard::{self, Call};
 use crate::freed_memory::Parking;
 use crate::in_place::DriverIdentity;
-use crate::loader_word::LoaderWord;
+use crate::loader_word::{DeviceWord, Held};
 use crate::queue_share::{encode, record_name, QueueSwitch, Verdict, SWITCH_IDLES};
 use crate::release;
 use crate::shader_cache::store::Store;
@@ -102,12 +117,23 @@ pub(crate) fn timed(device: &Device) -> bool {
 /// [`Parts`], never a handle (the module docs).
 pub(crate) fn start(device: &Device) -> bool {
     let parts = Parts::of(device);
+    // Its command buffers, made here, on the thread that starts it (`Made`).
+    let made = parts
+        .pair
+        .map(|_| Made::make(device, parts.family, 4 * ROUNDS));
+    let pool = match &made {
+        Some(Ok(made)) => made.pool,
+        _ => vk::CommandPool::null(),
+    };
     let switch = Arc::clone(&parts.switch);
     switch.began();
     let builder = std::thread::Builder::new().name("m2v-queue-switch-check".to_owned());
     let spawned = exit_guard::spawn(builder, move || {
         let switch = Arc::clone(&parts.switch);
-        run(&parts);
+        #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+        crate::loader_word::on_a_check_s_thread();
+        crate::step_aside::mark_a_check_s_thread(crate::step_aside::Counted::Apart);
+        run(&parts, made);
         // Its shares go before the teardown that waits for it goes on.
         #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
         let dropping = Instant::now();
@@ -117,9 +143,61 @@ pub(crate) fn start(device: &Device) -> bool {
         switch.ended();
     });
     if spawned.is_err() {
+        if pool != vk::CommandPool::null() {
+            // SAFETY: the pool is the check's and nothing of it was used.
+            unsafe { release::object(device.shared().vk(), pool) };
+        }
         switch.ended();
     }
     spawned.is_ok()
+}
+
+/// The check's command pool, of the primary family, and its command buffers, one per batch, made
+/// as it starts on the thread that starts it (the program's, making its first command queue of
+/// the round robin): their `vkAllocateCommandBuffers` is the one call of the check's that the
+/// loader serves, which reads the device's loader word (`loader_word.rs`), so the check's thread
+/// makes none beside the program's work, whose messages MoltenVK writes it with. The check's
+/// thread records them ([`Objects::make`]).
+struct Made {
+    pool: vk::CommandPool,
+    buffers: Vec<vk::CommandBuffer>,
+}
+
+impl Made {
+    /// `device`'s, for `batches` batches of family `family`; `Err` where a call was refused (the
+    /// pool then released).
+    fn make(device: &Device, family: u32, batches: usize) -> Result<Made, Error> {
+        let shared = device.shared();
+        let raw = shared.vk();
+        let pool_info = vk::CommandPoolCreateInfo::default()
+            .flags(vk::CommandPoolCreateFlags::TRANSIENT)
+            .queue_family_index(family);
+        // SAFETY: the device is live.
+        let pool = unsafe { raw.create_command_pool(&pool_info, None) }.map_err(vulkan)?;
+        exit_guard::called(Call::CreateCommandPool);
+        let allocate = vk::CommandBufferAllocateInfo::default()
+            .command_pool(pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(batches as u32);
+        // The loader serves it; the device's loader word is put back first.
+        match device.allocate_command_buffers(&allocate) {
+            Ok(buffers) => Ok(Made { pool, buffers }),
+            Err(error) => {
+                // SAFETY: the pool is the check's, none of its command buffers made.
+                unsafe { release::object(raw, pool) };
+                Err(error)
+            }
+        }
+    }
+
+    /// Let the pool go unused, inside a section (left to the process's end once it is exiting).
+    fn release(self, parts: &Parts) {
+        let Some(_busy) = exit_guard::enter() else {
+            return;
+        };
+        // SAFETY: the pool is the check's, none of its command buffers submitted.
+        unsafe { release::object(parts.vk(), self.pool) };
+    }
 }
 
 /// The parts of a device its check works with, none of which holds the device (the module docs):
@@ -132,8 +210,11 @@ struct Parts {
     parking: Option<Arc<Parking>>,
     counts: Arc<Counters>,
     fences: Arc<Fences>,
-    loader_word: Arc<LoaderWord>,
+    loader_word: Arc<DeviceWord>,
     switch: Arc<QueueSwitch>,
+    /// The device's allocations, whose work in progress the check steps aside for
+    /// (`step_aside.rs`).
+    allocations: Arc<Allocations>,
     store: Arc<Store>,
     /// The primary family, its pool's.
     family: u32,
@@ -159,6 +240,7 @@ impl Parts {
             fences: Arc::clone(&shared.fences),
             loader_word: Arc::clone(&shared.loader_word),
             switch: Arc::clone(&shared.queue_switch),
+            allocations: Arc::clone(&shared.allocations.allocations),
             store: shared.shader_cache.content_store_share(),
             family: shared.queue_family,
             round_robin: shared.round_robin(),
@@ -173,6 +255,17 @@ impl Parts {
         self.functions.get()
     }
 
+    /// Step aside for the device's allocations and frees on other threads before a round
+    /// (`step_aside.rs`): not while the check stops or a call waits for its verdict. Counted where
+    /// it waited.
+    fn step(&self) {
+        let switch = &*self.switch;
+        let activity = self.allocations.activity();
+        if let Some(waited) = activity.step_aside(|| switch.stopping() || switch.awaited()) {
+            self.counts.check_stepped_aside(waited);
+        }
+    }
+
     /// What a use of one of the device's `VkQueue`s reaches.
     fn queue_uses(&self) -> QueueUses<'_> {
         QueueUses {
@@ -184,6 +277,20 @@ impl Parts {
         }
     }
 
+    /// A hold of the device's loader word across a step, where the word was found overwritten
+    /// (`loader_word.rs`): none elsewhere.
+    fn step_held(&self) -> Option<Held<'_>> {
+        // SAFETY: the device is live while its check runs (its teardown stops it first).
+        unsafe { self.loader_word.step_hold(None) }
+    }
+
+    /// Whether the device's loader word was found overwritten (`loader_word.rs`): a round
+    /// started then is held whole.
+    fn overwritten(&self) -> bool {
+        // SAFETY: the device is live while its check runs (its teardown stops it first).
+        unsafe { self.loader_word.overwritten() }
+    }
+
     /// Settle the device's verdict (`Device::settle_queue_switch`).
     fn settle(&self, verdict: Verdict, cost: i64, took: Option<Duration>) {
         let slots = &self.queues[..self.round_robin];
@@ -193,13 +300,13 @@ impl Parts {
 
 /// The check's thread: the measurement, the verdict, the record. Stopped by the device's
 /// teardown, it settles `Unchecked` and records nothing.
-fn run(parts: &Parts) {
+fn run(parts: &Parts, made: Option<Result<Made, Error>>) {
     let started = Instant::now();
-    let Some(pair) = parts.pair else {
+    let (Some(pair), Some(made)) = (parts.pair, made) else {
         parts.settle(Verdict::Unchecked, 0, None);
         return;
     };
-    let measured = measure(parts, pair);
+    let measured = made.and_then(|made| measure(parts, pair, made));
     parts.counts.queue_switch_check_ran();
     let took = Some(started.elapsed());
     let Ok(Some((alternated, alone))) = measured else {
@@ -221,11 +328,12 @@ fn run(parts: &Parts) {
 /// The median gap, in nanoseconds, between batches on the two `VkQueue`s of `pair` and between
 /// batches on one: `Ok(None)` where too few rounds' timestamps were written, the process is
 /// exiting or the device's teardown stopped the check, `Err` where a Vulkan call refused.
-fn measure(parts: &Parts, pair: (usize, usize)) -> Result<Option<(i64, i64)>, Error> {
+fn measure(parts: &Parts, pair: (usize, usize), made: Made) -> Result<Option<(i64, i64)>, Error> {
     if parts.switch.stopping() {
+        made.release(parts);
         return Ok(None);
     }
-    let Some(mut objects) = Objects::make(parts, 4 * ROUNDS)? else {
+    let Some(mut objects) = Objects::make(parts, made)? else {
         return Ok(None);
     };
     let ran = objects.run(parts, pair);
@@ -242,46 +350,42 @@ fn measure(parts: &Parts, pair: (usize, usize)) -> Result<Option<(i64, i64)>, Er
     gaps
 }
 
-/// The check's Vulkan objects: a command pool of the primary family and its command buffers, one
-/// per batch, a timestamp pool of two queries per batch, and its timelines: the gate, and one per
-/// `VkQueue` its batches signal.
+/// The check's Vulkan objects: its command pool and command buffers ([`Made`]), a timestamp pool
+/// of two queries per batch, its timelines (the gate, and one per `VkQueue` its batches signal),
+/// and a fence for each of a round's two batches, which a held round's submissions signal.
 struct Objects {
     pool: vk::CommandPool,
     buffers: Vec<vk::CommandBuffer>,
     queries: vk::QueryPool,
     gate: vk::Semaphore,
     done: [vk::Semaphore; 2],
+    fences: [vk::Fence; 2],
     /// Whether every batch submitted completed (or none was submitted): only then are they
     /// released (`false` once the process is exiting mid-run).
     settled: bool,
 }
 
 impl Objects {
-    /// The objects for `batches` batches, each command buffer recorded: its two queries reset,
+    /// The objects of `made`, one batch a command buffer, each recorded: its two queries reset,
     /// then a timestamp at the top of the pipe and one at the bottom. `Ok(None)` where the process
-    /// is exiting.
-    fn make(parts: &Parts, batches: usize) -> Result<Option<Objects>, Error> {
+    /// is exiting (`made` then left to its end).
+    fn make(parts: &Parts, made: Made) -> Result<Option<Objects>, Error> {
+        let _held = parts.step_held();
         let Some(_busy) = exit_guard::enter() else {
             return Ok(None);
         };
-        let raw = parts.vk();
-        let pool_info = vk::CommandPoolCreateInfo::default()
-            .flags(vk::CommandPoolCreateFlags::TRANSIENT)
-            .queue_family_index(parts.family);
-        // SAFETY: the device is live, inside a section.
-        let pool = unsafe { raw.create_command_pool(&pool_info, None) }.map_err(vulkan)?;
-        exit_guard::called(Call::CreateCommandPool);
         let mut objects = Objects {
-            pool,
-            buffers: Vec::new(),
+            pool: made.pool,
+            buffers: made.buffers,
             queries: vk::QueryPool::null(),
             gate: vk::Semaphore::null(),
             done: [vk::Semaphore::null(); 2],
+            fences: [vk::Fence::null(); 2],
             settled: true,
         };
-        let made = objects.fill(parts, batches);
+        let filled = objects.fill(parts);
         drop(_busy);
-        match made {
+        match filled {
             Ok(()) => Ok(Some(objects)),
             Err(error) => {
                 objects.release(parts);
@@ -290,23 +394,11 @@ impl Objects {
         }
     }
 
-    /// Make the pool's command buffers, the query pool and the timelines, and record the command
-    /// buffers, inside the caller's section.
-    fn fill(&mut self, parts: &Parts, batches: usize) -> Result<(), Error> {
+    /// Make the query pool, the timelines and the fences, and record the command buffers, inside
+    /// the caller's section.
+    fn fill(&mut self, parts: &Parts) -> Result<(), Error> {
         let raw = parts.vk();
-        let allocate = vk::CommandBufferAllocateInfo::default()
-            .command_pool(self.pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(batches as u32);
-        // SAFETY: the device is live (its teardown waits for the check), and the pool is the
-        // check's, which this thread alone uses; its loader word is put back first
-        // (`loader_word.rs`).
-        let allocated = unsafe {
-            parts.loader_word.restore();
-            raw.allocate_command_buffers(&allocate)
-        };
-        exit_guard::called(Call::AllocateCommandBuffers);
-        self.buffers = allocated.map_err(vulkan)?;
+        let batches = self.buffers.len();
         let info = vk::QueryPoolCreateInfo::default()
             .query_type(vk::QueryType::TIMESTAMP)
             .query_count(2 * batches as u32);
@@ -322,6 +414,12 @@ impl Objects {
             // SAFETY: the device is live and enables `timelineSemaphore`, inside a section.
             *semaphore = unsafe { raw.create_semaphore(&info, None) }.map_err(vulkan)?;
             exit_guard::called(Call::CreateSemaphore);
+        }
+        for fence in &mut self.fences {
+            // SAFETY: the device is live, inside a section.
+            *fence = unsafe { raw.create_fence(&vk::FenceCreateInfo::default(), None) }
+                .map_err(vulkan)?;
+            exit_guard::called(Call::CreateFence);
         }
         let begin = vk::CommandBufferBeginInfo::default()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
@@ -357,6 +455,7 @@ impl Objects {
             if parts.switch.stopping() {
                 return Ok(false);
             }
+            parts.step();
             let queues = match round % 2 {
                 0 => [pair.0, pair.1],
                 _ => [pair.0, pair.0],
@@ -392,7 +491,16 @@ impl Objects {
         done: [u64; 2],
     ) -> Result<bool, Error> {
         self.settled = false;
-        let (submitted, refused) = match self.submit(parts, batches, gate) {
+        // Where the device's loader word was found overwritten as the round starts, held from the
+        // gate's signal through the wait for the batches, for the check's own fences of them and
+        // for the relay's marks after them (`loader_word.rs`): MoltenVK names the device as each
+        // completes, after the timelines are signalled. It signals each fence as the batch's
+        // Metal command buffer completes, as the submission checks' own fences end their steps;
+        // where the queue's failures are not relayed (an adopted device, whose instance has no
+        // relay), no mark follows them. Taken inside the round's queues' locks, as each batch's
+        // submission takes the word inside its queue's, and kept once they go.
+        let hold = parts.overwritten();
+        let (submitted, refused, step, marks) = match self.submit(parts, batches, gate, hold) {
             Some(answer) => answer,
             None => return Ok(false),
         };
@@ -401,7 +509,13 @@ impl Objects {
             let lane = usize::from(batch.signal.0 != self.done[0]);
             reached[lane] = reached[lane].min(batch.signal.1 - 1);
         }
-        if !self.wait(parts, reached)? {
+        let fenced = match hold {
+            true => &self.fences[..submitted],
+            false => &[],
+        };
+        let waited = self.wait(parts, reached)? && self.wait_fences(parts, fenced)?;
+        parts.loader_word.end_step(step, marks);
+        if !waited {
             return Ok(false);
         }
         self.settled = true;
@@ -412,62 +526,94 @@ impl Objects {
     }
 
     /// Submit `batches`, each alone on its `VkQueue`, in order until one is refused, then signal
-    /// the gate to `gate` from the host, inside one section: how many were submitted, and the
-    /// refusal; `None` where the process is exiting.
-    fn submit(
+    /// the gate to `gate` from the host, inside one section, with each of the round's `VkQueue`s
+    /// under its lock from before the first submission until after the signal (the module docs):
+    /// how many were submitted, the refusal, the hold of the device's loader word the signal was
+    /// made under where the round is held (`hold`, each batch then signalling its fence of the
+    /// check's own), and the relay's marks after the batches, kept; `None` where the process is
+    /// exiting.
+    fn submit<'p>(
         &self,
-        parts: &Parts,
+        parts: &'p Parts,
         batches: &[Batch],
         gate: u64,
-    ) -> Option<(usize, Option<vk::Result>)> {
+        hold: bool,
+    ) -> Option<Submitted<'p>> {
         let _busy = exit_guard::enter()?;
         let raw = parts.vk();
         let uses = parts.queue_uses();
-        let mut submitted = 0;
-        let mut refused = None;
-        for batch in batches {
-            let buffers = [batch.buffer];
-            let waits = [batch.wait.0];
-            let wait_values = [batch.wait.1];
-            let stages = [vk::PipelineStageFlags::ALL_COMMANDS];
-            let signals = [batch.signal.0];
-            let signal_values = [batch.signal.1];
-            let mut values = vk::TimelineSemaphoreSubmitInfo::default()
-                .wait_semaphore_values(&wait_values)
-                .signal_semaphore_values(&signal_values);
-            let submit = vk::SubmitInfo::default()
-                .wait_semaphores(&waits)
-                .wait_dst_stage_mask(&stages)
-                .command_buffers(&buffers)
-                .signal_semaphores(&signals)
-                .push_next(&mut values);
-            // SAFETY: the queue is used under its lock, inside a section; the command buffer is
-            // recorded, ended and in no other submission; each timeline's signals rise in the order
-            // they run (each lane's batches run in its queue's order); the gate's wait is
-            // signalled below.
-            let made = uses.use_queue(
-                batch.queue,
-                By::Runtime,
-                Uses::OneSignalling,
-                |queue| unsafe {
-                    parts.counts.queue_submitted(1, 1);
-                    raw.queue_submit(queue, &[submit], vk::Fence::null())
-                },
-            );
-            exit_guard::called(Call::QueueSubmit);
-            if let Err(error) = made {
-                refused = Some(error);
-                break;
+        let mut queues: Vec<usize> = batches.iter().map(|batch| batch.queue).collect();
+        queues.sort_unstable();
+        queues.dedup();
+        let submitted = uses.use_queues_kept(&queues, By::Runtime, |held| {
+            let mut submitted = 0;
+            let mut refused = None;
+            let mut marks = Vec::new();
+            for (batch, &own) in batches.iter().zip(&self.fences) {
+                // The crate's device tests' hold of a round on one `VkQueue` between its two
+                // submissions (`tests::device_recovery`).
+                #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+                if !std::ptr::eq(batch, &batches[0]) && batch.queue == batches[0].queue {
+                    parts.switch.between.pass();
+                }
+                let fence = match hold {
+                    true => own,
+                    false => vk::Fence::null(),
+                };
+                let buffers = [batch.buffer];
+                let waits = [batch.wait.0];
+                let wait_values = [batch.wait.1];
+                let stages = [vk::PipelineStageFlags::ALL_COMMANDS];
+                let signals = [batch.signal.0];
+                let signal_values = [batch.signal.1];
+                let mut values = vk::TimelineSemaphoreSubmitInfo::default()
+                    .wait_semaphore_values(&wait_values)
+                    .signal_semaphore_values(&signal_values);
+                let submit = vk::SubmitInfo::default()
+                    .wait_semaphores(&waits)
+                    .wait_dst_stage_mask(&stages)
+                    .command_buffers(&buffers)
+                    .signal_semaphores(&signals)
+                    .push_next(&mut values);
+                // SAFETY: the queue is used under its lock, inside a section; the command buffer
+                // is recorded, ended and in no other submission; each timeline's signals rise in
+                // the order they run (each lane's batches run in its queue's order); the gate's
+                // wait is signalled below, before the queue's lock goes; the fence, where there
+                // is one, is unsignaled (made so, or reset once the round before signalled it) and
+                // in no pending submission. The device's loader word is held across the call and
+                // the relay's mark after it (MoltenVK names the device as it logs each,
+                // `loader_word.rs`), taken inside the queue's lock. None of the round's batches
+                // runs before the gate's signal, which is made under the word where it was found
+                // overwritten, so none completes while the word is let go between them, nor does
+                // the mark after it, which is kept, for the round to wait for.
+                let ((word, made), mark) =
+                    held.use_queue_kept(batch.queue, Uses::OneSignalling, true, |queue| unsafe {
+                        let word = parts.loader_word.held();
+                        parts.counts.queue_submitted(1, 1);
+                        (word, raw.queue_submit(queue, &[submit], fence))
+                    });
+                drop(word);
+                marks.extend(mark);
+                exit_guard::called(Call::QueueSubmit);
+                if let Err(error) = made {
+                    refused = Some(error);
+                    break;
+                }
+                submitted += 1;
             }
-            submitted += 1;
-        }
-        let signal = vk::SemaphoreSignalInfo::default()
-            .semaphore(self.gate)
-            .value(gate);
-        // SAFETY: the gate's value rises with each signal, its only signaller the host.
-        let signalled = unsafe { raw.signal_semaphore(&signal) };
-        exit_guard::called(Call::SignalSemaphore);
-        Some((submitted, refused.or(signalled.err())))
+            let signal = vk::SemaphoreSignalInfo::default()
+                .semaphore(self.gate)
+                .value(gate);
+            let step = match hold {
+                true => parts.step_held(),
+                false => None,
+            };
+            // SAFETY: the gate's value rises with each signal, its only signaller the host.
+            let signalled = unsafe { raw.signal_semaphore(&signal) };
+            exit_guard::called(Call::SignalSemaphore);
+            (submitted, refused.or(signalled.err()), step, marks)
+        });
+        Some(submitted)
     }
 
     /// Wait for each `VkQueue`'s timeline to reach its value of `done`, a slice at a time, each a
@@ -504,9 +650,43 @@ impl Objects {
         }
     }
 
+    /// Wait for `fences`, the check's own of a held round's batches submitted, a slice at a time,
+    /// each a section, then reset them for the next round: whether they were signalled (false
+    /// once the process is exiting).
+    fn wait_fences(&self, parts: &Parts, fences: &[vk::Fence]) -> Result<bool, Error> {
+        if fences.is_empty() {
+            return Ok(true);
+        }
+        loop {
+            let Some(_busy) = exit_guard::enter() else {
+                return Ok(false);
+            };
+            // SAFETY: the check's fences, each in a submission made.
+            let waited =
+                unsafe { (parts.vk()).wait_for_fences(fences, true, WAIT_SLICE.as_nanos() as u64) };
+            exit_guard::called(Call::WaitForFences);
+            match waited {
+                Ok(()) => break,
+                Err(vk::Result::TIMEOUT) => continue,
+                Err(error) => return Err(vulkan(error)),
+            }
+        }
+        #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+        parts.switch.waited_fences(fences.len());
+        let Some(_busy) = exit_guard::enter() else {
+            return Ok(false);
+        };
+        // SAFETY: each is signalled, its submission completed.
+        let reset = unsafe { parts.vk().reset_fences(fences) };
+        exit_guard::called(Call::ResetFences);
+        reset.map_err(vulkan)?;
+        Ok(true)
+    }
+
     /// The median gap between batches on the two `VkQueue`s and on one, in nanoseconds, from the
     /// timestamps (`Ok(None)` where fewer than [`FEWEST`] of either kind were written).
     fn gaps(&self, parts: &Parts) -> Result<Option<(i64, i64)>, Error> {
+        let _held = parts.step_held();
         let Some(_busy) = exit_guard::enter() else {
             return Ok(None);
         };
@@ -574,6 +754,7 @@ impl Objects {
         if !self.settled {
             return;
         }
+        let _held = parts.step_held();
         let Some(_busy) = exit_guard::enter() else {
             return;
         };
@@ -584,6 +765,11 @@ impl Objects {
             for semaphore in [self.gate, self.done[0], self.done[1]] {
                 if semaphore != vk::Semaphore::null() {
                     release::object(raw, semaphore);
+                }
+            }
+            for fence in self.fences {
+                if fence != vk::Fence::null() {
+                    release::object(raw, fence);
                 }
             }
             if self.queries != vk::QueryPool::null() {
@@ -602,6 +788,11 @@ struct Batch {
     wait: (vk::Semaphore, u64),
     signal: (vk::Semaphore, u64),
 }
+
+/// What a round's submission answers ([`Objects::submit`]): how many batches were submitted, the
+/// refusal, the hold of the device's loader word where it was found overwritten, and the relay's
+/// marks after the batches, kept.
+type Submitted<'p> = (usize, Option<vk::Result>, Option<Held<'p>>, Vec<Mark<'p>>);
 
 /// The median of `values` (sorted here).
 fn median(values: &mut [i64]) -> i64 {

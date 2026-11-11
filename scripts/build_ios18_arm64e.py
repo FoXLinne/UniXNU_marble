@@ -114,6 +114,7 @@ def prepare(out, upstream, stack, profile):
     apply_patch(work, DEVICE / 'patches/xnu-11417/wifi-association-event-cluster.patch')
     launch_constraints_patch = DEVICE / 'ios18/source/patches/xnu/zzyc-owner-skip-launch-constraints.patch'
     apply_patch(work, launch_constraints_patch)
+    apply_patch(work, DEVICE / 'patches/xnu-11417/haptics-device-access.patch')
     patch_list = out / 'xnu-patches.list'
     patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n' + str(filesystem_patch) + '\n' + str(rtc_patch) + '\n' + str(performance_patch) + '\n' + str(native_pac_el0_patch) + '\n' + str(dataprotect_patch) + '\n' + str(console_patch) + '\n')
     with patch_list.open('a') as stream:
@@ -313,11 +314,13 @@ def build_board(tree, env):
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
                     'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleWifi.cpp', 'MarbleWifiRuntime.cpp', 'MarbleWifiNet.cpp', 'MarbleWifiFirmware.c', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
-                    'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'MarbleButtons.cpp', 'MarbleHaptics.cpp', 'KeyStoreEvents.cpp')]
+                    'MarbleHid18.cpp', 'NativeHomeInput.cpp', 'MarbleTouch.cpp', 'MarbleButtons.cpp', 'MarbleHaptics.cpp', 'MarbleHapticsRuntime.cpp', 'KeyStoreEvents.cpp')]
         sources.append(tree.parent / 'SoftwareAES/NativeAES.cpp')
         sources.append(tree.parent / 'AppleKeyStoreState/NativeKeyStoreEvents.cpp')
         sources.append(tree.parent / 'GopFramebuffer/NativeLegacyDisplay.cpp')
         sources.append(DEVICE / 'ios18/sources/QcomGeniSpi/GeniSpi.c')
+        sources += [DEVICE / 'package/MarbleAudio.cpp', DEVICE / 'package/audio/ShengGpr.c',
+                    DEVICE / 'package/audio/ShengAudioReach.c']
         for source in sources:
             filename = source.name
             if filename == 'MarbleAdsp.cpp':

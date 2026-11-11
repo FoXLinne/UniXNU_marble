@@ -891,6 +891,14 @@ fn route_air(cx: &SelectCx<'_>, op: &AirIntrinsic, decl: FuncId) -> Route {
         A::GlobalBuiltin(_) => Route::Refuse(
             Unsupported::not_implemented(Feature::Lowering(LowerFamily::Dispatch)).into(),
         ),
+        // Canonicalization reads each of them from the hidden buffer of a kernel compiled in
+        // OpenCL mode; no other pipeline has the values, and Metal makes no other pipeline of a
+        // function that reads them.
+        A::WorkItem(_) => Route::Refuse(
+            Unsupported::not_implemented(Feature::Lowering(LowerFamily::Dispatch))
+                .naming(decl_name(cx, decl))
+                .into(),
+        ),
     }
 }
 
@@ -908,6 +916,9 @@ fn route_llvm(op: &LlvmIntrinsic) -> Route {
         L::Float { .. } | L::Int { .. } | L::Abs { .. } | L::Cttz { .. } | L::Ctlz { .. } => {
             Route::Family(LowerFamily::Arith)
         }
+        // A narrow integer's operation canonicalization did not fold over constants: no SPIR-V
+        // type has its width.
+        L::NarrowInt { .. } => Route::Refuse(not_lowered(LowerFamily::Arith)),
     }
 }
 
@@ -978,6 +989,10 @@ fn route(cx: &SelectCx<'_>, id: InstId, inst: &Inst) -> Route {
             Callee::Direct(_) => Route::Refuse(invariant("a direct call survived inlining")),
             Callee::UnknownIntrinsic(_) => {
                 Route::Refuse(Unsupported::not_implemented(Feature::UnknownIntrinsic).into())
+            }
+            // Canon's post-check refuses every call whose immediates are not constants.
+            Callee::Unbound { .. } => {
+                Route::Refuse(invariant("an unbound intrinsic survived canon"))
             }
         },
     }
@@ -1191,9 +1206,10 @@ pub fn select(
         stage,
         values: mp.values,
         push: BTreeSet::new(),
-        // A call stack's depth, which a compiled kernel's pipeline must match.
+        // A call stack's depth, and OpenCL mode, which a compiled kernel's pipeline must match.
         facts: (e.call_stack.into_iter())
             .map(|stack| RuntimeFact::CallStackDepth { depth: stack.depth })
+            .chain(inputs.open_cl_mode.then_some(RuntimeFact::OpenClMode))
             .collect(),
         // Private memory past the floor of a device not measured rests on no measurement, as
         // does a group operation in a branch no measurement says Metal speculates. A rate-map
@@ -1569,6 +1585,8 @@ fn finish(
 ) -> Result<Plan, Error> {
     let p = cx.profile;
     let stage = cx.stage;
+    // The class of the lockstep pass's simdgroup barriers, beside the program's own.
+    sync::barrier::lockstep_class(&mut cx);
     // Each family completes its own plan and contributes its descriptors, facts, simd class,
     // and tangled instructions before the combined checks below.
     stage_io::finish(&mut cx)?;
@@ -1594,7 +1612,7 @@ fn finish(
 
     // An object function's partial threadgroups read its region, which a folded variant's slot
     // plan then reads from its record.
-    mesh::plan_partial_groups(&mut cx, &sel.strategy);
+    mesh::plan_partial_groups(&mut cx);
     let slots = access::finish_slots(&mut cx, m)?;
     access::absent::finish(&mut cx);
     sync::memory_model::finish_interlock(&mut cx, &slots)?;
@@ -1755,7 +1773,11 @@ fn finish(
 /// `NearestPixelSampler` boolean, by the function's slot index, or a texture slot's
 /// `UnmeasuredTexels` boolean, or the class of the format bound at a texture slot, which no
 /// constant carries (`SpecKey::BoundTexelFormat`), or the whole word of the sampler bound at a
-/// sampler slot, which none carries either (`SpecKey::BoundSamplerWord`).
+/// sampler slot, which none carries either (`SpecKey::BoundSamplerWord`), or whether a texture a
+/// stage's handles can name is two-plane YCbCr (`SpecKey::HeapYCbCrTextures`) or held by its raw
+/// texels alone (`SpecKey::HeapRawTextures`), or the families of such textures whose texels may
+/// hold a NaN (`SpecKey::HeapNanFamilies`), or whether a sampler state an argument buffer can
+/// name filters (`SpecKey::FilteringArgumentSampler`), which the plan gives.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum NoteOn {
     Sampler(u32),
@@ -1763,6 +1785,10 @@ pub(crate) enum NoteOn {
     Unmeasured(u32),
     Bound(u32),
     BoundSampler(u32),
+    HeapYCbCr(Stage),
+    HeapRaw(Stage),
+    HeapNan(Stage),
+    ArgumentSamplers,
 }
 
 /// A test of one slot's specialization constant `v`: it holds where `(v & mask == bits) == equal`,
@@ -1833,6 +1859,11 @@ fn declared(families: &FamilyPlans, t: NoteTest) -> Option<SpecTest> {
         NoteOn::BoundSampler(index) => {
             SpecKey::BoundSamplerWord(families.sampler.slots.get(&index)?.slot)
         }
+        // Given by the plan from what the command's handles can name, never a constant.
+        NoteOn::HeapYCbCr(stage) => SpecKey::HeapYCbCrTextures(stage),
+        NoteOn::HeapRaw(stage) => SpecKey::HeapRawTextures(stage),
+        NoteOn::HeapNan(stage) => SpecKey::HeapNanFamilies(stage),
+        NoteOn::ArgumentSamplers => SpecKey::FilteringArgumentSampler,
         NoteOn::Sampler(index) => {
             let r = families.sampler.slots.get(&index)?;
             let fields = r.fields();

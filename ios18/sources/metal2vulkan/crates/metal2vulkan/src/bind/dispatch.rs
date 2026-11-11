@@ -39,7 +39,10 @@
 //! emulated simdgroups, and instantiating it on the plan of another variant is
 //! `BindError::NeedsVariant`, before anything is written. Only the variant's scratch is left to the
 //! variant's own plan, since only its compile knows it. A dispatch of whole subgroups keeps the
-//! flattened pipeline.
+//! flattened pipeline, and so does a region of one row of a kernel whose only simdgroup semantics
+//! are lockstep barriers that order pairs meeting across rows (`RuntimeFact::RowLockstep`): its
+//! simdgroups lie within the row, where no pair meets, so it runs whatever its width, without
+//! `REQUIRE_FULL_SUBGROUPS`.
 //!
 //! **Push bytes.** Each region's push write covers the stage's whole push range, so every
 //! statically used push byte is written (VUID-vkCmdDispatch-maintenance4-08602): the
@@ -49,11 +52,13 @@
 //!
 //! **Stage-in region**. A kernel that reads the region (a `[[stage_in]]` step by thread position,
 //! `[[grid_origin]]`, or `[[grid_size]]`) is dispatched only with one the encoder set: without it,
-//! `BindError::MissingStageInRegion`, since what Metal reads then is not established. A kernel
-//! whose step reads the thread position alone (a step rate above 1, or an indexed step) depends on
-//! the region's origin being 0 on that axis; a dispatch with another origin there is
-//! `Unsupported{KernelStageIn, NotImplemented}`: whether Metal adds the origin before or after the
-//! division or the index lookup is not established.
+//! `BindError::MissingStageInRegion`, since what Metal reads then is not established. A step at a
+//! rate above 1 adds the region's origin to the quotient, and an indexed step adds it to the index
+//! it looks up at the thread position, as an M4 and an M3 Max read (`lower::stage_io::stage_in`):
+//! the binder writes the region whatever its origin. Each region's `SpecKey::StageInReach` says
+//! whether an element of a thread-position step may lie past the first `2^32` bytes from its bind
+//! offset ([`stage_in_reach`]). It is false where none can, which drops the fetch's reach check,
+//! so only a dispatch that can reach takes the `VkPipeline` that keeps it.
 //!
 //! **Indirect.** When any axis of `maxComputeWorkGroupCount` is below `2^32 - 1`, an indirect
 //! dispatch carries an [`IndirectClamp`] prepass and its region reads the clamp's scratch
@@ -76,7 +81,10 @@ use crate::device::requirements::VkLimit;
 use crate::error::{BindError, Capability, Feature, LowerFamily, Unsupported};
 use crate::indirect_commands::BINDING_COUNT;
 use crate::lower::dispatch::{pack_nominal, region_bytes};
+use crate::metal::vertex::vertex_bytes;
+use crate::metal::{StepFunction, VertexFormat};
 use crate::pipeline::interface::{AccessSet, BufferForm, PushLoc};
+use crate::pipeline::stage_io::StageInFetch;
 use crate::pipeline::sym::{Axis, PushField, SlotClass, SpecKey, Stage};
 use crate::vk;
 
@@ -235,13 +243,32 @@ pub(crate) enum Fit {
 /// A flattened tier's region of local size `r` that is not whole subgroups of its size: every
 /// multiple of a flattened plan is its tier's subgroup size, since the flattened tiers refuse
 /// derivatives (`ComputeDerivativesWithSimd`).
-fn partial(rules: &LocalRules, r: [u32; 3]) -> bool {
+fn unwhole(rules: &LocalRules, r: [u32; 3]) -> bool {
     let n: u64 = r.iter().map(|&x| u64::from(x)).product();
     rules.flat
         && rules
             .multiples
             .iter()
             .any(|&m| m > 0 && !n.is_multiple_of(u64::from(m)))
+}
+
+/// A region that is not whole subgroups ([`unwhole`]) and needs emulated simdgroups: any but a
+/// region of one row of a kernel whose simdgroup semantics need no simdgroup spanning two rows
+/// (`LocalRules::rows`), whose simdgroups then lie within its row, where no pair meets.
+fn partial(rules: &LocalRules, r: [u32; 3]) -> bool {
+    unwhole(rules, r) && !(rules.rows && r[1] == 1 && r[2] == 1)
+}
+
+/// The stage flags of a region of local size `r` on the planned pipeline: the pipeline's, but
+/// `REQUIRE_FULL_SUBGROUPS` for a region that is not whole subgroups, a row [`partial`] admits.
+fn region_flags(rules: &LocalRules, r: [u32; 3]) -> vk::PipelineShaderStageCreateFlags {
+    if unwhole(rules, r) {
+        rules
+            .stage_flags
+            .difference(vk::PipelineShaderStageCreateFlags::REQUIRE_FULL_SUBGROUPS)
+    } else {
+        rules.stage_flags
+    }
 }
 
 /// The local-size rules of the kernel's emulated-simdgroups variant as the plan of its flattened
@@ -255,6 +282,7 @@ fn emulated_rules(rules: &LocalRules) -> LocalRules {
         required_subgroup_size: None,
         stage_flags: vk::PipelineShaderStageCreateFlags::empty(),
         scratch: None,
+        rows: false,
         ..rules.clone()
     }
 }
@@ -793,19 +821,118 @@ impl BindingPlan {
         threads_per_group: [u32; 3],
     ) -> Result<SpecializationKey, BindError> {
         let t = self.compute_template("replay_specialization")?;
-        Ok(region_specialization(t, threads_per_group, true))
+        // A replay variant reads no stage-in region (`check_replay`), so no key bounds a fetch.
+        Ok(region_specialization(t, threads_per_group, true, true))
     }
 }
 
 /// The specialization of a region of `local` threads of `t`: the template's fixed constants, the
-/// local size, and whether the region reads its record (`MultiRegion`).
-fn region_specialization(t: &ComputeTemplate, local: [u32; 3], multi: bool) -> SpecializationKey {
+/// local size, whether the region reads its record (`MultiRegion`), and whether a stage-in element
+/// it fetches may lie past the first `2^32` bytes from its bind offset (`StageInReach`,
+/// [`stage_in_reach`]).
+fn region_specialization(
+    t: &ComputeTemplate,
+    local: [u32; 3],
+    multi: bool,
+    reach: bool,
+) -> SpecializationKey {
     let n: u64 = local.iter().map(|&x| u64::from(x)).product();
     spec_key(&t.spec, |k| match k {
         SpecKey::LocalSize(a) => Some(u64::from(local[a as usize])),
         SpecKey::FlatLocalSize => Some(n),
         SpecKey::MultiRegion => Some(u64::from(multi)),
+        SpecKey::StageInReach => Some(u64::from(reach)),
         other => t.fixed.iter().find(|(key, _)| *key == other).map(|f| f.1),
+    })
+}
+
+/// The stride the compute encoder binds kernel buffer `index` with in `state`
+/// (`setBuffer:offset:attributeStride:atIndex:` and its forms, `MTLAttributeStrideStatic`'s low
+/// 32 bits), 0 where it binds none: what a stage-in layout of `MTLBufferLayoutStrideDynamic`
+/// fetches at.
+fn stage_in_stride(state: &BindState, index: u32) -> u32 {
+    match state
+        .stages
+        .get(&Stage::Kernel)
+        .and_then(|k| k.buffers.get(&index))
+    {
+        Some(
+            &BoundBuffer::Buffer {
+                attribute_stride: Some(s),
+                ..
+            }
+            | &BoundBuffer::Bytes {
+                attribute_stride: Some(s),
+                ..
+            },
+        ) => s,
+        _ => 0,
+    }
+}
+
+/// The axis (0 for x, 1 for y) of fetch `f`'s thread-position step; `None` for any other step.
+/// These are the steps whose element the region clamps, and which `SpecKey::StageInReach` bounds
+/// (`lower::stage_io::stage_in`).
+pub(super) fn grid_axis(f: &StageInFetch) -> Option<usize> {
+    match f.step_function {
+        StepFunction::ThreadPositionInGridX => Some(0),
+        StepFunction::ThreadPositionInGridY => Some(1),
+        _ => None,
+    }
+}
+
+/// The end of fetch `f`'s attribute bytes in an element: its offset plus its format's store
+/// size ([`vertex_bytes`]; `MTLAttributeFormat` lists `MTLVertexFormat`'s formats at the same
+/// values). An element `e` at stride `s` lies in the first `2^32` bytes from the bind offset
+/// exactly where `e · s` plus this end is at most `2^32` (`lower::stage_io::fetch`'s
+/// `within_reach`). `None` for a format no fetch decodes.
+fn element_end(f: &StageInFetch) -> Option<u64> {
+    let format = VertexFormat::try_from(f.format.as_raw()).ok()?;
+    let bytes = vertex_bytes(format)?;
+    Some(u64::from(f.offset) + u64::from(bytes))
+}
+
+/// The `SpecKey::StageInReach` of a dispatch of `t` over Metal's `grid` (0 on each axis for an
+/// indirect dispatch, whose grid only the GPU knows) in stage-in region `region`, under `state`'s
+/// strides. It says whether an element that a thread-position fetch reads may lie past the first
+/// `2^32` bytes from its bind offset, where the fetch's reach check reads it as zero
+/// (`lower::stage_io::fetch`). Each element is `origin + min(position / rate, size - 1)` on the
+/// step's axis, so it is at most the origin plus the smaller of the region's last element and the
+/// grid's last position over the rate. In a region of size 0 on the axis, whose size less 1 clamps
+/// nothing, it is bounded by the grid alone. Where that bound is unknown (an indirect grid over
+/// such a region) or the sum leaves 32 bits (the shader's add wraps), any element may be read.
+fn stage_in_reach(
+    t: &ComputeTemplate,
+    region: Option<StageInRegion>,
+    grid: [u32; 3],
+    state: &BindState,
+) -> bool {
+    let Some(region) = region else {
+        return !t.stage_in_grid.is_empty();
+    };
+    t.stage_in_grid.iter().any(|f| {
+        let (Some(axis), Some(end)) = (grid_axis(f), element_end(f)) else {
+            return true;
+        };
+        let stride = f
+            .stride
+            .unwrap_or_else(|| stage_in_stride(state, f.buffer_index));
+        // At stride 0 every element is the attribute's own bytes at the bind offset.
+        if stride == 0 {
+            return end > 1 << 32;
+        }
+        let rate = f.step_rate.max(1);
+        let positions = grid[axis].checked_sub(1).map(|p| p / rate);
+        let last = match (region.size[axis].checked_sub(1), positions) {
+            (None, None) => return true,
+            (None, Some(p)) => p,
+            (Some(z), None) => z,
+            (Some(z), Some(p)) => z.min(p),
+        };
+        let Some(element) = region.origin[axis].checked_add(last) else {
+            return true;
+        };
+        u64::from(element) * u64::from(stride) + end > 1 << 32
     })
 }
 
@@ -938,36 +1065,12 @@ fn instantiate(
             PushField::StageInRegion => stage_in_region_bytes(region.ok_or_else(|| {
                 internal("a stage-in region push field without the region's fact")
             })?),
-            // The stride the encoder bound the stage-in buffer with, 0 without one, as Metal
-            // reads a dynamic layout; inline bytes' alike, but at `MTLAttributeStrideStatic`, whose
-            // answer is not measured.
+            // The stride the encoder bound the stage-in buffer or inline bytes with, 0 without
+            // one, as Metal reads a dynamic layout: `MTLAttributeStrideStatic`'s is its low 32
+            // bits, whose elements past the first the fetch reads past the bind offset's 2^32
+            // bytes (`lower::stage_io::fetch`).
             PushField::StageInStride(index) => {
-                let stride = match state
-                    .stages
-                    .get(&Stage::Kernel)
-                    .and_then(|k| k.buffers.get(&index))
-                {
-                    Some(&BoundBuffer::Bytes {
-                        attribute_stride: Some(u32::MAX),
-                        ..
-                    }) => {
-                        return Err(BindError::Unsupported(Unsupported::not_implemented(
-                            Feature::KernelStageIn,
-                        )))
-                    }
-                    Some(
-                        &BoundBuffer::Buffer {
-                            attribute_stride: Some(s),
-                            ..
-                        }
-                        | &BoundBuffer::Bytes {
-                            attribute_stride: Some(s),
-                            ..
-                        },
-                    ) => s,
-                    _ => 0,
-                };
-                FieldBytes::of(&stride.to_le_bytes())
+                FieldBytes::of(&stage_in_stride(state, index).to_le_bytes())
             }
             field => slot_field(field, &bound.residuals, &t.resources, state)
                 .ok_or_else(|| internal(format!("a compute push field {field:?}")))?,
@@ -987,6 +1090,7 @@ fn instantiate(
         nominal,
         ..
     } = planned;
+    let reach = stage_in_reach(t, region, grid, state);
     let mut regions = Vec::with_capacity(planned.len());
     for r in planned {
         let mut bytes = push.clone();
@@ -995,7 +1099,7 @@ fn instantiate(
                 .ok_or_else(|| internal("an unpackable nominal threadgroup size"))?;
             put(&mut bytes, push_start, &mut [], loc, &b)?;
         }
-        let specialization = region_specialization(t, r.local, r.multi);
+        let specialization = region_specialization(t, r.local, r.multi, reach);
         let indirect = match *dispatch {
             Dispatch::ThreadgroupsIndirect { .. } if replay => Some(IndirectArgs::Replay),
             Dispatch::ThreadgroupsIndirect { indirect, .. } => {
@@ -1020,7 +1124,7 @@ fn instantiate(
                 }]
             },
             indirect,
-            stage_flags: t.local.stage_flags,
+            stage_flags: region_flags(&t.local, r.local),
             required_subgroup_size: t.local.required_subgroup_size,
         });
     }

@@ -28,7 +28,7 @@
 //! shadow takes no sample mask beside it). Each case's colors, depth and stencil are read back and
 //! compared bit for bit; the form is printed.
 
-use super::{form, library, reads_planes, through_inputs, TEXELS, Z};
+use super::{fetches, form, library, reads_planes, through_inputs, TEXELS, Z};
 use crate::runtime_lane::buffer_with;
 use crate::runtime_lane::resolves::{lane, quiet, Lane, FULL};
 use metal2vulkan::device::{VkFeature, VkProperty};
@@ -326,6 +326,9 @@ fn refusal(lane: &Lane) -> Option<(Attachment, Needs)> {
 /// Metal's answer for every case at `samples` (the module docs).
 fn cases_at(samples: u32) {
     let (messages, _cache, lane) = lane();
+    if !fetches(&lane.device) {
+        return;
+    }
     let device = lane.device.name().to_owned();
     let vertices = library(&lane, "rt6_resolves");
     let returning = library(&lane, "dsx_fetch_returned_stencil");

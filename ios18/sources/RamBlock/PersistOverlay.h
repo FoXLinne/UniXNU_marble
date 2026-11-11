@@ -108,8 +108,10 @@ struct Overlay {
     memset (bitmap, 0, bb * kBlock);
     if (ro) return Open::Blank;
     if (!reset) return Open::Kept;
-    uint8_t zero[kBlock] = {};
-    for (uint64_t b = 0; b < bb; ++b) if (!ops.write (1 + b, 1, zero)) return Open::Failed;
+    // The cleared bitmap goes out in one write (the store splits it into its largest transfers), not one command per block: a 210 GiB
+    // disk has 1680 bitmap blocks, and that many forced-unit-access writes held the medium long enough for the root volumes that
+    // share it to miss their publication deadline.
+    if (!ops.write (1, static_cast<uint32_t> (bb), bitmap)) return Open::Failed;
     if (!ops.sync ()) return Open::Failed;
     generation = (header == 3 || header == 2) ? generation + 1 : 1;
     encodeHeader (block, pages, seed, generation);

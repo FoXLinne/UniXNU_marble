@@ -1700,6 +1700,7 @@ fn air_math(f: MathFn) -> Result<Fun, Error> {
         M::IClamp(s) => Fun::Int(IntFn::Clamp(sign(s))),
         M::IMin3(s) => Fun::Int(IntFn::Min3(sign(s))),
         M::IMax3(s) => Fun::Int(IntFn::Max3(sign(s))),
+        M::IMedian3(s) => Fun::Int(IntFn::Median3(sign(s))),
         M::MulHi(s) => Fun::Int(IntFn::MulHi(sign(s))),
         M::MadHi(s) => Fun::Int(IntFn::MadHi(sign(s))),
         M::MadSat(s) => Fun::Int(IntFn::MadSat(sign(s))),
@@ -1760,7 +1761,9 @@ fn llvm_math(op: &LlvmIntrinsic) -> Result<Fun, Error> {
         LlvmIntrinsic::Abs { .. } => Fun::Int(IntFn::Abs),
         LlvmIntrinsic::Cttz { .. } => Fun::Int(IntFn::Ctz),
         LlvmIntrinsic::Ctlz { .. } => Fun::Int(IntFn::Clz),
-        LlvmIntrinsic::Memset { .. }
+        // An operation on a narrow integer that constant propagation did not fold.
+        LlvmIntrinsic::NarrowInt { .. }
+        | LlvmIntrinsic::Memset { .. }
         | LlvmIntrinsic::Memcpy { .. }
         | LlvmIntrinsic::Memmove { .. }
         | LlvmIntrinsic::Agx(_) => return Err(not_lowered()),

@@ -1,11 +1,17 @@
 //! Textures over an IOSurface plane beyond a 2D texture of one texel a block: a BC texture over a
-//! surface's rows, and a texture buffer, a 1D texture and a 2D array of one slice over a plane of
-//! a surface with planes (`linear_plan.rs`'s **Block-compressed surfaces** and **Beyond the
-//! plane's rows**). Each reads and writes the bytes the x86 Macs' Metal does
-//! (`surface_texture_envelope`; each shape names the `oracle_surftex` case or the probe's shape it
-//! stands for): a kernel's reads, the blits, `getBytes` and `replaceRegion` take those bytes, a
-//! kernel after a blit or a CPU write reads what they wrote, and no other byte of the surface
-//! changes.
+//! surface's rows, and a texture buffer, a 1D texture, a 2D array of one slice and a 2D texture
+//! wider than the plane's rows over a plane of a surface with planes (`linear_plan.rs`'s
+//! **Block-compressed surfaces** and **Beyond the plane's rows**). Each reads and writes the bytes
+//! the x86 Macs' Metal does, and a texture buffer at a plane offset off 16 and a texture wider
+//! than its plane's rows the bytes the M3 Max's does (`surface_texture_envelope`; each shape
+//! names the `oracle_surftex` case or the probe's shape it stands for): a kernel's reads, the
+//! blits, `getBytes` and `replaceRegion` take those bytes, a kernel after a blit or a CPU write
+//! reads what they wrote, and no other byte of the surface changes. A BC texture of 8-byte blocks
+//! at a plane offset off 16 takes the bytes the x86 Macs' blits and samples and the 5300M's
+//! `getBytes` take, at the plane's offset, on every path (the UHD 630's CPU calls take the plane
+//! from byte 0). A blit into a 2D texture whose rows overlap is refused
+//! (`NotImplemented(OverlappingSurfaceRows)`, `linear_plan.rs`'s **Rows that overlap**) and
+//! changes no byte.
 //!
 //! A device test: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
 //! `m2v_cpu_icd`), on the kind of device the cfg selects. Each surface is a buffer standing for
@@ -20,7 +26,7 @@ use super::layer_claim::Watched;
 use crate::{
     BlitCommandEncoder, BlitOption, Buffer, ComputePipelineState, Device, DeviceKind,
     DeviceOptions, Error, IoSurfacePlane, Origin, PipelineOptions, Region, ResourceOptions,
-    ShaderCacheOptions, Size, Texture, TextureDescriptor,
+    RuntimeGap, ShaderCacheOptions, Size, Texture, TextureDescriptor,
 };
 use metal2vulkan::metal::{PixelFormat, TextureType, TextureUsage};
 use std::path::Path;
@@ -191,6 +197,18 @@ const BGRA1X2: Surface = Surface {
     length: 32768,
     plane: (0, 256, true),
 };
+/// A 64 x 64 `'BGRA'` surface of one plane at offset 8, in 32768 bytes (the probe's
+/// `bgraat8`).
+const BGRA_AT8: Surface = Surface {
+    length: 32768,
+    plane: (8, 256, true),
+};
+/// A 64 x 64 `'BGRA'` surface of one plane at 264 bytes a row, in 32768 bytes (the probe's
+/// `bgrarow264`).
+const BGRA_ROW264: Surface = Surface {
+    length: 32768,
+    plane: (0, 264, true),
+};
 /// A 64 x 64 `420v` CVPixelBuffer's luma plane on the x86 Macs.
 const P0: Surface = Surface {
     length: 6432,
@@ -200,6 +218,16 @@ const P0: Surface = Surface {
 const P1: Surface = Surface {
     length: 6432,
     plane: (4128, 64, true),
+};
+/// A 64 x 64 `420v` surface's luma plane on the M3 Max (the probe's `420v`).
+const M3_P0: Surface = Surface {
+    length: 6720,
+    plane: (512, 64, true),
+};
+/// Its chroma plane.
+const M3_P1: Surface = Surface {
+    length: 6720,
+    plane: (4608, 64, true),
 };
 
 /// One texture over a surface.
@@ -238,9 +266,16 @@ impl Shape {
             PixelFormat::BC1RGBA | PixelFormat::BC4RUnorm => (8, [4, 4]),
             PixelFormat::BC3RGBA | PixelFormat::BC7RGBAUnorm => (16, [4, 4]),
             PixelFormat::BGRA8Unorm => (4, [1, 1]),
+            PixelFormat::RG8Unorm => (2, [1, 1]),
             PixelFormat::R8Unorm => (1, [1, 1]),
             pf => panic!("{pf:?}"),
         }
+    }
+
+    /// Whether its rows share bytes: a 2D texture's rows wider than the plane's `bytesPerRow`.
+    fn rows_overlap(&self) -> bool {
+        let (_, row) = self.units();
+        self.texture_type == TextureType::Type2D && row > self.surface.plane.1
     }
 
     /// Its units across and down, and the bytes of a row of them.
@@ -260,12 +295,26 @@ impl Shape {
         }
     }
 
+    /// The surface's byte where a kernel reads row `row` of units from: a texture buffer's from
+    /// the plane's offset rounded down to 16, as Metal's functions read one (`bgraat8.texbuf` on
+    /// the M3 Max), every other shape's where its CPU calls do.
+    fn gpu_row_at(&self, row: u64) -> usize {
+        let (offset, _, _) = self.surface.plane;
+        match self.texture_type {
+            TextureType::TextureBuffer => (offset - offset % 16) as usize,
+            _ => self.row_at(row),
+        }
+    }
+
     /// Whether a kernel's reads are checked: a BC1 texture's solid blocks, or 8-bit unsigned
     /// normalized texels.
     fn read_checked(&self) -> bool {
         matches!(
             self.pf,
-            PixelFormat::BC1RGBA | PixelFormat::BGRA8Unorm | PixelFormat::R8Unorm
+            PixelFormat::BC1RGBA
+                | PixelFormat::BGRA8Unorm
+                | PixelFormat::RG8Unorm
+                | PixelFormat::R8Unorm
         )
     }
 
@@ -325,6 +374,17 @@ fn shapes() -> Vec<Shape> {
         shape("125 bgra1.fmt.bc1", P::BC1RGBA, T::Type2D, [64, 64], BGRA1),
         shape("420v.p0.bc1.16x64", P::BC1RGBA, T::Type2D, [16, 64], P0),
         shape("420v.p1.bc1.16x32", P::BC1RGBA, T::Type2D, [16, 32], P1),
+        // 8-byte blocks over a plane at an offset or pitch off 16 (the x86 Macs' `bgraat8.bc1`
+        // and `bgrarow264.bc1`): at the plane's own offset and pitch, unrounded.
+        shape("bgraat8.bc1", P::BC1RGBA, T::Type2D, [64, 64], BGRA_AT8),
+        shape(
+            "bgrarow264.bc1",
+            P::BC1RGBA,
+            T::Type2D,
+            [64, 64],
+            BGRA_ROW264,
+        ),
+        shape("bgraat8.bc4", P::BC4RUnorm, T::Type2D, [64, 64], BGRA_AT8),
         shape(
             "121 bgra1.typebuffer",
             P::BGRA8Unorm,
@@ -338,6 +398,30 @@ fn shapes() -> Vec<Shape> {
             T::TextureBuffer,
             [128, 1],
             BGRA1X2,
+        ),
+        // At a plane offset and a pitch off 16 (the M3 Max's `bgraat8.texbuf` and
+        // `bgrarow264.texbuf`): its functions from the offset rounded down to 16, its CPU calls
+        // from the offset.
+        shape(
+            "bgraat8.texbuf.64",
+            P::BGRA8Unorm,
+            T::TextureBuffer,
+            [64, 1],
+            BGRA_AT8,
+        ),
+        shape(
+            "bgraat8.texbuf.128",
+            P::BGRA8Unorm,
+            T::TextureBuffer,
+            [128, 1],
+            BGRA_AT8,
+        ),
+        shape(
+            "bgrarow264.texbuf.128",
+            P::BGRA8Unorm,
+            T::TextureBuffer,
+            [128, 1],
+            BGRA_ROW264,
         ),
         shape(
             "129 420v.p0.typebuffer",
@@ -360,6 +444,25 @@ fn shapes() -> Vec<Shape> {
             T::Type2DArray,
             [64, 64],
             P0,
+        ),
+        // Wider than the plane's rows (the M3 Max's): a 2D texture's rows `bytesPerRow` apart,
+        // overlapping, and a 1D texture's one row from the plane's offset.
+        shape("bgra1x2.65x64", P::BGRA8Unorm, T::Type2D, [65, 64], BGRA1X2),
+        shape(
+            "bgra1x2.128x32",
+            P::BGRA8Unorm,
+            T::Type2D,
+            [128, 32],
+            BGRA1X2,
+        ),
+        shape("420v.p0.65x64", P::R8Unorm, T::Type2D, [65, 64], M3_P0),
+        shape("420v.p1.33x32", P::RG8Unorm, T::Type2D, [33, 32], M3_P1),
+        shape(
+            "bgra1x2.1d.128",
+            P::BGRA8Unorm,
+            T::Type1D,
+            [128, 1],
+            BGRA1X2,
         ),
     ]
 }
@@ -416,6 +519,17 @@ fn rows_of(shape: &Shape, bytes: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+/// The texture's rows of units as a kernel reads them, packed, out of the surface's `bytes`.
+fn gpu_rows_of(shape: &Shape, bytes: &[u8]) -> Vec<u8> {
+    let ([_, down], row) = shape.units();
+    (0..down)
+        .flat_map(|j| {
+            let at = shape.gpu_row_at(j);
+            bytes[at..at + row as usize].to_vec()
+        })
+        .collect()
+}
+
 /// Write `rows` (packed rows of units) into the surface's `bytes` where the texture's lie.
 fn set_rows(shape: &Shape, bytes: &mut [u8], rows: &[u8]) {
     let (_, row) = shape.units();
@@ -439,6 +553,7 @@ fn expected(shape: &Shape, rows: &[u8], (x, y): (u64, u64)) -> [u32; 4] {
         PixelFormat::BGRA8Unorm => {
             [rows[at + 2], rows[at + 1], rows[at], rows[at + 3]].map(u32::from)
         }
+        PixelFormat::RG8Unorm => [u32::from(rows[at]), u32::from(rows[at + 1]), 0, 255],
         PixelFormat::R8Unorm => [u32::from(rows[at]), 0, 0, 255],
         pf => panic!("{pf:?}"),
     }
@@ -565,7 +680,7 @@ fn check(
         if !shape.read_checked() {
             return;
         }
-        let rows = rows_of(shape, model);
+        let rows = gpu_rows_of(shape, model);
         let read = kernel_reads(device, state, shape, &texture);
         let off: Vec<_> = (0..h)
             .flat_map(|y| (0..w).map(move |x| (x, y)))
@@ -648,6 +763,33 @@ fn check(
         surface_holds("replaceRegion", &model, wrong);
         kernel("after replaceRegion", &model, wrong);
         blit_read("after replaceRegion", &model, wrong);
+    }
+    // A blit into rows that share bytes, refused: no order a row copy writes them in is Metal's.
+    if blits && shape.rows_overlap() {
+        let source = device.new_buffer(image, ResourceOptions::shared()).unwrap();
+        let mut gap = None;
+        blit(device, |blit| {
+            gap = blit
+                .copy_from_buffer_to_texture(
+                    &source,
+                    0,
+                    row,
+                    0,
+                    Size::new(w, h, 1),
+                    &texture,
+                    0,
+                    0,
+                    Origin::new(0, 0, 0),
+                    BlitOption::None,
+                )
+                .err();
+            Ok(())
+        });
+        if gap != Some(Error::NotImplemented(RuntimeGap::OverlappingSurfaceRows)) {
+            wrong.push(format!("blit write: {gap:?}, not OverlappingSurfaceRows"));
+        }
+        surface_holds("a refused blit write", &model, wrong);
+        return path;
     }
     // Every unit, from a blit.
     if blits {

@@ -272,8 +272,15 @@ fn a_release_waits_for_the_batch_in_flight_where_the_device_parks_freed_memory()
 
 /// The bytes of a private buffer that takes a block of its own, with a buffer of addresses (past
 /// half a pooled block, `memory.rs`), and that the recycler parks for no later buffer (past its
-/// bytes, `recycle.rs`): its release frees its block.
+/// bytes, `recycle.rs`): its release frees its block where the device keeps no empty block
+/// ([`keeping_no_empty_block`]).
 const OWN_BLOCK: u64 = 128 << 20;
+
+/// `device`, keeping no empty block for reuse past its pools' two (the heaps' budget's test
+/// stand-in at 0, `memory.rs`'s `KEPT_EMPTY_BYTES`): a block that empties goes.
+fn keeping_no_empty_block(device: &Device) {
+    crate::device::lock(&device.shared().memory).kept_budget_stand_in = Some(0);
+}
 
 /// The `vkDestroyBuffer` calls the memory's own code made so far (`memory.rs`): its blocks'
 /// buffers of addresses (`WorkCounts::object_churn`'s release sites). Read from the counters
@@ -298,6 +305,7 @@ fn addresses_destroyed(device: &Device) -> u64 {
 fn a_block_s_buffer_of_addresses_goes_with_no_submission_inside_its_vk_queue_submit() {
     let scratch = Scratch::new("gated");
     let device = device(&scratch.0);
+    keeping_no_empty_block(&device);
     device.park_freed_memory();
     let parking = Arc::clone(device.shared().parking.get().expect("the device parks"));
     let buffer = device
@@ -343,6 +351,7 @@ const ROUNDS: usize = 24;
 fn blocks_go_while_submissions_that_make_buffers_run() {
     let scratch = Scratch::new("orders");
     let device = device(&scratch.0);
+    keeping_no_empty_block(&device);
     device.park_freed_memory();
     let (done, ended) = mpsc::channel();
     let submitter = {
@@ -546,7 +555,7 @@ fn a_release_waits_for_the_program_s_own_submission_where_the_device_parks_freed
     // SAFETY: the queue is used only inside `f`, under the runtime's lock; the submission waits
     // for a value of the program's semaphore that the program signals below.
     unsafe {
-        queue.with_vk_queue(|vk_queue, _| {
+        queue.with_vk_queue(|_, vk_queue, _| {
             vk_device
                 .queue_submit(vk_queue, &[submit], vk::Fence::null())
                 .unwrap()
@@ -803,12 +812,31 @@ fn the_in_place_check_s_buffers_delay_no_deallocator_behind_batches_in_flight() 
             && now.host_imports_live == before.host_imports_live
             && now.host_import_releases_pending == before.host_import_releases_pending
     };
+    // The check's steps the test sees: its verdicts as they come, its rounds' images
+    // (`ObjectChurn::vk_images_made`; the program's fills make none), and its imports' releases
+    // and frees. Each of its submissions waits behind a batch of fills on the device's queue, so
+    // the whole check is as long as its submissions times a batch, which a loaded host stretches
+    // past any bound; the bound holds for each step.
+    let steps = || {
+        let now = device.work_counts();
+        let imports = (now.host_import_releases_posted, now.host_imports_live);
+        let images = now.object_churn.vk_images_made;
+        (device.in_place_check_report(), images, imports)
+    };
+    let (mut seen, mut stepped, mut longest) = (steps(), Instant::now(), Duration::ZERO);
     // The first batch is in flight as the check starts, and a next one is submitted before each
     // completes, until it is done.
     let mut in_flight = filling(&queue, &target);
-    let deadline = Instant::now() + WAIT;
     while !done() {
-        assert!(Instant::now() < deadline, "the check's buffers never went");
+        let now = steps();
+        if now != seen {
+            (seen, longest) = (now, longest.max(stepped.elapsed()));
+            stepped = Instant::now();
+        }
+        assert!(
+            stepped.elapsed() < WAIT,
+            "the check's buffers never went: no step of the check in {WAIT:?}"
+        );
         let next = filling(&queue, &target);
         in_flight.wait_until_completed_for(WAIT).unwrap();
         in_flight = next;
@@ -820,10 +848,13 @@ fn the_in_place_check_s_buffers_delay_no_deallocator_behind_batches_in_flight() 
     let posted = after.host_import_releases_posted - before.host_import_releases_posted;
     let parked = after.freed_memory_parked - before.freed_memory_parked;
     eprintln!(
-        "IN-PLACE-CHECK-RELEASES: {report:?}: posted {posted}, parked {parked}, delayed {delayed}"
+        "IN-PLACE-CHECK-RELEASES: {report:?}: posted {posted}, parked {parked}, delayed {delayed}, \
+         longest step {longest:?}"
     );
+    // Of the verdicts' lines, before the check's notes.
     let checked = |class: &str| {
-        (report.iter()).any(|line| line.starts_with(class) && !line.ends_with("Unchecked"))
+        (report.iter().take(crate::in_place::VERDICTS))
+            .any(|line| line.starts_with(class) && !line.ends_with("Unchecked"))
     };
     if !checked("Pointer") && !checked("DmaBuf") {
         eprintln!("IN-PLACE-CHECK-RELEASES: the check made no no-copy buffer");

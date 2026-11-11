@@ -9,7 +9,7 @@ use super::super::blit_plan::{
     texel_rows, BufferCopyPlan, BufferLayout, BufferRange, CopyPair, ImageCopyRegion, RowsCopy,
 };
 use super::super::copy_plan::{
-    copy_unit, BlitOption, CopyProblem, CopyRefusal, CopyUnit, ImageRegion, TextureRegion,
+    copy_unit, shape, BlitOption, CopyProblem, CopyRefusal, CopyUnit, ImageRegion, TextureRegion,
 };
 use super::super::error::RuntimeGap;
 use super::super::image_plan::{plan_image, ImagePlan};
@@ -281,11 +281,28 @@ fn layouts_off_metals_rules_copy_where_plain_metal_places_their_rows() {
     assert_eq!(at(rgba8.0, rgba8.1, 2, 6, true), Ok(vec![0, 8, 12, 20]));
     assert_eq!(at(rgba8.0, rgba8.1, 1, 0, true), Ok(vec![0, 0, 0, 0]));
     assert_eq!(at(P::R8Uint, [4, 4, 1], 1, 3, true), Ok(vec![1, 4, 7, 10]));
-    // Refused: overlapping writes out of a texture, the aligned path's pitch below a row (0
-    // reads garbage) and offsets of 16 or more on it (not measured), and depth and stencil
-    // formats but `Depth32Float` (not measured).
+    // The aligned path at a pitch below a row: each row whole from its own row's offset, the rows
+    // overlapping in the buffer (an M3 Max, `probes/short_row_blits.m`), as a one-plane YCbCr
+    // texture's copy at the row `MTLPixelFormatGetInfoForDevice` describes (half the row) takes.
+    assert_eq!(at(rgba8.0, [8, 4, 1], 0, 16, true), Ok(vec![0, 16, 32, 48]));
+    assert_eq!(
+        at(P::RGBA32Uint, [4, 4, 1], 0, 32, true),
+        Ok(vec![0, 32, 64, 96])
+    );
+    let half = at(P::YCBCR84221P, [32, 4, 1], 0, 32, true);
+    assert_eq!(half, Ok(vec![0, 32, 64, 96]));
+    // Out of a texture at a pitch below a row: each row at its own offset, the rows overlapping in
+    // the buffer (written in turn: `a_copy_out_at_a_pitch_below_the_row_leaves_the_later_rows`),
+    // so at a pitch of 0 the last row alone, which covers every other whole.
+    assert_eq!(at(rgba8.0, rgba8.1, 0, 8, false), Ok(vec![0, 8, 16, 24]));
+    assert_eq!(at(rgba8.0, rgba8.1, 0, 0, false), Ok(vec![0]));
+    assert_eq!(
+        at(rgba8.0, [8, 4, 1], 0, 16, false),
+        Ok(vec![0, 16, 32, 48])
+    );
+    // Refused: the aligned path's pitch of 0 (it reads garbage) and offsets of 16 or more on it
+    // (not measured), and depth and stencil formats but `Depth32Float` (not measured).
     let refused = Err(CopyProblem::BytesPerRow);
-    assert_eq!(at(rgba8.0, rgba8.1, 0, 8, false), refused);
     assert_eq!(at(rgba8.0, rgba8.1, 0, 0, true), refused);
     assert_eq!(at(P::RGBA32Uint, [1, 4, 1], 0, 8, true), refused);
     assert_eq!(at(rgba8.0, rgba8.1, 16, 18, true), refused);
@@ -294,6 +311,20 @@ fn layouts_off_metals_rules_copy_where_plain_metal_places_their_rows() {
         at(P::Depth16Unorm, [4, 4, 1], 1, 8, true),
         Err(CopyProblem::Offset)
     );
+    // Depth and stencil formats but `Depth32Float` at a pitch below the row on the copy unit
+    // (`rows_below_row`): each row at `y x bytesPerRow`, both ways (an M3 Max,
+    // `probes/short_row_kinds.m`), out of the texture the later row's bytes standing. A pitch off
+    // the unit, or of 0, stays refused.
+    for into in [true, false] {
+        let depth = at(P::Depth16Unorm, [8, 4, 1], 0, 10, into);
+        assert_eq!(depth, Ok(vec![0, 10, 20, 30]), "{into}");
+        let stencil = at(P::Stencil8, [8, 4, 1], 0, 5, into);
+        assert_eq!(stencil, Ok(vec![0, 5, 10, 15]), "{into}");
+    }
+    let aligned = at(P::Depth16Unorm, [16, 4, 1], 0, 16, true);
+    assert_eq!(aligned, Ok(vec![0, 16, 32, 48]));
+    assert_eq!(at(P::Depth16Unorm, [8, 4, 1], 0, 9, true), refused);
+    assert_eq!(at(P::Depth16Unorm, [8, 4, 1], 0, 0, false), refused);
     // The images of a 3D texture (`sw_3d`): each row on its own, no aligned path.
     let t = tex(P::RGBA8Unorm, TextureType::Type3D, [4, 2, 2]);
     let u = unit(&t, BlitOption::None).unwrap();
@@ -326,6 +357,55 @@ fn unstage(plan: &BufferCopyPlan, texels: &[u8], len: usize) -> Vec<u8> {
         out[s..s + n].copy_from_slice(&texels[d..d + n]);
     }
     out
+}
+
+/// A copy out of a texture at a pitch below its row writes each row at `y x bytesPerRow`, in turn,
+/// the later row's bytes over the earlier's, one of the orders plain Metal's blit leaves (an Apple
+/// M3 Max under macOS 27.0.1, `probes/short_row_blits.m`: no one order holds), nothing past the
+/// last row written: a one-plane YCbCr texture at the row `MTLPixelFormatGetInfoForDevice`
+/// describes (half the row), a 16-byte texel at a pitch off the row's half, and every row at the
+/// first at a pitch of 0. Each row's buffer bytes are one region, apart from every other's.
+#[test]
+fn a_copy_out_at_a_pitch_below_the_row_leaves_the_later_rows() {
+    use PixelFormat as P;
+    for (pf, extent, bpr) in [
+        (P::YCBCR84221P, [32u32, 4u32], 32u64),
+        (P::RGBA8Unorm, [8, 4], 16),
+        (P::RGBA32Float, [4, 3], 48),
+        (P::R8Unorm, [16, 4], 0),
+    ] {
+        let t = tex(
+            pf,
+            TextureType::Type2D,
+            [u64::from(extent[0]), u64::from(extent[1]), 1],
+        );
+        let u = unit(&t, BlitOption::None).unwrap();
+        let s = shape([extent[0], extent[1], 1], &u);
+        let r = region([0, 0, 0], [extent[0], extent[1], 1]);
+        let len = ((s.rows - 1) * bpr + s.row_bytes) as usize;
+        let plan = plan_buffer_copy(&t.record, &r, &u, &layout(0, bpr, 0), len as u64, 0, false);
+        let plan = plan.unwrap_or_else(|problem| panic!("{pf:?} at {bpr}: {problem:?}"));
+        assert_eq!(plan.span, 0..len as u64, "{pf:?} at {bpr}");
+        let staging = plan.staging.as_ref().expect("a staged copy");
+        assert!(
+            staging.rows.len() as u64 <= s.rows,
+            "{pf:?}: {:?}",
+            staging.rows
+        );
+        let texels: Vec<u8> = (0..s.rows * s.row_bytes)
+            .map(|i| (i * 7 % 253) as u8)
+            .collect();
+        let mut want = vec![0xabu8; len + 16];
+        for y in 0..s.rows {
+            let (at, from, n) = (
+                (y * bpr) as usize,
+                (y * s.row_bytes) as usize,
+                s.row_bytes as usize,
+            );
+            want[at..at + n].copy_from_slice(&texels[from..from + n]);
+        }
+        assert_eq!(unstage(&plan, &texels, len + 16), want, "{pf:?} at {bpr}");
+    }
 }
 
 /// A `bytesPerImage` off Metal's rules (an M4 under macOS 27.0.1; its validation
@@ -1100,22 +1180,35 @@ fn copies_into_textures_over_buffers_move_texel_rows() {
         (16..40, 292..364)
     );
     assert!(!copy.meets());
-    // Metal's checks of the buffer's side: rows that do not cover the region.
-    let short = BufferLayout {
-        bytes_per_row: 4,
+    // A pitch below the region's row on the copy unit (`rows_below_row`): each row at
+    // `y x bytesPerRow`, the rows overlapping in the buffer (an M3 Max,
+    // `probes/short_row_kinds.m`). Out of the texture the later row's bytes stand: each row but
+    // the last copies its first `bytesPerRow` bytes.
+    let short = |bytes_per_row| BufferLayout {
+        bytes_per_row,
         ..layout
     };
-    assert_eq!(
+    let rows = |l: &BufferLayout, length| {
         plan_rows_copy(
             &t.record,
-            &region([0, 0, 0], [2, 2, 1]),
+            &region([0, 0, 0], [2, 3, 1]),
             &unit,
-            &short,
-            4096,
-            &texels
-        ),
-        Err(CopyProblem::BytesPerRow)
-    );
+            l,
+            length,
+            &texels,
+        )
+    };
+    let (from, to) = rows(&short(4), 4096).unwrap();
+    assert_eq!(from, vec![16..24, 20..28, 24..32]);
+    assert_eq!(to, vec![256..264, 288..296, 320..328]);
+    let out = RowsCopy::new(&to, &from);
+    let written: Vec<(u64, u64)> = out.rows.iter().map(|r| (r.dst, r.size)).collect();
+    assert_eq!(written, vec![(16, 4), (20, 4), (24, 8)]);
+    // Refused: a pitch off the unit or of 0, and a last row past the buffer.
+    assert_eq!(rows(&short(6), 4096), Err(CopyProblem::BytesPerRow));
+    assert_eq!(rows(&short(0), 4096), Err(CopyProblem::BytesPerRow));
+    assert_eq!(rows(&short(4), 31), Err(CopyProblem::BufferRange));
+    assert_eq!(rows(&short(4), 32).map(|_| ()), Ok(()));
 }
 
 /// A BC texture over a surface's rows (`linear_plan.rs`) copies rows of blocks: a region's texels
@@ -1761,4 +1854,68 @@ fn copies_reach_the_buffer_s_last_byte_and_no_further() {
             );
         }
     }
+}
+
+/// A copy of rows cut where a side's bytes pass its texture's tail (`buffer_texture.rs`): every
+/// byte in one part, each part's rows on one side of each cut, a row across a cut split there,
+/// and a side with no cut whole before it.
+#[test]
+fn rows_split_at_each_side_s_tail() {
+    // Two 256-byte rows from a buffer into a texture whose bytes past 4096 are its tail: the
+    // second row crosses it 128 bytes in.
+    let copy = RowsCopy::new(&[0..256, 1024..1280], &[3712..3968, 3968..4224]);
+    let parts = copy.split(None, Some(4096));
+    let rows = |past: bool| -> Vec<BufferRange> {
+        let part = parts.iter().find(|(s, d, _)| !*s && *d == past);
+        part.map_or(Vec::new(), |(.., copy)| copy.rows.clone())
+    };
+    assert_eq!(parts.len(), 2);
+    assert_eq!(
+        rows(false),
+        [
+            BufferRange {
+                src: 0,
+                dst: 3712,
+                size: 256
+            },
+            BufferRange {
+                src: 1024,
+                dst: 3968,
+                size: 128
+            }
+        ]
+    );
+    assert_eq!(
+        rows(true),
+        [BufferRange {
+            src: 1152,
+            dst: 4096,
+            size: 128
+        }]
+    );
+    let (.., past) = parts
+        .iter()
+        .find(|(_, d, _)| *d)
+        .expect("a part past the cut");
+    assert_eq!(
+        (past.src_span.clone(), past.dst_span.clone()),
+        (1152..1280, 4096..4224)
+    );
+    // Both sides cut: a row crossing both cuts at different bytes is three parts, and a row
+    // before both joins the first.
+    let both =
+        RowsCopy::new(&[0..64, 3968..4224], &[64..128, 4032..4288]).split(Some(4096), Some(4096));
+    let mut sides: Vec<(bool, bool, u64)> = both
+        .iter()
+        .map(|(s, d, copy)| (*s, *d, copy.length()))
+        .collect();
+    sides.sort_unstable();
+    assert_eq!(
+        sides,
+        [(false, false, 128), (false, true, 64), (true, true, 128)]
+    );
+    // No cut: the copy itself.
+    let whole = copy.split(None, None);
+    assert_eq!(whole.len(), 1);
+    assert_eq!(whole[0].2, copy);
 }

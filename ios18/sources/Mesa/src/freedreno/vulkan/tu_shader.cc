@@ -213,6 +213,15 @@ tu_spirv_to_nir(struct tu_device *dev,
    if (result != VK_SUCCESS)
       return NULL;
 
+   if (stage == MESA_SHADER_FRAGMENT) {
+      bool progress = false;
+      NIR_PASS(progress, nir, nir_lower_terminate_to_demote);
+      if (progress) {
+         NIR_PASS(_, nir, nir_lower_halt_to_return);
+         NIR_PASS(_, nir, nir_lower_returns);
+      }
+   }
+
    /* ir3 uses num_ubos and num_ssbos to track the number of *bindful*
     * UBOs/SSBOs, but spirv_to_nir sets them to the total number of objects
     * which is useless for us, so reset them here.
@@ -1566,6 +1575,9 @@ tu_lower_io(nir_shader *shader, struct tu_device *dev,
                mesa_to_vk_shader_stage(shader->info.stage)))
             continue;
 
+         if (binding->size == 0)
+            continue;
+
          /* If we don't know the size at compile time due to a variable
           * descriptor count, then with descriptor buffers we cannot know
           * how much space the real inline uniform has. In this case we fall
@@ -2159,6 +2171,28 @@ tu6_emit_xs(struct tu_crb &crb,
 {
    if (!xs) {
       /* shader stage disabled */
+      if (CHIP >= A8XX) {
+         switch (stage) {
+         case MESA_SHADER_VERTEX:
+            crb.add(A6XX_SP_VS_BASE());
+            break;
+         case MESA_SHADER_TESS_CTRL:
+            crb.add(A6XX_SP_HS_BASE());
+            break;
+         case MESA_SHADER_TESS_EVAL:
+            crb.add(A6XX_SP_DS_BASE());
+            break;
+         case MESA_SHADER_GEOMETRY:
+            crb.add(A6XX_SP_GS_BASE());
+            break;
+         case MESA_SHADER_FRAGMENT:
+            crb.add(A6XX_SP_PS_BASE());
+            break;
+         case MESA_SHADER_COMPUTE:
+            crb.add(A6XX_SP_CS_BASE());
+            break;
+         }
+      }
       return;
    }
 

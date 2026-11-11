@@ -4,8 +4,12 @@
 //!
 //! A secondary per instance costs GPU time and CPU on every driver measured: on ms01's Iris Xe
 //! (ANV) about 11 us of GPU and 8 us of recording CPU per pass, on a Radeon 780M (RADV) and an
-//! RTX 5080 about 1 to 3 us of each, whatever the draw count. Everything else of the pass records
-//! as before, at its end; only where the first instance's commands go changes.
+//! RTX 5080 about 1 to 3 us of each, whatever the draw count. And a secondary is one more
+//! command buffer a pass holds until its command buffer completes: on ANV below Xe-HP each begun
+//! takes a 64 KiB block of the device's 1 GiB binding-table pool until it is begun again, reset
+//! or freed (`spares.rs`), so one command buffer of passes that each recorded a primary and a
+//! secondary failed at the end of its 8,087th pass on ms01's Iris Xe (`tests::many_passes`). Everything else of the pass records as before, at its end; only where
+//! the first instance's commands go changes.
 //!
 //! - **The command buffer.** The pass takes the encoder's own command buffer where nothing has
 //!   recorded into it yet, else a new one after it (`EncoderCore::hold_pass`). Until the pass
@@ -18,8 +22,8 @@
 //!   submission order.
 //! - **At the open: the layout allows it** ([`opens_inline`]). The first instance's render pass,
 //!   attachments and clear values must be what the pass's end would make: no step the end decides
-//!   from the whole pass may change them. So: one layer of one sample, no depth or stencil
-//!   attachment, no rasterization-rate map, custom sample positions or visibility buffer, and
+//!   from the whole pass may change them. So: an attachment, one layer of one sample, no
+//!   rasterization-rate map, custom sample positions or visibility buffer, and
 //!   every color attachment the texture's own image or its image over a buffer's bytes
 //!   (`Texture::image_over_buffer`; not a texture buffer, a shadow, a stand-in while the bytes
 //!   are detached, or a bound linear image), of no extended-range, padded or bfloat format,
@@ -29,12 +33,24 @@
 //!   operations (`render_target::final_pass` stores every attachment of an instance that is not
 //!   the last; so does the last here, and `kept_bytes.rs` keeps a stored attachment in place),
 //!   its attachments or its clear values.
+//! - **A depth/stencil attachment** ([`depth_stencil_opens`]) the texture's own image (not the
+//!   scratch image of separate depth and stencil textures, `depth_stencil_scratch.rs`, a
+//!   stand-in, `attachment_stand_in.rs`, or a texture over a buffer), held in `GENERAL` (`render_target::depth_layout`: a
+//!   single-sampled one is), of no memoryless aspect, resolved nowhere, each aspect it names
+//!   loaded `Load` or `Clear` (but a NaN depth clear, which the end writes apart and loads,
+//!   `nan_clear.rs`) and stored `Store`, not late; an aspect of the texture it does not name
+//!   loaded and stored unchanged, as every instance does (`DepthStencilTarget::keep_depth`).
+//!   Then the end changes nothing of it in the first instance either: its clear past the render
+//!   area is the instance's own (below), and it records no copy or layout move of it around the
+//!   instance. A pass of no color but memoryless ones renders over its depth/stencil
+//!   attachment's reach where its first aspect is cleared.
 //! - **A clear past the render area.** Metal's `Clear` load reaches past the render area, to
 //!   whole tiles (`clear_reach.rs`), where the end clears the reach before the pass and loads it
 //!   (`ReachClears`). The instance recorded inline clears it itself: it renders over that reach
 //!   ([`inline_area`]), its render area and framebuffer of that extent, which every attachment
-//!   must then share, each other color cleared to the same reach (none loaded, whose texels past
-//!   the render area Metal leaves alone) and each memoryless color at least as large; else the
+//!   must then share, each other color and depth/stencil aspect cleared to the same reach (none
+//!   loaded, whose texels past the render area Metal leaves alone) and each memoryless color at
+//!   least as large; else the
 //!   pass records as before (counted). "The effects of attachment load, store, and multisample
 //!   resolve operations are restricted to the pixels whose x and y coordinates fall within the
 //!   render area on all attachments" (`VkRenderPassBeginInfo`): so its load and store operations
@@ -109,13 +125,15 @@
 //! - **A stand-in that arrives later** (a fetched attachment whose image lacks the usage the
 //!   fetch needs) stands in from the next instance on: the end copies each attachment into its
 //!   stand-in right after the inline instance, which rendered the attachment itself, not before
-//!   the pass, and back after the last as before.
+//!   the pass, and back after the last as before; after the last instance a draw pinned to the
+//!   attachments' own images, where one did (`render/snapshot.rs`).
 //! - **Counted**: `WorkCounts::inline_passes` (passes whose first instance recorded inline) and
 //!   `WorkCounts::inline_passes_split` (those of more than one instance), and
 //!   `WorkCounts::inline_split_instances` (`render/inline_splits.rs`); the passes whose first
 //!   instance did not, by the first check that ruled it out ([`NotInline`]): at the open, the
 //!   encoder (`passes_not_inline_encoders`), the layout (`passes_not_inline_layouts`), a memoryless
-//!   color (`passes_not_inline_memoryless`), a color's actions (`passes_not_inline_actions`, and
+//!   color or depth/stencil aspect (`passes_not_inline_memoryless`), a color's or depth/stencil
+//!   aspect's actions (`passes_not_inline_actions`, and
 //!   by the first ruled out: a `DontCare` load, a reach past the render area the attachments do
 //!   not share, a clear to a NaN the clear would not keep, a resolve, or a store other than
 //!   `Store` or late, `passes_not_inline_actions_dont_care_load` and kin), a texture over a buffer
@@ -134,7 +152,7 @@ use crate::clear_reach;
 use crate::device::Device;
 use crate::error::Error;
 use crate::linear_attachment;
-use crate::render_pass::{ColorTarget, PassLayout};
+use crate::render_pass::{ColorTarget, DepthStencilTarget, PassLayout};
 use crate::render_target::{
     self, Feedback, FramebufferObject, PassShape, Position, RenderPassObject,
 };
@@ -210,9 +228,10 @@ pub(super) fn opens_inline(
         && layout.layers <= 1
         && layout.samples == 1
         && layout.visibility.is_none()
-        && layout.depth_stencil.is_none()
         && !extended.keeps_draws();
-    if !plain || layout.colors.iter().flatten().next().is_none() {
+    let attached =
+        layout.colors.iter().flatten().next().is_some() || layout.depth_stencil.is_some();
+    if !plain || !attached {
         return Err(NotInline::Layouts);
     }
     let area = inline_area(layout);
@@ -247,7 +266,7 @@ pub(super) fn opens_inline(
             // late. Else the first action ruled out.
             let loaded = match color.load {
                 LoadAction::Load => (area != layout.extent).then_some(ActionsRefused::UnequalReach),
-                LoadAction::Clear => (clear_reach::cleared(layout, target.extent, true) != area)
+                LoadAction::Clear => (clear_reach::cleared(layout, target, true) != area)
                     .then_some(ActionsRefused::UnequalReach),
                 LoadAction::DontCare => Some(ActionsRefused::DontCareLoad),
             };
@@ -271,6 +290,60 @@ pub(super) fn opens_inline(
             return Err(NotInline::Attachments);
         }
     }
+    match &layout.depth_stencil {
+        Some(ds) => depth_stencil_opens(device, layout, ds, area),
+        None => Ok(()),
+    }
+}
+
+/// Whether the depth/stencil attachment `ds` of a pass of `layout` on `device` lets its first
+/// instance record inline over `area` ([`inline_area`]; the module docs), else the first check it
+/// fails ([`NotInline`]): the texture's own image (no separate depth and stencil textures'
+/// scratch, stand-in, texture over a buffer or hidden depth and stencil), held in `GENERAL`
+/// (`render_target::depth_layout`),
+/// of no memoryless aspect, resolved nowhere, each aspect it names loaded where the instance
+/// renders over the render area or cleared over the reach it renders over, and stored `Store`,
+/// not late, its depth's clear no NaN written apart; an aspect it does not name but keeps (the
+/// texture's format has both) loaded and stored unchanged, over the render area alone.
+fn depth_stencil_opens(
+    device: &Device,
+    layout: &PassLayout,
+    ds: &DepthStencilTarget,
+    area: [u32; 2],
+) -> Result<(), NotInline> {
+    let general = render_target::depth_layout(device, layout)
+        .is_ok_and(|held| held == vk::ImageLayout::GENERAL);
+    if ds.hidden || !general {
+        return Err(NotInline::Layouts);
+    }
+    let aspects = || ds.depth.iter().chain(ds.stencil.iter());
+    if super::memoryless(&ds.target) || aspects().any(|aspect| aspect.memoryless) {
+        return Err(NotInline::Memoryless);
+    }
+    let loaded_over = |load: LoadAction| match load {
+        LoadAction::Load => (area != layout.extent).then_some(ActionsRefused::UnequalReach),
+        LoadAction::Clear => (clear_reach::cleared(layout, &ds.target, true) != area)
+            .then_some(ActionsRefused::UnequalReach),
+        LoadAction::DontCare => Some(ActionsRefused::DontCareLoad),
+    };
+    for aspect in aspects() {
+        let refused = loaded_over(aspect.load)
+            .or(ds.resolve.is_some().then_some(ActionsRefused::Resolve))
+            .or((aspect.store != StoreAction::Store || aspect.late_store)
+                .then_some(ActionsRefused::Store));
+        if let Some(refused) = refused {
+            return Err(NotInline::Actions(refused));
+        }
+    }
+    let kept = (ds.keep_depth || ds.keep_stencil) && area != layout.extent;
+    if kept {
+        return Err(NotInline::Actions(ActionsRefused::UnequalReach));
+    }
+    let written_nan = ds.depth.as_ref().is_some_and(|depth| depth.written_nan);
+    let apart = ds.separate.is_some() || ds.stand_in.is_some() || ds.target.texture.over_buffer();
+    if apart || written_nan {
+        return Err(NotInline::Attachments);
+    }
     Ok(())
 }
 
@@ -284,9 +357,22 @@ fn inline_area(layout: &PassLayout) -> [u32; 2] {
         .find(|color| !(color.memoryless || super::memoryless(&color.target)));
     match first {
         Some(color) if color.load == LoadAction::Clear => {
-            clear_reach::cleared(layout, color.target.extent, true)
+            clear_reach::cleared(layout, &color.target, true)
         }
-        _ => layout.extent,
+        Some(_) => layout.extent,
+        // A pass of no color but its memoryless ones: its depth/stencil attachment's first aspect,
+        // where it clears it.
+        None => match layout.depth_stencil.as_ref() {
+            Some(ds)
+                if (ds.depth.iter().chain(ds.stencil.iter()))
+                    .next()
+                    .map(|a| a.load)
+                    == Some(LoadAction::Clear) =>
+            {
+                clear_reach::cleared(layout, &ds.target, true)
+            }
+            _ => layout.extent,
+        },
     }
 }
 
@@ -407,7 +493,8 @@ impl RenderLowering {
             counts.pass_not_inline(NotInline::Draws);
             return Ok(None);
         }
-        let device = self.core.device().clone();
+        // Borrowed from the core, which the pass's hold below takes once the objects are found.
+        let device = self.core.device();
         // As its colors' loads stand at the open, before a memoryless color's below.
         let area = inline_area(&self.layout);
         // A memoryless color loaded `DontCare` reads zero where a draw reaches a tile, as the
@@ -436,21 +523,13 @@ impl RenderLowering {
             first: true,
             last: true,
         };
-        // The pass has no depth/stencil attachment (`opens_inline`): every attachment in
-        // `GENERAL`.
+        // Every attachment in `GENERAL`: its depth/stencil attachment too (`opens_inline`).
         let (none, general) = (Feedback::NONE, vk::ImageLayout::GENERAL);
         let shape = &instance.shape;
-        let pass = render_target::final_pass(&device, &self.layout, shape, at, none, general)?;
+        let pass = render_target::final_pass(device, &self.layout, shape, at, none, general)?;
         let views = instance.views;
-        let framebuffer = render_target::framebuffer_over(
-            &device,
-            &pass,
-            &self.layout,
-            shape,
-            views,
-            none,
-            area,
-        )?;
+        let framebuffer =
+            render_target::framebuffer_over(device, &pass, &self.layout, shape, views, none, area)?;
         let held = self.core.hold_pass()?;
         Ok(Some(InlineBegin {
             pass,
@@ -475,14 +554,14 @@ impl RenderLowering {
             splits,
             area: [width, height],
         } = begin;
-        let device = self.core.device().clone();
-        let raw = device.shared().vk();
+        let shared = self.core.device().shared();
+        let raw = shared.vk();
         if self.current.draws != vk::CommandBuffer::null() {
             // SAFETY: the secondary is recording, only this encoder records it, and nothing
             // recorded into it: no draw, and no query (the pass has no visibility buffer).
             let ended = unsafe { self.core.command_buffer().end_raw(self.current.draws) };
             if ended.is_ok() {
-                device.shared().counts.unrun_instance_ended();
+                shared.counts.unrun_instance_ended();
             }
         }
         let clear_values = render_target::clear_values(&self.layout);
@@ -499,7 +578,7 @@ impl RenderLowering {
         // to its end, which retains them), the render area is the framebuffer's extent, and
         // every image rests in `GENERAL`.
         unsafe { raw.cmd_begin_render_pass(held, &info, vk::SubpassContents::INLINE) };
-        device.shared().counts.render_pass_begun(PassBegun::Inline);
+        shared.counts.render_pass_begun(PassBegun::Inline);
         self.current.draws = held;
         self.current.inline = true;
         self.current.rerecord = None;
@@ -511,6 +590,6 @@ impl RenderLowering {
             later: Vec::new(),
             stood: 0,
         }));
-        device.shared().counts.inline_pass();
+        shared.counts.inline_pass();
     }
 }

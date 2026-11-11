@@ -49,7 +49,10 @@ pipeline records `NativeHalfConversion` or `NativeHalfQuantize`; not `NativeHalf
 MoltenVK on the Apple M3 Max's macOS 27 identity (`DriverDeviation::MetalHalfConversion`), where
 every such `half` is a conversion of a `float` the function holds or of a texel, measured to be
 Metal's. NVIDIA's driver (615.71.09) folds the pair
-(`DriverWorkaround::HalfConversionPairFolded`), so it takes the native conversion.
+(`DriverWorkaround::HalfConversionPairFolded`), so it takes the native conversion. RADV's compiler
+fuses a `float` addition, subtraction, multiply or fused multiply-add into the conversion of its
+result and rounds the exact result once (`DriverWorkaround::HalfConversionFusedWithArithmetic`), so
+a pipeline that rounds such a result to `half` there records `NativeHalfConversion`.
 A `half` read from memory or from its bits is the device's widening on every device (an
 `OpFConvert` of the bits read as a 16-bit float with `shaderFloat16`, `GLSL.std.450
 UnpackHalf2x16` without it), and a `half` stored or reinterpreted as bits, unless they are the
@@ -197,8 +200,12 @@ under 20 seconds and 500 MiB per attempt.
 (`VK_EXT_external_memory_host`). Some drivers refuse the pointer of shared memory: RADV (AMD on
 Linux) imports a pointer through amdgpu's userptr, which takes anonymous pages only, so it refuses
 `MAP_SHARED` mappings of a `memfd`, a shared memory object or any file (QEMU's
-`memory-backend-memfd,share=on` guest RAM among them) with `Unsupported`, `HostMemory`. NVIDIA and
-lavapipe import the same memory.
+`memory-backend-memfd,share=on` guest RAM among them). NVIDIA and lavapipe import the same memory.
+A no-copy buffer or heap over memory the device so refuses, made with no source of dma-bufs of its
+pages (below), or with one that fails or whose dma-bufs the device refuses, is a copy of the
+pages, announced ([Copied host buffers](#copied-host-buffers),
+`WorkCounts::copied_host_buffers_device_refused`); a rebind to such memory without a working
+source is refused with `Unsupported`, `HostMemory`.
 
 No driver that pins imported pages imports a mapping the kernel cannot pin (`VM_IO` or `VM_PFNMAP`:
 a mapping of a dma-buf). NVIDIA's driver fails such an import as out of device memory and then fails
@@ -219,7 +226,12 @@ dma-bufs of exactly the pages asked for, in order, split only at multiples of it
 the granule is less than the length (64 KiB on RADV of Mesa 26.2.4, 4 KiB on 26.0.8), several
 chunks are bound to one sparse buffer and must total the length rounded up to the granule: pad the
 last with a scratch page of your own, repeated. A texture's request takes one chunk, of the same
-file pieces the buffer's chunks hold there.
+file pieces the buffer's chunks hold there. A device that imports a dma-buf for a plain buffer but
+reports none for a sparse one asks with a granule of the whole length: one chunk, which one
+udmabuf must hold, else the object is refused. ANV of Mesa 26.2.6 on i915 is such a device: it
+takes a view of up to `list_limit` runs through its dma-buf, and refuses the pointer of a mapping
+of dma-bufs (`VK_ERROR_INVALID_EXTERNAL_HANDLE`), so a view of more runs, mapped through dma-bufs,
+is refused there; mapped from its files, its pointer is imported.
 
 On Linux, `udmabuf` makes such a dma-buf of the file pieces behind the pages: open `/dev/udmabuf`
 (the process needs read and write access to it) and issue `UDMABUF_CREATE_LIST` with one item per
@@ -261,12 +273,13 @@ released:
   buffers stand at once, raise the soft limit toward the hard one at startup (`setrlimit`), as QEMU
   does.
   A blit whose released buffer the device cannot import again (out of memory) is refused.
-- An import of the pointer, on a driver whose pointer imports follow their address
-  (`DriverFact::PointerImportsFollowTheirAddress`: ANV, Mesa 26.2.4 on the Iris Xe of Raptor
-  Lake-P; RADV, Mesa 26.2.4 on the Radeon 780M of Phoenix or Hawk Point and on the RX 7900 XTX; and
-  lavapipe). There a live import reads, at each submission, the pages mapped at its pointer then,
-  so the new import at the same pointer reads what the kept one would. A blit whose released buffer the device cannot import again is refused,
-  typed as the first import would be. Elsewhere a pointer import stays imported.
+- An import of the pointer, on a driver whose pointer imports follow their address, as the device
+  checks once per driver, release and kernel by remapping pages of its own under a live import
+  (`Device::pointer_imports_follow_their_address`, Linux only; ANV, RADV and lavapipe answer yes,
+  NVIDIA no). There a live import reads, at each submission, the pages mapped at its pointer then,
+  so the new import at the same pointer reads what the kept one would. Buffers made before the check
+  answered keep their imports. A blit whose released buffer the device cannot import again is
+  refused, typed as the first import would be. Elsewhere a pointer import stays imported.
 
 A buffer stays imported for good once its Metal address is handed out (`gpu_address`, a binding, an
 argument buffer or table, an indirect command buffer, `use_resource`), its `VkBuffer` is read, a
@@ -295,15 +308,32 @@ back after, which would undo a CPU write made meanwhile, where Metal keeps every
 command buffer does not write.
 
 By default (`HostPageTexturePolicy::InPlace`) the runtime relies on the driver there, checked. A
-texture whose declared usage only samples or reads it is a linear image aliasing the pages wherever
-the device's own check passed for that kind of pages (pointer imports, dma-buf imports, fresh
-pages): the check makes such images while a CPU thread writes beside their texels and passes a kind
-only where every first move kept every byte. It runs on a thread of its own, started by the first
-such texture, once per driver, driver version and runtime release; with a shader-cache directory
-its verdict is kept there and recalled as the next device is made, else it runs once per process.
-Until it answers, a texture is a shadow (`WorkCounts::host_texture_shadows_check_pending`), so the
-first frames of a first session pay the shadow's copies. A texture that renders or writes
-(`RenderTarget`, `ShaderWrite`, `ShaderAtomic`), one the check failed or could not cover, and one
+texture whose declared usage samples, reads, renders into it or writes it through a shader (of
+texels of 1, 2, 4, 8 or 16 bytes) is a linear image aliasing the pages wherever the device makes
+one and its own check passed for that kind of pages (pointer imports, dma-buf imports, fresh
+pages) and each of its accesses (a texture that renders, and one a shader writes, are checked
+apart, and a shader's writes of 1- or 2-byte texels apart from wider ones'), on a
+discrete GPU as on any other: the check makes such images while a CPU thread writes beside their
+texels and passes a kind only where every first move (and render pass, for one that renders, and
+kernel's storage writes, for one a shader writes) kept every byte. It runs on a thread of its own, started by the first such texture, once per driver and
+driver version; with a shader-cache directory its verdicts are kept there, named by the driver and
+the check's own version (not the runtime release), and recalled as the next device is made, else
+it runs once per process. A texture made before its verdict is a shadow, made without waiting for
+the check (`WorkCounts::host_texture_shadows_check_pending`), and moves in place once its kind's
+verdicts pass, with no copy (`WorkCounts::host_textures_moved_in_place`; its shadow's image goes
+once that commit's command buffer completed, `WorkCounts::host_texture_shadows_freed_after_move`), at a quiet commit: one
+made while no other command buffer of the device is uncommitted, that waits for no event and binds
+no texture by its ID, while none that does is still running (a program that never commits so
+keeps them shadows). A program that makes such textures as it starts (a compositor's
+framebuffers) and wants them in place from their first use on a driver's first run starts the
+check earlier, for instance as it makes the device, with `Device::settle_in_place_checks` and a
+zero timeout, which waits for nothing; the same call with a zero timeout later says whether the
+verdicts are known. A program that routes each surface either to a texture over its pages or to a
+copy of its own asks `Buffer::texture_placement` (or `texture_placement_with_iosurface_plane`)
+with the arguments it would make the texture with: the answer (`TexturePlacement`: in place,
+pending, a shadow and why, no host pages, another shape) is the making's own decision, so no report
+string needs parsing. A texture a shader writes of texels of a width the check stores none of
+(`host_texture_shadows_store_width`), one the check failed or could not cover, and one
 no image in place serves (a pitch the device's linear images do not take --
 `host_texture_shadows_refused_pitch`; over dma-buf pages, a source that makes no one dma-buf of
 the texture's own pages, as a chunked `udmabuf` import does -- `host_texture_shadows_refused_source`)
@@ -321,7 +351,41 @@ includes any extra memory that is required based on rowPitch"), which its layout
 render pass's load and store operations ("read and write back any memory locations within the image
 subresource bound for that attachment"; lavapipe writes back the bytes its 4-texel blocks reach
 past a row, a signaling NaN's bits quieted) may write, where Metal leaves them as the program writes
-them.
+them. A consumer that owns every read of such a buffer's bytes (a cache it fills and reads back by
+rows of texels, say) may make it with `BufferDescriptor::with_padding_unobserved()`: a runtime
+extension, no Metal counterpart, refused over the caller's memory (`NoCopy` contents). A texture
+over it is then a linear image at its pitch wherever the device lays one out so, or else, where
+the device makes `DRM_FORMAT_MOD_LINEAR` images (`VK_EXT_image_drm_format_modifier`), one at the
+pitch where its in-place check passed for its pooled memory (for a texture that renders, the
+check of renders that lets a pass change those bytes, as the declaration does, and no byte past the
+last row's pitch) and, for a tracked texture over a `Private` buffer, its rows take no more bytes
+than a bound past which such an image renders and samples slower than the shadow (over a `Shared`
+or `Managed` buffer, and for an untracked texture, any size)
+(`WorkCounts::pooled_pitched_images`; `TextureShadowReason::LinearCost` past it;
+`HostPageTexturePolicy::Shadow` turns it off; one made before that check answered is a shadow
+that moves to the image at a quiet commit once it passed, as one over host pages moves in place,
+`WorkCounts::pooled_textures_moved_in_place`), its subresources holding each row's bytes after its
+texels to its pitch (the last row's included) and nothing past the last row's pitch; those bytes
+and the bytes between slices may change whenever the texture is made or used, and no other byte
+does (`WorkCounts::unobserved_padding_aliases` counts such images; `Buffer::texture_placement`
+answers `NotHostPages` for such a texture, else the shadow's cause, and
+`Shadow(TextureShadowReason::BytesBetweenRows)` without the declaration).
+
+Such an image is bound at the buffer's memory offset plus the texture's offset, which must be a
+multiple of the device's linear-image alignment (`Device::minimum_linear_texture_alignment_for_pixel_format`
+answers it: 256 bytes on RADV, 128 on NVIDIA, 64 on lavapipe, 16 on MoltenVK). The runtime starts
+each buffer of its own memory on a multiple of 256, so a texture at offset 0 (or any multiple of
+256) aliases the buffer where the device lays its rows out; one at another offset, as a decoded
+frame's planes CoreVideo lays 32 bytes into their surface (and its second plane 32 bytes past a
+multiple of 256 after the first's rows), is a shadow there. A consumer that makes such a buffer
+for such textures (a device cache of decoded frames, say) may make it with
+`BufferDescriptor::with_aligned_byte(0x20)`: a runtime extension, no Metal counterpart, refused
+over the caller's memory (`NoCopy` contents). The buffer's memory then starts so that byte lies on
+a multiple of 256 (at most 255 bytes more of it taken), and a texture there, and at any multiple of
+256 bytes past it, aliases the buffer as one at offset 0 would. Its length, `gpuAddress` and
+Metal's rules of a texture's offset in it stay Metal's; its contents (`contents`) start that
+byte's remainder short of a multiple of 256, where Metal's start on a page. Such a buffer is never
+parked for another making nor laid in fresh pages.
 
 A blit that names a texture over a buffer runs on the buffers' bytes, a region per row where its
 rows lie apart, and a buffer-texture copy in a layout Vulkan cannot state moves its rows through a
@@ -363,12 +427,20 @@ happens where:
   for a buffer or rebind that lies in a live import or copy of the same bytes, memory whose GPU
   writes Metal's private option bit 24 drops, a rebind whose bytes moved in their page under a texture
   (below), or where the device refused the pointer before it;
+- the device refuses the pointer of a no-copy buffer or heap, and no dma-buf of its pages serves
+  it (no source given, or one that fails or whose dma-bufs the device refuses): RADV refuses shared
+  memory, a `memfd` mapping among it (`Device::imports_shared_host_pointers`,
+  `copied_host_buffers_device_refused`); a rebind to such memory is refused instead;
 - an import the device and the gate admitted fails, of the pointer or of the dma-bufs of the
   caller's source (out of memory, another Vulkan error: `copied_host_buffers_degraded`);
 - on NVIDIA's driver, the pages are a mapping the kernel cannot pin (a dma-buf's), which the
   runtime never hands that driver (`RuntimeDriverDefect::UnpinnablePagesBreakHostMemory`,
   `WorkCounts::host_imports_unpinnable`), and no dma-buf of the caller's source served them
-  (`copied_host_buffers_degraded`).
+  (`copied_host_buffers_degraded`);
+- off macOS, the memory is of Metal's private option bit 24 (`ResourceOptions::PRIVATE_BIT`),
+  whose GPU writes Metal drops: no import there keeps the GPU's writes out of the pages, so the
+  copy is made without asking the gate and drops them (below; `copied_read_only_memory`). On macOS
+  such pages are imported through a read-only view of them instead.
 
 A buffer made over exactly the bytes (the same first byte and length) a live copied buffer was
 made over lies in that copy, of either storage mode, as a buffer over a live import's bytes lies in
@@ -399,27 +471,41 @@ completion, after that write-back: no read of the event's value shows it earlier
 on another queue (a plain `Event`'s too) is held until then rather than chained on the GPU
 (`event_signals_behind_merge`). Each completion compares every byte of each copy its command
 buffers may have written (`copied_merges_compared`, `copied_merges_skipped`): those their uses
-wrote, and every copy where a function reads addresses or an indirect command buffer runs, so keep
-copies few. Where the pages' memory carries a log of the writes to them
-(`HostMemory::with_dirty_pages`, `HostRam::with_dirty_pages`), each commit compares only the pages
+wrote, and every copy where a function that may store reads addresses or an indirect command
+buffer runs, so keep copies few. Where the pages' memory carries a log of the writes to them
+(`HostMemory::with_dirty_pages`, `HostRam::with_dirty_pages`, a copy that drops the GPU's writes
+included), each commit compares only the pages
 the log reports written since the copy's last commit, and the bytes no log keeps
 (`copied_copy_in_bytes_skipped`): it asks one stamp of each log for every copy and waits for its
 publication (bounded) on the committing thread, and every copy compares every byte at its first
 commit and where a log answers `false`. The runtime reports to the log what the log cannot see: a
 copy's merge back, as the copy's own write, the GPU's writes into the pages through imports in
-place, and its own CPU writes into them. A texture over a copied buffer is a shadow of its bytes. The copy reads the pages through the kernel
+place, and its own CPU writes into them. A texture over a copied buffer is a linear image over the
+copy, bound in its memory, wherever the device's in-place check passed for the caller's pages, for
+the texture's accesses (`copied_textures_in_place`): in fresh pages the runtime imported, an image
+made for host allocations, as over the pages, under the fresh pages' check too; in memory the device
+allocates, the driver's own linear image where it lays the rows at the texture's pitch, which starts
+`PREINITIALIZED` and so keeps the copy's bytes, else a `DRM_FORMAT_MOD_LINEAR` image at that pitch
+under the check of the runtime's pooled memory too. Elsewhere it is a shadow of the copy's bytes, its
+notice naming why. The copy reads the pages through the kernel
 first, and where the kernel cannot read them, with plain loads where the process maps every page
 with read permission: on Linux the kernel's read pins each page, which a mapping of a dma-buf
 (`VM_PFNMAP`) does not allow. Pages not mapped, or mapped
 without read permission, are never copied: the buffer is refused, as their import is.
 
 Pages the process maps read-only (a VMM's alias of `replaceBackingWithRanges:readOnly:`, its
-maximum protection lowered to read) are copied the same way, and the copy drops the GPU's writes,
+maximum protection lowered to read) are copied the same way on Linux, whatever the gate answers
+and whether or not a dma-buf source was given, which is never called for them
+(`copied_unwritable_pages`): Linux drivers pin an imported pointer's pages for writing, and a
+dma-buf of the pages would take the GPU's writes. The copy drops the GPU's writes,
 as Metal drops them: each batch's completion takes the bytes the GPU changed back out of the copy
 and writes nothing to the pages (`copied_dropped_bytes`), so later commands of the same command
 buffer read the writes back and a later command buffer reads the pages' bytes. The runtime asks
-the system whether the process can write the pages as it makes the copy. The announcement's detail
-says so.
+the system whether the process can write the pages as it makes the copy. The copy of memory of
+Metal's private option bit 24 drops the GPU's writes the same way, whatever the pages' protection.
+A command buffer committed before the writer's batch completed may still read the writes, where
+Metal's never does, and a render pass's store-out into such a copy completes, where Metal's faults
+its command buffer. The announcement's detail says so.
 
 A no-copy heap's own buffer is copied the same way (`copied_heaps_made`): its buffers lie in the
 copy, and its textures are shadows of its bytes. `Buffer::rebind_bytes_no_copy` and
@@ -430,23 +516,30 @@ the copy (`copied_rebind_images_made`): where an image in place rides on it, the
 pages the runtime maps and imports by pointer, and the image is made as over the caller's pages,
 under the device's in-place check for fresh pages; else the copy is memory the device allocates,
 and each image a linear image of it that starts `PREINITIALIZED`, so its first move keeps the
-copy's bytes. Textures held as shadows read the copy. A buffer's
+copy's bytes, or where the driver lays that image's rows at another pitch, a
+`DRM_FORMAT_MOD_LINEAR` image at the texture's pitch, under the check of the runtime's pooled
+memory. Textures held as shadows read the copy. A buffer's
 rebind to bytes at another offset in their page than the old, under a texture planned at the old
 offset, is a copy laid out at the old offset too, the gate unasked (`copied_rebind_pages_moved`).
 A rebind is refused (`NotImplemented(RebindTextures)`) only where the device makes no such image
-over the copy (its driver lays the linear image out at other pitches, or in memory of another type
-or alignment), or where the buffer's GPU writes are dropped and its bytes moved in their page.
+over the copy (its driver lays the linear image out at other pitches and makes no
+`DRM_FORMAT_MOD_LINEAR` image at the texture's pitch that the pooled memory's check passed, or
+either lies in memory of another type or alignment), or where the buffer's GPU writes are dropped and its bytes moved in their page.
 
 ### Guest RAM imported whole
 
 A VMM whose device refuses views of guest pages made through dma-bufs (each import of scattered
-pages then takes a kernel mapping per page) can give the device the guest's RAM once instead:
+pages then takes a kernel mapping per page), or whose driver lists every import in every
+submission, can give the device the guest's RAM once instead:
 
 - `unsafe HostRam::new(ranges, keep_alive)` takes the RAM's ranges of host memory (whole host pages,
   mapped readable and writable until the keep-alive goes) and `Device::use_host_ram(&ram)` uses it
-  on a device, until the returned `HostRamUse` is dropped. A device may use several RAMs whose
-  ranges are apart, and a new one over the same ranges once the earlier use ended; ranges that
-  meet a used RAM's are misuse (`Invalid`, `Problem::HostRam`).
+  on a device, until the returned `HostRamUse` is dropped. The drop waits for the device's thread
+  for the RAM (below), which stops within one 2 MiB step of faulting pages in: once it returned,
+  the runtime reads, faults in and imports no page of the RAM, and only an import a buffer or a
+  pending command buffer still holds keeps pages, until the keep-alive goes. A device may use
+  several RAMs whose ranges are apart, and a new one over the same ranges once the earlier use
+  ended; ranges that meet a used RAM's are misuse (`Invalid`, `Problem::HostRam`).
 - `HostMemory::with_runs(resolver)` gives each no-copy object a `RunResolver`: asked once, at the
   object's making and at each `rebind_bytes_no_copy` to new memory, on the calling thread with no lock of the runtime's held and before the import
   gate, with the object's import window (whole host pages), it answers the host addresses of the
@@ -457,8 +550,14 @@ pages then takes a kernel mapping per page) can give the device the guest's RAM 
   `Problem::HostRam`).
 - One run inside one chunk: the device imports the RAM by host pointer in chunks of 64 MiB, never
   across a range's end, each once (`WorkCounts::host_ram_chunks_imported`, `host_ram_chunk_bytes`,
-  `host_ram_chunks_live`). From `use_host_ram` on, a thread of the device's imports chunks ahead
-  of the objects over them (`host_ram_chunks_imported_ahead`): the chunk an object last took, then a
+  `host_ram_chunks_live`). A device that refuses pointers to shared memory
+  (`Device::imports_shared_host_pointers` false: RADV) imports each chunk of a RAM of shared memory
+  (`memory-backend-memfd,share=on`) as a dma-buf where the RAM has a source of them
+  (`HostRam::with_dma_buf`, below); with none, it imports no chunk and refuses each object over it
+  (`Unsupported`, `HostMemory`), each copy over it goes through the CPU, whenever it comes
+  (`copy_from_host_ram` and `copy_to_host_ram`, below), and the device's thread faults none of its
+  pages in (`host_ram_chunks_faulted_ahead` counts the chunks it faults in elsewhere). From
+  `use_host_ram` on, a thread of the device's imports chunks ahead of the objects over them (`host_ram_chunks_imported_ahead`): the chunk an object last took, then a
   window of chunks past it in the direction the takes go, up the RAM or down it, one chunk after a
   take that starts no run (and the RAM's first chunk before any take), four once a take lands inside
   the window or next to the chunk last taken. So a run of objects over consecutive RAM, up or down,
@@ -467,18 +566,21 @@ pages then takes a kernel mapping per page) can give the device the guest's RAM 
   reach, or the chunk the thread is importing) is bound in an import of its own run alone, made on
   its own thread, which faults in and pins its own pages (2 MiB for such a heap), while the thread
   imports the chunk; the objects over the chunk after that are bound in it
-  (`run_bound_buffers_made`). Each run's import goes with its object (`run_imports_live`), and its
-  uses order against those of the objects over the same bytes in the chunk, and of the copies of
-  them (below), by their host addresses, as any two no-copy buffers over shared bytes do. So no
-  object's making waits for a chunk's fault-in. The price is up to one more allocation and pin per
-  object made while its chunk is not imported, for the object's life: a burst of heaps that outruns
-  the thread takes one for each heap over a chunk the thread has not imported yet. Where the thread
+  (`run_bound_buffers_made`). Each run's import goes with its object (`run_imports_live`); a
+  buffer's (not a heap's) that only blits have read is released after its idle window, as a
+  no-copy buffer's own import is (above), and the buffer is bound in the chunk at its next
+  blit. Its uses order against those of the objects over the same bytes in the chunk, and of the
+  copies of them (below), by their host addresses, as any two no-copy buffers over shared bytes
+  do. So no object's making waits for a chunk's fault-in. The price is up to one more allocation
+  and pin per object made while its chunk is not imported, for the life of a heap or of a buffer
+  whose address was handed out: a burst of heaps that outruns the thread takes one for each heap
+  over a chunk the thread has not imported yet. Where the thread
   does not run (it stopped at the allocation limit's margin, below), failed the chunk or gave it
   back, where the device's allocations are within that margin, where the object's run is the whole
   chunk, or on a driver whose barriers do not order blits through two imports of the same pages
-  (`RuntimeDriverDefect::AliasedImportBlitsUnordered`, MoltenVK's: there every object over a chunk
-  lies in its one import), the object imports the chunk as it is made, or waits for the import of it
-  under way. The thread faults in no more than the window past the objects, and never goes back for
+  (`RuntimeDriverDefect::AliasedImportBlitsUnordered`, MoltenVK's and ANV's: there every object
+  over a chunk lies in its one import), the object imports the chunk as it is made, or waits for
+  the import of it under way. The thread faults in no more than the window past the objects, and never goes back for
   a chunk a take skipped. What an
   import costs is faulting in the chunk's fresh pages, not the pin. On an RTX 5080 laptop
   (NVIDIA 615.71.09, Linux 7.2), the import of 64 MiB already resident took 2 to 3 ms; the
@@ -500,7 +602,11 @@ pages then takes a kernel mapping per page) can give the device the guest's RAM 
   paced: it runs as the system's batch work (`SCHED_BATCH` on Linux, the utility class on
   Apple's systems), never at a weight the system starves, since it holds a chunk's lock and, as
   it pins, the process's memory map lock; it yields between chunks; and on Linux it faults each
-  chunk's pages in 2 MiB at a time (`MADV_POPULATE_WRITE`) before the import pins them. Each
+  chunk's pages in 2 MiB at a time before the import pins them: shared memory of base pages (a
+  VMM's `memfd`) by a read of each page, whose fault holds its mapping's own lock rather than the
+  memory map lock, so no other thread's `mmap`, `munmap` or `mprotect` (a driver's compiler
+  growing its heap) waits behind it; private memory, hugetlbfs and kernels before 6.11 by
+  `MADV_POPULATE_WRITE`, which holds the memory map lock for each step. Each
   import is made with the device's memory lock released. The thread stops where one
   more import would leave the device less than a quarter of its `maxMemoryAllocationCount`, the
   rest left to the objects over them; once the device's allocations come within that quarter, the
@@ -513,11 +619,104 @@ pages then takes a kernel mapping per page) can give the device the guest's RAM 
   robust descriptor range nor a root entry reaches the rest of the chunk. A no-copy heap's own
   buffer, and a buffer's or heap's rebind, take the same path; a buffer's rebind to bytes at
   another offset in their page under a texture takes the copy laid out at the old offset instead.
+- `HostRam::with_dma_buf(source)` gives the RAM a `DmaBufSource` of its pages. A device that imports
+  dma-bufs then imports each chunk (and each object's run imported alone) as one dma-buf of it, from
+  the source, where the device's own check finds that a held host-pointer import adds to the cost of
+  every submission (the import tax, RADV's: amdgpu gets every page of every held pointer import
+  again in each submission), or where it refuses the chunk's pointer (RADV refuses any shared
+  mapping, a `memfd`'s among them); elsewhere (ANV and MoltenVK pay no such tax) the pointer, as
+  without a source (`WorkCounts::host_ram_dma_buf_imports`). A dma-buf chunk costs a submission what
+  one import does, whatever its length: on the Radeon 780M (Mesa 26.2.6, Linux 7.3.1) one held
+  pointer import of 64 MiB added 24.1 us to every submission, and 100 held dma-bufs added 42 us
+  (`runtime_lane::submit_per_import`). Each request asks for whole host pages inside one chunk of
+  the RAM, by the RAM's own addresses, with a `granule` of its `length`: answer one dma-buf of
+  exactly those pages (a `udmabuf` of the `memfd` behind them; `udmabuf`'s default `size_limit_mb`
+  is 64, a chunk's size). A texture over an object bound in such a chunk is an image over a dma-buf
+  of its own pages, as over an object's own dma-buf imports, asked of the same source. A source that
+  fails, or a dma-buf the driver refuses (NVIDIA's refuses a udmabuf), leaves the chunk to its
+  pointer (`WorkCounts::host_ram_dma_buf_imports_failed`); a driver's refusal is remembered for the
+  device's life, and its later chunks (and the copies' lists below) take their pointer without
+  asking the source.
+- `HostRam::with_largest_dma_buf(bytes)` says how long one dma-buf of the source may be (for
+  `udmabuf`, its `size_limit_mb` parameter, read from `/sys/module/udmabuf/parameters/`). On a
+  device whose held imports add to the cost of every submission, with a source, each listed
+  import costs every submission: an 8 GiB RAM held as 128 dma-bufs of 64 MiB raised a
+  submission's median from 14 us to 60 to 88 us on the Radeon 780M (Mesa 26.2.6, Linux 7.3.1;
+  `runtime_lane::submit_per_import::submit_per_ram_dma_buf`), as 3 of 2730 MiB to 16 us. There
+  `use_host_ram` first asks the driver whether it takes the source's dma-bufs: it asks the source
+  for the RAM's first host page and imports that dma-buf, released at once (so that page is
+  allocated in the `memfd` where the guest never wrote it). Where the driver refuses it, or
+  refused one before, the RAM keeps its 64 MiB chunks, imported ahead, each by its pointer. Where
+  it takes it, each chunk is as long as that, the device's `maxMemoryAllocationSize`,
+  `maxBufferSize` and `maxStorageBufferRange` all take, in whole 64 MiB, and never longer than
+  512 MiB (an 8 GiB RAM in 16 chunks at most): a chunk's import pins every page of it, and
+  `udmabuf` allocates the pages of the `memfd` the guest never touched, which stay allocated after
+  the chunk is freed, so a longer chunk makes more of the guest's untouched RAM resident. Without the call, or where a
+  kernel caps it at 64 MiB, the chunks stay 64 MiB. On such a device no chunk is imported ahead. The first object over a chunk
+  not imported asks a thread of the device's for it, and that thread imports it, which pins
+  every page of the chunk (all of it resident, where 64 MiB chunks pinned only those the objects
+  and the window reached; 660 to 692 ms for 2.7 GiB on the Radeon 780M and the RX 7900 XTX). That
+  object, and every object over the chunk until the import is done, is bound in an import of its
+  own run alone, as above, so no making waits for the chunk; each is one more listed import, a
+  buffer's released after its idle window and a heap's, or a buffer's whose address was handed
+  out, kept while the object lives. The first kernel submission after a chunk's import waits while
+  the kernel writes the chunk's page tables, and so does every other submission of the device
+  (231 to 275 ms for a 3.94 GiB chunk on the Radeon 780M), so a chunk stays imported once
+  imported where the whole RAM fits in half the device's memory heaps with unified memory, or in
+  three quarters of its heaps that are not device-local without (an 8 GiB RAM does on the 780M
+  and the RX 7900 XTX of a 27 GiB host). Each kept chunk adds about half a microsecond to every
+  submission. Where the RAM does not fit, a chunk no buffer bound in it and no pending command
+  buffer that used it holds for its idle window (2 s, doubled at each release of the chunk up to
+  64 s) is released by the same thread (`host_ram_chunks_released`), and the next object over it
+  asks for it again.
+- `HostRam::with_dma_buf_of_runs(source, most_runs)` gives the RAM a `DmaBufRunsSource`: one
+  dma-buf of a list of runs of its pages, the runs' pages one after another (on Linux,
+  `udmabuf`'s `UDMABUF_CREATE_LIST`, whose list holds at most its `list_limit` parameter, 1024 by
+  default: pass that as `most_runs`). Only the copies by runs below ask it, and only on a device
+  whose held imports add to the cost of every submission and whose chunks of the RAM are its
+  dma-bufs (RADV with `with_dma_buf`) and whose barriers order blits through two imports of the
+  same pages. There a copy takes its runs of the chunks not imported by address across them,
+  those that share a host page as one, and imports each list of at most `most_runs` of them (and
+  at most a chunk's and `with_largest_dma_buf`'s bytes) as one dma-buf of the source
+  (`WorkCounts::host_ram_run_list_imports`, their time in `host_ram_run_list_import_nanos`): a
+  tile of 1,800 pages anywhere in the RAM is one list or two. Each list is kept past its command
+  buffer for the copies after it: a copy takes a kept list for each of its runs that one of the
+  list's runs holds whole (a device cache filled and downloaded again, a tile copied both ways) and
+  imports nothing for those, lists of its own for the rest. The lists kept hold at most 64 MiB and
+  are at most 16, the least recently taken let go of first; each goes once no copy took it for 2 s
+  and no command buffer holds it, and all go as the device's use of the RAM ends
+  (`run_imports_live` counts them). It neither imports those chunks nor asks for them, so copies
+  pin the pages they copy while they run or their lists are kept, and none of the RAM the guest
+  never touched; a chunk already imported serves its pages as before. Without the source a copy of
+  more than 16 ranges of a chunk imports the chunk (or waits for its import under way) and keeps
+  it: that pins every page of the chunk, up to 512 MiB, `udmabuf` allocating those the guest never
+  touched, for good, and later copies over it import nothing. With it a copy over a chunk not
+  imported pays its lists' imports where no kept list holds its pages. On the Radeon 780M (RADV,
+  `tests/host_ram_listed_bench.rs`, a guest that wrote half its RAM in 2 MiB extents and scrolls
+  tiles of 1,800 of those pages, each filled and downloaded, then one of the last 24 filled and
+  downloaded again; then a 5 MiB device cache filled and downloaded 40 times each): the RAM's file
+  held 4028 MiB of an 8 GiB guest at the end, where whole-chunk imports would have made all 8192
+  MiB resident, and 8300 MiB of a 16 GiB guest, where they would have made 16384 MiB, the same with
+  the lists kept as without. A tile laid as a surface's pages (454 to 620 sorted runs, one list)
+  took 3.9 to 4.3 ms from the commit to the completion and 0.7 to 0.9 ms to encode where it
+  imported its list, and 0.53 to 0.60 ms and 0.6 to 1.0 ms where it took the list kept from its
+  fill; a tile of 1,800 pages each anywhere (two lists) 0.83 to 1.15 ms and 1.3 to 1.8 ms
+  importing, 0.46 to 0.50 ms and 0.42 to 0.54 ms taking them. The 5 MiB cache filled again took
+  0.37 to 0.43 ms and 0.2 to 0.4 ms (3.0 to 3.2 ms and 0.7 to 1.0 ms with no list kept); over an
+  imported chunk 0.37 to 0.40 ms and 0.12 to 0.14 ms. The 24 tiles of the scroll that are filled
+  again pass the 64 MiB the lists kept hold (about nine such tiles), so a third to a half of their
+  fills took a kept list. A copy with a run no kept list holds looks through all of them: 48 to
+  63 µs for a surface's tile against nine lists, 250 to 290 µs for 1,800 runs anywhere against 16.
+  The GPU's own time was about 0.23 ms for a tile and 0.17 ms for the cache. Each request of a list
+  is whole host pages inside one chunk, by the RAM's own addresses, by start and sharing no page,
+  with a `granule` of its `length`: answer one dma-buf of exactly those pages in that order, its
+  `length` their total. A source that fails, or answers a dma-buf of another length, leaves the
+  copy to the chunk.
 - Any other answer (several runs, one run crossing a chunk's end, `None`) takes the paths above:
   the gate, then the import or the copy. The runs are kept with the object.
-- The chunks are never released while idle. Once the use is dropped, each is freed when nothing
-  holds it (no buffer bound in it, no command buffer that used one), and the RAM's keep-alive is
-  dropped after the last.
+- Elsewhere the chunks are never released while idle. Once the use is dropped, each is freed when
+  nothing holds it (no buffer bound in it, no command buffer that used one), and the RAM's
+  keep-alive is dropped after the last.
 - `HostRam::with_dirty_pages` takes one `DirtyPages` log for the whole RAM, its offsets host
   addresses. A write the runtime reports over an object whose pages are many runs of the RAM
   comes to the log as one call (`DirtyPages::wrote_runs`, or `wrote_runs_as` for a copy's own
@@ -527,30 +726,155 @@ pages then takes a kernel mapping per page) can give the device the guest's RAM 
   the device uses into consecutive bytes of `destination` from `offset`, in the order given, and
   `copy_to_host_ram(source, offset, ram, runs)` scatters them back: for a surface whose pages are
   a scatter of guest pages, with no view of them and no import of its own. Each run is a host
-  address range inside the RAM's ranges, 4 KiB-aligned and whole 4 KiB pages; a run that starts
-  where the one before ended joins it, a descending neighbour stays apart, and each is cut where
-  a chunk ends. The pages become a table of 4 KiB pages in the command buffer's upload arena and
-  one compute dispatch for each chunk they touch, over the chunk's own `VkBuffer` (more only past
-  the device's storage range or workgroup count): never a copy region per run
-  (`WorkCounts::host_ram_copies`, `host_ram_copy_bytes`, `host_ram_copy_dispatches`). A copy takes
-  each chunk it touches as an object over it does, and the thread's window moves past it; but where
-  an object over a chunk not imported yet is bound in an import of its own run, a copy makes none:
-  the chunk is imported first, or the thread's import of it waited for. Each copy is ordered
-  and seen as a copy between the buffer and a no-copy buffer over the pages: the chunk's bytes have
-  a hazard-tracking key placed over its host bytes, as a no-copy buffer's are, so the copy is
-  ordered against every other copy of those bytes and every no-copy buffer or heap over the RAM's
-  own addresses, in the encoder and across encoders, command buffers and queues (an object over
-  another mapping of the same pages is not, as two no-copy buffers over two mappings of one page
-  are not). The CPU's writes made before the commit are seen, the GPU's are in the pages at the
+  address range inside the RAM's ranges that starts on a 4-byte word and ends at any byte past
+  it: a surface's whole pages, or each of its rows' texels alone, whose padding and edge pages the
+  guest's CPU may own; a run that starts where the one before ended joins it, a descending
+  neighbour stays apart, and each is cut where a chunk ends. Where every run also ends on a 4-byte
+  word (whole pages, or the rows of a surface of 4-byte texels), the runs become a table of runs
+  of words, at most 4 KiB each, in the command buffer's upload arena and one compute dispatch for
+  each chunk they touch, over the chunk's own `VkBuffer` (more only past the device's storage
+  range or workgroup count): never a copy region per run, and no other word of their pages read or
+  written (`WorkCounts::host_ram_copies`, `host_ram_copy_bytes`, `host_ram_copy_dispatches`).
+  Otherwise (a run that ends off a word, such as a row of 2-byte texels, or a scatter whose runs
+  write a byte twice) each run's bytes in a chunk are one region of a `vkCmdCopyBuffer` between the
+  import that holds them (whole pages, imported as for any copy) and the buffer, the regions of one
+  import one command of at most 1024: no other byte of their pages is read or written, and of runs
+  that write a byte twice the later's bytes stay (`WorkCounts::host_ram_copy_regions`). A copy
+  takes each chunk it touches as an object over it does, and the thread's window moves past it.
+  Over a chunk not imported yet, a copy on a device whose thread imports ahead (every device but
+  one whose listed imports cost each submission: RADV with a dma-buf source) is staged through the
+  CPU, however few its ranges: an import of a copy's ranges alone pins every page between ranges
+  less than 2 MiB apart on the encoding thread (a 24 MiB cache of 2,477 runs over five chunks, its
+  runs joined where less than 1 MiB apart, pinned 317 MiB in 61 ms on an RTX 5080 Laptop GPU, where
+  the CPU copied the runs in 2.8 ms). A copy where the thread does not import, of at most 16
+  ranges, imports those ranges alone, as an object's run is imported (not on MoltenVK or ANV). No
+  staged copy makes or waits for an import, no page is pinned for it, and the thread imports each
+  such chunk next, so the copies after it go through the imports.
+  - A staged gather's work is its batch's host step, off the encoding and committing threads,
+    once the batch is otherwise ready to submit (its event waits met): it takes memory of the
+    command buffer's own, copies the runs from the pages into it by the CPU, and records the
+    GPU's copy from there into the buffer (`WorkCounts::host_ram_copies_staged`,
+    `host_ram_staged_fill_nanos`). A rebind before the first submission that encodes its encoder
+    again copies the gather through the imports instead. Where a buffer or heap over host pages lies over the runs'
+    bytes, or a scatter into those chunks was recorded, the CPU's copy first waits until every
+    queue completed the work submitted before it (`host_ram_staged_fills_gated`), and where that
+    is so at the encoding the copy takes the imports' path.
+  - A staged scatter's GPU copy is recorded by its batch's host step, off the encoding and
+    committing threads, into memory of the command buffer's own that the step takes; the work
+    after it goes in a batch of its own, whose host step waits until every queue completed the
+    work submitted before it, then copies each run's bytes by the CPU into the pages (a byte two
+    runs name keeps the later's) before that batch is submitted. So the pages hold the bytes once
+    the command buffer completed, and every command after the copy, in its command buffer or a
+    later one, sees them (`host_ram_scatters_staged`, `host_ram_staged_drain_nanos`). The cost is
+    one wait for the GPU between the copy and the work after it in its command buffer. A rebind,
+    before the command buffer's first submission, of a buffer over host pages that the copy's
+    encoder also used finds that encoder kept no log to encode it again from
+    (`CommandBufferError::EncodedUseRebound`, as for an encoder with an indirect dispatch the
+    host reads).
+
+  Any other copy imports the chunk on its encoding thread, or waits for the import under way
+  (`host_ram_copy_import_waits`, `host_ram_copy_import_wait_nanos`; every chunk import's time in
+  `host_ram_chunk_import_nanos`). Of a RAM with a source of run lists, on a device whose held
+  imports add to every submission's cost, a copy over chunks not imported imports lists of its own
+  pages instead (`HostRam::with_dma_buf_of_runs`, above), and those chunks not at all. Each copy is
+  ordered and seen as a copy between the buffer and a no-copy buffer over the pages: the chunk's
+  bytes have a hazard-tracking key placed over its host bytes, as a no-copy buffer's are, so the
+  copy is ordered against every other copy of those bytes and every no-copy buffer or heap over the
+  RAM's own addresses, in the encoder and across encoders, command buffers and queues (an object
+  over another mapping of the same pages is not, as two no-copy buffers over two mappings of one
+  page are not). The CPU's writes made before the commit are seen, the GPU's are in the pages at the
   completion, and where the RAM came with a log its scatters are reported to it as the GPU's writes
   in place, so copied buffers and shadows over those pages copy them in at their next commit.
   Refused: a device without `VK_EXT_external_memory_host` (`Unsupported`); a RAM the device does
-  not use, a run empty, off 4 KiB or outside the RAM, or bytes of the buffer that start off a
-  4-byte word of its memory (`Invalid`, `Problem::HostRam`); bytes past the buffer (`Invalid`,
+  not use, a run empty, starting off a 4-byte word or outside the RAM, bytes of the buffer that
+  start off a 4-byte word of its memory, or, of a copy by regions, a buffer over host pages the
+  runs' bytes overlap (`Invalid`, `Problem::HostRam`); bytes past the buffer (`Invalid`,
   `Problem::RangeOutOfBounds`); a chunk the device cannot import (the import's error). A caller
   falls back to its own copy on any of them.
+- `BlitCommandEncoder::copy_runs_from_host_ram(ram, runs, destination)` and
+  `copy_runs_to_host_ram(source, ram, runs)` are the same copies with each run at a byte of the
+  buffer of its own: `runs` are `(buffer byte, host run)` pairs, for a device cache that keeps a
+  surface's layout (row `r`'s texels at `base + r × pitch`, the padding between rows the guest's,
+  neither read nor written): one call for all its rows, whose dispatches number by the chunks the
+  rows touch, where a call a row takes a dispatch or more for each row. The host runs are as above; a run that starts where the one before ended,
+  in the RAM and in the buffer, joins it. Where every run also ends on a word and lies at a word
+  of the buffer's memory, the runs take the dispatches; otherwise, or where two runs name one
+  destination byte (the later run's bytes stay), regions. Hazard tracking takes the buffer's
+  bytes from the lowest run's first to the highest's last. Refused as above, and a run whose bytes
+  pass the buffer's length (`Invalid`, `Problem::RangeOutOfBounds`, the first such run's); a run
+  at a byte of the buffer off a word is copied by regions, not refused.
 
-## 7. Check the integration
+## 7. Memory another API writes
+
+A video decoder or another driver that writes a runtime buffer in place imports the buffer's
+memory. Make the buffer with a descriptor's `exported_as`: `MemoryExport::DmaBuf` for VA-API or
+any dma-buf importer, `MemoryExport::OpaqueFd` for CUDA or another `VkDevice` of the same driver
+(`Device::new_exportable_buffer` makes the latter too). The descriptor's `aligned_byte` and
+`padding_unobserved` act as for any buffer, so a frame whose planes start 32 bytes into their
+surface keeps its textures in place:
+
+```rust,ignore
+let descriptor = BufferDescriptor::new(length, ResourceOptions::private(), BufferContents::Zero)
+    .with_aligned_byte(0x20)
+    .with_padding_unobserved()
+    .with_exported_as(MemoryExport::DmaBuf);
+let frame = device.new_buffer_with_descriptor(descriptor)?;
+let exported = frame.export_memory_dma_buf()?;
+// A DRM_PRIME_2 surface: the dma-buf `exported.fd` of `exported.allocation_size` bytes, each
+// plane at `exported.offset` plus its offset in the frame, DRM_FORMAT_MOD_LINEAR.
+```
+
+A texture over a plane of the frame is an image of the exported memory in place, made for the
+export's handle type (`VkExternalMemoryImageCreateInfo`, as Vulkan requires of an image bound in
+exported memory), where all of these hold for the plane's linear image (its format, extent and
+usage, that handle type; the plain linear image first, else a `DRM_FORMAT_MOD_LINEAR` one):
+
+- the image format query (`vkGetPhysicalDeviceImageFormatProperties2` with
+  `VkPhysicalDeviceExternalImageFormatInfo`) takes the handle type for it, and not in a dedicated
+  allocation alone;
+- the plane's byte in the memory, `exported.offset` plus the plane's offset in the frame, is a
+  multiple of the `alignment` `vkGetImageMemoryRequirements` answers for the image;
+- `vkGetImageSubresourceLayout` answers `offset` 0 and a `rowPitch` equal to the plane's row
+  pitch, and the image's `size` fits in the buffer from the plane on;
+- the device's in-place check of the runtime's memory exported with that handle type passed for
+  the texture's access (a texture made before the check answered is a shadow that moves in place
+  at a later commit).
+
+Over a dma-buf export where the device takes no such image in the memory itself (the format query
+takes the dma-buf handle type only in a dedicated allocation, the image made requires one, or the
+memory is the buffer's dedicated allocation), the plane's image is a `DRM_FORMAT_MOD_LINEAR` one
+whose plane lies at the plane's byte in the memory with the plane's row pitch, bound to a dedicated
+import of that memory's own dma-buf (`vkGetMemoryFdKHR`, as `export_memory_dma_buf` makes one),
+so it reads and writes the frame's bytes in place through a second `VkDeviceMemory` of the same
+memory, where the driver takes that layout and the same check passed
+(`WorkCounts::exported_dma_buf_images`; the import goes with the texture). RADV takes the dma-buf
+handle type for no plain linear image, and requires a dedicated allocation of a
+`DRM_FORMAT_MOD_LINEAR` one, so a frame's planes take this route there. `export_memory_dma_buf`
+answers the same dma-buf as before.
+
+Elsewhere the texture is a shadow, announced with its cause: the memory is an opaque file
+descriptor's dedicated allocation (Vulkan binds no image in memory dedicated to a buffer), the
+format query refuses the handle type, the layout differs, or the check did not pass. Measured for
+a 3840x2160 NV12 frame (an `R8Unorm` plane, then an `RG8Unorm` 1920x1080 plane, both rows 3840
+bytes) made with `aligned_byte(0x20)`, its planes at 256 and 8,294,656 bytes of the memory, each
+plane's image answered row pitch 3840 and offset 0, with an alignment of 64 on lavapipe and 256 on
+RADV (RX 550, opaque file descriptors). Mesa 26.2.6's RADV lists no
+`VK_EXT_image_drm_format_modifier` for the RX 550 (POLARIS12), so it has no image to import its
+dma-buf into, and its dma-buf planes are announced shadows.
+
+The export settles the zeros the buffer was made with first, so the decoder may write at once.
+After each of its writes, once the consumer waited for them (`vaSyncSurface`), call
+`frame.external_write_done()`: Vulkan leaves what another API wrote undefined until the device
+acquires the memory from the queue family reserved for it, and the device's next submission records
+that acquire before its commands, so the call waits for no GPU work. The call is also what tells a
+texture over the frame that its bytes changed: one whose rows no image of the memory holds reads them
+through a shadow, which copies them in again at its next use after the call, and keeps what it copied
+before where no call came. The decoder writes only while
+no command of the runtime's that uses the buffer is in flight, and the buffer outlives every import.
+A device that does not export a dma-buf refuses the making (`NotImplemented`,
+`RuntimeGap::DmaBufExport`); the consumer then decodes into its own memory and copies.
+
+## 8. Check the integration
 
 `spirv-val` checks structural validity, not agreement with Metal:
 

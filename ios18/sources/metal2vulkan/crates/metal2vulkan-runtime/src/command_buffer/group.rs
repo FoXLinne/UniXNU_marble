@@ -1,13 +1,15 @@
 //! Batches that go to the driver in one kernel submission (`CompletionPolicy::Grouped`).
 //!
-//! On a driver measured to merge each `vkQueueSubmit`'s `VkSubmitInfo`s that signal nothing into
-//! the next one's kernel submission ([`DriverFact::SubmissionsWithoutSignalsMerge`], whose
-//! documentation holds what was measured where), batches that signal nothing but their queue's
-//! timeline may wait and go in one call for the cost of one kernel submission. The question is
-//! the driver's, and the fact answers it, never the driver's name: a driver without the fact
-//! takes the ungrouped path, each batch its own `vkQueueSubmit`, which is what every batch took
-//! before grouping and is exact alike -- a group changes when a `vkQueueSubmit` is made and
-//! nothing it submits.
+//! On a device whose check found one `vkQueueSubmit` of `VkSubmitInfo`s that signal nothing to
+//! cost about one of its submissions (`submit_check.rs`, `Check::Merge`: Mesa's common queue
+//! merges each into the next one's kernel submission, `vulkan/runtime/vk_queue.c`), batches that
+//! signal nothing but their queue's timeline may wait and go in one call for the cost of one
+//! kernel submission. The question is the device's, and its check answers it, never the driver's
+//! name nor its GPU's: a device whose check found otherwise, or has not answered, takes the
+//! ungrouped path, each batch its own `vkQueueSubmit`, which is what every batch took before
+//! grouping and is exact alike -- a group changes when a `vkQueueSubmit` is made and nothing it
+//! submits. Each command buffer of a group is exact on every driver by Vulkan's own rules (the
+//! bullets below), so the check decides only where grouping pays.
 //!
 //! - **What waits.** A batch the scheduler submits waits here, submitted by nothing yet, where it
 //!   signals nothing but its queue's timeline and its events' semaphores: no binary semaphore,
@@ -62,11 +64,23 @@
 //!   less (30 a frame against 24, at 67 command buffers a frame committed 1 ms apart behind 1.3 ms
 //!   of GPU work each) and left the GPU as idle (0.62 ms a frame with either).
 //!   It goes then, or once it fills, a batch that cannot join sends it, a head waits for the GPU
-//!   (at a gate, or for a signal to land, which may be the group's), or a thread waits for one of
-//!   its command buffers' completion (`CommandBuffer::wait_until_completed` marks it and wakes the
-//!   scheduler: [`CommandBufferShared::waits_for_completion`]). A group whose batch ends a command
-//!   buffer with a switch of storage forms riding on it is never kept: the switch settles by the
-//!   submission's outcome, before the command buffer is `Scheduled`. A kept batch is seen
+//!   (at a gate, or its checks for a signal to land, which may be the group's), or a thread waits
+//!   for one of its command buffers' completion (`CommandBuffer::wait_until_completed` marks it
+//!   and wakes the scheduler: [`CommandBufferShared::waits_for_completion`]). Nor is it kept
+//!   where the thread runs, once the pass ends, the submission handlers of a command buffer of
+//!   another logical queue (a batch held, or one submitted: `scheduler::holds_back_another_queue`):
+//!   it goes first, so no handler that waits for another queue's work holds that work back, as
+//!   Metal schedules one queue's command buffers whatever another queue's handler does (probe
+//!   `cross_queue_handler_waits`). The handlers of the batches' own queue keep it held: Metal
+//!   runs one queue's handlers one at a time, so a handler there that waits for a completed
+//!   handler of its own queue never sees it either (the probe's `scheduled-one-queue`). A group
+//!   whose batch ends a command buffer with a switch of storage forms riding on it is never kept:
+//!   the switch settles by the submission's outcome, before the command buffer is `Scheduled`.
+//!   A head of another queue whose wait is for a value only a batch the group holds signals
+//!   (`HeldFor::EventValue`: no submitted signal reaches it yet) does not send it: it is held
+//!   until the group goes, at the completion turn that leaves one submission in flight at the
+//!   latest, and is then submitted with its wait on the `VkQueue`
+//!   (`runtime_lane::grouped_submissions`). A kept batch is seen
 //!   complete late by its group's later batches' GPU time, as any member, and where the one
 //!   submission left in flight ends before the group reaches the GPU, by that gap besides: at most
 //!   a completion turn's reaction and the group's `vkQueueSubmit`. Counted:
@@ -81,15 +95,14 @@
 
 use super::submit::Submission;
 use super::{submission_error, CommandBufferShared};
-use crate::degradation::Degradation;
+use crate::degradation::{Degradation, NoticesFor};
 use crate::device::relay::Relayed;
 use crate::error::CommandBufferError;
 use crate::exit_guard::{self, Call};
 use crate::gpu_time;
 use crate::Device;
 use ash::vk;
-use metal2vulkan::device::{CompletionPolicy, DriverFact};
-use std::collections::BTreeSet;
+use metal2vulkan::device::CompletionPolicy;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -105,12 +118,11 @@ const BATCH_INFOS: usize = 2;
 const MOST_INFOS: usize = GROUP_BATCHES * BATCH_INFOS + 1 + BATCH_INFOS;
 
 /// Whether `device`'s batches on `VkQueue` `queue` may wait in a group: its policy groups them,
-/// its driver is measured to merge a submission that signals nothing into the next (the module
-/// docs), and the queue's failures are not relayed (each relayed batch takes a fence,
-/// `device/relay.rs`).
+/// its check found a submission that signals nothing merged into the next (the module docs), and
+/// the queue's failures are not relayed (each relayed batch takes a fence, `device/relay.rs`).
 pub(crate) fn groups(device: &Device, queue: usize) -> bool {
     device.compile_device().policy().completion == CompletionPolicy::Grouped
-        && merges_submissions(&device.properties().driver_facts)
+        && device.submissions_merge_now()
         && device.shared().flights(queue).is_none()
 }
 
@@ -118,6 +130,24 @@ impl CommandBufferShared {
     /// Whether its batches may wait in a group ([`groups`]).
     pub(crate) fn groups(&self) -> bool {
         groups(&self.device, self.queue.vk_queue())
+    }
+
+    /// Whether a committing thread submits a batch of it that may wait in a group
+    /// ([`groups`]) alone, rather than leave it to the scheduler's thread
+    /// (`scheduler::plain`, `CommandBuffer::commit_and_submit`): where its `VkQueue` runs at most
+    /// one earlier submission not seen complete, the pass that held it would send the group at its
+    /// end ([`Group::keeps`]), so it reaches the GPU no later, and the commit saves the scheduler's
+    /// wake and pass. Where two or more run, the scheduler's thread holds it in the group, with
+    /// the commits that join it. Read without the queue's lock, as `keeps` reads it: a submission
+    /// seen complete meanwhile only lowers the count.
+    pub(crate) fn goes_alone_at_commit(&self) -> bool {
+        (self.device.shared().queues[self.queue.vk_queue()].pending_beyond_one()).is_none()
+    }
+
+    /// Its queue's identity: the logical queue its batches line up on in the scheduler's order
+    /// (`scheduler/order.rs`).
+    pub(crate) fn logical_queue(&self) -> u64 {
+        self.queue.id()
     }
 
     /// A batch of it was held in the scheduler's group.
@@ -173,14 +203,6 @@ const IN_GROUP: u8 = 1;
 
 /// A command buffer's `group_hold` bit: a thread waits for its completion.
 const WAITED_FOR: u8 = 2;
-
-/// Whether the driver merges a `VkSubmitInfo` that signals nothing into the next one's kernel
-/// submission ([`DriverFact::SubmissionsWithoutSignalsMerge`]): the driver's facts alone answer
-/// it, and nothing of the driver's identity, so a test can hand it the facts of each committed
-/// profile (`tests::batches::only_drivers_measured_to_merge_their_submissions_group_their_batches`).
-pub(crate) fn merges_submissions(facts: &BTreeSet<DriverFact>) -> bool {
-    facts.contains(&DriverFact::SubmissionsWithoutSignalsMerge)
-}
 
 /// What sent a group held (`WorkCounts::group_ends_full` and kin).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -371,7 +393,8 @@ impl Group {
     /// docs): the group has room, two or more submissions of its `VkQueue` are not seen complete,
     /// no batch held ends a command buffer with a switch of storage forms riding on it (it settles
     /// by the submission's outcome), no thread waits for one of their command buffers, and the
-    /// device is not lost.
+    /// device is not lost. The scheduler asks only where no handler it runs next is of another
+    /// logical queue's command buffer (the module docs).
     /// The value of that queue's timeline whose completion leaves one submission in flight, for
     /// the completion turns to wake the scheduler at. Counted once per group, and once more where
     /// a waiter sends a group kept before.
@@ -414,16 +437,22 @@ impl Group {
     /// `VkQueue` of `device`, only the last signalling (the module docs); `waited` is the
     /// scheduler's list of what that queue waited for. Inside a section of the exit guard. The
     /// held batches' outcome is kept for the scheduler ([`take_outcome`](Group::take_outcome));
-    /// the call's own result is `after`'s, as the `vkQueueSubmit` returned it.
+    /// the call's own result is `after`'s, as the `vkQueueSubmit` returned it: on success, the
+    /// host time at which the scheduler called it, the kernel end of a command buffer whose last
+    /// batch it carried (now where it submitted nothing). Taken as the call is made, never once
+    /// it returned: the GPU may run the work, and its timestamps place its end, before the call
+    /// returns (a driver that runs it as it is submitted, lavapipe's or NVIDIA's) or before a
+    /// scheduler thread preempted after the call takes the time, and Metal's `GPUEndTime` is never
+    /// earlier than its `kernelEndTime`.
     pub(crate) fn submit(
         &mut self,
         device: &Device,
         waited: &mut [u64],
         after: Option<After<'_>>,
-    ) -> Result<(), vk::Result> {
+    ) -> Result<u64, vk::Result> {
         if self.members.is_empty() {
             return match after {
-                None => Ok(()),
+                None => Ok(gpu_time::host_nanos()),
                 Some(after) => submit_alone(device, after),
             };
         }
@@ -495,9 +524,11 @@ impl Group {
         // SAFETY: as each batch's own submission (`submit.rs`): every command buffer is
         // executable and submitted once; every wait is for a signal submitted before; the one
         // timeline signal is above the queue's value; the `VkQueue` is used under its lock.
+        let mut called = 0;
         let submitted =
             shared.submit_logged((queue, Some(value)), fence, &relayed, |vk_queue| unsafe {
                 shared.counts.queue_submitted(submits.len(), buffers);
+                called = gpu_time::host_nanos();
                 raw.queue_submit(vk_queue, submits, fence.unwrap_or(vk::Fence::null()))
             });
         exit_guard::called(Call::QueueSubmit);
@@ -505,11 +536,10 @@ impl Group {
         let several = count + usize::from(!alone) > 1;
         let outcome = match submitted {
             Ok(()) => {
-                let now = gpu_time::host_nanos();
                 for member in self.members.drain(..) {
                     self.spare.push(member.infos);
                     if member.submission.schedules() && !member.submission.scheduled() {
-                        member.submission.buffer().kernel.end_at(now);
+                        member.submission.buffer().kernel.end_at(called);
                     }
                     self.made.push(member.submission);
                 }
@@ -543,6 +573,8 @@ impl Group {
         };
         if several && outcome.is_ok() {
             let batches = count + usize::from(!alone);
+            // Several command buffers' batches: none of them named.
+            let _several = NoticesFor::none();
             device.degrade_once(Degradation::GroupedCompletion, || {
                 (
                     format!("{batches} batches of command buffers on one queue"),
@@ -553,12 +585,13 @@ impl Group {
             });
         }
         self.outcome = Some(outcome);
-        submitted
+        submitted.map(|()| called)
     }
 }
 
 /// Submit `after` alone on its `VkQueue` of `device`: the group's submission with no batch held.
-fn submit_alone(device: &Device, after: After<'_>) -> Result<(), vk::Result> {
+/// On success, the host time at which its `vkQueueSubmit` was called ([`Group::submit`]).
+fn submit_alone(device: &Device, after: After<'_>) -> Result<u64, vk::Result> {
     let shared = device.shared();
     let raw = shared.vk();
     let After {
@@ -569,13 +602,15 @@ fn submit_alone(device: &Device, after: After<'_>) -> Result<(), vk::Result> {
         fence,
         relayed,
     } = after;
+    let mut called = 0;
     // SAFETY: the batch's submission's own (`submit.rs`).
     let submitted = shared.submit_logged((queue, Some(value)), fence, relayed, |vk_queue| unsafe {
         shared.counts.queue_submitted(infos.len(), buffers);
+        called = gpu_time::host_nanos();
         raw.queue_submit(vk_queue, infos, fence.unwrap_or(vk::Fence::null()))
     });
     exit_guard::called(Call::QueueSubmit);
-    submitted
+    submitted.map(|()| called)
 }
 
 /// Signal the end a failed group held (its events' semaphores to their indices, then `VkQueue`

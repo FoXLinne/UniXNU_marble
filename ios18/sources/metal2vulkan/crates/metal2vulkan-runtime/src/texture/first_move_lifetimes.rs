@@ -115,7 +115,7 @@ fn texels() -> Vec<u8> {
 
 /// The image `texture`'s storage holds, as an alias of a buffer's bytes or as its own.
 fn image_of(texture: &Texture) -> Option<&Arc<Image>> {
-    match &texture.0.storage {
+    match texture.storage() {
         Storage::Alias { image, .. } | Storage::Image(image) => Some(image),
         Storage::Texels(_) | Storage::Shadow { .. } => None,
     }
@@ -139,7 +139,7 @@ fn a_waiting_move_of_an_image_a_detach_let_go_of_is_dropped() {
     let device = device(&scratch.0);
     // SAFETY: the memory outlives the device (dropped after it), and nothing else uses it.
     let made = unsafe {
-        device.new_buffer_with_bytes_no_copy(
+        device.new_buffer_with_bytes_no_copy_now(
             HostMemory::new(host.0),
             BYTES as u64,
             ResourceOptions::shared(),
@@ -190,7 +190,12 @@ fn a_host_copy_makes_the_waiting_move_of_an_image_over_host_pages() {
         HeapDescriptor::new(HeapType::Automatic, BYTES as u64, ResourceOptions::shared());
     // SAFETY: the memory outlives the device (dropped after it), and nothing else uses it.
     let made = unsafe {
-        device.new_heap_with_bytes_no_copy(HostMemory::new(host.0), &heap_descriptor, None, None)
+        device.new_heap_with_bytes_no_copy_now(
+            HostMemory::new(host.0),
+            &heap_descriptor,
+            None,
+            None,
+        )
     };
     let Ok(heap) = made else {
         eprintln!(

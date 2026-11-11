@@ -89,6 +89,7 @@ fn kernel(func: FuncId, params: Vec<ParamBinding>) -> EntryPoint {
         func,
         stage: Stage::Kernel {
             max_total_threads: None,
+            work_group_size: None,
         },
         params,
         outputs: Vec::new(),
@@ -128,6 +129,7 @@ fn arg(i: u32) -> Value {
 fn request() -> SpecRequest {
     SpecRequest {
         call_stack_depth: 1,
+        open_cl_mode: false,
         entry: "k".into(),
         constants: BTreeMap::new(),
     }

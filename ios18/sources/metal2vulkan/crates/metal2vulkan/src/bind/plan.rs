@@ -153,6 +153,11 @@ pub struct ComputeTemplate {
     /// without a region is `BindError::MissingStageInRegion`.
     #[cfg_attr(feature = "serde", serde(default))]
     pub(crate) stage_in_region: bool,
+    /// The kernel's `[[stage_in]]` fetches of a thread-position step, whose elements decide each
+    /// region's `SpecKey::StageInReach` (`dispatch::stage_in_reach`); empty where the kernel
+    /// declares no such key.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub(crate) stage_in_grid: Vec<crate::pipeline::stage_io::StageInFetch>,
 }
 
 /// The pipeline and device facts a render plan instantiates with: the buffer slots of both stages,
@@ -569,6 +574,8 @@ pub(crate) struct LocalRules {
     pub stage_flags: vk::PipelineShaderStageCreateFlags,
     /// The emulated simdgroups' scratch (`RuntimeFact::SimdgroupEmulation`).
     pub scratch: Option<ScratchRule>,
+    /// A region of one row needs no whole subgroups (`RuntimeFact::RowLockstep`).
+    pub rows: bool,
     /// The pipeline is a tile function (`RuntimeFact::TileFunction`): its threads take Metal's
     /// tile-dispatch layout, built for the threadgroups `dispatch::tile_layout_measured` takes,
     /// dispatched by threadgroups.

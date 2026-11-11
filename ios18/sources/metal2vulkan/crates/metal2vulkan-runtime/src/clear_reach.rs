@@ -10,7 +10,9 @@
 //!   area rounded up to whole tiles of [`TILE`] pixels a side, clipped to the attachment's level,
 //!   in a pass with a draw call (one whose primitives cover nothing, or of no vertex, included),
 //!   and in each layer of a layered pass, with a draw call or not; a pass of one layer without a
-//!   draw call clears the whole level and slice. So for every format measured (`R8Unorm` to `RGBA32Float`, 1 to 16 bytes a pixel, and
+//!   draw call clears the whole level and slice of a texture Metal keeps losslessly compressed,
+//!   and the render area's tiles of one it keeps uncompressed ([`clears_whole`]). So for every
+//!   format measured (`R8Unorm` to `RGBA32Float`, 1 to 16 bytes a pixel, and
 //!   eight `RGBA8Unorm` or four `RGBA32Float` attachments at 4 samples), at 1, 2 and 4 samples,
 //!   with a descriptor's tile of 16x16, for `Depth32Float`, `Depth16Unorm`, `Stencil8` and
 //!   `Depth32Float_Stencil8`, at a level or slice past the first, over render areas of 1x1,
@@ -60,6 +62,12 @@
 //!   So is a cleared attachment the pass's first instance leaves out where no whole-subresource
 //!   clear may stand for its load operation (`render.rs`'s `cleared_ahead`), over the render area
 //!   where it stores nothing.
+//! - A depth a pass at custom sample positions clears, on a driver that stores and tests a
+//!   depth its pass clears at the standard positions there
+//!   (`DriverFact::ClearedDepthAtStandardPositions`), is cleared before the pass the same way
+//!   wherever its clear reaches, over the render area where the pass does not store it, a
+//!   memoryless one too, and the pass then loads it: a pass that loads the depth takes the
+//!   positions (`sample_positions.rs`).
 //! - A pass whose first instance records inline clears none before it: that instance, begun at a
 //!   draw that records (of a vertex and an instance at least), renders over the reach its colors
 //!   share, and its load operations' clear reaches it (`render/inline_first.rs`). Unmeasured on
@@ -72,10 +80,13 @@ use super::render_pass::{AspectClear, PassLayout, Target};
 use super::render_target::{self, FramebufferObject, RenderPassObject};
 use super::render_values::{LoadAction, StoreAction};
 use super::resource::ResourceKey;
+use super::texture::heap_tiled::metal_compresses_layout;
+use super::texture_descriptor::TextureLayout;
 use super::tracker::{Barrier, Use};
 use super::values::StorageMode;
 use super::Device;
 use ash::vk;
+use metal2vulkan::device::DriverFact;
 use metal2vulkan::metal::format::ClearRoute;
 use metal2vulkan::metal::PixelFormat;
 
@@ -96,7 +107,8 @@ pub(super) const TILE: u32 = 32;
 
 /// The extent from the origin that a `Clear` load of an attachment of `extent` clears in a pass
 /// over the render area `area`: the render area rounded up to whole [`TILE`]s, clipped to the
-/// attachment; the whole attachment where `whole` (a pass of one layer without a draw).
+/// attachment; the whole attachment where `whole` (a pass of one layer without a draw, over an
+/// attachment [`clears_whole`] holds for).
 pub(super) fn reach(area: [u32; 2], extent: [u32; 2], whole: bool) -> [u32; 2] {
     if whole {
         return extent;
@@ -109,10 +121,64 @@ pub(super) fn reach(area: [u32; 2], extent: [u32; 2], whole: bool) -> [u32; 2] {
     })
 }
 
-/// The extent from the origin that a `Clear` load of an attachment of `extent` clears in
-/// `layout`'s pass, a pass with a draw call where `called`: [`reach`] over its render area.
-pub(super) fn cleared(layout: &PassLayout, extent: [u32; 2], called: bool) -> [u32; 2] {
-    reach(layout.extent, extent, !called && layout.layers == 1)
+/// The extent from the origin that a `Clear` load of `target`, an attachment's own level and
+/// layers (a stand-in's `own`, of the stand-in's extent), clears in `layout`'s pass, a pass with a
+/// draw call where `called`: [`reach`] over its render area.
+pub(super) fn cleared(layout: &PassLayout, target: &Target, called: bool) -> [u32; 2] {
+    let whole = !called && layout.layers == 1 && clears_whole(target);
+    reach(layout.extent, target.extent, whole)
+}
+
+/// Whether a `Clear` load of `target` in a pass of one layer without a draw call clears its whole
+/// level and slice, past the render area's tiles. On a device that presents an Apple silicon
+/// Mac's compression (`Device::metal_compresses_textures`), where Metal keeps the attachment's
+/// texture (a view's first texture) losslessly compressed (`heap_tiled::metal_compresses_layout`
+/// of its type, level 0, samples, usage and `allowGPUOptimizedContents`; never one over a
+/// buffer): our probes `clearreach2` and `clearreach3` on the M3 Max (macOS 27.0.1), a new
+/// `Private` attachment against an untouched twin, cleared whole where the texture was
+/// compressed and over the render area's tiles where it was not, at every one of 16 color
+/// formats (1 to 16 bytes a texel, float, unorm and integer), `Depth32Float`, `Depth16Unorm`,
+/// `Stencil8` and `Depth32Float_Stencil8` (each aspect), 1, 2 and 4 samples, a level past the
+/// first (one under 16 texels a side included), a slice past the first, a cube's face, a 3D
+/// texture's plane, a view of the same format, of one level, and of another format,
+/// `ShaderWrite` and `PixelFormatView` usage, a level 0 under and at 16 texels a side, and a
+/// texture over a buffer, the property on and off; the consumer's probe alike (`tileclear2`,
+/// jobs m3-max-12716 and m3-max-12735). On a device that presents a Mac keeping no texture
+/// compressed, as a Mac with an Intel or AMD GPU does, always: those Macs disagree (an AMD
+/// Radeon Pro 5300M clears the whole level, an Intel UHD 630 anything from the render area to
+/// the whole texture: jobs m3-max-12736 and m3-max-12737), and the runtime gives the 5300M's
+/// answer.
+pub(super) fn clears_whole(target: &Target) -> bool {
+    let device = target.texture.device();
+    if !device.metal_compresses_textures() {
+        return true;
+    }
+    let mut root = &target.texture;
+    while let Some(parent) = root.parent_texture() {
+        root = parent;
+    }
+    let narrow = |side: u64| u32::try_from(side).unwrap_or(u32::MAX);
+    let layout = TextureLayout {
+        texture_type: root.texture_type(),
+        pixel_format: root.pixel_format(),
+        extent: [root.width(), root.height(), root.depth()].map(narrow),
+        levels: narrow(root.mipmap_level_count()),
+        layers: narrow(root.array_length()),
+        samples: narrow(root.sample_count()),
+    };
+    let optimized = root.allow_gpu_optimized_contents();
+    !root.over_buffer() && metal_compresses_layout(&layout, root.usage(), optimized)
+}
+
+/// Whether a `Clear` load of an attachment of `extent` that the pass stores, over the render area
+/// `area` in a pass with a draw call where `called`, is cleared before the pass and loaded in it
+/// though its clear reaches no further than the render area ([`ReachClears`]): in a pass without
+/// a draw call over an attachment larger than the render area. A pass's own clear on a device that
+/// renders through Metal (MoltenVK) reaches the whole attachment there (lane `fresh_clear_reach`
+/// on MoltenVK: an uncompressed 128x128 target cleared over 64x64), where Metal's reaches the
+/// render area's tiles of a texture it keeps uncompressed.
+fn own_clear_overreaches(area: [u32; 2], extent: [u32; 2], called: bool) -> bool {
+    !called && (0..2).any(|axis| area[axis] < extent[axis])
 }
 
 /// Whether Metal's `store` keeps an attachment's texels.
@@ -691,7 +757,11 @@ impl ReachClears {
                 continue;
             }
             let extent = match stores(color.store) {
-                true => cleared(layout, color.target.extent, called),
+                true => cleared(
+                    layout,
+                    color.stand_in.as_ref().map_or(&color.target, |s| &s.own),
+                    called,
+                ),
                 false => area,
             };
             // A color held in sample planes keeps its `Clear` load (`load_in_pass`): its tiles
@@ -699,7 +769,13 @@ impl ReachClears {
             let tiles = bounded
                 .filter(|(loads, _)| loads.colors.contains(&index) && color.planes.is_none())
                 .map(|(_, tiles)| tiles);
-            if extent == area && !left_out.contains(&(index as u32)) && tiles.is_none() {
+            let overreaches =
+                stores(color.store) && own_clear_overreaches(area, color.target.extent, called);
+            if extent == area
+                && !left_out.contains(&(index as u32))
+                && tiles.is_none()
+                && !overreaches
+            {
                 continue;
             }
             let rects = tiles.map_or_else(|| vec![rect(extent)], |t| t.rects(extent));
@@ -717,10 +793,22 @@ impl ReachClears {
                 value: vk::ClearValue { color: color.clear },
             });
         }
+        // A depth the pass clears at custom sample positions on a driver that stores and tests
+        // it at the standard ones there (`DriverFact::ClearedDepthAtStandardPositions`): cleared
+        // before the pass, memoryless or unstored too, so that the pass loads it, which takes the
+        // positions. One the pass does not store is cleared over the render area alone.
+        let positioned = !layout.sample_positions.is_empty()
+            && device
+                .properties()
+                .driver_facts
+                .contains(&DriverFact::ClearedDepthAtStandardPositions);
+        let positioned_depth = |ds: &super::render_pass::DepthStencilTarget| {
+            positioned && ds.depth.is_some_and(|a| a.load == LoadAction::Clear)
+        };
         if let Some(ds) = layout
             .depth_stencil
             .as_ref()
-            .filter(|ds| ds.separate.is_none() && !memoryless(&ds.target))
+            .filter(|ds| ds.separate.is_none() && (!memoryless(&ds.target) || positioned_depth(ds)))
         {
             let cleared_aspect = |aspect: Option<&super::render_pass::AspectTarget>| {
                 aspect.is_some_and(|a| {
@@ -731,7 +819,11 @@ impl ReachClears {
                 cleared_aspect(ds.depth.as_ref()),
                 cleared_aspect(ds.stencil.as_ref()),
             );
-            let extent = cleared(layout, ds.target.extent, called);
+            let reached = cleared(
+                layout,
+                ds.stand_in.as_ref().map_or(&ds.target, |s| &s.own),
+                called,
+            );
             let mut value = vk::ClearDepthStencilValue::default();
             for aspect in [ds.depth.as_ref(), ds.stencil.as_ref()]
                 .into_iter()
@@ -748,12 +840,16 @@ impl ReachClears {
                 Some((loads, tiles)) => (Some(tiles), [loads.depth, loads.stencil]),
                 None => (None, [false, false]),
             };
+            let forced = positioned_depth(ds);
             let parts = [
-                ([depth && !bound[0], stencil && !bound[1]], None),
-                ([depth && bound[0], stencil && bound[1]], tiles),
+                ([depth && !bound[0], stencil && !bound[1]], None, reached),
+                ([depth && bound[0], stencil && bound[1]], tiles, reached),
+                ([forced && !depth, false], None, area),
             ];
-            for ([depth, stencil], tiles) in parts {
-                if !(depth || stencil) || (extent == area && tiles.is_none()) {
+            let overreaches = own_clear_overreaches(area, ds.target.extent, called);
+            for ([depth, stencil], tiles, extent) in parts {
+                let reaches = extent != area || tiles.is_some() || (forced && depth) || overreaches;
+                if !(depth || stencil) || !reaches {
                     continue;
                 }
                 let rects = tiles.map_or_else(|| vec![rect(extent)], |t| t.rects(extent));
@@ -800,6 +896,7 @@ impl ReachClears {
                         .filter(|color| color.load == LoadAction::Clear && color.planes.is_none())
                     {
                         color.load = LoadAction::Load;
+                        color.cleared_ahead = true;
                     }
                 }
                 Reached::DepthStencil { depth, stencil } => {

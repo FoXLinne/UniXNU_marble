@@ -34,6 +34,12 @@
 //! (`PrecisionNote::DeviceInterpolationOffset`), each bounded by the value's change from pixel to
 //! pixel in Metal's reading ([`Slopes`]). Every sample covers where Metal's covers, on every device.
 //! The lane's offsets lie inside the range every Vulkan device takes, so no clamp moves them. On a
+//! driver that answers a perspective read at a sample or an offset with the pixel center's value
+//! extrapolated along the quad's coarse derivatives
+//! (`DriverWorkaround::PerspectiveReadsExtrapolated`: RADV, whose reads lie up to about 1.0 from
+//! Metal's here), each such value lies within the same bound of Metal's value plus the
+//! extrapolation's own error, which the lane computes from its geometry ([`extrapolation_error`]),
+//! and the pipelines that read so record `PrecisionNote::ExtrapolatedInterpolation`. On a
 //! driver that shades a triangle it clips as several
 //! (`DriverWorkaround::ClippedTrianglesSplitPixelFragments`: lavapipe) a centroid read of a
 //! multisampled pixel is refused as a centroid varying is, and those draws are not drawn.
@@ -118,15 +124,104 @@ enum Lanes {
     Half,
 }
 
+impl Lanes {
+    /// Whether lane `c` of an attachment holding these lanes is a perspective input's.
+    fn perspective(self, c: usize) -> bool {
+        match self {
+            Lanes::Perspective | Lanes::Half => true,
+            Lanes::NoPerspective => false,
+            // `p2.xy` (perspective), `s` and `hn` (no perspective).
+            Lanes::Narrow => c < 2,
+        }
+    }
+}
+
 /// One draw of the lane: the name Metal's reading gives it, the fragment function, its
 /// attachments' format, how each attachment is read and which lanes it holds, and the fragment
-/// bytes at buffers 0 and 1.
+/// bytes at buffers 0 and 1; the sample index its sample reads name (`None`: each invocation's
+/// own, `[[sample_id]]`), and the offset its offset reads give, from the pixel's upper-left
+/// corner.
 struct Draw {
     what: String,
     function: &'static str,
     format: PixelFormat,
     reads: Vec<(Read, Lanes)>,
     bytes: Vec<Vec<u8>>,
+    index: Option<u32>,
+    offset: [f32; 2],
+}
+
+impl Draw {
+    /// Where a read `read` of sample `s` at `n` samples lies from the pixel's center: a sample's
+    /// standard position, or the offset, less the center.
+    fn distance(&self, read: Read, n: u32, s: u32) -> [f64; 2] {
+        let from_corner = match read {
+            Read::Sample => {
+                let i = self.index.unwrap_or(s) & (n - 1);
+                match n {
+                    1 => [0.5, 0.5],
+                    _ => FOUR_POSITIONS[i as usize],
+                }
+            }
+            Read::Offset => self.offset.map(f64::from),
+            Read::Center | Read::Centroid => [0.5, 0.5],
+        };
+        from_corner.map(|v| v - 0.5)
+    }
+}
+
+/// Vulkan's standard positions of 4 samples in a pixel, from its upper-left corner, where Metal's
+/// reading reads them too.
+const FOUR_POSITIONS: [[f64; 2]; 4] = [
+    [0.375, 0.125],
+    [0.875, 0.375],
+    [0.125, 0.625],
+    [0.625, 0.875],
+];
+
+/// Lane `c` of the perspective interpolation of [`VALUES`] over the triangle at framebuffer
+/// location `p` (pixels from the target's upper-left corner, `y` down, as Metal's viewport maps
+/// [`POSITIONS`]): the vertices' values weighted by their framebuffer barycentrics over their
+/// clip `w`.
+fn perspective_at(p: [f64; 2], c: usize) -> f64 {
+    let side = SIDE as f64;
+    let v = POSITIONS.map(|[x, y, _, w]| {
+        let (x, y, w) = (f64::from(x), f64::from(y), f64::from(w));
+        [(x / w + 1.0) / 2.0 * side, (1.0 - y / w) / 2.0 * side, w]
+    });
+    let area = |a: [f64; 2], b: [f64; 2], q: [f64; 2]| {
+        (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])
+    };
+    let xy = |i: usize| [v[i][0], v[i][1]];
+    let whole = area(xy(0), xy(1), xy(2));
+    let weights = [
+        area(xy(1), xy(2), p) / whole,
+        area(xy(2), xy(0), p) / whole,
+        area(xy(0), xy(1), p) / whole,
+    ];
+    let over_w: Vec<f64> = (0..3).map(|i| weights[i] / v[i][2]).collect();
+    let sum: f64 = over_w.iter().sum();
+    (0..3)
+        .map(|i| over_w[i] / sum * f64::from(VALUES[i][c]))
+        .sum()
+}
+
+/// How far a driver that extrapolates a perspective read along the quad's coarse derivatives
+/// (`DriverWorkaround::PerspectiveReadsExtrapolated`) answers from the perspective value, in lane
+/// `c` of pixel `(x, y)` read at `d` from its center: `f(center) + (f(tr) - f(tl)) * d.x +
+/// (f(bl) - f(tl)) * d.y`, less `f(center + d)`, each `f` the exact [`perspective_at`] and `tl`,
+/// `tr`, `bl` the centers of the top-left, top-right and bottom-left pixels of the pixel's quad.
+/// Of second order in `d`, so the vertices' snapping, which moves Metal's values and the
+/// device's alike, leaves it within the lane's bound.
+fn extrapolation_error(x: u64, y: u64, d: [f64; 2], c: usize) -> f32 {
+    let f = |px: f64, py: f64| perspective_at([px + 0.5, py + 0.5], c);
+    let (x, y) = (x as f64, y as f64);
+    let (qx, qy) = ((x / 2.0).floor() * 2.0, (y / 2.0).floor() * 2.0);
+    let tl = f(qx, qy);
+    let ddx = f(qx + 1.0, qy) - tl;
+    let ddy = f(qx, qy + 1.0) - tl;
+    let first_order = f(x, y) + ddx * d[0] + ddy * d[1];
+    (first_order - f(x + d[0], y + d[1])) as f32
 }
 
 /// `words`' little-endian bytes.
@@ -148,6 +243,8 @@ fn draws(n: u32) -> Vec<Draw> {
         format: PixelFormat::RGBA32Float,
         reads: pair(read),
         bytes: Vec::new(),
+        index: None,
+        offset: [0.5, 0.5],
     };
     let mut out = vec![
         plain("center", "pm_center", Read::Center),
@@ -156,6 +253,7 @@ fn draws(n: u32) -> Vec<Draw> {
     for i in 0..n {
         out.push(Draw {
             bytes: vec![bytes_of(&[i])],
+            index: Some(i),
             ..plain(&format!("sample {i}"), "pm_sample", Read::Sample)
         });
     }
@@ -164,6 +262,7 @@ fn draws(n: u32) -> Vec<Draw> {
         let what = format!("offset {:08x} {:08x}", x.to_bits(), y.to_bits());
         out.push(Draw {
             bytes: vec![bytes_of(&[x.to_bits(), y.to_bits()])],
+            offset: [x, y],
             ..plain(&what, "pm_offset", Read::Offset)
         });
     }
@@ -183,6 +282,8 @@ fn draws(n: u32) -> Vec<Draw> {
         format: PixelFormat::RGBA32Float,
         reads: every(Lanes::Narrow),
         bytes: narrow.clone(),
+        index: Some(NARROW_SAMPLE),
+        offset: NARROW_OFFSET,
     });
     out.push(Draw {
         what: "half".to_owned(),
@@ -190,6 +291,8 @@ fn draws(n: u32) -> Vec<Draw> {
         format: PixelFormat::RGBA16Float,
         reads: every(Lanes::Half),
         bytes: narrow,
+        index: Some(NARROW_SAMPLE),
+        offset: NARROW_OFFSET,
     });
     out
 }
@@ -270,13 +373,31 @@ impl Slopes {
 }
 
 /// How far a device not measured to interpolate as Metal does may be from Metal's `metal`: the
-/// device's interpolation (`PrecisionNote::DeviceInterpolation`, about `1.5e-4` measured, `3e-4`
-/// on lavapipe, held at `1e-3` of the value's magnitude or 1), plus where Vulkan leaves the
+/// device's interpolation (`PrecisionNote::DeviceInterpolation`), plus where Vulkan leaves the
 /// location the device's: a multisampled pixel's centroid anywhere in it (twice the slope), an
 /// offset on a grid of sixteenths (half a step each way: an eighth of the slope, doubled), and a
 /// `half` result's own rounding.
-fn device_bound(metal: f32, read: Read, lanes: Lanes, slope: f32, n: u32) -> f32 {
-    let mut bound = 1e-3 * metal.abs().max(1.0);
+///
+/// In full, for lane `c` of a value read at `read` with `n` samples, Metal's value `m`:
+///
+/// ```text
+/// |ours - m| <= 1e-3 * max(sum_i |VALUES[i][c]|, |m|, 1)
+///             + (2 * slope    for a centroid at n > 1)
+///             + (slope / 8    for an offset)
+///             + (|m| * 2^-10 + 2^-14    for a `half` result)
+/// ```
+///
+/// The first term is the device's interpolation, propagated through the lane's values. A value
+/// is `sum_i w_i * VALUES[i][c]`, the `w_i` the device's weights of the three vertices, so weights
+/// off by at most `e` each move it by at most `e * sum_i |VALUES[i][c]|`, `range` ([`range_of`]),
+/// whatever the value's own magnitude: lane 3 of [`VALUES`], `(3, -2, 0.5)`, sums 5.5 where lanes
+/// 0 to 2 sum 1. Lanes 0 to 2 hand `(1, 0, 0)`, `(0, 1, 0)` and `(0, 0, 1)`, so their values are
+/// the weights themselves, held to `e = 1e-3`; lane 3 lies within its bound exactly where its
+/// error is those weights'. Measured: about `1.5e-4` of it, `3e-4` on lavapipe
+/// (LLVM 23.1.1); llvmpipe (LLVM 23.1.4, Mesa 26.2.6) up to `4.6e-3` apart in lane 3, `8.4e-4` of
+/// its range, and lanes 0 to 2 within `1e-3`.
+fn device_bound(metal: f32, range: f32, read: Read, lanes: Lanes, slope: f32, n: u32) -> f32 {
+    let mut bound = 1e-3 * metal.abs().max(range).max(1.0);
     bound += match read {
         Read::Centroid if n > 1 => 2.0 * slope,
         Read::Offset => slope / 8.0,
@@ -286,6 +407,12 @@ fn device_bound(metal: f32, read: Read, lanes: Lanes, slope: f32, n: u32) -> f32
         bound += metal.abs() * 2f32.powi(-10) + 2f32.powi(-14);
     }
     bound
+}
+
+/// The sum of the vertices' magnitudes in lane `c` of every interpolant: lane `c` of [`VALUES`],
+/// which every draw's interpolants hand in that lane (`Lanes::Narrow`'s narrower ones included).
+fn range_of(c: usize) -> f32 {
+    VALUES.iter().map(|vertex| vertex[c].abs()).sum()
 }
 
 struct Lane {
@@ -525,7 +652,10 @@ fn read_single(target: &Texture, format: PixelFormat) -> Vec<[f32; 4]> {
 /// elsewhere, as does a pipeline of more than one sample that reads at the center where that read
 /// is `InterpolateAtOffset` at offset 0 (a device with the centered origin that does not read a
 /// center varying at the pixel center itself, `VkProperty::MetalCenterVaryings`: the NVIDIA RTX
-/// 5080 Laptop).
+/// 5080 Laptop). On a driver that extrapolates a perspective read at a sample or an offset
+/// (`DriverWorkaround::PerspectiveReadsExtrapolated`: RADV) the pipelines that read so, and those
+/// alone, record `PrecisionNote::ExtrapolatedInterpolation`, and their perspective lanes lie within
+/// the bound of Metal's value plus the extrapolation's error ([`extrapolation_error`]).
 #[test]
 fn interpolants_read_metal_s_values() {
     let messages = Messages::default();
@@ -552,7 +682,11 @@ fn interpolants_read_metal_s_values() {
             && !properties.contains(&VkProperty::MetalCenterVaryings);
         println!(
             "PM {name}: MetalInterpolation {exact}, offsets from {origin:?}, center reads at the \
-             pixel center by an offset {pixel_form}"
+             pixel center by an offset {pixel_form}, perspective reads at a sample or offset \
+             extrapolated {}",
+            profile
+                .workarounds()
+                .contains(&DriverWorkaround::PerspectiveReadsExtrapolated)
         );
         let reading = metal_reading();
         let slopes = Slopes::of(&reading[&("center".to_owned(), 1)]);
@@ -570,6 +704,9 @@ fn interpolants_read_metal_s_values() {
         let split = profile
             .workarounds()
             .contains(&DriverWorkaround::ClippedTrianglesSplitPixelFragments);
+        let extrapolates = profile
+            .workarounds()
+            .contains(&DriverWorkaround::PerspectiveReadsExtrapolated);
         let (mut drawn, mut refused) = (0, 0);
         for &n in &counts {
             for draw in draws(n) {
@@ -603,6 +740,19 @@ fn interpolants_read_metal_s_values() {
                 let centers =
                     n > 1 && pixel_form && draw.reads.iter().any(|(read, _)| *read == Read::Center);
                 assert_eq!(noted, offsets, "{name} {what}: the offset note");
+                // A read at a sample or an offset of the lane's perspective inputs, which every
+                // such draw reads.
+                let beyond = (draw.reads.iter())
+                    .any(|(read, _)| matches!(read, Read::Sample | Read::Offset));
+                let extrapolation_noted = compiled.stages.iter().any(|s| {
+                    s.precision_notes
+                        .contains(&PrecisionNote::ExtrapolatedInterpolation)
+                });
+                assert_eq!(
+                    extrapolation_noted,
+                    extrapolates && beyond,
+                    "{name} {what}: the extrapolation note"
+                );
                 assert_eq!(
                     compiled.requirements.properties.contains(&origin),
                     offsets || centers,
@@ -625,11 +775,25 @@ fn interpolants_read_metal_s_values() {
                         for c in 0..4 {
                             let (o, m) = (f32::from_bits(ours[c]), f32::from_bits(metal[c]));
                             most = most.max((o - m).abs());
+                            // Where the driver extrapolates the read, Metal's value moved by the
+                            // extrapolation's own error.
+                            let expected = match extrapolates
+                                && matches!(read, Read::Sample | Read::Offset)
+                                && lanes.perspective(c)
+                            {
+                                true => {
+                                    let d = draw.distance(read, n, at.2);
+                                    m + extrapolation_error(at.0, at.1, d, c)
+                                }
+                                false => m,
+                            };
                             let agrees = match exact {
                                 true => ours[c] == metal[c],
                                 false => {
                                     let slope = slopes.of_lane(lanes, c);
-                                    (o - m).abs() <= device_bound(m, read, lanes, slope, n)
+                                    let range = range_of(c);
+                                    let bound = device_bound(m, range, read, lanes, slope, n);
+                                    (o - expected).abs() <= bound
                                 }
                             };
                             if !agrees {

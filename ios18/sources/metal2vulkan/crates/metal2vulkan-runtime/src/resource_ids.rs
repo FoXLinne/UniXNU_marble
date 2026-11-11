@@ -43,7 +43,8 @@
 //!   it leaves, and Metal hands out that range's IDs again while textures hold them (20 reserved
 //!   gives 21 to 31, 1 to 15, 1 to 15 again, 16 to 19, 32 on). The runtime hands them out as Metal
 //!   does: both textures answer the ID, the slot is the later one's (Slots), and each gives it back
-//!   as it goes, as Metal's do ([`Pool`]).
+//!   as it goes, as Metal's do ([`Pool`]). A queue the runtime makes for its own work (its
+//!   in-place check's, `queue.rs`) is no Metal queue: it makes no pool and takes no sampler ID.
 //! - **The device's sampler ID** (the consumer's M3 Max report at 701572bbf, the M4 probes, plain
 //!   and under API validation alike). Metal's device keeps a sampler ID for itself for good as it
 //!   makes its first command queue, indirect command buffer, or texture whose memory is its own (of
@@ -135,8 +136,10 @@
 //!   reaches every ID a heap array can (`heap_sets.rs`), so a texture Metal numbers past its
 //!   placement limit is reached as any other. A texture's ID indexes every set-1 array its usage
 //!   can bind it through (sampled where it reads, storage where it writes), so an ID past the least
-//!   of those arrays' update-after-bind limits is refused `Unsupported`; a reservation is refused
-//!   only past the larger, since no usage is known then. A sampler state is never refused for the
+//!   of those arrays' elements is refused `Unsupported`: past their update-after-bind limits,
+//!   naming the limit, or past the handle table's 65536 entries, within which link sizes every
+//!   heap array, not implemented. A reservation is refused only past the larger, since no usage is
+//!   known then. A sampler state is never refused for the
 //!   sampler arrays: its element there is not its ID but the lowest no live state holds
 //!   (`ElementHold`), which the sampler table maps its ID to (its two windows reach IDs 0 to 32767
 //!   and 32768 more from the first ID past them, a reservation's, `heap_sets.rs`); only where more
@@ -159,18 +162,57 @@
 //!   generation changes with its holder, so the device writes a slot again only where it
 //!   changed. A sampler state is reached likewise: the device writes it into its heap sets' sampler
 //!   arrays and its sampler tables as it takes its slot, and the neutral as it goes.
+//! - **Passing holds** ([`PassingHolds`]). The runtime takes a program's textures and sampler
+//!   states for a moment off the program's thread: a batch's thread writes the slots asked while
+//!   it held their writes (`heap_sets::HeldSlots`), a scheduler's thread ends a storage-form
+//!   switch (`texture/storage_form.rs`), and a heap set made or written again takes every live
+//!   holder. Where the program released its last handle meanwhile, that thread's is the last,
+//!   and the resource goes only as it lets go, with what only it held: a texture the program
+//!   made next would take the next ID, one past Metal's, where Metal's release of the texture had
+//!   given the ID back (`tests::in_place_check`, at the in-place check's submissions, on
+//!   lavapipe), and a buffer pinned where the buffer a released texture was made over lay was
+//!   refused, its range still held (`tests::passing_holds`), where Metal's release had freed it.
+//!   So each such hold lasts a passing hold, from before its first handle is taken until its last
+//!   is let go, and its handles go inside it: a texture whose last handle one is goes there, and
+//!   with it what it alone held (the buffer it was made over, its heap, the texture a view was
+//!   made of), each giving back its ID and slot, its range of the address space or its pool's
+//!   slot (`address.rs`), and its range of an automatic heap (`heap.rs`). A making that takes
+//!   any of those -- a program's texture or sampler state its ID, a buffer, heap or pool its
+//!   bytes of the Metal address space (`Device::address_space_for`), a resource of an automatic
+//!   heap its range of the heap (`Heap::allocate`) -- waits for every passing hold of the device
+//!   to end first: what a released resource held is back by then, whichever thread let go of it
+//!   last. A new heap set's walk of the live textures takes one for each part of them, and
+//!   between two lets every making waiting go on first (`heap_sets::Walk`,
+//!   [`Device::let_makings_pass`]), so a making waits for one part of it at most. Only the
+//!   program's code in such a going waits for the thread's outermost hold to end:
+//!   a release of the program's (a deallocator, a keep-alive, a range token, a dma-buf source,
+//!   `exit_guard::program_release`, [`released_past_passing_hold`]) and a message for the
+//!   device's message sink ([`held_past_passing_hold`]) run then, in order, on a handler thread
+//!   where the thread is one command buffers' completion depends on
+//!   (`Device::let_go_elsewhere`). So a passing hold runs none of the program's code (in builds
+//!   with debug assertions, `exit_guard::program` ends the process where it would), and makes no
+//!   image and takes no device memory (`Switch::prepare` makes its images between two): it takes
+//!   the heap sets' lock, the IDs' lock, the storage forms' and the held resources' own, writes
+//!   descriptors and makes descriptor sets and views, and destroys and frees what a going
+//!   resource held under their own locks, and waits for no command buffer, no making and nothing
+//!   but those locks, which no thread holds while it waits; so a making waits for a bounded run
+//!   of the runtime's own work. A making on a thread inside one does not wait for it, and a
+//!   making waits holding none of the runtime's locks.
 
-use super::device::{lock, DebugMessage, Device, MessageKind, MessageSeverity};
+use super::device::{lock, DebugMessage, Device, MessageKind, MessageSeverity, MessageSink};
 use super::error::{invalid, Error, Problem};
+use super::exit_guard;
 use super::pipeline::{RenderShared, StateShared};
 use super::sampler::SamplerShared;
 use super::texture::TextureShared;
-use metal2vulkan::device::VkLimit;
+use metal2vulkan::bind::HANDLE_TABLE_CAPACITY;
+use metal2vulkan::device::{DeviceProfile, VkLimit};
 use metal2vulkan::error::{Capability, Feature, Unsupported};
 use metal2vulkan::metal::{TextureType, TextureUsage};
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex, PoisonError, Weak};
 
 mod numbered;
 pub(super) use numbered::{
@@ -1050,8 +1092,9 @@ impl IdHold {
     }
 }
 
-impl Drop for IdHold {
-    fn drop(&mut self) {
+impl IdHold {
+    /// Give the ID back, and its slot where this hold's holder still holds it.
+    fn release(&mut self) {
         let mut all = lock(&self.ids);
         if self.space == IdSpace::Sampler && self.id != 0 {
             all.count_sampler_id(false);
@@ -1077,6 +1120,180 @@ impl Drop for IdHold {
             if self.space == IdSpace::Sampler {
                 all.sampler_slot_changed();
             }
+        }
+    }
+}
+
+impl Drop for IdHold {
+    fn drop(&mut self) {
+        self.release();
+    }
+}
+
+/// The device's passing holds of a program's textures and sampler states (the module docs): how
+/// many are under way, read with one load by a making where none is, how many makings wait for
+/// them, read with one load by a walk in parts between two, and the signal that the last ended,
+/// or that the last waiting making went on.
+#[derive(Default)]
+pub(super) struct PassingHolds {
+    under_way: AtomicUsize,
+    /// The makings waiting in [`wait`](Self::wait), which a walk in parts lets pass
+    /// ([`Device::let_makings_pass`]).
+    makings: AtomicUsize,
+    /// Held to wait for [`ended`](Self::ended), and to signal it.
+    waiting: Mutex<()>,
+    ended: Condvar,
+}
+
+thread_local! {
+    /// How many passing holds the thread is inside.
+    static INSIDE: Cell<usize> = const { Cell::new(0) };
+    /// What the thread's passing holds left for once the outermost ended (the module docs).
+    static LEFT: RefCell<Left> = const {
+        RefCell::new(Left {
+            releases: Vec::new(),
+            messages: Vec::new(),
+        })
+    };
+}
+
+/// What a thread's passing holds left for once the outermost ended: the releases of the
+/// program's raised inside them, and the messages for a device's message sink, each in order.
+struct Left {
+    releases: Vec<ProgramRelease>,
+    messages: Vec<(MessageSink, DebugMessage)>,
+}
+
+/// A release of the program's (`exit_guard::program_release`).
+type ProgramRelease = Box<dyn FnOnce() + Send>;
+
+/// Releases of the program's a thread's passing holds left (the module docs): run in order as
+/// they drop, each as `exit_guard::program_release` runs it, outside every passing hold; none
+/// once the process is exiting, as the resources they release are left to its end.
+struct Releases(Vec<ProgramRelease>);
+
+impl Drop for Releases {
+    fn drop(&mut self) {
+        let exiting = exit_guard::closed();
+        for release in self.0.drain(..) {
+            match exiting {
+                true => std::mem::forget(release),
+                false => exit_guard::program_release(release),
+            }
+        }
+    }
+}
+
+impl PassingHolds {
+    /// Wait until no passing hold is under way, as a program's resource is about to take its
+    /// ID, or a range a released resource may have held (the module docs): one load where none
+    /// is; at once on a thread inside one.
+    pub(super) fn wait(&self) {
+        if self.under_way.load(Ordering::SeqCst) == 0 || inside_passing_hold() {
+            return;
+        }
+        let mut waiting = lock(&self.waiting);
+        self.makings.fetch_add(1, Ordering::SeqCst);
+        while self.under_way.load(Ordering::SeqCst) > 0 {
+            waiting = (self.ended.wait(waiting)).unwrap_or_else(PoisonError::into_inner);
+        }
+        // Under the lock: a walk that read a making waiting is waiting for this signal by now.
+        if self.makings.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.ended.notify_all();
+        }
+    }
+}
+
+impl Device {
+    /// A passing hold of the device's (the module docs), under way until the guard goes: taken
+    /// before the first handle it takes of a program's resource, and let go of after the last of
+    /// those went, inside it.
+    pub(super) fn passing_hold(&self) -> PassingHold<'_> {
+        (self.shared().passing_holds.under_way).fetch_add(1, Ordering::SeqCst);
+        INSIDE.with(|inside| inside.set(inside.get() + 1));
+        PassingHold(self)
+    }
+
+    /// Let the makings waiting for the passing holds go on, between two parts of a walk that
+    /// takes a passing hold for each (the module docs): one load where none waits. The caller is
+    /// inside no passing hold and holds no lock.
+    pub(super) fn let_makings_pass(&self) {
+        let holds = &self.shared().passing_holds;
+        if holds.makings.load(Ordering::SeqCst) == 0 {
+            return;
+        }
+        let mut waiting = lock(&holds.waiting);
+        while holds.makings.load(Ordering::SeqCst) > 0 {
+            waiting = (holds.ended.wait(waiting)).unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+}
+
+/// Whether this thread is inside a passing hold, where the program's code runs in no case (the
+/// module docs).
+pub(crate) fn inside_passing_hold() -> bool {
+    INSIDE.with(Cell::get) > 0
+}
+
+/// Whether `message`, for `sink`, waits for this thread's outermost passing hold to end, to be
+/// delivered then: where the thread is inside one (the module docs).
+pub(crate) fn held_past_passing_hold(sink: &MessageSink, message: &DebugMessage) -> bool {
+    if !inside_passing_hold() {
+        return false;
+    }
+    LEFT.with(|left| (left.borrow_mut().messages).push((sink.clone(), message.clone())));
+    true
+}
+
+/// Whether `release`, a release of the program's (`exit_guard::program_release`), waits for this
+/// thread's outermost passing hold to end, to run then (the module docs): given back to run now
+/// where the thread is inside none.
+pub(crate) fn released_past_passing_hold<F: FnOnce() + Send + 'static>(release: F) -> Option<F> {
+    if !inside_passing_hold() {
+        return Some(release);
+    }
+    LEFT.with(|left| (left.borrow_mut().releases).push(Box::new(release)));
+    None
+}
+
+/// A passing hold under way ([`Device::passing_hold`]). The handles it took go before it does,
+/// inside it (the module docs).
+pub(super) struct PassingHold<'a>(&'a Device);
+
+impl Drop for PassingHold<'_> {
+    fn drop(&mut self) {
+        let inside = INSIDE.with(|inside| {
+            inside.set(inside.get() - 1);
+            inside.get()
+        });
+        let holds = &self.0.shared().passing_holds;
+        if holds.under_way.fetch_sub(1, Ordering::SeqCst) == 1 {
+            // Under the waiters' lock: a waiter that read it under way is waiting by now.
+            let _waiting = lock(&holds.waiting);
+            holds.ended.notify_all();
+        }
+        if inside > 0 {
+            return;
+        }
+        // The outermost ended: what the holds left runs, outside every one.
+        let (releases, messages) = LEFT.with(|left| {
+            let mut left = left.borrow_mut();
+            (
+                Releases(std::mem::take(&mut left.releases)),
+                std::mem::take(&mut left.messages),
+            )
+        });
+        if !releases.0.is_empty() {
+            // A thread command buffers' completion depends on runs none of the program's
+            // releases (`exit_guard::program_release`).
+            if exit_guard::serving_completion() {
+                self.0.let_go_elsewhere(Box::new(releases));
+            } else {
+                drop(releases);
+            }
+        }
+        for (sink, message) in messages {
+            sink.deliver(&message);
         }
     }
 }
@@ -1132,9 +1349,19 @@ impl Device {
     /// Metal's process (`Invalid`, `Problem::ResourceId`); an indirect command buffer ID of 2^31
     /// or more, at which Metal's reservation never returns (`Invalid`,
     /// `Problem::ReservationHangs`); and a texture ID no set-1 array of the device can hold
-    /// (`Unsupported`, naming the limit). Plain indirect command buffer IDs past a reservation
+    /// (`Unsupported`: naming the limit, or not implemented past the handle table's 65536
+    /// entries). Plain indirect command buffer IDs past a reservation
     /// are Metal's, to 2^31 - 1, each buffer made at any length.
     pub fn reserve_resource_ids(
+        &self,
+        kind: ResourceIdKind,
+        ids: &[ResourceId],
+    ) -> Result<(), Error> {
+        self.at_serving(|device| device.reserve_resource_ids_now(kind, ids))
+    }
+
+    /// [`Device::reserve_resource_ids`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn reserve_resource_ids_now(
         &self,
         kind: ResourceIdKind,
         ids: &[ResourceId],
@@ -1156,8 +1383,8 @@ impl Device {
                 // Whatever texture is placed at it: an ID no texture array can hold.
                 ResourceIdKind::Texture => {
                     check_limit(CALL, id, RESERVED_POOL_LIMIT)?;
-                    let [sampled, storage] = self.texture_arrays();
-                    self.check_capacity(id, sampled.max(storage))?;
+                    let [sampled, storage] = texture_arrays(self.compile_device().profile());
+                    check_capacity(id, sampled.max(storage))?;
                 }
                 ResourceIdKind::SamplerState => check_limit(CALL, id, RESERVED_POOL_LIMIT)?,
                 ResourceIdKind::IndirectCommandBuffer if id >= RECORDS_RESERVED_LIMIT => {
@@ -1233,6 +1460,11 @@ impl Device {
     /// A runtime extension, with no Metal counterpart: Metal keeps a descriptor in its sampler
     /// heap for each of these IDs, so a caller that models that heap's placement counts them.
     pub fn sampler_ids_live(&self) -> u64 {
+        self.current().sampler_ids_live_now()
+    }
+
+    /// [`Device::sampler_ids_live`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn sampler_ids_live_now(&self) -> u64 {
         self.shared().sampler_ids.live.load(Ordering::Acquire)
     }
 
@@ -1254,6 +1486,11 @@ impl Device {
     /// Read as [`Device::sampler_ids_live`] is: changed inside the call that grows the pool, a
     /// plain atomic read with no lock. A runtime extension, with no Metal counterpart.
     pub fn sampler_id_pool_size(&self) -> u64 {
+        self.current().sampler_id_pool_size_now()
+    }
+
+    /// [`Device::sampler_id_pool_size`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn sampler_id_pool_size_now(&self) -> u64 {
         self.shared().sampler_ids.pool_size.load(Ordering::Acquire)
     }
 
@@ -1290,7 +1527,7 @@ impl Device {
         if texture_type == TextureType::TextureBuffer {
             return Ok(());
         }
-        let [sampled, storage] = self.texture_arrays();
+        let [sampled, storage] = texture_arrays(self.compile_device().profile());
         let arrays = [
             usage.contains(TextureUsage::SHADER_READ).then_some(sampled),
             usage
@@ -1298,7 +1535,7 @@ impl Device {
                 .then_some(storage),
         ];
         match arrays.into_iter().flatten().min() {
-            Some(least) => self.check_capacity(id, least),
+            Some(least) => check_capacity(id, least),
             None => Ok(()),
         }
     }
@@ -1315,54 +1552,6 @@ impl Device {
             IdPlacement::Any => Ok(()),
             IdPlacement::Outside => Err(invalid(call, Problem::OutsidePlacement)),
         }
-    }
-
-    /// Refuse ID `id` past `array`, a set-1 array's capacity and the limit that bounds it.
-    fn check_capacity(&self, id: u64, (available, limit): (u64, VkLimit)) -> Result<(), Error> {
-        if id < available {
-            return Ok(());
-        }
-        Err(Error::Unsupported(Unsupported::needs(
-            Feature::ArgumentBufferTextures,
-            Capability::Limit {
-                limit,
-                required: id + 1,
-                available,
-            },
-        )))
-    }
-
-    /// The most elements a set-1 sampled-image array and a set-1 storage-image array can have
-    /// on the device (an ID is its element), each with the limit that bounds it.
-    fn texture_arrays(&self) -> [(u64, VkLimit); 2] {
-        let l = self.compile_device().profile().limits();
-        let resources = (
-            l.max_per_stage_update_after_bind_resources,
-            VkLimit::MaxPerStageUpdateAfterBindResources,
-        );
-        let sampled = least(&[
-            (
-                l.max_descriptor_set_update_after_bind_sampled_images,
-                VkLimit::MaxDescriptorSetUpdateAfterBindSampledImages,
-            ),
-            (
-                l.max_per_stage_descriptor_update_after_bind_sampled_images,
-                VkLimit::MaxPerStageDescriptorUpdateAfterBindSampledImages,
-            ),
-            resources,
-        ]);
-        let storage = least(&[
-            (
-                l.max_descriptor_set_update_after_bind_storage_images,
-                VkLimit::MaxDescriptorSetUpdateAfterBindStorageImages,
-            ),
-            (
-                l.max_per_stage_descriptor_update_after_bind_storage_images,
-                VkLimit::MaxPerStageDescriptorUpdateAfterBindStorageImages,
-            ),
-            resources,
-        ]);
-        [sampled, storage]
     }
 
     /// The most elements a set-1 sampler array can have on the device: link's count for a
@@ -1442,11 +1631,76 @@ pub(super) fn records_placement(
     Ok(Some(kept))
 }
 
-/// The least of `limits` (each a capacity and the limit it is), as a capacity.
-fn least(limits: &[(u32, VkLimit)]) -> (u64, VkLimit) {
-    limits
-        .iter()
-        .map(|&(value, limit)| (u64::from(value), limit))
-        .min()
-        .unwrap_or((0, VkLimit::MaxPerStageUpdateAfterBindResources))
+/// What bounds a set-1 image array's elements ([`texture_arrays`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum ArrayBound {
+    /// One of the device's update-after-bind limits.
+    Limit(VkLimit),
+    /// The handle table's reach (`bind::HANDLE_TABLE_CAPACITY`, 65536 entries), within which link
+    /// sizes every heap array (`pipeline::link`'s heap capacity): an element past it is not
+    /// built on any device.
+    HandleTable,
+}
+
+/// The most elements a set-1 sampled-image array and a set-1 storage-image array can have on a
+/// device of `p` (an ID is its element), each with what bounds it ([`least`]): what texture
+/// placements and reservations are checked against, and the argument-buffer texture family row
+/// is judged by (`families::limits`).
+pub(super) fn texture_arrays(p: &DeviceProfile) -> [(u64, ArrayBound); 2] {
+    let l = p.limits();
+    let resources = (
+        l.max_per_stage_update_after_bind_resources,
+        VkLimit::MaxPerStageUpdateAfterBindResources,
+    );
+    let sampled = least(&[
+        (
+            l.max_descriptor_set_update_after_bind_sampled_images,
+            VkLimit::MaxDescriptorSetUpdateAfterBindSampledImages,
+        ),
+        (
+            l.max_per_stage_descriptor_update_after_bind_sampled_images,
+            VkLimit::MaxPerStageDescriptorUpdateAfterBindSampledImages,
+        ),
+        resources,
+    ]);
+    let storage = least(&[
+        (
+            l.max_descriptor_set_update_after_bind_storage_images,
+            VkLimit::MaxDescriptorSetUpdateAfterBindStorageImages,
+        ),
+        (
+            l.max_per_stage_descriptor_update_after_bind_storage_images,
+            VkLimit::MaxPerStageDescriptorUpdateAfterBindStorageImages,
+        ),
+        resources,
+    ]);
+    [sampled, storage]
+}
+
+/// Refuse ID `id` past `array`, a set-1 array's elements and what bounds them: the limit it
+/// needs, or, past the handle table's reach, not implemented.
+pub(super) fn check_capacity(id: u64, (available, bound): (u64, ArrayBound)) -> Result<(), Error> {
+    if id < available {
+        return Ok(());
+    }
+    Err(Error::Unsupported(match bound {
+        ArrayBound::Limit(limit) => Unsupported::needs(
+            Feature::ArgumentBufferTextures,
+            Capability::Limit {
+                limit,
+                required: id + 1,
+                available,
+            },
+        ),
+        ArrayBound::HandleTable => Unsupported::not_implemented(Feature::ArgumentBufferTextures),
+    }))
+}
+
+/// The least of the handle table's reach and `limits` (each a capacity and the limit it is), as a
+/// set-1 array's elements and what bounds them: the device's limit where one equals the reach.
+fn least(limits: &[(u32, VkLimit)]) -> (u64, ArrayBound) {
+    let table = (u64::from(HANDLE_TABLE_CAPACITY), ArrayBound::HandleTable);
+    (limits.iter())
+        .map(|&(value, limit)| (u64::from(value), ArrayBound::Limit(limit)))
+        .fold(table, std::cmp::min)
 }

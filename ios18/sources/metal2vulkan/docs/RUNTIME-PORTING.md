@@ -153,7 +153,7 @@ narrow refusal that the call's rustdoc describes.
 | `commit_and_submit` | (none: a runtime extension) | `CommandBuffer::commit_and_submit`: `commit`, then the calling thread submits the ready command buffers in commit order, this one among them (one held back holding back only the later commits that wait behind it, as on the scheduler's thread), where no other pass is under way and each needs no host step or storage-form switch, running their submission checks just before each submission (one that waits for a shared event's GPU signal to land is left to the scheduler's thread; a plain event's wait goes to the `VkQueue`) and their submission handlers inside the call; the rest goes to the scheduler's thread. One left for a render encoder's end (`RenderLoweringPolicy::Worker`) returns as `commit` does, and the thread that runs its commit once the end is lowered makes the pass |
 | `add_completion_seen_handler` | (none: a runtime extension) | `CommandBuffer::add_completion_seen_handler`: a handler run once the command buffer completed, its status and GPU times final, on the runtime's thread that saw it complete where its transition to `Completed` runs there, or runs to its completion-seen handlers there (one with completed handlers, the rest on its queue's handler thread), else on its queue's handler thread, before its completed handlers; short, and never blocking |
 | `set_submission_check` | (none: a runtime extension) | `CommandBuffer::set_submission_check`: a check of each of Metal's submissions of the command buffer, run once its event waits are met (an `Event` wait for a submitted signal at once, its wait on the `VkQueue`; a `SharedEvent` wait only a GPU signal still running reaches once that signal lands, as Metal schedules each), just before it is submitted, on the thread that submits it (the device's scheduler thread, or one in `commit_and_submit` or making the pass of one left for a render encoder's end); a code it answers fails that submission alone, as Metal fails one that uses a resource detached by then |
-| `object_id` | (none: Metal names an object by pointer) | `Buffer::object_id`, `Texture::object_id`, `Heap::object_id`: an `ObjectId` unique for the object's life, never reused (a sparse heap's `gpu_address` is 0) |
+| `object_id` | (none: Metal names an object by pointer) | `Buffer::object_id`, `Texture::object_id`, `Heap::object_id`, `CommandBuffer::object_id`: an `ObjectId` unique for the object's life, never reused (a sparse heap's `gpu_address` is 0); a degrade notice announced for a command buffer's work names its command buffer's (`DegradeNotice::command_buffer`) |
 
 ### `ComputeCmd`: `MTLComputeCommandEncoder` commands
 
@@ -414,7 +414,7 @@ narrow refusal that the call's rustdoc describes.
 | `SetFragmentTexture` | `setFragmentTexture:atIndex:` | `RenderCommandEncoder::set_fragment_texture` |
 | `SetFragmentTextures` | `setFragmentTextures:withRange:` | `RenderCommandEncoder::set_fragment_textures` |
 | `SetFrontFacingWinding` | `setFrontFacingWinding:` | `RenderCommandEncoder::set_front_facing_winding` |
-| `SetLineWidth` | `setLineWidth:` (SPI) | `RenderCommandEncoder::set_line_width`: every width accepted, quantized as Metal does; drawn by the device's lines where they draw it (announced `device-wide-lines` where not Metal's parallelogram) or as the band variant; what neither draws (a triangle's edges, a line without `tessellationShader`, a rate-mapped pass's or an execution's lines) by the device's lines at the nearest width they draw, announced `lines-at-nearest-width` (the runtime's README, line widths) *(partial)* |
+| `SetLineWidth` | `setLineWidth:` (SPI) | `RenderCommandEncoder::set_line_width`: every width accepted, quantized as Metal does; drawn by the device's lines where they draw it (announced `device-wide-lines`, no device's taken as Metal's parallelogram) or as the band variant; what neither draws (a triangle's edges, a line without `tessellationShader`, a rate-mapped pass's or an execution's lines) by the device's lines at the nearest width they draw, announced `lines-at-nearest-width` (the runtime's README, line widths) *(partial)* |
 | `SetPointSize` | `setPointSize:` (SPI) | `RenderCommandEncoder::set_point_size`: a no-op, as on Metal |
 | `SetProvokingVertexMode` | `setProvokingVertexMode:` (SPI) | `RenderCommandEncoder::set_provoking_vertex_mode`: modes 0 and 1 drawn as Metal draws them; every other mode, which Metal draws a third way, drawn as 1 (patches as 0), each draw Metal's third way draws otherwise announced (`provoking-vertex-unmatched`) *(partial)* |
 | `SetRenderPipelineState` | `setRenderPipelineState:` | `RenderCommandEncoder::set_render_pipeline_state` |
@@ -483,6 +483,7 @@ narrow refusal that the call's rustdoc describes.
 | `length` | `length` | `Buffer::length` |
 | `new_linear_texture` | `newLinearTextureWithDescriptor:offset:bytesPerRow:bytesPerImage:` (SPI) | `Buffer::new_linear_texture` (an aliasing image, or a shadow image where Vulkan cannot alias) *(partial)* |
 | `new_texture` | `newTextureWithDescriptor:offset:bytesPerRow:` | `Buffer::new_texture`, as `new_linear_texture` *(partial)* |
+| `new_tiled_texture` | `newTiledTextureWithDescriptor:offset:bytesPerRow:` (SPI) | `Buffer::new_tiled_texture`: one level as `new_texture`; more, one image of every level whose first is a copy of the bytes kept in step at command boundaries (`shadowed-texture`) *(partial)* |
 
 ### `Texture`: `MTLTexture`
 
@@ -574,7 +575,13 @@ narrow refusal that the call's rustdoc describes.
 | `sample_counts` | `supportsTextureSampleCount:` | `DeviceProperties::supports_texture_sample_count` |
 | `families` | `supportsFamily:` | `Device::supports_family`; `Device::family_blockers` names what blocks a family |
 | `heap_buffer_page_private` | `heapBufferSizeAndAlignWithLength:options:` | `Device::heap_buffer_size_and_align` |
-| `min_linear_alignment_bgra8` | `minimumLinearTextureAlignmentForPixelFormat:` | `DeviceProperties::minimum_linear_texture_alignment_for_pixel_format` |
+| `min_linear_alignment_bgra8` | `minimumLinearTextureAlignmentForPixelFormat:` | `Device::minimum_linear_texture_alignment_for_pixel_format` |
+
+### `IdentityCaps`: `MTLDevice` identity and size answers
+
+| Item | Metal | Runtime |
+|---|---|---|
+| `sizes.max_argument_buffer_sampler_count` | `maxArgumentBufferSamplerCount` | `DeviceProperties::max_argument_buffer_sampler_count`: one fewer than the smaller of a set-1 sampler array's elements (`metal2vulkan::pipeline::heap_sampler_capacity`) and `maxSamplerAllocationCount`; 65535 on MoltenVK on an M3 Max, where Metal answers 500000 *(partial)* |
 
 ## Composed from runtime calls
 

@@ -35,7 +35,9 @@ enum {
 typedef struct {
     int32_t value[BmFields];
     uint32_t valid;               /* bit per field */
+    uint32_t cycle_valid, completed_valid; /* successful reads in the active and completed cycles */
     uint8_t cursor, in_flight, enabled, slow_due;
+    uint8_t sample_only, sample_wanted;
     uint32_t cycles_done, responses, notifications, errors, timeouts, ignored;
     uint32_t refresh_wanted;      /* a notification asked for a new cycle while one ran */
     int last_timeout;             /* the field the last timeout skipped, -1 none */
@@ -63,18 +65,20 @@ typedef struct {
     int adapter_mv, adapter_ma, adapter_watts;
 } MarbleBatterySnapshot;
 
-enum {BmIgnored = 0, BmAnswer = 1, BmCycleDone = 2, BmNotified = 3, BmEnabled = 4};
+enum {BmIgnored = 0, BmAnswer = 1, BmCycleDone = 2, BmNotified = 3, BmEnabled = 4, BmSampleDone = 5};
 
 void marble_battmgr_init(MarbleBattmgr *b);
 /* The notification enable request (sent once the channel is up). */
 uint32_t marble_battmgr_enable_request(uint8_t out[MARBLE_BATTMGR_ENABLE_BYTES]);
 /* Starts a refresh cycle (no effect while one runs: it is remembered and runs after). slow: also the fields that hardly change. */
 void marble_battmgr_refresh(MarbleBattmgr *b, int slow);
+/* One measured current for the gas-gauge logger; shares the request queue. */
+void marble_battmgr_sample(MarbleBattmgr *b);
 /* The next request: an input current limit due after the last cycle, else the running cycle's next field; 0 when nothing is to be
  * sent now (one in flight, or nothing due). */
 uint32_t marble_battmgr_next(MarbleBattmgr *b, uint8_t out[MARBLE_BATTMGR_REQUEST_BYTES]);
 /* The owner's request timer ran out: the field is skipped (a limit set counts as tried). */
-void marble_battmgr_timeout(MarbleBattmgr *b);
+int marble_battmgr_timeout(MarbleBattmgr *b);
 /* A message from the channel; returns one of the Bm* results. */
 int marble_battmgr_receive(MarbleBattmgr *b, const uint8_t *data, uint32_t length);
 /* The power source values from the fields read so far. */

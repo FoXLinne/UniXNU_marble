@@ -126,6 +126,32 @@ impl WeakRenderPipelineState {
             .upgrade()
             .map(|state| RenderPipelineState(Kind::Graphics(GraphicsState(state))))
     }
+
+    /// Whether it names `state`: the same drawing state, whose allocation it keeps, so no other
+    /// state lies at its address while it is kept.
+    pub(crate) fn names(&self, state: &RenderPipelineState) -> bool {
+        match &state.0 {
+            Kind::Graphics(graphics) => self.is(graphics),
+            Kind::Tile(_) => false,
+        }
+    }
+
+    /// Whether it names `state` ([`names`](Self::names) of a drawing state).
+    pub(crate) fn is(&self, state: &GraphicsState) -> bool {
+        std::ptr::eq(self.0.as_ptr(), Arc::as_ptr(&state.0))
+    }
+
+    /// Whether the state it names lives still.
+    pub(crate) fn lives(&self) -> bool {
+        self.0.strong_count() > 0
+    }
+}
+
+/// The same drawing state ([`WeakRenderPipelineState::names`]'s identity).
+impl PartialEq for WeakRenderPipelineState {
+    fn eq(&self, other: &WeakRenderPipelineState) -> bool {
+        Weak::ptr_eq(&self.0, &other.0)
+    }
 }
 
 /// A drawing state's program, named without holding it ([`GraphicsState::program_name`]): its
@@ -594,6 +620,15 @@ impl Device {
         descriptor: &RenderPipelineDescriptor,
         options: &PipelineOptions,
     ) -> Result<RenderPipelineState, Error> {
+        self.at_serving(|device| device.new_render_pipeline_state_now(descriptor, options))
+    }
+
+    /// [`Device::new_render_pipeline_state`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_render_pipeline_state_now(
+        &self,
+        descriptor: &RenderPipelineDescriptor,
+        options: &PipelineOptions,
+    ) -> Result<RenderPipelineState, Error> {
         GraphicsState::create(self, descriptor, options, None)
             .map(|state| RenderPipelineState(Kind::Graphics(state)))
     }
@@ -605,6 +640,18 @@ impl Device {
     /// [`RenderPipelineDescriptor::reflection`]'s, under the creation's budget; what it refuses
     /// refuses the call (`Unsupported`, `Compile`).
     pub fn new_render_pipeline_state_with_reflection(
+        &self,
+        descriptor: &RenderPipelineDescriptor,
+        options: &PipelineOptions,
+    ) -> Result<(RenderPipelineState, Option<RenderPipelineReflection>), Error> {
+        self.at_serving(|device| {
+            device.new_render_pipeline_state_with_reflection_now(descriptor, options)
+        })
+    }
+
+    /// [`Device::new_render_pipeline_state_with_reflection`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_render_pipeline_state_with_reflection_now(
         &self,
         descriptor: &RenderPipelineDescriptor,
         options: &PipelineOptions,
@@ -657,15 +704,27 @@ impl Device {
     /// ([`RenderPipelineState::max_total_threads_per_object_threadgroup`] and the rest), and its
     /// draws are not held to them. What the compile refuses otherwise is
     /// `Compile` or `Unsupported`, as [`Device::new_render_pipeline_state`] says, and so is an
-    /// archive of another device; no binary archive holds a mesh render pipeline, so
-    /// `FAIL_ON_BINARY_ARCHIVE_MISS` with archives listed is `BinaryArchiveMiss`. Each stage's
+    /// archive of another device. `FAIL_ON_BINARY_ARCHIVE_MISS` with archives listed is
+    /// `BinaryArchiveMiss` unless one holds an add of an equal descriptor
+    /// ([`BinaryArchive::add_mesh_render_pipeline_functions`], whose key holds every field, as
+    /// Metal's mesh key is not measured). Each stage's
     /// imports come from its own dynamic libraries, as a render state's do. An object, mesh or
     /// fragment function made by `Library::new_function_with_name` whose function declares
     /// function constants is `Invalid(UnspecializedFunction)`, as plain Metal ends its process at
     /// its creation, before the device's mesh shading is asked.
     ///
     /// [`RenderCommandEncoder::draw_mesh_threadgroups`]: crate::RenderCommandEncoder::draw_mesh_threadgroups
+    /// [`BinaryArchive::add_mesh_render_pipeline_functions`]: crate::BinaryArchive::add_mesh_render_pipeline_functions
     pub fn new_mesh_render_pipeline_state(
+        &self,
+        descriptor: &MeshPipelineDescriptor,
+        options: &PipelineOptions,
+    ) -> Result<RenderPipelineState, Error> {
+        self.at_serving(|device| device.new_mesh_render_pipeline_state_now(descriptor, options))
+    }
+
+    /// [`Device::new_mesh_render_pipeline_state`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_mesh_render_pipeline_state_now(
         &self,
         descriptor: &MeshPipelineDescriptor,
         options: &PipelineOptions,
@@ -685,6 +744,18 @@ impl Device {
     /// (`Device::mesh_descriptor_key`), so every state of one descriptor shares one answer rather
     /// than decoding the three stages' AIR again.
     pub fn new_mesh_render_pipeline_state_with_reflection(
+        &self,
+        descriptor: &MeshPipelineDescriptor,
+        options: &PipelineOptions,
+    ) -> Result<(RenderPipelineState, Option<RenderPipelineReflection>), Error> {
+        self.at_serving(|device| {
+            device.new_mesh_render_pipeline_state_with_reflection_now(descriptor, options)
+        })
+    }
+
+    /// [`Device::new_mesh_render_pipeline_state_with_reflection`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_mesh_render_pipeline_state_with_reflection_now(
         &self,
         descriptor: &MeshPipelineDescriptor,
         options: &PipelineOptions,
@@ -1215,13 +1286,14 @@ impl RenderPipelineState {
     }
 
     /// `maxTotalThreadsPerObjectThreadgroup`: a mesh state's
-    /// ([`MeshPipelineMetalInfo::max_total_threads_per_object_threadgroup`]): the descriptor's
-    /// maximum, else the object function's `[[max_total_threads_per_threadgroup(n)]]`, else
-    /// 1024, as an M3 Max answers, held to this device's limit for the stage where that is lower
-    /// (the task stage's invocations with `VK_EXT_mesh_shader`, else the compute stage's), as a
-    /// compute state's `maxTotalThreadsPerThreadgroup` is. 0 for a mesh state without an object
-    /// function, where an M3 Max answers 3 (docs/API.md, accepted differences), and for any
-    /// other state. A draw is not held to it.
+    /// ([`MeshPipelineMetalInfo::max_total_threads_per_object_threadgroup`]): the least of the
+    /// descriptor's maximum, the object function's `[[max_total_threads_per_threadgroup(n)]]`,
+    /// the threads of the required object size and 1024, as an M3 Max answers on a first compile,
+    /// held to this device's limit for the stage where that is lower (the task stage's
+    /// invocations with `VK_EXT_mesh_shader`, else the compute stage's), as a compute state's
+    /// `maxTotalThreadsPerThreadgroup` is. 0 for a mesh state without an object function, where
+    /// an M3 Max answers 3 (docs/API.md, accepted differences), and for any other state. A draw
+    /// is not held to it.
     pub fn max_total_threads_per_object_threadgroup(&self) -> u32 {
         self.mesh_info()
             .map_or(0, |i| i.max_total_threads_per_object_threadgroup)
@@ -1416,7 +1488,11 @@ impl GraphicsState {
             ));
         }
         // Metal answers nil with an `NSError` for a state with rasterization disabled whose vertex
-        // function returns a value (`unrasterized.rs`), before it compiles anything.
+        // function returns a value, and for a rasterizing one whose vertex function returns none
+        // outside OpenGL mode, which makes it rasterizing nothing (`unrasterized.rs`), before it
+        // compiles anything. The second's answer outside OpenGL mode is the compile's, which reads
+        // it from the vertex entry it specializes anyway (`DescriptorError::RasterizedVoidVertex`),
+        // so only the others ask.
         // Each answer below is the one a creation of a descriptor of the same key worked out, where
         // one kept it in memory or in the cache directory (`shader_cache/creation.rs`), else worked
         // out now; kept where this creation worked one out and every question has its answer.
@@ -1432,18 +1508,18 @@ impl GraphicsState {
         // earlier creation read reads its entries and its plain answers rather than decoding and
         // specializing them again (`pipeline/memo.rs`).
         let entries = cache.memo.stage_entries();
-        if !descriptor.rasterization_enabled {
-            let returns = match known.vertex_returns_value {
+        let returns =
+            super::unrasterized::asks(descriptor).then(|| match known.vertex_returns_value {
                 Some(returns) => Ok(returns),
                 None => {
                     learned = true;
                     device.shared().counts.linked_use_question_asked();
                     descriptor.vertex_returns_value(&options.budget(), entries)
                 }
-            };
-            answers.vertex_returns_value = returns.as_ref().ok().copied();
-            super::unrasterized::check("new_render_pipeline_state", returns)?;
-        }
+            });
+        answers.vertex_returns_value = returns.as_ref().and_then(|r| r.as_ref().ok().copied());
+        let rasterizes =
+            super::unrasterized::rasterizes("new_render_pipeline_state", descriptor, returns)?;
         // Metal links the fragment function whether or not the pipeline rasterizes, and answers
         // nil with an `NSError`, in this order, for a fragment function writing depth without a
         // depth attachment, a function using a direct texture or sampler with indirect command
@@ -1459,7 +1535,10 @@ impl GraphicsState {
             }
         };
         answers.fragment_writes_depth_unattached = writes.as_ref().ok().copied();
-        super::linked_fragment::check_depth("new_render_pipeline_state", writes)?;
+        // OpenGL mode makes the first (`linked_fragment.rs`).
+        if !descriptor.private.open_gl_mode_enabled {
+            super::linked_fragment::check_depth("new_render_pipeline_state", writes)?;
+        }
         if descriptor.support_indirect_command_buffers {
             let uses = match known.stages_using_direct_arguments {
                 Some(uses) => Ok(uses),
@@ -1488,20 +1567,24 @@ impl GraphicsState {
         }
         let rasterized;
         // The descriptor the state is made from, and its key: the one the checks above asked
-        // their questions under, where it is the same descriptor. Dropping the fragment stage
-        // makes another descriptor, which the key reads as one (a stage no descriptor names is
-        // written apart from any stage), so that creation builds the one other key it needs.
-        let (descriptor, made_key) =
-            match descriptor.fragment.is_some() && !descriptor.rasterization_enabled {
-                true => {
-                    let mut unrasterized = descriptor.clone();
-                    unrasterized.fragment = None;
-                    rasterized = unrasterized;
-                    let key = render_descriptor_key(device, &rasterized);
-                    (&rasterized, key)
-                }
-                false => (descriptor, descriptor_key),
-            };
+        // their questions under, where it is the same descriptor. Dropping the fragment stage of a
+        // state that rasterizes nothing, and rasterization where the descriptor asks for it and
+        // the state rasterizes nothing (`unrasterized.rs`), makes another descriptor, which the key
+        // reads as one (a stage no descriptor names is written apart from any stage), so that
+        // creation builds the one other key it needs.
+        let (descriptor, made_key) = match !rasterizes
+            && (descriptor.fragment.is_some() || descriptor.rasterization_enabled)
+        {
+            true => {
+                let mut unrasterized = descriptor.clone();
+                unrasterized.fragment = None;
+                unrasterized.rasterization_enabled = false;
+                rasterized = unrasterized;
+                let key = render_descriptor_key(device, &rasterized);
+                (&rasterized, key)
+            }
+            false => (descriptor, descriptor_key),
+        };
         // The reflection of the descriptor the state is made from: kept, else worked out on a
         // thread of its own beside the rest of the creation, which it shares nothing with. Under
         // the key the compile and the state read, which the creation built once.
@@ -1529,7 +1612,8 @@ impl GraphicsState {
                 (descriptor, options, used, added_unsupported),
                 entries,
                 &made_key,
-            )?;
+            )
+            .map_err(|e| super::unrasterized::compiled("new_render_pipeline_state", e))?;
             let reflected = match (kept, making) {
                 (Some(Some(reflection)), _) => Some(Reflected::Kept(reflection)),
                 (_, Some((key, making))) => Some(Reflected::Made(
@@ -1766,12 +1850,15 @@ impl GraphicsState {
             .as_ref()
             .map(crate::dynamic_library::stage_with_dependencies);
         let descriptor = &loaded;
-        // No binary archive holds a mesh render pipeline (`BinaryArchive` adds render, compute
-        // and tile pipelines): under `FAIL_ON_BINARY_ARCHIVE_MISS` every listed archive misses
-        // its mesh function.
-        binary_archive::check(device, options, CALL, ArchivedPipeline::Render, |_, _| {
-            Some(&descriptor.mesh)
-        })?;
+        // Under `FAIL_ON_BINARY_ARCHIVE_MISS`, refused naming the mesh function where no listed
+        // archive holds the descriptor's key (`BinaryArchive::add_mesh_render_pipeline_functions`).
+        binary_archive::check(
+            device,
+            options,
+            CALL,
+            ArchivedPipeline::Render,
+            binary_archive::mesh_missing(descriptor),
+        )?;
         // As a render state's, in Metal's order: a fragment function writing
         // depth without a depth attachment, the indirect command buffers' refusal, then the
         // fragment function's stage inputs the linking keeps that the mesh function does not
@@ -2141,6 +2228,12 @@ impl GraphicsState {
         self.0.made_tables.load(Ordering::Acquire)
     }
 
+    /// It, named without holding it: what a draw's encoder keeps the bind state its last draw
+    /// left under (`live_bind.rs`), which [`WeakRenderPipelineState::is`] tells apart.
+    pub(crate) fn downgrade(&self) -> WeakRenderPipelineState {
+        WeakRenderPipelineState(Arc::downgrade(&self.0))
+    }
+
     /// Its program, named without holding it: what a draw's encoder keeps the state's last
     /// settle under (`live_bind.rs`), which [`runs`](Self::runs) tells apart.
     pub(crate) fn program_name(&self) -> ProgramName {
@@ -2196,6 +2289,12 @@ impl GraphicsState {
     /// Whether `other` is this state: the same object, not an equal one.
     pub(crate) fn same(&self, other: &GraphicsState) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    /// The state's address, while the program holds it: what a reader of its draws is known by
+    /// across passes (`render/coverage.rs`).
+    pub(crate) fn address(&self) -> usize {
+        Arc::as_ptr(&self.0).addr()
     }
 
     /// Another reference to the state, which a command buffer holds it by
@@ -2571,13 +2670,14 @@ fn large_form(
 
 /// Whether `answers` holds an answer to every linked-use question a creation of `descriptor`
 /// asks (`GraphicsState::create_adding`): whether its vertex function returns a value where it
-/// does not rasterize, the stages using a direct argument where it supports indirect command
-/// buffers, and always the fragment's depth write and the unwritten fragment inputs.
+/// asks that (`unrasterized::asks`), the stages using a direct argument where it supports
+/// indirect command buffers, and always the fragment's depth write and the unwritten fragment
+/// inputs.
 fn answers_every_question(
     answers: &LinkedUseAnswers,
     descriptor: &RenderPipelineDescriptor,
 ) -> bool {
-    (descriptor.rasterization_enabled || answers.vertex_returns_value.is_some())
+    (!super::unrasterized::asks(descriptor) || answers.vertex_returns_value.is_some())
         && answers.fragment_writes_depth_unattached.is_some()
         && (!descriptor.support_indirect_command_buffers
             || answers.stages_using_direct_arguments.is_some())
@@ -3058,7 +3158,8 @@ impl RenderVariant {
     /// before. Under `PipelineWaitPolicy::Bounded` (the default) each making is handed to the
     /// device's pool, kept by the state's piece holds as a draw's is ([`pooled`](Self::pooled)),
     /// and the creation waits for them the policy's `pipeline_creation_wait` (4.5 s by default) at
-    /// most, one deadline for all of them, as Metal compiles in its creation: a driver's cold
+    /// most, one deadline for all of them, and within it for each settled piece to give back what
+    /// it took (its trail, `trails.rs`), as Metal compiles in its creation: a driver's cold
     /// compile (seconds on MoltenVK with a cold Metal compiler service) holds the thread creating
     /// the state, which a host may create inside a command buffer's encoding, no longer; a draw
     /// that finds the making in flight takes it (`render/pending.rs`), its command buffer waiting a
@@ -3164,6 +3265,17 @@ impl RenderVariant {
             if making.wait_until(deadline).is_none() {
                 device.shared().counts.creation_left_making();
             }
+        }
+        // And, as a command buffer's waiter waits (`trails.rs`), until each piece that settled its
+        // making gave back what it took, within the same bound: the trail it opened before the
+        // settle closes once the state keeps what it gave back. So no pool thread holds the device
+        // for a making this creation waited for once it returns, and a program that then lets go
+        // of the state and the device tears the device down on its own thread, before its last
+        // drop returns, its shader cache's writes done.
+        if !handed.is_empty() {
+            let trails = &device.shared().trails;
+            // At the bound the piece goes on and gives back as a draw's does.
+            let _ = trails.wait_below(trails.mark(), Some(deadline));
         }
         // The full join: every key begun here is settled before the creation returns.
         if pieces.is_empty() {
@@ -3448,11 +3560,13 @@ impl RenderVariant {
                 counts.creation_pipeline_made(crate::work_counts::Predicted::Render);
             }
             // Its callers take it from the making: from the settle, the batches that wait
-            // for it may run and complete while this piece still holds the variant and the
-            // pass, and the device with them, until it gave them back. A trail spans that
-            // (`trails.rs`).
+            // for it, and the creation that waits for it, may go on while this piece still holds
+            // the variant and the pass, and the device with them, until it gave them back. A
+            // trail spans that (`trails.rs`).
             let trail = variant.objects.device.shared().trails.open();
             drop(ticket.settle(made));
+            #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+            super::pool::held::settled();
             lease.give_back(
                 PieceHeld::Drawn {
                     _variant: variant,

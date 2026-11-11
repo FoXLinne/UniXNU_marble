@@ -21,6 +21,13 @@
 //! - **The caller's buffers** (`wrapped_buffer.rs`): buffers over `VkBuffer`s the caller made and
 //!   bound to its own memory (an imported dma-buf, for example), `Shared` at a host address the
 //!   caller gives, or `Private`.
+//! - **Shared events whose semaphore another API imports** (`exported_semaphore.rs`,
+//!   [`Device::new_exportable_shared_event`](super::Device::new_exportable_shared_event)): the
+//!   event's timeline semaphore exported as an opaque file descriptor, its counter the signal
+//!   index the hooks above name.
+//! - **Buffers whose memory another API imports** (`exported_memory.rs`,
+//!   [`Device::new_exportable_buffer`](super::Device::new_exportable_buffer)): an allocation of
+//!   its own, exported as an opaque file descriptor; the buffer outlives every import.
 //! - **The caller's binary semaphores** (`CommandBuffer::encode_wait_for_vk_semaphore` and
 //!   `encode_signal_vk_semaphore`): Vulkan has no query for a semaphore's type, so the runtime
 //!   refuses what it can tell is no binary semaphore of the device: a null handle, and its own
@@ -155,16 +162,25 @@ impl Texture {
     /// and of every view of it, made by the runtime or the caller's
     /// ([`Device::new_texture_with_vk_image`](super::Device::new_texture_with_vk_image)). `None`
     /// where the texels are a buffer's bytes the runtime copies into and out of an image of its
-    /// own (a texture buffer, a texture over a no-copy buffer's host pages, or a texture over
-    /// another buffer that does not alias it), or another image's texels it so copies (a view of
-    /// another component layout on a device whose views reinterpret none).
+    /// own (a texture buffer, a texture over a buffer whose image does not alias it, or a shadow
+    /// over a no-copy buffer's host pages, `shadowed-texture`), or another image's texels it so
+    /// copies (a view of another component layout on a device whose views reinterpret none).
     ///
     /// A texture over a buffer's bytes whose image aliases them gives a linear image of
     /// `VK_IMAGE_TILING_LINEAR`, bound to the buffer's memory, the runtime's own: such a texture's
     /// rows lie one after another and its image's subresource holds no byte but its texels. A
-    /// texture over a no-copy buffer's host pages (imported by their pointer or as dma-bufs) gives
-    /// none: an image bound to them would start `VK_IMAGE_LAYOUT_UNDEFINED`, whose first move
-    /// Vulkan lets read and write every byte bound to it (it is a shadow, `shadowed-texture`). A
+    /// texture over a no-copy buffer's host pages in place (where the device's in-place check
+    /// passed for the pages and the texture's accesses, under the default
+    /// `HostPageTexturePolicy::InPlace`) gives its image in place, bound where the texels lie: over
+    /// pages imported by their pointer, the driver's linear image where it lays the rows out at the
+    /// texture's pitch, else an image of `VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT` with
+    /// `DRM_FORMAT_MOD_LINEAR` at those pitches; over pages imported as dma-bufs, the latter. The
+    /// bytes between rows that lie apart are in its subresource. Over memory the runtime exports
+    /// (`MemoryExport`), either image names the memory's handle type
+    /// (`VkExternalMemoryImageCreateInfo`). A shadow over host pages (or over the device's pooled
+    /// memory at Metal's pitch, or over its exported memory) made before the device's check
+    /// answered gives none until it moves in place, at a commit once the check passed for it
+    /// (`texture/storage_form.rs`). A
     /// texture placed in a heap over host pages imported as dma-bufs (`HostMemory::with_dma_buf`)
     /// gives an image of `VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT` with `DRM_FORMAT_MOD_LINEAR`:
     /// ask its layout of its memory plane (`VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT`, not the color
@@ -196,15 +212,33 @@ impl Buffer {
     /// its address from its memory block's buffer), so the caller asks it for no device address.
     /// Once it was handed out, a shadowed texture over a `Private` buffer's bytes copies them in
     /// at each command buffer's first use, as one over the CPU's bytes does: the caller's own
-    /// work may write them.
+    /// work may write them. Handing it out first makes the work that still waits on its bytes
+    /// (a new `Private` buffer's zeros or bytes, a `Managed` buffer's upload, which the device's
+    /// next submission would make before its commands), that work alone, by a submission waited
+    /// for, as [`Texture::vk_image`](crate::Texture::vk_image) makes its texture's: so the
+    /// caller's work on the handle comes after it. Where the device reserved a queue for its
+    /// staging copies (a copy engine, or a queue of compute work beside its own), the
+    /// submission goes there and waits for no work of the program's;
+    /// elsewhere it goes to the device's first `VkQueue`, behind what was submitted there before.
+    /// Nothing is submitted where no such work waits. Where that submission fails (the device
+    /// lost, or out of memory), the work waits for the next. Once its device's recovery carried
+    /// the buffer to a new `VkDevice` (`Degradation::DeviceRecovered`), a handle answered before
+    /// stays the lost device's, kept with that device until the buffer goes, and a later call
+    /// answers the new one's.
     ///
     /// # Safety
     ///
     /// The `VkBuffer` stays the runtime's: the caller does not destroy it, and uses it only while
     /// the buffer lives, ordered against the runtime's work on it.
     pub unsafe fn vk_buffer(&self) -> (vk::Buffer, u64) {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
         self.hand_out();
-        self.at_for(0, ReadApart::VkBuffer)
+        let handle = self.at_for(0, ReadApart::VkBuffer);
+        // A failed submission gives the work back, to the device's next submission; the caller
+        // sees the failure at its next call (a lost device refuses it).
+        let _ = self.settle_first_work(handle.0);
+        handle
     }
 
     /// No Metal counterpart (an interop hook): where the buffer's byte 0 lies in Vulkan memory,
@@ -224,7 +258,8 @@ impl Buffer {
     /// a copied host buffer ([`HostBacking::Copied`](crate::HostBacking::Copied)), whose memory is
     /// a copy the runtime brings in step with the pages only at its own commits and completions;
     /// pages imported as dma-bufs (several allocations, sparsely bound); pages of Metal's private
-    /// option bit 24, whose import is of a read-only view that drops the GPU's writes; a detached
+    /// option bit 24, whose import is of a read-only view that drops the GPU's writes (on macOS;
+    /// elsewhere they are a copied host buffer); a detached
     /// buffer; and an import the device released while idle and could not make again (the device
     /// is then lost). As [`vk_buffer`](Self::vk_buffer) does, the call keeps an import the device
     /// would release while idle imported for good.
@@ -240,6 +275,8 @@ impl Buffer {
     /// [`SharedEvent::vk_wait`], [`SharedEvent::reserve_vk_signal`]) and against the host's
     /// writes to the pages, as for any use of the buffer.
     pub unsafe fn vk_host_memory(&self) -> Option<VkHostMemory> {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
         self.host_memory_at(0)
     }
 }
@@ -284,7 +321,12 @@ impl std::fmt::Debug for VkHostMemory {
 
 /// Either kind's timeline semaphore ([`Event::vk_semaphore`], [`SharedEvent::vk_semaphore`]).
 fn semaphore(event: EventRef<'_>) -> vk::Semaphore {
-    event.shared().semaphore()
+    loop {
+        // An event carried since this read it answers where it was carried (`EventRef::shared`).
+        if let Some(semaphore) = event.shared().hand_out_semaphore() {
+            return semaphore;
+        }
+    }
 }
 
 /// Either kind's answer of how the caller's submission waits for `value` ([`Event::vk_wait`],
@@ -329,7 +371,9 @@ impl Event {
     ///
     /// # Safety
     ///
-    /// The semaphore stays the runtime's: the caller never destroys it, never uses it as a
+    /// The semaphore stays the runtime's (once its device's recovery carried the event to a new
+    /// `VkDevice`, one answered before stays the lost device's until the event goes, and a later
+    /// call answers the new one's): the caller never destroys it, never uses it as a
     /// binary semaphore, signals it only as a reservation names (never from the host but as
     /// that call says), and uses it only while the event lives: it keeps the event (a clone of
     /// it) until every submission of its own that waits for or signals the semaphore completed.
@@ -378,7 +422,11 @@ impl Event {
     /// the semaphore to `counter`, in a submission that first waits for the semaphore to reach
     /// `after` where given, to a queue of the event's device, soon: every later signal of the
     /// event and every wait for a value it reaches waits for it, the runtime's command buffers'
-    /// on their queues included, and a reservation never signalled stalls them for good. Those
+    /// on their queues included, and a reservation never signalled stalls them for good. So
+    /// does a texture's `get_bytes` or `replace_region` behind such a wait on a device that
+    /// copies textures through a submission of its own on its first `VkQueue` (one with no
+    /// `VK_EXT_host_image_copy` and no staging queue, a depth texture's on one with no host
+    /// copies): a thread submits the signal before it makes such a call. Those
     /// command buffers may be submitted before the signal is, so the caller's submission depends
     /// on none of them: it waits for no such command buffer's completion, and goes to a queue no
     /// command queue submits to (an extra or reserved queue,
@@ -414,7 +462,9 @@ impl SharedEvent {
     ///
     /// # Safety
     ///
-    /// The semaphore stays the runtime's: the caller never destroys it, never uses it as a
+    /// The semaphore stays the runtime's (once its device's recovery carried the event to a new
+    /// `VkDevice`, one answered before stays the lost device's until the event goes, and a later
+    /// call answers the new one's): the caller never destroys it, never uses it as a
     /// binary semaphore, signals it only as a reservation names (never from the host but as
     /// that call says), and uses it only while the event lives: it keeps the event (a clone of
     /// it) until every submission of its own that waits for or signals the semaphore completed.
@@ -459,9 +509,23 @@ impl SharedEvent {
     ///
     /// For a [`VkEventSignal::Counter`] answer, the caller submits exactly one signal operation of
     /// the semaphore to `counter`, in a submission that first waits for the semaphore to reach
-    /// `after` where given, to a queue of the event's device, soon: every later signal of the
+    /// `after` where given, to a queue of the event's device (or of an API that imported the
+    /// semaphore of an event made exportable, [`export_semaphore_fd`](Self::export_semaphore_fd)),
+    /// soon: every later signal of the
     /// event and every wait for a value it reaches waits for it, the runtime's command buffers'
-    /// on their queues included, and a reservation never signalled stalls them for good. Where
+    /// on their queues included, and a reservation never signalled stalls them for good. A
+    /// command buffer's wait for such a value is held on the host, never on a `VkQueue`, but a
+    /// command buffer that signals the event after the reservation waits for the reserved signal
+    /// on its `VkQueue` before its own signal. So does a texture's `get_bytes` or
+    /// `replace_region` behind such a command buffer on a device that copies textures through a
+    /// submission of its own on its first `VkQueue` (one with no `VK_EXT_host_image_copy` and no
+    /// staging queue, a depth texture's on one with no host copies): a thread submits the signal
+    /// before it makes such a call. Those command buffers may be submitted before the signal is,
+    /// so the caller's submission depends on none of them: it waits for no such command buffer's
+    /// completion, and goes to a queue no command queue submits to (an extra or reserved queue,
+    /// [`DeviceHandles::extra_queues`](crate::DeviceHandles::extra_queues),
+    /// [`DeviceHandles::reserved_queues`](crate::DeviceHandles::reserved_queues)), or to a
+    /// command queue's `VkQueue` ([`CommandQueue::with_vk_queue`]) behind none of them. Where
     /// the submission fails, the caller signals the semaphore to `counter` from the host
     /// (`vkSignalSemaphore`) once the semaphore reached `after`, so the rest goes on. The
     /// semaphore's other contract is [`vk_semaphore`](Self::vk_semaphore)'s; the runtime holds
@@ -472,12 +536,18 @@ impl SharedEvent {
 }
 
 impl CommandQueue {
-    /// `f` with the `VkQueue` this queue submits to and its family's index, under the runtime's
-    /// lock of that `VkQueue`, which every submission to it takes: the caller's own submissions
-    /// and presents (`vkQueuePresentKHR`) go there, externally synchronized as Vulkan requires.
+    /// `f` with the `VkDevice` this queue's `VkQueue` belongs to (with its device-level commands),
+    /// that `VkQueue` and its family's index, under the runtime's lock of that `VkQueue`, which
+    /// every submission to it takes: the caller's own submissions and presents
+    /// (`vkQueuePresentKHR`) go there, externally synchronized as Vulkan requires.
     /// From the first call on the queue keeps that `VkQueue` for its life: where the device
     /// shares `VkQueue`s among its command queues (`QueueSharingPolicy::Adaptive`), it moves no
-    /// more.
+    /// more. After a recovery (`Degradation::DeviceRecovered`) the queue lends the new
+    /// `VkDevice`'s `VkQueue`, and `f` gets the new `VkDevice` with it, read under the same lock:
+    /// a caller whose objects (a command pool, a fence) were made on another `VkDevice` than the
+    /// one `f` gets makes them again on it before it submits there. The handles
+    /// [`Device::raw`](crate::Device::raw) answered before the recovery name the lost one until a
+    /// later `raw` call answers the new one's.
     /// On MoltenVK, where the runtime relays the driver's command-buffer failures, it submits no
     /// work with a fence of its own after `f` under the same lock, so a failure of the caller's
     /// submissions stays the caller's. There the runtime's frees of its memory wait for the work
@@ -487,30 +557,34 @@ impl CommandQueue {
     ///
     /// # Safety
     ///
-    /// The caller does not keep the handle past `f`, and `f` makes no call into the runtime and
+    /// The caller does not keep the handles past `f`, and `f` makes no call into the runtime and
     /// waits for nothing that needs a later submission of the runtime's (the scheduler submits
     /// only under this lock).
-    pub unsafe fn with_vk_queue<R>(&self, f: impl FnOnce(vk::Queue, u32) -> R) -> R {
-        let shared = self.device().shared();
+    pub unsafe fn with_vk_queue<R>(&self, f: impl FnOnce(&ash::Device, vk::Queue, u32) -> R) -> R {
+        // The queue's place on the generation that serves, which keeps its `VkQueue`
+        // (`queue.rs`); a recovery that retires it has the queue take a new place, of its own.
+        let place = self.serving();
+        let device = place.device();
+        let shared = device.shared();
         // The caller's own submissions are GPU work of the program's: textures' host shadows are
         // read against the device's count of it (`texture/host_shadow.rs`).
         shared.program_gave_gpu_work();
         // The copies queued for the staging queue are made first, waited for: the caller's
         // submissions may read what they wrote (`texture/staging_copy.rs`). A failure there is a
         // lost device, which the caller's own submissions then meet.
-        let _ = self.device().flush_staging_waited();
+        let _ = device.flush_staging_waited();
         // The queue keeps this `VkQueue` for good from here on, so the caller's submissions there
         // stay in its order (`queue_share.rs`).
-        let vk_queue = self.pinned_vk_queue();
+        let vk_queue = place.pinned_vk_queue();
         let family = shared.queue_family_of(vk_queue);
         // Where the queue's failures are relayed, a mark after `f`'s submissions keeps a failure
         // of theirs the caller's (`device/relay.rs`); where freed memory waits for the work in
         // flight, it waits for that mark (`freed_memory.rs`).
         let used = shared.use_queue(vk_queue, By::Program, Uses::Unknown, |queue| {
-            f(queue, family)
+            f(shared.vk(), queue, family)
         });
         if let Some(parking) = shared.parking.get() {
-            parking.watch(self.device());
+            parking.watch(device);
         }
         used
     }

@@ -11,8 +11,8 @@
 //! rule matched all 432 probed `sample_compare` rows (depths 0, 0.5 and 1, four functions, masks 0
 //! to 3, nine references among them NaN and the infinities), and the slot, constexpr and gather
 //! rows. Each draw here is checked against it. The comparisons are the device's, which announce
-//! `restricted-depth-range` only on a device whose depth images may narrow a value outside
-//! `[0, 1]` (`degrade_notices::clamps_depth_uploads`).
+//! `restricted-depth-range` only on a device whose depth images take no depth outside `[0, 1]`
+//! (`degrade_notices::clamps_depth_uploads`: without `VK_EXT_depth_range_unrestricted`).
 
 use super::degrade_notices::{clamps_depth_uploads, counts};
 use super::{
@@ -182,8 +182,8 @@ impl Lane {
 /// `[[sampler(2)]]` under `Less`, `Equal` and `GreaterEqual`, and through a constexpr `Less`
 /// sampler, under masks that clamp the sampler's comparisons and masks that clamp others: each
 /// `sample_compare` and `gather_compare` answers as Metal's rule says (the module docs), and
-/// `restricted-depth-range` is announced exactly where the device's depth images may narrow a
-/// value outside `[0, 1]`.
+/// `restricted-depth-range` is announced exactly where the device's depth images take no value
+/// outside `[0, 1]`.
 #[test]
 fn the_depth_compare_clamp_mask_clamps_metal_s_references() {
     let messages = Messages::default();

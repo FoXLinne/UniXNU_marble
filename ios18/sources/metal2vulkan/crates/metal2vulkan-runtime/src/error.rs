@@ -446,7 +446,8 @@ impl Unproven {
 /// guest as Metal does makes the `NSError` of `domain`, `code` and a `userInfo` holding
 /// `NSLocalizedDescription` = `localized_description`, its only key where Metal's holds no
 /// other (every refusal the runtime answers so: [`Problem::IndirectCommandsDirectArgument`],
-/// [`Problem::UnrasterizedVertexReturn`], [`Problem::DepthWrittenWithoutAttachment`],
+/// [`Problem::UnrasterizedVertexReturn`], [`Problem::RasterizedVoidVertex`],
+/// [`Problem::DepthWrittenWithoutAttachment`],
 /// [`Problem::UnwrittenFragmentInputs`], [`Problem::RasterSampleCount`], and
 /// [`Problem::BinaryFunctions`] with [`BinaryFunctionProblem::NotPrecompiled`]).
 #[non_exhaustive]
@@ -559,13 +560,15 @@ pub enum Problem {
     DmaBuf,
     /// Guest RAM, or a run resolver's answer, that breaks its runtime extension's contract
     /// (`HostRam::new`, `Device::use_host_ram`, `HostMemory::with_runs`,
-    /// `BlitCommandEncoder::copy_from_host_ram` and `copy_to_host_ram`; Metal has none). For the
-    /// RAM: no range, or a range that is empty, starts or ends off the host page, runs past the
-    /// address space's end or overlaps another (of the same RAM, or of another RAM the device
-    /// uses). For an answer: runs that are not whole host pages or do not cover exactly the pages
-    /// asked for. For a copy: a RAM the device does not use, a run that is empty, starts or ends
-    /// off 4 KiB or lies outside the RAM's ranges, or bytes of the buffer that start off a 4-byte
-    /// word of its memory.
+    /// `BlitCommandEncoder::copy_from_host_ram`, `copy_to_host_ram`, `copy_runs_from_host_ram`
+    /// and `copy_runs_to_host_ram`; Metal has none). For the RAM: no range, or a range that is
+    /// empty, starts or ends off the host page, runs past the address space's end or overlaps
+    /// another (of the same RAM, or of another RAM the device uses). For an answer: runs that are
+    /// not whole host pages or do not cover exactly the pages asked for. For a copy: a RAM the
+    /// device does not use, a run that is empty, starts off a 4-byte word or lies outside the
+    /// RAM's ranges, of runs one after another bytes of the buffer that start off a 4-byte word
+    /// of its memory, or, of a copy by regions, a buffer over host pages the copy's bytes
+    /// overlap.
     ///
     /// Basis: ours (a runtime extension's own contract: Metal imports no guest RAM).
     HostRam,
@@ -582,6 +585,16 @@ pub enum Problem {
     ///
     /// Basis: ours (a runtime extension: Metal has no binary semaphores).
     Semaphore(SemaphoreProblem),
+    /// The memory of a buffer, or the semaphore of a shared event, not made exportable as asked
+    /// (`Buffer::export_memory_fd` of a buffer not made exportable as an opaque file descriptor,
+    /// `Buffer::export_memory_dma_buf` of one not made exportable as a dma-buf,
+    /// `Buffer::external_write_done` of one made exportable as neither, and
+    /// `SharedEvent::export_semaphore_fd` of an event `Device::new_exportable_shared_event` did
+    /// not make): no other API imports it so.
+    ///
+    /// Basis: ours (a runtime extension: Metal exports no buffer's memory and no event's
+    /// semaphore).
+    NotExportable,
     /// No pipeline state is set (plain Metal faults at a compute dispatch without one).
     ///
     /// Basis: unknown (plain Metal is held to fault at a dispatch with no pipeline state, on no
@@ -681,6 +694,25 @@ pub enum Problem {
     ///
     /// Basis: ours (this crate's paired slices: Metal's calls take a count).
     LengthMismatch,
+    /// A buffer descriptor that declares the bytes between a texture's rows unobserved
+    /// (`BufferDescriptor::padding_unobserved`) with `NoCopy` contents: the declaration is for a
+    /// buffer of the runtime's own memory, whose every reader the caller owns, never the caller's
+    /// pages, which others may read.
+    ///
+    /// Basis: ours (a runtime extension: Metal has no such declaration).
+    PaddingUnobservedNoCopy,
+    /// A buffer descriptor that lays a byte of the buffer on a multiple of 256 bytes of its memory
+    /// (`BufferDescriptor::aligned_byte`) with `NoCopy` contents: the placement is of the runtime's
+    /// own memory, never the caller's pages, whose first byte is where the caller put it.
+    ///
+    /// Basis: ours (a runtime extension: Metal places no buffer's byte).
+    AlignedByteNoCopy,
+    /// A buffer descriptor that makes the buffer's memory exportable
+    /// (`BufferDescriptor::exported_as`) with `NoCopy` contents: the export is of the runtime's own
+    /// memory, never the caller's pages, which the caller can hand to another API itself.
+    ///
+    /// Basis: ours (a runtime extension: Metal exports no buffer's memory).
+    ExportedNoCopy,
     /// A texture buffer's fill given a pattern of more than 32752 bytes
     /// (`fillTexture:...:bytes:length:`): Metal's process ends in the call, in the blit's
     /// dispatch, whatever the region, of no texels or past the buffer too (an Apple M3 Max under
@@ -915,8 +947,9 @@ pub enum Problem {
     ///
     /// Basis: ours (a runtime extension: Metal wraps no Vulkan buffer).
     WrappedBuffer(WrappedBufferProblem),
-    /// A pipeline's `requiredThreadsPerThreadgroup` that Metal refuses at creation, or a dispatch
-    /// whose threadgroup size is not it.
+    /// A pipeline's `requiredThreadsPerThreadgroup` that Metal refuses at creation. A dispatch
+    /// whose threadgroup size is not it runs at the size it gives, as plain Metal runs it (API
+    /// validation stops it).
     ///
     /// Basis: delegated(RequiredThreadsProblem).
     RequiredThreads(RequiredThreadsProblem),
@@ -969,6 +1002,16 @@ pub enum Problem {
     ///
     /// Basis: metal-measured (an M4, macOS 27.0.1: plain Metal answers nil with an NSError).
     UnrasterizedVertexReturn,
+    /// `new_render_pipeline_state` of a descriptor with rasterization enabled whose vertex
+    /// function's return type is `void`, with or without a fragment function, outside OpenGL mode
+    /// (`PrivateRenderState::open_gl_mode_enabled`, with which Metal makes it, rasterizing
+    /// nothing): plain Metal answers nil with an `NSError` ([`Error::MetalError`]) (on an M3 Max
+    /// under macOS 27.0.1). Its error: code 3, `localizedDescription` "RasterizationEnabled is
+    /// true but the vertex shader's return type is void", `userInfo` holding that alone, and the
+    /// domain of Metal's GPU driver class, as [`Problem::IndirectCommandsDirectArgument`]'s.
+    ///
+    /// Basis: metal-measured (an M3 Max, macOS 27.0.1: plain Metal answers nil with an NSError).
+    RasterizedVoidVertex,
     /// `new_render_pipeline_state` (a render or mesh state) of a descriptor with
     /// `supportIndirectCommandBuffers` whose function of `stage`, the first in the order Metal
     /// names them that uses a direct texture or sampler once linked, uses one only by a rule the
@@ -1002,7 +1045,9 @@ pub enum Problem {
         refusal: Box<CompileError>,
     },
     /// `new_render_pipeline_state` of a descriptor without a depth attachment whose fragment
-    /// function writes depth (a `[[depth(...)]]` output): plain Metal answers nil with an
+    /// function writes depth (a `[[depth(...)]]` output), outside OpenGL mode
+    /// (`PrivateRenderState::open_gl_mode_enabled`, with which Metal makes it, the depth going
+    /// nowhere; on an M3 Max under macOS 27.0.1): plain Metal answers nil with an
     /// `NSError` ([`Error::MetalError`]) with or without rasterization, a color attachment or
     /// `supportIndirectCommandBuffers`, before the indirect command buffers' refusal (on an M4
     /// under macOS 27.0.1); `new_mesh_render_pipeline_state` alike, first. Its error: code 3,
@@ -1399,14 +1444,18 @@ pub enum RuntimeGap {
     ExtensionEnable(VkExtension),
     /// Render pipelines, passes and draws.
     Render,
-    /// A texture over a buffer whose texels run past the buffer's length, which Metal makes over
-    /// bytes its buffer's allocation has past the length (a 2D texture, a texture buffer and a 2D
-    /// array alike, up to the allocation, past which Metal answers nil:
-    /// [`Problem::BufferTexture`]'s `PastAllocation`), or a texture over a plane of a surface
-    /// with planes whose rows or GPU texels run past the buffer standing for the surface: the
-    /// runtime's buffers have no bytes there. Metal lays those in no one place
-    /// (`metal2vulkan-conformance/probes/surface_texture_envelope.m`, an Apple M3 Max under
-    /// macOS 27.0.1): its blits read zeros past the surface, its kernels zeros and, 32 KiB on, the
+    /// A texture over a plane of a surface with planes whose rows or GPU texels run past the
+    /// buffer standing for the surface, which Metal makes, of a shape whose texels another form
+    /// holds than a shadow's copies of its rows: a two-plane YCbCr texture's codes, a two-plane
+    /// extended-range one's, a 4:2:2 one's pairs, a depth or stencil plane's elements, a BC
+    /// texture's blocks, and a rotated texture's stored frame. A colour plane is made, its
+    /// texels past the surface in a tail of its own
+    /// ([`Buffer::new_texture_with_iosurface_plane`](crate::Buffer::new_texture_with_iosurface_plane),
+    /// announced as `Degradation::SurfaceTexelsTail`), as a 2D texture, an array or a texture
+    /// buffer over a buffer is made past its length
+    /// ([`Buffer::new_texture`](crate::Buffer::new_texture)). Metal lays a plane's in no one place
+    /// (`metal2vulkan-conformance/probes/surface_texture_envelope.m`, an Apple M3 Max under macOS
+    /// 27.0.1): its blits read zeros past the surface, its kernels zeros and, 32 KiB on, the
     /// surface's first bytes again, its `getBytes` other memory, and its blits and
     /// `replaceRegion` write the surface's bytes alone. The x86 Macs' are not measured, as a read
     /// past a surface can fault their GPUs.
@@ -1436,29 +1485,51 @@ pub enum RuntimeGap {
     /// options whatever its descriptor names, and a plane its descriptor's other modes.
     MemorylessSurfacePlane,
     /// A texture over a plane of an IOSurface with planes (`Buffer::new_texture_with_iosurface_plane`,
-    /// the stand-in for `newTextureWithDescriptor:iosurface:plane:`) that Metal makes and whose
-    /// texels it lays out no one way: rows wider than the plane's `bytesPerRow`, more than one mip
-    /// level, a 2D array of more than one slice, a 3D, cube or multisample texture or any other
-    /// type but 2D, a texture buffer, 1D or a 2D array of one slice, a 1D texture wider than the
-    /// plane's row, a BC texture of another type than 2D or wider than the plane's rows, and a
-    /// texture buffer or BC texture over a plane at an offset or `bytesPerRow` off 16 bytes.
+    /// the stand-in for `newTextureWithDescriptor:iosurface:plane:`) that Metal makes, whose
+    /// texels it lays out no one way, and that the runtime holds in no form: a 2D texture whose
+    /// rows are wider than the plane's `bytesPerRow`, or a 1D texture wider than the row, of a
+    /// format but a colour one or over a plane at an offset or `bytesPerRow` off 16 bytes; a 2D
+    /// texture of more than one mip level, a 3D or a 2D multisample texture of a format but a
+    /// colour one; a 2D array of more than one slice of a format but a colour one, or over a
+    /// plane at an offset or `bytesPerRow` off 16 bytes; any other type but 2D, 3D, 2D
+    /// multisample, 2D array, texture buffer and 1D; and a BC texture of another type than 2D,
+    /// wider than the plane's rows, of 16-byte blocks (BC2, BC3, BC5, BC6H, BC7) over a plane at
+    /// an offset or `bytesPerRow` off 16 bytes, or of 8-byte blocks (BC1, BC4) at an offset or
+    /// `bytesPerRow` off 8 bytes or under 16 bytes a row. A BC1 or BC4 texture at an offset or
+    /// `bytesPerRow` off 16 that 8 divides is made at the plane's own offset and pitch on every
+    /// path, as the x86 Macs' blits and samples take it (the M3 Max answers nil). A
+    /// colour 2D texture whose rows are wider than the plane's `bytesPerRow` and a colour 1D
+    /// texture wider than the row, over a plane at multiples of 16, are made with their rows
+    /// `bytesPerRow` apart on every path, as the M3 Max lays them out, a 2D texture's rows
+    /// overlapping (announced as `Degradation::CollidingSurfaceRowWrites`). A colour 2D texture
+    /// of several levels, a 3D and a 2D multisample one are made in memory of their own, their
+    /// texels in no one place on the M3 Max, their first level and slice among them (announced
+    /// as `Degradation::SurfaceTexelsApart`); and a colour 2D array of more than one slice keeps
+    /// its first slice over the plane and its others in a tail of its own (announced as
+    /// `Degradation::SurfaceTexelsTail`). A cube or cube array there is
+    /// Metal's own refusal (`Invalid`: plain Metal asserts "carriesComplexTexture || numFaces ==
+    /// 1", the API validation layer off), and a texture buffer at an offset or `bytesPerRow` off
+    /// 16 is made, its functions reading from the offset rounded down to 16 and its CPU calls
+    /// from the offset, as the M3 Max's do.
     ///
     /// Measured (`metal2vulkan-conformance/probes/surface_texture_envelope.m`, each texel's bytes
     /// tagged, read by blit, kernel and `getBytes` and written by blit and `replaceRegion`, on an
     /// AMD Radeon Pro 5300M and an Intel UHD 630 under macOS 26.7.1 and an Apple M3 Max under
-    /// 27.0.1; every one of these made on all three, but the M3's cube, at which its own assertion
-    /// ends the process): no layout holds them. Rows wider than the pitch overlap the next row on
-    /// the M3's GPU and CPU alike, while the UHD 630's GPU keeps no texel past the pitch and the
-    /// 5300M's blit into the texture changes no byte of the surface and its kernels read the rows
-    /// at another pitch. Levels past 0 lie at the plane's base on the M3's CPU and elsewhere on its
-    /// GPU, and in no byte of the surface on the two x86 GPUs (zeros, or other memory), while
-    /// their CPU lays them after level 0 or reads zeros. A second slice of a 2D array or 3D
-    /// texture lies one image on for the UHD 630 inside the plane and nowhere past it, at the
-    /// plane's base for the 5300M's and the M3's blits and CPU, and in zeros or one image on for
-    /// their kernels. A 1D texture wider than the row: the 5300M's blit writes its first row's
+    /// 27.0.1; every one of these made on all three, but the M3's cube and cube array, at which
+    /// its own assertion ends the process, and its BC textures, for which it answers nil): no
+    /// layout holds them. Rows wider than the pitch overlap the next row on the M3's GPU and CPU
+    /// alike (the runtime's layout, over a plane at multiples of 16), while the UHD 630's GPU
+    /// keeps no texel past the pitch and the 5300M's blit into the texture changes no byte of the
+    /// surface and its kernels read the rows at another pitch. Levels past 0 lie at the plane's
+    /// base on the M3's CPU and elsewhere on its GPU, and in no byte of the surface on the two
+    /// x86 GPUs (zeros, or other memory), while their CPU lays them after level 0 or reads zeros.
+    /// A second slice of a 2D array or 3D texture lies one image on for the UHD 630 inside the
+    /// plane and nowhere past it, at the plane's base for the 5300M's and the M3's blits and CPU,
+    /// and in zeros or one image on for their kernels. A 1D texture wider than the row: the 5300M's blit writes its first row's
     /// worth alone, and the UHD 630's writes the rest 8 KiB on. A multisample one reaches past
     /// the plane's bytes and is not measured on the x86 GPUs. The offsets off 16 are not measured
-    /// for those formats.
+    /// for those formats, nor for a BC texture of 16-byte blocks: only BC1 was, at offset 8 and at
+    /// 264 bytes a row (`bgraat8.bc1`, `bgrarow264.bc1`).
     SurfacePlaneShape,
     /// A command of an indirect command buffer at or past its size
     /// (`indirectComputeCommandAtIndex:`, `indirectRenderCommandAtIndex:`). Plain Metal checks no
@@ -1514,37 +1585,6 @@ pub enum RuntimeGap {
         /// The range's offset in the buffer.
         offset: u64,
     },
-    /// An executed indirect command's kernel or vertex buffer at `index` set without an attribute
-    /// stride (the plain setter, or the stride form at `MTLAttributeStrideStatic`), on an indirect
-    /// command buffer whose descriptor supports dynamic attribute strides, where its pipeline
-    /// state's `[[stage_in]]` or vertex-descriptor layout of `MTLBufferLayoutStrideDynamic` reads
-    /// the stride. Plain Metal takes the command, and its API validation layer stops it no more
-    /// than plain Metal does: the setters, the execution and the commit all return and the command
-    /// buffer completes, nothing faulting (an M3 Max under macOS 27.0.1, the layer off, on a buffer
-    /// of `ConcurrentDispatch` whose command bound its stage-in buffer with the plain setter and
-    /// with `MTLAttributeStrideStatic`).
-    ///
-    /// On that device the fetch reads the buffer at a stride of 2^32 - 1: the record's stride word
-    /// is 32 bits, and `MTLAttributeStrideStatic` truncates into it. Measured on an Apple M3 Max
-    /// under macOS 27.0.1 with markers planted at byte 2^32 - 1 and at byte 2^32 of a buffer of
-    /// 4 GiB + 256 bytes: element 1 read the byte 2^32 - 1 marker, never the byte 2^32 one, never
-    /// zero and never element 0's or element 1's own bytes, from a compute command and from a
-    /// render command alike (three runs each with the layer off, one with it on); the stride form
-    /// at `attributeStride:0xFFFFFFFF` read the same, while strides of 4 and 8 read element 1 of
-    /// those strides. Other devices and releases are unmeasured. The runtime refuses rather than
-    /// place a displacement it cannot: 2^32 - 1 does not fit the 32-bit fetch
-    /// [`StageInFetchPast4GiB`](Self::StageInFetchPast4GiB) and
-    /// [`VertexFetchPast4GiB`](Self::VertexFetchPast4GiB) name, and it holds no bytes 4 GiB on.
-    ///
-    /// A buffer whose descriptor does *not* support dynamic attribute strides is not this and is
-    /// taken: its records hold no stride word, so Metal's fetch reads stride 0, which the runtime
-    /// gives exactly (the same device, the plain setter reading element 1 at stride 0 in five runs
-    /// of five). Nor is the encoder's *own* dispatch or draw, which reads a buffer bound without a
-    /// stride at stride 0, as plain Metal reads it (`render/vertex_strides.rs`).
-    IndirectCommandUnstridedBuffer {
-        /// The buffer's index.
-        index: u32,
-    },
     /// A render pass whose custom sample positions Vulkan takes only through what the runtime
     /// does not build: a depth/stencil attachment of a caller's image not made with
     /// `VK_IMAGE_CREATE_SAMPLE_LOCATIONS_COMPATIBLE_DEPTH_BIT_EXT`, of a format the device does
@@ -1562,6 +1602,32 @@ pub enum RuntimeGap {
     /// such a sample at custom positions is not measured. The same draw at the device's own
     /// positions runs.
     InterpolateAtSampleWithPositions,
+    /// A buffer whose memory another API imports (`Device::new_exportable_buffer`, a runtime
+    /// extension: Metal has none) on a device that does not enable `VK_KHR_external_memory_fd`
+    /// (the runtime enables it wherever the device lists it; an adopted device's consumer
+    /// enables it or not), or that exports no buffer's memory as an opaque file descriptor
+    /// (`vkGetPhysicalDeviceExternalBufferProperties` answers
+    /// `VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT` not exportable for the runtime's buffer
+    /// usage). Every other buffer is made as before.
+    ExportableMemory,
+    /// A buffer whose memory another API imports as a dma-buf (`MemoryExport::DmaBuf`, a runtime
+    /// extension: Metal has none) on a device that does not enable `VK_KHR_external_memory_fd`,
+    /// `VK_EXT_external_memory_dma_buf` and `VK_EXT_queue_family_foreign`, whose queue family the
+    /// acquire of the other API's writes names (the runtime enables them wherever the device lists
+    /// them; an adopted device's consumer enables them or not), or that exports no buffer's memory
+    /// as a dma-buf (`vkGetPhysicalDeviceExternalBufferProperties` answers
+    /// `VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT` not exportable for the runtime's buffer
+    /// usage). Every other buffer is made as before.
+    DmaBufExport,
+    /// A shared event whose timeline semaphore another API imports
+    /// (`Device::new_exportable_shared_event`, a runtime extension: Metal has none) on a device
+    /// that does not enable `VK_KHR_external_semaphore_fd` (the runtime enables it wherever the
+    /// device lists it; an adopted device's consumer enables it or not), or that exports no
+    /// timeline semaphore as an opaque file descriptor
+    /// (`vkGetPhysicalDeviceExternalSemaphoreProperties` answers
+    /// `VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT` not exportable for a timeline
+    /// semaphore). Every other event is made as before.
+    ExportableSemaphore,
     /// A shared event handle opened on a device other than its event's: another physical
     /// device's, or one made with other options or adopted (equal options make one device, as
     /// Metal's calls do). Vulkan semaphores do not cross devices unless exported, which the runtime
@@ -1711,9 +1777,10 @@ pub enum RuntimeGap {
     EmptyFillPattern,
     /// `Buffer::rebind_bytes_no_copy` of a no-copy buffer whose GPU writes are dropped (Metal's
     /// private option bit 24) with a live texture over its bytes, given memory at another offset
-    /// in its page than the old: the texture's copies and texel views are planned at the bytes'
-    /// offset in their `VkBuffer` (`rebind.rs`), and such a buffer is never a copy laid out there,
-    /// as any other buffer's moved bytes are. Also a rebind of a no-copy buffer or heap with a
+    /// in its page than the old, on macOS: the texture's copies and texel views are planned at the
+    /// bytes' offset in their `VkBuffer` (`rebind.rs`), and such a buffer imports a read-only view
+    /// of its pages there, never a copy laid out there, as any other buffer's moved bytes are
+    /// (elsewhere such a buffer is a copy, laid out there). Also a rebind of a no-copy buffer or heap with a
     /// texture whose image is bound to its bytes, where the device makes no such image over the
     /// new memory: over memory it imports by its pointer, one that takes the import's type and
     /// lies where the texture's texels do, its rows (and slices) as far apart as the old image's,
@@ -1871,7 +1938,11 @@ pub enum RuntimeGap {
     /// `Texture::replace_region` or `get_bytes` of a texture whose bytes (a no-copy buffer's or
     /// heap's) are detached (`detach_backing`). Metal's CPU access reaches the pages the texture
     /// took as it was made (a heap's texture, the pages the heap was made over), measured on an
-    /// M4 under macOS 27.0.1; the runtime keeps no pages of detached bytes.
+    /// M4 under macOS 27.0.1; the runtime keeps no pages of detached bytes. A tiled texture of more
+    /// than one level (`Buffer::new_tiled_texture`) keeps its own image meanwhile: only a
+    /// `replace_region` of its first level is refused, whose `get_bytes` reads the bytes' last
+    /// texels, which the detach loaded into the image, and its other levels are read and written
+    /// there.
     DetachedTexelAccess,
     /// A use of a texture of a depth or stencil format (`Depth16Unorm`, `Depth32Float`,
     /// `Depth32Float_Stencil8`, `Stencil8`, `X32_Stencil8`) over a plane of a surface with planes
@@ -1942,6 +2013,31 @@ pub enum RuntimeGap {
     /// bytes it may reach through a root table), and a resolve target set on a texture a draw of
     /// the pass read.
     ColorAttachmentGroups,
+    /// An object made before its device's recovery from the loss of its `VkDevice` that the
+    /// recovery did not carry to the new one (the runtime made a new `VkDevice` behind the device,
+    /// announced as `Degradation::DeviceRecovered`; `Device::recover_for_test` runs the same
+    /// recovery). The recovery carries the events, the uses of guest RAM, the no-copy buffers
+    /// (made again over the same pages), the `Private` buffers (their contents lost: they read
+    /// zero) and the buffers in the runtime's own pages (their contents and `contents` pointer
+    /// kept): a long host-visible buffer's fresh pages, and the blocks of pages the `Shared` and
+    /// `Managed` buffers lie in where the device's checks found a held host-page import costs its
+    /// submissions nothing and textures over such pages take what they take over its own memory.
+    /// Every other object's Vulkan objects are the lost `VkDevice`'s, which serves nothing more:
+    /// a pooled `Shared` or `Managed` buffer in memory the device allocated, whose `contents`
+    /// pointer is its lost memory's mapping, a detached no-copy buffer, a heap and its resources,
+    /// a texture, a pipeline state, a library, a sampler state, an indirect command buffer, a
+    /// buffer over the caller's `VkBuffer` or exportable memory, and an event made exportable. A
+    /// call that meets such an object with the new generation (an encoder's bind, a pipeline's
+    /// making from its functions, a buffer or texture placed in its heap) or that needs its own
+    /// lost `VkDevice` (its placements, its imports again, its event signals) is refused, where
+    /// Metal's object goes on; the recovery's notice counts the buffers and events it left. The
+    /// same object made again on the device serves; a command buffer made before the recovery
+    /// fails as its victim (`GpuRecoveryVictim`).
+    MadeBeforeRecovery,
+    /// `Device::recover_for_test` on a device the consumer made (`Device::from_raw`): the runtime
+    /// cannot make a new `VkDevice` of the consumer's, so it recovers none, and the device is
+    /// left as it was. A real loss of such a device answers as a lost device does.
+    AdoptedDeviceRecovery,
 }
 
 /// The kind of memory that ran out.

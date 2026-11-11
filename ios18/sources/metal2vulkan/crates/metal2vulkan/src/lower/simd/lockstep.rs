@@ -43,13 +43,22 @@
 //! threads and a simdgroup's 32 put on the values (two threads of one simdgroup are 1 to 31
 //! apart), or through a loop counter that starts there and steps by more than the starts differ
 //! (every value is the start plus a multiple of the step, so two threads' values differ at
-//! whatever iterations); a counter whose back edge is never taken is its start. A component of
+//! whatever iterations); a counter whose back edge is never taken is its start. A cell
+//! `s + p * n` differs between threads by 1 or more wherever their `p`s do, at whatever
+//! iterations (`out[(y * w + x) * n + s]` over `s < n`): `s` a loop counter below `n` (it starts
+//! below `n`, as the bounds or a branch before the loop show, and the exit test lets a next value
+//! through only below `n`, or stepping by one, unequal to it), `n` one value in every thread of
+//! the simdgroup (uniform, or a texture's size query, a sample count being at most 64) and `p` an
+//! index as above; settled across iterations where `p * n` is. A component of
 //! `thread_position_in_grid` or `thread_position_in_threadgroup` does not differ between every two
 //! threads (two threads of a simdgroup share its `x` in a threadgroup narrower than 32), but it is
 //! the simdgroup's threadgroup origin plus a position below 1024: two threads' are equal or 1 to
 //! 1023 apart, so through the same steps it clears a pair whose bytes are apart both at one anchor
 //! and at anchors that far apart (`out[12 * gid + k]` against `out[12 * gid + j]`, `j != k`), but
-//! never by itself makes one thread at most run an access. Two commutative updates of one class whose
+//! never by itself makes one thread at most run an access. Where each simdgroup lies within one
+//! row of its threadgroup (decided apart, [`Lockstep::rows`]), two of its threads' `x` differ by 1
+//! to 31 and their `y` and `z` are equal, so `y * w + x` differs as `x` does. Two commutative
+//! updates of one class whose
 //! results are unused never conflict, and neither do two stores of one value every thread of the
 //! simdgroup stores alike (to locations equal or apart by their alignment), nor such a store at
 //! one address for the whole simdgroup and a read that follows it in every thread (the read
@@ -692,7 +701,7 @@ pub fn order(mut e: Entry, p: &DeviceProfile, m: &mut Meter) -> Result<Entry, Er
     let decided = decide(&e, (device, tangle), m);
     let spent = usize::try_from(m.ledger().saturating_sub(before)).unwrap_or(usize::MAX);
     m.release(spent);
-    let Some(d) = decided? else {
+    let Some((d, rows)) = decided? else {
         return Ok(e);
     };
     let barriers = if d.inserts.is_empty() {
@@ -707,18 +716,20 @@ pub fn order(mut e: Entry, p: &DeviceProfile, m: &mut Meter) -> Result<Entry, Er
         barriers,
         emulated: d.emulated,
         device: d.device,
+        rows,
     };
     Ok(e)
 }
 
-/// The barriers kernel `e` needs, or `None` when it needs none; `device`: the device runs a
-/// simdgroup in lockstep; `tangle`: a subgroup barrier in divergent flow orders the threads that
-/// run it together (maximal reconvergence on 32-lane subgroups).
+/// The barriers kernel `e` needs, or `None` when it needs none, and whether none is needed where
+/// each simdgroup lies within one row of its threadgroup ([`Lockstep::rows`]); `device`: the
+/// device runs a simdgroup in lockstep; `tangle`: a subgroup barrier in divergent flow orders the
+/// threads that run it together (maximal reconvergence on 32-lane subgroups).
 fn decide(
     e: &Entry,
     (device, tangle): (bool, bool),
     m: &mut Meter,
-) -> Result<Option<Decision>, Error> {
+) -> Result<Option<(Decision, bool)>, Error> {
     let Some(body) = e.module.func(e.func).and_then(|f| f.body.as_ref()) else {
         return Ok(None);
     };
@@ -738,7 +749,7 @@ fn decide(
     let u = Uniformity::under_barriers(e, body, Among::Workgroup, &loops, m)?;
     let us = Uniformity::under_barriers(e, body, Among::Simdgroup, &loops, m)?;
     let pdom = PostDomTree::compute(&e.cfg, m)?;
-    let mut af = AddrFacts::new(e, body, &layouts, &us, m)?;
+    let mut af = AddrFacts::new(e, body, &layouts, &us, false, m)?;
     let mut wants: BTreeSet<Want> = BTreeSet::new();
     let mut flags = MemFlags::default();
     for (space, acc) in &spaces {
@@ -758,10 +769,39 @@ fn decide(
     if wants.is_empty() {
         return Ok(None);
     }
+    // The same pairs where each simdgroup lies within one row of its threadgroup, so that two of
+    // its threads' positions differ in `x` and are equal in `y` and `z` (`AddrFacts::new`'s
+    // `rows`): where none conflicts, a
+    // dispatch of such threadgroups needs none of the barriers. Only a kernel whose subgroup
+    // barriers keep a 32-lane tier asks (`tangle`, without the device's own lockstep).
+    drop(af);
+    let mut rows = tangle && !device;
+    if rows {
+        let mut rows_af = AddrFacts::new(e, body, &layouts, &us, true, m)?;
+        for (_, acc) in &spaces {
+            let mut found = BTreeSet::new();
+            pairs(
+                e,
+                acc,
+                (&u, &us),
+                (&pdom, &loops),
+                &mut rows_af,
+                &mut found,
+                m,
+            )?;
+            if !found.is_empty() {
+                rows = false;
+                break;
+            }
+        }
+    }
     let term = spaces
         .first()
         .map_or(&[][..], |(_, acc)| acc.term.as_slice());
-    Ok(Some(stab(&wants, flags, (device, tangle), term, m)?))
+    Ok(Some((
+        stab(&wants, flags, (device, tangle), term, m)?,
+        rows,
+    )))
 }
 
 /// Collect into `wants` where barriers must order the conflicting pairs of `acc`, the accesses of

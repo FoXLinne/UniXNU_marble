@@ -6,6 +6,13 @@
 #include <IOKit/IOTimerEventSource.h>
 #include <IOKit/IOInterruptEventSource.h>
 #include <IOKit/IOPlatformExpert.h>
+#include <IOKit/IOUserClient.h>
+#include <IOKit/IOBufferMemoryDescriptor.h>
+#include <sys/conf.h>
+#include <sys/errno.h>
+#include <sys/stat.h>
+#include <sys/uio.h>
+#include <miscfs/devfs/devfs.h>
 #include <IOKit/pwr_mgt/IOPM.h>
 #include <IOKit/pwr_mgt/IOPMPowerSource.h>
 #include <libkern/c++/OSBoolean.h>
@@ -13,6 +20,7 @@
 #include <libkern/c++/OSNumber.h>
 #include <libkern/c++/OSSymbol.h>
 #include <pexpert/pexpert.h>
+#include <kern/clock.h>
 #include "QcomUcsi.h"
 extern "C" {
 bool native_runtime_usb_configured(void);
@@ -39,12 +47,185 @@ uint32_t configuredSdpLimit() {
     // before applying this standard 500 mA host budget.
     return native_runtime_usb_configured() || native_resident_usb_service_active() ? 500000u : 0u;
 }
+
+// 22H384 gas-gauge reader: 32-byte shared header, followed by 24-byte
+// records {signed current in mA, padding, timeval64}. Its configuration
+// stores the circular-buffer capacity at byte 0x9c.
+constexpr unsigned kGaugeCapacity = 128;
+struct GaugeSample {
+    int32_t current;
+    uint32_t reserved;
+    int64_t seconds;
+    uint32_t microseconds, reserved2;
+};
+static_assert(sizeof(GaugeSample) == 24);
+struct GaugeHeader {
+    uint8_t format, reserved[3];
+    uint32_t enabled;
+    uint64_t reserved2[2];
+    uint32_t producer, reserved3;
+};
+static_assert(sizeof(GaugeHeader) == 32);
+IOBufferMemoryDescriptor *gaugeMemory;
+IOSimpleLock *gaugeLock;
+IOInterruptEventSource *gaugeInbox;
+volatile uint32_t gaugeUsers, gaugeRefresh;
+uint32_t gaugeProducer;
+clock_sec_t gaugeLastSecond;
+GaugeSample gaugeLatest;
+bool gaugeLatestValid;
+int gaugeMajor = -1;
+void *gaugeNode;
+
+bool initializeGaugeMemory() {
+    gaugeLock = IOSimpleLockAlloc();
+    gaugeMemory = IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task,
+        kIODirectionInOut | kIOMemoryKernelUserShared, 4096, 4096);
+    if (!gaugeLock || !gaugeMemory) {
+        OSSafeReleaseNULL(gaugeMemory);
+        if (gaugeLock) { IOSimpleLockFree(gaugeLock); gaugeLock = nullptr; }
+        return false;
+    }
+    bzero(gaugeMemory->getBytesNoCopy(), 4096);
+    static_cast<GaugeHeader *>(gaugeMemory->getBytesNoCopy())->format = 1;
+    return true;
 }
+
+void gaugeLogging(bool enable) {
+    IOSimpleLockLock(gaugeLock);
+    uint32_t users = __atomic_load_n(&gaugeUsers, __ATOMIC_RELAXED);
+    if (enable) ++users;
+    else if (users) --users;
+    __atomic_store_n(&gaugeUsers, users, __ATOMIC_RELEASE);
+    static_cast<GaugeHeader *>(gaugeMemory->getBytesNoCopy())->enabled = users != 0;
+    IOSimpleLockUnlock(gaugeLock);
+    __atomic_store_n(&gaugeRefresh, 1u, __ATOMIC_RELEASE);
+    if (gaugeInbox) gaugeInbox->interruptOccurred(nullptr, nullptr, 0);
+}
+
+int gaugeOpen(dev_t, int, int, struct proc *) { return 0; }
+int gaugeClose(dev_t, int, int, struct proc *) { return 0; }
+int gaugeRead(dev_t, struct uio *uio, int) {
+    GaugeSample sample;
+    IOSimpleLockLock(gaugeLock);
+    const bool valid = gaugeLatestValid;
+    sample = gaugeLatest;
+    IOSimpleLockUnlock(gaugeLock);
+    if (!valid) return EWOULDBLOCK;
+    const off_t offset = uio_offset(uio);
+    if (offset < 0) return EINVAL;
+    if (offset >= off_t(sizeof(sample))) return 0;
+    const size_t available = sizeof(sample) - size_t(offset);
+    const size_t requested = size_t(uio_resid(uio));
+    const size_t bytes = requested < available ? requested : available;
+    return uiomove(reinterpret_cast<char *>(&sample) + offset, int(bytes), uio);
+}
+struct cdevsw gaugeCdev = {
+    .d_open = gaugeOpen, .d_close = gaugeClose, .d_read = gaugeRead,
+    .d_write = eno_rdwrt, .d_ioctl = eno_ioctl, .d_stop = eno_stop,
+    .d_reset = eno_reset, .d_ttys = nullptr,
+    .d_select = eno_select,
+    .d_mmap = eno_mmap, .d_strategy = eno_strat,
+    .d_reserved_1 = eno_getc, .d_reserved_2 = eno_putc, .d_type = 0
+};
+
+void publishGaugeNode() {
+    if (gaugeNode) return;
+    if (gaugeMajor < 0) gaugeMajor = cdevsw_add(-1, &gaugeCdev);
+    if (gaugeMajor >= 0)
+        gaugeNode = devfs_make_node(makedev(gaugeMajor, 0), DEVFS_CHAR,
+            0, 0, 0444, "cu.gas-gauge");
+}
+
+void recordGaugeSample(const MarbleBatterySnapshot &sample,
+                       clock_sec_t seconds, clock_usec_t microseconds) {
+    const GaugeSample value = {sample.current_ma, 0, int64_t(seconds), microseconds, 0};
+    IOSimpleLockLock(gaugeLock);
+    gaugeLatest = value;
+    gaugeLatestValid = true;
+    if (__atomic_load_n(&gaugeUsers, __ATOMIC_RELAXED) &&
+        (!gaugeProducer || seconds != gaugeLastSecond)) {
+        auto *header = static_cast<GaugeHeader *>(gaugeMemory->getBytesNoCopy());
+        auto *records = reinterpret_cast<GaugeSample *>(header + 1);
+        records[gaugeProducer % kGaugeCapacity] = value;
+        gaugeLastSecond = seconds;
+        ++gaugeProducer;
+        __atomic_store_n(&header->producer, gaugeProducer, __ATOMIC_RELEASE);
+    }
+    IOSimpleLockUnlock(gaugeLock);
+}
+}
+
+// 22H384 PLGasGaugeAgent opens AppleHDQGasGaugeControl with type 0 and
+// calls scalar method 8 with one register address. Its power sample reads
+// voltage (0x08, mV) and signed average current (0x14, mA).
+class AppleHDQGasGaugeControlUserClient : public IOUserClient {
+    OSDeclareDefaultStructors(AppleHDQGasGaugeControlUserClient)
+    bool logging = false;
+public:
+    IOReturn clientClose() override {
+        if (logging) { gaugeLogging(false); logging = false; }
+        terminate();
+        return kIOReturnSuccess;
+    }
+    void free() override {
+        if (logging) gaugeLogging(false);
+        IOUserClient::free();
+    }
+    IOReturn clientMemoryForType(UInt32 type, IOOptionBits *options,
+                                IOMemoryDescriptor **memory) override {
+        if (type != 0) return kIOReturnUnsupported;
+        if (!gaugeMemory) return kIOReturnNotReady;
+        *options = 0;
+        gaugeMemory->retain();
+        *memory = gaugeMemory;
+        return kIOReturnSuccess;
+    }
+    IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
+                           IOExternalMethodDispatch *, OSObject *, void *) override {
+        if (!args) return kIOReturnBadArgument;
+        if (selector == 2) {
+            if (args->scalarInputCount || args->scalarOutputCount ||
+                args->structureInputSize || !args->structureOutput ||
+                args->structureOutputSize < 0x160) return kIOReturnBadArgument;
+            bzero(args->structureOutput, 0x160);
+            static_cast<uint32_t *>(args->structureOutput)[0x9c / 4] = kGaugeCapacity;
+            args->structureOutputSize = 0x160;
+            return kIOReturnSuccess;
+        }
+        if (selector == 3) {
+            if (args->scalarInputCount != 1 || args->scalarOutputCount ||
+                args->structureInputSize || args->structureOutputSize)
+                return kIOReturnBadArgument;
+            const bool enable = args->scalarInput[0] != 0;
+            if (enable != logging) { gaugeLogging(enable); logging = enable; }
+            return kIOReturnSuccess;
+        }
+        if (selector != 8) return kIOReturnUnsupported;
+        if (!args || args->scalarInputCount != 1 || args->scalarOutputCount != 1 ||
+            !args->scalarInput || !args->scalarOutput || args->structureInputSize ||
+            args->structureOutputSize) return kIOReturnBadArgument;
+        const uint64_t reg = args->scalarInput[0];
+        const char *key = reg == 0x08 ? "Voltage" : reg == 0x14 ? "InstantAmperage" : nullptr;
+        if (!key) return kIOReturnUnsupported;
+        IOService *source = getProvider();
+        if (!source) return kIOReturnNotAttached;
+        OSObject *value = source->copyProperty(key);
+        OSNumber *measurement = OSDynamicCast(OSNumber, value);
+        if (!measurement) { OSSafeReleaseNULL(value); return kIOReturnNotReady; }
+        const int32_t reading = (int32_t)measurement->unsigned32BitValue();
+        args->scalarOutput[0] = (uint16_t)reading;
+        value->release();
+        return kIOReturnSuccess;
+    }
+};
+OSDefineMetaClassAndStructors(AppleHDQGasGaugeControlUserClient, IOUserClient)
 
 class MarbleBattery : public IOPMPowerSource {
     OSDeclareDefaultStructors(MarbleBattery)
     IOWorkLoop *loop = nullptr;
     IOTimerEventSource *request = nullptr, *refresh = nullptr;
+    IOTimerEventSource *gaugeTimer = nullptr;
     IOTimerEventSource *ucsiTimer = nullptr;
     QcomUcsi ucsi = {};
     uint8_t ucsiOutput[QCOM_UCSI_MAX_MESSAGE];
@@ -127,8 +308,18 @@ class MarbleBattery : public IOPMPowerSource {
     void publish() {
         MarbleBatterySnapshot s;
         marble_battmgr_snapshot(&bm, &s);
+        recordRaw();
+        clock_sec_t seconds = 0;
+        clock_usec_t microseconds = 0;
+        clock_get_calendar_microtime(&seconds, &microseconds);
+        // Publish a measured capacity, including a measured zero. A failed
+        // capacity request leaves the last published sample in IORegistry.
+        if (!s.charge_known) return;
         setBatteryInstalled(s.present);
         setExternalConnected(s.external);
+        // powerd uses this physical connection state for charge-session
+        // boundaries and its discharge-only percentage increase filter.
+        flag("AppleRawExternalConnected", s.external);
         setExternalChargeCapable(s.external);
         setIsCharging(s.charging);
         setAtCriticalLevel(s.critical);
@@ -142,7 +333,7 @@ class MarbleBattery : public IOPMPowerSource {
         flag("FullyCharged", s.fully_charged);
         number("InstantAmperage", s.current_ma);
         if (s.temperature_valid) number("Temperature", s.temperature);
-        if (s.raw_mah > 0) number("AppleRawCurrentCapacity", s.raw_mah);
+        if (bm.valid & (1u << BmCharge)) number("AppleRawCurrentCapacity", s.raw_mah);
         if (s.full_mah > 0) {number("AppleRawMaxCapacity", s.full_mah); number("NominalChargeCapacity", s.full_mah);}
         if (s.design_mah > 0) number("DesignCapacity", s.design_mah);
         OSDictionary *adapter = OSDictionary::withCapacity(5);
@@ -166,10 +357,19 @@ class MarbleBattery : public IOPMPowerSource {
         native_battery_stats[5] = s.present | s.external << 1 | s.charging << 2 | s.fully_charged << 3 | bm.enabled << 4;
         native_battery_stats[10] = (bm.valid >> BmUsbType) & 1 ? bm.value[BmUsbType] : -1;
         native_battery_stats[11] = s.full_mah; native_battery_stats[12] = s.design_mah; native_battery_stats[13] = s.cycles;
-        recordRaw();
-        if (!published && !s.charge_known) return;  // no charge reading yet: 0 % would read as an empty battery
+        // Match AppleSmartBattery's epoch-seconds read-completion properties.
+        // The regular cycle reads the user-visible fields; a slow cycle also
+        // reads full/design capacity and cycle count.
+        number("UpdateTime", seconds);
+        number("UserVisiblePathUpdated", seconds);
+        const uint32_t fullFields = (1u << BmFull) | (1u << BmDesign) | (1u << BmCycles);
+        if (!published) number("BootPathUpdated", seconds);
+        if ((bm.completed_valid & fullFields) == fullFields) {
+            number("FullPathUpdated", seconds);
+        }
         if (!published) {
             // The properties are in place before anyone finds the service.
+            publishGaugeNode();
             published = true;
             registerService();
             native_battery_stats[0] = 4;
@@ -203,9 +403,27 @@ class MarbleBattery : public IOPMPowerSource {
                 marble_battmgr_refresh(&self->bm, 1);
                 self->pump();
                 self->refresh->setTimeoutMS(kRefreshMs);
+                if (__atomic_load_n(&gaugeUsers, __ATOMIC_ACQUIRE)) self->gaugeTimer->setTimeoutMS(1000);
             }
-            if (!up && self->wasUp) {self->request->cancelTimeout();self->ucsiTimer->cancelTimeout();self->ucsi={};marble_battmgr_init(&self->bm); self->bm.sdp_limit_ua = self->sdpLimit;}
+            if (!up && self->wasUp) {
+                IOSimpleLockLock(gaugeLock);
+                gaugeLatestValid = false;
+                IOSimpleLockUnlock(gaugeLock);
+                self->request->cancelTimeout();self->ucsiTimer->cancelTimeout();self->ucsi={};
+                self->gaugeTimer->cancelTimeout();
+                marble_battmgr_init(&self->bm); self->bm.sdp_limit_ua = self->sdpLimit;
+            }
             self->wasUp = up;
+        }
+        if (__atomic_exchange_n(&gaugeRefresh, 0u, __ATOMIC_ACQ_REL) && self->wasUp) {
+            if (__atomic_load_n(&gaugeUsers, __ATOMIC_ACQUIRE)) {
+                marble_battmgr_sample(&self->bm);
+                self->handle(BmAnswer);
+                self->gaugeTimer->setTimeoutMS(1000);
+            } else {
+                self->gaugeTimer->cancelTimeout();
+                self->bm.sample_wanted = 0;
+            }
         }
         for (;;) {
             uint8_t data[kMessage];
@@ -224,18 +442,36 @@ class MarbleBattery : public IOPMPowerSource {
                 self->sendUcsi(ucsi_receive(&self->ucsi,data,length,self->ucsiOutput));
                 continue;
             }
+            const bool currentRead = self->bm.in_flight && self->bm.cursor == BmCurrent;
             const int result = marble_battmgr_receive(&self->bm, data, length);
+            if (currentRead && (result == BmAnswer || result == BmCycleDone || result == BmSampleDone) &&
+                (self->bm.valid & (1u << BmCurrent))) {
+                MarbleBatterySnapshot sample;
+                marble_battmgr_snapshot(&self->bm, &sample);
+                clock_sec_t seconds;
+                clock_usec_t microseconds;
+                clock_get_calendar_microtime(&seconds, &microseconds);
+                recordGaugeSample(sample, seconds, microseconds);
+            }
             if(!self->ucsi.status_valid&&(self->bm.valid&(1u<<BmUsbOnline)))native_marble_usb_vbus(self->bm.value[BmUsbOnline]);
-            if (result == BmAnswer || result == BmCycleDone) self->request->cancelTimeout();
+            if (result == BmAnswer || result == BmCycleDone || result == BmSampleDone) self->request->cancelTimeout();
             self->handle(result);
         }
     }
     static void requestAction(OSObject *owner, IOTimerEventSource *) {
         MarbleBattery *self = OSDynamicCast(MarbleBattery, owner);
         if (!self || !self->wasUp) return;
-        const uint32_t before = self->bm.cycles_done;
-        marble_battmgr_timeout(&self->bm);
-        self->handle(self->bm.cycles_done != before ? BmCycleDone : BmAnswer);
+        self->handle(marble_battmgr_timeout(&self->bm));
+    }
+    static void gaugeAction(OSObject *owner, IOTimerEventSource *sender) {
+        auto *self = OSDynamicCast(MarbleBattery, owner);
+        if (!self || !self->wasUp || !__atomic_load_n(&gaugeUsers, __ATOMIC_ACQUIRE)) return;
+        // 22H384 PLBatteryAgent integrates each ring entry as current * volts
+        // / -3600. Logging therefore requests one actual current read per
+        // second, independently of the power-source property refresh.
+        marble_battmgr_sample(&self->bm);
+        self->handle(BmAnswer);
+        sender->setTimeoutMS(1000);
     }
     static void refreshAction(OSObject *owner, IOTimerEventSource *sender) {
         MarbleBattery *self = OSDynamicCast(MarbleBattery, owner);
@@ -246,22 +482,52 @@ class MarbleBattery : public IOPMPowerSource {
     }
 
 public:
+    bool serializeProperties(OSSerialize *serializer) const override {
+        auto *self = const_cast<MarbleBattery *>(this);
+        self->setProperty("GasGaugeDeviceReady", gaugeNode != nullptr);
+        self->setProperty("GasGaugeSampleCount", gaugeProducer, 32);
+        self->setProperty("GasGaugeLoggingClients",
+            __atomic_load_n(&gaugeUsers, __ATOMIC_ACQUIRE), 32);
+        return IOPMPowerSource::serializeProperties(serializer);
+    }
+    IOReturn newUserClient(task_t task, void *security, UInt32 type,
+                          OSDictionary *, IOUserClient **handler) override {
+        if (type != 0) return kIOReturnUnsupported;
+        auto *client = OSTypeAlloc(AppleHDQGasGaugeControlUserClient);
+        if (!client || !client->initWithTask(task, security, type)) {
+            OSSafeReleaseNULL(client);
+            return kIOReturnNoMemory;
+        }
+        if (!client->attach(this)) { client->release(); return kIOReturnError; }
+        if (!client->start(this)) {
+            client->detach(this);
+            client->release();
+            return kIOReturnError;
+        }
+        *handler = client;
+        return kIOReturnSuccess;
+    }
     void free() override {
+        if (gaugeInbox == inbox) gaugeInbox = nullptr;
         if (request) request->cancelTimeout();
         if (refresh) refresh->cancelTimeout();
+        if (gaugeTimer) gaugeTimer->cancelTimeout();
         if (ucsiTimer) ucsiTimer->cancelTimeout();
         if (loop) {
             if (inbox) loop->removeEventSource(inbox);
             if (request) loop->removeEventSource(request);
             if (refresh) loop->removeEventSource(refresh);
+            if (gaugeTimer) loop->removeEventSource(gaugeTimer);
             if (ucsiTimer) loop->removeEventSource(ucsiTimer);
         }
         OSSafeReleaseNULL(inbox); OSSafeReleaseNULL(request); OSSafeReleaseNULL(refresh); OSSafeReleaseNULL(loop);
         OSSafeReleaseNULL(ucsiTimer);
+        OSSafeReleaseNULL(gaugeTimer);
         if (ringLock) {IOSimpleLockFree(ringLock); ringLock = nullptr;}
         IOPMPowerSource::free();
     }
     bool startBattery() {
+        if (!initializeGaugeMemory()) return false;
         marble_battmgr_init(&bm);
         bm.sdp_limit_ua = configuredSdpLimit();
         sdpLimit = bm.sdp_limit_ua;
@@ -270,9 +536,11 @@ public:
         inbox = IOInterruptEventSource::interruptEventSource(this, &MarbleBattery::inboxAction);
         request = IOTimerEventSource::timerEventSource(this, &MarbleBattery::requestAction);
         refresh = IOTimerEventSource::timerEventSource(this, &MarbleBattery::refreshAction);
+        gaugeTimer = IOTimerEventSource::timerEventSource(this, &MarbleBattery::gaugeAction);
         ucsiTimer = IOTimerEventSource::timerEventSource(this, &MarbleBattery::ucsiAction);
-        if (!loop || !ringLock || !inbox || !request || !refresh || !ucsiTimer || loop->addEventSource(inbox) != kIOReturnSuccess ||
+        if (!loop || !ringLock || !inbox || !request || !refresh || !gaugeTimer || !ucsiTimer || loop->addEventSource(inbox) != kIOReturnSuccess ||
             loop->addEventSource(request) != kIOReturnSuccess || loop->addEventSource(refresh) != kIOReturnSuccess ||
+            loop->addEventSource(gaugeTimer) != kIOReturnSuccess ||
             loop->addEventSource(ucsiTimer) != kIOReturnSuccess)
             return false;
         native_battery_stats[0] = 1;
@@ -280,14 +548,20 @@ public:
         channel = marble_adsp_channel ? marble_adsp_channel("PMIC_RTR_ADSP_APPS", 1024, 4, 0, &client, this) : nullptr;
         if (!channel) return false;
         native_battery_stats[0] = 2;
+        gaugeInbox = inbox;
         return true;
     }
 };
 OSDefineMetaClassAndStructors(MarbleBattery, IOPMPowerSource)
 
+class AppleHDQGasGaugeControl : public MarbleBattery {
+    OSDeclareDefaultStructors(AppleHDQGasGaugeControl)
+};
+OSDefineMetaClassAndStructors(AppleHDQGasGaugeControl, MarbleBattery)
+
 // Called by BatteryProbe.cpp once this file's classes are registered.
 extern "C" void marble_battery_start(void) {
-    MarbleBattery *battery = OSTypeAlloc(MarbleBattery);
+    MarbleBattery *battery = OSTypeAlloc(AppleHDQGasGaugeControl);
     if (!battery || !battery->init() || !battery->attach(IOService::getPlatform())) {
         if (battery) battery->release();
         native_battery_stats[0] = -1;

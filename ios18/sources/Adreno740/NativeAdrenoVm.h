@@ -120,6 +120,7 @@ public:
      * no CPU cache line can hold data the GPU should see or hide what it wrote. Lines are physically tagged, so this also reaches
      * lines a user mapping of the same pages left behind. int-070 runs it before every submission. */
     IOReturn publishMapped();
+    IOReturn markClientMaintained(uint64_t handle);
     /* The submit path saw a CPU-cached word that DRAM did not hold yet in a client's BO: from now on write-combined BOs are maintained
      * like any other (sticky; the safe behaviour of int-070..097). */
     void distrustWriteCombined() {distrust_write_combined_=true;}

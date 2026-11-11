@@ -9,6 +9,8 @@
 #pragma clang diagnostic pop
 #include <corecrypto/cc.h>
 #include <kern/task.h>
+#include <libkern/crypto/sha2.h>
+#include <IOKit/IODeviceTreeSupport.h>
 
 extern "C" {
 volatile uint32_t native_aes_kat_status = 0;
@@ -16,6 +18,37 @@ volatile uint32_t native_aes_registered = 0;
 volatile uint32_t native_aes_interface_status = 0;
 volatile uint32_t native_aes_completed = 0;
 volatile uint32_t native_aes_unsupported_key = 0;
+volatile uint32_t native_aes_nonce_key_uses = 0;
+}
+
+// Selector 0x8a4: the device key AppleImage4 entangles its boot nonce with (_darwin_el2_entangle_nonce: 128 bits, zero key bytes,
+// selector 0x8a4, CBC). On Apple hardware it is derived from the UID key; AppleImage4 panics when the request fails ("encryption
+// failed: 0xe00002c7", macOS run47, from a nonce sysctl as System Settings opened). This board has no hardware key, so the stand-in is
+// derived from /chosen/unique-chip-id: unique to the device and stable, but not secret from software, which the service's
+// NativeAESSoftwareKeysOnly property states. Every other hardware selector (the GID keys that decrypt firmware, the raw UID key) stays
+// unsupported: a made-up key there would hand back wrong plaintext instead of an error.
+enum : uint32_t { kNonceEntangleSelector = 0x8a4 };
+static bool nonceEntangleKey(IOAESKeyData *out)
+{
+  uint64_t chip = 0;
+  if (IORegistryEntry *chosen = IORegistryEntry::fromPath("/chosen", gIODTPlane)) {
+    OSData *id = OSDynamicCast(OSData, chosen->getProperty("unique-chip-id"));
+    if (id && id->getLength() >= sizeof(chip)) memcpy(&chip, id->getBytesNoCopy(), sizeof(chip));
+    chosen->release();
+  }
+  if (!chip) return false;
+  static const char label[] = "UniXNU software AES key 0x8a4";
+  unsigned char digest[SHA256_DIGEST_LENGTH];
+  SHA256_CTX context;
+  SHA256_Init(&context);
+  SHA256_Update(&context, label, sizeof(label));
+  SHA256_Update(&context, &chip, sizeof(chip));
+  SHA256_Final(digest, &context);
+  memset(out, 0, sizeof(*out));
+  out->bits = 128;
+  memcpy(out->bytes, digest, 16);
+  cc_clear(sizeof(digest), digest);
+  return true;
 }
 
 class NativeAES : public IOAESAccelerator {
@@ -27,7 +60,7 @@ public:
     return IOService::callPlatformFunction(name, wait, a, b, c, d);
   }
   const char *getAlgorithmName() override { return "AES-CBC"; }
-  bool isKeySupported(unsigned selector) override { return selector == 0; }
+  bool isKeySupported(unsigned selector) override { return selector == 0 || selector == kNonceEntangleSelector; }
   unsigned getSupportedOptions() override { return 1; }
   IOReturn performAES(void *, void *, task_t, unsigned long long, IOAESIV *,
                      IOAESOperation, IOAESKeyData *, IOAESCompletion, void *) override;
@@ -152,6 +185,11 @@ IOReturn NativeAES::performAES(IOMemoryDescriptor *input, IOMemoryDescriptor *ou
 {
   if (!input || !output || !key || !iv || !bytes || (bytes & 15) ||
       (key->bits != 128 && key->bits != 192 && key->bits != 256)) return kIOReturnBadArgument;
+  IOAESKeyData derived = {};
+  if (key->selector == kNonceEntangleSelector && key->bits == 128 && nonceEntangleKey(&derived)) {
+    __atomic_fetch_add(&native_aes_nonce_key_uses, 1, __ATOMIC_RELAXED);
+    key = &derived;
+  }
   if (key->selector || (operation != IOAESEncrypt && operation != IOAESDecrypt)) {
     __atomic_fetch_add(&native_aes_unsupported_key, 1, __ATOMIC_RELAXED);
     return kIOReturnUnsupported;
@@ -190,6 +228,7 @@ IOReturn NativeAES::performAES(IOMemoryDescriptor *input, IOMemoryDescriptor *ou
   cc_clear(4096, buffer);
   IOFree(buffer, 4096);
   cc_clear(sizeof(chaining), chaining);
+  cc_clear(sizeof(derived), &derived);
   output->complete();
   input->complete();
   if (callback) {

@@ -600,6 +600,14 @@ impl Device {
     /// pixel-coordinate one's included). A minimum or maximum reduction reads the weighted
     /// average.
     pub fn new_sampler_state(&self, descriptor: &SamplerDescriptor) -> Result<SamplerState, Error> {
+        self.at_serving(|device| device.new_sampler_state_now(descriptor))
+    }
+
+    /// [`Device::new_sampler_state`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_sampler_state_now(
+        &self,
+        descriptor: &SamplerDescriptor,
+    ) -> Result<SamplerState, Error> {
         self.sampler_state(
             "new_sampler_state",
             descriptor,
@@ -617,6 +625,15 @@ impl Device {
     /// [`new_sampler_state`](Self::new_sampler_state) is, and a placement at an ID of 16381 or
     /// more (`Invalid`, `Problem::ResourceId`), which Metal ends the process for.
     pub fn new_sampler_state_with_options(
+        &self,
+        descriptor: &SamplerDescriptor,
+        options: SamplerStateOptions,
+    ) -> Result<SamplerState, Error> {
+        self.at_serving(|device| device.new_sampler_state_with_options_now(descriptor, options))
+    }
+
+    /// [`Device::new_sampler_state_with_options`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_sampler_state_with_options_now(
         &self,
         descriptor: &SamplerDescriptor,
         options: SamplerStateOptions,
@@ -690,6 +707,10 @@ impl Device {
         }
         let shared = self.shared();
         let key = SamplerKey::of(descriptor, options);
+        // The ID a state the program released held is back, whichever thread let go of it last
+        // (`resource_ids.rs`, **Passing holds**); before the map's lock, which a state's going
+        // takes.
+        shared.passing_holds.wait();
         // Under the map's lock, so equal requests on two threads get one state.
         let mut live = lock(&shared.samplers);
         if let Some(state) = live.live(&key) {
@@ -740,7 +761,7 @@ impl Device {
     }
 
     /// [`argument_samplers`](Self::argument_samplers), with the count of the sampler IDs' slots'
-    /// changes they are live at ([`sampler_slots_changed`](Self::sampler_slots_changed)).
+    /// changes they are live at (`DeviceShared::sampler_slots_changed`).
     pub(super) fn argument_samplers_at(&self) -> (u64, Vec<SamplerState>) {
         let (changed, states) = lock(&self.shared().resource_ids).samplers();
         (changed, states.into_iter().map(SamplerState).collect())
@@ -752,15 +773,15 @@ impl Device {
         self.shared().counts.argument_samplers_taken();
         self.argument_samplers_at()
     }
+}
 
+impl crate::device::DeviceShared {
     /// The count of the changes of the sampler IDs' slots so far, a listing that found a state
     /// going among them (`ResourceIds::samplers`): while it holds,
-    /// [`argument_samplers`](Self::argument_samplers) answers the states it answered at it.
-    pub(super) fn sampler_slots_changed(&self) -> u64 {
-        self.shared()
-            .sampler_ids
-            .slots_changed
-            .load(Ordering::Acquire)
+    /// `Device::argument_samplers` answers the states it answered at it. Read at each draw, so
+    /// of the generation its command buffer holds (`CommandBuffer::generation`).
+    pub(crate) fn sampler_slots_changed(&self) -> u64 {
+        self.sampler_ids.slots_changed.load(Ordering::Acquire)
     }
 }
 
@@ -894,8 +915,9 @@ impl SamplerState {
     /// one the state keeps, else a new one, kept once the cache has room for it ([`KeptSamplers`],
     /// at most [`KEPT`] and at most as many as the device allows live). Where the device already
     /// holds as many samplers as it allows, one this state keeps that no command buffer holds goes
-    /// to make room; `Error::SamplerLimit` is the answer only where every one it keeps is held
-    /// ([`SamplerCount`]).
+    /// to make room, else a released variant's kept instance that holds immutable samplers
+    /// (`pipeline/kept.rs`); `Error::SamplerLimit` is the answer only where every one it keeps is
+    /// held and no kept instance holds one ([`SamplerCount`]).
     pub(super) fn vk_sampler(
         &self,
         desc: &metal2vulkan::vk::SamplerDesc,
@@ -917,7 +939,14 @@ impl SamplerState {
             // (`metal::sampler::opaque_black_border`).
             match unsafe { device.shared().create_sampler(&info) } {
                 Ok(raw) => break raw,
-                Err(limit @ Error::SamplerLimit(_)) if !kept.forget_spare() => return Err(limit),
+                // Room is made by one this state keeps that no command buffer holds, else by a
+                // released variant's kept instance that holds immutable samplers (`kept.rs`).
+                Err(limit @ Error::SamplerLimit(_))
+                    if !kept.forget_spare()
+                        && !crate::pipeline::objects::evict_kept_for_samplers(device) =>
+                {
+                    return Err(limit)
+                }
                 Err(Error::SamplerLimit(_)) => {}
                 Err(error) => return Err(error),
             }

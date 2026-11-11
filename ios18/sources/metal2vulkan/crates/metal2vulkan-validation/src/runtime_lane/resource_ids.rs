@@ -17,7 +17,7 @@ use super::degrade_notices::{
 use super::host_memory::{no_copy, not_importable, Mapping, GUEST_PAGE};
 use super::sparse_textures::{lacks_sparse, SparseFacts};
 use super::{
-    bound_buffers, buffer_with, case_making_kinds, creation_checked, encode_case,
+    at_plan, bound_buffers, buffer_with, case_making_kinds, creation_checked, encode_case,
     layer_reported_nothing_at_all, made_lane_device, pipeline_state, public_case, read_buffer,
     texture_descriptor, validated_device_with, CaseResources, Messages, PublicCase, ScratchCache,
 };
@@ -28,10 +28,10 @@ use crate::gpu::TEST_DEVICE;
 use crate::literal::LiteralTexture;
 use ash::vk;
 use metal2vulkan::bind::indirect_commands::RECORDS_ID_LIMIT;
-use metal2vulkan::bind::{SamplerDescriptor, TileMapping};
+use metal2vulkan::bind::{SamplerDescriptor, TileMapping, HANDLE_TABLE_CAPACITY};
 use metal2vulkan::device::DriverFact;
 use metal2vulkan::device::VkFeature;
-use metal2vulkan::error::{Feature, RuntimeDriverDefect};
+use metal2vulkan::error::{Feature, Needs, RuntimeDriverDefect};
 use metal2vulkan::metal::format::direct_format;
 use metal2vulkan::metal::{
     CompareFunction, IndirectCommandType, PixelFormat, RenderStages, ResourceUsage,
@@ -113,15 +113,37 @@ pub(super) const DELAYED_DEALLOCATORS: [Degradation; 1] = [Degradation::HostDeal
 /// device moves the tiles) lies as Metal lays it out at Metal's answer: it announces that shadow
 /// (`shadowed-texture`) and no route or layout of an image bound there. The lavapipe of the Linux
 /// gate's container takes that route for a `Private` heap's texture.
+///
+/// A texture the device made in place as an image that fits Metal's answer, where the image of
+/// its first route did not (`refit`: it moved `WorkCounts::heap_textures_refit`, the image's
+/// route [`refit_kind`] read) lies at Metal's answer as that route's image, and announces the
+/// route. These tests' textures are 2 x 2 texels, whose shorter side under 16 Metal keeps
+/// uncompressed in its tiles; `texture/heap.rs` refits such a texture only into a linear image
+/// that puts every element where those tiles do (`lies_in_metal_tiles`), so the heap's bytes are
+/// Metal's layout and no layout notice is announced.
 fn heap_texture_kinds(
     device: &Device,
     descriptor: &TextureDescriptor,
     tiled: bool,
+    refit: Option<Degradation>,
 ) -> BTreeSet<Degradation> {
     let answer = device.heap_texture_size_and_align(descriptor).unwrap();
     let metal = device
         .metal_heap_texture_size_and_align(descriptor)
         .unwrap();
+    if let Some(route) = refit {
+        assert!(
+            descriptor.width.min(descriptor.height) < 16,
+            "a refit texture Metal keeps uncompressed: {descriptor:?}"
+        );
+        return forced(&[
+            (
+                Degradation::HeapTextureLargerThanMetal,
+                metal.is_some_and(|metal| answer != metal),
+            ),
+            (route, true),
+        ]);
+    }
     if tiled {
         return forced(&[
             (
@@ -167,6 +189,30 @@ fn heap_texture_kinds(
             hides || !facts.contains(&DriverFact::ColorImagesLieAsMetalHeapTextures),
         ),
     ])
+}
+
+/// The route a heap texture made in place as an image that fits Metal's answer announced
+/// (`WorkCounts::heap_textures_refit`, `texture/heap.rs`): host-transfer usage where that image
+/// fits, else linear. The device's image sizes decide which, so it is read off the notices since
+/// the last taken, or those taken before (a device announces each kind once): exactly one of the
+/// two.
+fn refit_kind(messages: &Messages) -> Degradation {
+    let pending = messages.take_notices();
+    messages.restore_notices(pending.clone());
+    let taken = messages.taken_kinds();
+    let announced = |kind: &Degradation| {
+        taken.contains(kind)
+            || (pending.iter())
+                .filter_map(|message| message.degradation.as_ref())
+                .any(|notice| notice.degradation == *kind)
+    };
+    let routes = [
+        Degradation::HeapTextureHostTransfer,
+        Degradation::HeapTextureLinear,
+    ];
+    let kinds: Vec<Degradation> = routes.into_iter().filter(announced).collect();
+    assert_eq!(kinds.len(), 1, "a refit heap texture's route: {kinds:?}");
+    kinds[0]
 }
 
 /// The kinds a texture over a buffer of [`RGBA8Uint`](PixelFormat::RGBA8Uint) rows
@@ -667,10 +713,12 @@ fn a_texture_made_in_a_used_heap_after_a_dispatch_is_reached() {
         let mut first = sampling.forced(device);
         let unplaced = descriptor;
         descriptor.placement = IdPlacement::At(id);
-        let made = device.work_counts().heap_textures_tiled;
+        let made = device.work_counts();
         let late = heap.new_texture(&descriptor).unwrap();
-        let tiled = device.work_counts().heap_textures_tiled > made;
-        first.extend(heap_texture_kinds(device, &unplaced, tiled));
+        let tiled = device.work_counts().heap_textures_tiled > made.heap_textures_tiled;
+        let refit = device.work_counts().heap_textures_refit > made.heap_textures_refit;
+        let refit = refit.then(|| refit_kind(messages));
+        first.extend(heap_texture_kinds(device, &unplaced, tiled, refit));
         let upload = sampling.queue.command_buffer().unwrap();
         sampling.upload(device, &upload, &late);
         upload.commit().unwrap();
@@ -1031,7 +1079,7 @@ fn a_heap_s_token_drops_at_its_release_whatever_keeps_its_textures_images() {
         let texture = sampling.texture();
         let mut d = texture_descriptor(&sampling.literal, sampling.usage).unwrap();
         d.resource_options = ResourceOptions::private();
-        let made = device.work_counts().heap_textures_tiled;
+        let made = device.work_counts();
         for heap_type in [HeapType::Automatic, HeapType::Placement] {
             for case in ["through its ID", "first move"] {
                 let dropped = Arc::new(AtomicBool::new(false));
@@ -1076,9 +1124,11 @@ fn a_heap_s_token_drops_at_its_release_whatever_keeps_its_textures_images() {
                 assert_eq!(&output, expected, "{what}");
             }
         }
-        let tiled = device.work_counts().heap_textures_tiled > made;
+        let tiled = device.work_counts().heap_textures_tiled > made.heap_textures_tiled;
+        let refit = device.work_counts().heap_textures_refit > made.heap_textures_refit;
+        let refit = refit.then(|| refit_kind(messages));
         let mut first = sampling.forced(device);
-        first.extend(heap_texture_kinds(device, &d, tiled));
+        first.extend(heap_texture_kinds(device, &d, tiled, refit));
         // A shadow is announced as its ID's holder once: the command that reaches it through its
         // ID alone binds the heap set holding it, neither naming it nor making it resident.
         if tiled {
@@ -2157,7 +2207,7 @@ pub(super) fn distinct_sampler_states(device: &Device, count: u64) -> Vec<Sample
 /// Nothing is announced or counted (`WorkCounts::unlisted_argument_sampler_buffers`).
 #[test]
 fn late_sampler_states_past_twice_the_class_are_reached_by_their_ids() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let unlisted = || device.work_counts().unlisted_argument_sampler_buffers;
         let before = unlisted();
         for more in [20, 64] {
@@ -3164,6 +3214,50 @@ fn placed_ids_past_the_limits_are_refused_typed() {
     });
 }
 
+/// A texture ID at the handle table's reach (`HANDLE_TABLE_CAPACITY`, 65536 entries, within which
+/// link sizes every heap array) is one no set-1 array holds: its reservation is refused
+/// `Unsupported`, not implemented where the device's update-after-bind image limits reach past it
+/// (the device's limit named otherwise), and the ID below it is reserved. Printed
+/// (`TEXTURE_RESERVATION`).
+#[test]
+fn a_texture_reservation_at_the_handle_table_s_reach_is_refused() {
+    let reach = HANDLE_TABLE_CAPACITY;
+    let mut past = false;
+    on_device(|device, _| {
+        let l = &device.properties().description.limits;
+        let least = |limits: [u32; 3]| limits.into_iter().min().unwrap();
+        let sampled = least([
+            l.max_descriptor_set_update_after_bind_sampled_images,
+            l.max_per_stage_descriptor_update_after_bind_sampled_images,
+            l.max_per_stage_update_after_bind_resources,
+        ]);
+        let storage = least([
+            l.max_descriptor_set_update_after_bind_storage_images,
+            l.max_per_stage_descriptor_update_after_bind_storage_images,
+            l.max_per_stage_update_after_bind_resources,
+        ]);
+        past = sampled.max(storage) > reach;
+        let reserved =
+            device.reserve_resource_ids(ResourceIdKind::Texture, &[ResourceId(u64::from(reach))]);
+        eprintln!(
+            "TEXTURE_RESERVATION at={reach} sampled={sampled} storage={storage} {reserved:?}"
+        );
+        let Err(Error::Unsupported(refused)) = reserved else {
+            panic!("{reserved:?}");
+        };
+        assert_eq!(refused.feature, Feature::ArgumentBufferTextures);
+        assert_eq!(refused.needs == Needs::NotImplemented, past, "{refused:?}");
+    });
+    if past {
+        on_device(|device, _| {
+            let below = ResourceId(u64::from(reach) - 1);
+            device
+                .reserve_resource_ids(ResourceIdKind::Texture, &[below])
+                .unwrap();
+        });
+    }
+}
+
 /// A texture `new_texture` makes [`IdPlacement::Outside`] takes no resource ID (the consumer's
 /// helper textures), in the consumer's sequence: after a reservation of 20000 it answers 0, and a
 /// plain swizzled view of it takes 20001, the ID plain `new_texture` gives on a device that made a
@@ -3364,7 +3458,11 @@ fn reservations_keep_ids_from_plain_allocation() {
         assert!(line.kind.general && line.degradation.is_none(), "{line:?}");
         drop((sampling, plain, placed, next));
     }
-    let failing = seen.lock().unwrap().1.clone();
+    // The loader's own reports of driver manifests it ignored are the host's listing, not the
+    // device's work (`layer_claim`).
+    let mut failing = seen.lock().unwrap().1.clone();
+    let ignored = crate::candidate::runtime_case::IgnoredDrivers::of_messages(&failing);
+    failing.retain(|message| !ignored.explains(&message.id_name, &message.text));
     assert!(
         failing.is_empty(),
         "the validation layer reported: {failing:#?}"

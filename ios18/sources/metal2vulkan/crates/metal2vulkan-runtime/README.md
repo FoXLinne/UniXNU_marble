@@ -48,6 +48,12 @@ ash = { version = "0.38", default-features = false, features = ["std"] }
 - Nothing links against Vulkan at build time. The runtime opens the Vulkan loader when it makes a
   device, or takes the consumer's `vkGetInstanceProcAddr` when it adopts one. A device needs
   Vulkan 1.2 and `timelineSemaphore`.
+- A program that makes a `VkInstance` of its own beside a runtime device calls
+  `program_instance_made()` right after it. A layer registers an exit handler as an instance is
+  made (the validation layer's forgets every device it knows), and exit handlers run in the reverse
+  order of their registration: unreported, that handler runs before the runtime's at exit, and a
+  call the runtime's threads still make into the layer ends the process. The instance of a device
+  the runtime adopts (`Device::from_raw`) needs no call.
 - Shaders come in as a metallib (`Device::new_library_with_data`); there is no MSL compiler. Like
   Metal, `new_library_with_data` refuses bare AIR bitcode. For AIR bitcode, parse it with
   `metal2vulkan::library::Library::from_air` and pass the result to
@@ -99,8 +105,10 @@ A `[[visible]]` function a stage calls but does not define comes from the functi
 (`function.function_descriptor().with_linked(linked)`, `MTLLinkedFunctions`). A call resolves to
 the linked function of its name, `Function::name`: the specialized name
 `Library::new_function_with_descriptor` made it with (`FunctionDescriptor::specialized_name`,
-Metal's `specializedName`), else its own. A linked function computes with the constant values it
-was made with, and a constant it was given no value for reads as undefined, as Metal's does; one
+Metal's `specializedName`), else its own, whatever the definition's type: the arguments pass by
+position ([docs/API.md](../../docs/API.md) section 3, "Linked functions: types"). A linked
+function computes with the constant values it was made with, and a constant it was given no value
+for reads as undefined, as Metal's does; one
 made by `new_function_with_name` that reaches a constant of its module refuses the pipeline state
 (`Compile`, `LinkProblem::UnresolvedConstant`), as Metal fails its creation. A function in the
 stage's `binary_functions` is one a visible-function table calls: no call by name resolves to it
@@ -118,9 +126,14 @@ before it returns, where Metal compiles. The prediction comes from the descripto
 alone: the pass of its attachments, its input primitive class, each vertex-descriptor layout's
 buffer bound at an aligned offset (a layout of `MTLBufferLayoutStrideDynamic` at the stride that
 packs its attributes), Metal's default sampler at each runtime sampler slot, no texture, and
-Metal's default encoder state. A draw whose key differs makes its own `VkPipeline` at that draw.
-Tessellated and mesh states, separate depth and stencil formats and fragment functions that write
-depth make nothing at creation.
+Metal's default encoder state. A pipeline's key holds no pass's resolves, which render pass
+compatibility ignores, so a draw in a pass that resolves takes the predicted one. A point-class
+state's prediction takes the variant its draws of points take under Metal's guard band, and a
+multisampled state that blends into or reads an extended-range color (`BGRA10_XR` and its kin) the
+variant that holds the color's `half` shadow, as its draws in a pass that clears the color do. A
+draw whose key differs makes its own `VkPipeline` at that draw. Tessellated and mesh states,
+separate depth and stencil formats and fragment functions that write depth make nothing at
+creation.
 
 Where the device links its render pipelines from graphics pipeline libraries
 (`VK_EXT_graphics_pipeline_library` with fast linking; MoltenVK makes them whole),
@@ -170,6 +183,7 @@ Vulkan-side choices Metal has no counterpart for:
 | `optional_device_extensions` | Device extensions each device enables only where it can (it lists one, the instance has what it requires, and the device has its features), never refused for one; `Device::enables_extension` says which. A listed extension's feature structure is enabled with it where the runtime knows one (`VK_KHR_video_maintenance1` and `2`'s, `VK_KHR_unified_image_layouts`' with `unifiedImageLayoutsVideo` where the device has it), here and for `device_extensions`. |
 | `extra_queues` | Queues each device makes for the consumer beside its own, one per `VkQueueFlags` entry (a video decode queue, for example), of the first family whose flags contain the entry's; `DeviceHandles::extra_queues` returns them. A device with no queue for an entry is made all the same, says so (`metal2vulkan-extra-queues-absent`), and leaves it out. The runtime never submits to them. Empty by default. |
 | `reserved_queues` | How many queues of its own queue families each device reserves for the consumer out of the round robin its command queues share, which shrinks by each (on an RTX 5080, 13 `VkQueue`s rather than 14); `DeviceHandles::reserved_queues` returns them. The round robin keeps its first four and presenting its two, so a device with none to spare past those (MoltenVK's four families of one queue, lavapipe's one queue) reserves fewer, is made all the same, and says so (`metal2vulkan-reserved-queues-absent`). No command queue, presenting or not, and no internal copy ever submits to them. 0 by default. |
+| `queue_limits` | Fewer `VkQueue`s for each device than its queue plan takes (`QueueLimits`: the most for the round robin its command queues share, at least one, and for presenting queues), so making and dropping a device costs less: on an RTX 5080, whose plan takes 17 queues, a device took 445 ms to make and 110 ms to drop, and one limited to one round-robin queue and none for presenting (2 queues) 145 ms and 44 ms. Past the limits command queues share `VkQueue`s (one waits behind another's whole command buffer), and presenting and unshared ones may share. Where the limits change a placement from what the plan gives, the device says so in an informational message (`metal2vulkan-queue-limits-reached`). A device with no queue to spare (RADV's, lavapipe's one graphics queue) takes its plan. `None` (the default) is the plan. For tests and tools that make many devices. |
 | `instance_api_version` | The instance's `apiVersion` (1.2 when unset); a version outside 1.2 to the loader's is refused, never clamped. |
 | `withheld_features`, `withheld_extensions`, `withhold_generated_commands`, `withhold_view_reinterpretation` | Parts of the recommended enables to leave off; the device then compiles for what is enabled. |
 | `messages` | A `MessageSink` for the validation layer's messages and the runtime's notices; without one, notices go to stderr. `MessageSink::with_least_severity` skips messages below a severity (never a degrade notice), and the runtime then formats none of its own lines it would skip. |
@@ -183,11 +197,14 @@ While a handle lives, equal options give the same device for a physical device, 
 `MTLDevice` per GPU. Nothing is read from the environment but the platform's default cache
 directory. `Device::registry_ids_with` lists each qualifying physical device's `registryID`,
 preferred first, without making any device, and `Device::with_registry_id` makes only the device
-of one ID (runtime extensions). `Device::system_default_identity_with` reads the identity of the
-physical device `Device::system_default_with` makes its device of, with no device made: its name,
-kind, IDs, `deviceUUID`, `registryID`, Vulkan version, and its PCI bus address and DRM render node
-where the physical device lists `VK_EXT_pci_bus_info` and `VK_EXT_physical_device_drm`, which a
-consumer addresses the same GPU through another API by. The same two are
+of one ID (runtime extensions). `Device::identities_with` reads the identity of each of those
+physical devices, in the same order, with no device made, and `Device::system_default_identity_with`
+the first of them, the one `Device::system_default_with` makes its device of: its name, kind, IDs,
+`deviceUUID`, `registryID`, Vulkan version, the size of its largest `DEVICE_LOCAL` memory heap
+(`recommended_max_working_set_size`, named after Metal's nearest property, whose estimate it is
+not), and its PCI bus address and DRM render node where the physical device lists
+`VK_EXT_pci_bus_info` and `VK_EXT_physical_device_drm`, which a consumer addresses the same GPU
+through another API by. The same two are
 `DeviceProperties::pci_bus` and `DeviceProperties::drm_render` on a device that exists; both are
 `None` on macOS, where MoltenVK lists neither extension.
 
@@ -212,11 +229,17 @@ the record the pass is making.
   the consumer's work there uses the runtime's buffers and images with no ownership transfer
   (while they live, ordered against the runtime's work through semaphores, a runtime image left
   in `GENERAL`), and waits behind no command queue's command buffers.
-  `CommandQueue::with_vk_queue` lends a queue's `VkQueue` under the runtime's lock: the consumer's
-  submissions there sit in that command queue's order, and in that of any other command queue
-  sharing the `VkQueue`. From its first call the command queue keeps that `VkQueue` for its life.
+  `CommandQueue::with_vk_queue` lends a queue's `VkQueue`, with the `VkDevice` it belongs to and
+  its family, under the runtime's lock: the consumer's submissions there sit in that command
+  queue's order, and in that of any other command queue sharing the `VkQueue`. From its first call the command queue keeps that `VkQueue` for its life.
 - `Texture::vk_image`, `Buffer::vk_buffer`, `Event::vk_semaphore` and `SharedEvent::vk_semaphore`
-  give an object's handle.
+  give an object's handle. Handing out a texture's image, or a buffer's `VkBuffer` whose zeros or
+  bytes still wait for the device's next submission (a new `Private` buffer's), first makes that
+  work, the handle's own alone, by a submission it waits for, so the consumer's own work on the
+  handle comes after it: a buffer's on the device's staging queue where it reserved one (a copy
+  engine; or, on a device where no memory the host caches holds a texture's image, such as an
+  RX 7900 XTX under RADV, a queue of compute work beside its own), behind no other work of the
+  program's, else on the device's first `VkQueue`, behind what was submitted there before.
   A texture over a buffer's bytes that aliases them gives a linear image (the same one for textures
   of one image over the same bytes of one import of host pages, which share it), which over a
   no-copy buffer's or dma-buf host pages may be of `VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT`
@@ -254,6 +277,57 @@ the record the pass is making.
   imported by their pointer in one allocation, so the consumer binds a buffer of its own usage
   (a video decode's bitstream source) to the same bytes; `None` for copied, dma-buf, read-only or
   detached pages.
+- `Device::new_exportable_buffer` makes a buffer whose memory another API imports (CUDA's
+  `cuImportExternalMemory`, another `VkDevice`), in memory allocated exportable as an opaque file
+  descriptor: its own dedicated allocation where the device needs or prefers one, else a block
+  that exportable buffers share; every other buffer stays in the device's other pooled blocks.
+  `Buffer::export_memory_fd` answers a new descriptor each call, the consumer's to close, with the
+  allocation's size, the buffer's offset and length in it, whether it is a dedicated allocation
+  and its memory type. An import of a shared block reaches the whole block, of which the buffer
+  is its offset and length. The buffer must outlive every import. On a device loss the memory's
+  contents are lost for the imports too, and a device made again exports new allocations. A
+  device without `VK_KHR_external_memory_fd`, or that exports no buffer's memory so, refuses it
+  (`RuntimeGap::ExportableMemory`).
+- A buffer descriptor's `exported_as` (`MemoryExport::OpaqueFd` or `MemoryExport::DmaBuf`) makes
+  such a buffer of either handle type with the descriptor's other fields: `aligned_byte` lays that
+  byte on a multiple of 256 bytes of the exported memory, and `padding_unobserved` lets textures
+  over it alias it with rows apart. A texture over such a buffer is a linear image made for the
+  memory's handle type, as Vulkan requires of an image bound in exported memory; such an image
+  starts `UNDEFINED`, so it takes the memory in place where the device's in-place check of that
+  exported memory passed, and a texture made before the check answered is a shadow that moves in
+  place at a later commit (docs/HOWTO.md, section 7, says where each plane must lie). Over a
+  dma-buf export where no image binds in the memory itself (RADV's 780M), the texture's image is a
+  `DRM_FORMAT_MOD_LINEAR` one bound to a dedicated import of that memory's own dma-buf, in place
+  as well (`WorkCounts::exported_dma_buf_images`). An opaque file descriptor's memory the driver
+  exports only as the buffer's dedicated allocation takes no image: its textures are shadows,
+  announced. Dma-buf-exportable buffers share blocks of their own kind, or
+  take a dedicated allocation where the device needs or prefers one. `Buffer::export_memory_dma_buf`
+  answers a new dma-buf each call, with what `export_memory_fd` answers; its `offset` is the
+  buffer's first byte, so a VA-API `DRM_PRIME_2` surface's plane lies at `offset` plus the plane's
+  offset in the buffer. A device without `VK_KHR_external_memory_fd`,
+  `VK_EXT_external_memory_dma_buf` and `VK_EXT_queue_family_foreign`, which the runtime enables
+  wherever listed, or that exports no buffer's memory as a dma-buf, refuses it
+  (`RuntimeGap::DmaBufExport`). `NoCopy` contents with `exported_as` are refused
+  (`Problem::ExportedNoCopy`).
+- `Buffer::external_write_done` says the other API's writes to an exported buffer completed (the
+  consumer waited for them: `vaSyncSurface`, a CUDA stream's synchronize). Vulkan needs an acquire
+  from the queue family reserved for that API before the device reads them
+  (`VK_QUEUE_FAMILY_FOREIGN_EXT` for a dma-buf, `VK_QUEUE_FAMILY_EXTERNAL` for an opaque
+  descriptor): the device's next submission records it, of the whole `VkBuffer`, before any of its
+  commands, so the call waits for no GPU work; a host-visible buffer's acquire is made at once and
+  waited for alone. A texture over the buffer that reads it through a shadow (rows no image of the
+  memory holds, such as a decoder's pitch) copies the bytes in again at its next use in a command
+  buffer committed after the call; without the call, it may keep reading what it copied in before.
+  Call it once after each external write, while none of the runtime's commands that use the buffer
+  is in flight. Metal has no counterpart.
+- `Device::new_exportable_shared_event` makes a shared event whose timeline semaphore another API
+  imports (CUDA's external semaphores, another `VkDevice`), made exportable as an opaque file
+  descriptor; `SharedEvent::export_semaphore_fd` answers a new descriptor each call. Its counter
+  is the signal index the event's interop hooks name: the importer waits for the counter
+  `vk_wait` answers and signals only one `reserve_vk_signal` reserved. The event outlives every
+  import and every signal and wait an importer submitted; on a device loss its state is lost for
+  the imports too. A device without `VK_KHR_external_semaphore_fd`, or that exports no timeline
+  semaphore so, refuses it (`RuntimeGap::ExportableSemaphore`).
 
 ## The memory model
 
@@ -273,7 +347,10 @@ the record the pass is making.
 - **New resources** read what plain Metal's measured answer is: a new buffer reads zero. A
   host-visible buffer longer than 32 MiB lies, where the device imports host pointers, in fresh
   anonymous pages imported by their pointer, zero as mapped, so that nothing writes its zeros; a
-  recycled one is set to zero on the host. A new `Shared` or `Managed` texture reads zero. A new
+  recycled one is set to zero on the host. A new `Shared` or `Managed` texture reads zero: where
+  it copies on the host, its image is zeroed on the host as it is made, or, where the device has
+  `VK_EXT_zero_initialize_device_memory` and the image lies in memory no resource used, starts in
+  the driver's zeros. A new
   `Private` texture answers as the Mac the device presents (`MacClass`, which
   `DeviceOptions::mac_class` declares, by default the class of the device's GPU: an Apple silicon
   Mac on an Apple GPU, a Mac with an Intel or AMD GPU on every other;
@@ -292,20 +369,24 @@ the record the pass is making.
   on them.
 - **Host memory without a copy.** `unsafe Device::new_buffer_with_bytes_no_copy` imports host
   memory, given as a `HostMemory`, through `VK_EXT_external_memory_host`; memory the device cannot
-  import exactly is refused. `unsafe Device::new_heap_with_bytes_no_copy` is its heap twin.
+  import exactly is refused, but where the driver refuses the pointer itself (below).
+  `unsafe Device::new_heap_with_bytes_no_copy` is its heap twin.
   `Buffer::rebind_bytes_no_copy` and `Heap::rebind_bytes_no_copy` move either to another range,
   keeping the objects, addresses and IDs. A rebind is refused (`RebindProblem::EncodedUses`) while
   a command buffer not yet committed, or an open encoder, used the bytes; a render encoder whose
   attachment lies in them uses them from its open. Where a driver refuses the pointer (RADV
   refuses shared mappings, a `memfd`'s among them), memory made with `HostMemory::with_dma_buf` is
   imported from dma-bufs of its pages instead
-  ([HOWTO](../../docs/HOWTO.md#6-host-memory-a-driver-refuses)); on NVIDIA's driver the runtime
+  ([HOWTO](../../docs/HOWTO.md#6-host-memory-a-driver-refuses)), and a no-copy buffer or heap
+  over memory made without a source is a copy of its pages, as below; on NVIDIA's driver the runtime
   never hands the driver pages the kernel cannot pin (a dma-buf's mapping): they take the source,
   and else, or where its import fails, a copy, as below. A no-copy buffer's import of such
   dma-bufs that only blits have read may be released while idle and imported again at its next
   blit, which then costs time: RADV lists every import in every submission. Nothing of Metal's
   observes it. A no-copy buffer, heap, or buffer's or heap's rebind whose import the caller's gate
-  refuses (`HostMemory::with_import_gate`), or whose admitted import fails, is made over a copy of
+  refuses (`HostMemory::with_import_gate`), or whose admitted import fails, and a no-copy buffer
+  or heap whose pointer the device refuses with no dma-buf of its pages serving it (no source
+  given, or one that failed or whose dma-bufs the device refused), is made over a copy of
   its bytes in memory of the device's own, announced (`copied-host-pages`,
   [HOWTO](../../docs/HOWTO.md#copied-host-buffers)), wherever the process maps the pages
   readable (a dma-buf's mapping among them); over pages not mapped readable it is refused. A
@@ -324,20 +405,28 @@ the record the pass is making.
   program; no order of either changes a result.
 - **Textures over buffers** share the buffer's bytes. Over a no-copy buffer's host pages or such
   a long buffer's fresh pages, an image bound to them would start `UNDEFINED`, and Vulkan lets its
-  first move rewrite any byte bound to it: by default (`HostPageTexturePolicy::InPlace`) a texture
-  there that only samples or reads is an image in place wherever the device's own check showed
-  that move keeping every byte for that kind of pages (run once per driver and release on a
-  thread of its own, kept in the shader cache). The runtime keeps a copy and announces it
-  (`shadowed-texture`, naming why) for every other texture there (under
-  `HostPageTexturePolicy::Shadow`, one that renders or writes, one made before the check answered
-  or whose check did not pass), where the device's linear images cannot hold Metal's layout, and
-  where the rows lie with bytes between them. On a discrete GPU, a texture whose policy and usage
-  take the image in place, over a no-copy buffer whose memory carries a log of its writes
+  first move, and a render pass's load and store, rewrite any byte bound to it: by default
+  (`HostPageTexturePolicy::InPlace`) a texture there that samples, reads, renders into it or is
+  written through a shader (of texels of 1, 2, 4, 8 or 16 bytes, the narrow ones checked apart)
+  is an image in place wherever the
+  device makes it and its own check showed those operations keeping every byte for that kind of
+  pages (but the rows' padding of a texture over a buffer a kernel writes, which an x86 Mac's GPU
+  may change too: docs/API.md, section 10), on a discrete GPU as on any other (run once per driver and release on a thread of its
+  own, kept in the shader cache). The runtime keeps a copy and announces it (`shadowed-texture`,
+  naming why) for every other texture there (under `HostPageTexturePolicy::Shadow`, one a shader
+  writes of texels of a width the check stores none of, one made before the check answered or
+  whose check did not
+  pass), where the device's linear images cannot hold Metal's layout, and where the rows lie with
+  bytes between them (but over a buffer whose maker declared them unobserved,
+  `BufferDescriptor::padding_unobserved`, below). On a discrete GPU, a `Managed` texture
+  over a no-copy buffer's bytes (not an IOSurface plane's) that only samples or reads, whose
+  policy takes the image in place, over memory that carries a log of its writes
   (`HostMemory::with_dirty_pages`), tracked and laid out as one copy, is instead such a copy in
-  the device's memory, announced nowhere, whatever the check answered: its copies in take only the
-  rows the log reports changed, so the GPU reads the surface from its own memory, where in place it
-  reads the pages across the bus at every sample (`WorkCounts::device_copy_textures`). Exact either
-  way; integrated GPUs, CPU devices and memory without a log keep the image in place.
+  the device's memory, announced nowhere, whatever the check answered: the GPU's copy of the two
+  a `Managed` resource is on a Mac with a discrete GPU, its copies in only the rows the log
+  reports changed (`WorkCounts::device_copy_textures`). A `Shared` texture and an IOSurface's
+  stay in place there, read across the bus as a discrete Mac's GPU reads them. Exact either way;
+  integrated GPUs, CPU devices and memory without a log keep the image in place.
 - **Two-plane YCbCr textures** (`YCBCR8_420_2P` and its kin over a surface's planes) hold an
   image of the texels Metal reads, converted from the planes before a command buffer's first use
   where they changed. Where `has_unified_memory`, a function that only samples or gathers a
@@ -376,7 +465,10 @@ Calls Metal does not have, for a consumer that emulates a Metal device:
   only a GPU signal still running reaches is held until the signal lands (measured on an M3 Max,
   the conformance case `event-wait-behind-a-running-signal`).
 - `CommandBuffer::add_submission_handler` is called when the runtime takes the command buffer's
-  last batch for its queue (submits it, or holds it for one kernel submission with later ones);
+  last batch for its queue (submits it, or holds it for one kernel submission with later ones;
+  what another queue's command buffers had held then goes to the driver before it runs, and the
+  completion of one that needs no GPU work, taken with no submission behind no work in flight,
+  never waits for it);
   `add_executed_commands_handler` each time an execution's indirect records are read.
 - `CommandBuffer::add_completion_seen_handler` is called once the command buffer completed, its
   status, error and GPU times final, on the runtime's thread that saw it complete (its queue's
@@ -395,14 +487,17 @@ Calls Metal does not have, for a consumer that emulates a Metal device:
 - `CommandBuffer::commit_and_submit` commits as `commit` does, then submits on the calling thread
   where no other submission pass is under way: the ready command buffers in commit order, this
   one among them, each needing no host step and no switch of a storage form, up to the pass's
-  bound (one held back, another queue's waiting for its check or an event, holds back only the
+  bound (under `CompletionPolicy::Grouped`, on a driver whose batches may wait in a group, one
+  goes alone where its `VkQueue` runs at most one earlier submission not seen complete, and is
+  left to the scheduler's thread to group where two or more run; one held back, another queue's waiting for its check or an event, holds back only the
   later commits that wait behind it, as on the scheduler's thread), their submission checks run
   inside the call just before each submission (unless one waits for a shared event's GPU signal
   to land, which the scheduler's thread waits for; a plain event's wait goes to the `VkQueue`, as
   Metal submits an `MTLEvent` wait at once) and their submission handlers after it, in submission
-  order with every other command buffer's. What it leaves goes
-  to the scheduler's thread. One wake and one thread hop fewer per command buffer than `commit`,
-  whose submission is the scheduler thread's, as Metal's is its own thread's
+  order with every other command buffer's. What it leaves goes to the scheduler's thread, which
+  it wakes, as it does after a batch it submitted alone where the batch may wait in a group. No
+  wake and no thread hop lies on its way to the `VkQueue`, where `commit`'s submission is the
+  scheduler thread's, as Metal's is its own thread's
   (`WorkCounts::scheduler_passes_at_commit`, `batches_submitted_at_commit`,
   `batches_checked_at_commit`). Under `RenderLoweringPolicy::Worker`, one whose last render
   encoder's end the lowering thread has not lowered returns as `commit` does, and the thread that
@@ -466,17 +561,61 @@ Calls Metal does not have, for a consumer that emulates a Metal device:
   or a no-copy heap's buffer's: the caller's pages, imported by their pointer, as dma-bufs or in a
   guest RAM's chunk, or a copy of them (`copied-host-pages`), which Metal never makes; a rebind
   may change it ([HOWTO](../../docs/HOWTO.md#copied-host-buffers)).
+- `BufferDescriptor::padding_unobserved` (`with_padding_unobserved`): the maker of a buffer of
+  the runtime's own memory declares that nothing reads the bytes between a texture's rows over it
+  (each row's after its texels to its pitch, the last row's included) or between its slices, so
+  such a texture is a linear image aliasing the buffer where the device lays one out at its
+  pitches, or else a `DRM_FORMAT_MOD_LINEAR` image at them where the device's in-place check
+  passed for its pooled memory (`WorkCounts::pooled_pitched_images`), not a shadow, and those
+  bytes may change whenever it is made or used; no other byte does
+  (`WorkCounts::unobserved_padding_aliases`). Such a buffer lies in a plain block of the
+  runtime's memory, where on a unified-memory device whose other buffers lie in blocks allocated
+  exportable (docs/FAST-PATHS.md, the `Private` row) a block's making holds the process's
+  submissions on RADV (`WorkCounts::plain_buffer_blocks_made`). No Metal counterpart; refused
+  (`PaddingUnobservedNoCopy`) with `NoCopy` contents.
+- `BufferDescriptor::aligned_byte` (`with_aligned_byte`): a buffer of the runtime's own memory
+  laying one of its bytes on a multiple of 256 bytes of its memory, so a texture whose texels start
+  there (a decoded frame's plane 32 bytes into its surface, say) is a linear image aliasing the
+  buffer where the device lays one out, not a shadow, on a device whose linear images start on a
+  multiple of more than the texture's offset (RADV's 256). Its contents start that byte's remainder
+  short of a multiple of 256, not on a page as Metal's do; its length and `gpuAddress` are Metal's.
+  No Metal counterpart; refused (`AlignedByteNoCopy`) with `NoCopy` contents.
+- `Buffer::texture_placement` and `texture_placement_with_iosurface_plane` (with
+  `TexturePlacement` and `TextureShadowReason`): where a texture `new_texture` or
+  `new_texture_with_iosurface_plane` makes of the same arguments lies if made now: in place over
+  host pages, a shadow pending the device's in-place check, a shadow and why, no host pages, or
+  another shape. The making's own route answers it, after every check the making runs before it
+  makes anything, so the same arguments are refused with the same errors; an answer in place runs
+  the image's making up to its bind (one or two unbound `VkImage`s, released), so a pitch or an
+  image the device refuses answers the shadow the texture then is.
+  `Device::settle_in_place_checks` starts the check and says when its verdicts are known (a zero
+  timeout waits for nothing). `Buffer::tiled_texture_placement` answers it for
+  `new_tiled_texture`'s arguments.
 - `HostRam`, `Device::use_host_ram` (with `HostRamUse`) and `HostMemory::with_runs` (with
   `RunResolver`): a guest's RAM imported whole, in 64 MiB chunks, for a device that refuses views
   of guest pages made through dma-bufs; a no-copy object whose pages the consumer resolves to one
   run inside one chunk is bound in the chunk, with no import of its own
-  ([HOWTO](../../docs/HOWTO.md#guest-ram-imported-whole)).
+  ([HOWTO](../../docs/HOWTO.md#guest-ram-imported-whole)). `HostRam::with_dma_buf` gives the RAM a
+  source of dma-bufs of its pages: a device whose own check finds held pointer imports taxing
+  every submission (RADV), or that refuses the RAM's pointer, imports each chunk as one dma-buf.
+  `HostRam::with_dma_buf_of_runs` gives it a source of one dma-buf of a list of runs (udmabuf's
+  `UDMABUF_CREATE_LIST`): there a copy by runs over a chunk not imported imports lists of its own
+  pages in place of the chunk, which pins every page of it, each list kept past its command buffer
+  for the copies of the same pages after it (at most 64 MiB and 16 lists, each released once no
+  copy took it for 2 s).
 - `BlitCommandEncoder::copy_from_host_ram` and `copy_to_host_ram`: runs of a used guest RAM
-  (4 KiB-aligned host addresses, whole 4 KiB pages) gathered into consecutive bytes of a buffer,
-  or scattered back, by one compute dispatch per chunk the runs touch, from the device's chunk
-  imports, with no view of the pages and no import of their own; ordered and seen as a copy
-  between the buffer and a no-copy buffer over the pages
-  ([HOWTO](../../docs/HOWTO.md#guest-ram-imported-whole)).
+  (host addresses from a 4-byte word to any byte) gathered into consecutive bytes of a buffer,
+  or scattered back, from the device's chunk imports: runs that start and end on a word (whole
+  pages, or rows of 4-byte texels) by one compute dispatch per chunk the runs touch, other runs by
+  a copy region per run in a chunk; over a chunk not imported yet, where the device's thread
+  imports ahead, through memory of the command buffer's own that the CPU copies from or into
+  the pages; neither touches another byte of their pages; with no view
+  of the pages and no import of their own; ordered and seen as a copy between the buffer and a
+  no-copy buffer over the pages
+  ([HOWTO](../../docs/HOWTO.md#guest-ram-imported-whole)). `copy_runs_from_host_ram` and
+  `copy_runs_to_host_ram` take each run at a byte of the buffer of its own, so a buffer that
+  keeps a surface's layout (rows at a pitch, the padding between them untouched) is one call for
+  every row.
 - `HostBytes`: bytes at a pointer that may change while a call reads them (a guest's memory),
   which `Texture::replace_region_with_host_bytes` and `BufferContents::CopyHost` copy once through
   the pointer, where the slice forms would need the caller's own copy first.
@@ -570,6 +709,64 @@ names the first with the error `VK_TIMEOUT`, counted: `WorkCounts::draws_dropped
 `dispatches_dropped_still_making`, announced `draw-dropped-still-making` and
 `dispatch-dropped-still-making`. `PipelineWaitPolicy::Exact` waits until the pipeline is made.
 
+## A lost device
+
+A device the runtime made survives the loss of its `VkDevice` (`VK_ERROR_DEVICE_LOST`), as Metal's
+device survives a GPU recovery. The first call that needs the device after the loss makes a new
+`VkDevice` of the same physical device, options, queue families and extensions; the calls made
+meanwhile wait for it.
+
+- The command buffers in flight fail: the oldest incomplete one with `GpuHang`, the rest with
+  `GpuRecoveryVictim`. Until the recovery, a command buffer committed on the hang's queue runs
+  nothing and completes with no error, as on Metal's hang's queue. One made before the recovery
+  and committed after fails with `GpuRecoveryVictim`. A queue's second hang revokes it, as
+  Metal's does: a command buffer committed on it from then on, before the recovery too, fails
+  with `AccessRevoked`.
+- The `Device` and its `CommandQueue`s go on: what they make from then on is made on the new
+  `VkDevice`. A `Device` call that the loss meets while it runs is not refused for it: it runs
+  again on the new `VkDevice`. One that takes host memory, a deallocator or a range token, which a
+  second run could not have, runs on the new `VkDevice` where the loss came before it took them,
+  and completes on the lost one where the loss came after, its object then one made before the
+  recovery.
+- The recovery carries the events, the uses of guest RAM (`HostRamUse`), the no-copy buffers, the
+  `Private` buffers and the buffers in the runtime's own pages to the new `VkDevice`: the same
+  objects, at the same addresses. An event keeps the value the host saw and its listeners'
+  notifications. A buffer in the runtime's own pages keeps its bytes and its `contents` pointer:
+  a long host-visible buffer's fresh pages, and, on a device whose checks found that a held import
+  of host pages costs its submissions nothing and that textures over such pages take in place
+  what they take over the device's own memory, the blocks of pages the `Shared` and `Managed`
+  (unified memory) buffers lie in, imported again on the new `VkDevice`. A no-copy buffer is
+  made again over the same pages, so it keeps its bytes and its pointer; its import gate, run
+  resolver and dma-buf source are asked again, on the thread that recovers, and must not call
+  into the device. Its deallocator runs at its release once no `VkDevice` imports its pages. A
+  `Private` buffer's contents are lost: it reads zero.
+- Any other object made before the recovery is refused where it meets the new `VkDevice` (an
+  encoder's bind, a pipeline made from its functions) and in its own calls that need its lost one:
+  `Error::NotImplemented(RuntimeGap::MadeBeforeRecovery)`. That covers pooled `Shared` and
+  `Managed` buffers in memory the device allocated, whose `contents` pointer is the lost memory's
+  mapping (on a device that imports no host pointer, or whose checks found that a held import
+  costs its submissions or that textures over such pages take less, or had not answered; and a
+  `Managed` buffer without unified memory), detached no-copy buffers, heaps, textures, pipeline
+  states, libraries and exportable memory or events. Make it again.
+  Metal's objects go on. The recovery's notice counts the buffers and events it carried and left.
+- The lost `VkDevice` is destroyed once the objects left on it went and, where `Device::raw`
+  answered its handles, a later `raw` call answered the new one's: `WorkCounts::vk_devices_live`
+  reads 2 until then. A carried object holds nothing of it once none of its command buffers
+  records. `vk_devices_made` and `device_recoveries` count the rest.
+- Each recovery is announced (`device-recovered`), naming the hang's command buffer.
+- `Device::raw` answers the new `VkDevice`'s handles once a later call asks; the handles it
+  answered before stay valid until then, and the lost `VkDevice` stays alive until then, so the
+  consumer destroys what it made with those handles (a swapchain, an import) first.
+- `CommandQueue::with_vk_queue` gives its closure the `VkDevice` the lent `VkQueue` belongs to,
+  read under the same lock: from the recovery on, the new one, whatever `Device::raw` answered
+  before. A consumer whose command pool, fence or semaphore was made on another `VkDevice` makes
+  it again on that one before it submits there.
+- A device the consumer made (`Device::from_raw`) is not made again: it answers `DeviceLost` from
+  the loss on.
+
+`Device::recover_for_test` runs the same recovery with no GPU fault, for tests of what survives
+one.
+
 ## Degrade notices
 
 Where the runtime gives Metal's answer only at a cost Metal does not pay (a copy, a scratch
@@ -605,10 +802,9 @@ draw whose vertices or indices complete no primitive of its type draws nothing, 
 
 | Device | Route |
 |---|---|
-| `wideLines`, non-strict, parallelogram wide lines, `w' > 1` on the granularity | Its own lines, exactly Metal's |
-| `wideLines`, its lines otherwise (strict, not stated as parallelograms, `w' < 1`, off the granularity) | Its own lines, announced `device-wide-lines` (`WideLinePolicy::Device`, the default); under `WideLinePolicy::Exact` (`DevicePolicy::exact_answers()`) the band |
+| `wideLines`, `w'` in `lineWidthRange` and above 0 | Its own lines, announced `device-wide-lines` (`WideLinePolicy::Device`, the default): no device's are taken as Metal's, a driver's parallelograms included, whose ends the driver places; under `WideLinePolicy::Exact` (`DevicePolicy::exact_answers()`) the band |
 | No `wideLines` (MoltenVK), `w'` outside `lineWidthRange`, or `w' = 0` | The band |
-| What neither draws | Its own lines at the width nearest Metal's they draw (clamped into `lineWidthRange`, 1 without `wideLines`), announced `lines-at-nearest-width` |
+| What neither draws | Its own lines at the width nearest Metal's they draw (clamped into `lineWidthRange` and put on the nearer step of `lineWidthGranularity`'s grid from its bottom, never 0; 1 without `wideLines`), announced `lines-at-nearest-width` |
 
 The band is the pipeline's band variant, through a tessellation control and evaluation stage the
 translator adds (docs/API.md section 4): two triangles over each line's parallelogram, and for a
@@ -651,8 +847,24 @@ yes where the device has `sampleRateShading` (and, on MoltenVK, the portability 
 `shaderSampleRateInterpolationFunctions`): an `interpolant` input is then read at its centroid, a
 sample and an offset through Vulkan's interpolation functions; without them only
 `interpolate_at_center` compiles. An offset is read within the device's range and on its grid
-(`device-interpolation-offset`), and a draw at custom sample positions through a function that
-reads at a sample is refused (`RuntimeGap::InterpolateAtSampleWithPositions`).
+(`device-interpolation-offset`); on RADV a perspective interpolant read at a sample or an offset
+is the driver's extrapolation from the pixel center, off by the value's curvature across the
+distance (`extrapolated-interpolation`); and a draw at custom sample positions through a
+function that reads at a sample is refused (`RuntimeGap::InterpolateAtSampleWithPositions`).
+
+`Device::minimum_linear_texture_alignment_for_pixel_format`
+(`minimumLinearTextureAlignmentForPixelFormat:`) answers, per pixel format, the alignment of a
+texture's offset and `bytesPerRow` in a buffer at which the device's images hold the texture in
+place over host pages, at least the 16 bytes Metal answers on an Apple GPU. The runtime asks the
+driver for every format at the first query of any by making those images (none is bound; 17 to
+23 ms for all of them on the devices measured), keeps those answers for the device's life, and
+writes them as one record per driver in the shader cache's content directory. The M3
+Max's MoltenVK answers 16 for every format; RADV answers 256 and lavapipe 64 for each format
+whose texture over a buffer they can hold in place, and 16 for the rest (the two-plane YCbCr,
+packed and extended-range formats among them). A texture at a smaller
+multiple of 16 is still made, as a shadow where the device's images do not take its layout
+(`shadowed-texture`). The private `deviceLinearTextureAlignmentBytes` and
+`linearTextureAlignmentBytes` answer the largest of the formats' answers.
 
 Where Metal's answers differ by macOS release (which pixel formats it describes, how a heap
 texture's blocks lie, its private device properties),

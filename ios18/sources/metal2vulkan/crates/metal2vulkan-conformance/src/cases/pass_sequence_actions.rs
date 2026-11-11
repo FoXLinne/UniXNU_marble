@@ -834,10 +834,15 @@ impl Case for SequenceActions {
         // **No value is loosened**: every texel Metal leaves is one we must leave, in every cell
         // of both cases. Two notices are declared and neither is a difference.
         //
-        // `DontCareStore`: every cell of both cases stores an attachment `DontCare` somewhere, and
-        // a device whose `DontCare` store is not Metal's own announces that it took the
-        // near-equivalent. It fires on no venue whose driver stores `DONT_CARE` as Metal does
-        // (MoltenVK on this M3 Max among them), which is why it is declared rather than relied on.
+        // `DontCareStore`: every cell of both cases stores an attachment `DontCare` somewhere. Under
+        // the suite's exact policy (`DontCareColorPolicy::Kept`) a colour stored `DontCare` keeps
+        // its earlier texels through a backing of its queue's and announces nothing
+        // (`kept_bytes.rs`), so in the colour case it fires only where no backing could be made;
+        // under the default policy the colour is stored as the driver stores it and announced. A
+        // depth or stencil aspect stored `DontCare` on a device whose `DontCare` store is not
+        // Metal's own announces that it took the near-equivalent under either. It fires on no
+        // venue whose driver stores `DONT_CARE` as Metal does (MoltenVK on this M3 Max among
+        // them), which is why it is declared rather than relied on.
         //
         // `SharedInSystemMemory`: both cases read their attachments back through a `Shared`
         // buffer, and a device with no unified memory keeps a `Shared` allocation in system memory

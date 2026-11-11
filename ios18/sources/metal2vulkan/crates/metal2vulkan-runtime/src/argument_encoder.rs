@@ -182,6 +182,15 @@ impl Device {
         &self,
         arguments: &[ArgumentDescriptor],
     ) -> Result<ArgumentEncoder, Error> {
+        self.at_serving(|device| device.new_argument_encoder_with_arguments_now(arguments))
+    }
+
+    /// [`Device::new_argument_encoder_with_arguments`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_argument_encoder_with_arguments_now(
+        &self,
+        arguments: &[ArgumentDescriptor],
+    ) -> Result<ArgumentEncoder, Error> {
         const CALL: &str = "new_argument_encoder_with_arguments";
         let layout = ArgumentBufferLayout::from_descriptors(arguments)
             .map_err(|error| layout_error(CALL, error))?;
@@ -201,6 +210,15 @@ impl Device {
     /// [`Function::new_argument_encoder_with_buffer_index`]; a member whose encoder Metal's was
     /// not measured for (`Unsupported`), such as a plain buffer's pointer member.
     pub fn new_argument_encoder_with_buffer_binding(
+        &self,
+        binding: &BufferBinding,
+    ) -> Result<ArgumentEncoder, Error> {
+        self.at_serving(|device| device.new_argument_encoder_with_buffer_binding_now(binding))
+    }
+
+    /// [`Device::new_argument_encoder_with_buffer_binding`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_argument_encoder_with_buffer_binding_now(
         &self,
         binding: &BufferBinding,
     ) -> Result<ArgumentEncoder, Error> {
@@ -383,7 +401,7 @@ impl ArgumentEncoder {
             return Ok(());
         };
         if !buffer.device().same(&self.device) {
-            return Err(invalid(call, Problem::ForeignObject));
+            return Err(buffer.device().foreign(call, &self.device));
         }
         if buffer.storage_mode() == StorageMode::Private || buffer.contents().is_none() {
             return Err(invalid(call, Problem::StorageMode));
@@ -494,7 +512,7 @@ impl ArgumentEncoder {
         if device.same(&self.device) {
             Ok(())
         } else {
-            Err(invalid(call, Problem::ForeignObject))
+            Err(device.foreign(call, &self.device))
         }
     }
 

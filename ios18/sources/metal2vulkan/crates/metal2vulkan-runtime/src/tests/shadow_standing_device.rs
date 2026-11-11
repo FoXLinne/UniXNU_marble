@@ -18,12 +18,14 @@
 //! the counts say which copies in moved nothing (`WorkCounts::shadow_copies_in_skipped_by_standing`).
 //! A standing that never held leaves the bytes right and the counts wrong; one that held over a
 //! write leaves the counts right and the bytes wrong. A shadowed render target over host pages a
-//! no-copy buffer imports, whose CPU writes no count sees, never stands.
+//! no-copy buffer imports, whose CPU writes no count sees, never stands (a shadow under
+//! `HostPageTexturePolicy::Shadow`, `blit_holds::shadow_device`: under the default policy the
+//! device's in-place check may put it in place, with no image to stand).
 //!
 //! Device tests: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
 //! `m2v_cpu_icd`), on the kind of device the cfg selects.
 
-use super::blit_holds::{device, over_host, Host, Scratch, WAIT};
+use super::blit_holds::{device, over_host, shadow_device, Host, Scratch, WAIT};
 use super::encoder_holds::{bytes_of, library};
 use crate::{
     Buffer, CommandQueue, ComputePipelineState, Device, IoSurfacePlane, LoadAction,
@@ -37,8 +39,8 @@ use std::sync::Arc;
 
 /// The plane: `WIDTH` texels a row, `HEIGHT` rows, rows of `PITCH` bytes, 64 past each row's
 /// texels.
-const WIDTH: u64 = 64;
-const HEIGHT: u64 = 16;
+pub(super) const WIDTH: u64 = 64;
+pub(super) const HEIGHT: u64 = 16;
 const ROW: u64 = WIDTH * 4;
 const PITCH: u64 = ROW + 64;
 const LENGTH: u64 = PITCH * HEIGHT;
@@ -46,7 +48,7 @@ const LENGTH: u64 = PITCH * HEIGHT;
 /// What the texture is read and written with: the kernel that reads it, the plain texture the
 /// kernel writes, the pipeline that draws into it, and a `Shared` buffer the buffer's bytes are
 /// read into.
-struct Tools {
+pub(super) struct Tools {
     queue: CommandQueue,
     invert: ComputePipelineState,
     inverted: Texture,
@@ -55,7 +57,7 @@ struct Tools {
 }
 
 impl Tools {
-    fn new(device: &Device) -> Tools {
+    pub(super) fn new(device: &Device) -> Tools {
         let examples = library(device, "examples/runtime_examples.ll");
         let kernel = examples.new_function_with_name("invert_texels").unwrap();
         let options = PipelineOptions::default();
@@ -85,7 +87,7 @@ impl Tools {
 
     /// `texture`'s texels as the kernel reads them in a command buffer of its own, inverted, row
     /// after row, and the counts it moved.
-    fn texels(&self, texture: &Texture) -> (Vec<u8>, Stood) {
+    pub(super) fn texels(&self, texture: &Texture) -> (Vec<u8>, Stood) {
         let device = self.queue.device();
         let before = device.work_counts();
         let command_buffer = self.queue.command_buffer().unwrap();
@@ -196,19 +198,95 @@ impl Plane {
     }
 }
 
-/// The standing's counts between two snapshots of a device's.
-struct Stood {
+/// The standing's counts between two snapshots of a device's: the copies in decided against it,
+/// those it skipped and their texels, and the texels of those that moved them by where each was
+/// decided and by what the standing held (`WorkCounts::shadow_texels_unskipped_*`); of those whose
+/// standing never stood, by what last kept a command buffer's end from leaving it standing
+/// (`WorkCounts::shadow_texels_never_stood_*`).
+pub(super) struct Stood {
     against: u64,
-    skipped: u64,
+    pub(super) skipped: u64,
     texels: u64,
+    at: [u64; 6],
+    standing: [u64; 5],
+    never: [u64; 5],
+}
+
+/// Where an unskipped copy in was decided, as `Stood::at` orders them.
+const UNSTANDING: usize = 0;
+const COMMAND_BUFFER: usize = 4;
+const LET_GO: usize = 5;
+/// What its standing held, as `Stood::standing` orders them.
+const STOOD: usize = 0;
+const NEVER_STOOD: usize = 1;
+const TRUTH_WRITTEN: usize = 3;
+
+/// Of `stood`, the texels its unskipped copies in moved at `at` alone, and those whose standing
+/// held `standing` alone: every other count zero.
+fn moved(stood: &Stood, at: usize, standing: Option<usize>) -> u64 {
+    let texels = stood.at[at];
+    let mut at_only = [0; 6];
+    at_only[at] = texels;
+    assert_eq!(stood.at, at_only, "where the copies in were decided");
+    let mut standing_only = [0; 5];
+    if let Some(standing) = standing {
+        standing_only[standing] = texels;
+    }
+    assert_eq!(stood.standing, standing_only, "what their standing held");
+    texels
 }
 
 fn stood(before: &WorkCounts, after: &WorkCounts) -> Stood {
+    let delta = |count: fn(&WorkCounts) -> u64| count(after) - count(before);
+    let at = [
+        delta(|c| c.shadow_texels_unskipped_unstanding),
+        delta(|c| c.shadow_texels_unskipped_between_instances),
+        delta(|c| c.shadow_texels_unskipped_after_encoder_writes),
+        delta(|c| c.shadow_texels_unskipped_recorded_whole),
+        delta(|c| c.shadow_texels_unskipped_command_buffer),
+        delta(|c| c.shadow_texels_unskipped_let_go),
+    ];
+    let standing = [
+        delta(|c| c.shadow_texels_unskipped_stood),
+        delta(|c| c.shadow_texels_unskipped_never_stood),
+        delta(|c| c.shadow_texels_unskipped_unnamed_since),
+        delta(|c| c.shadow_texels_unskipped_truth_written),
+        delta(|c| c.shadow_texels_unskipped_image_written),
+    ];
+    let never = [
+        delta(|c| c.shadow_texels_never_stood_unmet),
+        delta(|c| c.shadow_texels_never_stood_not_current),
+        delta(|c| c.shadow_texels_never_stood_dropped),
+        delta(|c| c.shadow_texels_never_stood_partial),
+        delta(|c| c.shadow_texels_never_stood_end),
+    ];
+    let skipped_texels = delta(|c| c.shadow_texels_skipped_by_standing);
+    // Every first copy in of a private truth is skipped or counted where it was decided; and every
+    // one of a shadow that may stand that moved its texels, by what its standing held.
+    let first = delta(|c| c.shadow_texels_first_copied_in_private_buffers)
+        + delta(|c| c.shadow_texels_first_copied_in_private_surfaces);
+    assert_eq!(
+        first,
+        skipped_texels + at.iter().sum::<u64>(),
+        "skipped and unskipped: {at:?}"
+    );
+    assert_eq!(
+        at[1..].iter().sum::<u64>(),
+        standing.iter().sum::<u64>(),
+        "where {at:?}, standing {standing:?}"
+    );
+    assert_eq!(
+        standing[NEVER_STOOD],
+        never.iter().sum::<u64>(),
+        "never stood {never:?}"
+    );
     Stood {
-        against: after.shadow_copies_in_against_standing - before.shadow_copies_in_against_standing,
-        skipped: after.shadow_copies_in_skipped_by_standing
-            - before.shadow_copies_in_skipped_by_standing,
-        texels: after.shadow_texels_skipped_by_standing - before.shadow_texels_skipped_by_standing,
+        against: delta(|c| c.shadow_copies_in_against_standing),
+        skipped: delta(|c| c.shadow_copies_in_skipped_by_standing),
+        texels: skipped_texels,
+        at,
+        standing,
+        never,
     }
 }
 
@@ -239,6 +317,17 @@ fn a_private_plane_s_image_stands_until_a_command_writes_the_buffer_or_the_textu
         "the first copy in is decided at submission"
     );
     assert_eq!(counts.skipped, 0, "nothing stood yet");
+    let texels = WIDTH * HEIGHT;
+    assert_eq!(
+        moved(&counts, LET_GO, Some(NEVER_STOOD)),
+        texels,
+        "never stood"
+    );
+    assert_eq!(
+        counts.never,
+        [texels, 0, 0, 0, 0],
+        "no command buffer's end had met it"
+    );
     let (second, counts) = plane.texels();
     assert!(inverted(&second, 0x11));
     assert_eq!(counts.skipped, 1, "the image stood");
@@ -254,6 +343,11 @@ fn a_private_plane_s_image_stands_until_a_command_writes_the_buffer_or_the_textu
     );
     assert!(inverted(&filled[..row], 0x11) && inverted(&filled[3 * row..], 0x11));
     assert_eq!(counts.skipped, 0, "the fill let go");
+    assert_eq!(
+        moved(&counts, LET_GO, Some(TRUTH_WRITTEN)),
+        texels,
+        "the fill wrote the truth"
+    );
     let (_, counts) = plane.texels();
     assert_eq!(counts.skipped, 1, "and it stood again");
     // A pass draws 0x99 into every texel: a blit read of the buffer finds it, and the bytes
@@ -330,21 +424,29 @@ fn a_private_plane_copies_in_after_its_own_command_buffer_s_write_and_once_hande
     );
     assert!(inverted(&read[row..], 0x11));
     assert_eq!(counts.skipped, 0);
+    let texels = WIDTH * HEIGHT;
+    let written = counts.standing[STOOD] + counts.standing[TRUTH_WRITTEN];
+    assert_eq!(
+        (counts.at[COMMAND_BUFFER], written),
+        (texels, texels),
+        "decided by its own command buffer's write"
+    );
     // SAFETY: the handle is only read; no work of the caller's uses it.
     let _ = unsafe { plane.buffer.vk_buffer() };
     let _ = plane.texels();
     let (_, counts) = plane.texels();
     assert_eq!(counts.against, 0, "handed out, it never stands");
+    assert_eq!(moved(&counts, UNSTANDING, None), texels, "counted so");
 }
 
-/// A shadowed render target over host pages a no-copy buffer imports never stands: no count sees
-/// the CPU's writes. A CPU write between two command buffers reaches the second one's read, and
-/// no copy in of either is decided against a standing.
+/// A shadowed render target over host pages a no-copy buffer imports (under the shadow policy)
+/// never stands: no count sees the CPU's writes. A CPU write between two command buffers reaches
+/// the second one's read, and no copy in of either is decided against a standing.
 #[test]
 fn a_render_target_over_host_pages_never_stands() {
     let host = Host::new();
     let scratch = Scratch::new("shadow-standing-host");
-    let device = device(&scratch.0);
+    let device = shadow_device(&scratch.0);
     let runs = Arc::new(AtomicUsize::new(0));
     let Some(buffer) = over_host(&device, &host, &runs) else {
         return;

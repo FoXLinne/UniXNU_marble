@@ -142,13 +142,17 @@
 //! allocator as a consumer's process does (the counting one costs the draw path about a sixth of
 //! its time), and in one without it for the allocations.
 //!
-//! Three checks run by default where the allocations are counted:
+//! Four checks run by default where the allocations are counted, each after a warm-up whose last
+//! frame fills its queue ([`Workload::warm`]), so the device holds a command pool for every
+//! command buffer its queue holds at once:
 //! `a_frame_s_draws_and_pass_ends_allocate_within_their_bounds` holds a frame's draws to
 //! [`DRAW_ALLOCATIONS`] on the encoding thread, a draw's state changes and its draw call
 //! together ([`DRAW_ALLOCATIONS_DEBUG`] in a build with debug assertions), and its passes' ends
 //! to [`PASS_END_ALLOCATIONS`], each on average;
 //! `a_frame_s_pass_opens_allocate_within_their_bound` its pass opens to [`OPEN_ALLOCATIONS`]
-//! ([`FIRST_LOCK_ALLOCATIONS`] more on Apple's platforms); and
+//! ([`FIRST_LOCK_ALLOCATIONS`] more on Apple's platforms), and
+//! `a_full_queue_s_pass_opens_allocate_within_their_bound` those of a frame whose queue is full,
+//! as where the GPU falls behind by all of it ([`Workload::frame_full`]); and
 //! `a_frame_s_commits_allocate_within_their_bound` holds a checked frame's commits to
 //! [`COMMIT_ALLOCATIONS`] on the encoding thread ([`FIRST_LOCK_ALLOCATIONS`] more on Apple's
 //! platforms) and to [`SUBMIT_ALLOCATIONS`] on the others (the scheduler's passes, checks and
@@ -201,6 +205,10 @@ const TIMED: usize = 100;
 const COUNTED: usize = 20;
 /// The command buffers of a frame, each one pass.
 const BUFFERS: usize = 67;
+/// The uncompleted command buffers a command queue holds at most: Metal's default
+/// `maxCommandBufferCount`, the runtime's too. A frame of a full queue ([`Workload::frame_full`])
+/// commits this many before its first runs.
+const QUEUE_HOLDS: usize = 64;
 /// The draws of a pass.
 const DRAWS: usize = 6;
 /// In a repeating run ([`Run::REPEATING`]), the draws of a pass drawn again right after
@@ -215,7 +223,7 @@ const TARGET_SIDE: u64 = 512;
 /// reaches 512x320.
 const PART: [u64; 2] = [500, 300];
 /// The sampled textures the rectangles take in turn, and their side.
-const TEXTURES: usize = 16;
+pub(super) const TEXTURES: usize = 16;
 const TEXTURE_SIDE: u64 = 64;
 /// The bytes of `zwd_shapes`' `ZwdShape`: rectangle, fill, outline and shape.
 const SHAPE_BYTES: usize = 64;
@@ -309,8 +317,11 @@ const DRAW_ALLOCATIONS_DEBUG: f64 = 20.0;
 /// rectangle (`render_state::ViewportList`), its attachments' extents and its tracker's first part
 /// (`tracker::EncoderUses`) are held in place, and its lowering is boxed once where it is built
 /// (`render.rs`), its current instance inside that box, which the encoder then moves as a pointer.
-/// Measured: 4.00 on lavapipe in a build with debug assertions; 5.00 on the M3 Max through
-/// MoltenVK.
+/// Its core is boxed too, so the pass's end hands it on as a pointer, in the box the device kept
+/// from its last ended render encoder (`encoder::SpareCores`): no allocation of its own once the
+/// device has one. Measured: 4.00 on lavapipe (llvmpipe, LLVM 23.1.4) in a build with debug
+/// assertions; 5.00 on the M3 Max through MoltenVK. With a new box for the core at each open,
+/// 5.00 on lavapipe.
 #[cfg(not(m2v_system_alloc))]
 const OPEN_ALLOCATIONS: f64 = 4.5;
 /// The most allocations a frame's pass end (`end_encoding`) makes on the encoding thread on
@@ -603,6 +614,9 @@ struct Workload {
     /// for every [`PAGING_WAIT_EVERY`]th of the first queue's to wait for first (its paging
     /// event), with the values signalled so far.
     guest: Option<GuestEvents>,
+    /// The event a frame of a full queue's first command buffer waits for
+    /// ([`Workload::frame_full`]), with the last value signalled to it.
+    hold: (SharedEvent, Cell<u64>),
     /// Whether each pass draws its [`REPEATED`] draws again with no call before them.
     repeats: bool,
     /// The frame's shape, and each command buffer's passes as their draws ([`Shape::layout`]).
@@ -769,7 +783,7 @@ fn pipeline(
 }
 
 /// A `TEXTURE_SIDE` square `BGRA8Unorm` texture, every texel `texel`.
-fn sampled(device: &Device, texel: [u8; 4]) -> Texture {
+pub(super) fn sampled(device: &Device, texel: [u8; 4]) -> Texture {
     let mut descriptor =
         TextureDescriptor::texture_2d(PixelFormat::BGRA8Unorm, TEXTURE_SIDE, TEXTURE_SIDE, false);
     descriptor.usage = TextureUsage::SHADER_READ;
@@ -813,7 +827,7 @@ fn target_over_buffer(device: &Device) -> (Texture, Buffer) {
 }
 
 /// `ZwdShape`'s bytes: draw `n`'s box in a pass of the target's size, a fill and an outline.
-fn shape(n: usize) -> [u8; SHAPE_BYTES] {
+pub(super) fn shape(n: usize) -> [u8; SHAPE_BYTES] {
     let x = (n % 8) as f32 * 60.0;
     let y = (n / 8 % 8) as f32 * 60.0;
     let words: [f32; 16] = [
@@ -924,6 +938,7 @@ impl Workload {
                 paging: device.new_shared_event().unwrap(),
                 values: Cell::new((0, 0)),
             }),
+            hold: (device.new_shared_event().unwrap(), Cell::new(0)),
             repeats,
             shape,
             layout: shape.layout(),
@@ -1168,6 +1183,42 @@ impl Workload {
     /// [`frame`](Self::frame), reading `reads` around each step too (so its times are not the
     /// plain frame's).
     fn frame_reading(&self, reads: Reads) -> Frame {
+        self.frame_of(reads, false)
+    }
+
+    /// [`frame`](Self::frame) with its queue full, as where the GPU falls behind the encoding
+    /// thread by all of it: its first command buffer waits on the GPU for an event the CPU
+    /// signals once [`QUEUE_HOLDS`] of its command buffers are committed, so none completes
+    /// before, and each of them holds a command pool of its own meanwhile.
+    fn frame_full(&self) -> Frame {
+        self.frame_of(Reads::default(), true)
+    }
+
+    /// Every pipeline made, and every pool piece done: [`WARM`] frames, the last of them with
+    /// its queue full ([`frame_full`](Self::frame_full)), so the device holds a command pool for
+    /// every command buffer a frame of its queue holds uncompleted at once, however far the GPU
+    /// falls behind in a frame after. The last, so none of those pools is left idle long enough
+    /// for the device to free its command buffers (`spares.rs`) before the frames that count.
+    fn warm(&self) {
+        for _ in 1..WARM {
+            self.frame();
+        }
+        self.frame_full();
+    }
+
+    /// [`frame_reading`](Self::frame_reading), with its queue full where `full`
+    /// ([`frame_full`](Self::frame_full)).
+    fn frame_of(&self, reads: Reads, full: bool) -> Frame {
+        assert!(
+            !full || self.queues.len() == 1,
+            "a frame of a full queue commits on one"
+        );
+        let held = full.then(|| {
+            let (_, last) = &self.hold;
+            last.set(last.get() + 1);
+            last.get()
+        });
+        let release = QUEUE_HOLDS.min(self.layout.len()) - 1;
         let mut frame = Frame::default();
         // Each queue's last command buffer of the frame.
         let mut lasts: Vec<Option<CommandBuffer>> = self.queues.iter().map(|_| None).collect();
@@ -1185,6 +1236,11 @@ impl Workload {
             let command_buffer = self.queues[queue].command_buffer().unwrap();
             if let Some(guest) = &self.guest {
                 guest.begin(&command_buffer, queue, buffer);
+            }
+            if let (Some(value), 0) = (held, buffer) {
+                command_buffer
+                    .encode_wait_for_event(EventRef::from(&self.hold.0), value)
+                    .unwrap();
             }
             for &draws in passes {
                 let descriptor = self.pass(pass);
@@ -1249,6 +1305,9 @@ impl Workload {
                     .push(after.commits_handed_off > before.commits_handed_off);
             }
             lasts[queue] = Some(command_buffer);
+            if let Some(value) = held.filter(|_| buffer == release) {
+                self.hold.0.set_signaled_value(value);
+            }
         }
         frame.begun = begun;
         frame.wall = start.elapsed();
@@ -1271,14 +1330,14 @@ impl Workload {
 /// One step's wall time, and the encoding thread's allocations and user-space instructions in it
 /// where they are counted.
 #[derive(Clone, Copy)]
-struct Step {
-    wall: Duration,
-    allocations: Option<u64>,
-    instructions: Option<u64>,
+pub(super) struct Step {
+    pub(super) wall: Duration,
+    pub(super) allocations: Option<u64>,
+    pub(super) instructions: Option<u64>,
 }
 
 /// Run `body` as one step, counting its instructions where `counted`.
-fn step<R>(counted: bool, body: impl FnOnce() -> R) -> (R, Step) {
+pub(super) fn step<R>(counted: bool, body: impl FnOnce() -> R) -> (R, Step) {
     let allocations = alloc::thread_allocations();
     let instructions = counted.then(instructions::read).flatten();
     let start = Instant::now();
@@ -1302,7 +1361,7 @@ fn step<R>(counted: bool, body: impl FnOnce() -> R) -> (R, Step) {
 /// hybrid CPU (Intel's P and E cores) it counts on the P cores alone (`cpu_core`), where a run is
 /// pinned (`taskset`).
 #[cfg(target_os = "linux")]
-mod instructions {
+pub(super) mod instructions {
     use std::cell::Cell;
 
     /// `struct perf_event_attr` as its first published size (`PERF_ATTR_SIZE_VER0`).
@@ -1373,7 +1432,7 @@ mod instructions {
     }
 
     /// The instructions the calling thread retired in user space since its counter opened.
-    pub(super) fn read() -> Option<u64> {
+    pub(in crate::runtime_lane) fn read() -> Option<u64> {
         let fd = counter();
         if fd < 0 {
             return None;
@@ -1387,8 +1446,8 @@ mod instructions {
 
 /// Elsewhere none is counted.
 #[cfg(not(target_os = "linux"))]
-mod instructions {
-    pub(super) fn read() -> Option<u64> {
+pub(super) mod instructions {
+    pub(in crate::runtime_lane) fn read() -> Option<u64> {
         None
     }
 }
@@ -1520,7 +1579,7 @@ fn thread_switches() -> Option<Switches> {
 }
 
 /// The calling thread's CPU time so far.
-fn thread_cpu() -> Duration {
+pub(super) fn thread_cpu() -> Duration {
     let mut now = libc::timespec {
         tv_sec: 0,
         tv_nsec: 0,
@@ -2201,10 +2260,12 @@ fn frame_costs_over_buffers() {
     ]);
 }
 
-/// One frame of a plain device, once every pipeline is made and every pool piece done, its
-/// allocations counted; and the device's name.
+/// One frame of a plain device, once every pipeline is made and every pool piece done
+/// ([`Workload::warm`]), its allocations counted, with its queue full where `full`
+/// ([`Workload::frame_full`]); the device's name, and the command pools the device made in the
+/// frame and in one more frame like it after (`WorkCounts::command_pools_made`).
 #[cfg(not(m2v_system_alloc))]
-fn counted() -> (String, Frame) {
+fn counted(full: bool) -> (String, Frame, [u64; 2]) {
     let cache = ScratchCache::new().unwrap();
     let heard = Heard::default();
     let work = Workload::new(
@@ -2213,11 +2274,22 @@ fn counted() -> (String, Frame) {
         Layers::Private,
         (false, false, Shape::Window, false),
     );
-    for _ in 0..WARM {
-        work.frame();
-    }
-    let frame = work.frame();
-    (work.device.name().to_string(), frame)
+    work.warm();
+    let frame = || match full {
+        true => work.frame_full(),
+        false => work.frame(),
+    };
+    let made = |before: u64| work.device.work_counts().command_pools_made - before;
+    let before = work.device.work_counts().command_pools_made;
+    let counted = frame();
+    let first = made(before);
+    let before = work.device.work_counts().command_pools_made;
+    frame();
+    (
+        work.device.name().to_string(),
+        counted,
+        [first, made(before)],
+    )
 }
 
 /// The allocations each step of `steps` of `frame` made on the encoding thread, on average.
@@ -2241,7 +2313,7 @@ fn allocations_each(frame: &Frame, steps: StepsOf) -> f64 {
 #[cfg(not(m2v_system_alloc))]
 #[test]
 fn a_frame_s_draws_and_pass_ends_allocate_within_their_bounds() {
-    let (device, frame) = counted();
+    let (device, frame, _) = counted(false);
     let each = allocations_each(&frame, |f| &f.draws);
     let bound = match cfg!(debug_assertions) {
         true => DRAW_ALLOCATIONS_DEBUG,
@@ -2296,9 +2368,7 @@ fn a_frame_s_passes_and_commits_begin_their_command_buffers_within_their_bound()
         (false, false, Shape::Window, false),
     );
     // Every pipeline made, and every pool piece done, before the frame that counts.
-    for _ in 0..WARM {
-        work.frame();
-    }
+    work.warm();
     let counted = work.device.work_counts();
     let frame = work.frame_reading(Reads {
         work_counts: true,
@@ -2425,14 +2495,54 @@ fn a_frame_s_passes_and_commits_begin_their_command_buffers_within_their_bound()
 #[cfg(not(m2v_system_alloc))]
 #[test]
 fn a_frame_s_pass_opens_allocate_within_their_bound() {
-    let (device, frame) = counted();
+    pass_opens_within_their_bound(false);
+}
+
+/// [`a_frame_s_pass_opens_allocate_within_their_bound`] with the frame's queue full
+/// ([`Workload::frame_full`]), as where the GPU falls behind the encoding thread by all of it:
+/// every command buffer the queue holds then takes a command pool of its own, which the warm-up
+/// made ([`Workload::warm`]), so no open makes one. One that does allocates its primary and the
+/// pool's list of them, and its secondary and their list where its first instance does not record
+/// inline: 2 or 4 more. That frame and a full one after it make one command pool between them at
+/// most: the device keeps every pool a full queue took, and only the queue's next command buffer,
+/// opening as the one that gave its slot back begins a primary ahead in its pool, out of the spares
+/// meanwhile, may find none (`spares.rs`), once.
+#[cfg(not(m2v_system_alloc))]
+#[test]
+fn a_full_queue_s_pass_opens_allocate_within_their_bound() {
+    pass_opens_within_their_bound(true);
+}
+
+/// A frame's pass opens, with its queue full where `full`, allocate at most
+/// [`OPEN_ALLOCATIONS`] each on average ([`FIRST_LOCK_ALLOCATIONS`] more on Apple's platforms).
+#[cfg(not(m2v_system_alloc))]
+fn pass_opens_within_their_bound(full: bool) {
+    let (device, frame, [made, again]) = counted(full);
     let each = allocations_each(&frame, |f| &f.open);
     let bound = OPEN_ALLOCATIONS + FIRST_LOCK_ALLOCATIONS;
-    eprintln!("FRAME-COST {device}: {each:.2} allocations a pass open, at most {bound} kept");
+    let queue = match full {
+        true => " with the queue full",
+        false => "",
+    };
+    eprintln!(
+        "FRAME-COST {device}: {each:.2} allocations a pass open{queue}, at most {bound} kept; \
+         {made} command pools made in the frame, {again} in the next"
+    );
     assert!(
         each <= bound,
-        "{each:.2} allocations a pass open, more than {bound}"
+        "{each:.2} allocations a pass open{queue}, more than {bound}, {made} command pools made \
+         in the frame; each open's, in order: {:?}",
+        (frame.open.iter())
+            .map(|open| open.allocations.unwrap())
+            .collect::<Vec<_>>()
     );
+    if full {
+        assert!(
+            made + again <= 1,
+            "{made} command pools made in a full queue's frame after the warm-up's, and {again} \
+             in the next: more than the one a primary begun ahead may leave to make"
+        );
+    }
 }
 
 /// A checked frame's commits allocate at most [`COMMIT_ALLOCATIONS`] each on average on the
@@ -2455,9 +2565,7 @@ fn a_frame_s_commits_allocate_within_their_bound() {
         (false, false, Shape::Window, false),
     );
     // Every pipeline made, and every pool piece done, before the frames that count.
-    for _ in 0..WARM {
-        work.frame();
-    }
+    work.warm();
     const FRAMES: usize = 4;
     let before = others_allocations().unwrap();
     // The work counts read around each step tell which commits handed their batches off.

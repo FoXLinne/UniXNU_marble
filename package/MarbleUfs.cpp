@@ -16,6 +16,7 @@
 #include "MarbleUfs.h"
 #include "MarbleRtc.h"
 extern "C" { uint8_t marble_rtc_header_before[4096]; }
+extern "C" void native_marble_audio_dma_prepare(uintptr_t);
 namespace {
 UfsRootDiagnostics gRootDiagnostic;
 bool gRootDiagnosticEnabled = true;
@@ -83,6 +84,7 @@ static void smmuBypassStream (uint16_t stream, OSSharedPtr<IOMemoryMap> &keep, u
   report[0] = index | (bank << 16);
   report[1] = cbar;
   report[2] = sctlr;
+  if (stream == 0xe0) native_marble_audio_dma_prepare(smmu);
 }
 #include "RootTransportLayout.h"
 
@@ -165,6 +167,7 @@ static void hostWrite (unsigned offset, uint32_t value)
 static uint32_t hostCompletionCount(unsigned) { return 0; }
 static bool hostInterruptMode(void) { return false; }
 static void hostWaitCompletion(unsigned, uint32_t, uint64_t) { IODelay(2); }
+static void hostWaitDone(uint64_t) {}
 static uint64_t hostDmaAddress(const void *) { return 0; }
 #include "RootCommands.h"
 

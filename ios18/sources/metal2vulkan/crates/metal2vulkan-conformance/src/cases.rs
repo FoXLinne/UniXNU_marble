@@ -56,6 +56,7 @@ pub mod blit_indirect_commands;
 pub mod border_swizzles;
 pub mod buffer_blits;
 pub mod buffer_depth_samples;
+pub mod buffer_tails;
 pub mod buffer_target_clears;
 pub mod buffer_texture_blits;
 pub mod buffer_textures;
@@ -85,6 +86,7 @@ pub mod etc_textures;
 pub mod event_orders;
 pub mod extended_range_blends;
 pub mod extended_range_gamut;
+pub mod extended_range_gradients;
 pub mod extended_range_planes;
 pub mod extended_range_targets;
 pub mod extended_range_two_planes;
@@ -118,10 +120,13 @@ pub mod math_routines;
 pub mod mesh_barriers;
 pub mod mesh_commands;
 pub mod mesh_draws;
+pub mod mesh_partial_barriers;
 pub mod mesh_pipeline_descriptors;
 pub mod mesh_pipeline_reflection;
 pub mod nearest_positions;
 pub mod norm_storage_writes;
+pub mod padded_blends;
+pub mod padded_fetch;
 pub mod pass_attachment_pairs;
 pub mod pass_bound_pairs;
 pub mod pass_bytes;
@@ -131,6 +136,7 @@ pub mod pipeline_descriptors;
 pub mod pipeline_facts;
 pub mod pipeline_functions;
 pub mod pipeline_handlers;
+pub mod pipeline_limits;
 pub mod pipeline_option_reflection;
 pub mod pipeline_options;
 pub mod pixel_downscales;
@@ -141,6 +147,7 @@ pub mod pvrtc_rows;
 pub mod rate_map_degenerate_forms;
 pub mod rate_map_sweeps;
 pub mod rate_maps;
+pub mod read_through;
 pub mod read_write_tiers;
 pub mod render_chains;
 pub mod render_depth_stencil_state;
@@ -178,6 +185,7 @@ pub mod tessellation_sweeps;
 pub mod texel_swizzles;
 pub mod texture_accesses;
 pub mod texture_buffer_fills;
+pub mod texture_buffer_tails;
 pub mod texture_descriptor_pairs;
 pub mod texture_fills;
 pub mod texture_views;
@@ -189,6 +197,8 @@ pub mod topology_classes;
 pub mod two_plane_copies;
 pub mod two_plane_heap_blits;
 pub mod two_plane_samples;
+pub mod vertex_attribute_strides;
+pub mod vertex_fetch_reach;
 pub mod vertex_formats;
 pub mod visibility;
 pub mod visible_tables;
@@ -363,6 +373,9 @@ pub fn all() -> Vec<Box<dyn Case>> {
     for case in half_read_nans::all() {
         cases.push(Box::new(case));
     }
+    for case in read_through::all() {
+        cases.push(Box::new(case));
+    }
     for case in half_texel_nans::all() {
         cases.push(Box::new(case));
     }
@@ -386,6 +399,15 @@ pub fn all() -> Vec<Box<dyn Case>> {
     for case in extended_range_gamut::masked() {
         cases.push(Box::new(case));
     }
+    for case in extended_range_gradients::draws() {
+        cases.push(Box::new(case));
+    }
+    for case in padded_blends::all() {
+        cases.push(Box::new(case));
+    }
+    for case in padded_fetch::all() {
+        cases.push(Box::new(case));
+    }
     cases.push(Box::new(texture_buffer_fills::streams()));
     cases.push(Box::new(texture_buffer_fills::groups()));
     cases.push(Box::new(texture_buffer_fills::long_fills()));
@@ -406,6 +428,12 @@ pub fn all() -> Vec<Box<dyn Case>> {
         cases.push(Box::new(case));
     }
     for case in mesh_barriers::all() {
+        cases.push(Box::new(case));
+    }
+    for case in mesh_partial_barriers::all() {
+        cases.push(Box::new(case));
+    }
+    for case in pipeline_limits::all() {
         cases.push(Box::new(case));
     }
     cases.push(Box::new(mesh_commands::own_state_commands()));
@@ -495,10 +523,14 @@ pub fn all() -> Vec<Box<dyn Case>> {
     cases.extend(blit_encoder_commands::all());
     cases.extend(compute_encoder_commands::all());
     cases.extend(attribute_strides::all());
+    cases.extend(vertex_attribute_strides::all());
+    cases.extend(vertex_fetch_reach::all());
     cases.extend(stage_in_unread::all());
     cases.extend(blit_indirect_commands::all());
     cases.push(Box::new(compute_heap_residency::heap_residency()));
     cases.extend(buffer_texture_blits::all());
+    cases.extend(buffer_tails::all());
+    cases.push(Box::new(texture_buffer_tails::TextureBufferTails));
     cases.extend(buffer_textures::all());
     cases.extend(buffer_target_clears::all());
     cases.push(Box::new(host_detach::detach_in_a_completed_handler()));

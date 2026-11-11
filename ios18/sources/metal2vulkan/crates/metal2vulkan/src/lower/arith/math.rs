@@ -52,6 +52,8 @@ pub enum IntFn {
     Clamp(Sign),
     Min3(Sign),
     Max3(Sign),
+    /// The middle one of three: `max(min(a, b), min(max(a, b), c))`.
+    Median3(Sign),
     MulHi(Sign),
     MadHi(Sign),
     /// `a * b + c` saturated from the exact (double-width) result.
@@ -93,6 +95,7 @@ impl IntFn {
             IntFn::Clamp(_)
             | IntFn::Min3(_)
             | IntFn::Max3(_)
+            | IntFn::Median3(_)
             | IntFn::MadHi(_)
             | IntFn::MadSat(_)
             | IntFn::ExtractBits(_)
@@ -325,6 +328,15 @@ pub fn int_fn(fb: &mut FunctionBuilder<'_>, op: IntFn, f: Form, args: &[Value]) 
                 let z = ext(fb, s, arg(args, 2)?)?;
                 r = minmax(fb, s, max, r, z)?;
             }
+            mask(fb, f, r)
+        }
+        IntFn::Median3(s) => {
+            let (x, y) = (ext(fb, s, a)?, ext(fb, s, arg(args, 1)?)?);
+            let z = ext(fb, s, arg(args, 2)?)?;
+            let lo = minmax(fb, s, false, x, y)?;
+            let hi = minmax(fb, s, true, x, y)?;
+            let mid = minmax(fb, s, false, hi, z)?;
+            let r = minmax(fb, s, true, lo, mid)?;
             mask(fb, f, r)
         }
         IntFn::Clamp(s) => {
@@ -1138,14 +1150,18 @@ impl FloatFn {
     /// Whether the lowering on lanes of format `fmt` records no NaN note of its own: `saturate`,
     /// which answers a number for one, `copysign`, which moves bits, `sign`, whose NaN answer is
     /// its instruction's
-    /// ([`FloatFn::native_instruction`]), and the device's picks, `median3` and, on `float` and
+    /// ([`FloatFn::native_instruction`]), the device's picks, `median3` and, on `float` and
     /// `half`, `fmin`, `fmax`, `min3`, `max3`, and `clamp`, which return an operand (two NaNs'
     /// answer is `PrecisionNote::NativeMinMax`'s where the device is not measured to pick
-    /// Metal's).
+    /// Metal's), and `ldexp` on `float`, whose lowering on the bits answers a NaN operand itself,
+    /// bit for bit, as Metal does ([`ldexp_bits`]; `nan::NanAnswer::Operand`) on every device.
     pub fn metal_nans(self, fmt: FloatFmt) -> bool {
         use FloatFn as F;
         if matches!(self, F::Min | F::Max | F::Clamp | F::Min3 | F::Max3) {
             return metal_picks(Some(fmt));
+        }
+        if self == F::Ldexp {
+            return fmt == FloatFmt::F32;
         }
         matches!(
             self,

@@ -17,13 +17,56 @@ extern "C" {volatile uint32_t native_adreno_import_stage;volatile uint64_t nativ
 extern "C" {volatile uint32_t native_adreno_bo_memory[8];}
 /* Contiguous BO runs: [0] made, [1] refused by the free memory (those BOs fell back to pageable pages). */
 extern "C" {volatile uint32_t native_adreno_bo_contig[2];}
+/* Who holds the system BOs, for the board log: a row a process {pid, live KiB, live BOs, peak KiB}, the 24 processes that hold the
+ * most kept (a process that released everything gives its row up); and the live BOs by size, {count, KiB} for sizes up to 64 KiB,
+ * 1 MiB, 4 MiB, 16 MiB, 64 MiB and above. Both change under the driver's lock, as systemBytes does. */
+extern "C" {volatile uint32_t native_adreno_bo_owners[24][4];volatile uint32_t native_adreno_bo_sizes[6][2];int proc_selfpid(void);}
 namespace {
 uint64_t systemBytes,systemPeak;
 bool pressure;
-void noteSystem(int64_t bytes)
+unsigned sizeClass(uint64_t bytes)
+{
+    static const uint64_t limit[5]={UINT64_C(64)<<10,UINT64_C(1)<<20,UINT64_C(4)<<20,UINT64_C(16)<<20,UINT64_C(64)<<20};
+    unsigned c=0;while(c<5 && bytes>limit[c])++c;
+    return c;
+}
+void noteOwner(int32_t pid,int64_t bytes)
+{
+    const uint32_t kib=(uint32_t)((uint64_t)(bytes<0?-bytes:bytes)>>10);
+    unsigned row=24,spare=24,least=0;
+    for(unsigned i=0;i<24;++i) {
+        if(native_adreno_bo_owners[i][2] && native_adreno_bo_owners[i][0]==(uint32_t)pid) {row=i;break;}
+        if(!native_adreno_bo_owners[i][2] && spare==24)spare=i;
+        if(native_adreno_bo_owners[i][1]<native_adreno_bo_owners[least][1])least=i;
+    }
+    if(bytes<0) {
+        if(row==24)return;
+        native_adreno_bo_owners[row][1]=native_adreno_bo_owners[row][1]>kib?native_adreno_bo_owners[row][1]-kib:0;
+        native_adreno_bo_owners[row][2]=native_adreno_bo_owners[row][2]-1;
+        return;
+    }
+    if(row==24) {
+        /* A new holder takes a free row, else the row of the smallest holder once it holds more than that one. */
+        row=spare!=24?spare:least;
+        if(spare==24 && native_adreno_bo_owners[least][1]>=kib)return;
+        native_adreno_bo_owners[row][0]=(uint32_t)pid;native_adreno_bo_owners[row][1]=0;native_adreno_bo_owners[row][2]=0;native_adreno_bo_owners[row][3]=0;
+    }
+    native_adreno_bo_owners[row][1]=native_adreno_bo_owners[row][1]+kib;
+    native_adreno_bo_owners[row][2]=native_adreno_bo_owners[row][2]+1;
+    if(native_adreno_bo_owners[row][1]>native_adreno_bo_owners[row][3])native_adreno_bo_owners[row][3]=native_adreno_bo_owners[row][1];
+}
+void noteSystem(int64_t bytes,int32_t pid)
 {
     systemBytes+=bytes;if(systemBytes>systemPeak)systemPeak=systemBytes;
     native_adreno_bo_memory[4]=(uint32_t)(systemBytes>>20);native_adreno_bo_memory[5]=(uint32_t)(systemPeak>>20);
+    const unsigned c=sizeClass((uint64_t)(bytes<0?-bytes:bytes));
+    const uint32_t kib=(uint32_t)((uint64_t)(bytes<0?-bytes:bytes)>>10);
+    if(bytes>0) {native_adreno_bo_sizes[c][0]=native_adreno_bo_sizes[c][0]+1;native_adreno_bo_sizes[c][1]=native_adreno_bo_sizes[c][1]+kib;}
+    else {
+        native_adreno_bo_sizes[c][0]=native_adreno_bo_sizes[c][0]?native_adreno_bo_sizes[c][0]-1:0;
+        native_adreno_bo_sizes[c][1]=native_adreno_bo_sizes[c][1]>kib?native_adreno_bo_sizes[c][1]-kib:0;
+    }
+    noteOwner(pid,bytes);
 }
 }
 bool NativeAdrenoMemory::memoryPressure() {return pressure;}
@@ -120,14 +163,14 @@ static IOBufferMemoryDescriptor *systemDescriptor(size_t bytes,bool write_combin
     IOOptionBits options=static_cast<IOOptionBits>(kIODirectionInOut)|static_cast<IOOptionBits>(kIOMemoryMapperNone)|
         static_cast<IOOptionBits>(kIOMemoryPageable);
     if(write_combined)options|=kIOMapWriteCombineCache;
-    /* Pageable pages arrive one by one (a BO averaged 69 spans); from `sheng-gpu-bo-contig` KiB up to 128 KiB a BO first asks for one
+    /* Pageable pages arrive one by one (a BO averaged 69 spans); from `gpu-bo-contig` KiB up to 128 KiB a BO first asks for one
      * physically contiguous run (one span, one table walk), and a request the free memory cannot serve falls back to pageable pages.
      * A contiguous request the kernel cannot serve scans every free page before it gives up: in ibb10331f24 124 such searches (0.1 to
      * 64 MiB) took 163 ms each at the median and 21.7 s in all, synchronously in the caller (the render server's and the widget
      * renderer's allocations, the stalls at an app launch and on the widget page), while every success was 64 to 128 KiB. So larger
      * BOs never ask, and after a failure no request of that size or larger asks again for 5 s. */
     static uint32_t contigKiB=UINT32_MAX;
-    if(contigKiB==UINT32_MAX) {contigKiB=0;PE_parse_boot_argn("sheng-gpu-bo-contig",&contigKiB,sizeof contigKiB);}
+    if(contigKiB==UINT32_MAX) {contigKiB=0;PE_parse_boot_argn("gpu-bo-contig",&contigKiB,sizeof contigKiB);}
     static const size_t contigMax=size_t(128)*1024;
     static size_t failedBytes=0;
     static uint64_t failedAt=0,backoff=0;
@@ -158,8 +201,10 @@ IOReturn NativeAdrenoMemory::prepareSystem(size_t bytes,bool write_combined,Nati
     if(!made)made=wired=mach_absolute_time();   /* a contiguous run: made and wired in one step */
     if(descriptor->getLength()!=bytes) {descriptor->complete();descriptor->release();return kIOReturnUnsupported;}
     bool cleaned=false;
-    /* Default-attribute pages may still hold the zero fill in a CPU's cache: written back here, by physical runs, as allocateSystem would. */
-    if(!write_combined) {
+    /* XNU 11417's UPL batch changes WC PTEs without flushing their cached
+     * zero-fill aliases (its cache-flush pass handles RT only). Publish once
+     * while the allocation is private, before CPU writers or GPU mappings. */
+    {
         cleaned=true;
         for(size_t offset=0;offset<bytes && cleaned;) {
             IOByteCount length=0;
@@ -167,7 +212,7 @@ IOReturn NativeAdrenoMemory::prepareSystem(size_t bytes,bool write_combined,Nati
             if(!physical || (physical&4095) || length<4096) {cleaned=false;break;}
             if(length>bytes-offset)length=bytes-offset;
             length&=~IOByteCount(4095);
-            if(NativeAdrenoMaintainPhysicalPages(physical,length,NativeAdrenoClean)!=kIOReturnSuccess)cleaned=false;
+            if(NativeAdrenoMaintainPhysicalPages(physical,length,write_combined?NativeAdrenoCleanInvalidate:NativeAdrenoClean)!=kIOReturnSuccess)cleaned=false;
             offset+=length;
         }
         if(cleaned)NativeAdrenoNotePhase(NativeAdrenoPhaseAllocate,bytes);
@@ -195,11 +240,11 @@ IOReturn NativeAdrenoMemory::allocateSystem(size_t bytes,unsigned bits,size_t bu
     } else descriptor_=systemDescriptor(bytes,write_combined);
     status=descriptor_?kIOReturnSuccess:kIOReturnNoMemory;
     if(status==kIOReturnSuccess) {
-        system_=true;prepared_=true;bytes_=bytes;write_combined_=write_combined;noteSystem((int64_t)bytes);
+        system_=true;prepared_=true;bytes_=bytes;write_combined_=write_combined;owner_pid_=proc_selfpid();noteSystem((int64_t)bytes,owner_pid_);
         status=descriptor_->getLength()==bytes?takeSegments(descriptor_,bytes,UINT64_C(1)<<bits,false):kIOReturnUnsupported;
-        /* Default-attribute pages may still hold the zero fill in this CPU's cache: written back before the GPU reads them. */
-        if(status==kIOReturnSuccess && !write_combined && !cleaned) {
-            status=maintainImported(0,bytes,NativeAdrenoClean);
+        /* Cover allocations made here as well as pages prepared outside the lock. */
+        if(status==kIOReturnSuccess && !cleaned) {
+            status=maintainImported(0,bytes,write_combined?NativeAdrenoCleanInvalidate:NativeAdrenoClean);
             NativeAdrenoNotePhase(NativeAdrenoPhaseAllocate,bytes);
         }
         if(status!=kIOReturnSuccess) {write_combined_=false;(void)release();}
@@ -361,7 +406,7 @@ IOReturn NativeAdrenoMemory::release()
         native_adreno_trace_stage=34;
     }
     if(owned_) {noteOwned(spans_,span_count_,false);owned_=false;}
-    if(system_) {noteSystem(-(int64_t)bytes_);system_=false;}
+    if(system_) {noteSystem(-(int64_t)bytes_,owner_pid_);system_=false;}
     if(borrowed_) {borrowed_=false;prepared_=false;}
     if(spans_)IODeleteData(spans_,NativeAdrenoPhysicalSpan,span_capacity_);
     mapping_=nullptr;spans_=nullptr;bytes_=span_count_=span_capacity_=0;read_only_=false;owner_uncached_=false;
@@ -409,9 +454,9 @@ IOReturn NativeAdrenoMemory::acquireDeviceWrites(size_t offset,size_t bytes,unsi
     if(!backed() || !prepared_ || quarantined_)return kIOReturnNotReady;
     if(!bytes || ((offset|bytes)&4095) || offset>bytes_ || bytes>bytes_-offset)return kIOReturnBadArgument;
     if(imported_ && owner_uncached_)return kIOReturnSuccess;
-    /* Publication removed CPU dirty lines before GPU ownership. Completion discards
-     * speculative CPU reads without writing old pixels over the GPU's output. */
-    if(imported_) {NativeAdrenoNotePhase(phase,bytes);return maintainImported(offset,bytes,NativeAdrenoInvalidate);}
+    /* Shared imports can contain CPU producer writes beside the GPU's range.
+     * Preserve those dirty lines before invalidating, as in the shared driver. */
+    if(imported_) {NativeAdrenoNotePhase(phase,bytes);return maintainImported(offset,bytes,NativeAdrenoCleanInvalidate);}
     if(write_combined_)return kIOReturnSuccess;
     NativeAdrenoNotePhase(phase,bytes);
     if(!mapping_)return maintainImported(offset,bytes,NativeAdrenoInvalidate);   /* system memory */

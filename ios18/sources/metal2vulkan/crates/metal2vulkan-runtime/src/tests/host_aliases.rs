@@ -788,11 +788,10 @@ fn the_version_counts_each_change_augment_reads() {
     changed("forgotten");
 }
 
-/// An encoder's commands whose uses of bytes name only keys an earlier one found to take no other
-/// use look nothing up (`host_aliases::Quiet`, `WorkCounts::host_alias_lookups`), while a key
-/// that takes one is looked up at each command; a buffer placed over bytes a quiet key lies
-/// over, or a quiet key joining another's memory, between two commands makes the second carry
-/// the use it takes now.
+/// An encoder's commands whose uses of bytes name only keys an earlier one found look nothing up
+/// (`host_aliases::Quiet`, `WorkCounts::host_alias_lookups`), a key that takes no other use and
+/// one that takes some alike; a buffer placed over bytes a quiet key lies over, or a quiet key
+/// joining another's memory, between two commands makes the second carry the use it takes now.
 #[test]
 fn a_quiet_key_is_looked_up_again_once_a_buffer_moves_or_joins() {
     let aliases = Aliases::default();
@@ -818,17 +817,19 @@ fn a_quiet_key_is_looked_up_again_once_a_buffer_moves_or_joins() {
         assert_eq!(augment(&used), None);
     }
     assert_eq!(aliases.lookups(), 1, "a quiet key is looked up once");
-    let crowded = [write(second, 0..0x40)];
-    for _ in 0..3 {
+    // A key that takes a use is looked up once too, and its uses at other bytes take the same
+    // key's, at their own bytes, from what the encoder kept of it.
+    for bytes in [0..0x40, 0x40..0x80, 0..0x40] {
+        let crowded = [write(second, bytes.clone())];
         assert_eq!(
             augment(&crowded),
-            Some(vec![crowded[0].clone(), write(first, 0..0x40)])
+            Some(vec![crowded[0].clone(), write(first, bytes)])
         );
     }
     assert_eq!(
         aliases.lookups(),
-        4,
-        "a key that takes a use is looked up each time"
+        2,
+        "a key that takes a use is looked up once"
     );
     // A buffer placed over the second half of the lone key's bytes.
     aliases.place(moved, (0x40_0800, 0x1000));
@@ -848,5 +849,162 @@ fn a_quiet_key_is_looked_up_again_once_a_buffer_moves_or_joins() {
     assert_eq!(
         augment(&joined),
         Some(vec![joined[0].clone(), write(owner, 0..0x40)])
+    );
+}
+
+/// The keys an ended encoder found go to the device's next encoder (`HostAliases::quiet`): one
+/// that opens while nothing changed looks none of them up again, and takes what they took; one
+/// that opens after a change looks its keys up again, and takes what they take now.
+#[test]
+fn an_ended_encoder_s_keys_go_to_the_next_while_nothing_changes() {
+    let aliases = Aliases::default();
+    let mut all = Vec::new();
+    let (first, second, alone) = (ResourceKey::new(), ResourceKey::new(), ResourceKey::new());
+    // Two keys over one range crowd the device's placements; a third lies alone.
+    aliases.place(first, (0x10_0000, 0x1000));
+    aliases.place(second, (0x10_0000, 0x1000));
+    aliases.place(alone, (0x40_0000, 0x1000));
+    let (quiet_use, crowded_use) = ([write(alone, 0x800..0x840)], [write(second, 0x80..0xc0)]);
+    let crowded_takes = vec![crowded_use[0].clone(), write(first, 0x80..0xc0)];
+    // An encoder with nothing given back looks its two keys up, once each.
+    let mut encoder = aliases.quiet();
+    assert!(!aliases.augment_into(&quiet_use, &mut all, Some(&mut encoder)));
+    assert!(aliases.augment_into(&crowded_use, &mut all, Some(&mut encoder)));
+    assert_eq!(all, crowded_takes);
+    assert_eq!(aliases.lookups(), 2);
+    aliases.give_quiet(encoder);
+    // The next looks up neither, and its crowded key's use takes what it took.
+    for _ in 0..3 {
+        let mut encoder = aliases.quiet();
+        assert!(!aliases.augment_into(&quiet_use, &mut all, Some(&mut encoder)));
+        assert!(aliases.augment_into(&crowded_use, &mut all, Some(&mut encoder)));
+        assert_eq!(all, crowded_takes);
+        aliases.give_quiet(encoder);
+    }
+    assert_eq!(
+        aliases.lookups(),
+        2,
+        "keys given back are not looked up again"
+    );
+    // A buffer placed over the second half of the lone key's bytes: the next encoder looks the
+    // key up again, and its use takes the new key's.
+    let moved = ResourceKey::new();
+    aliases.place(moved, (0x40_0800, 0x1000));
+    let mut encoder = aliases.quiet();
+    assert!(aliases.augment_into(&quiet_use, &mut all, Some(&mut encoder)));
+    assert_eq!(all, vec![quiet_use[0].clone(), write(moved, 0..0x40)]);
+    assert_eq!(
+        aliases.lookups(),
+        3,
+        "keys given back are looked up again after a change"
+    );
+}
+
+/// Keys placed, rebound, removed and joined at random, and uses of random bytes of them: an
+/// encoder that keeps what it found of each key (`host_aliases::Quiet`) carries exactly the uses
+/// a lookup of every use under the lock gives (`HostAliases::augment`), and looks a command up
+/// again only once something changed since or a key is new to it, or its range is met by more
+/// ranges than it keeps.
+#[test]
+fn what_an_encoder_keeps_of_a_key_takes_what_a_lookup_takes() {
+    const PAGE: u64 = 0x1000;
+    const BASE: u64 = 0x7000_0000_0000;
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut next = move |below: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state % below
+    };
+    let aliases = Aliases::default();
+    let keys: Vec<ResourceKey> = (0..24).map(|_| ResourceKey::new()).collect();
+    let mut at: Vec<Option<(u64, u64)>> = vec![None; keys.len()];
+    let mut quiet = Quiet::default();
+    let mut all = Vec::new();
+    let (mut kept, mut found) = (0, 0);
+    for round in 0..6000 {
+        let index = next(keys.len() as u64) as usize;
+        let key = keys[index];
+        match next(16) {
+            0 => {
+                at[index] = None;
+                aliases.unplace(key);
+            }
+            1 => {
+                let class = next(6);
+                let length = (1 + next(1 << class)) * PAGE;
+                let place = (BASE + next(96) * PAGE, length);
+                at[index] = Some(place);
+                aliases.place(key, place);
+            }
+            2 => {
+                // Over the same bytes as another live key's: it joins that one's memory.
+                let other = next(keys.len() as u64) as usize;
+                if let Some(memory) = at[other] {
+                    join(&aliases, key, memory);
+                }
+            }
+            _ => {}
+        }
+        // A command of one or two uses, of keys placed or not.
+        let mut uses = Vec::new();
+        for _ in 0..1 + next(2) {
+            let index = next(keys.len() as u64) as usize;
+            let length = at[index].map_or(PAGE, |at| at.1);
+            let start = next(length + PAGE);
+            let bytes = start..start + 1 + next(length + PAGE);
+            uses.push(match next(2) {
+                0 => write(keys[index], bytes),
+                _ => sample(keys[index], bytes),
+            });
+        }
+        let looked = aliases.augment(&uses);
+        let before = aliases.lookups();
+        let took = aliases
+            .augment_into(&uses, &mut all, Some(&mut quiet))
+            .then(|| all.clone());
+        assert_eq!(took, looked, "round {round}: {uses:?}");
+        match aliases.lookups() - before {
+            0 => kept += 1,
+            _ => found += 1,
+        }
+    }
+    assert!(kept > 1000 && found > 1000, "kept {kept}, found {found}");
+}
+
+/// A staged copy's question (`host_ram/copy.rs`): a key over a byte of the range answers yes,
+/// unless it lies alone over its range and the caller calls it quiet; a range only meeting the
+/// bytes' end, or one gone, answers nothing.
+#[test]
+fn others_over_finds_every_key_but_a_quiet_one_alone() {
+    let aliases = Aliases::default();
+    assert!(
+        !aliases.others_over(0x10000, 0x20000, |_| false),
+        "none placed"
+    );
+    let (chunk, buffer, second) = (ResourceKey::new(), ResourceKey::new(), ResourceKey::new());
+    aliases.place(chunk, (0x10000, 0x10000));
+    let quiet = |key: ResourceKey| key == chunk;
+    assert!(aliases.others_over(0x18000, 0x19000, |_| false));
+    assert!(
+        !aliases.others_over(0x18000, 0x19000, quiet),
+        "the quiet key alone"
+    );
+    assert!(
+        !aliases.others_over(0x20000, 0x30000, |_| false),
+        "past the range's end"
+    );
+    // A buffer over some of the chunk's bytes: found where the bytes meet it, not elsewhere.
+    aliases.place(buffer, (0x14000, 0x1000));
+    assert!(aliases.others_over(0x14800, 0x16000, quiet));
+    assert!(!aliases.others_over(0x16000, 0x17000, quiet));
+    // A second key over the quiet key's very range: it is not alone there.
+    aliases.place(second, (0x10000, 0x10000));
+    assert!(aliases.others_over(0x16000, 0x17000, quiet));
+    aliases.forget(second);
+    aliases.forget(buffer);
+    assert!(
+        !aliases.others_over(0x10000, 0x20000, quiet),
+        "the others gone"
     );
 }

@@ -27,8 +27,8 @@ use crate::cache::VariantKey;
 use crate::device::requirements::{Requirements, VkExtension, VkFeature, VkLimit, VkProperty};
 use crate::device::{mechanism, Device, DeviceProfile};
 use crate::error::{
-    DescriptorError, Error, Feature, InternalError, InternalKind, MeshPipelineProblem,
-    RuntimeInput, Unsupported,
+    ComputePipelineProblem, DescriptorError, Error, Feature, InternalError, InternalKind,
+    MeshPipelineProblem, MetalAnswer, RuntimeInput, Unsupported,
 };
 use crate::library::{CompiledFunction, FunctionArtifact, FunctionCompileKey};
 use crate::lower::select::LowerInputs;
@@ -314,7 +314,7 @@ impl Device {
     /// render area, binding each attachment it reaches (`WriteSource::TileAttachment`). A
     /// `Compiled` tile function must have been compiled under the same formats: one compiled
     /// without tile inputs is `InvalidDescriptor(StageMismatch)`, and one that stages an attachment
-    /// the descriptor gives another format (`RuntimeFact::TileAttachmentFormat`) is
+    /// the descriptor gives another format, or none (`RuntimeFact::TileAttachmentFormat`), is
     /// `InvalidDescriptor(ColorAttachment)`. A multisampled pass (`raster_sample_count` above 1) is
     /// `Unsupported{TileShading, NotImplemented}`: what its imageblock's samples are is not read.
     /// The tile function's recursion is sized for `d`'s `maxCallStackDepth` as a compute kernel's
@@ -571,11 +571,6 @@ impl Device {
         };
         let mesh = self.stage(&d.mesh, InputsFrom::Given(&mesh_inputs), m)?;
         check_function_maxima(d, object.as_ref(), &mesh)?;
-        // A mesh pipeline's vertex amplification is not built: refused once Metal's own
-        // refusals are answered.
-        if d.max_vertex_amplification_count > 1 {
-            return Err(Unsupported::not_implemented(Feature::VertexAmplification).into());
-        }
         // A stage compiled on its own holds the descriptor's length only where it was compiled
         // under it.
         if let Some(bytes) = payload_length {
@@ -698,15 +693,21 @@ impl Device {
                 limits.mesh.max_mesh_work_group_invocations,
             )
         };
-        // Metal's: the least of 1024, the function's own maximum and the descriptor's (Metal's 0
-        // is none), within the device's.
-        let threads = |f: &CompiledFunction, given: Option<u32>, device: u32| {
-            [f.artifact().kernel.max_total_threads, given]
-                .into_iter()
-                .flatten()
-                .filter(|&n| n > 0)
-                .fold(METAL_MAX_THREADS.min(device), u32::min)
-        };
+        // Metal's on a first compile: the least of 1024, the function's own maximum, the
+        // descriptor's (Metal's 0 is none) and the threads of the stage's required size (Metal's
+        // all-zero size is none), within the device's.
+        let threads =
+            |f: &CompiledFunction, given: Option<u32>, required: Option<[u32; 3]>, device: u32| {
+                let required = required_size(required).map(|axes| {
+                    let threads: u64 = axes.iter().map(|&axis| u64::from(axis)).product();
+                    u32::try_from(threads).unwrap_or(u32::MAX)
+                });
+                [f.artifact().kernel.max_total_threads, given, required]
+                    .into_iter()
+                    .flatten()
+                    .filter(|&n| n > 0)
+                    .fold(METAL_MAX_THREADS.min(device), u32::min)
+            };
         let width = self.metal_properties().thread_execution_width;
         // The descriptor's, else Metal's: an object function's
         // `[[max_total_threadgroups_per_mesh_grid(n)]]` changes nothing Metal answers.
@@ -720,11 +721,17 @@ impl Device {
         };
         MeshPipelineMetalInfo {
             max_total_threads_per_object_threadgroup: object.map_or(0, |o| {
-                threads(o, d.max_total_threads_per_object_threadgroup, object_limit)
+                threads(
+                    o,
+                    d.max_total_threads_per_object_threadgroup,
+                    d.required_threads_per_object_threadgroup,
+                    object_limit,
+                )
             }),
             max_total_threads_per_mesh_threadgroup: threads(
                 mesh,
                 d.max_total_threads_per_mesh_threadgroup,
+                d.required_threads_per_mesh_threadgroup,
                 mesh_limit,
             ),
             object_thread_execution_width: object.map_or(0, |_| width),
@@ -794,8 +801,10 @@ impl Device {
         }
         let kernel = self.stage(&d.kernel, InputsFrom::Given(inputs), m)?;
         let a = kernel.artifact();
+        check_compute_maxima(d, a)?;
         check_stage_in(a, d)?;
         check_call_stack(a, d.max_call_stack_depth)?;
+        check_open_cl_mode(a, d.open_cl_mode_enabled)?;
         let linked = link(&[a], &LinkInputs::compute(), p)?;
         let stage = stage_module(&kernel, &linked, 0)?;
         let profile = self.profile_fingerprint();
@@ -1112,9 +1121,15 @@ impl Device {
             let groups = free / per_simdgroup;
             max = max.min(u32::try_from(groups.saturating_mul(32)).unwrap_or(u32::MAX));
         }
-        // Metal's own answer: Apple's 1024 under the same caps, without the device's limits.
+        // Metal's own answer: Apple's 1024 under the same caps, without the device's limits. A
+        // required work-group size caps both at its threads (64 for `reqd_work_group_size(64, 1,
+        // 1)` on the M3 Max, macOS 27.0.1).
+        let required = c
+            .kernel
+            .work_group_size
+            .map(|[x, y, z]| x.saturating_mul(y).saturating_mul(z));
         let mut metal = METAL_MAX_THREADS;
-        for cap in [c.kernel.max_total_threads, max_threads]
+        for cap in [c.kernel.max_total_threads, required, max_threads]
             .into_iter()
             .flatten()
             // Metal's 0 is "the device maximum".
@@ -1123,21 +1138,11 @@ impl Device {
             max = max.min(cap);
             metal = metal.min(cap);
         }
-        // The emulated scratch of the most threads counts as static threadgroup memory, so any
-        // `[[threadgroup(n)]]` lengths that fit beside the reported length fit every threadgroup
-        // up to the maximum (the arena grows by exactly their rounded lengths).
-        // A predicated walk's vote word is static threadgroup memory beside the arena.
-        let vote = if c.facts.contains(&RuntimeFact::PredicationVote) {
-            u64::from(crate::lower::simd::divergent::VOTE_BYTES)
-        } else {
-            0
-        };
-        let static_bytes = match emulation {
-            Some((per_simdgroup, fixed)) => {
-                fixed.saturating_add(u64::from(max).div_ceil(32).saturating_mul(per_simdgroup))
-            }
-            None => c.kernel.static_threadgroup_bytes.saturating_add(vote),
-        };
+        // The static part of Metal's own layout, as Metal reports it: neither the emulated
+        // simdgroups' scratch nor a predicated walk's vote word, which are ours and which the
+        // planner counts in each dispatch's total (`bind::plan::compute`), refusing a threadgroup
+        // whose lengths fit beside this length and not beside them (`ThreadgroupMemorySize`).
+        let static_bytes = c.kernel.static_threadgroup_bytes;
         ComputePipelineMetalInfo {
             max_total_threads_per_threadgroup: max,
             thread_execution_width: self.metal_properties().thread_execution_width,
@@ -1286,10 +1291,13 @@ fn graphics_requirements(
     // A multiview pipeline needs `multiview` and its view count whether or not a stage reads the
     // view index; the binder draws more amplifications than the device has views one at a time, so
     // the views it needs are at most those.
+    // A mesh pipeline draws no amplification as a view: its draws of more than one amplification
+    // are refused at the draw (`bind::graphics`), and one draws without multiview.
+    let mesh = artifacts.iter().any(|a| a.interface.stage == Stage::Mesh);
     let views = graphics
         .max_vertex_amplification_count
         .min(p.fields().limits.max_multiview_view_count.max(1));
-    if views > 1 {
+    if views > 1 && !mesh {
         requirements.features.insert(VkFeature::Multiview);
         if linked.control.is_some() {
             requirements
@@ -1348,11 +1356,13 @@ fn invariant(detail: &str) -> Error {
 }
 
 /// The lowering inputs a `Function` kernel of compute pipeline `d` compiles under: its
-/// stage-input descriptor and its `maxCallStackDepth` when not Metal's default, 1.
+/// stage-input descriptor, its `maxCallStackDepth` when not Metal's default, 1, and its OpenCL
+/// mode.
 fn kernel_inputs(d: &ComputePipelineDescriptor) -> LoweringInputs {
     LoweringInputs {
         stage_input: d.stage_input.clone(),
         max_call_stack_depth: (d.max_call_stack_depth > 1).then_some(d.max_call_stack_depth),
+        open_cl_mode: d.open_cl_mode_enabled,
         ..LowerInputs::new()
     }
 }
@@ -1398,7 +1408,10 @@ fn check_tile_threadgroup(
 
 /// Each attachment the tile function of artifact `a` stages has the format it was compiled for in
 /// `d`: a `Compiled` tile function compiled under other formats is
-/// `InvalidDescriptor(ColorAttachment)` (a `Function` one is compiled under `d`'s).
+/// `InvalidDescriptor(ColorAttachment)` (a `Function` one is compiled under `d`'s). It answers
+/// Metal's nil and `NSError` where `d` gives the attachment no format, as Metal answers a tile
+/// function reaching one; under another format it answers `EndsProcess`, the answer of a case
+/// with no Metal counterpart.
 fn check_tile_formats(a: &FunctionArtifact, d: &TileRenderPipelineDescriptor) -> Result<(), Error> {
     for fact in &a.facts {
         let RuntimeFact::TileAttachmentFormat { color, format } = *fact else {
@@ -1407,11 +1420,17 @@ fn check_tile_formats(a: &FunctionArtifact, d: &TileRenderPipelineDescriptor) ->
         let given = usize::try_from(color)
             .ok()
             .and_then(|i| d.color_attachment_formats.get(i).copied().flatten());
-        if given != Some(format) {
-            return Err(Error::InvalidDescriptor(DescriptorError::ColorAttachment {
-                index: color,
-            }));
-        }
+        // Without a format, Metal's answer; under another, compiled for another pipeline, which
+        // has no Metal counterpart.
+        let metal = match given {
+            Some(given) if given == format => continue,
+            Some(_) => MetalAnswer::EndsProcess,
+            None => MetalAnswer::NilWithError,
+        };
+        return Err(Error::InvalidDescriptor(DescriptorError::ColorAttachment {
+            index: color,
+            metal,
+        }));
     }
     Ok(())
 }
@@ -1439,6 +1458,30 @@ fn mesh_refusal(problem: MeshPipelineProblem) -> Error {
     Error::InvalidDescriptor(DescriptorError::MeshPipeline { problem })
 }
 
+/// Metal's error over compute descriptor `d`'s `maxTotalThreadsPerThreadgroup` beside kernel `a`
+/// ([`ComputePipelineProblem`]): one other than the kernel's own maximum, else one above 1024.
+/// Metal's 0 is no maximum.
+fn check_compute_maxima(d: &ComputePipelineDescriptor, a: &FunctionArtifact) -> Result<(), Error> {
+    let Some(max) = d.max_total_threads_per_threadgroup.filter(|&max| max > 0) else {
+        return Ok(());
+    };
+    let refusal = |problem| {
+        Err(Error::InvalidDescriptor(DescriptorError::ComputePipeline {
+            problem,
+        }))
+    };
+    match a.kernel.max_total_threads.filter(|&n| n > 0) {
+        Some(specified) if specified != max => {
+            refusal(ComputePipelineProblem::MaxThreadsDiffer { specified, max })
+        }
+        None if max > METAL_MAX_THREADS => refusal(ComputePipelineProblem::MaxThreadsOverLimit {
+            max,
+            limit: METAL_MAX_THREADS,
+        }),
+        _ => Ok(()),
+    }
+}
+
 /// `required`, with Metal's all-zero size as none.
 fn required_size(required: Option<[u32; 3]>) -> Option<[u32; 3]> {
     required.filter(|axes| *axes != [0; 3])
@@ -1446,8 +1489,8 @@ fn required_size(required: Option<[u32; 3]>) -> Option<[u32; 3]> {
 
 /// Metal's refusals of mesh descriptor `d` before any compile ([`MeshPipelineProblem`]), in
 /// Metal's order: those its descriptor validation ends the process at (the required sizes, an
-/// amplification count of 0), then the creation's errors over the thread maxima, the mesh
-/// stage's required size and the payload length.
+/// amplification count of 0), then the creation's errors over the thread maxima, each stage's
+/// required size beside its maximum and the payload length.
 fn check_mesh_fields(d: &MeshPipelineDescriptor) -> Result<(), Error> {
     let stages = [
         (
@@ -1510,18 +1553,18 @@ fn check_mesh_fields(d: &MeshPipelineDescriptor) -> Result<(), Error> {
             }));
         }
     }
-    // The mesh stage's required size gives its threads, as its function's maximum does; an
-    // object stage's does not.
-    let required = required_size(d.required_threads_per_mesh_threadgroup);
-    let max = d
-        .max_total_threads_per_mesh_threadgroup
-        .filter(|&max| max > 0);
-    if let (Some(required), Some(max)) = (required, max) {
+    // A stage's required size gives its threads, as its function's maximum does, in either
+    // stage: Metal's first compile refuses a maximum of other threads.
+    for (stage, required, max) in stages {
+        let (Some(required), Some(max)) = (required_size(required), max.filter(|&max| max > 0))
+        else {
+            continue;
+        };
         // Within the limit, so within `u32`.
         let specified = required.iter().product::<u32>();
         if specified != max {
             return Err(mesh_refusal(MeshPipelineProblem::MaxThreadsDiffer {
-                stage: Stage::Mesh,
+                stage,
                 specified,
                 max,
             }));
@@ -1620,6 +1663,19 @@ fn check_stage_in(a: &FunctionArtifact, d: &ComputePipelineDescriptor) -> Result
                 DescriptorError::StageInputAttribute { attribute: s.index },
             ));
         }
+    }
+    Ok(())
+}
+
+/// The kernel of artifact `a` was compiled in its compute pipeline's OpenCL mode, `given`
+/// (`RuntimeFact::OpenClMode`): a `Compiled` kernel of the other mode is
+/// `InvalidDescriptor(OpenClMode)` (a `Function` kernel is compiled under `given`).
+fn check_open_cl_mode(a: &FunctionArtifact, given: bool) -> Result<(), Error> {
+    let compiled = a.facts.contains(&RuntimeFact::OpenClMode);
+    if compiled != given {
+        return Err(Error::InvalidDescriptor(DescriptorError::OpenClMode {
+            compiled,
+        }));
     }
     Ok(())
 }
@@ -1762,6 +1818,8 @@ fn stage_module(c: &CompiledFunction, linked: &Linked, i: usize) -> Result<Stage
         specialized_notes: a.specialized.clone(),
         own_pixel_textures: a.interface.own_pixel_textures.clone(),
         snapshot_textures: a.interface.snapshot_textures.clone(),
+        snapshot_refusals: a.interface.snapshot_refusals.clone(),
+        level_reads: a.interface.level_reads.clone(),
         private_bytes: a.interface.private_bytes,
         // Link resolves the module's symbols and adds no instruction, so the function's own
         // counts are the stage's.

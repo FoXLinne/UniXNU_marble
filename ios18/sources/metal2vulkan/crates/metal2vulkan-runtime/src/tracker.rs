@@ -312,6 +312,25 @@ impl<K> Use<K> {
         }
     }
 
+    /// Whether this use of bytes holds `other`: of the same resource, tracking, reads and writes,
+    /// over a range holding `other`'s. Noting or gathering `other` after it changes nothing that
+    /// takes uses by overlap (an image's use holds none but its equal).
+    pub(super) fn covers(&self, other: &Use<K>) -> bool
+    where
+        K: PartialEq,
+    {
+        let bytes = matches!(
+            (&self.range, &other.range),
+            (UseRange::Bytes(_), UseRange::Bytes(_))
+        );
+        bytes
+            && self.key == other.key
+            && self.tracked == other.tracked
+            && self.read == other.read
+            && self.write == other.write
+            && self.range.contains(&other.range)
+    }
+
     /// Whether the use touches nothing: an empty range, or neither a read nor a write.
     pub(super) fn is_nothing(&self) -> bool {
         self.range.is_empty() || (self.read.is_empty() && self.write.is_empty())
@@ -2626,6 +2645,15 @@ impl<K: Copy + Ord + Hash> Tracker<K> {
                 }
             }
         }
+    }
+
+    /// The batches of `at`'s `VkQueue` before it that the host had not seen complete as of the
+    /// last [`Tracker::completed`] of that queue: the value a plan at `at` retires by, so a plan
+    /// orders after the work of exactly these batches (`WorkCounts::batches_with_none_pending` and
+    /// kin count them).
+    pub(super) fn pending_before(&self, at: Point) -> u64 {
+        let through = self.completed.get(at.queue).copied().unwrap_or(0);
+        at.value.saturating_sub(1).saturating_sub(through)
     }
 
     /// The barriers before the `encoders` of the batch submitted next, at `at`, and its waits.

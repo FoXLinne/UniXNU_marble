@@ -85,6 +85,12 @@ struct UfsPrd { uint64_t addr; uint32_t bytes; };
 static constexpr unsigned kMaxPrds = (kUcdStride - kPrdtOffset) / 16;
 static constexpr uint32_t kXferMax = 1U << 20, kPrdMax = 256U << 10;
 static bool gZeroCopy = true;
+// Data commands by path, for the log: straight to or from the caller's pages, or through the slot's data area with a copy.
+static volatile uint64_t gDirectCommands = 0, gStagedCommands = 0;
+// Commands in flight, for the log: when each slot's doorbell rang (0 while the slot has no command out) and the command's opcode (the
+// SCSI opcode, or the UPIU transaction type for others). The log names the oldest, so a command that does not complete is visible.
+static volatile uint64_t gSlotIssuedAt[kSlots] = {};
+static volatile uint8_t gSlotOpcode[kSlots] = {};
 
 static IOReturn hostIssue (const UfsSlot &slot, uint32_t direction, uint32_t dataBytes, uint32_t timeoutUs, uint64_t *deadline,
                            uint32_t *ocs, const UfsPrd *prd = nullptr, unsigned prds = 0, const void *buffer = nullptr)
@@ -148,16 +154,27 @@ static IOReturn hostIssue (const UfsSlot &slot, uint32_t direction, uint32_t dat
   if (!hostInterruptMode ()) hostWrite (0x20, 1);  // Acknowledge completion only; preserve error evidence. With interrupts the handler does.
   clock_interval_to_deadline (timeoutUs, kMicrosecondScale, deadline);
   __atomic_or_fetch (&gOutstanding, slot.bit, __ATOMIC_RELEASE);
+  gSlotOpcode[slot.index] = slot.ucd[slot.ucd[0] == 1 ? 16 : 12];
+  __atomic_store_n (&gSlotIssuedAt[slot.index], mach_absolute_time (), __ATOMIC_RELAXED);
   hostWrite (0x58, slot.bit);
   return kIOReturnSuccess;
 }
 
-static IOReturn hostAwait (const UfsSlot &slot, uint32_t dataBytes, uint64_t deadline, uint32_t *ocs, const void *buffer = nullptr)
+// `direction` is the command's UTRD data direction. Only data the device wrote (2) is invalidated after the command: the device does
+// not change the data of a write (1), which was cleaned to memory before the doorbell, so its cache lines need nothing (Linux's
+// arch_sync_dma_for_cpu returns at once for DMA_TO_DEVICE). An invalidate there would also drop a line a CPU wrote to the caller's
+// page while the command ran.
+static IOReturn hostAwait (const UfsSlot &slot, uint32_t dataBytes, uint64_t deadline, uint32_t *ocs, const void *buffer = nullptr,
+                           unsigned direction = 2)
 {
   HardwareTransferPort port = { slot, deadline, 0 };
   UfsTransferPoll state;
   UfsTransferEnd end = pollUfsTransfer (port, state);
-  if (end == UfsTransferEnd::Completed) __atomic_and_fetch (&gOutstanding, ~slot.bit, __ATOMIC_RELEASE);
+  __atomic_store_n (&gSlotIssuedAt[slot.index], 0, __ATOMIC_RELAXED);
+  if (end == UfsTransferEnd::Completed) {
+    __atomic_and_fetch (&gOutstanding, ~slot.bit, __ATOMIC_RELEASE);
+    hostWaitDone (port.started);
+  }
   gRootDiagnostic.polls = state.polls;
   gRootDiagnostic.dbSeen = state.doorbellSeen;
   gRootDiagnostic.isSeen = state.interruptSeen;
@@ -170,7 +187,7 @@ static IOReturn hostAwait (const UfsSlot &slot, uint32_t dataBytes, uint64_t dea
     return recordTransport (end == UfsTransferEnd::Timeout ? kIOReturnTimeout : kIOReturnIOError, *ocs);
   }
   cacheInvalidate (slot.ucd, kPrdtOffset);
-  if (dataBytes) cacheInvalidate (buffer ? buffer : slot.data, dataBytes);
+  if (dataBytes && direction != 1) cacheInvalidate (buffer ? buffer : slot.data, dataBytes);
   gRootDiagnostic.response = loadBe32 (slot.ucd + kRspOffset);
   return recordTransport (*ocs == 0 ? kIOReturnSuccess : kIOReturnIOError, *ocs);
 }
@@ -179,7 +196,7 @@ static IOReturn hostSubmit (const UfsSlot &slot, uint32_t direction, uint32_t da
 {
   uint64_t deadline = 0;
   IOReturn result = hostIssue (slot, direction, dataBytes, timeoutUs, &deadline, ocs);
-  return result != kIOReturnSuccess ? result : hostAwait (slot, dataBytes, deadline, ocs);
+  return result != kIOReturnSuccess ? result : hostAwait (slot, dataBytes, deadline, ocs, nullptr, direction);
 }
 
 static bool hostClearUcd (const UfsSlot &slot)
@@ -271,11 +288,11 @@ static IOReturn hostScsiIssue (const UfsSlot &slot, uint8_t lun, const uint8_t *
 }
 
 static IOReturn hostScsiAwait (const UfsSlot &slot, uint8_t lun, uint32_t dataBytes, uint64_t deadline, uint32_t *scsiStatus,
-                               const void *buffer = nullptr)
+                               const void *buffer = nullptr, unsigned direction = 2)
 {
   *scsiStatus = 0xffff;
   uint32_t ocs = 0xf;
-  IOReturn status = hostAwait (slot, dataBytes, deadline, &ocs, buffer);
+  IOReturn status = hostAwait (slot, dataBytes, deadline, &ocs, buffer, direction);
   if (status != kIOReturnSuccess) return status;
   const uint8_t tag = static_cast<uint8_t> (slot.entry);
   status = hostResponseHeader (slot, 0x21, lun, tag);
@@ -306,7 +323,8 @@ static IOReturn hostScsiDir (const UfsSlot &slot, uint8_t lun, const uint8_t *cd
 {
   uint64_t deadline = 0;
   IOReturn status = hostScsiIssue (slot, lun, cdb, cdbLength, direction, dataBytes, timeoutUs, &deadline, scsiStatus, prd, prds, buffer);
-  return status != kIOReturnSuccess ? status : hostScsiAwait (slot, lun, dataBytes, deadline, scsiStatus, prds ? buffer : nullptr);
+  return status != kIOReturnSuccess ? status
+                                    : hostScsiAwait (slot, lun, dataBytes, deadline, scsiStatus, prds ? buffer : nullptr, direction);
 }
 
 // The original read-only entry point: data, when present, always flows device -> host.
@@ -356,6 +374,7 @@ static IOLock *gSlotLock = nullptr;
 // Pool statistics (under gSlotLock): slots taken now, the most taken at once, takes that had to wait for a slot.
 static uint32_t gSlotsBusy = 0, gSlotsPeak = 0;
 static uint64_t gSlotWaits = 0;
+static volatile uint32_t gSlotWaitersNow = 0;   // takers waiting for a slot now, for the log
 // With the pool empty, takers queue in arrival order and a freed slot goes straight to the oldest of them (no thread can be passed over).
 struct UfsSlotWaiter { UfsSlotWaiter *next; int slot; };
 static UfsSlotWaiter *gSlotWaitHead = nullptr, *gSlotWaitTail = nullptr;
@@ -400,7 +419,9 @@ static UfsSlot hostSlotTake (bool *pooled)
     UfsSlotWaiter waiter = { nullptr, -1 };
     if (gSlotWaitTail) gSlotWaitTail->next = &waiter; else gSlotWaitHead = &waiter;
     gSlotWaitTail = &waiter;
+    __atomic_fetch_add (&gSlotWaitersNow, 1, __ATOMIC_RELAXED);
     while (waiter.slot < 0) IOLockSleep (gSlotLock, &waiter, THREAD_UNINT);
+    __atomic_fetch_sub (&gSlotWaitersNow, 1, __ATOMIC_RELAXED);
     index = static_cast<unsigned> (waiter.slot);
   }
   if (++gSlotsBusy > gSlotsPeak) gSlotsPeak = gSlotsBusy;
@@ -429,9 +450,11 @@ static void hostSlotGive (const UfsSlot &slot, bool pooled)
 // A command the device refused for now: BUSY (0x08) or TASK SET FULL (0x28), as when more commands are queued than it accepts. It is
 // sent again after a short pause, up to kBusyRetries times; any other status is final.
 static constexpr unsigned kBusyRetries = 50;
+static volatile uint64_t gBusyRetries = 0;   // commands sent again, for the log
 static bool hostRetryable (IOReturn status, uint32_t scsi, unsigned attempt)
 {
   if (status != kIOReturnNotReady || (scsi != 0x08 && scsi != 0x28) || attempt >= kBusyRetries) return false;
+  __atomic_fetch_add (&gBusyRetries, 1, __ATOMIC_RELAXED);
   IODelay (attempt < 4 ? 50U << attempt : 1000U);
   return true;
 }
@@ -478,6 +501,7 @@ static IOReturn hostRead4k (uint8_t lun, uint64_t lba, uint32_t blocks, void *ds
   bool pooled;
   const UfsSlot slot = hostSlotTake (&pooled);
   gRootDiagnostic.lba = lba;
+  __atomic_fetch_add (prds ? &gDirectCommands : &gStagedCommands, 1, __ATOMIC_RELAXED);
   uint8_t cdb[10] = { 0x28, 0, uint8_t (lba >> 24), uint8_t (lba >> 16), uint8_t (lba >> 8), uint8_t (lba),
                       0, uint8_t (blocks >> 8), uint8_t (blocks), 0 };
   uint32_t scsi = 0;
@@ -545,6 +569,7 @@ static IOReturn hostWrite4k (uint8_t lun, uint64_t lba, uint32_t blocks, const v
   bool pooled;
   const UfsSlot slot = hostSlotTake (&pooled);
   gRootDiagnostic.lba = lba;
+  __atomic_fetch_add (prds ? &gDirectCommands : &gStagedCommands, 1, __ATOMIC_RELAXED);
   if (!prds) memcpy (slot.data, src, blocks * 4096U);
   uint8_t cdb[10] = { 0x2a, uint8_t (fua ? 0x08 : 0), uint8_t (lba >> 24), uint8_t (lba >> 16), uint8_t (lba >> 8), uint8_t (lba),
                       0, uint8_t (blocks >> 8), uint8_t (blocks), 0 };

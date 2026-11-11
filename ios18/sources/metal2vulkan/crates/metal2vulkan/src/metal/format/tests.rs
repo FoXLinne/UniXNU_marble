@@ -88,7 +88,8 @@ fn refused_formats_are_exactly_the_documented_set() {
     // - the three bfloat formats, held raw.
     // - `RGB10A2Unorm_sRGB`, held raw.
     // - `BGRA4Unorm`, held in the 4-bit word of its bits.
-    assert_eq!(count("not_implemented"), 45 + 3 + 60, "{refused:?}");
+    // - the twenty held for copies alone (`copies_only`).
+    assert_eq!(count("not_implemented"), 45 + 3 + 40, "{refused:?}");
     assert!(refused["not_implemented"].iter().all(|&pf| {
         (ycbcr_format(pf).is_some() && !ycbcr(pf))
             || matches!(pf, P::RGBA16FloatXR | P::AnyDepth | P::AnyStencil)
@@ -111,6 +112,16 @@ fn direct_formats_round_trip() {
         for c in &candidates {
             assert!(c.format.is_known(), "{pf:?} -> {:?}", c.format);
             assert_ne!(c.format, vk::Format::UNDEFINED, "{pf:?}");
+        }
+        // A format held for copies alone holds its bytes in an unsigned integer format of their
+        // size, which no use but a copy takes: its direct format is that one, which an integer
+        // format of the same size shares.
+        if candidates[0].emulation == FormatEmulation::CopiesOnly {
+            assert!(copies_only(pf), "{pf:?}");
+            assert_eq!(candidates.len(), 1, "{pf:?}");
+            assert_eq!(direct_format(pf), Some(candidates[0].format), "{pf:?}");
+            assert_eq!(byte_format(pf), Some(candidates[0].format), "{pf:?}");
+            continue;
         }
         // A PVRTC RGB, 4:2:2 or ASTC 4x2 or 8x4 format, held through its decoded twin's view
         // alone, has no direct format: no Vulkan format holds its blocks as Metal reads them.
@@ -256,6 +267,11 @@ fn numeric_types_and_packed_layouts_agree() {
         let Repr::Candidates(aspects, candidates) = make_repr(pf) else {
             continue;
         };
+        // A format held for copies alone has no sampled type: no function reads it.
+        if candidates[0].emulation == FormatEmulation::CopiesOnly {
+            assert_eq!(sampled_type(pf), None, "{pf:?}");
+            continue;
+        }
         let ty = sampled_type(pf).unwrap();
         if aspects != vk::ImageAspectFlags::COLOR {
             continue;
@@ -1124,6 +1140,7 @@ fn formats_metal_names_are_named_and_refused_typed() {
     // And the three bfloat formats and `RGB10A2Unorm_sRGB`, held raw (`ExtendedRange`).
     // And `BGRA4Unorm`, held in the 4-bit word of its bits (`A4R4G4B4_UNORM_PACK16`, or
     // `ABGR4Unorm`'s word through a rotating view).
+    // And the twenty held for copies alone (`copies_only`).
     let bfloat = |pf| ExtendedRange::of(pf).is_some_and(ExtendedRange::bfloat);
     let rgb10a2_srgb = |pf| ExtendedRange::of(pf) == Some(ExtendedRange::Rgb10A2Srgb);
     assert_eq!(
@@ -1131,7 +1148,7 @@ fn formats_metal_names_are_named_and_refused_typed() {
             .iter()
             .filter(|&&pf| matches!(pf, formats_named_not_held!()))
             .count(),
-        named.len() - 4 - 11 - 3 - 1 - 1
+        named.len() - 4 - 11 - 3 - 1 - 1 - 20
     );
     for (raw, name) in named {
         let pf = PixelFormat::try_from(raw).unwrap_or_else(|e| panic!("{raw}: {e}"));
@@ -1140,7 +1157,7 @@ fn formats_metal_names_are_named_and_refused_typed() {
         if padded_words(pf) || x_channel(pf) || bfloat(pf) || rgb10a2_srgb(pf) {
             continue;
         }
-        if pf == PixelFormat::BGRA4Unorm {
+        if pf == PixelFormat::BGRA4Unorm || copies_only(pf) {
             continue;
         }
         assert!(matches!(pf, formats_named_not_held!()), "{name}");
@@ -1940,6 +1957,43 @@ fn storage_choices_on_committed_profiles_are_declarable() {
     }
 }
 
+/// A storage choice that exchanges red and blue in the shader (`SwizzleBgra`, `SrgbEncodeBgra`) is
+/// one of a format `red_blue_exchanged` names, on every committed profile and for every use, and
+/// each such format takes one on some profile: the flag a heap entry carries for it
+/// (`memory::handles::FLAG_RED_BLUE`) is what tells its member from the red-first format of its
+/// texel class.
+#[test]
+fn a_red_blue_exchange_is_a_blue_first_format_s() {
+    let mut exchanged = BTreeSet::new();
+    for (stem, dev) in committed_devices() {
+        for &pf in PixelFormat::ALL {
+            for use_ in [
+                StorageUse::READ_WRITE_TEXTURE,
+                StorageUse::texture(false, true),
+                StorageUse::texture(true, false),
+                StorageUse::texture(false, false),
+            ] {
+                let Ok(c) = storage_choice(pf, use_, dev.profile()) else {
+                    continue;
+                };
+                if matches!(
+                    c.class,
+                    StorageImageClass::SwizzleBgra | StorageImageClass::SrgbEncodeBgra
+                ) {
+                    assert!(red_blue_exchanged(pf), "{stem} {pf:?} {use_:?}: {c:?}");
+                    exchanged.insert(pf);
+                }
+            }
+        }
+    }
+    let named: BTreeSet<PixelFormat> = PixelFormat::ALL
+        .iter()
+        .copied()
+        .filter(|&pf| red_blue_exchanged(pf))
+        .collect();
+    assert_eq!(exchanged, named);
+}
+
 /// A half-float storage texture takes `Identity` on every committed profile, for every use, written
 /// or read, image or texel buffer: the device converts each value and NaN (`lower::texture`'s
 /// `half_storage_facts` and `half_write_nans` record what it relies on or notes). So does another
@@ -2218,7 +2272,8 @@ fn out_of_bounds_alpha_follows_the_measured_formats() {
         let placeholder = matches!(pf, P::Invalid | P::Unspecialized);
         let held_none = (ycbcr_format(pf).is_some() && !ycbcr(pf))
             || matches!(pf, P::RGBA16FloatXR | P::AnyDepth | P::AnyStencil)
-            || matches!(pf, formats_named_not_held!());
+            || matches!(pf, formats_named_not_held!())
+            || copies_only(pf);
         assert_eq!(
             out_of_bounds_alpha_one(pf).is_none(),
             placeholder || held_none,
@@ -2586,7 +2641,11 @@ fn a_pass_renders_only_the_ycbcr_formats_whose_store_is_matched() {
 /// channel's `half` is the `half` of its code's value: `0.1`'s (code 435 reads 51/510, whose
 /// `half` is `half` 0.1's), not `0.25`'s (code 512 reads 0.25098) or `0.0012345`'s (code 385);
 /// the two-plane formats' alpha byte reads `0.5` as `128 / 255`, a `BGRA10_XR` alpha code exactly;
-/// `BGR10_XR` has no alpha; the padded and bfloat forms' tile memory is unmeasured.
+/// `BGR10_XR` has no alpha. A padded form's channels read `c / 1023`: `0.33371`'s `half` is not
+/// code 341's (the M3 Max's tile held the `half`: a premultiplied blend of `(0, 0, 0, 0.5)` over
+/// that clear stored code 171 where code 341's value gives 170), nor `0.5`'s code 512's, while 0
+/// and 1 are (but `RG10Unorm_X12_sRGB`'s 1, whose code reads back linear); only the channels a
+/// padded form has count. The bfloat forms' tile memory is unmeasured.
 #[test]
 fn clears_read_back_where_their_halves_are_their_codes_values() {
     let planes = ExtendedRange::Planes { srgb: false };
@@ -2609,7 +2668,27 @@ fn clears_read_back_where_their_halves_are_their_codes_values() {
     assert_eq!(bgra.clear_read_back([0.0, 0.0, 0.0, 0.5]), Some(true));
     assert_eq!(planes.clear_read_back([0.0, 0.0, 0.0, 0.5]), Some(false));
     assert_eq!(bgr.clear_read_back([0.0, 0.0, 0.0, 0.5]), Some(true));
-    assert_eq!(ExtendedRange::R10X6.clear_read_back([0.0; 4]), None);
+    for form in [
+        ExtendedRange::R10X6,
+        ExtendedRange::Rg10X12,
+        ExtendedRange::R10X6Srgb,
+        ExtendedRange::Rg10X12Srgb,
+        ExtendedRange::Rgb10A2Srgb,
+    ] {
+        assert_eq!(form.clear_read_back([0.0; 4]), Some(true), "{form:?}");
+        // `RG10Unorm_X12_sRGB` writes 1 as code 137 (Metal's table), which reads `137 / 1023`.
+        let one = form != ExtendedRange::Rg10X12Srgb;
+        assert_eq!(form.clear_read_back([1.0; 4]), Some(one), "{form:?}");
+    }
+    let r10 = ExtendedRange::R10X6;
+    assert_eq!(
+        r10.clear_read_back([0.33371, 0.70011, 0.10049, 0.5]),
+        Some(false)
+    );
+    // Red alone counts: green's 0.5 is no channel of `R10Unorm_X6`.
+    assert_eq!(r10.clear_read_back([1.0, 0.5, 0.5, 0.5]), Some(true));
+    let rg = ExtendedRange::Rg10X12;
+    assert_eq!(rg.clear_read_back([1.0, 0.5, 0.0, 1.0]), Some(false));
     assert_eq!(ExtendedRange::Rgba16Bfloat.clear_read_back([0.0; 4]), None);
 }
 
@@ -2896,7 +2975,7 @@ fn footprint_answers_where_no_image_does() {
         };
         answered += 1;
         assert!(
-            matches!(repr(pf), Repr::NotImplemented),
+            matches!(repr(pf), Repr::NotImplemented) || copies_only(pf),
             "{pf:?}: {shape:?}, but the crate holds an image of it"
         );
         // Every candidate of the format is refused, so no device can hold its texture, whatever
@@ -3132,19 +3211,21 @@ fn packed_sixteen_bit_formats_sit_in_the_vulkan_word_of_their_bits() {
     );
 }
 
-/// `ARGB8Unorm_sRGB`, the other plain straggler, stays refused `NotImplemented(Format)` and keeps
-/// its own heap footprint: its bytes are `ARGB8Unorm`'s, which the crate holds, but no Vulkan
+/// `ARGB8Unorm_sRGB`, the other plain straggler, is held for copies alone (`copies_only`: its
+/// bytes in `R32_UINT`), every use but a copy refused `NotImplemented(Format)`, and keeps its own
+/// heap footprint: its bytes are `ARGB8Unorm`'s, which the crate holds, but no Vulkan
 /// format applies the sRGB transfer function to the three channels Metal's does -- every Vulkan
 /// `_SRGB` format encodes the word's low three and leaves the fourth linear, and Metal's alpha is
 /// the low byte here. Holding it in `R8G8B8A8_SRGB` through `ARGB8Unorm`'s rotation would read
 /// Metal's alpha decoded and Metal's blue linear, because format conversion runs before a view's
 /// component swizzle.
 #[test]
-fn the_srgb_straggler_has_no_vulkan_image_and_keeps_its_footprint() {
+fn the_srgb_straggler_is_held_for_copies_alone_and_keeps_its_footprint() {
     let pf = PixelFormat::ARGB8UnormSRGB;
-    assert!(matches!(repr(pf), Repr::NotImplemented));
-    assert_eq!(aspects(pf), None);
-    assert_eq!(direct_format(pf), None);
+    assert!(copies_only(pf));
+    assert_eq!(aspects(pf), Some(vk::ImageAspectFlags::COLOR));
+    assert_eq!(byte_format(pf), Some(vk::Format::R32_UINT));
+    assert_eq!(sampled_type(pf), None);
     assert_eq!(
         footprint(pf),
         Some(super::footprint::Footprint::Tiled {
@@ -3154,8 +3235,20 @@ fn the_srgb_straggler_has_no_vulkan_image_and_keeps_its_footprint() {
     );
     // Its sibling is held, and the two no longer answer the same way anywhere.
     assert_eq!(footprint(PixelFormat::BGRA4Unorm), None);
-    // Every usage is refused `NotImplemented` on every committed profile: no candidate to pick.
+    // Every usage is refused `NotImplemented` on every committed profile: its one candidate
+    // admits none, and no storage choice writes it.
     for (stem, device) in committed_devices() {
+        assert!(
+            matches!(
+                storage_image_choice(pf, device.profile()),
+                Err(Error::Unsupported(Unsupported {
+                    feature: Feature::Format,
+                    needs: Needs::NotImplemented,
+                    ..
+                }))
+            ),
+            "{stem}"
+        );
         for u in [
             FormatUsage::SampledImage,
             FormatUsage::StorageImage,

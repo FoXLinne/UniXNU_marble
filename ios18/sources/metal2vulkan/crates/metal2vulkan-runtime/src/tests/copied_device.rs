@@ -12,11 +12,20 @@
 //!   The same without a gate.
 //! - **Coherence.** In each, the GPU reads the caller's bytes; a CPU write before a commit reaches
 //!   the GPU, those bytes alone copied in; a fill reaches the caller's pages at its completion,
-//!   those bytes alone merged back.
+//!   those bytes alone merged back. A completion compares no copy its batch only read, nor one a
+//!   batch left unnamed whose draw only reads through the addresses it loads; a kernel's stores
+//!   through such an address still merge back.
 //! - **Unreadable pages** (mapped without access, memory Metal makes no buffer over) are never
 //!   copied: the buffer is refused, as their import is.
 //! - **A dma-buf's mapping** (Linux, where `/dev/udmabuf` opens), whose pages the kernel's read
 //!   cannot pin, is copied where the gate refuses its import, with the same coherence.
+//! - **Shared memory the device refuses** (Linux: a `memfd` mapped shared, made with no source of
+//!   dma-bufs) is copied where the device refuses its pointer (RADV), announced and counted as the
+//!   device's refusal, with the same coherence; imported elsewhere.
+//! - **Read-only pages** (a read-only view of shared memory) are a copy whose GPU writes are
+//!   dropped, a buffer's and a rebind's: where the gate refuses their import, counted as a
+//!   refusal; on Linux where it admits it, counted as a copy of unwritable pages
+//!   (`WorkCounts::copied_unwritable_pages`). Their dma-buf source is never called.
 //! - **Rebinds.** A rebind's new pages are a copy where the gate refuses their import or the
 //!   admitted import fails, with the same coherence; the old pages stay as they were, and a later
 //!   rebind imports again.
@@ -30,6 +39,13 @@
 //!   texture bound to its bytes read and write the new pages. A command buffer committed before
 //!   such a rebind and held back reaches the copy, encoded again; a rebind while one not yet
 //!   committed used the buffer is refused, the gate unasked.
+//! - **Textures over a copy.** A texture made over a copied buffer, sampled or rendered into, is an
+//!   image over the copy where the device's check passed for the copy's memory and the caller's
+//!   pages (`WorkCounts::copied_textures_in_place`), else a shadow (`shadowed-texture`): either
+//!   way it reads the caller's texels and a CPU write made before a commit, a blit into it and a
+//!   render pass's clear reach the texels' bytes in the pages alone, the bytes between its rows
+//!   and after it kept; a rebind to another copy and back to an import makes its image again over
+//!   each, which it follows.
 //! - **The answer.** `Buffer::host_backing` says which: a buffer whose pages the device imported
 //!   answers it imported them by their pointer, a copy answers `Copied` (each test's copy above
 //!   too), a buffer placed in a no-copy heap its heap's, a detached one `Detached`, and a buffer
@@ -69,6 +85,10 @@ enum Backing {
     DmaBuf {
         _mapping: super::copied::DmaBufMapping,
     },
+    /// A `memfd`'s pages mapped shared, read and write, as QEMU maps its
+    /// `memory-backend-memfd,share=on` guest RAM: unmapped as it drops.
+    #[cfg(target_os = "linux")]
+    Shared,
 }
 
 impl Host {
@@ -95,6 +115,38 @@ impl Host {
             backing: Backing::DmaBuf { _mapping: mapping },
             seed,
         })
+    }
+
+    /// Host memory over a `memfd`'s pages mapped shared, read and write, in the pattern of `seed`.
+    #[cfg(target_os = "linux")]
+    fn over_shared_memory(seed: u8) -> Host {
+        use std::os::fd::AsRawFd;
+        let fd = shared_memory();
+        // SAFETY: a new shared mapping of the memfd's `LENGTH` bytes, unmapped as the host drops;
+        // the descriptor may close once it is mapped.
+        let mapped = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                LENGTH,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                fd.as_raw_fd(),
+                0,
+            )
+        };
+        assert_ne!(
+            mapped,
+            libc::MAP_FAILED,
+            "{}",
+            std::io::Error::last_os_error()
+        );
+        let host = Host {
+            pointer: NonNull::new(mapped.cast()).unwrap(),
+            backing: Backing::Shared,
+            seed,
+        };
+        host.write(0, &host.pattern());
+        host
     }
 
     /// The pattern it was made with.
@@ -130,7 +182,12 @@ impl Host {
             Some(gate) => memory.with_import_gate(gate),
             None => memory,
         };
-        // SAFETY: as above.
+        self.buffer_over(device, memory)
+    }
+
+    /// A no-copy buffer over its bytes, made with `memory`, which names them.
+    fn buffer_over(&self, device: &Device, memory: HostMemory) -> Buffer {
+        // SAFETY: as for `buffer`.
         unsafe {
             device.new_buffer_with_bytes_no_copy(
                 memory,
@@ -153,6 +210,11 @@ impl Drop for Host {
             // Unmapped by the mapping's own drop.
             #[cfg(target_os = "linux")]
             Backing::DmaBuf { .. } => {}
+            // SAFETY: the mapping of `LENGTH` bytes made for it, which nothing uses any more.
+            #[cfg(target_os = "linux")]
+            Backing::Shared => unsafe {
+                assert_eq!(libc::munmap(self.pointer.as_ptr().cast(), LENGTH), 0);
+            },
         }
     }
 }
@@ -192,6 +254,18 @@ fn device() -> Option<(Device, Heard)> {
     if device.shared().host_import.is_err() {
         eprintln!("COPIED: the device imports no host memory here; nothing to test");
         return None;
+    }
+    // Where the device may lay its buffers in exportable blocks, its first buffer starts its
+    // in-place check (`in_place.rs`'s `Device::fd_blocks_checked`), whose own imports of host
+    // pages would land in the counts these tests compare: settled first.
+    let exportable = crate::device::lock(&device.shared().memory)
+        .fd_buffer_types
+        .is_ok();
+    if exportable {
+        assert!(
+            device.settle_in_place_checks(Duration::from_secs(120)),
+            "the device's in-place check answered"
+        );
     }
     Some((device, heard))
 }
@@ -347,6 +421,79 @@ fn copied_buffer_is_made_where_the_caller_s_gate_refuses_the_import() {
     assert_eq!(gpu_bytes(&device, &imported), other.pattern());
     assert_eq!(asked.lock().unwrap().len(), 2, "asked once more");
     drop((buffer, imported));
+}
+
+/// A no-copy buffer over shared memory (a `memfd` mapped shared, as QEMU's
+/// `memory-backend-memfd,share=on` guest RAM is) made with no source of dma-bufs of its pages, and
+/// one made with a source that fails: on a device that refuses the pointer of shared memory
+/// (`Device::imports_shared_host_pointers`, RADV) each a copy of the pages, announced (once) and
+/// counted as the device's refusal, with every copy's coherence, the source called once, where
+/// the call was refused before; elsewhere an import of the pointer, the source never called.
+#[cfg(target_os = "linux")]
+#[test]
+fn copied_buffer_is_made_over_shared_memory_whose_pointer_the_device_refuses() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    // Pages of their own each, so that neither buffer lies in the other's copy.
+    let hosts = [Host::over_shared_memory(9), Host::over_shared_memory(10)];
+    let Some((device, heard)) = device() else {
+        return;
+    };
+    let refuses = !device.imports_shared_host_pointers().unwrap();
+    let calls = Arc::new(AtomicUsize::new(0));
+    for (host, failing) in hosts.iter().zip([false, true]) {
+        let memory = match failing {
+            // SAFETY: as for `Host::buffer`.
+            false => unsafe { HostMemory::new(host.pointer) },
+            true => {
+                let counted = Arc::clone(&calls);
+                let source: crate::DmaBufSource = Arc::new(move |_| {
+                    counted.fetch_add(1, Ordering::Relaxed);
+                    Err(std::io::Error::other("no dma-buf"))
+                });
+                // SAFETY: as for `Host::buffer`, and the source answers no chunk.
+                unsafe { HostMemory::with_dma_buf(host.pointer, source) }
+            }
+        };
+        let source = match failing {
+            true => "a source that fails",
+            false => "no source",
+        };
+        let before = device.work_counts();
+        let buffer = host.buffer_over(&device, memory);
+        let after = device.work_counts();
+        let device_refused =
+            after.copied_host_buffers_device_refused - before.copied_host_buffers_device_refused;
+        eprintln!(
+            "COPIED {}: the device refuses shared memory's pointer: {refuses}; the buffer over it \
+             with {source} is {:?}, {device_refused} copied for the device's refusal, the source \
+             called {} times",
+            device.name(),
+            buffer.host_backing(),
+            calls.load(Ordering::Relaxed)
+        );
+        match refuses {
+            true => {
+                assert_eq!(
+                    device_refused, 1,
+                    "{source}: counted as the device's refusal"
+                );
+                assert_eq!(moved(&before, &after), [0, 1, 0, 0, 0], "{source}: a copy");
+                assert_eq!(announced(&heard), 1, "{source}: announced once");
+                lies_in_a_copy(&device, &buffer, host);
+                assert_eq!(calls.load(Ordering::Relaxed), usize::from(failing));
+            }
+            false => {
+                assert_eq!(device_refused, 0);
+                assert_eq!(buffer.host_backing(), Some(HostBacking::ImportedByPointer));
+                assert_eq!(
+                    calls.load(Ordering::Relaxed),
+                    0,
+                    "{source}: no source called"
+                );
+            }
+        }
+        drop(buffer);
+    }
 }
 
 /// Pages of a dma-buf's mapping (`VM_PFNMAP`, as a consumer maps guest RAM), which the kernel's
@@ -868,16 +1015,29 @@ const SIDE: usize = 16;
 const TEXEL: usize = 4;
 const PITCH: usize = 256;
 
-/// The rows of a texture's texels in `bytes`, its first texel at 0.
+/// Tight rows: a 16 x 16 RGBA8 texture's, with no byte between them.
+const TIGHT: usize = SIDE * TEXEL;
+
+/// The rows of a texture's texels in `bytes`, its first texel at 0, its rows `PITCH` apart.
 fn rows(bytes: &[u8]) -> Vec<u8> {
+    rows_at(bytes, PITCH)
+}
+
+/// The rows of a texture's texels in `bytes`, its first texel at 0, its rows `pitch` apart.
+fn rows_at(bytes: &[u8], pitch: usize) -> Vec<u8> {
     (0..SIDE)
-        .flat_map(|row| bytes[row * PITCH..row * PITCH + SIDE * TEXEL].to_vec())
+        .flat_map(|row| bytes[row * pitch..row * pitch + SIDE * TEXEL].to_vec())
         .collect()
 }
 
 /// A sampled 16 x 16 RGBA8 texture over `buffer` at 0, its rows `PITCH` apart, and whether it
 /// is an image in place over the bytes (`WorkCounts::host_textures_in_place`).
 fn texture_over(device: &Device, buffer: &Buffer) -> (crate::Texture, bool) {
+    texture_over_at(device, buffer, PITCH)
+}
+
+/// [`texture_over`], its rows `pitch` apart.
+fn texture_over_at(device: &Device, buffer: &Buffer, pitch: usize) -> (crate::Texture, bool) {
     let mut descriptor = crate::TextureDescriptor::texture_2d(
         metal2vulkan::metal::PixelFormat::RGBA8Unorm,
         SIDE as u64,
@@ -887,7 +1047,7 @@ fn texture_over(device: &Device, buffer: &Buffer) -> (crate::Texture, bool) {
     descriptor.usage = metal2vulkan::metal::TextureUsage::SHADER_READ;
     descriptor.resource_options = buffer.resource_options();
     let before = device.work_counts();
-    let texture = buffer.new_texture(&descriptor, 0, PITCH as u64).unwrap();
+    let texture = buffer.new_texture(&descriptor, 0, pitch as u64).unwrap();
     let after = device.work_counts();
     let in_place = after.host_textures_in_place > before.host_textures_in_place;
     eprintln!(
@@ -946,9 +1106,9 @@ fn write_texels(device: &Device, texture: &crate::Texture, value: u8) {
     });
 }
 
-/// The texture over `buffer`, which lies in a copy of the `LENGTH` bytes at `pages` whose
-/// pattern is `pattern`, reads those texels; a GPU write into it reaches the texels' bytes in
-/// `pages` alone, the bytes between its rows and after it kept.
+/// The texture over `buffer`, its rows `PITCH` apart, which lies in a copy of the `LENGTH` bytes
+/// at `pages` whose pattern is `pattern`, reads those texels; a GPU write into it reaches the
+/// texels' bytes in `pages` alone, the bytes between its rows and after it kept.
 fn texture_follows_the_copy(
     device: &Device,
     buffer: &Buffer,
@@ -956,24 +1116,39 @@ fn texture_follows_the_copy(
     pages: NonNull<u8>,
     pattern: &[u8],
 ) {
+    texture_follows_the_copy_at(device, (buffer, texture), pages, pattern, PITCH);
+}
+
+/// [`texture_follows_the_copy`], the texture's rows `pitch` apart.
+fn texture_follows_the_copy_at(
+    device: &Device,
+    (buffer, texture): (&Buffer, &crate::Texture),
+    pages: NonNull<u8>,
+    pattern: &[u8],
+    pitch: usize,
+) {
     assert!(buffer.copied(), "the buffer is a copy");
     assert_eq!(
         buffer.contents(),
         Some(pages),
         "contents are the new pointer"
     );
-    assert_eq!(texels(device, texture), rows(pattern), "the new texels");
+    assert_eq!(
+        texels(device, texture),
+        rows_at(pattern, pitch),
+        "the new texels"
+    );
     assert_eq!(gpu_bytes(device, buffer), pattern, "the buffer's new bytes");
     write_texels(device, texture, 0xA5);
     // SAFETY: the caller's bytes, which no command buffer uses now.
     let now = unsafe { std::slice::from_raw_parts(pages.as_ptr(), LENGTH) }.to_vec();
     for row in 0..SIDE {
-        let (start, end) = (row * PITCH, row * PITCH + SIDE * TEXEL);
+        let (start, end) = (row * pitch, row * pitch + SIDE * TEXEL);
         assert!(
             now[start..end].iter().all(|&byte| byte == 0xA5),
             "row {row}'s texels reached the pages"
         );
-        let next = (row + 1) * PITCH;
+        let next = (row + 1) * pitch;
         assert_eq!(
             now[end..next],
             pattern[end..next],
@@ -981,8 +1156,8 @@ fn texture_follows_the_copy(
         );
     }
     assert_eq!(
-        now[SIDE * PITCH..],
-        pattern[SIDE * PITCH..],
+        now[SIDE * pitch..],
+        pattern[SIDE * pitch..],
         "past the texels"
     );
     assert!(texels(device, texture).iter().all(|&byte| byte == 0xA5));
@@ -1032,6 +1207,391 @@ fn copied_rebind_makes_a_texture_s_image_in_place_again_over_the_copy() {
         "COPIED-REBIND-IN-PLACE: texture {} over a gate-refused rebind's copy",
         if in_place { "in place" } else { "a shadow" }
     );
+    drop((texture, buffer));
+}
+
+/// Whether the device's check passed, for a texture of `usage` over `buffer` (a copied buffer, its
+/// copy in memory the device allocates) at `pitch`, for the caller's pages, for texels that lie in
+/// lines as they lie in the copy and in the pages; and whether it passed for the runtime's pooled
+/// memory, which a `DRM_FORMAT_MOD_LINEAR` image over the copy takes too (`texture/route.rs`,
+/// `Device::copy_unplaced`).
+fn passed_over_copy(
+    device: &Device,
+    buffer: &Buffer,
+    usage: metal2vulkan::metal::TextureUsage,
+    pitch: usize,
+) -> (bool, bool) {
+    use crate::in_place::{Access, PagesClass, RowEnds, Verdict};
+    let layout = crate::linear_plan::BufferLayout {
+        offset: 0,
+        row_pitch: pitch as u64,
+        slice_pitch: (pitch * SIDE) as u64,
+        row_bytes: (SIDE * TEXEL) as u64,
+        rows: SIDE as u64,
+        slices: 1,
+    };
+    let line = device.shared().in_place.line();
+    let caller = buffer.contents().unwrap().as_ptr().addr() as u64;
+    let copy = buffer.memory().1;
+    let renders = usage.contains(metal2vulkan::metal::TextureUsage::RENDER_TARGET);
+    let passes = |class, start| {
+        let rows = RowEnds::of(start, &layout, line);
+        let access = match renders {
+            true => Access::Renders,
+            false => Access::Reads,
+        };
+        device.in_place_verdict(class, access, rows) == Verdict::Passed
+    };
+    let policy = device.compile_device().policy().host_page_textures;
+    let in_place = policy == metal2vulkan::device::HostPageTexturePolicy::InPlace;
+    (
+        in_place && passes(PagesClass::Pointer, copy) && passes(PagesClass::Pointer, caller),
+        passes(PagesClass::Pooled, copy),
+    )
+}
+
+/// A 16 x 16 RGBA8 texture of `usage` over `buffer` at 0, its rows `pitch` apart, and whether it
+/// is an image over the buffer's copy (`WorkCounts::copied_textures_in_place`), its making
+/// counted as an image in place or a shadow alone.
+fn texture_over_copy(
+    device: &Device,
+    buffer: &Buffer,
+    usage: metal2vulkan::metal::TextureUsage,
+    pitch: usize,
+) -> (crate::Texture, bool) {
+    let mut descriptor = crate::TextureDescriptor::texture_2d(
+        metal2vulkan::metal::PixelFormat::RGBA8Unorm,
+        SIDE as u64,
+        SIDE as u64,
+        false,
+    );
+    descriptor.usage = usage;
+    descriptor.resource_options = buffer.resource_options();
+    let before = device.work_counts();
+    let texture = buffer.new_texture(&descriptor, 0, pitch as u64).unwrap();
+    let after = device.work_counts();
+    let over_copy = after.copied_textures_in_place - before.copied_textures_in_place;
+    let in_place = after.host_textures_in_place - before.host_textures_in_place;
+    let shadows = after.shadowed_textures - before.shadowed_textures;
+    assert_eq!(
+        in_place, over_copy,
+        "an image in place over a copy is over the copy"
+    );
+    assert_eq!(over_copy + shadows, 1, "an image over the copy or a shadow");
+    (texture, over_copy == 1)
+}
+
+/// A render pass's clear of `texture` (16 x 16 RGBA8 over `buffer`'s copy of `pages` at 0, rows
+/// `pitch` apart, in `pattern`) reaches the texels' bytes in the pages alone, at its completion.
+fn clear_reaches_the_pages(
+    device: &Device,
+    texture: &crate::Texture,
+    pages: NonNull<u8>,
+    pattern: &[u8],
+    pitch: usize,
+) {
+    let mut pass = crate::RenderPassDescriptor::new();
+    let color = &mut pass.color_attachments[0];
+    color.texture = Some(texture.clone());
+    color.load_action = crate::LoadAction::Clear;
+    color.store_action = crate::StoreAction::Store;
+    color.clear_color = crate::ClearColor::new(1.0, 0.0, 1.0, 0.0);
+    let queue = device.new_command_queue().unwrap();
+    let command_buffer = queue.command_buffer().unwrap();
+    (command_buffer.render_command_encoder(&pass).unwrap())
+        .end_encoding()
+        .unwrap();
+    command_buffer.commit().unwrap();
+    command_buffer.wait_until_completed_for(WAIT).unwrap();
+    assert_eq!(command_buffer.status(), CommandBufferStatus::Completed);
+    // SAFETY: the caller's bytes, which no command buffer uses now.
+    let now = unsafe { std::slice::from_raw_parts(pages.as_ptr(), LENGTH) }.to_vec();
+    for row in 0..SIDE {
+        let (start, end) = (row * pitch, row * pitch + SIDE * TEXEL);
+        assert!(
+            now[start..end]
+                .chunks(4)
+                .all(|texel| texel == [255, 0, 255, 0]),
+            "row {row}: the clear reached the pages"
+        );
+        let next = (row + 1) * pitch;
+        assert_eq!(
+            now[end..next],
+            pattern[end..next],
+            "row {row}: the bytes after it kept"
+        );
+    }
+    assert_eq!(
+        now[SIDE * pitch..],
+        pattern[SIDE * pitch..],
+        "past the texels"
+    );
+}
+
+/// A texture made over a copied buffer (its copy in memory the device allocates) is an image over
+/// the copy where the device's check passed for the caller's pages and, where its image is the
+/// `DRM_FORMAT_MOD_LINEAR` one, for the runtime's pooled memory (`texture/route.rs`), sampled and
+/// rendered into alike; never where the first did not pass; else a shadow. Either way it reads
+/// the caller's texels; a CPU write before a commit reaches it; a blit into it, and for one that
+/// renders a render pass's clear, reach the texels' bytes in the pages alone. Before textures took
+/// an image over a copy, each was a shadow: on a device whose check passed both (lavapipe, the
+/// Iris Xe) the test fails.
+#[test]
+fn a_texture_over_a_copied_buffer_is_an_image_over_the_copy_where_the_check_passed() {
+    use metal2vulkan::metal::TextureUsage;
+    let Some((device, _heard)) = device() else {
+        return;
+    };
+    device.settle_in_place_checks(Duration::from_secs(120));
+    let usages = [
+        ("sampled", TextureUsage::SHADER_READ),
+        (
+            "rendered",
+            TextureUsage::SHADER_READ | TextureUsage::RENDER_TARGET,
+        ),
+    ];
+    for (seed, (name, usage)) in (40u8..).zip(usages) {
+        let host = Host::new(seed);
+        let asked: Arc<Mutex<Vec<ImportRequest>>> = Arc::default();
+        let buffer = host.buffer(&device, Some(gate(&asked, false)));
+        assert!(buffer.copied(), "the gate refused the import: a copy");
+        let (pages, pooled) = passed_over_copy(&device, &buffer, usage, PITCH);
+        let (texture, over_copy) = texture_over_copy(&device, &buffer, usage, PITCH);
+        eprintln!(
+            "COPIED-TEXTURE {name} on {}: the check passed for the pages {pages} and the pooled \
+             memory {pooled}, an image over the copy {over_copy}",
+            device.name()
+        );
+        if pages && pooled {
+            assert!(
+                over_copy,
+                "{name}: an image over the copy where the check passed"
+            );
+        }
+        if !pages {
+            assert!(
+                !over_copy,
+                "{name}: no image over the copy where the pages' check did not pass"
+            );
+        }
+        // A CPU write before a commit reaches the texture.
+        let pattern = host.pattern();
+        assert_eq!(
+            texels(&device, &texture),
+            rows(&pattern),
+            "{name}: the caller's texels"
+        );
+        host.write(0, &[0x3C; SIDE * TEXEL]);
+        let read = texels(&device, &texture);
+        assert!(
+            read[..SIDE * TEXEL].iter().all(|&byte| byte == 0x3C),
+            "{name}: the CPU's write reached the texture"
+        );
+        let mut written = pattern.clone();
+        written[..SIDE * TEXEL].fill(0x3C);
+        assert_eq!(
+            read[SIDE * TEXEL..],
+            rows(&written)[SIDE * TEXEL..],
+            "{name}: the rest"
+        );
+        if usage.contains(TextureUsage::RENDER_TARGET) {
+            clear_reaches_the_pages(&device, &texture, host.pointer, &written, PITCH);
+        }
+        texture_follows_the_copy(&device, &buffer, &texture, host.pointer, &host.bytes());
+        drop((texture, buffer));
+    }
+}
+
+/// A texture made over a copied buffer as an image over the copy follows its buffer's rebinds: to
+/// another copy (the gate refuses the new pages) and back to an import (no gate), its image made
+/// again over each (`copied_rebind_images_made` for the copy), reading the new texels, its writes
+/// reaching the new pages.
+#[test]
+fn a_texture_over_a_copy_follows_its_buffer_s_rebinds() {
+    use metal2vulkan::metal::TextureUsage;
+    let (first, second) = (Host::new(44), Host::new(45));
+    let Some((device, _heard)) = device() else {
+        return;
+    };
+    device.settle_in_place_checks(Duration::from_secs(120));
+    let asked: Arc<Mutex<Vec<ImportRequest>>> = Arc::default();
+    let buffer = first.buffer(&device, Some(gate(&asked, false)));
+    let (texture, over_copy) =
+        texture_over_copy(&device, &buffer, TextureUsage::SHADER_READ, PITCH);
+    eprintln!(
+        "COPIED-TEXTURE-REBIND on {}: an image over the copy {over_copy}",
+        device.name()
+    );
+    assert_eq!(texels(&device, &texture), rows(&first.pattern()));
+    let before = device.work_counts();
+    rebind(&buffer, &second, Some(gate(&asked, false))).unwrap();
+    let after = device.work_counts();
+    let images = after.copied_rebind_images_made - before.copied_rebind_images_made;
+    assert_eq!(
+        images,
+        u64::from(over_copy),
+        "the image made again over the new copy"
+    );
+    texture_follows_the_copy(
+        &device,
+        &buffer,
+        &texture,
+        second.pointer,
+        &second.pattern(),
+    );
+    rebind(&buffer, &first, None).unwrap();
+    assert!(!buffer.copied(), "imported again");
+    assert_eq!(
+        texels(&device, &texture),
+        rows(&first.pattern()),
+        "the imported texels"
+    );
+    drop((texture, buffer));
+}
+
+/// A rebind's copy under an image in place lies in fresh pages only where the device's check
+/// passed for them: with the check's verdicts for fresh pages set unchecked (as on a device whose
+/// check failed them or found none to try), the copy lies in memory the device allocates, and the
+/// image in place is a linear image of the driver's own over it. Where that image does not lie at
+/// the texels' pitch, the rebind is refused, as the image cannot be made over the copy.
+#[test]
+fn a_copied_rebind_where_fresh_pages_are_unchecked_takes_memory_the_device_allocates() {
+    use crate::in_place::{Access, PagesClass, Verdict};
+    let (first, second) = (Host::new(26), Host::new(27));
+    let Some((device, _heard)) = device() else {
+        return;
+    };
+    device.settle_in_place_checks(Duration::from_secs(120));
+    let buffer = first.buffer(&device, None);
+    let (texture, in_place) = texture_over(&device, &buffer);
+    if !in_place {
+        eprintln!("COPIED-REBIND-UNCHECKED: the texture is a shadow here; nothing to test");
+        return;
+    }
+    for access in Access::ALL {
+        for rows in crate::in_place::RowEnds::ALL {
+            (device.shared().in_place).set(PagesClass::Fresh, access, rows, Verdict::Unchecked);
+        }
+    }
+    let asked: Arc<Mutex<Vec<ImportRequest>>> = Arc::default();
+    let before = device.work_counts();
+    let rebound = rebind(&buffer, &second, Some(gate(&asked, false)));
+    let after = device.work_counts();
+    assert_eq!(
+        after.fresh_page_buffers_made - before.fresh_page_buffers_made,
+        0,
+        "the copy lies in memory the device allocates, not in fresh pages"
+    );
+    let images = after.copied_rebind_images_made - before.copied_rebind_images_made;
+    match rebound {
+        Ok(()) => {
+            assert_eq!(images, 1, "the image in place made over the copy");
+            texture_follows_the_copy(
+                &device,
+                &buffer,
+                &texture,
+                second.pointer,
+                &second.pattern(),
+            );
+        }
+        Err(crate::Error::NotImplemented(crate::RuntimeGap::RebindTextures)) => {
+            assert_eq!(images, 0);
+            assert_eq!(
+                texels(&device, &texture),
+                rows(&first.pattern()),
+                "the old texels"
+            );
+        }
+        Err(error) => panic!("the rebind: {error:?}"),
+    }
+    eprintln!(
+        "COPIED-REBIND-UNCHECKED: a gate-refused rebind with fresh pages unchecked: {}",
+        match images {
+            1 => "the image in place over a copy in memory the device allocates",
+            _ => "refused: the driver's own linear image lies at another pitch",
+        }
+    );
+    drop((texture, buffer));
+}
+
+/// A rebind's copy under an image in place whose rows lie at another pitch than the driver's own
+/// linear image's: tight rows (64 bytes apart) and wide ones (512 bytes apart; RADV lays a linear
+/// image of its own 256 bytes a row, and makes no image in place at either, so there neither tests
+/// anything; lavapipe takes both). Where the device's check passed fresh pages for the texture's
+/// access, the copy lies in fresh pages, its image made over them at the texels' pitch for host
+/// allocations, so the rebind is taken and the texture follows the copy; elsewhere the copy lies in
+/// memory the device allocates, and the rebind is refused where the driver's linear image lies at
+/// another pitch (`docs/FAST-PATHS.md`'s known gaps). A pitch whose texture is a shadow tests
+/// nothing.
+#[test]
+fn a_copied_rebind_at_another_pitch_takes_fresh_pages_where_their_check_passed() {
+    let tight = (Host::new(28), Host::new(29));
+    let wide = (Host::new(30), Host::new(31));
+    let Some((device, _heard)) = device() else {
+        return;
+    };
+    device.settle_in_place_checks(Duration::from_secs(120));
+    rebind_at_pitch(&device, TIGHT, &tight);
+    rebind_at_pitch(&device, 2 * PITCH, &wide);
+}
+
+/// [`a_copied_rebind_at_another_pitch_takes_fresh_pages_where_their_check_passed`] at `pitch`:
+/// a texture in place over `first`, rebound to `second`.
+fn rebind_at_pitch(device: &Device, pitch: usize, (first, second): &(Host, Host)) {
+    use crate::in_place::{Access, PagesClass, RowEnds, Verdict};
+    let buffer = first.buffer(device, None);
+    let (texture, in_place) = texture_over_at(device, &buffer, pitch);
+    if !in_place {
+        eprintln!("COPIED-REBIND-PITCH {pitch}: the texture is a shadow here; nothing to test");
+        return;
+    }
+    // The texture's texels in the device's lines of memory, as its rebind asks the check.
+    let layout = crate::linear_plan::BufferLayout {
+        offset: 0,
+        row_pitch: pitch as u64,
+        slice_pitch: (pitch * SIDE) as u64,
+        row_bytes: (SIDE * TEXEL) as u64,
+        rows: SIDE as u64,
+        slices: 1,
+    };
+    let start = buffer.contents().map_or(0, |at| at.as_ptr().addr() as u64);
+    let rows = RowEnds::of(start, &layout, device.shared().in_place.line());
+    let passed = device.in_place_verdict(PagesClass::Fresh, Access::Reads, rows) == Verdict::Passed;
+    let asked: Arc<Mutex<Vec<ImportRequest>>> = Arc::default();
+    let before = device.work_counts();
+    let rebound = rebind(&buffer, second, Some(gate(&asked, false)));
+    let after = device.work_counts();
+    let fresh = after.fresh_page_buffers_made - before.fresh_page_buffers_made;
+    let images = after.copied_rebind_images_made - before.copied_rebind_images_made;
+    eprintln!(
+        "COPIED-REBIND-PITCH {pitch} on {}: fresh pages passed for reads {passed}; the rebind \
+         {rebound:?}, its copy in fresh pages {fresh}, images made over it {images}",
+        device.name()
+    );
+    match (passed, rebound) {
+        (true, rebound) => {
+            rebound.unwrap();
+            assert_eq!(
+                (fresh, images),
+                (1, 1),
+                "the copy in fresh pages, its image over it"
+            );
+            texture_follows_the_copy_at(
+                device,
+                (&buffer, &texture),
+                second.pointer,
+                &second.pattern(),
+                pitch,
+            );
+        }
+        (false, Ok(())) => assert_eq!((fresh, images), (0, 1), "the copy in device memory"),
+        (false, Err(crate::Error::NotImplemented(crate::RuntimeGap::RebindTextures))) => {
+            assert_eq!((fresh, images), (0, 0));
+            let old = rows_at(&first.pattern(), pitch);
+            assert_eq!(texels(device, &texture), old, "the old texels");
+        }
+        (false, Err(error)) => panic!("the rebind at {pitch}: {error:?}"),
+    }
     drop((texture, buffer));
 }
 
@@ -1739,14 +2299,13 @@ fn copied_heap_rebind_over_read_only_pages_drops_the_gpu_s_writes() {
     drop((buffer, imported));
 }
 
-/// A buffer's rebind to read-only pages whose import the gate admits goes to the caller's source
-/// (Linux drivers pin a pointer's pages for writing); where the device's import of those dma-bufs
-/// then fails (the RTX 5080's, out of device memory), the buffer is a copy of them all the same,
-/// counted as degraded, whose GPU writes are dropped. Where the device imports them, or none, the
-/// test says what it took and passes.
+/// A buffer's rebind to read-only pages whose import the gate admits gives it a copy of them on
+/// every device, their source never called (a dma-buf of them would take the GPU's writes, and
+/// Linux drivers pin a pointer's pages for writing), counted as a copy of unwritable pages, whose
+/// GPU writes are dropped; the old pages stay as they were.
 #[cfg(target_os = "linux")]
 #[test]
-fn copied_rebind_over_read_only_pages_whose_admitted_import_fails_drops_the_gpu_s_writes() {
+fn copied_rebind_over_read_only_pages_the_gate_admits_drops_the_gpu_s_writes() {
     let (first, second) = (Host::new(33), ReadOnlyHost::new(34));
     let Some((device, heard)) = device() else {
         return;
@@ -1761,26 +2320,64 @@ fn copied_rebind_over_read_only_pages_whose_admitted_import_fails_drops_the_gpu_
         buffer.rebind_bytes_no_copy(second.memory(gate(&asked, true), &calls), None, None)
     };
     let after = device.work_counts();
-    let called = calls.load(std::sync::atomic::Ordering::Acquire);
+    rebound.expect("a rebind to read-only pages the gate admits is a copy");
+    assert!(buffer.copied(), "a copy");
+    assert_eq!(moved(&before, &after), [0, 1, 0, 0, 0]);
+    assert_eq!(
+        after.copied_unwritable_pages - before.copied_unwritable_pages,
+        1
+    );
     assert_eq!(asked.lock().unwrap().len(), 1, "the gate was asked once");
-    // An import that failed is never the answer: the copy is.
-    if let Err(error @ (crate::Error::OutOfMemory(_) | crate::Error::Vulkan(_))) = &rebound {
-        panic!("the admitted import failed and no copy was made: {error:?}");
-    }
-    if !buffer.copied() {
-        eprintln!(
-            "COPIED-READ-ONLY-ADMITTED: not a copy here ({rebound:?}, the source called {called} \
-             times, {} dma-buf imports made): nothing to test",
-            after.dma_buf_imports - before.dma_buf_imports
-        );
-        return;
-    }
-    rebound.unwrap();
-    assert_eq!(moved(&before, &after), [0, 1, 0, 1, 0]);
-    assert_eq!(called, 1, "the source was asked once");
+    assert_eq!(
+        calls.load(std::sync::atomic::Ordering::Acquire),
+        0,
+        "the source unasked"
+    );
+    assert_eq!(after.dma_buf_imports, before.dma_buf_imports);
     assert_eq!(announced(&heard), 1, "announced once");
     drops_the_gpu_s_writes(&device, (&buffer, 0), &second);
-    eprintln!("COPIED-READ-ONLY-ADMITTED: the source's import failed, and the copy was made");
+    assert_eq!(first.bytes(), first.pattern(), "the old pages stay");
+}
+
+/// A no-copy buffer over read-only pages whose import the gate admits is a copy of them on every
+/// device, their source never called, counted as a copy of unwritable pages, whose GPU writes are
+/// dropped.
+#[cfg(target_os = "linux")]
+#[test]
+fn copied_buffer_over_read_only_pages_the_gate_admits_drops_the_gpu_s_writes() {
+    let host = ReadOnlyHost::new(35);
+    let Some((device, heard)) = device() else {
+        return;
+    };
+    let asked: Arc<Mutex<Vec<ImportRequest>>> = Arc::default();
+    let calls: Arc<std::sync::atomic::AtomicUsize> = Arc::default();
+    let before = device.work_counts();
+    // SAFETY: the view outlives the buffer and the device (dropped after both).
+    let buffer = unsafe {
+        device.new_buffer_with_bytes_no_copy(
+            host.memory(gate(&asked, true), &calls),
+            LENGTH as u64,
+            ResourceOptions::default(),
+            None,
+        )
+    }
+    .expect("a buffer over read-only pages the gate admits is a copy");
+    let after = device.work_counts();
+    assert!(buffer.copied(), "a copy");
+    assert_eq!(moved(&before, &after), [0, 1, 0, 0, 0]);
+    assert_eq!(
+        after.copied_unwritable_pages - before.copied_unwritable_pages,
+        1
+    );
+    assert_eq!(
+        calls.load(std::sync::atomic::Ordering::Acquire),
+        0,
+        "the source unasked"
+    );
+    assert_eq!(after.dma_buf_imports, before.dma_buf_imports);
+    assert_eq!(announced(&heard), 1, "announced once");
+    drops_the_gpu_s_writes(&device, (&buffer, 0), &host);
+    drop(buffer);
 }
 
 /// A batch that only reads a copied buffer leaves it uncompared at its merge back
@@ -1868,6 +2465,97 @@ fn a_write_through_an_address_no_use_names_still_merges_back() {
         "the stores through the address are in the pages"
     );
     drop((buffer, out, state, queue));
+}
+
+/// A batch whose draw reads memory through addresses it loads (a root table), with vertex and
+/// fragment functions that store nothing (`GraphicsState::vertex_writes_memory`,
+/// `fragment_writes_memory`), leaves a copy none of its uses wrote uncompared at its merge back:
+/// the draw writes no memory its uses do not name.
+#[test]
+fn a_merge_back_skips_a_copy_when_a_draw_only_reads_through_loaded_addresses() {
+    use crate::{SamplerStateOptions, TextureDescriptor};
+    use metal2vulkan::bind::SamplerDescriptor;
+    use metal2vulkan::metal::TextureUsage;
+    use metal2vulkan::metal::{PixelFormat, PrimitiveType, RenderStages, ResourceUsage};
+    let Some((device, _)) = device() else {
+        return;
+    };
+    let host = Host::new(15);
+    let asked = Arc::default();
+    let buffer = host.buffer(&device, Some(gate(&asked, false)));
+    assert!(buffer.copied(), "the buffer is a copy");
+    // The fixture's entry shape: the vertex function loads its position through the address in
+    // its table's entry, and the fragment function samples the texture the entry names.
+    let state = super::encoder_holds::render_state(
+        &device,
+        "engine/resident_draws.ll",
+        "rd_entry_vertex",
+        "rd_entry_fragment",
+    );
+    let mut sampled = TextureDescriptor::texture_2d(PixelFormat::RGBA8Unorm, 4, 4, false);
+    sampled.usage = TextureUsage::SHADER_READ;
+    let sampled = device.new_texture(&sampled).unwrap();
+    let options = SamplerStateOptions {
+        support_argument_buffers: true,
+        ..SamplerStateOptions::default()
+    };
+    let sampler = device
+        .new_sampler_state_with_options(&SamplerDescriptor::new(), options)
+        .unwrap();
+    let position: Vec<u8> = [0.0f32, 0.0, 0.0, 1.0].map(f32::to_le_bytes).concat();
+    let position = device
+        .new_buffer_with_bytes(&position, ResourceOptions::shared())
+        .unwrap();
+    let entry: Vec<u8> = [
+        position.gpu_address().0,
+        sampled.gpu_resource_id().0,
+        sampler.gpu_resource_id().0,
+    ]
+    .map(u64::to_le_bytes)
+    .concat();
+    let table = device
+        .new_buffer_with_bytes(&entry, ResourceOptions::shared())
+        .unwrap();
+    let mut target = TextureDescriptor::texture_2d(PixelFormat::RGBA8Unorm, 16, 16, false);
+    target.usage = TextureUsage::RENDER_TARGET;
+    let target = device.new_texture(&target).unwrap();
+    let before = device.work_counts();
+    let queue = device.new_command_queue().unwrap();
+    let command_buffer = queue.command_buffer().unwrap();
+    let mut encoder = command_buffer
+        .render_command_encoder(&super::encoder_holds::pass(&target))
+        .unwrap();
+    let vertex = (position.as_resource(), RenderStages::VERTEX);
+    let fragment = (sampled.as_resource(), RenderStages::FRAGMENT);
+    for (resource, stages) in [vertex, fragment] {
+        (encoder.use_resource(resource, ResourceUsage::READ, stages)).unwrap();
+    }
+    encoder.set_render_pipeline_state(&state).unwrap();
+    encoder.set_vertex_buffer(Some(&table), 0, 0).unwrap();
+    encoder.set_fragment_buffer(Some(&table), 0, 0).unwrap();
+    (encoder.draw_primitives(PrimitiveType::Triangle, 0, 3, 1, 0)).unwrap();
+    encoder.end_encoding().unwrap();
+    command_buffer.commit().unwrap();
+    command_buffer.wait_until_completed_for(WAIT).unwrap();
+    assert_eq!(command_buffer.status(), CommandBufferStatus::Completed);
+    let after = device.work_counts();
+    let compared = after.copied_merges_compared - before.copied_merges_compared;
+    let skipped = after.copied_merges_skipped - before.copied_merges_skipped;
+    eprintln!(
+        "COPIED: a draw through loaded addresses: {} root table ranges, merge back {compared} \
+         compared, {skipped} skipped",
+        after.root_table_ranges_noted - before.root_table_ranges_noted,
+    );
+    assert!(
+        after.root_table_ranges_noted > before.root_table_ranges_noted,
+        "the draw read through a root table"
+    );
+    assert_eq!(
+        compared, 0,
+        "the copy the draw did not write is not compared"
+    );
+    assert!(skipped >= 1);
+    drop((buffer, state, queue));
 }
 
 /// `Buffer::host_backing` answers what the GPU uses for each kind of buffer: the caller's pages,

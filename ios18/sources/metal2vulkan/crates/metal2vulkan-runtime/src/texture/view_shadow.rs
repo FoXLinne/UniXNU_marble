@@ -61,7 +61,7 @@ use crate::image_plan::plan_image;
 use crate::image_plan::{copies_between, takes_views_of};
 use crate::memory::Placement;
 use crate::resource::{Identity, ResourceKey};
-use crate::shadow::{Backing, ImageThrough, ShadowCopies, ShadowSource};
+use crate::shadow::{Backing, ImageThrough, ImageTruth, ShadowCopies, ShadowSource};
 use crate::shadow_merge::ScratchSpares;
 use crate::texture::{copy_units, image_error, texture_aspects};
 use crate::texture_descriptor::{TextureDescriptor, TextureLayout};
@@ -117,7 +117,7 @@ impl Texture {
         if let Some(storage) = self.converted_view(call, record) {
             return storage;
         }
-        match &self.0.storage {
+        match self.storage() {
             Storage::Image(image) => {
                 let base = match &image.owner {
                     Owner::ViewShadow(shadow) => &shadow.base,
@@ -143,6 +143,11 @@ impl Texture {
             Storage::Shadow { .. } if record.presented.rotation != 0 => {
                 self.rotated_view(call, record)
             }
+            // A tiled texture's bytes hold its first level alone, and its image is their shadow
+            // already (`Buffer::new_tiled_texture`): no second shadow holds its other levels.
+            Storage::Shadow { image, .. } if image.plan().levels > 1 => {
+                Err(refused(Some(image.as_ref())))
+            }
             Storage::Alias { texels, .. } | Storage::Shadow { texels, .. } => {
                 let mut descriptor = TextureDescriptor::texture_2d(
                     record.pixel_format,
@@ -156,8 +161,10 @@ impl Texture {
                 let layout = descriptor
                     .check(self.device().properties().texture_rules())
                     .map_err(|_| refused(None))?;
+                // A view's storage never moves in place (`texture/storage_form.rs`).
+                let over = (Arc::clone(texels), &mut None);
                 self.device()
-                    .storage_over_buffer(call, Arc::clone(texels), &descriptor, &layout)
+                    .storage_over_buffer(call, over, &descriptor, &layout)
             }
             // A texture buffer's views are texel buffer views of its bytes, which take any
             // format of its class (`Texture::view`).
@@ -172,7 +179,7 @@ impl Texture {
         &self,
         record: &ViewRecord,
     ) -> Option<(Arc<Image>, (PixelFormat, TextureSwizzleChannels))> {
-        let Storage::Image(image) = &self.0.storage else {
+        let Storage::Image(image) = self.storage() else {
             return None;
         };
         let base = truth(image);
@@ -195,7 +202,7 @@ impl Texture {
         self.0.record.read_as?;
         Some(Texture::made(
             self.device(),
-            self.0.storage.clone(),
+            self.storage().clone(),
             self.0.record.bound(),
             Some(self.clone()),
             IdUse::Runtime,
@@ -214,7 +221,7 @@ impl Texture {
         if let Some(shadow) = held.as_ref() {
             return Ok(shadow.clone());
         }
-        let Storage::Image(image) = &self.0.storage else {
+        let Storage::Image(image) = self.storage() else {
             return Err(internal("a view read through its image without one"));
         };
         let record = ViewRecord {
@@ -467,7 +474,7 @@ impl Device {
             tracked: base.identity.tracked,
         };
         let (truth, truth_key, truth_range) = (
-            base.own_raw(),
+            Arc::clone(base) as Arc<dyn ImageTruth>,
             base.identity.key,
             range(texture_aspects(base.plan())),
         );

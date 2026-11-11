@@ -395,23 +395,23 @@
 </td></tr>
 </table>
 
-## Samsung Galaxy A10
+## Samsung Galaxy Tab A 10.1 (2019, 4G)
 
 <table>
 <tr><td>
 
 > [!CAUTION]
-> `BIT-9` Version is Required on this Device!
+> `BIT-8` Version is Required on this Device!
 
 </td></tr>
 </table>
 
-<img align="right" src="Resources/Pictures/Samsung-Galaxy-A10.png" width="500" alt="Preview">
+<img align="right" src="Resources/Pictures/Samsung-Galaxy-A-10-1-2019.png" width="500" alt="Preview">
 
-**State:** Inactive <br>
-**Codename:** a10
+**State:** Active <br>
+**Codename:** gta3xllte
 
-**Contributors:** [snaccy](https://github.com/sonic011gamer/)
+**Contributors:** [halal-beef](https://github.com/halal-beef/)
 
 ### UEFI Status
 
@@ -421,11 +421,16 @@
 | Internal Storage   |             | ✅    |
 | Side Buttons       |             | ✅    |
 | USB Host Mode      |             | ❌    |
-| USB Device Mode    |             | ❌    |
+| USB Device Mode    |             | ✅    |
 | USB Power Delivery |             | ❌    |
 | SD Card            |             | ❌    |
 | Windows Boot       |             | ✅    |
 | Linux Boot         |             | ❌    |
+
+<table>
+<tr><th>Windows</th>
+</tr>
+<tr><td>
 
 > [!IMPORTANT]
 > Only Windows PE boots.
@@ -459,6 +464,82 @@
 | Mobile Data          |              | ❌    |
 | Display              |              | ✅    | 
 | Vibration            |              | ❌    |
+
+</td></tr>
+</table>
+
+## Samsung Galaxy A10
+
+<table>
+<tr><td>
+
+> [!CAUTION]
+> `BIT-9` Version is Required on this Device!
+
+</td></tr>
+</table>
+
+<img align="right" src="Resources/Pictures/Samsung-Galaxy-A10.png" width="500" alt="Preview">
+
+**State:** Inactive <br>
+**Codename:** a10
+
+**Contributors:** [snaccy](https://github.com/sonic011gamer/)
+
+### UEFI Status
+
+| Feature            | Description | State |
+|:-------------------|:------------|:-----:|
+| Display            |             | ✅    |
+| Internal Storage   |             | ✅    |
+| Side Buttons       |             | ✅    |
+| USB Host Mode      |             | ❌    |
+| USB Device Mode    |             | ❌    |
+| USB Power Delivery |             | ❌    |
+| SD Card            |             | ❌    |
+| Windows Boot       |             | ✅    |
+| Linux Boot         |             | ❌    |
+
+<table>
+<tr><th>Windows</th>
+</tr>
+<tr><td>
+
+> [!IMPORTANT]
+> Only Windows PE boots.
+
+| Feature              | Description  | State |
+|:---------------------|:-------------|:-----:|
+| Internal Storage     |              | ❌    |
+| Side Buttons         |              | ❌    |
+| Proximity Sensor     |              | ❌    |
+| Light Sensor         |              | ❌    |
+| Accelerometer Sensor |              | ❌    |
+| Compass Sensor       |              | ❌    | 
+| Gyroscope Sensor     |              | ❌    |
+| Fingerprint Sensor   |              | ❌    |
+| NFC Sensor           |              | ❌    |
+| Temperature Sensor   |              | ❌    |
+| Battery              |              | ❌    |
+| USB Host Mode        |              | ❌    |
+| USB Device Mode      |              | ❌    |
+| USB Power Delivery   |              | ❌    |
+| Charging             |              | ❌    |
+| WLAN                 |              | ❌    |
+| CPU                  | Only 1 Core  | ⚠️    |
+| Touchscreen          |              | ❌    |
+| Bluetooth            |              | ❌    |
+| GPS                  |              | ❌    |
+| Speakers             |              | ❌    |
+| Microphone           |              | ❌    |
+| GPU                  |              | ❌    |
+| Camera               |              | ❌    |
+| Mobile Data          |              | ❌    |
+| Display              |              | ✅    | 
+| Vibration            |              | ❌    |
+
+</td></tr>
+</table>
 
 ## Samsung Galaxy A7 (2018)
 

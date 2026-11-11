@@ -11,7 +11,7 @@ use super::{device_error, Device, InstanceShared, Parts};
 use crate::error::Error;
 use crate::gpu_time;
 use crate::image_barrier::MemoryReads;
-use crate::loader_word::LoaderWord;
+use crate::loader_word::DeviceWord;
 use crate::shader_cache::{CacheSetup, ShaderCacheOptions};
 use crate::sparse::device::SparseFeatures;
 use ash::vk;
@@ -51,7 +51,9 @@ pub struct RawDevice {
     /// a texture over a buffer's memory render into its linear image in place;
     /// `VK_KHR_external_memory_fd` with `VK_EXT_external_memory_dma_buf` serve
     /// `HostMemory::with_dma_buf`, and with them `VK_EXT_image_drm_format_modifier` with
-    /// `VK_EXT_queue_family_foreign` make textures over its pages images rather than shadows.
+    /// `VK_EXT_queue_family_foreign` make textures over its pages images rather than shadows;
+    /// those two with `VK_EXT_queue_family_foreign` make buffers whose memory is exported as a
+    /// dma-buf (`MemoryExport::DmaBuf`).
     pub device_extensions: Vec<CString>,
     /// Where the device keeps translated shaders: by default, the platform's per-user cache
     /// directory.
@@ -248,13 +250,11 @@ impl Device {
         let compile =
             metal2vulkan::device::Device::new(enabled.clone(), policy).map_err(device_error)?;
         // SAFETY: the caller's contract: the word is still the loader's.
-        let loader_word = unsafe { LoaderWord::of_device(raw.device) };
+        let loader_word = unsafe { DeviceWord::of_device(raw.device) };
         // SAFETY: the device is live; the loader's `vkGetDeviceProcAddr` reads the word, which
         // is the loader's.
-        let device = unsafe {
-            loader_word.restore();
-            ash::Device::load(instance.fp_v1_0(), raw.device)
-        };
+        let device =
+            unsafe { loader_word.restored(|| ash::Device::load(instance.fp_v1_0(), raw.device)) };
         // The vocabulary does not say whether a portability subset's
         // `imageViewFormatReinterpretation` was enabled: the consumer says so beside it, and a
         // device with the subset whose consumer does not reinterprets nothing.
@@ -280,6 +280,14 @@ impl Device {
         // Nor whether the dma-buf route's were (`dma_buf.rs`): the consumer lists them.
         let dma_buf = super::create::dma_buf_names(&listed).is_some();
         let dma_buf_images = super::create::dma_buf_image_names(&listed).is_some();
+        // Nor whether `VK_KHR_external_memory_fd` was (`exported_memory.rs`): the consumer lists
+        // it.
+        let memory_fd = super::create::memory_fd_name(&listed).is_some();
+        // Nor whether `VK_EXT_queue_family_foreign` was beside the dma-buf route's
+        // (`exported_memory.rs`): the consumer lists them.
+        let foreign_family = super::create::foreign_family_name(&listed).is_some();
+        // Nor whether `VK_KHR_external_semaphore_fd` was (`exported_semaphore.rs`).
+        let semaphore_fd = super::create::semaphore_fd_name(&listed).is_some();
         let graphics_pipeline_library = super::create::graphics_pipeline_library(&listed, || {
             // SAFETY: the consumer's physical device of its instance, which lists the
             // extension (the consumer enabled it), at Vulkan 1.2 or later.
@@ -321,6 +329,7 @@ impl Device {
             queue_family: raw.queue_family,
             queues: vec![(raw.queue_family, raw.queue_index)],
             present_queues: 0,
+            planned: None,
             staging: None,
             reserved_queues: Vec::new(),
             extra_queues: Vec::new(),
@@ -334,6 +343,9 @@ impl Device {
                 .any(|name| name.as_c_str() == ash::ext::pipeline_creation_feedback::NAME),
             dma_buf,
             dma_buf_images,
+            memory_fd,
+            foreign_family,
+            semaphore_fd,
             calibration: gpu_time::Extension::among(&raw.device_extensions.into_iter().collect()),
             gpu_times_from_host: raw.gpu_times_from_host,
             mac_class: raw.mac_class,
@@ -341,11 +353,17 @@ impl Device {
             record_executions: false,
             pipeline_records: raw.pipeline_records,
             fail_in_place_check: false,
+            assume_submissions_merge: false,
+            // On where `METAL2VULKAN_PENDING_AUDIT` is set (`assemble`).
+            pending_audit: false,
             announce_each: raw.announce_each,
             lowering_refuses: raw.lowering_refuses,
             view_reinterpretation,
             generated_commands: false,
             host_image_copy,
+            // Nor whether `zeroInitializeDeviceMemory` was: none of its images start in memory the
+            // driver zeroed.
+            zero_initialize_device_memory: false,
             linear_color_attachment,
             graphics_pipeline_library,
             // Nor whether `samplerYcbcrConversion` was: its YCbCr textures convert through
@@ -356,8 +374,17 @@ impl Device {
             memory_reads,
             owned: false,
             cache,
+            // The consumer made the `VkDevice`: the runtime cannot make it again once it is
+            // lost (`line.rs`).
+            line: None,
+            recipe: None,
         };
         // SAFETY: the caller's contract.
-        unsafe { Device::assemble(parts) }
+        let device = unsafe { Device::assemble(parts) }?;
+        // The consumer made the instance, so a layer's exit handler registered at its
+        // `vkCreateInstance` may follow the hook's last registration: the hook registers again,
+        // after it (`exit_guard::instance_made`).
+        crate::exit_guard::instance_made();
+        Ok(device.root())
     }
 }

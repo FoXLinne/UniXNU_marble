@@ -28,7 +28,6 @@ use std::sync::Arc;
 
 use crate::air::abi::{AbiInt, AirAbi, OutputRole, ParamRole, Stage as AbiStage};
 use crate::air::container::{self, LibraryFunction};
-use crate::air::ir::Value;
 use crate::air::{self, ConstValue, LinkedCode, LinkedModule, LinkedName, SpecRequest};
 use crate::bind::argument_buffer::{self, EntryLayout};
 use crate::bind::{ArgumentBufferLayout, ArgumentLayoutError};
@@ -37,7 +36,8 @@ use crate::cache::Hash256;
 use crate::cache::VariantKey;
 use crate::device::DeviceProfile;
 use crate::error::{
-    DescriptorError, DiagName, Error, Feature, InternalError, InternalKind, Unsupported,
+    DescriptorError, DiagName, Error, Feature, InternalError, InternalKind, MetalAnswer,
+    Unsupported,
 };
 use crate::library::function::FunctionSource;
 use crate::library::{
@@ -224,6 +224,16 @@ impl<'a> InputsFrom<'a> {
         }
     }
 
+    /// Whether the stage compiles as the kernel of a compute pipeline of OpenCL mode
+    /// (`LoweringInputs::open_cl_mode`): the given inputs' say; a render pipeline's stage never
+    /// does.
+    fn open_cl_mode(&self) -> bool {
+        match self {
+            InputsFrom::Given(i) => i.open_cl_mode,
+            InputsFrom::Vertex(..) | InputsFrom::Fragment(..) => false,
+        }
+    }
+
     /// The group of its pipeline's color attachments a fragment stage compiles for
     /// (`LoweringInputs::color_group`): the given inputs', or the render pipeline variant's.
     fn color_group(&self) -> Option<&'a crate::pipeline::lower_inputs::ColorGroup> {
@@ -246,6 +256,45 @@ fn grouped_entry(
         Some(g) => color_group::entry(spec, g, p),
         None => Ok(spec),
     }
+}
+
+/// Where `inputs` are a render pipeline's fragment stage's, each `[[color(n)]]` input the
+/// specialized fragment entry `spec` declares has an attachment with a pixel format in the
+/// pipeline (the pass's attachments, or its color group's `ColorGroup::present`, the pipeline's
+/// own), whether or not the body reads it: plain Metal refuses the pipeline otherwise, with the
+/// read dead after specialization as with it live ("Shaders reads from a color attachment whose
+/// pixel format is MTLPixelFormatInvalid",
+/// `metal2vulkan-conformance/probes/dead_ordered_and_unattached_reads.m`, an M3 Max under macOS
+/// 27.0.1). `InvalidDescriptor(ColorAttachment)` at the first index without one. An input its
+/// constants gate is no parameter of the specialized entry. Checked on the entry before its
+/// group renumbers it, by both a stage's keys ([`stage_inputs`]) and its compile.
+fn color_inputs_attached(spec: &air::Entry, inputs: InputsFrom<'_>) -> Result<(), Error> {
+    let InputsFrom::Fragment(pass, ..) = inputs else {
+        return Ok(());
+    };
+    for b in &spec.ep.params {
+        let ParamRole::ColorInput {
+            index: AbiInt::Const(color),
+            ..
+        } = b.role
+        else {
+            continue;
+        };
+        let attached = match pass.color_group {
+            Some(g) => g.present.contains(&color),
+            None => pass
+                .color_attachments
+                .get(color as usize)
+                .is_some_and(Option::is_some),
+        };
+        if !attached {
+            return Err(Error::InvalidDescriptor(DescriptorError::ColorAttachment {
+                index: color,
+                metal: MetalAnswer::NilWithError,
+            }));
+        }
+    }
+    Ok(())
 }
 
 /// The lowering input of a `maxCallStackDepth` `depth`: `None` at Metal's default, 1 (or 0).
@@ -558,7 +607,9 @@ pub fn stage_inputs(
     m: &mut Meter,
 ) -> Result<StageInputs, Error> {
     guarded(|| {
-        let specialized = entries.specialized(fd, inputs.call_stack_depth(), m)?;
+        let specialized =
+            entries.specialized(fd, inputs.call_stack_depth(), inputs.open_cl_mode(), m)?;
+        color_inputs_attached(&specialized.spec, inputs)?;
         // A color group's variant reads its own renumbering of the entry the creation shares.
         let grouped = match inputs.color_group() {
             Some(_) => Some(grouped_entry(specialized.spec.clone(), inputs, p)?),
@@ -633,18 +684,44 @@ pub(crate) fn argument_buffer_layout(
     }
 }
 
+/// Entry point `ep` of `module` as its pipeline binds it: where `open_cl_mode`, a kernel as a
+/// pipeline of OpenCL mode binds it (`air::canon::opencl::entry`), its hidden buffers the
+/// parameters past the function's own, as specialization appends them; else `ep` itself.
+fn bound_entry<'a>(
+    module: &air::ir::Module,
+    ep: &'a air::abi::EntryPoint,
+    open_cl_mode: bool,
+) -> Result<std::borrow::Cow<'a, air::abi::EntryPoint>, Error> {
+    if !open_cl_mode || !matches!(ep.stage, AbiStage::Kernel { .. }) {
+        return Ok(std::borrow::Cow::Borrowed(ep));
+    }
+    let params = module.func(ep.func).map(|f| f.params.len());
+    let first = params.and_then(|n| u32::try_from(n).ok()).ok_or_else(|| {
+        Error::Internal(InternalError::new(
+            InternalKind::Invariant,
+            "the entry's function is not in its module",
+        ))
+    })?;
+    Ok(std::borrow::Cow::Owned(air::canon::opencl::entry(
+        ep.clone(),
+        first,
+    )?))
+}
+
 /// What a pipeline's reflection states for its stage `fd`, its calls nesting `depth` deep through
-/// visible functions: the entry's bindings and the attributes it reads, from the entry its
+/// visible functions (a kernel of OpenCL mode where `open_cl_mode`): the entry's bindings and the attributes it reads, from the entry its
 /// constants and linked functions specialize where they decide a binding
 /// (`reflection::needs_resolution`) or which arguments it reads
 /// (`reflection::specialization_decides_reads`), else from the decoded entry.
 pub(crate) fn stage_reflection(
     fd: &FunctionDescriptor,
     depth: u32,
+    open_cl_mode: bool,
     m: &mut Meter,
 ) -> Result<reflection::StageReflection, Error> {
     let mut inputs = LowerInputs::new();
     inputs.max_call_stack_depth = call_stack_input(depth);
+    inputs.open_cl_mode = open_cl_mode;
     guarded(|| {
         with_request(
             &fd.function,
@@ -658,18 +735,20 @@ pub(crate) fn stage_reflection(
                 }
                 let mut req = spec_request(&decoded, r.entry, r.consts)?;
                 req.call_stack_depth = r.inputs.call_stack_depth();
+                req.open_cl_mode = r.inputs.open_cl_mode();
                 let ep = air::canon::select(&decoded.module, &decoded.abi, &req.entry)?;
                 if !reflection::needs_resolution(ep, &decoded.abi.structs)
                     && !reflection::specialization_decides_reads(&decoded.abi)
                 {
+                    let ep = bound_entry(&decoded.module, ep, req.open_cl_mode)?;
                     return Ok(reflection::StageReflection {
                         bindings: reflection::bindings(
-                            ep,
+                            &ep,
                             &decoded.abi.structs,
                             reflection::Channel::Pipeline,
                             &BTreeSet::new(),
                         )?,
-                        attributes: reflection::read_attributes(ep)?,
+                        attributes: reflection::read_attributes(&ep)?,
                     });
                 }
                 let before = reflection::UnspecializedReads::of(&decoded.module, &decoded.abi, ep);
@@ -689,18 +768,20 @@ pub(crate) fn stage_reflection(
     })
 }
 
-/// What stage `fd`, its calls nesting `depth` deep through visible functions, may store through
-/// each slot its arguments bind: of the entry [`stage_reflection`] reads, its parameters' roles,
+/// What stage `fd`, its calls nesting `depth` deep through visible functions (a kernel of OpenCL
+/// mode where `open_cl_mode`), may store through each slot its arguments bind: of the entry [`stage_reflection`] reads, its parameters' roles,
 /// declared accesses and slots alone (`reflection::entry_slot_writes`). It derives no type
 /// description, so an argument whose reflection Metal's answer has not been measured for does not
 /// refuse it: only the decode and the specialization can.
 pub(crate) fn stage_slot_writes(
     fd: &FunctionDescriptor,
     depth: u32,
+    open_cl_mode: bool,
     m: &mut Meter,
 ) -> Result<Vec<reflection::SlotWrite>, Error> {
     let mut inputs = LowerInputs::new();
     inputs.max_call_stack_depth = call_stack_input(depth);
+    inputs.open_cl_mode = open_cl_mode;
     guarded(|| {
         with_request(
             &fd.function,
@@ -714,11 +795,13 @@ pub(crate) fn stage_slot_writes(
                 }
                 let mut req = spec_request(&decoded, r.entry, r.consts)?;
                 req.call_stack_depth = r.inputs.call_stack_depth();
+                req.open_cl_mode = r.inputs.open_cl_mode();
                 let ep = air::canon::select(&decoded.module, &decoded.abi, &req.entry)?;
                 if !reflection::needs_resolution(ep, &decoded.abi.structs)
                     && !reflection::specialization_decides_reads(&decoded.abi)
                 {
-                    return Ok(reflection::entry_slot_writes(ep));
+                    let ep = bound_entry(&decoded.module, ep, req.open_cl_mode)?;
+                    return Ok(reflection::entry_slot_writes(&ep));
                 }
                 let before = reflection::UnspecializedReads::of(&decoded.module, &decoded.abi, ep);
                 let spec = specialize_request(decoded, &req, r, m)?;
@@ -896,6 +979,8 @@ struct StageEntry {
     air_hash: Hash256,
     function: FunctionDescriptor,
     depth: u32,
+    /// Specialized as the kernel of a compute pipeline of OpenCL mode.
+    open_cl_mode: bool,
     /// What specializing it charged the ledger, which the byte bound counts.
     bytes: u64,
     specialized: Arc<Specialized>,
@@ -1015,17 +1100,19 @@ impl StageEntries {
         &self,
         fd: &FunctionDescriptor,
         depth: u32,
+        open_cl_mode: bool,
         m: &mut Meter,
     ) -> Result<Arc<Specialized>, Error> {
         let depth = depth.max(1);
         // The library's table states it without decoding (`Function::info`).
         let air_hash = fd.function.info().air_hash;
         let lock = || self.kept.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(specialized) = lock().take(&air_hash, fd, depth) {
+        if let Some(specialized) = lock().take(&air_hash, fd, depth, open_cl_mode) {
             return Ok(specialized);
         }
         let mut inputs = LowerInputs::new();
         inputs.max_call_stack_depth = call_stack_input(depth);
+        inputs.open_cl_mode = open_cl_mode;
         // What the specialization charged the ledger, which the byte bound counts: the entry is
         // what the charge is still held for once this returns.
         let before = m.ledger();
@@ -1041,7 +1128,7 @@ impl StageEntries {
         let mut kept = lock();
         // Another caller may have specialized the same stage meanwhile: its entry is this one, so
         // the two share one.
-        if let Some(theirs) = kept.take(&air_hash, fd, depth) {
+        if let Some(theirs) = kept.take(&air_hash, fd, depth, open_cl_mode) {
             return Ok(theirs);
         }
         kept.made += 1;
@@ -1050,6 +1137,7 @@ impl StageEntries {
             air_hash,
             function: fd.clone(),
             depth,
+            open_cl_mode,
             bytes,
             specialized: Arc::clone(&specialized),
         });
@@ -1067,11 +1155,14 @@ impl Kept {
         air_hash: &Hash256,
         fd: &FunctionDescriptor,
         depth: u32,
+        open_cl_mode: bool,
     ) -> Option<Arc<Specialized>> {
-        let at = self
-            .entries
-            .iter()
-            .position(|e| e.depth == depth && e.air_hash == *air_hash && e.function == *fd)?;
+        let at = self.entries.iter().position(|e| {
+            e.depth == depth
+                && e.open_cl_mode == open_cl_mode
+                && e.air_hash == *air_hash
+                && e.function == *fd
+        })?;
         let entry = self.entries.remove(at);
         let specialized = Arc::clone(&entry.specialized);
         self.entries.push(entry);
@@ -1138,7 +1229,8 @@ pub(crate) fn stage_entry<T>(
     f: impl FnOnce(&air::Entry, &mut Meter) -> Result<T, Error>,
 ) -> Result<T, Error> {
     guarded(|| {
-        let specialized = entries.specialized(fd, depth, m)?;
+        // A render or mesh pipeline's stage, never a kernel of OpenCL mode.
+        let specialized = entries.specialized(fd, depth, false, m)?;
         f(&specialized.spec, m)
     })
 }
@@ -1377,7 +1469,7 @@ pub(crate) fn reads_primitive_id_varying(
     use crate::pipeline::descriptor::StageSource;
     Ok(match fragment {
         Some(StageSource::Function(fd)) => entries
-            .specialized(fd, depth, m)?
+            .specialized(fd, depth, false, m)?
             .spec
             .ep
             .params
@@ -1913,7 +2005,18 @@ pub(crate) fn spec_request(
         entry: name,
         constants: constant_values(&decoded.abi, consts)?,
         call_stack_depth: 1,
+        open_cl_mode: false,
     })
+}
+
+/// The parameters of the specialized entry `spec` an instruction of its body uses, as the lowering
+/// reads a use (`lower::select`: an argument any instruction names, a call's operand included). A
+/// parameter the function's constants leave unread (its reads folded away by specialization and
+/// deleted with what nothing observes) is not among them.
+fn params_used(spec: &air::Entry) -> BTreeSet<u32> {
+    let body = spec.module.func(spec.func).and_then(|f| f.body.as_ref());
+    body.map(crate::lower::users::params_used)
+        .unwrap_or_default()
 }
 
 /// The Metal attribute indices the specialized vertex entry `spec` reads: its `[[attribute(n)]]`
@@ -1931,17 +2034,7 @@ pub(crate) fn declared_attributes(
     let Some(func) = spec.module.func(spec.func) else {
         return out;
     };
-    let Some(body) = func.body.as_ref() else {
-        return out;
-    };
-    let mut used = BTreeSet::new();
-    for inst in body.insts.values() {
-        inst.kind.for_each_value(|v| {
-            if let Value::Arg(a) = v {
-                used.insert(a.raw());
-            }
-        });
-    }
+    let used = params_used(spec);
     for b in &spec.ep.params {
         if let ParamRole::VertexInput { location } = &b.role {
             if let AbiInt::Const(index) = location.index {
@@ -1981,20 +2074,7 @@ pub(crate) fn declared_attributes(
 /// narrower reading of it. Empty for any other stage, which declares no such parameter.
 pub(crate) fn stage_in_attributes(spec: &air::Entry) -> BTreeSet<u32> {
     let mut out = BTreeSet::new();
-    let Some(func) = spec.module.func(spec.func) else {
-        return out;
-    };
-    let Some(body) = func.body.as_ref() else {
-        return out;
-    };
-    let mut used = BTreeSet::new();
-    for inst in body.insts.values() {
-        inst.kind.for_each_value(|v| {
-            if let Value::Arg(a) = v {
-                used.insert(a.raw());
-            }
-        });
-    }
+    let used = params_used(spec);
     for b in &spec.ep.params {
         if let ParamRole::StageIn { location } = &b.role {
             if let AbiInt::Const(index) = location.index {
@@ -2025,7 +2105,8 @@ pub(crate) fn kernel_inputs_read(
         let Some(given) = inputs.stage_input.as_ref() else {
             return Ok(inputs.clone());
         };
-        let specialized = entries.specialized(fd, inputs.max_call_stack_depth.unwrap_or(1), m)?;
+        let depth = inputs.max_call_stack_depth.unwrap_or(1);
+        let specialized = entries.specialized(fd, depth, inputs.open_cl_mode, m)?;
         let read = stage_in_attributes(&specialized.spec);
         let mut out = inputs.clone();
         out.stage_input = Some(given.narrowed_to(&read));
@@ -2094,16 +2175,25 @@ pub(crate) fn unattached_colors_written(
 
 /// The framebuffer-fetch state of pass `d` for the specialized fragment entry `spec` on `p`
 /// (`LoweringInputs::framebuffer_fetch`): on a device that orders fetch only through the pixel
-/// interlock, the state of every attachment the entry declares a `[[color(n)]]` input of a constant
-/// index for, of every extended-range attachment it writes that the pass blends (whose blend the
-/// function computes from the texel it reads), and of every attachment variant `v`'s instance keeps
-/// out of its subpass that the entry writes through its first output
+/// interlock, the state of every attachment the entry reads through a `[[color(n)]]` input of a
+/// constant index (one an instruction of its specialized body uses: an input the function's
+/// constants leave unread reads nothing), of every extended-range attachment it writes that the
+/// pass blends (whose blend the function computes from the texel it reads) or writes unblended
+/// under a mask of some of the codes one word holds (`color_writes::merged_extended`), of every
+/// attachment held with its channels rotated whose blend the function computes
+/// (`color_writes::shader_rotated_blend`, in either form below), and of every attachment variant
+/// `v`'s instance keeps out of its subpass that the entry writes through its first output
 /// (`VariantKey::interlocked_colors`); `None` on another device or for an entry that declares none
 /// of them. On a device that orders fetch through rasterization-order input attachments, the state
 /// of every extended-range attachment the entry writes that the pass blends (whose blend the
-/// function computes over its input attachment, `lower::fragment`'s `input_blend`), and of every
+/// function computes over its input attachment, `lower::fragment`'s `input_blend`), of every
 /// word attachment it writes under a mask of some of the word's channels (whose word the function
-/// merges into its input attachment's, `color_writes::merged_word`).
+/// merges into its input attachment's, `color_writes::merged_word`), and of every extended-range
+/// attachment it writes unblended under a mask of some of the codes one word holds (merged so,
+/// `color_writes::merged_extended`); and, where `v`'s instance holds extended-range shadows
+/// (`VariantKey::extended_shadows`), the state of each shadowed attachment the entry reads or
+/// writes through its first output, with the pass's depth or stencil attachment and alpha to
+/// coverage, which bear on the shadow the function stores (`lower::fragment`'s `input_shadow`).
 pub(crate) fn fetch_inputs(
     spec: &air::Entry,
     d: FragmentPass<'_>,
@@ -2115,6 +2205,9 @@ pub(crate) fn fetch_inputs(
     if !matches!(spec.ep.stage, AbiStage::Fragment { .. }) || !(interlock || inputs) {
         return None;
     }
+    // An extended-range color whose `half` shadow the draw's instance holds, which a function on
+    // a device that fetches through input attachments reads beside it.
+    let shadowed = |color: u32| inputs && v.extended_shadows.contains(&color);
     let blended = |color: u32| {
         d.color_attachments
             .get(color as usize)
@@ -2124,6 +2217,15 @@ pub(crate) fn fetch_inputs(
                 c.blending_enabled
                     && crate::metal::format::ExtendedRange::of(c.pixel_format).is_some()
             })
+    };
+    // An extended-range attachment whose word's codes an unblended write of some of them merges
+    // into the word it reads.
+    let merged_extended = |color: u32| {
+        d.color_attachments
+            .get(color as usize)
+            .copied()
+            .flatten()
+            .is_some_and(|c| crate::pipeline::color_writes::merged_extended(&c))
     };
     // A word attachment whose writes the function blends over, or merges into, the word it reads.
     let stored_word = |color: u32| {
@@ -2146,15 +2248,29 @@ pub(crate) fn fetch_inputs(
             })
             .is_some()
     };
+    // An attachment held with its channels rotated whose blend the function computes over the
+    // texel it reads, in either form (`color_writes::shader_rotated_blend`).
+    let rotated_blend = |color: u32| {
+        d.color_attachments
+            .get(color as usize)
+            .copied()
+            .flatten()
+            .is_some_and(|c| crate::pipeline::color_writes::shader_rotated_blend(&c, p))
+    };
+    // A color input counts only where the specialized body reads it, as the lowering plans only
+    // a used parameter: a read the function's constants make dead reads nothing, so it takes
+    // neither the storage form nor its blend in the shader.
+    let used = params_used(spec);
     let read: BTreeSet<u32> = spec
         .ep
         .params
         .iter()
+        .filter(|b| used.contains(&b.param))
         .filter_map(|b| match b.role {
             ParamRole::ColorInput {
                 index: AbiInt::Const(color),
                 ..
-            } if interlock => Some(color),
+            } if interlock || shadowed(color) => Some(color),
             _ => None,
         })
         .chain(spec.ep.outputs.iter().filter_map(|o| match o.role {
@@ -2163,8 +2279,9 @@ pub(crate) fn fetch_inputs(
                 index: 0,
                 ..
             } if blended(color)
-                || (interlock && stored_word(color))
-                || (inputs && merged_word(color)) =>
+                || rotated_blend(color)
+                || (interlock && (stored_word(color) || merged_extended(color)))
+                || (inputs && (merged_word(color) || merged_extended(color))) =>
             {
                 Some(color)
             }
@@ -2176,12 +2293,13 @@ pub(crate) fn fetch_inputs(
                 ..
             } if interlock && v.interlocked_colors.contains(&color) => Some(color),
             // An extended-range color whose `half` shadow the draw's instance holds, written
-            // through the storage form against it.
+            // through the storage form against it, or over an input attachment beside its shadow
+            // (`lower::fragment`'s `input_shadow`).
             OutputRole::RenderTarget {
                 attachment: AbiInt::Const(color),
                 index: 0,
                 ..
-            } if interlock && v.extended_shadows.contains(&color) => Some(color),
+            } if v.extended_shadows.contains(&color) => Some(color),
             _ => None,
         }))
         .collect();
@@ -2189,7 +2307,9 @@ pub(crate) fn fetch_inputs(
         return None;
     }
     // The blend over an input attachment depends on the attachments' state alone: its write is
-    // the fixed function's, which the tests, coverage and views take as any other's.
+    // the fixed function's, which the tests, coverage and views take as any other's. A shadow
+    // beside it is stored by the function, so the tests and the coverage bear on it.
+    let shadows = inputs && !v.extended_shadows.is_empty();
     Some(match interlock {
         true => crate::pipeline::lower_inputs::FramebufferFetchInputs::of(
             read,
@@ -2201,8 +2321,8 @@ pub(crate) fn fetch_inputs(
         false => crate::pipeline::lower_inputs::FramebufferFetchInputs::of(
             read,
             d.color_attachments,
-            false,
-            false,
+            shadows && d.depth_or_stencil,
+            shadows && d.alpha_to_coverage,
             1,
         ),
     })
@@ -2301,9 +2421,11 @@ fn instanced_attributes(
 
 /// The caller's inputs `i` for the specialized entry `spec`, its object payload kept only where it
 /// widens an object or mesh function's payload arena (`LoweringInputs::object_payload`): any other
-/// function, and one whose own arena holds it, compiles as without it.
+/// function, and one whose own arena holds it, compiles as without it. OpenCL mode is kept for a
+/// kernel alone (`LoweringInputs::open_cl_mode`).
 fn given_inputs(spec: &air::Entry, i: &LowerInputs) -> LowerInputs {
     let mut out = i.clone();
+    out.open_cl_mode = i.open_cl_mode && matches!(spec.ep.stage, AbiStage::Kernel { .. });
     out.object_payload = i.object_payload.filter(|&bytes| {
         matches!(
             spec.ep.stage,
@@ -2441,7 +2563,8 @@ fn specialize_one(r: &Request<'_>, m: &mut Meter) -> Result<Specialized, Error> 
     // The creation's entry of this stage: the same request's, made by a check or key of the
     // creation, else made there now.
     if let Shared::Entry(entries, fd) = r.shared {
-        let kept = entries.specialized(fd, r.inputs.call_stack_depth(), m)?;
+        let kept =
+            entries.specialized(fd, r.inputs.call_stack_depth(), r.inputs.open_cl_mode(), m)?;
         return Ok(Specialized::clone(&kept));
     }
     let mut decoded = decoded_module(r, m)?;
@@ -2449,8 +2572,10 @@ fn specialize_one(r: &Request<'_>, m: &mut Meter) -> Result<Specialized, Error> 
         decoded.abi.check_container(&decoded.module, f, m)?;
     }
     let mut req = spec_request(&decoded, r.entry, r.consts)?;
-    // A stage compiles under its pipeline's `maxCallStackDepth` for it.
+    // A stage compiles under its pipeline's `maxCallStackDepth` for it, and a kernel under its
+    // pipeline's OpenCL mode.
     req.call_stack_depth = r.inputs.call_stack_depth();
+    req.open_cl_mode = r.inputs.open_cl_mode();
     // Only a module that declares function constants needs them; specialization selects the
     // entry the same way.
     let before = if reflection::specialization_decides_reads(&decoded.abi) {
@@ -2528,6 +2653,7 @@ fn plan_one(r: &Request<'_>, p: &DeviceProfile, m: &mut Meter) -> Result<Planned
         spec,
         before,
     } = ordered_entry(r, p, m)?;
+    color_inputs_attached(&spec, r.inputs)?;
     let spec = grouped_entry(spec, r.inputs, p)?;
     let inputs = lower_inputs(&spec, r.inputs, p, m)?;
     // A flat variant runs its grid in threadgroups of its own: only a kernel that does not observe
@@ -2554,6 +2680,7 @@ fn plan_one(r: &Request<'_>, p: &DeviceProfile, m: &mut Meter) -> Result<Planned
     let plan = crate::lower::select::select(&spec, &memory, p, &inputs, m)?;
     let kernel = KernelFacts {
         max_total_threads: spec.ep.stage.max_total_threads(),
+        work_group_size: spec.ep.stage.work_group_size(),
         flat_local_size: plan
             .dispatch
             .as_ref()
@@ -2611,8 +2738,9 @@ fn compile_kept<K>(
     // repeated regions are written once, as a loop.
     crate::spirv::roll::roll_entry(&mut module, m)?;
     // On a driver whose compiler loses a simdgroup's storage writes after an `optnone` call only
-    // its helper invocations make, those invocations take another arm where that is exact.
-    let helper_guard = crate::spirv::helper_branches::guard_for(&mut module, p, m)?;
+    // its helper invocations make, those invocations take another arm where that is exact, and
+    // each such call left is fenced once every analysis below has read the module.
+    let (helper_guard, fences) = crate::spirv::helper_branches::guard_for(&mut module, p, m)?;
     let function_tables = spec.function_tables.clone();
     let reaches_command_buffers = spec.may_encode_indirect_commands();
     let command_writes = spec.command_writes();
@@ -2639,12 +2767,15 @@ fn compile_kept<K>(
     let writes_memory = crate::spirv::requirements::writes_memory(&module)?;
     // A fragment function's texture slots read only at the fragment's own pixel.
     let mut own_pixel_textures = crate::spirv::requirements::own_pixel_textures(&module, m)?;
+    // The levels of its bound view each texture slot's reads reach.
+    let level_reads = crate::spirv::requirements::level_reads(&module, m)?;
     // Those a draw can read through a snapshot an earlier draw of the same primitives took, of a
-    // function that writes no memory. A variant compiled to read them so states its own: its only
-    // texel access of each is the entry's copy, at the fragment's own pixel.
+    // function that writes no memory, and why each other one is left out. A variant compiled to
+    // read them so states its own, and judges none: its only texel access of each is the entry's
+    // copy, at the fragment's own pixel.
     let snapshots: Vec<u32> = plan.families.fragment.snapshot.keys().copied().collect();
-    let snapshot_textures = match (snapshots.is_empty(), writes_memory) {
-        (false, _) => {
+    let snapshot_textures = match snapshots.is_empty() {
+        false => {
             if !crate::spirv::requirements::snapshot_copies_alone(&module, &snapshots, m)? {
                 return Err(Error::Internal(InternalError::new(
                     InternalKind::Invariant,
@@ -2654,12 +2785,17 @@ fn compile_kept<K>(
             own_pixel_textures.extend(&snapshots);
             own_pixel_textures.sort_unstable();
             own_pixel_textures.dedup();
-            snapshots
+            crate::spirv::requirements::Judged {
+                slots: snapshots,
+                refusals: Vec::new(),
+            }
         }
-        (true, true) => Vec::new(),
-        (true, false) => {
-            crate::spirv::requirements::snapshot_textures(&module, &own_pixel_textures, m)?
-        }
+        true => crate::spirv::requirements::snapshot_textures(
+            &module,
+            &own_pixel_textures,
+            writes_memory,
+            m,
+        )?,
     };
     // A `half` rounded through `OpQuantizeToF16` (`QuantizeForm::Device`): the module records the
     // native note on every profile, a result below the smallest normal half the device's.
@@ -2691,6 +2827,14 @@ fn compile_kept<K>(
         && p.takes_driver_deviation(crate::error::DriverDeviation::MetalHalfArithmetic);
     let native_widening =
         widens && quantize != crate::spirv::builder::QuantizeForm::Controlled && !measured_widening;
+    // A `half` rounded from `float` arithmetic through the conversion under the float controls,
+    // on a driver that fuses the operation into the narrowing
+    // (`DriverWorkaround::HalfConversionFusedWithArithmetic`): its exact result rounded once,
+    // where Metal rounds the `float` result; the module records the native note.
+    let fused = quantize == crate::spirv::builder::QuantizeForm::Controlled
+        && p.workarounds()
+            .contains(&crate::device::profile::DriverWorkaround::HalfConversionFusedWithArithmetic)
+        && crate::lower::arith::narrow::rounds_arithmetic(&module, m)?;
     // Its NaN's bits, and those of a `half` held widened that a widening to `float` or a `half`
     // `fabs` moves: Metal's where the device's widening and narrowing are measured to answer
     // them (`DriverDeviation::MetalNanMoves`) and the module moves its `half` values only as
@@ -2725,7 +2869,7 @@ fn compile_kept<K>(
         ),
         (device_quantize, PrecisionNote::NativeHalfQuantize),
         (
-            (converts && !measured_conversion) || native_widening,
+            (converts && !measured_conversion) || native_widening || fused,
             PrecisionNote::NativeHalfConversion,
         ),
     ];
@@ -2755,6 +2899,8 @@ fn compile_kept<K>(
         precision.push(PrecisionNote::DeviceSampling);
         precision.sort_unstable();
     }
+    // The fences are identities, which the analyses above would read as moves between lanes.
+    fences.apply(&mut module)?;
     let stats = crate::spirv::verify::verify(&module, p, m)?;
     let kept = keep(&module);
     let mut symbols =
@@ -2778,7 +2924,7 @@ fn compile_kept<K>(
         &function_tables,
         (reaches_command_buffers, command_writes),
         (writes_textures, numbered_samplers),
-        (own_pixel_textures, snapshot_textures),
+        (own_pixel_textures, snapshot_textures, level_reads),
     );
     let mut requirements = module.requirements.clone();
     // Pairs only the device's simdgroup lockstep orders.
@@ -2898,13 +3044,6 @@ fn compile_kept<K>(
     requirements
         .properties
         .extend(plan.families.texture.storage_properties.iter().copied());
-    // Depth comparisons the device makes, with no note, because its depth images keep values
-    // outside `[0, 1]` as Metal's do.
-    if plan.families.texture.kept_depth_range {
-        requirements
-            .properties
-            .insert(crate::device::requirements::VkProperty::DepthImageKeepsValuesOutsideUnitRange);
-    }
     // The set-1 heap's binding flags need their features beside the module's.
     requirements
         .features
@@ -3032,9 +3171,11 @@ fn census(plan: &Plan) -> StrategyCensus {
     c
 }
 
-/// [`census`] of the emitted module: the plan's, and the selections whose helper invocations
-/// take another arm (`spirv::helper_branches`), each with its helper query and one or two
-/// logical operations (about 12 words).
+/// [`census`] of the emitted module: the plan's, the selections whose helper invocations take
+/// another arm (`spirv::helper_branches`), each with its helper query and one or two logical
+/// operations (about 12 words), and the `optnone` calls an identity shuffle follows, each with
+/// its lane's load and its shuffle (about 10 words; a structure's two members and their
+/// construction about 30).
 fn emitted_census(
     plan: &Plan,
     helper_guard: crate::spirv::helper_branches::Guarded,
@@ -3046,6 +3187,15 @@ fn emitted_census(
             StrategyUse {
                 uses: helper_guard.selections,
                 words: u64::from(helper_guard.selections) * 12,
+            },
+        );
+    }
+    if helper_guard.fences > 0 {
+        c.entries.insert(
+            crate::spirv::helper_branches::FENCE_STRATEGY.to_owned(),
+            StrategyUse {
+                uses: helper_guard.fences,
+                words: u64::from(helper_guard.fences) * 30,
             },
         );
     }
@@ -3070,7 +3220,11 @@ fn stage_interface(
     function_tables: &std::collections::BTreeSet<u32>,
     (reaches_command_buffers, command_writes): (bool, crate::pipeline::interface::CommandWrites),
     (writes_textures, numbered_samplers): (bool, Vec<crate::pipeline::interface::NumberedSampler>),
-    (own_pixel_textures, snapshot_textures): (Vec<u32>, Vec<u32>),
+    (own_pixel_textures, snapshots, level_reads): (
+        Vec<u32>,
+        crate::spirv::requirements::Judged,
+        Vec<crate::pipeline::interface::LevelReads>,
+    ),
 ) -> StageInterface {
     use crate::pipeline::interface::{BufferKind, BufferSlot};
     use crate::pipeline::sym::{PushField, SlotClass};
@@ -3135,7 +3289,9 @@ fn stage_interface(
         writes_textures,
         numbered_samplers,
         own_pixel_textures,
-        snapshot_textures,
+        snapshot_textures: snapshots.slots,
+        snapshot_refusals: snapshots.refusals,
+        level_reads,
         private_bytes: plan.private_bytes,
     }
 }

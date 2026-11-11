@@ -18,10 +18,11 @@
 //! submission begins then, the time the thread spent in the driver's `vkQueueSubmit` before it
 //! apart (`WorkCounts::batch_submit_nanos`).
 
+use super::degrade_notices::on_device_with;
 use super::degrade_notices::{assert_made_once, on_device};
 use super::indirect_host_steps::{expected, Setup, HOST_STEPS};
 use super::shared_kinds;
-use super::{buffer_with, read_buffer, WAIT};
+use super::{at_plan, buffer_with, read_buffer, WAIT};
 use metal2vulkan_runtime::{
     host_time, Buffer, CommandBuffer, CommandBufferStatus, CommandQueue, Device, ResourceOptions,
     Submission, SubmissionCheck,
@@ -81,7 +82,7 @@ fn queues(device: &Device) -> (CommandQueue, CommandQueue) {
 /// buffer was made and encoded first.
 #[test]
 fn a_copy_committed_after_a_write_on_another_queue_holds_it() {
-    on_device(|device, _| {
+    on_device_with(at_plan, |device, _| {
         let (a, b) = queues(device);
         let written = buffer_with(device, &[0; BYTES as usize]).unwrap();
         let (reader, copy) = copy_first(&b, &written);
@@ -104,7 +105,7 @@ fn a_copy_committed_after_a_write_on_another_queue_holds_it() {
 /// held batch keeps its place.
 #[test]
 fn a_copy_committed_while_a_write_waits_for_its_host_step_holds_it() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let (a, b) = queues(device);
         let setup = Setup::new(device, 2);
         let (reader, copy) = copy_first(&b, setup.out());
@@ -143,7 +144,7 @@ fn a_copy_committed_while_a_write_waits_for_its_host_step_holds_it() {
 /// meanwhile, holds the fill: the held batch keeps its place.
 #[test]
 fn a_copy_committed_while_a_write_waits_for_its_check_holds_it() {
-    on_device(|device, _| {
+    on_device_with(at_plan, |device, _| {
         let (a, b) = queues(device);
         let written = buffer_with(device, &[0; BYTES as usize]).unwrap();
         let (reader, copy) = copy_first(&b, &written);
@@ -222,7 +223,7 @@ fn commits_made_while_the_vk_queue_is_held_return_at_once_and_run_in_commit_orde
                 // SAFETY: the closure keeps no handle and calls nothing of the runtime's; it waits
                 // only for this test's release.
                 unsafe {
-                    queue.with_vk_queue(|_, _| {
+                    queue.with_vk_queue(|_, _, _| {
                         held.send(()).unwrap();
                         let _ = released.recv_timeout(WAIT);
                     })
@@ -358,7 +359,7 @@ fn a_checked_command_buffer_committed_during_a_submission_is_taken_up_promptly()
                 // SAFETY: the closure keeps no handle and calls nothing of the runtime's; it waits
                 // only for this test's release.
                 unsafe {
-                    queue.with_vk_queue(|_, _| {
+                    queue.with_vk_queue(|_, _, _| {
                         held.send(()).unwrap();
                         let _ = released.recv_timeout(WAIT);
                     })
@@ -465,7 +466,7 @@ fn taken_up(device: &Device, queue: &CommandQueue) -> Round {
             // SAFETY: the closure keeps no handle and calls nothing of the runtime's; it waits
             // only for this round's release.
             unsafe {
-                queue.with_vk_queue(|_, _| {
+                queue.with_vk_queue(|_, _, _| {
                     held.send(()).unwrap();
                     let _ = released.recv_timeout(WAIT);
                 })

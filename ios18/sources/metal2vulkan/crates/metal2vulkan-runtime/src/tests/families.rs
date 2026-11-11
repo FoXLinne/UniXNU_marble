@@ -12,6 +12,7 @@ use super::capabilities::{committed_descriptions, created};
 use crate::families::formats::{answers, FormatAnswers, Missing};
 use crate::families::{audit, Facts};
 use crate::image_plan::{ImageFacts, ImagePlan};
+use crate::resource_ids::texture_arrays;
 use crate::{
     FamilyRow, FeatureRow, FormatCapabilities, FormatCapability, FormatRow, Framework, GpuFamily,
     LimitRow, Refusal, RowAudit, RowState, RuntimeGap,
@@ -59,6 +60,7 @@ pub(super) fn all_audits(
         storage_multisample: enabled.has(VkFeature::ShaderStorageImageMultisample),
         depth_images: crate::image_plan::DepthImageFacts::of(&enabled.driver_facts()),
         linear_attachments: false,
+        any_views: &crate::image_plan::AnyViews::default(),
     };
     let limits = any_limits;
     let memo: RefCell<BTreeMap<PixelFormat, FormatAnswers>> = RefCell::default();
@@ -101,6 +103,7 @@ pub(super) fn format_capabilities(
         storage_multisample: enabled.has(VkFeature::ShaderStorageImageMultisample),
         depth_images: crate::image_plan::DepthImageFacts::of(&enabled.driver_facts()),
         linear_attachments: false,
+        any_views: &crate::image_plan::AnyViews::default(),
     };
     let sparse = Err(Missing::Gap(RuntimeGap::SparseHeaps));
     answers(pf, &image, &any_limits, sparse).capabilities()
@@ -468,6 +471,134 @@ fn archive_and_argument_buffer_rows() {
                 "{stem}: {tier2:?}"
             );
         }
+    }
+}
+
+/// The argument-buffer sampler row answers by what the runtime honours: Metal's
+/// `maxArgumentBufferSamplerCount` as the runtime answers it
+/// (`DeviceProperties::max_argument_buffer_sampler_count`) against each family's cell, on every
+/// committed profile. It read `maxDescriptorSetUpdateAfterBindSamplers` alone before, so MoltenVK's
+/// 500000 held Apple9's 500000 where the handle table's 65536 entries hold 65535 states. Pinned:
+/// the families whose row each venue refuses (Apple9's and Apple10's 500000 past 65535, lavapipe's
+/// 32767 and NVIDIA's 3999; every family past the desktop baseline's 15 and the floor's 0).
+#[test]
+fn the_argument_buffer_sampler_row_is_the_runtime_s_answer() {
+    use GpuFamily as G;
+    let cell = |family: GpuFamily| match family {
+        G::Apple1 | G::Apple2 | G::Apple3 | G::Apple4 | G::Apple5 => Some(16),
+        G::Apple6 => Some(128),
+        G::Apple7 | G::Apple8 | G::Metal3 => Some(996),
+        G::Apple9 | G::Apple10 => Some(500_000),
+        G::Mac1 | G::Mac2 => Some(1_024),
+        _ => None,
+    };
+    let row = FamilyRow::Limit(LimitRow::ArgumentBufferSamplers);
+    let mut refusing: BTreeMap<String, BTreeSet<GpuFamily>> = BTreeMap::new();
+    for (stem, desc) in committed_descriptions() {
+        let available = created(&stem, &desc).1.max_argument_buffer_sampler_count;
+        let mut refused = BTreeSet::new();
+        for (family, rows) in all_audits(&stem, &desc) {
+            let want = cell(family).map(|required| match available >= required {
+                true => RowState::Exact,
+                false => RowState::Refused(Refusal::ArgumentBufferSamplerCount {
+                    required,
+                    available,
+                }),
+            });
+            let got = state(&rows, row);
+            assert_eq!(got, want, "{stem} {family:?}");
+            if got.is_some_and(|s| s.blocks()) {
+                refused.insert(family);
+            }
+        }
+        refusing.insert(stem, refused);
+    }
+    let past_apple8 = BTreeSet::from([G::Apple9, G::Apple10]);
+    let every: BTreeSet<GpuFamily> = (GpuFamily::ALL.into_iter())
+        .filter(|&f| cell(f).is_some())
+        .collect();
+    for (stem, want) in [
+        ("moltenvk-m3", &past_apple8),
+        ("amd-780m-radv", &past_apple8),
+        ("intel-irisxe-rplp-anv", &past_apple8),
+        ("lavapipe", &past_apple8),
+        ("gate-lavapipe", &past_apple8),
+        ("nvidia-rtx5080-laptop", &past_apple8),
+        ("lunarg-desktop-baseline-2023", &every),
+        ("vk12-floor", &every),
+    ] {
+        assert_eq!(refusing.get(stem), Some(want), "{stem}");
+    }
+}
+
+/// The argument-buffer texture row answers by what the runtime honours: the textures a set-1
+/// sampled-image array holds at IDs 1 and up (`resource_ids::texture_arrays`, which texture
+/// placements are checked against: the least of the handle table's 65536 entries and the
+/// update-after-bind sampled-image limits, less the neutral's element) against each family's
+/// cell, on every committed profile. It read `maxDescriptorSetUpdateAfterBindSampledImages` alone
+/// before, so MoltenVK's 1,000,000 and the other venues' larger limits held Apple6's 1,000,000
+/// where the array holds 65535 textures. Pinned: the families whose row each venue refuses
+/// (Apple6 to Apple10, Mac1, Mac2 and Metal3, whose cell is 1,000,000, past 65535 and past the
+/// desktop baseline's 127; every family past the floor's 0).
+#[test]
+fn the_argument_buffer_texture_row_is_the_runtime_s_array() {
+    use GpuFamily as G;
+    let cell = |family: GpuFamily| match family {
+        G::Apple1 | G::Apple2 | G::Apple3 => Some(31),
+        G::Apple4 | G::Apple5 => Some(96),
+        G::Apple6 | G::Apple7 | G::Apple8 | G::Apple9 | G::Apple10 | G::Metal3 => Some(1_000_000),
+        G::Mac1 | G::Mac2 => Some(1_000_000),
+        _ => None,
+    };
+    let row = FamilyRow::Limit(LimitRow::ArgumentBufferTextures);
+    let mut answers: BTreeMap<String, (u64, BTreeSet<GpuFamily>)> = BTreeMap::new();
+    for (stem, desc) in committed_descriptions() {
+        let (enabled, _) = created(&stem, &desc);
+        let compile = Device::new(enabled, DevicePolicy::UNTRUSTED).unwrap();
+        let [(elements, _), _] = texture_arrays(compile.profile());
+        let available = elements.saturating_sub(1);
+        let mut refused = BTreeSet::new();
+        for (family, rows) in all_audits(&stem, &desc) {
+            let want = cell(family).map(|required| match available >= required {
+                true => RowState::Exact,
+                false => RowState::Refused(Refusal::ArgumentBufferTextureCount {
+                    required,
+                    available,
+                }),
+            });
+            let got = state(&rows, row);
+            assert_eq!(got, want, "{stem} {family:?}");
+            if got.is_some_and(|s| s.blocks()) {
+                refused.insert(family);
+            }
+        }
+        answers.insert(stem, (available, refused));
+    }
+    let past_apple5 = BTreeSet::from([
+        G::Apple6,
+        G::Apple7,
+        G::Apple8,
+        G::Apple9,
+        G::Apple10,
+        G::Mac1,
+        G::Mac2,
+        G::Metal3,
+    ]);
+    let every: BTreeSet<GpuFamily> = (GpuFamily::ALL.into_iter())
+        .filter(|&f| cell(f).is_some())
+        .collect();
+    for (stem, want) in [
+        ("moltenvk-m3", (65535, &past_apple5)),
+        ("amd-780m-radv", (65535, &past_apple5)),
+        ("intel-irisxe-rplp-anv", (65535, &past_apple5)),
+        ("lavapipe", (65535, &past_apple5)),
+        ("gate-lavapipe", (65535, &past_apple5)),
+        ("nvidia-rtx5080-laptop", (65535, &past_apple5)),
+        ("lunarg-desktop-baseline-2023", (127, &past_apple5)),
+        ("vk12-floor", (0, &every)),
+    ] {
+        let got = answers.get(stem).map(|(n, refused)| (*n, refused));
+        assert_eq!(got, Some(want), "{stem}");
     }
 }
 
@@ -842,6 +973,7 @@ fn formats_without_a_made_multisample_texture_or_a_modelled_resolve_answer_neith
             storage_multisample: enabled.has(VkFeature::ShaderStorageImageMultisample),
             depth_images: crate::image_plan::DepthImageFacts::of(&enabled.driver_facts()),
             linear_attachments: false,
+            any_views: &crate::image_plan::AnyViews::default(),
         };
         let found = |pf| {
             let sparse = Err(Missing::Gap(RuntimeGap::SparseHeaps));
@@ -926,6 +1058,7 @@ fn extended_range_formats_answer_the_shaders_filter_and_blend() {
             storage_multisample: enabled.has(VkFeature::ShaderStorageImageMultisample),
             depth_images: crate::image_plan::DepthImageFacts::of(&enabled.driver_facts()),
             linear_attachments: false,
+            any_views: &crate::image_plan::AnyViews::default(),
         };
         for pf in formats {
             let sparse = Err(Missing::Gap(RuntimeGap::SparseHeaps));
@@ -970,6 +1103,68 @@ fn extended_range_formats_answer_the_shaders_filter_and_blend() {
     }
 }
 
+/// A padded 10-bit format answers Blend exactly where it renders and the compile layer's blend in
+/// the shader holds (`extended_range_blend`), as Metal blends into one: every device that orders
+/// fetch through the pixel interlock alone, and lavapipe. A bfloat format, which Metal blends
+/// nowhere, answers no Blend on any device.
+#[test]
+fn padded_formats_blend_in_the_shader_and_bfloat_formats_do_not() {
+    use metal2vulkan::metal::format::extended_range_blend;
+    let padded = [
+        PixelFormat::R10UnormX6,
+        PixelFormat::R10UnormX6SRGB,
+        PixelFormat::RG10UnormX12,
+        PixelFormat::RG10UnormX12SRGB,
+        PixelFormat::RGB10A2UnormSRGB,
+    ];
+    let bfloat = [
+        PixelFormat::R16Bfloat,
+        PixelFormat::RG16Bfloat,
+        PixelFormat::RGBA16Bfloat,
+    ];
+    let mut blended = Vec::new();
+    for (stem, desc) in committed_descriptions() {
+        let (enabled, _) = created(&stem, &desc);
+        let compile = Device::new(enabled.clone(), DevicePolicy::UNTRUSTED).unwrap();
+        let image = ImageFacts {
+            profile: compile.profile(),
+            formats: &enabled.formats,
+            storage_multisample: enabled.has(VkFeature::ShaderStorageImageMultisample),
+            depth_images: crate::image_plan::DepthImageFacts::of(&enabled.driver_facts()),
+            linear_attachments: false,
+            any_views: &crate::image_plan::AnyViews::default(),
+        };
+        let found = |pf| {
+            let sparse = Err(Missing::Gap(RuntimeGap::SparseHeaps));
+            answers(pf, &image, &any_limits, sparse).capabilities()
+        };
+        for pf in padded {
+            let caps = found(pf);
+            let blends = extended_range_blend(pf, compile.profile()).is_ok();
+            assert_eq!(
+                caps.contains(FormatCapability::Blend),
+                blends && caps.contains(FormatCapability::Color),
+                "{stem}: {pf:?}"
+            );
+            if caps.contains(FormatCapability::Blend) {
+                blended.push((stem.clone(), pf));
+            }
+        }
+        for pf in bfloat {
+            assert!(
+                !found(pf).contains(FormatCapability::Blend),
+                "{stem}: {pf:?} answers Blend"
+            );
+        }
+    }
+    for stem in ["moltenvk-m3", "amd-rdna3-radv", "intel-arl-anv", "lavapipe"] {
+        for pf in padded {
+            let at = (stem.to_owned(), pf);
+            assert!(blended.contains(&at), "{stem}: {pf:?} answers no Blend");
+        }
+    }
+}
+
 /// An 8-bit sRGB format a device holds as its UNORM twin, unable to sample the sRGB format
 /// (`R8Unorm_sRGB` on lavapipe, `RG8Unorm_sRGB` on lavapipe, ANV and NVIDIA), answers Filter where
 /// the twin filters linearly: the device filters the twin's codes, which the function decodes
@@ -990,6 +1185,7 @@ fn srgb_formats_held_as_their_unorm_twin_answer_the_twins_filter() {
             storage_multisample: enabled.has(VkFeature::ShaderStorageImageMultisample),
             depth_images: crate::image_plan::DepthImageFacts::of(&enabled.driver_facts()),
             linear_attachments: false,
+            any_views: &crate::image_plan::AnyViews::default(),
         };
         for pf in [
             PixelFormat::R8UnormSRGB,
@@ -1059,6 +1255,7 @@ fn listed_formats_answer_at_most_their_apple9_cell() {
             storage_multisample: enabled.has(VkFeature::ShaderStorageImageMultisample),
             depth_images: crate::image_plan::DepthImageFacts::of(&enabled.driver_facts()),
             linear_attachments: false,
+            any_views: &crate::image_plan::AnyViews::default(),
         };
         for row in FormatRow::ALL {
             for &pf in row.formats() {
@@ -1083,10 +1280,11 @@ fn listed_formats_answer_at_most_their_apple9_cell() {
 }
 
 /// The mesh rows follow how the device runs mesh pipelines (`DeviceProfile::emulates_mesh_shading`):
-/// on every committed profile the mesh shading row is the binder's one refusal, a partial object
-/// threadgroup of an object function that waits at a barrier (`NotImplemented(MeshShading)`),
-/// whether the device runs the stages natively or as compute work; and a device that runs them as
-/// compute work answers the mesh grid, object grid and payload limits of Metal3 by its compute
+/// on every committed profile that runs the stages natively or as compute work the mesh shading
+/// row is exact (a partial object threadgroup of an object function that waits at a barrier runs,
+/// `lower::simd::divergent`), and one that runs them neither way lacks `taskShader`; and a device
+/// that runs them as compute work answers the mesh grid, object grid and payload limits of Metal3
+/// by its compute
 /// limits (the payload refused where its workgroup memory cannot hold Metal3's 16384 bytes beside
 /// the object wrapper's 12), where they were refused for `meshShader` before. Each profile's
 /// Metal3 blockers are printed (`METAL3` lines).
@@ -1107,7 +1305,7 @@ fn mesh_rows_follow_how_the_device_runs_mesh_stages() {
         if emulates || native {
             assert_eq!(
                 state(metal3, feature(FeatureRow::MeshShading)),
-                Some(not_implemented(Feature::MeshShading)),
+                Some(RowState::Exact),
                 "{stem}"
             );
         }

@@ -77,7 +77,7 @@ use std::time::Duration;
 const WAIT: Duration = Duration::from_secs(60);
 
 /// The target's side, in pixels.
-pub(super) const SIDE: u64 = 32;
+const SIDE: u64 = 32;
 
 /// The target's red before the pass.
 const BEFORE: u8 = 64;
@@ -222,7 +222,7 @@ fn pass(
 }
 
 /// The red of pixel `(x, y)` of `bytes`, tight `RGBA8Unorm` rows.
-pub(super) fn red(bytes: &[u8], x: u64, y: u64) -> u8 {
+fn red(bytes: &[u8], x: u64, y: u64) -> u8 {
     bytes[((y * SIDE + x) * 4) as usize]
 }
 
@@ -967,6 +967,7 @@ fn instances(before: &WorkCounts, after: &WorkCounts) -> [u64; 2] {
         c.instance_splits_barrier
             + c.instance_splits_tile_dispatch
             + c.instance_splits_tile_memory
+            + c.instance_splits_interlocked_writes
             + c.instance_splits_attached_read
             + c.instance_splits_feedback
             + c.instance_splits_memoryless_write

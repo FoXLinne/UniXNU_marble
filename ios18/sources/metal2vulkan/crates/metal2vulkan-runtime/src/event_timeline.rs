@@ -162,9 +162,25 @@ impl<Q, S> EventTimeline<Q, S> {
     }
 
     /// Whether the host may set the value.
-    #[cfg(test)]
     pub(super) fn settable(&self) -> bool {
         self.settable
+    }
+
+    /// The timeline of the event carried to a new semaphore, at 0, on its device's next
+    /// generation (`device/carry.rs`): the value the host saw, its floor included, and nothing
+    /// pending. The lost device's signals the host never saw land on no semaphore, and a wait for
+    /// a value only they reach waits for a later signal, as for one never encoded.
+    pub(super) fn carried(&self) -> EventTimeline<Q, S> {
+        EventTimeline {
+            reached: 0,
+            reached_value: self.reached_value,
+            pending: VecDeque::new(),
+            floor: self.floor,
+            settable: self.settable,
+            landed: 0,
+            unfinished: VecDeque::new(),
+            released_value: self.released_value.max(self.reached_value),
+        }
     }
 }
 
@@ -260,6 +276,19 @@ impl<Q: Copy + Eq, S: Clone> EventTimeline<Q, S> {
             }
         }
         None
+    }
+
+    /// Whether a batch submitted now on `queue` that waits for `value` hands its `VkQueue` a wait
+    /// for a signal of another `VkQueue`'s, or of one of the caller's submissions: one
+    /// [`EventTimeline::wait`] answers with an index, whose signal is pending elsewhere, so the
+    /// `VkQueue` holds the batch on the GPU until that other work ends (`queue_share.rs`).
+    pub(super) fn waits_across(&self, value: u64, queue: Q) -> bool {
+        if self.settable || value <= self.value() {
+            return false;
+        }
+        (self.pending.iter())
+            .find(|pending| pending.value >= value)
+            .is_some_and(|pending| pending.queue != Some(queue))
     }
 
     /// Whether a wait for `value` is held on the host where a Vulkan wait for a submitted GPU

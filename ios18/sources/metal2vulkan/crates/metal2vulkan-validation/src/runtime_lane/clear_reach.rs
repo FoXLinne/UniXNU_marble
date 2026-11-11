@@ -10,7 +10,8 @@
 //! depth 0.25; its fragment function writes (1/255, 0, 0, 1)): a triangle over the whole
 //! target, one wholly outside it, or none. Metal's clear reaches past the render area to whole
 //! 32x32 tiles in a pass that draws or of more layers than one, and over the whole attachment in
-//! a pass of one layer that does not; a `DontCare` load keeps the texels in a pass that does not
+//! a pass of one layer that does not (of a texture Metal keeps compressed, as every one here is:
+//! `fresh_clear_reach` holds an uncompressed one's tiles); a `DontCare` load keeps the texels in a pass that does not
 //! draw and clears to zero (a color) or the clear value (depth, stencil) in one that does, which
 //! is Metal's answer in each tile a draw touches and a near-equivalent elsewhere, announced once
 //! ([`DONT_CARE_LOADS`]). A pass without a draw call that clears and resolves nothing records
@@ -25,7 +26,7 @@
 use super::degrade_notices::shared_in_system_memory;
 use super::degrade_notices::{assert_made_once, forced, made_render_kinds};
 use super::{
-    buffer_with, layer_reported_nothing_at_all, read_buffer, validated_device, Messages,
+    buffer_with, layer_reported_nothing_at_all, read_buffer, validated_device_with, Messages,
     ScratchCache, WAIT,
 };
 use crate::air_library::AirLibrary;
@@ -39,8 +40,8 @@ use metal2vulkan::metal::{
 use metal2vulkan::pipeline::{ColorAttachmentDescriptor, RenderPipelineDescriptor, StageSource};
 use metal2vulkan_devtools::{engine_dir, llvm_assemble};
 use metal2vulkan_runtime::{
-    BlitOption, ClearColor, CommandQueue, Degradation, Device, Library, LoadAction, Origin,
-    PipelineOptions, Region, RenderPassDescriptor, RenderPipelineState, ResourceOptions,
+    BlitOption, ClearColor, CommandQueue, Degradation, Device, DeviceOptions, Library, LoadAction,
+    Origin, PipelineOptions, Region, RenderPassDescriptor, RenderPipelineState, ResourceOptions,
     ScissorRect, Size, StoreAction, Texture, TextureDescriptor, Viewport,
 };
 use std::collections::BTreeSet;
@@ -66,7 +67,7 @@ const CLEAR: [f64; 4] = [0.5, 0.0, 0.0, 1.0];
 /// The codes an 8-bit unorm channel's clear to `value` may store on a device whose clear is
 /// Metal's conversion (`metals`, `DriverFact::ColorClearIsMetals`) or not: Metal's, but at a half
 /// step on any other device either nearest code, which Vulkan leaves to the device (announced
-/// `device-color-conversion`: `degrade_notices::tie_cleared`).
+/// `device-color-conversion`: `degrade_notices::clear_in_question`).
 fn clear_codes(value: f64, metals: bool) -> Vec<u8> {
     let scaled = value.clamp(0.0, 1.0) * 255.0;
     let metal = scaled.round_ties_even() as u8;
@@ -437,9 +438,14 @@ fn color_pass(texture: &Texture, load: LoadAction, area: [u64; 2]) -> RenderPass
 }
 
 pub(super) fn lane() -> (Messages, ScratchCache, Lane) {
+    lane_with(|_| {})
+}
+
+/// [`lane`] on a device made with the options `adjust` changes (`validated_device_with`).
+pub(super) fn lane_with(adjust: impl FnOnce(&mut DeviceOptions)) -> (Messages, ScratchCache, Lane) {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
-    let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+    let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), adjust).unwrap();
     (messages, cache, Lane::new(device))
 }
 
@@ -720,17 +726,31 @@ fn colors_whose_clears_reach_alike_record_inline_over_their_reach() {
     quiet(lane, &messages);
 }
 
-/// A clear of a `half` NaN writes Metal's canonical quiet NaN (Metal probe case `nan_1_half_nan` on
-/// the M3 Max and an M4: `0x7e00`) over the reach any clear has, through the scratch image of an
-/// integer format the runtime clears it in (`nan_clear.rs`): to the tiles in a pass with a draw
-/// call, over the whole attachment in one without, and through a stand-in. A 4-sample attachment's
-/// clear runs valid (Metal's resolve of its NaN samples is unmeasured).
+/// A clear of a `half` NaN reaches as any clear does: to the tiles in a pass with a draw call, over
+/// the whole attachment in one without, and through a stand-in. Metal writes its canonical quiet
+/// NaN (Metal probe case `nan_1_half_nan` on the M3 Max and an M4: `0x7e00`); the device converts
+/// the clear value to the format's NaN as it likes, which the runtime announces as
+/// `device-nan-encoding` on every device (`nan_clear::degrade_nan_clears`). So a cleared texel's
+/// red holds a `half` NaN, Metal's or the device's (ANV on the Iris Xe, Mesa 26.2.6, stores
+/// `0xfe00`), and its green, 1.0, Metal's `0x3c00` exactly; every texel past the reach keeps its
+/// old bytes. A 4-sample attachment's clear runs valid (Metal's resolve of its NaN samples is
+/// unmeasured).
 #[test]
 fn a_nan_clear_reaches_as_metal_s() {
     let (messages, _cache, lane) = lane();
     let rg16 = PixelFormat::RG16Float;
     let pipeline = lane.pipeline(&[rg16], (None, None), 1);
     let nan = [0x00, 0x7e, 0x00, 0x3c];
+    // A texel `got` holds Metal's `want`, or, where Metal's is the clear's, a `half` NaN of the
+    // device's encoding in red beside Metal's green.
+    let holds = |got: &[u8], want: &[u8]| {
+        got == want
+            || (want == nan
+                && super::driver_deviations::half_nan(u16::from_le_bytes([got[0], got[1]]))
+                && got[2..] == want[2..])
+    };
+    let _ = messages.take_notices();
+    let mut device_nans = 0;
     let pass = |texture: &Texture| {
         let mut descriptor = color_pass(texture, LoadAction::Clear, [AREA, AREA]);
         descriptor.color_attachments[0].clear_color = ClearColor::new(f64::NAN, 1.0, 0.5, f64::NAN);
@@ -759,11 +779,23 @@ fn a_nan_clear_reaches_as_metal_s() {
     for (name, usage, draw, reach) in cases {
         let texture = lane.old_color(rg16, PLAIN, usage);
         lane.run(&pass(&texture), draw, Some(&pipeline));
-        assert_eq!(
-            lane.read(&texture, (0, 0), 4, BlitOption::None),
-            expected(SIDE, [AREA, AREA], reach, (None, &nan, &OLD)),
-            "{name}"
+        let got = lane.read(&texture, (0, 0), 4, BlitOption::None);
+        let want = expected(SIDE, [AREA, AREA], reach, (None, &nan, &OLD));
+        assert_eq!(got.len(), want.len(), "{name}");
+        let apart: Vec<usize> = (0..got.len() / 4)
+            .filter(|&t| !holds(&got[4 * t..4 * t + 4], &want[4 * t..4 * t + 4]))
+            .collect();
+        assert!(
+            apart.is_empty(),
+            "{name}: {} texels hold neither Metal's nor a NaN of the device's beside Metal's \
+             green, the first {:?} at texel {}",
+            apart.len(),
+            apart.first().map(|&t| &got[4 * t..4 * t + 4]),
+            apart.first().copied().unwrap_or(0)
         );
+        device_nans += (0..got.len() / 4)
+            .filter(|&t| got[4 * t..4 * t + 4] != want[4 * t..4 * t + 4])
+            .count();
     }
     let four = Shape {
         samples: 4,
@@ -771,6 +803,15 @@ fn a_nan_clear_reaches_as_metal_s() {
     };
     let multisampled = lane.texture(rg16, four, TextureUsage::RENDER_TARGET);
     lane.run(&pass(&multisampled), Draw::None, None);
+    let announced = super::degrade_notices::counts(&messages.take_notices());
+    eprintln!(
+        "NAN-CLEAR on {}: {device_nans} cleared texels hold the device's NaN, not Metal's 0x7e00",
+        lane.device.name()
+    );
+    assert!(
+        announced.contains_key(&Degradation::DeviceNanEncoding),
+        "a half NaN clear announces device-nan-encoding: {announced:?}"
+    );
     quiet(lane, &messages);
 }
 

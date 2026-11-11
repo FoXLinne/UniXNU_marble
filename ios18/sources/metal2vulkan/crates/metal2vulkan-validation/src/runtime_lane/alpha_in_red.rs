@@ -30,6 +30,7 @@
 
 use super::degrade_notices::{made_render_kinds, resolve_kind};
 use super::driver_deviations::stage_notes;
+use super::framebuffer_fetch::fetches;
 use super::pixel_samplers::metal_sampler;
 use super::{
     buffer_with, converted_holds, half_within, layer_reported_nothing_at_all, read_buffer,
@@ -979,8 +980,9 @@ fn a8_without_a8_unorm_renders_masks_clears_and_blends_as_metal() {
 }
 
 /// A 4-sample render over the lower left half of the target resolves as `R8Unorm`'s does, at the
-/// edge too, and as Metal's away from it (229 below it, 0 above), where every texel's samples
-/// agree: on the device without `A8_UNORM` (its `R8_UNORM` image's resolve), and with its own
+/// edge too but where the device rounds the average its own way (`device-rounded-resolve`, within
+/// one code of Metal's), which may round the edge's tie a code apart, and as Metal's away from it
+/// (229 below it, 0 above), where every texel's samples agree: on the device without `A8_UNORM` (its `R8_UNORM` image's resolve), and with its own
 /// where it has the format, which the device's average resolves as it does `R8Unorm` (probe `a8`:
 /// an `A8Unorm` resolve is `RGBA8Unorm`'s alpha). Where the fill's stage records
 /// `device-color-conversion`, a texel below it may hold the code above Metal's, counted.
@@ -1033,7 +1035,22 @@ fn a8_resolve_leg(lane: &Lane, what: &str) {
     };
     let a8 = resolved(PixelFormat::A8Unorm);
     let r8 = resolved(PixelFormat::R8Unorm);
-    assert_eq!(a8, r8, "{what}: A8Unorm's resolve against R8Unorm's");
+    // An edge texel's samples disagree, and where the device rounds the average its own way
+    // (`device-rounded-resolve`: within one code of Metal's) it may round `A8Unorm`'s tie apart
+    // from `R8Unorm`'s (RADV on the RX 550: 114 and 115 of 114.5). Every other texel is the same.
+    let rounded = kind == Some(Degradation::DeviceRoundedResolve);
+    let mut ties = 0usize;
+    for (i, (&a, &r)) in a8.iter().zip(&r8).enumerate() {
+        let edge = i % SIDE as usize == i / SIDE as usize;
+        if edge && rounded && a.abs_diff(r) == 1 {
+            ties += 1;
+            continue;
+        }
+        assert_eq!(
+            a, r,
+            "{what}: A8Unorm's resolve against R8Unorm's at texel {i}: {a8:?}, {r8:?}"
+        );
+    }
     // Where the fill's stage leaves its color's conversion to the device
     // (`device-color-conversion`: the device's rounding of the product, where Metal rounds the
     // exact one to nearest), 0.9 may store a code above Metal's 229.
@@ -1062,8 +1079,8 @@ fn a8_resolve_leg(lane: &Lane, what: &str) {
         }
     }
     println!(
-        "A8-RESOLVE {what}: as R8Unorm's ({kind:?}), {device_codes} texels a code from Metal's \
-         (the device's color conversion: {converts})"
+        "A8-RESOLVE {what}: as R8Unorm's ({kind:?}) but {ties} edge texels a code apart, \
+         {device_codes} texels a code from Metal's (the device's color conversion: {converts})"
     );
 }
 
@@ -1086,13 +1103,17 @@ const FETCH_MASKS: [(ColorWriteMask, u8); 3] = [
 /// function's write after it stores the alpha as the write mask lets it, at one sample and at four,
 /// as Metal's do: on the device without `A8_UNORM` (its `R8_UNORM` image read through the input
 /// attachment or the interlocked storage form, whichever the device orders fetch with), and with
-/// its own `A8_UNORM` where it has the format.
+/// its own `A8_UNORM` where it has the format. A device without a fetch form skips it
+/// ([`fetches`]).
 #[test]
 fn a8_color_input_reads_alpha_as_metal() {
     let messages = Messages::default();
     let cache = ScratchCache::new().unwrap();
     for withheld in [true, false] {
         let lane = Lane::new(&messages, &cache, withheld);
+        if !fetches(&lane.device) {
+            continue;
+        }
         let name = lane.device.name().to_owned();
         if withheld {
             assert!(lane.in_red(), "{name}: A8Unorm is not held in red");
@@ -1164,7 +1185,8 @@ fn a8_color_input_reads_alpha_as_metal() {
 /// `A8_UNORM`: the fetch reads the planes in the pixel interlock, declared without a format by the
 /// format's own bit, and the planes are held in `A8_UNORM` itself (`bind::PlanesCopy::Alpha8`), as
 /// no unsigned view reads its class. A target cleared to 0.6 reads `(0, 0, 0, 0.6)` at every
-/// sample, and the write of [`COLOR`] after it resolves to 204, as Metal's (probe `a8`'s uses).
+/// sample, and the write of [`COLOR`] after it resolves to 204, as Metal's (probe `a8`'s uses). A
+/// device without a fetch form skips it ([`fetches`]).
 #[test]
 fn a8_color_input_through_sample_planes_reads_alpha_as_metal() {
     let messages = Messages::default();
@@ -1184,6 +1206,9 @@ fn a8_color_input_through_sample_planes_reads_alpha_as_metal() {
         );
         drop(lane);
         layer_reported_nothing_at_all(&messages);
+        return;
+    }
+    if !fetches(&lane.device) {
         return;
     }
     let pipeline = lane

@@ -666,9 +666,9 @@ fn texels(level: u32, layer: u32, origin: [u32; 2], size: [u32; 2]) -> TexelBox 
 /// Max under macOS 27.0.1, through the direct
 /// `updateTextureMapping:mode:region:mipLevel:slice:` over this very shape — a 256 by 256
 /// nine-level `R32Float` texture whose level 0 holds 4 by 4 of Metal's 16-KiB tiles — the heap's
-/// `usedSize` 0 before each shape and the command buffer `Completed` with no error after. The one
-/// reading that is not this rule's is a **slice** past the texture's, which took one page there and
-/// maps none here.
+/// `usedSize` 0 before each shape and the command buffer `Completed` with no error after. A
+/// **slice** past the texture's took one page there: it names its tile at that slice, which the
+/// heap counts and nothing holds.
 #[test]
 fn a_mapping_update_past_the_bounds_clips_as_plain_metal_does() {
     let grid = grid([256, 256, 1], 9, 1, 3, false);
@@ -685,10 +685,14 @@ fn a_mapping_update_past_the_bounds_clips_as_plain_metal_does() {
         grid.clipped_region(0, 0, &Region::new_2d(0, 0, 8, 8)),
         whole
     );
-    // A level past the texture's levels, a slice past its slices, and an origin past the level's
-    // last tile each map nothing, where Metal's `usedSize` stayed at 0.
+    // A level past the texture's levels and an origin past the level's last tile each map
+    // nothing, where Metal's `usedSize` stayed at 0; a slice past its slices names its tile there,
+    // past the texture's slices, where Metal took one page.
     assert!(grid.clipped_region(9, 0, &one).is_empty(), "level 9 of 9");
-    assert!(grid.clipped_region(0, 1, &one).is_empty(), "slice 1 of 1");
+    let past = grid.clipped_region(0, 1, &one);
+    assert_eq!(past, vec![tile(0, 1, [0, 0])], "slice 1 of 1");
+    assert!(grid.past_slices(past[0]));
+    assert!(!grid.past_slices(tile(0, 0, [0, 0])));
     assert!(
         grid.clipped_region(0, 0, &Region::new_2d(4, 4, 1, 1))
             .is_empty(),
@@ -1014,10 +1018,9 @@ fn texel_boxes_intersect_and_split() {
 /// Metal's rule is the plain one: it bounds the level and the origin and **does not bound the
 /// slice**, charging a region of a slice past the texture's exactly what the same region on an
 /// in-bounds slice costs — the region clipped to the level's tiles — and that charge then behaves
-/// like any mapping, idempotent and given back on an unmap. The runtime instead maps and counts
-/// nothing there, so its count is **lower by those tiles**, and that is the difference this test
-/// pins: `metal` below is what Metal read, `ours` what the runtime answers, and a row where they
-/// part names the gap rather than hiding it.
+/// like any mapping, idempotent and given back on an unmap. The runtime's heap counts the same
+/// tiles, which it maps nowhere (`UnitGrid::past_slices`): `metal` below is what Metal read, and
+/// the runtime counts the units the list names.
 ///
 /// Each row is a probe shape. The in-bounds rows are the controls: their counts **must** move, or
 /// no row here is a measurement of anything.
@@ -1039,67 +1042,50 @@ fn a_slice_past_the_textures_is_the_one_axis_metal_does_not_bound() {
             .count()
     };
 
-    // shape, the argument list, Metal's pages for it, ours.
-    let rows: &[(&str, &[(u64, u64, Region)], usize, usize)] = &[
+    // shape, the argument list, Metal's pages for it.
+    let rows: &[(&str, &[(u64, u64, Region)], usize)] = &[
         // The controls, through the indirect selector: one in-bounds tile is one page, two are
         // two, so the reading follows the list rather than being fixed by construction.
-        ("indirect-control", &[(0, 0, one(0, 0))], 1, 1),
+        ("indirect-control", &[(0, 0, one(0, 0))], 1),
         (
             "indirect-two-inbounds",
             &[(0, 0, one(0, 0)), (0, 0, one(1, 0))],
-            2,
             2,
         ),
         // 1. ALONE. Metal charges one page for the out-of-bounds slice; the direct selector read
         //    the same one page for it (`direct-slice-alone`, which is the committed reading off
         //    `sparse_mapping_past_the_bounds.m`). So "none alone" is false, for either selector.
-        ("indirect-slice-alone", &[(0, 2, one(0, 0))], 1, 0),
+        ("indirect-slice-alone", &[(0, 2, one(0, 0))], 1),
         // 2. BESIDE ANOTHER REGION. Two pages, where the in-bounds region alone is one: the
         //    out-of-bounds region added exactly the one page it adds alone, never a tile more.
         (
             "indirect-slice-beside",
             &[(0, 0, one(0, 0)), (0, 2, one(0, 0))],
             2,
-            1,
         ),
         // And with four pages already mapped it went 4 -> 5, again exactly one, so the charge is
         // the same in every configuration rather than varying with what else is mapped.
-        ("indirect-slice-after-four", &[(0, 2, one(0, 0))], 1, 0),
+        ("indirect-slice-after-four", &[(0, 2, one(0, 0))], 1),
         // The charge follows the REGION, clipped to the level: 8 by 8 tiles on a level holding
         // 4 by 4 cost 16 pages on the out-of-bounds slice, as they do on an in-bounds one.
         (
             "indirect-slice-big-region",
             &[(0, 2, Region::new_2d(0, 0, 8, 8))],
             16,
-            0,
         ),
         // One page per out-of-bounds region, not one per update: slices 2 and 3 cost two.
         (
             "indirect-two-oob-slices",
             &[(0, 2, one(0, 0)), (0, 3, one(0, 0))],
             2,
-            0,
         ),
         // The level and the origin ARE bounded, and cost nothing — which is what makes the slice
         // the one unbounded axis rather than a general "Metal does not check".
-        ("indirect-level-alone", &[(9, 0, one(0, 0))], 0, 0),
-        ("indirect-origin-alone", &[(0, 0, one(4, 4))], 0, 0),
+        ("indirect-level-alone", &[(9, 0, one(0, 0))], 0),
+        ("indirect-origin-alone", &[(0, 0, one(4, 4))], 0),
     ];
-    for (shape, regions, metal, mine) in rows {
-        assert_eq!(ours(regions), *mine, "what the runtime counts for {shape}");
-        // Where the runtime parts from Metal it is only ever by counting LESS, and only for a
-        // region whose slice is past the texture's: a row that counted more would be a bug the
-        // other way, and is not a thing any reading showed.
-        assert!(
-            *mine <= *metal,
-            "{shape}: the runtime counts {mine} pages where Metal counted {metal}"
-        );
-        let out_of_bounds = regions.iter().any(|(_, slice, _)| *slice >= 2);
-        assert_eq!(
-            *mine == *metal,
-            !out_of_bounds,
-            "{shape}: only a slice past the texture's may part from Metal's count"
-        );
+    for (shape, regions, metal) in rows {
+        assert_eq!(ours(regions), *metal, "what the runtime counts for {shape}");
     }
 
     // 3. AN UNMAP OF IT, in every configuration measured. Metal's charge is reversible and
@@ -1110,20 +1096,112 @@ fn a_slice_past_the_textures_is_the_one_axis_metal_does_not_bound() {
     //    `indirect-map-then-unmap-slice` 0 -> 1 -> 0, the page given back exactly;
     //    `indirect-slice-unmap-twice` 0 -> 1 -> 0 -> 0, a second unmap taking nothing more;
     //    `indirect-slice-twice` 0 -> 1 -> 1, the charge idempotent per region.
-    //    So "below zero" is false. The runtime cannot go below zero either, and for a stronger
-    //    reason than a measurement: the clip names no unit for such a region at all, and
-    //    `SparseHeap::give` saturates besides.
-    assert_eq!(
-        ours(&[(0, 2, one(0, 0))]),
-        0,
-        "an unmap of slice 2 of 2 names no unit, whatever the count stands at"
+    //    So "below zero" is false. The runtime gives a unit's page back only where its map took
+    //    it (`SparseState::charged`, `sparse/bind.rs`'s `apply`), and `SparseHeap::give`
+    //    saturates besides.
+    let past = array.clipped_region(0, 2, &one(0, 0));
+    assert_eq!(past, vec![tile(0, 2, [0, 0])]);
+    assert!(
+        array.past_slices(past[0]),
+        "slice 2 of 2 is past the texture's"
     );
 
     // A slice past a 1-slice texture's own, which is the shape the suite's non-array sparse
     // cases use, clips the same way.
     let plain = grid([256, 256, 1], 9, 1, 3, false);
-    assert!(
-        plain.clipped_region(0, 1, &one(0, 0)).is_empty(),
+    assert_eq!(
+        plain.clipped_region(0, 1, &one(0, 0)),
+        vec![tile(0, 1, [0, 0])],
         "slice 1 of 1"
+    );
+}
+
+/// **A slice past the texture's on its other levels and its tail costs what the same region
+/// inside it costs**, as on level 0 above, against plain Metal's own `usedSize` readings.
+///
+/// The readings are `metal2vulkan-conformance/probes/sparse_slice_past_levels_usedsize.m` on an
+/// Apple M3 Max (the name read back off the device) under macOS 27.0.1, plain Metal with the layer
+/// off, one shape a process and every shape run twice, each command buffer `Completed` with no
+/// error, through all three forms a mapping update takes: the direct selector, the indirect one,
+/// and the direct one through a view of the texture's slice 1, which names the texture's slice
+/// 2. The three forms read alike in every shape and run. The texture is the probe's 2-slice 256
+/// by 256 nine-level `R32Float` texture, whose level 1 holds 2 by 2 of Metal's 16-KiB tiles,
+/// level 2 one, and whose tail starts at level 3 (`firstMipmapInTail`) and is one page a slice
+/// (`tailSizeInBytes` 16384).
+///
+/// Each row is a probe shape on slice 2, past the texture's, with its control: the same region on
+/// an in-bounds slice, read after it, whose count **must** move where the rule maps anything, or
+/// the row measured nothing. The runtime counts the units [`UnitGrid::clipped_region`] names,
+/// a tile one page and a slice's tail its tail's pages (`SparseImage::heap_tiles`), and maps
+/// those past the slices nowhere (`SparseState::charged`).
+#[test]
+fn a_slice_past_the_textures_costs_every_level_and_the_tail_what_it_costs_inside() {
+    let array = grid([256, 256, 1], 9, 2, 3, false);
+    assert_eq!(
+        array.first_mipmap_in_tail, 3,
+        "the probe's firstMipmapInTail"
+    );
+    let tail_bytes = tail_size_in_bytes(
+        TextureType::Type2DArray,
+        PixelFormat::R32Float,
+        1,
+        [256, 256, 1],
+        9,
+        3,
+        K16,
+    );
+    assert_eq!(tail_bytes, K16, "the probe's tailSizeInBytes");
+    let pages = |units: &[MetalUnit]| {
+        (units.iter())
+            .map(|unit| match unit.is_tail() {
+                true => tail_bytes / K16,
+                false => 1,
+            })
+            .sum::<u64>()
+    };
+    let one = Region::new_2d(0, 0, 1, 1);
+    // shape, level, region, Metal's pages for slice 2 and for its control on slice 0.
+    let rows = [
+        // One tile of level 1, and a region of 8 by 8 tiles where the level holds 2 by 2: the
+        // region clipped to the level's tiles, one page each.
+        ("l1", 1, one, 1, 1),
+        ("l1-big", 1, Region::new_2d(0, 0, 8, 8), 4, 4),
+        // Level 2's one tile.
+        ("l2", 2, one, 1, 1),
+        // A tile of level 3, `firstMipmapInTail`: the slice's whole tail, one page here.
+        ("tail", 3, one, 1, 1),
+        // Level 5, inside the tail past its first level: nothing, slice 2's and the control's
+        // alike.
+        ("tail-inner", 5, one, 0, 0),
+    ];
+    for (shape, level, region, metal, control) in rows {
+        let past = array.clipped_region(level, 2, &region);
+        assert_eq!(pages(&past), metal, "{shape}: slice 2 of 2");
+        assert!(
+            past.iter().all(|&unit| array.past_slices(unit)),
+            "{shape}: every unit past the texture's slices"
+        );
+        let inside = array.clipped_region(level, 0, &region);
+        assert_eq!(pages(&inside), control, "{shape}: the control on slice 0");
+        assert!(
+            !inside.iter().any(|&unit| array.past_slices(unit)),
+            "{shape}"
+        );
+    }
+    assert!(
+        array
+            .clipped_region(3, 2, &one)
+            .iter()
+            .all(|unit| unit.is_tail()),
+        "level 3's tile is the slice's tail"
+    );
+    // `l1-unmap`: a map of level 1's tile on slice 2 took one page and an unmap of it gave the
+    // page back (16384 -> 0), as the control's did (16384 -> 0) and as level 0's did through the
+    // indirect selector above. The runtime gives back a unit's page only where its map took it
+    // (`sparse/bind.rs`), and an unmap names the same unit the map did.
+    assert_eq!(
+        array.clipped_region(1, 2, &one),
+        vec![tile(1, 2, [0, 0])],
+        "the unit the map and the unmap name"
     );
 }

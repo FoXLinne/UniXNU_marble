@@ -6,9 +6,9 @@
 //! classed, and so reaches the ledger.
 
 use crate::device::{
-    BatchOrderPolicy, CompletionPolicy, DevicePolicy, ExtendedRangeBlitPolicy, HalfChainPolicy,
-    HeapCompressionPolicy, HostPageTexturePolicy, PipelineWaitPolicy, QueueSharingPolicy,
-    RenderLoweringPolicy, WideLinePolicy,
+    BatchOrderPolicy, CompletionPolicy, DevicePolicy, DontCareColorPolicy, ExtendedRangeBlitPolicy,
+    HalfChainPolicy, HeapCompressionPolicy, HostPageTexturePolicy, PipelineWaitPolicy,
+    QueueSharingPolicy, RenderLoweringPolicy, WideLinePolicy, YCbCrInPlacePolicy,
 };
 use crate::pipeline::PrecisionNote;
 use std::collections::BTreeSet;
@@ -63,8 +63,8 @@ fn choices() -> Vec<Choice> {
         // encoder's calls are lowered, what holds a sampled texture over host pages, whether and
         // how long a pipeline being made is waited for (the bounds' values:
         // `the_ledger_states_the_pipeline_wait_bounds`), which lines draw a wide line, what a
-        // blit through a compressed extended-range texture writes, and which `VkQueue` a command
-        // queue submits to.
+        // blit through a compressed extended-range texture writes, which `VkQueue` a command
+        // queue submits to, and what a colour attachment stored `DontCare` keeps.
         heap_compression: _,
         completion: _,
         batch_order: _,
@@ -76,8 +76,11 @@ fn choices() -> Vec<Choice> {
         wide_lines: _,
         extended_range_blits: _,
         queue_sharing: _,
-        // The translator's: how a `half` chain rounds without `shaderFloat16`.
+        dont_care_colors: _,
+        // The translator's: how a `half` chain rounds without `shaderFloat16`, and how planes of a
+        // two-plane YCbCr texture read in place are sampled.
         half_chains: _,
+        ycbcr_in_place_reads: _,
     } = p;
     vec![
         choice!(p.heap_compression: HeapCompressionPolicy { Compressed, Uncompressed }),
@@ -86,10 +89,12 @@ fn choices() -> Vec<Choice> {
         choice!(p.render_lowering: RenderLoweringPolicy { AtCall, Worker }),
         choice!(p.host_page_textures: HostPageTexturePolicy { InPlace, Shadow, InPlaceWrites }),
         choice!(p.half_chains: HalfChainPolicy { AtExits, EachOperation }),
+        choice!(p.ycbcr_in_place_reads: YCbCrInPlacePolicy { Model, Exact }),
         choice!(p.pipeline_waits: PipelineWaitPolicy { Bounded, Exact }),
         choice!(p.wide_lines: WideLinePolicy { Device, Exact }),
         choice!(p.extended_range_blits: ExtendedRangeBlitPolicy { Kept, Canonical }),
         choice!(p.queue_sharing: QueueSharingPolicy { Adaptive, PerQueue }),
+        choice!(p.dont_care_colors: DontCareColorPolicy { Driver, Kept }),
     ]
 }
 
@@ -139,6 +144,7 @@ fn notes() -> Vec<(&'static str, Ledger)> {
             DeviceSignedZeroInfNan,
             DeviceInterpolation,
             DeviceInterpolationOffset,
+            ExtrapolatedInterpolation,
             DeviceAlphaCoverage,
             HalfOutputFastMathBlend,
             UnmeasuredFetchBlend,
@@ -448,7 +454,7 @@ fn the_runtime_s_render_lowering_choice_keys_no_profile() {
     }
 }
 
-/// The runtime's choice of what holds a sampled texture over host pages (`host_page_textures`)
+/// The runtime's choice of what holds a texture over host pages (`host_page_textures`)
 /// moves no committed profile's fingerprint: no profile carries it, so no translation follows it.
 #[test]
 fn the_runtime_s_host_page_textures_choice_keys_no_profile() {
@@ -531,7 +537,7 @@ fn the_runtime_s_wide_lines_choice_keys_no_profile() {
 }
 
 /// `DevicePolicy::exact_answers()` draws a wide line as Metal's parallelogram where the device's
-/// own line differs, and the default draws the device's own.
+/// own lines would draw it, and the default draws the device's own.
 #[test]
 fn exact_answers_draw_wide_lines_as_metal_s_parallelogram() {
     assert_eq!(DevicePolicy::UNTRUSTED.wide_lines, WideLinePolicy::Device);
@@ -606,6 +612,38 @@ fn exact_answers_keep_each_command_queue_on_its_vk_queue() {
     );
 }
 
+/// The runtime's choice of what a colour attachment stored `DontCare` keeps (`dont_care_colors`)
+/// moves no committed profile's fingerprint: no profile carries it, so no translation follows it.
+#[test]
+fn the_runtime_s_dont_care_colors_choice_keys_no_profile() {
+    use crate::spirv::testing::committed_profiles_with;
+    let driver = committed_profiles_with(DevicePolicy::UNTRUSTED).expect("profiles");
+    let kept = committed_profiles_with(DevicePolicy {
+        dont_care_colors: DontCareColorPolicy::Kept,
+        ..DevicePolicy::UNTRUSTED
+    })
+    .expect("profiles");
+    assert_eq!(driver.len(), kept.len());
+    for ((stem, d), (other, k)) in driver.iter().zip(&kept) {
+        assert_eq!(stem, other);
+        assert_eq!(d.fingerprint(), k.fingerprint(), "{stem}");
+    }
+}
+
+/// `DevicePolicy::exact_answers()` keeps a `DontCare` colour's earlier texels, and the default
+/// stores it as the driver stores it.
+#[test]
+fn exact_answers_keep_a_dont_care_colour_s_earlier_texels() {
+    assert_eq!(
+        DevicePolicy::UNTRUSTED.dont_care_colors,
+        DontCareColorPolicy::Driver
+    );
+    assert_eq!(
+        DevicePolicy::UNTRUSTED.exact_answers().dont_care_colors,
+        DontCareColorPolicy::Kept
+    );
+}
+
 /// The ledger's row of the pipeline waits states each bound as the default policy sets it, as
 /// `field = N s`: a changed bound changes its row.
 #[test]
@@ -622,4 +660,37 @@ fn the_ledger_states_the_pipeline_wait_bounds() {
             "docs/FAST-PATHS.md does not state `{named}`, the default's bound"
         );
     }
+}
+
+/// The translator's choice of how a function samples planes read in place
+/// (`ycbcr_in_place_reads`) moves every committed profile's fingerprint: the profile carries it,
+/// so its translations follow it.
+#[test]
+fn the_translator_s_ycbcr_in_place_reads_choice_keys_every_profile() {
+    use crate::spirv::testing::committed_profiles_with;
+    let model = committed_profiles_with(DevicePolicy::UNTRUSTED).expect("profiles");
+    let exact = committed_profiles_with(DevicePolicy {
+        ycbcr_in_place_reads: YCbCrInPlacePolicy::Exact,
+        ..DevicePolicy::UNTRUSTED
+    })
+    .expect("profiles");
+    assert_eq!(model.len(), exact.len());
+    for ((stem, m), (other, e)) in model.iter().zip(&exact) {
+        assert_eq!(stem, other);
+        assert_ne!(m.fingerprint(), e.fingerprint(), "{stem}");
+    }
+}
+
+/// `DevicePolicy::exact_answers()` samples planes read in place as Metal converts and filters
+/// them, and the default by Vulkan's Y′CbCr model.
+#[test]
+fn exact_answers_read_planes_in_place_as_metal() {
+    assert_eq!(
+        DevicePolicy::UNTRUSTED.ycbcr_in_place_reads,
+        YCbCrInPlacePolicy::Model
+    );
+    assert_eq!(
+        DevicePolicy::UNTRUSTED.exact_answers().ycbcr_in_place_reads,
+        YCbCrInPlacePolicy::Exact
+    );
 }

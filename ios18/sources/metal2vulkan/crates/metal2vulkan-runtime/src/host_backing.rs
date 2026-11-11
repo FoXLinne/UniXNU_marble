@@ -35,8 +35,10 @@ pub enum HostBacking {
     /// A copy of the pages in memory of the device's own, which the GPU reads and writes in their
     /// place: the caller's gate refused their import
     /// ([`HostMemory::with_import_gate`](crate::HostMemory::with_import_gate)), the import the
-    /// device and the gate admitted failed, or a rebind's new bytes lie at another offset in
-    /// their page than the old under a texture over the buffer. Announced as the
+    /// device and the gate admitted failed, a rebind's new bytes lie at another offset in their
+    /// page than the old under a texture over the buffer, on Linux the process maps some of the
+    /// pages read-only, or off macOS the memory is of Metal's private option bit 24; the copy of
+    /// read-only pages or bit-24 memory drops the GPU's writes. Announced as the
     /// [`copied-host-pages`](crate::Degradation::CopiedHostPages) degradation: each commit writes
     /// into the copy the bytes the CPU changed in the pages, and each batch's completion writes
     /// back the bytes the GPU changed, where Metal's GPU uses the pages themselves.
@@ -63,13 +65,14 @@ impl Buffer {
         let pages = match self.pages_cell()?.lying() {
             Lying::In(pages) => pages,
             Lying::Detached(_) => return Some(HostBacking::Detached),
+            Lying::Gone(_) => super::buffer::read_gone(),
         };
         let backing = if pages.copied() {
             HostBacking::Copied
-        } else if pages.over_dma_buf() {
-            HostBacking::ImportedAsDmaBuf
         } else if pages.in_ram_chunk() {
             HostBacking::InHostRam
+        } else if pages.over_dma_buf() {
+            HostBacking::ImportedAsDmaBuf
         } else {
             HostBacking::ImportedByPointer
         };

@@ -39,7 +39,8 @@
 //! interface records the attachment (`StageIo::extended_range_colors`), so link holds a stage
 //! compiled for it to the pipeline's attachments. Where the pipeline blends such an attachment the
 //! function writes, the write blends over the same input attachment (`input_blend`), which a
-//! `[[color(n)]]` read of the attachment shares ([`input_texel`]).
+//! `[[color(n)]]` read of the attachment shares ([`input_texel`]). Where the draw's instance holds
+//! the attachment's `half` shadow, a read is the shadow's texel instead (`input_shadow`).
 //!
 //! **An 8-bit sRGB attachment** (`RGBA8Unorm_sRGB`, `BGRA8Unorm_sRGB` and the rest) reads through
 //! its input attachment the device's decode of its bytes, Vulkan's sRGB EOTF within the device's
@@ -70,7 +71,9 @@ use crate::air::abi::{AbiInt, OutputRole, ParamBinding, ParamRole};
 
 use crate::air::ir::{ArgIdx, TypeId as AirTypeId, Value};
 use crate::device::requirements::VkFeature;
-use crate::error::{Attachment, Capability, DescriptorError, Error, Feature, Unsupported};
+use crate::error::{
+    Attachment, Capability, DescriptorError, Error, Feature, MetalAnswer, Unsupported,
+};
 use crate::lower::arith::legal::{form_on, refuse_int64_interface};
 use crate::lower::arith::{extended_range, narrow, ops, Form, Held};
 use crate::lower::emit::EmitCx;
@@ -180,6 +183,16 @@ pub(super) fn select_param(cx: &mut SelectCx<'_>, b: &ParamBinding) -> Result<Co
     if !frag.rasterization_order_color_access {
         return Err(unordered(cx, color));
     }
+    // The input attachment of an image holding Metal's channels rotated (`ARGB8Unorm` in
+    // `R8G8B8A8_UNORM`) reads them in the image's order: a color input of one is not modelled.
+    // The function's own blend over it rotates the texel it reads (`input_blend::rotated_texel`),
+    // and link admits the attachment's input attachment for that blend alone. One holding Metal's
+    // alpha in red is read as Metal's alpha (`ColorInput::alpha_red`).
+    if cx.inputs.rotated_colors.contains(&color) && !cx.inputs.alpha_in_red_colors.contains(&color)
+    {
+        let refused = Unsupported::not_implemented(Feature::Format);
+        return Err(refused.at_attachment(Attachment::Color(color)).into());
+    }
     // Two reads of one attachment must agree on its numeric class (one image declaration).
     let known = &cx.families.fragment.colors;
     if known
@@ -193,7 +206,13 @@ pub(super) fn select_param(cx: &mut SelectCx<'_>, b: &ParamBinding) -> Result<Co
         .fragment
         .input_blends
         .get(&color)
-        .is_some_and(|ib| ib.blend.is_some());
+        .is_some_and(super::InputBlend::reads)
+        || cx
+            .families
+            .fragment
+            .rotated_blends
+            .get(&color)
+            .is_some_and(super::RotatedInputBlend::reads);
     if !known.iter().any(|c| c.color == color) && !blended {
         cx.descriptors.input_attachments = cx.descriptors.input_attachments.saturating_add(1);
         cx.facts.insert(RuntimeFact::FramebufferFetch { color });
@@ -205,12 +224,8 @@ pub(super) fn select_param(cx: &mut SelectCx<'_>, b: &ParamBinding) -> Result<Co
         if !form.is_float() {
             return Err(Error::InvalidDescriptor(DescriptorError::ColorAttachment {
                 index: color,
+                metal: MetalAnswer::NilWithError,
             }));
-        }
-        // A padded 10-bit attachment's tile value is not measured.
-        if e.form.padded() {
-            let refused = Unsupported::not_implemented(Feature::FramebufferFetch);
-            return Err(refused.at_attachment(Attachment::Color(color)).into());
         }
         cx.families.arith.converts(e.form);
         cx.families
@@ -244,6 +259,7 @@ pub(super) fn select_param(cx: &mut SelectCx<'_>, b: &ParamBinding) -> Result<Co
         if !form.is_float() {
             return Err(Error::InvalidDescriptor(DescriptorError::ColorAttachment {
                 index: color,
+                metal: MetalAnswer::NilWithError,
             }));
         }
         cx.families
@@ -337,8 +353,10 @@ pub(super) const ALPHA_IN_RED_WORDS: u64 = 16;
 /// function (`multisampled`), or its storage image in the interlocked storage form (`fetch`), which
 /// holds the samples as its view states; the storage image of every other attachment in that form
 /// (one the function only writes); the input attachment of every extended-range attachment whose
-/// blend the function computes over it (`input_blend`); and that of every word attachment whose
-/// word the function merges into the texel's (`word_input`), of `uint` texels.
+/// blend the function computes over it (`input_blend`) and that of every word attachment whose
+/// word the function merges into the texel's (`word_input`), of `uint` texels; and that of every
+/// attachment held with its channels rotated whose blend the function computes over it
+/// (`rotated`, `input_blend`), of `float` texels.
 pub(super) fn declare(
     mb: &mut ModuleBuilder,
     colors: &[ColorInput],
@@ -347,6 +365,7 @@ pub(super) fn declare(
         &BTreeMap<u32, super::InputBlend>,
         &BTreeMap<u32, u32>,
     ),
+    rotated: &BTreeMap<u32, super::RotatedInputBlend>,
     multisampled: bool,
 ) -> BResult<BTreeMap<u32, GlobalId>> {
     let mut out = BTreeMap::new();
@@ -369,13 +388,17 @@ pub(super) fn declare(
             e.insert(super::fetch::declare(mb, color, sc)?);
         }
     }
-    let blended = blends
-        .iter()
-        .filter(|(_, ib)| ib.blend.is_some())
-        .map(|(&c, _)| c);
+    let blended = blends.iter().filter(|(_, ib)| ib.reads()).map(|(&c, _)| c);
     for color in blended.chain(merges.keys().copied()) {
         if let std::collections::btree_map::Entry::Vacant(e) = out.entry(color) {
             e.insert(input_attachment(mb, color, false, multisampled)?);
+        }
+    }
+    // An attachment held with its channels rotated, whose 8-bit unorm texels its blend reads as
+    // `float`s.
+    for (&color, _) in rotated.iter().filter(|(_, rb)| rb.reads()) {
+        if let std::collections::btree_map::Entry::Vacant(e) = out.entry(color) {
+            e.insert(input_attachment(mb, color, true, multisampled)?);
         }
     }
     Ok(out)
@@ -413,9 +436,10 @@ fn input_attachment(
     mb.resource(slot, StorageClass::UniformConstant, ty)
 }
 
-/// The value of color input `c` in its lowered representation, read at each use (the use may
-/// sit in a construct whose values do not dominate the rest of the block), at the invocation's
-/// sample for a per-sample function.
+/// The value of color input `c` in its lowered representation, at the invocation's sample for a
+/// per-sample function: an input attachment's read at each use (the use may sit in a construct
+/// whose values do not dominate the rest of the block), a storage-form attachment's from the
+/// texel the function read before its body (`fetch::value`).
 pub(super) fn value(
     cx: &mut EmitCx<'_>,
     fb: &mut FunctionBuilder<'_>,
@@ -424,12 +448,19 @@ pub(super) fn value(
     if cx.plan.families.fragment.fetch.contains_key(&c.color) {
         return super::fetch::value(cx, fb, c);
     }
-    let texel = input_texel(cx, fb, c.color)?;
-    let texel = match c.extended {
-        Some(form) => extended_range::tile_value(fb, form, texel)?,
+    let texel = match (c.extended, super::input_shadow::shadows(cx, c.color)) {
+        // The instance's shadow holds the tile value itself (`input_shadow`).
+        (Some(_), Some(_)) => super::input_shadow::read(cx, fb, c.color)?,
+        (Some(form), None) => {
+            let texel = input_texel(cx, fb, c.color)?;
+            extended_range::tile_value(fb, form, texel)?
+        }
         // The image's red, Metal's alpha: `(0, 0, 0, r)`.
-        None if c.alpha_red => alpha_in_red(fb, texel)?,
-        None => texel,
+        (None, _) if c.alpha_red => {
+            let texel = input_texel(cx, fb, c.color)?;
+            alpha_in_red(fb, texel)?
+        }
+        (None, _) => input_texel(cx, fb, c.color)?,
     };
     let x = match c.form.lanes {
         4 => texel,

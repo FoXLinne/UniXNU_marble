@@ -192,6 +192,24 @@ static void progress(QcomGlink *g)
         g->version_sent = 1;
     }
     if (!g->version_agreed) return;
+    for (unsigned p = 0; p < QCOM_GLINK_MAX_CHANNELS; ++p) {
+        if (!g->pending_open[p].used) continue;
+        for (unsigned i = 0; i < QCOM_GLINK_MAX_CHANNELS; ++i) {
+            QcomGlinkChannel *c = &g->channel[i];
+            if (!c->used) continue;
+            unsigned same = 1;
+            for (unsigned b = 0; same && b < QCOM_GLINK_NAME; ++b) {
+                if (c->name[b] != g->pending_open[p].name[b]) same = 0;
+                if (!c->name[b]) break;
+            }
+            if (!same) continue;
+            if (command(g, QCOM_GLINK_OPEN_ACK, g->pending_open[p].rcid, 0)) return;
+            c->rcid = g->pending_open[p].rcid;
+            c->remote_open = 1;
+            g->pending_open[p].used = 0;
+            break;
+        }
+    }
     for (unsigned i = 0; i < QCOM_GLINK_MAX_CHANNELS; ++i) {
         QcomGlinkChannel *c = &g->channel[i];
         if (!c->used || (c->lcid < 32 && (g->pending_closes & (1u << c->lcid)))) continue;
@@ -314,6 +332,19 @@ static int receive_one(QcomGlink *g)
             g->unknown_opens++;
             for (unsigned b = 0; b < QCOM_GLINK_NAME; ++b) g->last_unknown[b] = name[b];
             note_unknown(g, name);
+            unsigned slot = QCOM_GLINK_MAX_CHANNELS;
+            for (unsigned i = 0; i < QCOM_GLINK_MAX_CHANNELS; ++i)
+                if (g->pending_open[i].used && g->pending_open[i].rcid == param1) {slot = i; break;}
+            if (slot == QCOM_GLINK_MAX_CHANNELS)
+                for (unsigned i = 0; i < QCOM_GLINK_MAX_CHANNELS; ++i)
+                    if (!g->pending_open[i].used) {slot = i; break;}
+            if (slot == QCOM_GLINK_MAX_CHANNELS) {
+                slot = (g->unknown_opens - 1) % QCOM_GLINK_MAX_CHANNELS;
+                g->dropped++;
+            }
+            for (unsigned b = 0; b < QCOM_GLINK_NAME; ++b) g->pending_open[slot].name[b] = name[b];
+            g->pending_open[slot].rcid = param1;
+            g->pending_open[slot].used = 1;
         } else {
             if (c->remote_open && c->up && c->client.state) c->client.state(c->context, c, 0);
             if (c->remote_open) reset_channel(c);
@@ -330,6 +361,8 @@ static int receive_one(QcomGlink *g)
         break;
     case QCOM_GLINK_CLOSE:
         if (command(g, QCOM_GLINK_CLOSE_ACK, param1, 0)) return 0;
+        for (unsigned i = 0; i < QCOM_GLINK_MAX_CHANNELS; ++i)
+            if (g->pending_open[i].used && g->pending_open[i].rcid == param1) g->pending_open[i].used = 0;
         if ((c = by_rcid(g, param1))) {
             const int was = c->up;
             if (c->open_sent == 1 && command(g, QCOM_GLINK_CLOSE, c->lcid, 0)) return 0;

@@ -51,8 +51,9 @@ use crate::device::{Device, DeviceDescription, DevicePolicy};
 use crate::error::{BindError, Capability, Feature, Needs, Unsupported};
 use crate::library::{FunctionArtifact, Library};
 use crate::memory::handles::{
-    declare_table, define_lookup, lookup_host, Lookup, FLAG_OUT_OF_BOUNDS_ALPHA_ONE,
-    FLAG_TEXEL_CLASS, HANDLE_ALPHA_ONE, TABLE_ENTRY_BYTES,
+    declare_table, define_lookup, lookup_host, Lookup, FLAG_BORDER_TEXELS,
+    FLAG_OUT_OF_BOUNDS_ALPHA_ONE, FLAG_RED_BLUE, FLAG_TEXEL_CLASS, HANDLE_ALPHA_ONE, HANDLE_ENTRY,
+    TABLE_ENTRY_BYTES,
 };
 use crate::memory::leaf::k32;
 use crate::memory::views;
@@ -247,8 +248,8 @@ fn table(bytes: &[DescriptorBytes], set: u32, binding: u32) -> Vec<(u64, u32)> {
 }
 
 /// The entries `(id, element, flags)` of the table bytes at `(set, binding)`: a texture entry's
-/// flags hold its out-of-bounds-alpha flag and its texel class's index alone, and the null entry's
-/// none.
+/// flags hold its out-of-bounds-alpha flag, its red-blue order, its border texels and its texel
+/// class's index alone, and the null entry's none.
 fn entries(bytes: &[DescriptorBytes], set: u32, binding: u32) -> Vec<(u64, u32, u32)> {
     let b = &bytes
         .iter()
@@ -260,11 +261,11 @@ fn entries(bytes: &[DescriptorBytes], set: u32, binding: u32) -> Vec<(u64, u32, 
         .map(|e| {
             let w = |i: usize| u32::from_le_bytes(e[4 * i..4 * i + 4].try_into().expect("word"));
             let id = u64::from(w(0)) | (u64::from(w(1)) << 32);
-            assert_eq!(
-                w(3) & !(FLAG_OUT_OF_BOUNDS_ALPHA_ONE | FLAG_TEXEL_CLASS),
-                0,
-                "other flags are reserved"
-            );
+            let fields = FLAG_OUT_OF_BOUNDS_ALPHA_ONE
+                | FLAG_RED_BLUE
+                | FLAG_BORDER_TEXELS
+                | FLAG_TEXEL_CLASS;
+            assert_eq!(w(3) & !fields, 0, "other flags are reserved");
             if id == 0 {
                 assert_eq!(w(3), 0, "the null entry has no flags");
             }
@@ -571,14 +572,24 @@ fn a_sampled_heap_writes_each_member_and_its_table() {
         .bytes;
     assert_eq!(emitted_lookup(bytes, &keys), want.to_vec());
     // Each entry's flags are its member's out-of-bounds alpha: token 2's `R32Uint` has no alpha,
-    // every other member's format has one, and the null entries have none (beside its texel class,
-    // which `table_entries_state_each_members_texel_class` reads).
+    // every other member's format has one, and the null entries have none (beside its texel class
+    // and border texels, which `table_entries_state_each_members_texel_class` reads).
     let flag = FLAG_OUT_OF_BOUNDS_ALPHA_ONE;
-    let flags: Vec<u32> = entries(&cmds.descriptor_bytes, set, binding)
+    let listed = entries(&cmds.descriptor_bytes, set, binding);
+    let flags: Vec<u32> = listed
         .iter()
-        .map(|e| e.2 & !FLAG_TEXEL_CLASS)
+        .map(|e| e.2 & !(FLAG_TEXEL_CLASS | FLAG_RED_BLUE | FLAG_BORDER_TEXELS))
         .collect();
     assert_eq!(flags, vec![0, 0, 0, 0, 0, 0, flag, 0, 0]);
+    // And its red-blue order: `[[texture(3)]]`'s `BGRA8Unorm` (element 8) is blue-first, every
+    // other member red-first.
+    for &(id, element, flags) in &listed {
+        assert_eq!(
+            flags & FLAG_RED_BLUE != 0,
+            element == 8,
+            "id {id:#x} element {element}"
+        );
+    }
     // The search's flagged form carries the found entry's alpha flag in the handle's bit 31; a
     // miss is the null handle without it.
     let alpha: Vec<u32> = want
@@ -588,6 +599,7 @@ fn a_sampled_heap_writes_each_member_and_its_table() {
     let flagged = Lookup::Flagged {
         alpha: true,
         class: false,
+        red_blue: false,
     };
     assert_eq!(emitted_lookup_in(bytes, &keys, flagged), alpha);
     // The table's element of an id is the element the plan wrote that texture to.
@@ -1047,9 +1059,11 @@ fn a_compared_depth_member_is_held_by_the_depth_comparison_class() {
 }
 
 /// Each member's table entry states its texel class's index (`heap_class_index`, in
-/// [`FLAG_TEXEL_CLASS`]) beside its out-of-bounds alpha (a depth format has no alpha). The
+/// [`FLAG_TEXEL_CLASS`]) and its border texels (`metal::sampler::border_texels`, in
+/// [`FLAG_BORDER_TEXELS`]) beside its out-of-bounds alpha (a depth format has no alpha). The
 /// search's flagged form carries the alpha in the handle's bit 31 and the class in place where it
-/// carries them; a miss carries nothing.
+/// carries them, and its indexed form the entry's index in the top 16 bits; a miss carries
+/// nothing.
 #[test]
 fn table_entries_state_each_members_texel_class() {
     let dev = m3();
@@ -1102,6 +1116,11 @@ fn table_entries_state_each_members_texel_class() {
             crate::metal::TextureSwizzleChannels::DEFAULT,
         ) << FLAG_TEXEL_CLASS.trailing_zeros()
     };
+    let border = |pf| {
+        crate::metal::sampler::border_texels(pf, crate::metal::TextureSwizzleChannels::DEFAULT)
+            .expect("border texels")
+            << FLAG_BORDER_TEXELS.trailing_zeros()
+    };
     let (d16, d32, d32s8, rgba8) = (
         class(PixelFormat::Depth16Unorm),
         class(PixelFormat::Depth32Float),
@@ -1109,14 +1128,21 @@ fn table_entries_state_each_members_texel_class() {
         class(PixelFormat::RGBA8Unorm),
     );
     assert!(d16 != 0 && d32 != 0 && rgba8 != 0 && d16 != rgba8);
+    // A depth format's border texel is `(b, b, b, 1)`, a four-channel one's the color itself.
+    let (depth, four) = (
+        border(PixelFormat::Depth16Unorm),
+        border(PixelFormat::RGBA8Unorm),
+    );
+    assert_eq!(depth >> 3, 0b111_100_100_100);
+    assert_eq!(four >> 3, 0b110_100_100_100);
     assert_eq!(
         entries(&cmds.descriptor_bytes, set, binding),
         vec![
             (0, 0, 0),
-            (D, 4, rgba8),
-            (A, 1, alpha | d16),
-            (B, 2, alpha | d32),
-            (C, 3, alpha | d32s8),
+            (D, 4, rgba8 | four),
+            (A, 1, alpha | depth | d16),
+            (B, 2, alpha | depth | d32),
+            (C, 3, alpha | depth | d32s8),
         ]
     );
     let bytes = &cmds
@@ -1129,6 +1155,7 @@ fn table_entries_state_each_members_texel_class() {
     let flagged = Lookup::Flagged {
         alpha: true,
         class: false,
+        red_blue: false,
     };
     let one = HANDLE_ALPHA_ONE;
     assert_eq!(
@@ -1138,10 +1165,21 @@ fn table_entries_state_each_members_texel_class() {
     let classes = Lookup::Flagged {
         alpha: false,
         class: true,
+        red_blue: false,
     };
     assert_eq!(
         emitted_lookup_in(bytes, &keys, classes),
         vec![4 | rgba8, 1 | d16, 2 | d32, 3 | d32s8, 0, 0]
+    );
+    let indexed = Lookup::Indexed {
+        alpha: true,
+        class: true,
+        red_blue: false,
+    };
+    let entry = |k: u32| k << HANDLE_ENTRY.trailing_zeros();
+    assert_eq!(
+        emitted_lookup_in(bytes, &keys, indexed),
+        vec![4 | entry(1), 1 | entry(2), 2 | entry(3), 3 | entry(4), 0, 0]
     );
 }
 
@@ -2605,4 +2643,173 @@ fn late_argument_samplers_fit_twice_the_class_and_the_plan_s_checks() {
     let plan = untested.plan(&dev, &encoded.shape()).expect("plan");
     assert!(relisted(&plan, &with(linear)).is_some());
     assert_eq!(relisted(&plan, &with(cubic)), None, "beside no test");
+}
+
+/// A filtered `float` sample of a texture an argument buffer holds records its filter note on a
+/// device that samples through Metal's own sampler (`moltenvk-m3`), under what the command's
+/// handles and an argument buffer's sampler can name (`lower::sampler::linear::filter_note`): the
+/// plan gives `SpecKey::HeapYCbCrTextures` 1 exactly where a texture the command makes resident is
+/// two-plane YCbCr, and `SpecKey::FilteringArgumentSampler` 1 exactly where a listed argument
+/// sampler filters (a linear minification, magnification or mip filter, or anisotropy), and the
+/// note holds (`StageModule::precision_notes_bound`) exactly where both do. Through a runtime
+/// sampler slot the bound sampler's word decides in the second's place. A comparison of a depth
+/// texture, whose class holds no two-plane texture, and an integer texture's sample record no
+/// such note; lavapipe, which samples natively, records none.
+#[test]
+fn a_heap_texture_s_ycbcr_filter_note_holds_where_its_sampler_can_filter() {
+    use crate::metal::SamplerMipFilter;
+    use crate::pipeline::artifact::PrecisionNote;
+    use crate::pipeline::sym::SpecKey;
+    let note = PrecisionNote::FloatSampleFilter;
+    let dev = m3();
+    let (Some(argument), Some(compare), Some(integer)) = (
+        argument_sampler_pipeline(&dev, "argument_sampler_sample"),
+        argument_sampler_pipeline(&dev, "argument_sampler_compare"),
+        argument_sampler_pipeline(&dev, "argument_sampler_integer"),
+    ) else {
+        return;
+    };
+    let Some(bc) = assembled("handles", llvm_assemble(&engine_dir().join("handles.ll"))) else {
+        return;
+    };
+    let runtime = compute(&dev, &bc, "argument_buffer_runtime_sampler");
+    let keys = |p: &ComputePipeline| -> Vec<Vec<SpecKey>> {
+        (p.stage.specialized_notes.iter())
+            .filter(|s| s.note == note)
+            .flat_map(|s| &s.when)
+            .map(|c| c.all.iter().map(|t| t.key).collect())
+            .collect()
+    };
+    let heap = SpecKey::HeapYCbCrTextures(Stage::Kernel);
+    assert_eq!(
+        keys(&argument),
+        vec![vec![heap, SpecKey::FilteringArgumentSampler]]
+    );
+    let sampler = SlotRef {
+        stage: Stage::Kernel,
+        class: SlotClass::Sampler,
+        index: 0,
+    };
+    let runtime_keys = keys(&runtime);
+    assert!(!runtime_keys.is_empty());
+    for k in &runtime_keys {
+        assert!(
+            k.contains(&heap) && k.contains(&SpecKey::BoundSamplerWord(sampler)),
+            "{k:?}"
+        );
+    }
+    for p in [&compare, &integer] {
+        assert!(keys(p).is_empty(), "{:?}", p.stage.specialized_notes);
+        assert!(!p.stage.precision_notes.contains(&note));
+    }
+    let lavapipe = {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../metal2vulkan-validation/profiles/lavapipe.json");
+        let text = std::fs::read_to_string(path).expect("profile");
+        let desc = DeviceDescription::from_khronos_json(&text, None).expect("description");
+        Device::new(desc, DevicePolicy::default()).expect("device")
+    };
+    for entry in ["argument_sampler_sample", "argument_sampler_compare"] {
+        let native = argument_sampler_pipeline(&lavapipe, entry).expect("lavapipe");
+        assert!(keys(&native).is_empty(), "{entry} on lavapipe");
+        assert!(!native.stage.precision_notes.contains(&note), "{entry}");
+    }
+    let desc = |linear: bool, mip: SamplerMipFilter, anisotropy: u32| {
+        let mut d = SamplerDescriptor::new();
+        if linear {
+            d.min_filter = SamplerMinMagFilter::Linear;
+            d.mag_filter = SamplerMinMagFilter::Linear;
+        }
+        d.mip_filter = mip;
+        d.max_anisotropy = anisotropy;
+        d
+    };
+    let nearest = desc(false, SamplerMipFilter::NotMipmapped, 1);
+    // Each list of live argument samplers, and whether one of them filters.
+    let lists = [
+        ("none", vec![], false),
+        ("nearest", vec![nearest], false),
+        (
+            "nearest mip filter",
+            vec![desc(false, SamplerMipFilter::Nearest, 1)],
+            false,
+        ),
+        (
+            "nearest and linear",
+            vec![nearest, desc(true, SamplerMipFilter::NotMipmapped, 1)],
+            true,
+        ),
+        (
+            "linear mip filter",
+            vec![desc(false, SamplerMipFilter::Linear, 1)],
+            true,
+        ),
+        (
+            "anisotropic",
+            vec![desc(false, SamplerMipFilter::NotMipmapped, 16)],
+            true,
+        ),
+    ];
+    let formats = [
+        (PixelFormat::YCBCR84442P, true),
+        (PixelFormat::YCBCR104442PSRGB, true),
+        (PixelFormat::RGBA16Float, false),
+        (PixelFormat::RGBA8Unorm, false),
+    ];
+    for (pf, ycbcr) in formats {
+        for (name, list, filters) in &lists {
+            let what = format!("{pf:?} beside {name}");
+            let state = BindState {
+                used_resources: vec![used(1, TextureType::Type2D, pf, read(), Some(A))],
+                argument_samplers: (list.iter().zip(1u64..))
+                    .map(|(d, id)| argument_sampler(*d, id))
+                    .collect(),
+                ..Default::default()
+            };
+            let plan = argument
+                .plan(&dev, &state.shape())
+                .unwrap_or_else(|e| panic!("{what}: {e}"));
+            assert_eq!(
+                plan.specialized_value(heap),
+                Some(u64::from(ycbcr)),
+                "{what}"
+            );
+            let filtering = plan.specialized_value(SpecKey::FilteringArgumentSampler);
+            assert_eq!(filtering, Some(u64::from(*filters)), "{what}");
+            let held = (argument.stage)
+                .precision_notes_bound(&plan.specialization, &|k| plan.specialized_value(k))
+                .contains(&note);
+            assert_eq!(held, ycbcr && *filters, "{what}");
+        }
+        // Through a runtime sampler slot: the bound sampler's word.
+        for (name, d, filters) in [
+            ("nearest", nearest, false),
+            (
+                "linear",
+                desc(true, SamplerMipFilter::NotMipmapped, 1),
+                true,
+            ),
+        ] {
+            let what = format!("{pf:?} through a runtime {name} sampler");
+            let mut state = BindState {
+                used_resources: vec![used(1, TextureType::Type2D, pf, read(), Some(A))],
+                ..Default::default()
+            };
+            let mut t = StageTable::default();
+            t.samplers.insert(0, BoundSampler::new(d));
+            state.stages.insert(Stage::Kernel, t);
+            let plan = runtime
+                .plan(&dev, &state.shape())
+                .unwrap_or_else(|e| panic!("{what}: {e}"));
+            assert_eq!(
+                plan.specialized_value(heap),
+                Some(u64::from(ycbcr)),
+                "{what}"
+            );
+            let held = (runtime.stage)
+                .precision_notes_bound(&plan.specialization, &|k| plan.specialized_value(k))
+                .contains(&note);
+            assert_eq!(held, ycbcr && filters, "{what}");
+        }
+    }
 }

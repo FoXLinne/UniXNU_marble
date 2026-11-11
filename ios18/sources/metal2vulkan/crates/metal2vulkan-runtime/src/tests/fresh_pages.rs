@@ -2,8 +2,10 @@
 //!
 //! - **A long new buffer reads zero, nothing written.** A `Shared` buffer, a write-combined one
 //!   and a `Managed` one (with unified memory), each longer than half a pooled block: the `Shared`
-//!   one lies in fresh pages wherever the device imports host pointers
-//!   (`WorkCounts::fresh_page_buffers_made`), with the host setting none of its bytes to zero
+//!   one lies in fresh pages wherever the device imports host pointers and its check found a held
+//!   import adds nothing to a submission's cost (`submit_check.rs`; MoltenVK, ANV, lavapipe), and
+//!   never where it found it does (RADV) (`WorkCounts::fresh_page_buffers_made`), with the host
+//!   setting none of its bytes to zero
 //!   (`new_buffer_bytes_cleared` unchanged); a class whose best memory type for the buffer takes
 //!   no import lies where it would have, the host clearing every byte of it
 //!   (a discrete card's write-combined class, measured below). Either way the buffer reads zero
@@ -23,20 +25,31 @@
 //!   again and reads zero, nothing written.
 //! - **A copy of bytes.** `new_buffer_with_bytes` of a long pattern lies in fresh pages and reads
 //!   the pattern, through `contents` and a blit.
-//! - **A texture over a long buffer** is a shadow of its bytes
-//!   (`WorkCounts::shadows_over_fresh_pages`): a blit out of it reads the bytes the CPU wrote, and
-//!   a render pass's clear through it reaches them once the command buffer completed.
+//! - **A texture over a long buffer** that renders, its rows 512 bytes apart (twice its own) or 256
+//!   (its own), is a shadow of its bytes under `HostPageTexturePolicy::Shadow`
+//!   (`WorkCounts::shadows_over_fresh_pages`), and under `InPlace` an image in place only where the
+//!   device's check passed for render targets over fresh pages. Where the check passed it is still
+//!   a shadow where the device makes no image in place of its plan or at its pitch, its refusal
+//!   counted (`host_texture_shadows_refused_pitch` or `_image`): MoltenVK lays a linear image's
+//!   rows at a pitch of its own and enables no `VK_EXT_image_drm_format_modifier`, so on the M3 Max
+//!   the texture at 512 bytes a row is a shadow and the one at its own pitch an image in place.
+//!   Every shadow is announced (`shadowed-texture`) with its one cause counted, and an image in
+//!   place neither. Either way a blit out of it reads the bytes the CPU wrote, and a render pass's
+//!   clear through it reaches them once the command buffer completed, the bytes between its rows
+//!   kept.
 //!
 //! Device tests: compiled only under the GPU safety cfgs (`m2v_gpu`, `m2v_cpu_icd`).
 
 use super::blit_holds::{Scratch, WAIT};
+use super::draw_again::Heard;
 use crate::fresh_pages::FRESH_PAGES_PAST;
 use crate::{
-    BlitOption, Buffer, ClearColor, CommandBufferStatus, CommandQueue, CpuCacheMode, Device,
-    DeviceKind, DeviceOptions, HazardTrackingMode, HeapDescriptor, HeapType, LoadAction, Origin,
-    RenderPassDescriptor, ResourceOptions, ShaderCacheOptions, Size, StorageMode, StoreAction,
-    TextureDescriptor, WorkCounts,
+    BlitOption, Buffer, ClearColor, CommandBufferStatus, CommandQueue, CpuCacheMode, Degradation,
+    Device, DeviceKind, DeviceOptions, HazardTrackingMode, HeapDescriptor, HeapType, LoadAction,
+    MessageSink, Origin, RenderPassDescriptor, ResourceOptions, ShaderCacheOptions, Size,
+    StorageMode, StoreAction, TextureDescriptor, WorkCounts,
 };
+use metal2vulkan::device::HostPageTexturePolicy;
 use metal2vulkan::metal::{PixelFormat, TextureUsage};
 use std::path::Path;
 
@@ -44,9 +57,16 @@ use std::path::Path;
 /// read too.
 const LONG: u64 = FRESH_PAGES_PAST + 4100;
 
-/// The device the cfg selects, its shader cache in `cache`.
+/// The device the cfg selects, its shader cache in `cache`, its submission checks answered.
 fn device(cache: &Path) -> Device {
-    let options = DeviceOptions {
+    device_with(cache, HostPageTexturePolicy::InPlace, &Heard::default())
+}
+
+/// [`device`], its textures over host pages held as `policy` says, the notices it announces in
+/// `heard`.
+fn device_with(cache: &Path, policy: HostPageTexturePolicy, heard: &Heard) -> Device {
+    let heard = std::sync::Arc::clone(heard);
+    let mut options = DeviceOptions {
         kinds: match cfg!(m2v_cpu_icd) {
             true => vec![DeviceKind::Cpu],
             false => vec![
@@ -59,14 +79,26 @@ fn device(cache: &Path) -> Device {
             directory: Some(cache.to_owned()),
             ..ShaderCacheOptions::default()
         },
+        messages: Some(MessageSink::new(move |message| {
+            if let Some(notice) = &message.degradation {
+                heard.lock().unwrap().push(notice.clone());
+            }
+        })),
         ..DeviceOptions::default()
     };
-    Device::system_default_with(&options).unwrap()
+    options.policy.host_page_textures = policy;
+    let device = Device::system_default_with(&options).unwrap();
+    assert!(
+        device.settle_submit_checks(crate::tests::SETTLE),
+        "the submission checks never answered"
+    );
+    device
 }
 
-/// Whether the device takes fresh pages: it imports host pointers.
+/// Whether the device takes fresh pages: it imports host pointers, and its check found a held
+/// import adds nothing to a submission's cost.
 fn takes_fresh_pages(device: &Device) -> bool {
-    device.shared().host_import.is_ok()
+    device.shared().host_import.is_ok() && device.fresh_pages_pay()
 }
 
 /// Fill `buffer` with `value` on the GPU, waited for.
@@ -309,27 +341,158 @@ fn a_long_buffer_with_bytes_reads_them() {
 
 #[test]
 fn a_texture_over_a_long_buffer_is_its_bytes_through_a_shadow() {
+    let policy = HostPageTexturePolicy::Shadow;
+    a_texture_over_a_long_buffer_is_its_bytes("fresh-pages-texture", policy, 512);
+}
+
+#[test]
+fn a_texture_over_a_long_buffer_is_its_bytes_in_place_where_the_check_passed() {
+    let policy = HostPageTexturePolicy::InPlace;
+    a_texture_over_a_long_buffer_is_its_bytes("fresh-pages-texture-in-place", policy, 512);
+}
+
+#[test]
+fn a_texture_at_its_own_pitch_over_a_long_buffer_is_its_bytes_in_place_where_the_check_passed() {
+    let policy = HostPageTexturePolicy::InPlace;
+    a_texture_over_a_long_buffer_is_its_bytes("fresh-pages-texture-own-pitch", policy, 256);
+}
+
+/// A 64 by 64 `RGBA8Unorm` render target over a long buffer, its rows `pitch` bytes apart, on a
+/// device of `policy`, its scratch named `name` (the module docs).
+fn a_texture_over_a_long_buffer_is_its_bytes(
+    name: &str,
+    policy: HostPageTexturePolicy,
+    pitch: u64,
+) {
     const SIDE: u64 = 64;
-    const ROW: u64 = 512;
-    let scratch = Scratch::new("fresh-pages-texture");
-    let device = device(&scratch.0);
+    let scratch = Scratch::new(name);
+    let heard = Heard::default();
+    let device = device_with(&scratch.0, policy, &heard);
+    // The check's verdicts first: a texture made before its verdict is a shadow (`in_place.rs`).
+    device.settle_in_place_checks(WAIT);
     let queue = device.new_command_queue().unwrap();
     let buffer = device.new_buffer(LONG, ResourceOptions::shared()).unwrap();
     let contents = buffer.contents().unwrap();
-    let span = (ROW * SIDE) as usize;
+    let span = (pitch * SIDE) as usize;
     let pattern: Vec<u8> = (0..span).map(|i| (i % 253) as u8).collect();
     // SAFETY: the buffer's first bytes, which no command uses now.
     unsafe { std::ptr::copy_nonoverlapping(pattern.as_ptr(), contents.as_ptr(), span) };
+    let shadow_notices = || {
+        let heard = heard.lock().unwrap();
+        let shadows = heard.iter().filter(|notice| {
+            notice.degradation == Degradation::ShadowedTexture
+                && notice.object.contains(&format!("{SIDE}x{SIDE}"))
+                && notice.object.contains(&format!("rows of {pitch} bytes"))
+        });
+        shadows.count() as u64
+    };
     let before = device.work_counts();
+    let announced_before = shadow_notices();
     let mut descriptor = TextureDescriptor::texture_2d(PixelFormat::RGBA8Unorm, SIDE, SIDE, false);
     descriptor.usage = TextureUsage::SHADER_READ | TextureUsage::RENDER_TARGET;
     descriptor.resource_options = buffer.resource_options();
-    let texture = buffer.new_texture(&descriptor, 0, ROW).unwrap();
+    let texture = buffer.new_texture(&descriptor, 0, pitch).unwrap();
     let after = device.work_counts();
+    let announced = shadow_notices() - announced_before;
     let over_fresh = after.shadows_over_fresh_pages - before.shadows_over_fresh_pages;
-    assert_eq!(over_fresh, u64::from(buffer.in_fresh_pages()));
+    // SAFETY: the handle is only compared, while the texture lives.
+    let in_place = unsafe { texture.vk_image() }.is_some();
+    // The verdict its texels take: `RGBA8Unorm` rows `pitch` apart from the buffer's start.
+    let layout = crate::linear_plan::BufferLayout {
+        offset: 0,
+        row_pitch: pitch,
+        slice_pitch: pitch * SIDE,
+        row_bytes: SIDE * 4,
+        rows: SIDE,
+        slices: 1,
+    };
+    let start = contents.as_ptr().addr() as u64;
+    let rows = crate::in_place::RowEnds::of(start, &layout, device.shared().in_place.line());
+    let renders_in_place = device.shared().in_place.verdict(
+        crate::in_place::PagesClass::Fresh,
+        crate::in_place::Access::Renders,
+        rows,
+    ) == crate::in_place::Verdict::Passed;
+    // Each cause a shadow over host pages is counted under, by how many it counted now.
+    let moved = |count: fn(&WorkCounts) -> u64| count(&after) - count(&before);
+    let causes: [(&str, u64); 12] = [
+        ("exact", moved(|c| c.host_texture_shadows_exact)),
+        ("store width", moved(|c| c.host_texture_shadows_store_width)),
+        (
+            "check pending",
+            moved(|c| c.host_texture_shadows_check_pending),
+        ),
+        (
+            "check failed",
+            moved(|c| c.host_texture_shadows_check_failed),
+        ),
+        ("unchecked", moved(|c| c.host_texture_shadows_unchecked)),
+        ("rows", moved(|c| c.host_texture_shadows_refused_rows)),
+        (
+            "detached",
+            moved(|c| c.host_texture_shadows_refused_detached),
+        ),
+        ("image", moved(|c| c.host_texture_shadows_refused_image)),
+        ("pitch", moved(|c| c.host_texture_shadows_refused_pitch)),
+        (
+            "placement",
+            moved(|c| c.host_texture_shadows_refused_placement),
+        ),
+        ("source", moved(|c| c.host_texture_shadows_refused_source)),
+        ("dma-buf", moved(|c| c.host_texture_shadows_refused_dma_buf)),
+    ];
+    let counted: Vec<&str> = (causes.iter())
+        .filter(|(_, n)| *n > 0)
+        .map(|(cause, _)| *cause)
+        .collect();
+    eprintln!(
+        "FRESH-PAGES on {}: {policy:?}: in fresh pages {}, in place {in_place}, the check passed \
+         for render targets there {renders_in_place}, shadow causes counted {counted:?}, \
+         shadowed-texture notices {announced}",
+        device.name(),
+        buffer.in_fresh_pages()
+    );
     if buffer.in_fresh_pages() {
-        assert_eq!(after.shadowed_textures - before.shadowed_textures, 1);
+        let shadow = !in_place;
+        assert_eq!(over_fresh, u64::from(shadow));
+        assert_eq!(
+            after.shadowed_textures - before.shadowed_textures,
+            u64::from(shadow)
+        );
+        assert_eq!(
+            after.host_textures_in_place - before.host_textures_in_place,
+            u64::from(in_place)
+        );
+        // A shadow is announced, with its one cause counted; an image in place is neither.
+        assert_eq!(announced, u64::from(shadow), "a shadow is announced");
+        let one_cause: &[&str] = match (policy, in_place, renders_in_place) {
+            (HostPageTexturePolicy::Shadow, ..) => {
+                assert!(shadow, "a shadow under Shadow");
+                &["exact"]
+            }
+            (_, true, check) => {
+                assert!(
+                    check,
+                    "in place only where the check passed for render targets"
+                );
+                &[]
+            }
+            // Where the check passed, the device made no image in place of the texture's plan,
+            // or none at its pitch.
+            (_, false, true) => &["pitch", "image"],
+            (_, false, false) => &["check failed", "unchecked", "check pending"],
+        };
+        match one_cause {
+            [] => assert!(counted.is_empty(), "no shadow cause in place: {counted:?}"),
+            _ => assert!(
+                counted.len() == 1
+                    && one_cause.contains(&counted[0])
+                    && causes.iter().all(|(_, n)| *n <= 1),
+                "the shadow's one cause, one of {one_cause:?}, counted once: {counted:?}"
+            ),
+        }
+    } else {
+        assert_eq!(over_fresh, 0);
     }
 
     // A blit out of the texture reads the bytes the CPU wrote, row by row.
@@ -357,7 +520,7 @@ fn a_texture_over_a_long_buffer_is_its_bytes_through_a_shadow() {
     let read = read_on_cpu(&out);
     for y in 0..SIDE as usize {
         let row = &read[y * SIDE as usize * 4..(y + 1) * SIDE as usize * 4];
-        let wrote = &pattern[y * ROW as usize..][..SIDE as usize * 4];
+        let wrote = &pattern[y * pitch as usize..][..SIDE as usize * 4];
         assert_eq!(
             row, wrote,
             "row {y} of the texture reads the buffer's bytes"
@@ -382,7 +545,7 @@ fn a_texture_over_a_long_buffer_is_its_bytes_through_a_shadow() {
     assert_eq!(command_buffer.status(), CommandBufferStatus::Completed);
     let now = read_on_cpu(&buffer);
     for y in 0..SIDE as usize {
-        let row = &now[y * ROW as usize..(y + 1) * ROW as usize];
+        let row = &now[y * pitch as usize..(y + 1) * pitch as usize];
         let texels = &row[..SIDE as usize * 4];
         assert!(
             texels.chunks(4).all(|texel| texel == [255, 0, 255, 0]),
@@ -390,7 +553,7 @@ fn a_texture_over_a_long_buffer_is_its_bytes_through_a_shadow() {
         );
         assert_eq!(
             &row[SIDE as usize * 4..],
-            &pattern[y * ROW as usize + SIDE as usize * 4..(y + 1) * ROW as usize],
+            &pattern[y * pitch as usize + SIDE as usize * 4..(y + 1) * pitch as usize],
             "row {y}: the bytes between the rows kept the CPU's"
         );
     }

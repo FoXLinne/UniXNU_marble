@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 // AppleKeyStore for an ephemeral offline fixture: a notification service (the public IOKit matching class used by
-// MKBEventsRegister) and, only when sheng-aks=1 is set, a user client that answers the state queries of the unchanged
+// MKBEventsRegister) and, only when aks=1 is set, a user client that answers the state queries of the unchanged
 // libaks/MobileKeyBag truthfully for this environment: no keybag, no passcode, nothing locked. Key wrapping is software,
 // keyed from the platform identity, so the keychain works and its items survive a restart. Nothing protects that identity:
 // this offers no hardware data protection and must not be taken for secure storage. Keybag, passcode and reference-key

@@ -14,6 +14,19 @@ const char *native_marble_cellular_text_fixup(unsigned index);
 const char *native_marble_cellular_text_fixup(unsigned index)
 {
     static const char *const entries[] = {
+        /* 22H384 Powerlog stores persistent monotonic dates beyond INT32_MAX.
+         * Keep bucketNSDate, bucketTimeStampForDate and their three callers
+         * in signed 64-bit seconds. The 32-bit conversions saturate hourly
+         * AppRunTime/UsageTime buckets at 2038 while UI queries use doubles.
+         * These page fixups preserve the existing date origin and records. */
+        "dyld_shared_cache_arm64e.19,2089aa0,1800781ed3cafd940803621e0039691e1b00781e,1800789ed3cafd940803629e0039691e1b00789e",
+        "dyld_shared_cache_arm64e.19,2089c00,7503150b,7503158b",
+        "dyld_shared_cache_arm64e.19,2089ca4,6003621eded40494f9c9fd94f80300aa205744f9a002621e,6003629eded40494f9c9fd94f80300aa205744f9a002629e",
+        "dyld_shared_cache_arm64e.19,2089d88,a802621e,a802629e",
+        "dyld_shared_cache_arm64e.19,2089e20,6003621e,6003629e",
+        "dyld_shared_cache_arm64e.19,208b0dc,0800781e080dd31a087d131b0001621e,0800789e080dd39a087d139b0001629e",
+        "dyld_shared_cache_arm64e.19,20891ac,0900621e,0900629e",
+        "dyld_shared_cache_arm64e.19,208aa30,ea02621e0803621e,ea02629e0803629e",
         /* LCSCaptureApplicationMonitor metadata changes: its own bundle ID is
          * already inserted. Skip an absent optional container ID. Borrow the
          * nonnull getter's +0 value until the set retains it, replacing its
@@ -30,7 +43,17 @@ const char *native_marble_cellular_text_fixup(unsigned index)
         "dyld_shared_cache_arm64e.29,1167f0,7f2303d5f657bda9f44f01a9,7f2303d5000080d2ff0f5fd6",
         "dyld_shared_cache_arm64e.29,1191f0,7f2303d5f657bda9f44f01a9,7f2303d5000080d2ff0f5fd6",
     };
-    return index < sizeof(entries) / sizeof(entries[0]) ? entries[index] : NULL;
+    const unsigned count = sizeof(entries) / sizeof(entries[0]);
+    if (index < count) return entries[index];
+    unsigned audio = 0, haptics = 0;
+    PE_parse_boot_argn("marble-audio", &audio, sizeof(audio));
+    PE_parse_boot_argn("marble-haptics", &haptics, sizeof(haptics));
+    // 22H384 AudioGetHostClockFrequency reads this constant. Audio IO uses
+    // the board's 19.2 MHz counter; its periods must share the same clock as
+    // the HAL timestamps and DSP queue. Calendar time is independent.
+    if (index == count && (audio >= 2 || haptics >= 2))
+        return "dyld_shared_cache_arm64e.19,12fbfd8,0000000060e37641,00000000804f7241";
+    return NULL;
 }
 
 int native_marble_ui_dyld_policy(proc_t, int, user_addr_t, int);

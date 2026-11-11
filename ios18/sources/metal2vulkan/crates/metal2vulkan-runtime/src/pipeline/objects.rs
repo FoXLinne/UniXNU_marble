@@ -27,7 +27,7 @@ use crate::device::{lock, shared_draw_lock, DeviceShared};
 use crate::error::{internal, vulkan, Error};
 use crate::exit_guard;
 use crate::generated_commands::INDIRECT_BINDABLE;
-use crate::heap_sets::{self, HeapSet, HeapTables};
+use crate::heap_sets::{self, HeapSet, HeapTables, TableBinder};
 use crate::release;
 use crate::shader_cache::driver::Making;
 use crate::ycbcr_device::YCbCrSampler;
@@ -72,6 +72,13 @@ pub(crate) struct StageObject {
 /// device's teardown (`content_keyed.rs`).
 pub(crate) struct SamplerSet {
     samplers: Vec<vk::Sampler>,
+}
+
+impl SamplerSet {
+    /// Whether it holds any sampler: a layout that bakes none takes an empty set.
+    pub(crate) fn holds_samplers(&self) -> bool {
+        !self.samplers.is_empty()
+    }
 }
 
 impl Owned<DeviceShared> for SamplerSet {
@@ -130,7 +137,6 @@ pub(crate) fn sampler_set(
     if crate::warm::warming() {
         return Err(crate::warm::translation_only());
     }
-    let shared = device.shared();
     // The device's Y′CbCr conversion of each sampler of a planes image (`texture/ycbcr_planes.rs`),
     // the one its view is made with, so the two are identically defined: made before the sets'
     // lock, as it takes the owned kernels' own.
@@ -148,14 +154,32 @@ pub(crate) fn sampler_set(
         })
         .collect::<Result<Vec<_>, Error>>()?;
     let program = program_call();
+    loop {
+        match make_sampler_set(device, &descs, &conversions, program) {
+            // The device's samplers at its limit: a released variant's kept instance that holds
+            // samplers goes first (`kept.rs`), and the set is made again.
+            Err(Error::SamplerLimit(_)) if evict_kept_for_samplers(device) => {}
+            made => return made,
+        }
+    }
+}
+
+/// [`sampler_set`]'s making of the set of `descs`, each with its conversion, once.
+fn make_sampler_set(
+    device: &Device,
+    descs: &[metal2vulkan::vk::SamplerDesc],
+    conversions: &[Option<vk::SamplerYcbcrConversion>],
+    program: bool,
+) -> Result<(Arc<SamplerSet>, bool), Error> {
+    let shared = device.shared();
     // The lock is held across the creation, so two of the program's calls never make two sets of
     // the same samplers.
     let mut sets = lock(&shared.sampler_sets);
-    let made = sets.get_or_make(descs.clone(), program, || {
+    let made = sets.get_or_make(descs.to_vec(), program, || {
         let mut set = SamplerSet {
             samplers: Vec::with_capacity(descs.len()),
         };
-        for (desc, conversion) in descs.iter().zip(&conversions) {
+        for (desc, conversion) in descs.iter().zip(conversions) {
             let mut chained = vk::SamplerYcbcrConversionInfo::default();
             let mut reduction = vk::SamplerReductionModeCreateInfo::default();
             let mut border = vk::SamplerBorderColorComponentMappingCreateInfoEXT::default();
@@ -188,6 +212,34 @@ pub(crate) fn sampler_set(
         false => shared.counts.sampler_set_shared(),
     }
     Ok((set, made))
+}
+
+/// Make room for a sampler the device refused at its limit (`Error::SamplerLimit`): the least
+/// recently released kept instance that holds immutable samplers goes (`Kept::evict_for_samplers`),
+/// and the device's maps let go of what nothing holds then, its samplers among it where no live
+/// variant shares them. Whether an instance went: a caller tries its sampler again while one does.
+/// In a program's call only, where the kept variants apply their queue; elsewhere none goes.
+pub(crate) fn evict_kept_for_samplers(device: &Device) -> bool {
+    if !program_call() {
+        return false;
+    }
+    let shared = device.shared();
+    if !lock(&shared.kept).evict_for_samplers(shared) {
+        return false;
+    }
+    settle_device_maps(device);
+    true
+}
+
+/// Let go of the device's graphics pipeline libraries, modules, pipeline layouts and sampler sets
+/// nothing holds now, in the program's order: after the kept variants applied their queue. In
+/// that order, so one settle lets go of all an evicted instance held: a linked pipeline holds its
+/// layout (`libraries.rs`), and a layout the samplers it bakes (`shared_layouts.rs`).
+fn settle_device_maps(device: &Device) {
+    settle_libraries(device);
+    settle_modules(device);
+    settle_layouts(device);
+    settle_sampler_sets(device);
 }
 
 /// Let go of the device's sampler sets no variant holds any more (`content_keyed.rs`): in a
@@ -440,6 +492,9 @@ pub(crate) struct VariantObjects {
     /// What its layout binds of the device's texture and sampler tables, from its first command
     /// ([`heap_tables`](Self::heap_tables)).
     heap_tables: OnceLock<HeapTables>,
+    /// Its share in the device's sampler tables of the kind its layout binds, from its first
+    /// command ([`bind_sampler_tables`](Self::bind_sampler_tables)).
+    sampler_binder: OnceLock<Option<TableBinder>>,
     /// The variant instance its objects are, where its last release keeps them for a variant of
     /// the same compiled pipeline made again (`kept.rs`); `None` destroys them.
     keep: Option<Instance>,
@@ -658,6 +713,7 @@ impl VariantObjects {
             heap_layout: layout.sets.get(1).cloned(),
             heap: Mutex::new(None),
             heap_tables: OnceLock::new(),
+            sampler_binder: OnceLock::new(),
             kinds: Kinds::of(stages, pipeline, understates_support(device)),
             tested: tested_slots_of(stages),
             bound: Mutex::new(None),
@@ -708,15 +764,10 @@ impl VariantObjects {
             true => None,
             false => lock(&shared.kept).take(shared, compiled),
         };
-        // The kept variants' queue applied (an evicted instance's modules let go): the device's
-        // modules nothing holds now go, in the program's order.
-        settle_modules(device);
-        // And the device's pipeline layouts nothing holds now, then the sampler sets nothing
-        // holds now, the evicted instances' layouts gone.
-        settle_layouts(device);
-        settle_sampler_sets(device);
-        // And the device's graphics pipeline libraries nothing holds now.
-        settle_libraries(device);
+        // The kept variants' queue applied (an evicted instance's objects let go): the device's
+        // modules, layouts, sampler sets and libraries nothing holds now go, in the program's
+        // order.
+        settle_device_maps(device);
         let Some(back) = back else {
             let mut objects = VariantObjects::create(device, layout, stages, pipeline, digests)?;
             objects.keep = (!warming).then(|| Instance::new(compiled));
@@ -746,6 +797,7 @@ impl VariantObjects {
             heap_layout: layout.sets.get(1).cloned(),
             heap: Mutex::new(None),
             heap_tables: OnceLock::new(),
+            sampler_binder: OnceLock::new(),
             kinds: Kinds::of(stages, pipeline, understates_support(device)),
             tested: tested_slots_of(stages),
             bound: Mutex::new(None),
@@ -939,6 +991,18 @@ impl VariantObjects {
         (self.heap_tables).get_or_init(|| HeapTables::of(&self.device, layout, dependencies))
     }
 
+    /// As its command binds its layout, `layout`, of a pipeline stating `dependencies`: its share
+    /// in the device's sampler tables of the kind the layout binds, taken at its first command
+    /// and held while its objects live (`heap_sets::TableBinder`), so a sampler state the kind
+    /// leaves out is announced while its commands may read it, and not after.
+    pub(crate) fn bind_sampler_tables(
+        &self,
+        layout: &PipelineLayout,
+        dependencies: &[RuntimeDependency],
+    ) {
+        (self.sampler_binder).get_or_init(|| TableBinder::of(&self.device, layout, dependencies));
+    }
+
     /// The device's heap set of the layout's set 1 (`heap_sets.rs`), which the variant holds
     /// from its first command that binds it; refused for a layout without one (`Internal`).
     pub(crate) fn heap_set(&self) -> Result<Arc<HeapSet>, Error> {
@@ -1052,13 +1116,7 @@ impl VariantObjects {
         if bindable {
             info = info.push_next(&mut flags);
         }
-        // Whether the making's cache held it and its one stage, where the making reports them
-        // (`shader_cache::found_in_cache`; one stage's feedback, as
-        // VUID-VkComputePipelineCreateInfo-pipelineStageCreationFeedbackCount-06566 allows).
-        let mut whole = vk::PipelineCreationFeedback::default();
-        let mut stage = [vk::PipelineCreationFeedback::default()];
         let shared = self.device.shared();
-        let driver_reports = shared.shader_cache.driver_reports();
         // Its record is named by the variant's content and what this making adds to it.
         let making = self.making("compute").text(&(
             c.object.stage.as_raw(),
@@ -1084,34 +1142,10 @@ impl VariantObjects {
         let started = std::time::Instant::now();
         // With what the driver reports of the making: a pipeline found in its record's cache
         // reads no data back (`shader_cache/driver.rs`).
-        let created = shared
-            .make_pipelines_reported(making, |cache| {
-                let mut feedback = vk::PipelineCreationFeedbackCreateInfo::default()
-                    .pipeline_creation_feedback(&mut whole)
-                    .pipeline_stage_creation_feedbacks(&mut stage);
-                let mut info = info;
-                if driver_reports {
-                    info = info.push_next(&mut feedback);
-                }
-                // SAFETY: every pointer in `info` outlives the call; the pipeline cache is the
-                // making's own, destroyed once the call returned.
-                let made = unsafe { shared.vk().create_compute_pipelines(cache, &[info], None) };
-                let found = driver_reports
-                    .then(|| crate::shader_cache::found_in_cache(&whole, &stage))
-                    .flatten();
-                (made, found)
-            })
-            .map_err(|(_, error)| vulkan(error))?;
+        let raw = shared.make_compute_pipeline(making, info)?;
         let created_in = started.elapsed();
         drop(leader);
         drop(turn);
-        if driver_reports {
-            shared.shader_cache.driver_reported(&whole, &stage);
-        }
-        let raw = created
-            .first()
-            .copied()
-            .ok_or_else(|| internal("the driver made no pipeline"))?;
         self.device.shared().counts.variant_pipeline_made();
         let pipeline = RawPipeline {
             device: self.device.clone(),

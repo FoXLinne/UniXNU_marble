@@ -48,7 +48,12 @@
 //! order such draws by the interlock alone, and a memoryless color's copy through a fetch read
 //! texels as they were before the blends of the draws just before it. Not on a driver measured to
 //! order them (`DriverFact::InterlockOrdersDraws`: ANV on the Iris Xe), where the colors' barrier
-//! goes, about 15,000 GPU cycles a draw there.
+//! goes, about 15,000 GPU cycles a draw there. On a driver whose such draws race under load
+//! (`DriverFact::InterlockedDrawsRaceUnderLoad`: MoltenVK on Apple's GPUs, where a later draw read
+//! whole 8x4 groups of fragments from before the earlier one's writes, barrier or not, while other
+//! processes' work ran on the GPU; MoltenVK encodes no Metal barrier inside a render pass there),
+//! the later draw records into a new render pass instance after the earlier one's instead: the
+//! instances' boundary orders them.
 //!
 //! An 8-bit sRGB attachment (with the compile form) is read and written through a storage view in
 //! the unsigned-integer format of its texel size ([`storage_view_format`]): Metal's tile keeps the
@@ -98,7 +103,7 @@ use super::image_plan::{hiz_candidate, ImagePlan};
 use super::key_hash::KeyMap;
 use super::Device;
 use metal2vulkan::bind::PlanesCopy;
-use metal2vulkan::device::{DeviceProfile, DriverFact, FormatUsage, VkProperty};
+use metal2vulkan::device::{DeviceProfile, DriverFact, FormatUsage, VkFeature, VkProperty};
 use metal2vulkan::error::Capability;
 use metal2vulkan::metal::format::WordAttachment;
 use metal2vulkan::metal::TextureType;
@@ -111,6 +116,30 @@ use std::collections::BTreeMap;
 /// `rasterizationOrderColorAttachmentAccess`.
 pub(crate) fn through_inputs(profile: &DeviceProfile) -> bool {
     profile.fragment().rasterization_order_color_access
+}
+
+/// Whether a render pass on `profile` of `samples` samples, fetching through input attachments
+/// where `fetch_inputs`, may hold an extended-range color's `half` shadow
+/// (`render/extended_shadow.rs`): every pass that fetches in the pixel interlock, whose storage
+/// form reads and writes it; and one that fetches through input attachments on a device with
+/// `fragmentShaderPixelInterlock` and `fragmentStoresAndAtomics` that stores the shadow's format,
+/// and at more than one sample multisampled storage images, whose functions read and write the
+/// shadow beside the input attachment in the interlock (`lower::fragment`'s `input_shadow`).
+pub(crate) fn holds_extended_shadows(
+    profile: &DeviceProfile,
+    fetch_inputs: bool,
+    samples: u32,
+) -> bool {
+    if !fetch_inputs {
+        return true;
+    }
+    profile.fragment().pixel_interlock
+        && profile
+            .enabled()
+            .features
+            .contains(&VkFeature::FragmentStoresAndAtomics)
+        && profile.supports_format(Format::R16G16B16A16_SFLOAT, FormatUsage::StorageImage)
+        && (samples <= 1 || profile.images().storage_multisample)
 }
 
 /// Whether the compile layer reads `profile`'s fetched color attachments as storage images in the
@@ -490,6 +519,13 @@ impl Device {
         candidate: ImagePlan,
         texture_type: TextureType,
     ) -> Result<ImagePlan, Error> {
+        #[cfg(test)]
+        if (self.shared().storage_costs_forced).load(std::sync::atomic::Ordering::Relaxed)
+            && candidate.usage.contains(ImageUsageFlags::STORAGE)
+            && !plan.usage.contains(ImageUsageFlags::STORAGE)
+        {
+            return Ok(plan);
+        }
         let answers = &self.shared().textures.usage_answers;
         let known = lock(answers).answer(&plan, &candidate);
         let free = match known {

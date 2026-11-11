@@ -539,6 +539,15 @@ pub struct PrivateRenderState {
     /// pipeline amplifies (Metal there draws one copy's color and counts every copy's samples,
     /// a rule not built).
     pub explicit_visibility_group_id: u32,
+    /// `openGLModeEnabled` (default off): changes nothing Metal draws or reflects, and makes two
+    /// states Metal otherwise refuses (`pipeline::private_state`'s docs): a fragment function
+    /// writing depth without a depth attachment, its depth going nowhere, and a rasterizing state
+    /// whose vertex function returns `void`, which rasterizes nothing. The runtime answers both
+    /// (`metal2vulkan-runtime`'s `new_render_pipeline_state`), the second as the state of the
+    /// descriptor with rasterization disabled; the compile reads it not, and its link refuses a
+    /// rasterizing `void` vertex function whatever the mode
+    /// ([`DescriptorError::RasterizedVoidVertex`](crate::error::DescriptorError::RasterizedVoidVertex)).
+    pub open_gl_mode_enabled: bool,
 }
 
 impl PrivateRenderState {
@@ -563,11 +572,12 @@ impl PrivateRenderState {
             needs_custom_border_color_samplers: false,
             vertex_amplification_mode: 0,
             explicit_visibility_group_id: u32::MAX,
+            open_gl_mode_enabled: false,
         }
     }
 
     /// The fields as plain bits, the coverage by its `f32` bits: what equality compares.
-    fn bits(&self) -> (u64, u32, [bool; 9], [u64; 3], u8, [u32; 3]) {
+    fn bits(&self) -> (u64, u32, [bool; 10], [u64; 3], u8, [u32; 3]) {
         (
             self.sample_mask,
             self.sample_coverage.to_bits(),
@@ -581,6 +591,7 @@ impl PrivateRenderState {
                 self.two_side_enabled,
                 self.depth_stencil_write_disabled,
                 self.needs_custom_border_color_samplers,
+                self.open_gl_mode_enabled,
             ],
             [
                 self.alpha_test_function,
@@ -649,7 +660,9 @@ pub struct ComputePipelineDescriptor {
     /// `stageInputDescriptor`: how the kernel's `[[stage_in]]` attributes are fetched. A kernel
     /// reading a stage-in attribute compiles under it (`LoweringInputs::stage_input`).
     pub stage_input: Option<StageInputDescriptor>,
-    /// `None` for Metal's 0 (the device maximum).
+    /// `None` for Metal's 0 (the device maximum). Refused as Metal refuses it
+    /// ([`ComputePipelineProblem`](crate::error::ComputePipelineProblem)): above 1024, or beside a
+    /// kernel's own `[[max_total_threads_per_threadgroup(n)]]` of other threads.
     pub max_total_threads_per_threadgroup: Option<u32>,
     /// The guest's promise that interior regions' local sizes are multiples of 32.
     pub threadgroup_size_is_multiple_of_execution_width: bool,
@@ -658,8 +671,9 @@ pub struct ComputePipelineDescriptor {
     /// Metal's. The kernel compiles under it (`LoweringInputs::max_call_stack_depth`), which sizes
     /// the call stack of recursion through visible functions.
     pub max_call_stack_depth: u32,
-    /// `requiredThreadsPerThreadgroup`: `None` for Metal's zero size, no requirement. The runtime
-    /// refuses a dispatch of another threadgroup size, as Metal's API validation stops one. The
+    /// `requiredThreadsPerThreadgroup`: `None` for Metal's zero size, no requirement. A dispatch
+    /// of another threadgroup size runs at the size it gives, as plain Metal runs it (Metal's API
+    /// validation stops it; measured on an M3 Max, `compute_pipeline_limits.m`). The
     /// compiled pipeline does not depend on it, so it is not part of the key, and its
     /// `metal_info` answers the kernel's limit. The runtime's state answers the size's threads as
     /// its `maxTotalThreadsPerThreadgroup`, as Metal's state does.
@@ -675,6 +689,22 @@ pub struct ComputePipelineDescriptor {
     /// `needsCustomBorderColorSamplers` (Apple SPI, default off): changes nothing Metal runs, as
     /// the render descriptor's ([`PrivateRenderState::needs_custom_border_color_samplers`]).
     pub needs_custom_border_color_samplers: bool,
+    /// `openCLModeEnabled` (Apple SPI, `setOpenCLModeEnabled:`, default off): the kernel is a
+    /// kernel of Apple's OpenCL compiler (`__entry_<name>` of a library of `sourceLanguage` 1),
+    /// linked as Metal links it for OpenCL C. Metal binds three hidden buffers ahead of the
+    /// kernel's own: `__global_offset_and_num_dims` at index 0, four `uint`s the dispatcher fills
+    /// with the dispatch's global offset in each of its dimensions and its dimension count;
+    /// `__printf_buffer` at 1; and `__image_order_data_type_table` at 2. Each of the kernel's
+    /// arguments bound at a buffer index sits 3 past its own; threadgroup memory, textures and
+    /// samplers keep theirs. OpenCL C's work-item functions read the dispatch: `get_global_id`
+    /// adds the offset to the thread's position in the grid, `get_global_offset` and
+    /// `get_work_dim` read buffer 0, and a dimension past 2 answers OpenCL's 0 or 1 (where the M3
+    /// Max leaves a store of such a value unwritten). The pipeline's reflection lists the three
+    /// buffers after the kernel's arguments. The kernel compiles under it
+    /// (`LoweringInputs::open_cl_mode`), so it is part of the key. Without it Metal refuses a
+    /// pipeline of such a kernel ("Internal compiler error"); the crate compiles it as the AIR's
+    /// own Metal reading, refusing a read of `get_global_offset` or `get_work_dim`.
+    pub open_cl_mode_enabled: bool,
 }
 
 impl ComputePipelineDescriptor {
@@ -691,6 +721,7 @@ impl ComputePipelineDescriptor {
             support_adding_binary_functions: false,
             buffers: BTreeMap::new(),
             needs_custom_border_color_samplers: false,
+            open_cl_mode_enabled: false,
         }
     }
 }
@@ -836,9 +867,9 @@ pub struct TileRenderPipelineDescriptor {
     /// function, 1 by default as Metal's. A `Function` tile function compiles under it, as a
     /// compute pipeline's kernel does.
     pub max_call_stack_depth: u32,
-    /// `requiredThreadsPerThreadgroup`: `None` for Metal's zero size, no requirement. The runtime
-    /// refuses a tile dispatch of another threadgroup size, as Metal's API validation stops one.
-    /// Not part of the key. The runtime's state answers the size's threads as its
+    /// `requiredThreadsPerThreadgroup`: `None` for Metal's zero size, no requirement. A tile
+    /// dispatch of another threadgroup size runs at the size it gives, as plain Metal runs it
+    /// (Metal's API validation stops it). Not part of the key. The runtime's state answers the size's threads as its
     /// `maxTotalThreadsPerThreadgroup`, as a compute descriptor's
     /// ([`ComputePipelineDescriptor::required_threads_per_threadgroup`]).
     pub required_threads_per_threadgroup: Option<[u32; 3]>,

@@ -10,7 +10,8 @@
 //! alpha; each `1 - x` is computed in `float`. The source, the second source and the blend color
 //! are clamped first, as a blend unit clamps a normalized format's: a color lane to the form's
 //! range ([`super::source_range`]), alpha to `[0, 1]`, a NaN to the low end
-//! ([`extended_ranges`]). Metal's compiler instead fuses, regroups and rounds each step to `half`;
+//! ([`extended_ranges`]); a padded form's are not clamped at all, as Metal clamps none there.
+//! Metal's compiler instead fuses, regroups and rounds each step to `half`;
 //! the stored value can differ from Metal's in the last bits of the encode, which the artifact
 //! records (`PrecisionNote::ExtendedRangeBlendSource`, `ExtendedRangeFloatBlendSource`).
 //!
@@ -345,9 +346,16 @@ pub fn native(
 
 /// The ranges an extended-range form's blend clamps its source, second source and blend color to
 /// ([`native`]): the color lanes to the form's source range ([`source_range`]), alpha to `[0, 1]`.
-pub fn extended_ranges(form: ExtendedRange) -> ([f32; 4], [f32; 4]) {
+/// `None` for a padded form, whose blend Metal computes over them as they are, every lane
+/// unclamped (the M3 Max under macOS 27.0.1: sources, second sources and blend colors past both
+/// ends of `[0, 1]`, alpha among them, into every padded form; `probes/padded_and_bfloat_blends.m`
+/// of the conformance crate).
+pub fn extended_ranges(form: ExtendedRange) -> Option<([f32; 4], [f32; 4])> {
+    if form.padded() {
+        return None;
+    }
     let (lo, hi) = source_range(form);
-    ([lo, lo, lo, 0.0], [hi, hi, hi, 1.0])
+    Some(([lo, lo, lo, 0.0], [hi, hi, hi, 1.0]))
 }
 
 /// A value a blend lane reads.
@@ -630,6 +638,14 @@ fn alpha_rank(f: BlendFactor) -> u8 {
 /// An 8-bit unorm attachment's factor rank, of a color factor or alpha's where `alpha`, in the
 /// arithmetic `arith`: of an added pair, the destination's product is rounded first where the
 /// source factor's rank is at least the destination factor's, else the source's.
+///
+/// In a color lane the one minus the destination alpha ranks as the one minus the source alpha
+/// does. Plain Metal on the M3 Max under macOS 27.0.1 blends `DestinationAlpha` over
+/// `OneMinusDestinationAlpha` with the source's product rounded first, into `RGBA8Unorm` from a
+/// `float4` output under fast math: `f(fma(d, f(1 - da), f(s · da)))` gives Metal's code in every
+/// color channel of the 8,192 texels of the `argb8-targets-destination-alpha` recording, and the
+/// destination's product rounded first misses 10 of them. The same rank in `half` arithmetic is
+/// not measured.
 fn unorm8_rank(f: BlendFactor, alpha: bool, arith: BlendArith) -> u8 {
     use BlendFactor as F;
     let float = arith == BlendArith::Float;
@@ -638,10 +654,13 @@ fn unorm8_rank(f: BlendFactor, alpha: bool, arith: BlendArith) -> u8 {
         | F::SourceAlpha
         | F::DestinationColor
         | F::OneMinusDestinationColor
-        | F::DestinationAlpha
-        | F::OneMinusDestinationAlpha => 0,
+        | F::DestinationAlpha => 0,
+        F::OneMinusDestinationAlpha if alpha => 0,
         F::OneMinusSourceColor | F::OneMinusSourceAlpha if alpha && !float => 0,
-        F::OneMinusSourceColor | F::OneMinusSourceAlpha | F::SourceAlphaSaturated => 1,
+        F::OneMinusSourceColor
+        | F::OneMinusSourceAlpha
+        | F::OneMinusDestinationAlpha
+        | F::SourceAlphaSaturated => 1,
         F::BlendColor | F::BlendAlpha if float => 1,
         F::BlendColor | F::BlendAlpha => 2,
         F::OneMinusBlendColor | F::OneMinusBlendAlpha => 3,
@@ -1209,7 +1228,8 @@ impl Blend {
         use BlendFactor as F;
         let has_alpha = match pf {
             PixelFormat::R8Unorm | PixelFormat::RG8Unorm => false,
-            PixelFormat::RGBA8Unorm | PixelFormat::BGRA8Unorm => true,
+            // `ARGB8Unorm` blends as `RGBA8Unorm`, its channels rotated (`fetch::unorm8_format`).
+            PixelFormat::RGBA8Unorm | PixelFormat::BGRA8Unorm | PixelFormat::ARGB8Unorm => true,
             _ => return Err(Unsupported::not_implemented(Feature::FramebufferFetch).into()),
         };
         let factors = [

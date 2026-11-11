@@ -5,7 +5,7 @@
 #include <stdint.h>
 namespace native_half {
 // Half-float bit patterns of the smallest value that reaches each 8-bit code k = 1..255 (positive halves order like their values):
-// kLinear for linear light encoded to sRGB, kEncoded for values already sRGB-encoded (boot-arg sheng-fb-half=2).
+// kLinear for linear light encoded to sRGB, kEncoded for values already sRGB-encoded (boot-arg fb-half=2).
 inline constexpr uint16_t kLinear[255]={
     0x08fa,0x0f76,0x1238,0x145a,0x1599,0x16d7,0x180b,0x18aa,0x1949,0x19e8,0x1a88,0x1b30,0x1be2,0x1c4f,0x1cb2,0x1d19,
     0x1d86,0x1df7,0x1e6e,0x1eea,0x1f6c,0x1ff2,0x203f,0x2088,0x20d4,0x2122,0x2173,0x21c7,0x221e,0x2278,0x22d5,0x2335,

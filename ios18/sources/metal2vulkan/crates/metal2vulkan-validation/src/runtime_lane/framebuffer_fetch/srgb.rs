@@ -53,7 +53,7 @@
 //! sample's depth (`VkProperty::CenterFragCoordDepth`, MoltenVK on an M4), the `Less` cases run the
 //! depth test in the function against the depth's stand-in and are drawn, Metal's bytes.
 
-use super::{device_rounded, form, library, reads_planes, through_inputs};
+use super::{device_rounded, fetches, form, library, reads_planes, through_inputs};
 use crate::candidate::runtime_samples::{encode_through, shape};
 use crate::executor_contract::multisample::{ReadbackView, SampleRead};
 use crate::runtime_lane::degrade_notices::made_render_kinds;
@@ -466,6 +466,9 @@ fn differing(read: &[u8], want: &[u8]) -> Vec<(usize, [u8; 4], [u8; 4])> {
 #[test]
 fn an_srgb_target_is_fetched_as_metal_fetches_it() {
     let (messages, _cache, lane) = lane();
+    if !fetches(&lane.device) {
+        return;
+    }
     let fetch = library(&lane, "fragment_fetch");
     let device = lane.device.name();
     let inputs = through_inputs(&lane);

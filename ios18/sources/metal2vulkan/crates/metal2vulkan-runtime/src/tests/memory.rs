@@ -1,6 +1,6 @@
 use crate::memory::{
-    candidates, host_cached, host_cached_placement, host_incoherent, overflow_candidates,
-    MemoryClass, Pool, KEPT_EMPTY_BLOCKS, KEPT_EMPTY_FOR,
+    candidates, fd_buffer_types, host_cached, host_cached_placement, host_incoherent, kept_budget,
+    overflow_candidates, MemoryClass, Pool, KEPT_EMPTY_BLOCKS, KEPT_EMPTY_BYTES, KEPT_EMPTY_FOR,
 };
 use ash::vk;
 use std::time::Instant;
@@ -77,18 +77,18 @@ fn device_local_classes_overflow_into_system_memory() {
     let all = (1 << types.len()) - 1;
     for class in [MemoryClass::Private, MemoryClass::Memoryless] {
         assert_eq!(
-            overflow_candidates(&types, all, class),
+            overflow_candidates(&types, all, class, false),
             [3, 0, 2],
             "{class:?}"
         );
         // Only the types the resource takes.
         assert_eq!(
-            overflow_candidates(&types, 0b0101, class),
+            overflow_candidates(&types, 0b0101, class, false),
             [0, 2],
             "{class:?}"
         );
         assert!(
-            overflow_candidates(&types, 0b111_0010, class).is_empty(),
+            overflow_candidates(&types, 0b111_0010, class, false).is_empty(),
             "{class:?}"
         );
     }
@@ -98,7 +98,7 @@ fn device_local_classes_overflow_into_system_memory() {
         MemoryClass::Managed,
     ] {
         assert!(
-            overflow_candidates(&types, all, class).is_empty(),
+            overflow_candidates(&types, all, class, false).is_empty(),
             "{class:?}"
         );
     }
@@ -109,7 +109,7 @@ fn device_local_classes_overflow_into_system_memory() {
     ];
     for class in [MemoryClass::Private, MemoryClass::Memoryless] {
         assert!(
-            overflow_candidates(&unified, 0b111, class).is_empty(),
+            overflow_candidates(&unified, 0b111, class, true).is_empty(),
             "{class:?}"
         );
     }
@@ -167,18 +167,183 @@ fn shared_memory_follows_the_cpu_cache_mode_and_unified_memory() {
             assert_eq!(candidates(&incoherent, 0b11, class, unified), [0]);
         }
     }
-    // The other classes do not depend on unified memory.
-    for class in [
-        MemoryClass::Private,
-        MemoryClass::Managed,
-        MemoryClass::Memoryless,
-    ] {
+    // `Managed` does not depend on unified memory; `Private` and `Memoryless` do where a type is
+    // not device-local (`unified_private_memory_takes_the_system_heap_first`).
+    assert_eq!(
+        candidates(&radv, 0b1111, MemoryClass::Managed, true),
+        candidates(&radv, 0b1111, MemoryClass::Managed, false),
+    );
+}
+
+/// With unified memory, `Private` and `Memoryless` memory take the types that are not
+/// device-local first, host-invisible, then uncached, then cached, and the device-local ones after
+/// (`Memoryless` a lazily allocated one before all), never a protected or AMD device-coherent one;
+/// without unified memory, or where every type the resource takes is device-local, as before.
+#[test]
+fn unified_private_memory_takes_the_system_heap_first() {
+    use vk::MemoryPropertyFlags as P;
+    let (private, memoryless) = (MemoryClass::Private, MemoryClass::Memoryless);
+    // RADV (Mesa 26.2.4) on a Radeon 780M: device-local 0, 1, 3 and 4 (3 and 4 host-visible),
+    // system memory 2 (uncached) and 5 and 6 (cached), protected 7 to 12 (11 and 12 not
+    // device-local), AMD device-coherent 13 to 16.
+    let radv: Vec<vk::MemoryType> = [
+        0x1, 0x1, 0x6, 0x7, 0x7, 0xe, 0xe, 0x21, 0x21, 0x21, 0x21, 0x20, 0x20, 0xc1, 0xc6, 0xc7,
+        0xce,
+    ]
+    .iter()
+    .map(|&flags| ty(P::from_raw(flags)))
+    .collect();
+    let all = (1 << radv.len()) - 1;
+    for class in [private, memoryless] {
         assert_eq!(
-            candidates(&radv, 0b1111, class, true),
-            candidates(&radv, 0b1111, class, false),
+            candidates(&radv, all, class, true),
+            [2, 5, 6, 0, 1, 3, 4],
+            "{class:?}"
+        );
+        // Only the types the resource takes: device-local alone, as before.
+        assert_eq!(
+            candidates(&radv, 0b1_1011, class, true),
+            [0, 1, 3, 4],
+            "{class:?}"
+        );
+        assert_eq!(
+            candidates(&radv, 0b10_0001, class, true),
+            [5, 0],
+            "{class:?}"
+        );
+        assert!(
+            overflow_candidates(&radv, all, class, true).is_empty(),
             "{class:?}"
         );
     }
+    // Without unified memory, device-local first and system memory as overflow.
+    assert_eq!(candidates(&radv, 0b111_1111, private, false), [0, 1, 3, 4]);
+    assert_eq!(
+        overflow_candidates(&radv, 0b111_1111, private, false),
+        [2, 5, 6]
+    );
+    // A lazily allocated type before all for `Memoryless`, never for `Private`.
+    let tiler = [
+        ty(P::DEVICE_LOCAL),
+        ty(P::DEVICE_LOCAL | P::LAZILY_ALLOCATED),
+        ty(P::HOST_VISIBLE | P::HOST_COHERENT),
+    ];
+    assert_eq!(candidates(&tiler, 0b111, memoryless, true), [1, 2, 0]);
+    assert_eq!(candidates(&tiler, 0b111, private, true), [2, 0]);
+    // Every type device-local (ANV, MoltenVK, lavapipe): as before.
+    let anv = [
+        ty(P::DEVICE_LOCAL),
+        ty(P::DEVICE_LOCAL | P::HOST_VISIBLE | P::HOST_COHERENT),
+    ];
+    assert_eq!(candidates(&anv, 0b11, private, true), [0, 1]);
+}
+
+/// The memory types whose blocks of the runtime's own buffers are allocated exportable as a
+/// dma-buf (`memory.rs`'s "Buffers in exportable blocks"): with unified memory,
+/// those of a heap that is not device-local, where the device exports such memory from a pooled
+/// block; else none, and why.
+#[test]
+fn own_buffer_blocks_are_exportable_in_a_unified_device_s_system_heap() {
+    use vk::MemoryPropertyFlags as P;
+    // RADV (Mesa 26.2.4) on a Radeon 780M: heap 0 device-local, heap 1 system memory; types as
+    // in `unified_private_memory_takes_the_system_heap_first`, each in the heap its flags say.
+    let flags = [
+        0x1, 0x1, 0x6, 0x7, 0x7, 0xe, 0xe, 0x21, 0x21, 0x21, 0x21, 0x20, 0x20, 0xc1, 0xc6, 0xc7,
+        0xce,
+    ];
+    let properties = |flags: &[u32], heaps: &[vk::MemoryHeapFlags]| {
+        let mut properties = vk::PhysicalDeviceMemoryProperties {
+            memory_type_count: flags.len() as u32,
+            memory_heap_count: heaps.len() as u32,
+            ..Default::default()
+        };
+        for (at, &flags) in flags.iter().enumerate() {
+            let flags = P::from_raw(flags);
+            let heap = u32::from(!flags.contains(P::DEVICE_LOCAL) && heaps.len() > 1);
+            properties.memory_types[at] = vk::MemoryType {
+                property_flags: flags,
+                heap_index: heap,
+            };
+        }
+        for (at, &flags) in heaps.iter().enumerate() {
+            properties.memory_heaps[at] = vk::MemoryHeap {
+                size: 1 << 33,
+                flags,
+            };
+        }
+        properties
+    };
+    let local = vk::MemoryHeapFlags::DEVICE_LOCAL;
+    let radv = properties(&flags, &[local, vk::MemoryHeapFlags::empty()]);
+    let system = 1 << 2 | 1 << 5 | 1 << 6 | 1 << 11 | 1 << 12 | 1 << 14 | 1 << 16;
+    assert_eq!(fd_buffer_types(&radv, true, Ok(())), Ok(system));
+    // Where the device exports no such memory from a pooled block, none, for its reason.
+    let refused = "refused";
+    assert_eq!(fd_buffer_types(&radv, true, Err(refused)), Err(refused));
+    // Without unified memory (a discrete GPU's system heap), none.
+    assert!(fd_buffer_types(&radv, false, Ok(())).is_err());
+    // Every heap device-local (ANV, lavapipe, MoltenVK): none.
+    let anv = properties(&[0x1, 0x7], &[local]);
+    assert!(fd_buffer_types(&anv, true, Ok(())).is_err());
+}
+
+/// The device's verdicts decide whether the runtime's buffers lie in blocks allocated exportable
+/// (`in_place.rs`'s `blocks_take`): the first move of the image that takes the place of the
+/// device's linear image there must pass for both row ends, and the class must pass wherever
+/// plain pooled memory passed; a pending verdict that decides it leaves them in plain blocks
+/// meanwhile.
+#[test]
+fn exportable_blocks_take_what_plain_blocks_take() {
+    use crate::in_place::{blocks_take, Access, BlocksTake, PagesClass, RowEnds, Verdict};
+    // Every verdict of a class, but those `except` gives.
+    let all = |class: PagesClass, verdict: Verdict| {
+        move |of: PagesClass,
+              access: Access,
+              rows: RowEnds,
+              except: &[(Access, RowEnds, Verdict)]| {
+            match of == class {
+                true => (except.iter())
+                    .find(|(a, r, _)| *a == access && *r == rows)
+                    .map_or(verdict, |(_, _, v)| *v),
+                false => Verdict::Unchecked,
+            }
+        }
+    };
+    let take = |plain: Verdict, exportable: Verdict, except: &[(Access, RowEnds, Verdict)]| {
+        blocks_take(PagesClass::FdBlocks, |class, access, rows| match class {
+            PagesClass::Pooled => all(PagesClass::Pooled, plain)(class, access, rows, &[]),
+            PagesClass::FdBlocks => {
+                all(PagesClass::FdBlocks, exportable)(class, access, rows, except)
+            }
+            _ => Verdict::Unchecked,
+        })
+    };
+    use Verdict::{Failed, Passed, Pending, Unchecked};
+    assert_eq!(take(Passed, Passed, &[]), BlocksTake::Take);
+    // Plain pooled memory unchecked (no DRM_FORMAT_MOD_LINEAR images): the first move decides.
+    assert_eq!(take(Unchecked, Passed, &[]), BlocksTake::Take);
+    assert_eq!(take(Unchecked, Pending, &[]), BlocksTake::Pending);
+    assert_eq!(take(Pending, Passed, &[]), BlocksTake::Pending);
+    let (reads, on) = (Access::Reads, RowEnds::OnLines);
+    assert_eq!(
+        take(Unchecked, Passed, &[(reads, on, Failed)]),
+        BlocksTake::Refused(reads, on)
+    );
+    assert_eq!(
+        take(Unchecked, Passed, &[(reads, on, Unchecked)]),
+        BlocksTake::Refused(reads, on)
+    );
+    // An access plain memory passed and the class did not.
+    let renders = (Access::Renders, RowEnds::InLines);
+    assert_eq!(
+        take(Passed, Passed, &[(renders.0, renders.1, Failed)]),
+        BlocksTake::Refused(renders.0, renders.1)
+    );
+    // One plain memory did not pass either: nothing lost.
+    assert_eq!(
+        take(Failed, Passed, &[(renders.0, renders.1, Failed)]),
+        BlocksTake::Take
+    );
 }
 
 /// No class takes a device-coherent or device-uncached type of `VK_AMD_device_coherent_memory`,
@@ -264,7 +429,7 @@ fn host_transfer_images_prefer_host_cached_memory() {
         0xce,
     ]);
     let allowed = 0b1_1100_0000_0010_1100;
-    assert_eq!(picked(&radv, allowed, true), (MemoryClass::Shared, vec![5]));
+    assert_eq!(picked(&radv, allowed, true), (private, vec![5]));
     // The same memory on a device without unified memory: its device-local uncached type.
     assert_eq!(host_cached_placement(&radv, allowed, private, false), None);
     assert_eq!(picked(&radv, allowed, false), (private, vec![3]));
@@ -340,12 +505,15 @@ fn pooled_blocks_place_until_full_and_two_empty_blocks_are_kept() {
     assert_ne!(first, second);
     assert_eq!(pool.blocks(), 3);
     // Emptying the first block keeps it, and the second likewise: two empty blocks are kept.
-    assert_eq!(pool.release(first, 0, 100, now), None);
-    assert_eq!(pool.release(first, 128, 100, now), None);
-    assert_eq!(pool.release(second, 0, 200, now), None);
+    assert_eq!(pool.release(first, (0, 100), now, 0, |_| false), None);
+    assert_eq!(pool.release(first, (128, 100), now, 0, |_| false), None);
+    assert_eq!(pool.release(second, (0, 200), now, 0, |_| false), None);
     assert_eq!(pool.blocks(), 3);
     // Emptying the third while two are kept frees it, as a pooled block that emptied.
-    assert_eq!(pool.release(third, 0, 256, now), Some(("third", false)));
+    assert_eq!(
+        pool.release(third, (0, 256), now, 0, |_| false),
+        Some(("third", false))
+    );
     assert_eq!(pool.blocks(), 2);
     // The kept blocks serve the next requests, the first-made first; the freed slot is reused.
     assert_eq!(pool.place(256, 1), Some((first, 0)));
@@ -359,6 +527,38 @@ fn pooled_blocks_place_until_full_and_two_empty_blocks_are_kept() {
     assert_eq!(pool.blocks(), 0);
 }
 
+/// A place reads zero only in a block allocated zero-initialized and only past every range
+/// placed in that block before: the bytes no resource used since the driver zeroed them. A
+/// range given back and placed again, or a gap below the furthest range placed, is not fresh,
+/// however long the block stays; a block that emptied keeps what was placed in it.
+#[test]
+fn a_place_reads_zero_only_past_every_range_placed_in_a_zeroed_block() {
+    let now = Instant::now();
+    let mut pool: Pool<&str> = Pool::default();
+    let zeroed = pool.add_as(256, false, "zeroed", 64, true);
+    assert_eq!(pool.place_fresh(64, 64), Some((zeroed, 64, true)));
+    assert_eq!(pool.place_fresh(32, 1), Some((zeroed, 128, true)));
+    // The first range back, and placed again: it held a resource.
+    assert_eq!(pool.release(zeroed, (0, 64), now, 0, |_| false), None);
+    assert_eq!(pool.place_fresh(16, 1), Some((zeroed, 0, false)));
+    // Past the furthest range placed, fresh again; the gap left below it is not.
+    assert_eq!(pool.place_fresh(32, 64), Some((zeroed, 192, true)));
+    assert_eq!(pool.place_fresh(16, 1), Some((zeroed, 16, false)));
+    assert_eq!(pool.place_fresh(16, 1), Some((zeroed, 32, false)));
+    // Emptied whole and kept, the block keeps what was placed in it.
+    for (offset, size) in [(16, 16), (32, 16), (64, 64), (128, 32), (192, 32), (0, 16)] {
+        assert_eq!(
+            pool.release(zeroed, (offset, size), now, 0, |_| false),
+            None
+        );
+    }
+    assert_eq!(pool.place_fresh(224, 1), Some((zeroed, 0, false)));
+    assert_eq!(pool.place_fresh(32, 1), Some((zeroed, 224, true)));
+    // A block not allocated zero-initialized holds no fresh place.
+    let plain = pool.add(256, false, "plain", 0);
+    assert_eq!(pool.place_fresh(64, 1), Some((plain, 0, false)));
+}
+
 /// A kept empty block beyond its pool's one goes once it stayed empty for `KEPT_EMPTY_FOR`, the
 /// one emptied earliest first, and never the last kept one; a placement in a kept block makes it
 /// a block in use again. Every kept block goes where the caller takes them (a block of the type
@@ -370,14 +570,14 @@ fn a_kept_empty_block_beyond_one_goes_after_its_quiet_period() {
     let mut pool: Pool<&str> = Pool::default();
     let first = pool.add(256, false, "first", 256);
     let second = pool.add(256, false, "second", 256);
-    assert_eq!(pool.release(first, 0, 256, start), None);
+    assert_eq!(pool.release(first, (0, 256), start, 0, |_| false), None);
     assert_eq!(
         pool.stale(later),
         None,
         "one kept block stays, however long"
     );
     assert_eq!(
-        pool.release(second, 0, 256, start + KEPT_EMPTY_FOR / 2),
+        pool.release(second, (0, 256), start + KEPT_EMPTY_FOR / 2, 0, |_| false),
         None
     );
     assert_eq!(
@@ -400,8 +600,8 @@ fn a_kept_empty_block_beyond_one_goes_after_its_quiet_period() {
     let third = pool.add(256, false, "third", 256);
     assert_eq!(pool.place(256, 1), Some((second, 0)));
     let at = later + KEPT_EMPTY_FOR;
-    assert_eq!(pool.release(second, 0, 256, at), None);
-    assert_eq!(pool.release(third, 0, 256, at), None);
+    assert_eq!(pool.release(second, (0, 256), at, 0, |_| false), None);
+    assert_eq!(pool.release(third, (0, 256), at, 0, |_| false), None);
     assert_eq!(pool.stale(at + KEPT_EMPTY_FOR / 2), None);
     let mut taken = pool.take_kept();
     taken.sort_unstable();
@@ -417,10 +617,117 @@ fn dedicated_blocks_take_no_other_placement_and_free_with_their_resource() {
     assert_eq!(pool.place(1, 1), None, "a dedicated block is never shared");
     // Freed as dedicated, which its caller counts apart from a pooled block that emptied.
     assert_eq!(
-        pool.release(dedicated, 0, 1000, Instant::now()),
+        pool.release(dedicated, (0, 1000), Instant::now(), 0, |_| false),
         Some((7, true))
     );
     assert_eq!(pool.blocks(), 0);
+}
+
+/// Past its two kept empty pooled blocks, a pool keeps a block that empties where its bytes fit
+/// in what its heap's budget has to spare, and frees it where they do not; the bytes it keeps
+/// follow every block that empties, fills or goes.
+#[test]
+fn a_block_past_the_two_is_kept_where_the_heap_s_budget_spares_its_bytes() {
+    let now = Instant::now();
+    let mut pool: Pool<&str> = Pool::default();
+    let blocks = ["first", "second", "third", "fourth"].map(|name| pool.add(256, false, name, 256));
+    assert_eq!(pool.kept_bytes(), 0);
+    for &block in &blocks[..2] {
+        assert_eq!(pool.release(block, (0, 256), now, 0, |_| false), None);
+    }
+    assert_eq!(pool.kept_bytes(), 512, "two kept whatever the budget");
+    // The third's bytes fit in the spare: kept. The fourth's do not: freed.
+    assert_eq!(pool.release(blocks[2], (0, 256), now, 256, |_| false), None);
+    assert_eq!(pool.kept_bytes(), 768);
+    assert_eq!(
+        pool.release(blocks[3], (0, 256), now, 255, |_| false),
+        Some(("fourth", false))
+    );
+    assert_eq!(pool.kept_bytes(), 768);
+    // A placement in a kept block takes its bytes out of the kept ones.
+    assert_eq!(pool.place(16, 1), Some((blocks[0], 0)));
+    assert_eq!(pool.kept_bytes(), 512);
+    // A block added empty is kept as it is added.
+    pool.add(128, false, "fifth", 0);
+    assert_eq!(pool.kept_bytes(), 640);
+    let mut taken = pool.take_kept();
+    taken.sort_unstable();
+    assert_eq!(taken, ["fifth", "second", "third"]);
+    assert_eq!(pool.kept_bytes(), 0);
+}
+
+/// A heap's budget of kept empty blocks is an eighth of it, at most `KEPT_EMPTY_BYTES`; with
+/// unified memory, one budget of an eighth of every heap: a Radeon 780M's (RADV) two heaps of
+/// system memory, 5660 and 11319 MiB, keep 707 and 1414 MiB apart, and 2 GiB as one.
+#[test]
+fn unified_memory_keeps_one_budget_for_its_heaps() {
+    const MIB: u64 = 1 << 20;
+    let radeon = [5660 * MIB, 11319 * MIB];
+    assert_eq!(kept_budget(&radeon, 0, false), 5660 * MIB / 8);
+    assert_eq!(kept_budget(&radeon, 1, false), 11319 * MIB / 8);
+    for heap in 0..2 {
+        assert_eq!(kept_budget(&radeon, heap, true), KEPT_EMPTY_BYTES);
+    }
+    // A discrete card's heaps are apart: an RTX 5080 Laptop GPU's 16 GiB of VRAM keeps the cap.
+    let discrete = [16 << 30, 47 << 30];
+    assert_eq!(kept_budget(&discrete, 0, false), KEPT_EMPTY_BYTES);
+    // One heap of 4 GiB, unified or not: an eighth.
+    assert_eq!(kept_budget(&[4 << 30], 0, true), 512 * MIB);
+    assert_eq!(kept_budget(&[4 << 30], 0, false), 512 * MIB);
+}
+
+/// A dedicated block that empties is kept where its bytes fit in the heap's spare and its memory
+/// may take another placement; the next dedicated placement it fits takes it whole (at most a
+/// quarter shorter than the block), the shortest such first, and none shares it. A kept dedicated
+/// block goes once it stayed empty for `KEPT_EMPTY_FOR`, though it is the pool's only kept one.
+#[test]
+fn a_kept_dedicated_block_takes_the_next_dedicated_placement_it_fits() {
+    let start = Instant::now();
+    let mut pool: Pool<&str> = Pool::default();
+    let long = pool.add(1000, true, "long", 1000);
+    let short = pool.add(800, true, "short", 800);
+    let import = pool.add(1000, true, "import", 1000);
+    // Not reusable (an import, a buffer's dedicated allocation): freed as before.
+    assert_eq!(
+        pool.release(import, (0, 1000), start, 4000, |_| false),
+        Some(("import", true))
+    );
+    // Past the spare: freed.
+    assert_eq!(
+        pool.release(short, (0, 800), start, 799, |_| true),
+        Some(("short", true))
+    );
+    let short = pool.add(800, true, "short", 800);
+    assert_eq!(pool.release(short, (0, 800), start, 4000, |_| true), None);
+    assert_eq!(pool.release(long, (0, 1000), start, 4000, |_| true), None);
+    assert_eq!(pool.kept_bytes(), 1800);
+    assert_eq!(
+        pool.place(1, 1),
+        None,
+        "a kept dedicated block takes no pooled placement"
+    );
+    assert_eq!(
+        pool.place_dedicated(1001),
+        None,
+        "longer than every kept block"
+    );
+    assert_eq!(
+        pool.place_dedicated(790),
+        Some(short),
+        "the shortest that fits"
+    );
+    assert_eq!(
+        pool.place_dedicated(790),
+        None,
+        "the long one is past a quarter longer"
+    );
+    assert_eq!(pool.place_dedicated(800), Some(long));
+    assert_eq!(pool.kept_bytes(), 0);
+    assert_eq!(pool.release(long, (0, 800), start, 4000, |_| true), None);
+    assert_eq!(pool.stale(start + KEPT_EMPTY_FOR / 2), None, "not yet");
+    assert_eq!(pool.stale(start + KEPT_EMPTY_FOR), Some("long"));
+    assert_eq!(pool.kept_bytes(), 0);
+    assert_eq!(pool.turnover(), (0, 0), "no pooled block came or went");
 }
 
 /// A pool has room for a placement where a pooled block holds a free range that long at the
@@ -441,7 +748,10 @@ fn room_is_a_pooled_block_s_free_range_at_the_largest_alignment_asked() {
     // A placement aligned to 64 asks the pool's later room at 64: 192 bytes from offset 64.
     assert_eq!(pool.place(8, 64), Some((block, 64)));
     assert!(pool.has_room(128) && !pool.has_room(129));
-    assert_eq!(pool.release(block, 64, 8, Instant::now()), None);
+    assert_eq!(
+        pool.release(block, (64, 8), Instant::now(), 0, |_| false),
+        None
+    );
     assert!(pool.has_room(192) && !pool.has_room(193));
 }
 

@@ -44,7 +44,7 @@
 //! texture views of another component layout shadowed in `view_reinterpretation`
 //! ([`VIEW_SHADOWS`]), executions of an indirect command buffer from one command
 //! with two lengths in `visibility` ([`REPEATED_STARTS`]), passes writing a `Boolean` visibility
-//! result there ([`BOOLEANS`]), resources made with Metal's private
+//! result there ([`BOOLEANS`]), heaps of the runtime's memory made with Metal's private
 //! option bit here ([`PRIVATE_OPTION`]), indexed indirect draws of bytes a draw wrote with no
 //! barrier in `indirect_draws` ([`UNORDERED_DRAWS`]), pipeline states whose functions read an
 //! argument their function constants removed in `absent_reads` ([`ABSENT_READS`]), a slot's
@@ -56,7 +56,8 @@
 //! `rate_mapped_passes` ([`ZERO_LAYER_AFTER_RELEASE`]), and passes over a map reset after they took
 //! it that the runtime cannot encode again there ([`RESET_UNENCODED`]),
 //! IOSurface planes under 16 bytes a row in `buffer_texture_blits` ([`NARROW_ROWS`]) and
-//! planes whose GPU rows share bytes there ([`COLLIDING_ROWS`]), one
+//! planes whose GPU rows share bytes there ([`COLLIDING_ROWS`]), planes past their surface there
+//! ([`SURFACE_TAILS`]) and mipmapped planes in memory of their own there ([`SURFACE_APART`]), one
 //! texture's depth stored and resolved beside its stencil resolved alone in `resolves` ([`MIXED_RESOLVES`]), mesh
 //! draws emulated on a device without `VK_EXT_mesh_shader` in `mesh_draws` ([`EMULATED_MESH`]),
 //! draws under Apple's last provoking vertex on a device without its own in `provoking` and
@@ -89,8 +90,7 @@
 //! each command buffer's own copy on a device withholding
 //! `descriptorBindingUpdateUnusedWhilePending`, [`OWN_COPIES`]; a no-copy buffer's deallocator
 //! that waits for its pages' import, which a texture's image a submitted command buffer may read
-//! holds, [`DELAYED_DEALLOCATORS`]), a no-copy buffer over pages the process maps read-only,
-//! made from its dma-buf source in `dma_buf_imports` on Linux ([`READ_ONLY_PAGES`]),
+//! holds, [`DELAYED_DEALLOCATORS`]),
 //! pass colors a draw keeps where Metal's compiler may fold the output
 //! and zero them in `color_reformat` ([`KEPT_COLORS`]), multisampled depth copied in by an
 //! inexact fragment-depth draw in `sample_copies` ([`DRAWN_DEPTH`]), textures bound beyond their
@@ -117,7 +117,9 @@
 //! together on a driver that merges submissions in `grouped_submissions` ([`GROUPED`]),
 //! visibility
 //! counts of draws writing several colors on a driver that counts each sample once per color in
-//! `color_groups` ([`PER_COLOR_COUNTS`]), passes that load and draw a signed normalized attachment
+//! `color_groups` ([`PER_COLOR_COUNTS`]), visibility counts of early-tests draws whose fragment
+//! function writes its sample mask on a device that may count after it in `sample_coverage`
+//! ([`PAST_EARLY_MASKS`]), passes that load and draw a signed normalized attachment
 //! holding a minimum code, or an `RGB9E5Float` one holding an unnormalized word, in
 //! `snorm_tile_store` ([`SNORM_MINIMUM`], [`SHARED_EXPONENT`]), condition words of command
 //! predication past their buffer that read memory unrelated to it in `predication`
@@ -155,7 +157,9 @@ use super::attachment_reads::IN_PLACE;
 use super::barycentric_weights::SYNTHESIZED_GEOMETRY;
 use super::binary_archives::ARCHIVES;
 use super::blits::SYSTEM_MEMORY;
-use super::buffer_texture_blits::{COLLIDING_ROWS, NARROW_ROWS, OVERLAPS};
+use super::buffer_texture_blits::{
+    COLLIDING_ROWS, NARROW_ROWS, OVERLAPS, SURFACE_APART, SURFACE_TAILS,
+};
 use super::buffer_texture_order::USAGE_SHADOWS;
 use super::buffer_texture_renders::MERGES;
 use super::cache::UNWRITTEN_ENTRY;
@@ -168,6 +172,7 @@ use super::compressed_decode::BLOCK_DECODES;
 use super::cross_class_reads::CROSS_CLASS;
 use super::depth_denormals::{DEPTH_DENORMALS, SIGNED_DEPTH_TESTS};
 use super::detach_textures::DETACHED_REACHES;
+use super::device_recovery::RECOVERED;
 use super::extended_range_blends::{EXTENDED_RANGE_BITS, STORED_CODES};
 use super::extended_range_resolve::XR_RESOLVE;
 use super::extended_range_two_planes::HEAP_PLANES;
@@ -179,8 +184,9 @@ use super::fresh_contents::FRESH_PATTERNS;
 use super::grouped_submissions::GROUPED;
 use super::heap_layouts::HEAP_LAYOUTS;
 use super::heap_metal_sizes::{PAST_METAL_SIZES, UNMODELLED_SIZES};
+use super::heap_one_plane::ONE_PLANE_LAYOUTS;
 use super::heap_textures::{ALIASES, APART, COMPRESSED, OPTIMIZED};
-use super::host_memory::{not_importable, Mapping, GUEST_PAGE, READ_ONLY_PAGES};
+use super::host_memory::{not_importable, Mapping, GUEST_PAGE};
 use super::index_fetches::INDEX_FETCHES;
 use super::indirect_command_buffers::UNMEASURED_IDENTIFIERS;
 use super::indirect_dispatches::INDIRECT_DISPATCHES;
@@ -206,6 +212,7 @@ use super::resource_ids::{
 };
 use super::rotated_textures::ROTATED_LOADS;
 use super::sample_copies::DRAWN_DEPTH;
+use super::sample_coverage::PAST_EARLY_MASKS;
 use super::shader_stencil::SHADOW;
 use super::snorm_tile_store::{SHARED_EXPONENT, SNORM_MINIMUM};
 use super::sparse_textures::SPARSE;
@@ -222,9 +229,9 @@ use super::word_samples_msaa::WORD_RESOLVE;
 use super::ycbcr_passes::YCBCR_PASSES;
 use super::ycbcr_textures::YCBCR_FILTERS;
 use super::{
-    case_making_kinds, creation_heard_checked, layer_reported_nothing_at_all, made_lane_device,
-    pipeline_state, public_case, run_case, run_with, shared_kinds, validated_device_with, Messages,
-    PublicCase, ScratchCache,
+    at_plan, case_making_kinds, creation_heard_checked, layer_reported_nothing_at_all,
+    made_lane_device, pipeline_state, public_case, run_case, run_with, shared_kinds,
+    validated_device_with, Messages, PublicCase, ScratchCache,
 };
 use crate::air_library::AirLibrary;
 use crate::candidate::engine::compute_shape;
@@ -453,7 +460,8 @@ pub(super) fn on_device_with(
 /// reconvergence; no kind is in two lists, and no list names a kind twice. `misplaced-notice`
 /// ([`MISPLACED`]), `copied-host-pages` ([`COPIED_PAGES`]) and `device-memory-overflow`
 /// ([`OVERFLOWED`]) are taken by the runtime's own tests instead, as no lane can meet the first,
-/// only a refusing gate meets the second, and only a full device-local heap the third.
+/// only a refusing gate or, off macOS, Metal's private option bit 24 meets the second, and only a
+/// full device-local heap the third.
 ///
 /// This module compiles only under the device cfgs, so a kind that lands with no site leaves this
 /// test red where the ordinary gate cannot read it. The runtime crate's
@@ -522,6 +530,8 @@ fn every_kind_has_a_site_a_lane_test_takes() {
         &ROTATED_LOADS,
         &NARROW_ROWS,
         &COLLIDING_ROWS,
+        &SURFACE_TAILS,
+        &SURFACE_APART,
         &MIXED_RESOLVES,
         &EMULATED_MESH,
         &PROVOKING,
@@ -540,9 +550,11 @@ fn every_kind_has_a_site_a_lane_test_takes() {
         &OWN_COPIES,
         &KEPT_COLORS,
         &PER_COLOR_COUNTS,
+        &PAST_EARLY_MASKS,
         &DRAWN_DEPTH,
         &USAGE_SHADOWS,
         &HEAP_PLANES,
+        &ONE_PLANE_LAYOUTS,
         &TWO_PLANE_COPIES,
         &EXTENDED_RANGE_BITS,
         &SNORM_MINIMUM,
@@ -573,7 +585,6 @@ fn every_kind_has_a_site_a_lane_test_takes() {
         &CHOSEN_COPIES,
         &KEPT_BYTES,
         &DELAYED_DEALLOCATORS,
-        &READ_ONLY_PAGES,
         &MISPLACED,
         &STILL_MAKING,
         &COPIED_PAGES,
@@ -593,6 +604,7 @@ fn every_kind_has_a_site_a_lane_test_takes() {
         &YCBCR_PASSES,
         &MEMORYLESS_TEXEL_BUFFERS,
         &UNWRITTEN_ENTRY,
+        &RECOVERED,
     ];
     for kind in lists.into_iter().flatten().copied().chain(stage_kinds) {
         assert!(listed.insert(kind), "{kind:?} is listed twice");
@@ -796,10 +808,11 @@ const STILL_MAKING: [Degradation; 3] = [
 
 /// The kind a no-copy buffer takes whose import of the caller's pages the caller's gate
 /// (`HostMemory::with_import_gate`) refused, or whose import the gate and the device admitted and
-/// that then failed, so the pages are copied. Only `copied_surfaces` meets it, behind its refusing
-/// gate, where its notices are not its subject; no venue's driver fails an admitted import on
-/// demand (NVIDIA's runs out of the host kernel's mappings only past `vm.max_map_count`). The
-/// runtime's own tests
+/// that then failed, so the pages are copied; off macOS, also no-copy memory of Metal's private
+/// option bit 24 ([`read_only_kinds`]), which is a copy that drops the GPU's writes. Beside those,
+/// only `copied_surfaces` meets it, behind its refusing gate, where its notices are not its
+/// subject; no venue's driver fails an admitted import on demand (NVIDIA's runs out of the host
+/// kernel's mappings only past `vm.max_map_count`). The runtime's own tests
 /// `copied_buffer_is_made_where_the_caller_s_gate_refuses_the_import` and
 /// `copied_buffer_is_made_where_an_admitted_import_fails_announced` take its site, the import
 /// failed by the runtime's test hook.
@@ -814,8 +827,7 @@ const COPIED_PAGES: [Degradation; 1] = [Degradation::CopiedHostPages];
 const OVERFLOWED: [Degradation; 1] = [Degradation::DeviceMemoryOverflow];
 
 /// The kind Metal's private option bit takes where the GPU's writes reach the memory here
-/// ([`the_private_option_bit_is_announced_on_a_heap_of_the_runtime_s_memory`],
-/// [`the_private_option_bit_drops_the_gpu_s_writes_to_no_copy_memory`]).
+/// ([`the_private_option_bit_is_announced_on_a_heap_of_the_runtime_s_memory`]).
 const PRIVATE_OPTION: [Degradation; 1] = [Degradation::PrivateResourceOption];
 
 /// `options` with Metal's private option bit 24 (0x1000000).
@@ -896,10 +908,25 @@ fn the_private_option_bit_is_announced_on_a_heap_of_the_runtime_s_memory() {
     });
 }
 
-/// Whether the GPU's writes to no-copy memory made with Metal's private option bit 24 are
-/// dropped here, as Metal drops them: on macOS, where the runtime imports its pages through a
-/// read-only view of them (the runtime's `read_only_view.rs`).
-const DROPS_WRITES: bool = cfg!(target_os = "macos");
+/// Whether the runtime imports the pages of no-copy memory made with Metal's private option bit
+/// 24 through a read-only view of them here (the runtime's `read_only_view.rs`): on macOS. Else it
+/// makes the memory over a copy of the pages whose GPU writes it drops (`copied.rs`).
+const VIEWS_DROP_WRITES: bool = cfg!(target_os = "macos");
+
+/// The kinds no-copy memory made with Metal's private option bit 24 announces here: none where a
+/// read-only view of its pages drops the GPU's writes, else the copy's (`copied-host-pages`).
+fn read_only_kinds() -> &'static [Degradation] {
+    match VIEWS_DROP_WRITES {
+        true => &[],
+        false => &COPIED_PAGES,
+    }
+}
+
+/// The no-copy objects made over a copy of memory of Metal's private option bit 24 since `before`
+/// (`WorkCounts::copied_read_only_memory`).
+fn read_only_copies(device: &Device, before: &metal2vulkan_runtime::WorkCounts) -> u64 {
+    device.work_counts().copied_read_only_memory - before.copied_read_only_memory
+}
 
 /// Of `buffer`, a no-copy buffer over host pages whose bytes are its `contents`: the CPU writes
 /// 0x11 to its first 16 bytes, a command buffer fills them with 0x5a, and later command buffers
@@ -951,12 +978,14 @@ fn drops_the_fill(device: &Device, buffer: &Buffer) -> bool {
 /// A no-copy buffer, a buffer placed in a no-copy heap and that buffer rebound to other pages,
 /// made with Metal's private option bit 24, which Metal makes and keeps the GPU's writes from the
 /// memory of (the M3 Max under macOS 27.0.1: a blit's fill reaches neither the CPU nor a later
-/// command buffer, which reads the CPU's bytes): on macOS each drops a fill so, and nothing is
-/// announced; elsewhere the fill reaches the pages, announced once. Each reports its options
-/// without the bit, as Metal's does.
+/// command buffer, which reads the CPU's bytes): each drops a fill so. On macOS their pages are
+/// imported through a read-only view of them and nothing is announced; elsewhere each is made over
+/// a copy of the pages that drops the GPU's writes, counted and announced once. Each reports its
+/// options without the bit, as Metal's does.
 #[test]
 fn the_private_option_bit_drops_the_gpu_s_writes_to_no_copy_memory() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
+        let before = device.work_counts();
         let bit = ResourceOptions::PRIVATE_BIT;
         let shared = with_private_bit(ResourceOptions::shared());
         let plain = device
@@ -982,13 +1011,19 @@ fn the_private_option_bit_drops_the_gpu_s_writes_to_no_copy_memory() {
             no_copy => no_copy.unwrap(),
         };
         assert_eq!(no_copy.resource_options(), plain);
-        assert_eq!(drops_the_fill(device, &no_copy), DROPS_WRITES);
+        assert!(
+            drops_the_fill(device, &no_copy),
+            "the no-copy buffer took the fill"
+        );
         // Rebound to other pages, it drops the GPU's writes to them too.
         // SAFETY: the other mapping outlives the buffer, and no other thread encodes or commits.
         unsafe { no_copy.rebind_bytes_no_copy(HostMemory::new(other.pointer()), None, None) }
             .unwrap();
         assert_eq!(no_copy.contents(), Some(other.pointer()));
-        assert_eq!(drops_the_fill(device, &no_copy), DROPS_WRITES);
+        assert!(
+            drops_the_fill(device, &no_copy),
+            "the rebound buffer took the fill"
+        );
         let heap_memory = Mapping::anonymous(HEAP);
         let descriptor = HeapDescriptor::new(HeapType::Automatic, HEAP as u64, shared);
         // SAFETY: the mapping outlives the heap, which is dropped first.
@@ -1003,14 +1038,17 @@ fn the_private_option_bit_drops_the_gpu_s_writes_to_no_copy_memory() {
         .unwrap();
         assert_eq!(heap.resource_options().raw() & bit, 0);
         let placed = heap.new_buffer(256, ResourceOptions::shared()).unwrap();
-        assert_eq!(drops_the_fill(device, &placed), DROPS_WRITES);
+        assert!(
+            drops_the_fill(device, &placed),
+            "the heap's buffer took the fill"
+        );
         drop((placed, heap, no_copy));
+        // The buffer, its rebind and the heap: each a copy where no view drops the writes.
+        let copies = read_only_copies(device, &before);
+        eprintln!("PRIVATEBIT: views drop writes {VIEWS_DROP_WRITES}; copies made {copies}");
+        assert_eq!(copies, if VIEWS_DROP_WRITES { 0 } else { 3 });
         // Beside them, what the `Shared` resources force on the device.
-        let kinds: &[Degradation] = match DROPS_WRITES {
-            true => &[],
-            false => &PRIVATE_OPTION,
-        };
-        assert_made_once(messages, kinds, &shared_kinds(device));
+        assert_made_once(messages, read_only_kinds(), &shared_kinds(device));
     });
 }
 
@@ -1116,12 +1154,14 @@ fn kernel_store_reads(device: &Device, memory: &Buffer) -> KernelStoreReads {
 /// conformance suite's `host-page-writes-kernel-store-read-only`), a later command of the same
 /// command buffer reads the stored words back from the GPU's caches, every run, while a later
 /// command buffer and the CPU read the pages' own bytes. On macOS the runtime imports the pages
-/// through a read-only view of them, which answers as Metal does at all three sites and announces
-/// nothing; elsewhere the stores reach the pages and are read at all three, announced once. Every byte of
-/// the window the stores do not name keeps the pages' own byte at every site.
+/// through a read-only view of them, and elsewhere makes the buffer over a copy of them that drops
+/// the GPU's writes at the batch's completion (counted and announced once): either answers as
+/// Metal does at all three sites. Every byte of the window the stores do not name keeps the pages'
+/// own byte at every site.
 #[test]
 fn a_kernel_s_stores_into_private_bit_memory_reach_only_its_own_command_buffer() {
     on_device(|device, messages| {
+        let before = device.work_counts();
         let memory = Mapping::anonymous(GUEST_PAGE);
         // SAFETY: the mapping's `GUEST_PAGE` bytes are this process's and nothing else uses them.
         unsafe { std::ptr::write_bytes(memory.pointer().as_ptr(), PAD, GUEST_PAGE) };
@@ -1150,46 +1190,32 @@ fn a_kernel_s_stores_into_private_bit_memory_reach_only_its_own_command_buffer()
             stored[at..at + 4].copy_from_slice(&word.to_le_bytes());
         }
         let kept = vec![PAD; WINDOW];
-        let past = match DROPS_WRITES {
-            true => &kept,
-            false => &stored,
-        };
+        let copies = read_only_copies(device, &before);
         eprintln!(
-            "PRIVATEBIT-KERNEL: drops writes {DROPS_WRITES}; same command buffer stored {}, later \
-             command buffer stored {}, CPU stored {}",
+            "PRIVATEBIT-KERNEL: views drop writes {VIEWS_DROP_WRITES}; copies made {copies}; same \
+             command buffer stored {}, later command buffer stored {}, CPU stored {}",
             reads.same == stored,
             reads.later == stored,
             reads.cpu == stored
         );
+        assert_eq!(copies, u64::from(!VIEWS_DROP_WRITES));
         assert!(
             reads.same == stored,
             "a later command of the dispatch's command buffer reads the stored words, as Metal's \
              does"
         );
         assert!(
-            reads.later == *past,
-            "a later command buffer reads {}",
-            match DROPS_WRITES {
-                true => "the pages' own bytes: the stores were dropped",
-                false => "the stores, which reached the pages",
-            }
+            reads.later == kept,
+            "a later command buffer reads the pages' own bytes: the stores were dropped"
         );
         assert!(
-            reads.cpu == *past,
-            "the CPU reads {}",
-            match DROPS_WRITES {
-                true => "the pages' own bytes: the stores were dropped",
-                false => "the stores, which reached the pages",
-            }
+            reads.cpu == kept,
+            "the CPU reads the pages' own bytes: the stores were dropped"
         );
         drop(no_copy);
         let mut first = shared_kinds(device);
         first.extend(reads.made);
-        let kinds: &[Degradation] = match DROPS_WRITES {
-            true => &[],
-            false => &PRIVATE_OPTION,
-        };
-        assert_made_once(messages, kinds, &first);
+        assert_made_once(messages, read_only_kinds(), &first);
     });
 }
 
@@ -1260,7 +1286,7 @@ fn emulates_simdgroups(device: &Device, case: &PublicCase) -> bool {
 /// run on pinned subgroups wider than 8).
 #[test]
 fn dispatches_degrade_once_per_kind() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let ragged = public_case(RAGGED).unwrap();
         let partial = public_case(PARTIAL_SIMDGROUPS).unwrap();
         for case in [&ragged, &ragged, &partial, &partial] {
@@ -1362,12 +1388,12 @@ const SPECIALIZED: [&str; 2] = [
 
 /// The precision kinds a run of `case` on `device` announces, and the specialized notes its stage
 /// records: the notes of the stage its bind shape compiles (`compile_compute_for_shape`, the
-/// runtime's own route) under its plan's specialization and the values its plan pushes
-/// (`StageModule::precision_notes_bound`, `BindingPlan::specialized_value`), but a note kept by
-/// clauses of the bound formats alone (`SpecClause::tests_bound_formats`) only where one holds of
-/// the formats `case` binds (`StageModule::bound_format_clauses`; a clause testing a slot `case`
-/// binds nothing at does not hold, as the runtime reads it: the slot reads zero), and reconvergence
-/// that is not Metal's.
+/// runtime's own route) under its plan's specialization, the values its plan pushes
+/// (`StageModule::precision_notes_bound`, `BindingPlan::specialized_value`) and the classes of the
+/// formats `case` binds (`SpecKey::BoundTexelFormat`), but a note kept by clauses of the bound
+/// formats (`SpecKey::BoundTexelFormat`) only where one holds that tests no slot `case` binds
+/// nothing at (a clause testing one does not hold, as the runtime reads it: the slot reads zero),
+/// and reconvergence that is not Metal's.
 fn run_kinds(device: &Device, case: &PublicCase) -> (BTreeSet<Degradation>, BTreeSet<Degradation>) {
     let compile = device.compile_device();
     let addressed = compile.profile().descriptors().buffer_device_address;
@@ -1384,15 +1410,17 @@ fn run_kinds(device: &Device, case: &PublicCase) -> (BTreeSet<Degradation>, BTre
         let texture = case.compute.textures.get(&slot.index)?;
         Some(bound_texel_format(pixel_format(texture.format)))
     };
-    let bound = |key| plan.specialized_value(key);
+    let bound = |key: SpecKey| match key {
+        SpecKey::BoundTexelFormat(slot) => class(slot).map(u64::from),
+        key => plan.specialized_value(key),
+    };
     let mut kinds: BTreeSet<Degradation> = stage
         .precision_notes_bound(&plan.specialization, &bound)
         .into_iter()
         .filter(|&note| {
             let held = stage.note_clauses_bound(note, &plan.specialization, &bound);
             held.is_empty()
-                || held.iter().any(|c| !c.tests_bound_formats())
-                || stage.bound_format_clauses(note, &class).iter().any(|c| {
+                || held.iter().any(|c| {
                     c.all.iter().all(|t| match t.key {
                         SpecKey::BoundTexelFormat(slot) => {
                             case.compute.textures.contains_key(&slot.index)
@@ -1425,7 +1453,7 @@ fn run_kinds(device: &Device, case: &PublicCase) -> (BTreeSet<Degradation>, BTre
 /// texel, which the stage records whatever is bound.
 #[test]
 fn runs_announce_the_notes_their_specialization_keeps_once() {
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let mut expected = BTreeSet::new();
         let mut held = Vec::new();
         for name in SPECIALIZED {
@@ -1494,7 +1522,7 @@ fn a_kind_asked_for_at_each_occurrence_is_announced_at_each_bind_of_a_variant() 
         (kept, announced)
     };
     let mut asked = BTreeSet::new();
-    on_device(|device, messages| {
+    on_device_with(at_plan, |device, messages| {
         let (kept, announced) = run(device, messages);
         assert!(!kept.is_empty(), "no stage of {NOTED:?} keeps a note");
         let once: BTreeMap<Degradation, usize> = kept.keys().map(|&kind| (kind, 1)).collect();
@@ -1502,12 +1530,18 @@ fn a_kind_asked_for_at_each_occurrence_is_announced_at_each_bind_of_a_variant() 
         asked = kept.into_keys().collect();
     });
     let each = |options: &mut DeviceOptions| options.announce_each = asked.clone();
-    on_device_with(each, |device, messages| {
-        let (kept, announced) = run(device, messages);
-        let twice: BTreeMap<Degradation, usize> =
-            kept.into_iter().map(|(kind, n)| (kind, 2 * n)).collect();
-        assert_eq!(announced, twice);
-    });
+    on_device_with(
+        |options| {
+            each(options);
+            at_plan(options)
+        },
+        |device, messages| {
+            let (kept, announced) = run(device, messages);
+            let twice: BTreeMap<Degradation, usize> =
+                kept.into_iter().map(|(kind, n)| (kind, 2 * n)).collect();
+            assert_eq!(announced, twice);
+        },
+    );
 }
 
 /// A device that withholds maximal reconvergence (`shaderMaximalReconvergence`, which every venue
@@ -2014,15 +2048,20 @@ fn a_creation_s_notices_and_messages_reach_the_sink_on_the_asking_thread() {
 /// (`Device::degrade_stages` at the making), each where the device has not announced it before:
 /// every precision note a stage records that no specialization removes (a specialized one is
 /// announced where a draw or dispatch binds a variant keeping it), but
-/// `ArgumentPixelSamplerScaling`, which a draw or dispatch listing the state announces;
+/// `ArgumentPixelSamplerScaling`, which a draw or dispatch listing the state announces, and
+/// `DevicePointSize`, which a draw that rasterizes points announces;
 /// `shader-color-conversion` where a stage rounds a color write to Metal's code; and reconvergence
 /// that is not Metal's.
 fn making_kinds<'a>(stages: impl IntoIterator<Item = &'a StageModule>) -> BTreeSet<Degradation> {
+    const AT_DRAWS: [PrecisionNote; 2] = [
+        PrecisionNote::ArgumentPixelSamplerScaling,
+        PrecisionNote::DevicePointSize,
+    ];
     let mut kinds = BTreeSet::new();
     for stage in stages {
         for &note in &stage.precision_notes {
             let specialized = stage.specialized_notes.iter().any(|s| s.note == note);
-            if !specialized && note != PrecisionNote::ArgumentPixelSamplerScaling {
+            if !specialized && !AT_DRAWS.contains(&note) {
                 kinds.insert(Degradation::from_precision_note(note));
             }
         }
@@ -2051,6 +2090,30 @@ pub(super) fn made_render_kinds(
     let mut kinds = making_kinds(&compiled.stages);
     kinds.extend(layout_kinds(device, &compiled.layout));
     kinds
+}
+
+/// The kinds a draw of points of a render pipeline state of `descriptor` on `device` announces
+/// past its making's ([`made_render_kinds`]), each where the device has not announced it before:
+/// `DevicePointSize` where a stage records `PrecisionNote::DevicePointSize`, a point size on a
+/// device whose largest point is below Metal's (lavapipe's 256, ANV's 255), which a draw of points
+/// announces and no other draw does (`Device::degrade_point_size`).
+pub(super) fn point_draw_kinds(
+    device: &Device,
+    descriptor: &RenderPipelineDescriptor,
+) -> BTreeSet<Degradation> {
+    let compiled = device
+        .compile_device()
+        .compile_render_pipeline(descriptor, &Budget::standard())
+        .unwrap();
+    let noted = (compiled.stages.iter()).any(|stage| {
+        stage
+            .precision_notes
+            .contains(&PrecisionNote::DevicePointSize)
+    });
+    noted
+        .then_some(Degradation::DevicePointSize)
+        .into_iter()
+        .collect()
 }
 
 /// [`making_kinds`] of a mesh render pipeline state of `descriptor` on `device`, as its compile
@@ -2156,9 +2219,10 @@ pub(super) fn refused_sets(device: &Device, layout: &PipelineLayout) -> Vec<(u32
 
 /// The kinds a dispatch of kernel `function`'s compute pipeline state on `device` may announce
 /// beyond its making's ([`made_compute_kinds`]): those of the specialized notes its stage records
-/// with a clause that tests a value the function reads as data (`SpecClause::tests_bound_values`:
-/// a bound texture's format class). No pipeline's key carries those values, so the runtime
-/// announces such a kind at a dispatch whose pushed values hold one of its clauses
+/// with a clause that tests a value the function reads as data or a bound sampler's word
+/// (`SpecClause::tests_bound_values`: a bound texture's format class, `SpecKey::BoundSamplerWord`),
+/// a filter note's as `ycbcr-filter-not-exact`. No pipeline's key carries those values, so the
+/// runtime announces such a kind at a dispatch whose pushed values hold one of its clauses
 /// (`degrade_bound_values`), and only there; a test that dispatches with values it does not model
 /// (slots it binds nothing at) takes each as allowed, not forced ([`assert_once_allowing`]).
 pub(super) fn bound_value_kinds(
@@ -2175,7 +2239,12 @@ pub(super) fn bound_value_kinds(
         .specialized_notes
         .iter()
         .filter(|s| s.when.iter().any(|c| c.tests_bound_values()))
-        .map(|s| Degradation::from_precision_note(s.note))
+        .map(|s| match s.note {
+            PrecisionNote::HalfSampleFilter | PrecisionNote::FloatSampleFilter => {
+                Degradation::YCbCrFilterNotExact
+            }
+            note => Degradation::from_precision_note(note),
+        })
         .collect()
 }
 
@@ -2223,18 +2292,34 @@ pub(super) fn expected_once(
 }
 
 /// The note a device announces at its first clear of a color attachment to a value at a rounding
-/// question, which the device converts its own way (`device-color-conversion`): such as 0.5 in an
-/// 8-bit unorm channel, 127.5 codes, a tie, or any value strictly between 0 and 1 in an sRGB
-/// one, whose encode Vulkan leaves to the device. A lane whose pipelines record the note has it
-/// already (`made_render_kinds`); MoltenVK's record none. Not where every such clear is by the load
+/// question, which the device converts its own way (`device-color-conversion`): any value whose
+/// scaled `float` lies off a whole code of a normalized channel, of which Vulkan lets the device
+/// store either of the two closest codes (0.5 in an 8-bit unorm channel, 127.5 codes, a tie; 0.2,
+/// 51.0000008 codes), or any value strictly between 0 and 1 in an sRGB one, whose encode Vulkan
+/// leaves to the device. A lane whose pipelines record the note has it already
+/// (`made_render_kinds`); MoltenVK's record none. Not where every such clear is by the load
 /// operation of an attachment its pass's render area covers (`covered`) on a driver whose load
 /// operation clears as Metal's does (`DriverFact::ColorClearIsMetals`).
-pub(super) fn tie_cleared(device: &Device, covered: bool) -> BTreeSet<Degradation> {
+pub(super) fn clear_in_question(device: &Device, covered: bool) -> BTreeSet<Degradation> {
     let metals = device
         .properties()
         .driver_facts
         .contains(&DriverFact::ColorClearIsMetals);
     forced(&[(Degradation::DeviceColorConversion, !(metals && covered))])
+}
+
+/// How many of `notices` a color attachment's clear announced as `device-color-conversion`
+/// (`render_pass::degrade_clear_conversion`, whose object is "a {format} color attachment's clear
+/// to {color}"), apart from a pipeline's record of the note: one at each such clear on a device
+/// whose options list the kind (`DeviceOptions::announce_each`).
+pub(super) fn clear_conversions(notices: &[DebugMessage]) -> usize {
+    (notices.iter())
+        .filter_map(|message| message.degradation.as_ref())
+        .filter(|notice| {
+            notice.degradation == Degradation::DeviceColorConversion
+                && notice.object.contains("color attachment's clear")
+        })
+        .count()
 }
 
 /// The kinds of `kinds` whose condition holds: each paired with the device fact, or the test's
@@ -2257,20 +2342,15 @@ pub(super) fn loses_depth_denormals(device: &Device, on_host: bool) -> bool {
     !(stored && facts.contains(&DriverFact::DepthTestKeepsDenormals))
 }
 
-/// Whether `device` announces `restricted-depth-upload` for an upload into a 32-bit float depth
-/// image: it lacks `VK_EXT_depth_range_unrestricted`, where Vulkan leaves a value outside
-/// `[0, 1]` undefined, and its driver is not measured to keep one
-/// (`DriverFact::DepthImageKeepsValuesOutsideUnitRange`).
+/// Whether `device`'s uploads into a 32-bit float depth image clamp each value into `[0, 1]`
+/// first and announce `restricted-depth-upload`: it lacks `VK_EXT_depth_range_unrestricted`,
+/// where Vulkan takes no copied value outside `[0, 1]`
+/// (`VUID-vkCmdCopyBufferToImage-pRegions-07931`), whatever its driver is measured to keep.
 pub(super) fn clamps_depth_uploads(device: &Device) -> bool {
-    let unrestricted = device
+    !device
         .enabled()
         .extensions
-        .contains(&VkExtension::ExtDepthRangeUnrestricted);
-    let kept = device
-        .properties()
-        .driver_facts
-        .contains(&DriverFact::DepthImageKeepsValuesOutsideUnitRange);
-    !unrestricted && !kept
+        .contains(&VkExtension::ExtDepthRangeUnrestricted)
 }
 
 /// Whether `device` keeps a negative or NaN 32-bit float depth a write stores in a render

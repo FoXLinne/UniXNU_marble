@@ -26,7 +26,18 @@
 //! the buffer with: Metal reads a bound stride only for a layout of
 //! `MTLBufferLayoutStrideDynamic` (an M4 read a fixed 16 under a bound 8).
 //! Such a layout (`StageInputLayoutDescriptor::stride` `None`) reads the bound one from
-//! `PushField::StageInStride`, which the binder writes, as 0 for a buffer bound without one.
+//! `PushField::StageInStride`, which the binder writes, as 0 for a buffer bound without one; an
+//! element whose bytes lie past the first `2^32` bytes from the bind offset reads zero
+//! (`fetch::within_reach`), which is what `MTLAttributeStrideStatic`'s `2^32 - 1` gives every
+//! element past the first.
+//!
+//! **The reach check** of a thread-position step reads `SpecKey::StageInReach` ([`reach_key`]).
+//! Where the binder finds that no element of the dispatch region lies past those bytes, at the
+//! layout's stride and its attributes' ends (`bind::dispatch`'s `element_end`), it sets the key
+//! to false. The check
+//! then holds for every element and is dropped, so a dispatch that cannot reach takes the
+//! `VkPipeline` without it, and only one that can reach takes a second. An indexed step's element
+//! is whatever its index buffer holds, so it runs its check whatever the key says.
 //!
 //! **Formats** decode as a vertex format of the same raw value (`MTLAttributeFormat` and
 //! `MTLVertexFormat` list the same formats), and they meet the attribute's numeric class exactly
@@ -44,14 +55,24 @@ use crate::memory::contain;
 use crate::metal::{AttributeFormat, IndexType, StepFunction, VertexFormat};
 use crate::pipeline::facts::RuntimeFact;
 use crate::pipeline::stage_io::{StageInFetch, StageInInput};
-use crate::pipeline::sym::{PushField, Stage};
+use crate::pipeline::sym::{PushField, SpecKey, Stage};
 use crate::spirv::builder::FunctionBuilder;
 use crate::spirv::error::BResult;
 use crate::spirv::ids::Value as SValue;
+use crate::spirv::ir::{ConstBits, Type};
 
 use super::fetch::{self, IndexRead, PulledRead, Step, Stride};
 use super::plan::{io_form, io_type, param_ty};
 use super::{not_lowered, PlannedParam, Source};
+
+/// The `SpecKey::StageInReach` of the kernel's thread-position fetches: a `bool`, true by
+/// default, false where the binder finds that no element of the region lies past the first
+/// `2^32` bytes from its bind offset, so the fetch's reach check holds everywhere and is dropped.
+pub(super) fn reach_key(fb: &mut FunctionBuilder<'_>) -> BResult<SValue> {
+    let ty = fb.module().ty(Type::Bool)?;
+    let c = fb.module().spec(SpecKey::StageInReach, ty, ConstBits(1))?;
+    fb.module().const_value(c)
+}
 
 /// Record that the kernel reads the stage-in region, which the binder writes into
 /// `PushField::StageInRegion`.

@@ -31,15 +31,17 @@
 
 use super::instance_requirements::instance_requirements_met;
 use super::keeper::keep_drivers_loaded;
+use super::line::{Line, Recipe};
 use super::properties::{DeviceKind, PhysicalDeviceIdentity};
-use super::{device_error, lock, Device, InstanceShared, Parts, WeakDevice};
+use super::{device_error, holds, lock, Device, InstanceShared, Parts};
 use crate::degradation::{Degradation, DegradeNotice};
 use crate::enables::{host_image_copy_names, listed_reported, listed_structures, Enables};
 use crate::error::{vulkan, Error, InstanceApiVersion, LoaderNotFound};
 use crate::exit_guard;
 use crate::gpu_time;
 use crate::image_barrier::MemoryReads;
-use crate::loader_word::LoaderWord;
+use crate::loader_word::DeviceWord;
+use crate::memory::MemoryClass;
 use crate::release;
 use crate::shader_cache::{CacheSetup, ShaderCacheOptions};
 use crate::sparse;
@@ -201,6 +203,23 @@ pub struct DeviceOptions {
     /// lanes that hold the shadow to a failed check. No Metal counterpart.
     #[doc(hidden)]
     pub fail_in_place_check: bool,
+    /// Take each device's submission check of merged submissions (`submit_check.rs`,
+    /// `Check::Merge`) as holding without its answer, and keep no record of its checks: under
+    /// `CompletionPolicy::Grouped` its batches then wait in groups whatever the timing it
+    /// measured, where a driver that runs one `vkQueueSubmit` of several `VkSubmitInfo`s as
+    /// several kernel submissions runs them as correctly, saving none. Its import tax and follows
+    /// checks answer as ever. Off by default. A test hook, for the lanes that hold a device to the
+    /// grouped path on every run. No Metal counterpart.
+    #[doc(hidden)]
+    pub assume_submissions_merge: bool,
+    /// Turn each device's pending audit on: a diagnostic that checks, at each begin of a
+    /// `VkCommandBuffer`, reset or give-back of its pool and submission of it again, that the
+    /// GPU completed every submission that carries it, and logs each one that did not (id name
+    /// `metal2vulkan-pending-audit`, `pending_audit.rs`); it changes no work. Off by default;
+    /// `METAL2VULKAN_PENDING_AUDIT`, set, turns it on for every device too. For the tests that
+    /// hold it to a finding. No Metal counterpart.
+    #[doc(hidden)]
+    pub pending_audit: bool,
     /// Color formats each device takes as no color attachment, as a device without the
     /// attachment feature of them does: their tilings' `COLOR_ATTACHMENT` and blend features and
     /// their attachment sample counts are left out of the description the device plans and
@@ -210,6 +229,15 @@ pub struct DeviceOptions {
     /// device that renders the format. No Metal counterpart.
     #[doc(hidden)]
     pub withheld_attachment_formats: BTreeSet<metal2vulkan::vk::Format>,
+    /// The most color attachments, and fragment outputs, each device draws at once, where it is
+    /// below the device's own: the device's `maxColorAttachments` and
+    /// `maxFragmentOutputAttachments` are held to it in the description the device plans and
+    /// compiles by (`hold_color_attachments`), so a render pass of more colors draws in color
+    /// groups (`render/color_groups.rs`) as on a device of that many. `None` by default. A test
+    /// hook, for the lanes that run the color groups on a device that draws eight. No Metal
+    /// counterpart.
+    #[doc(hidden)]
+    pub color_attachment_limit: Option<u32>,
     /// Where each device hands its pipeline records: one [`PipelineRecord`](crate::PipelineRecord)
     /// per pipeline state creation that made its state (compute, render, mesh render and tile
     /// render, and the additional-binary-functions forms; and the one-sample or factor-scaling
@@ -279,6 +307,57 @@ pub struct DeviceOptions {
     /// is the queue's only submitter: its submissions there sit in no command queue's order, and
     /// hold none back. 0 by default. No Metal counterpart: a Vulkan-side option.
     pub reserved_queues: u32,
+    /// Fewer `VkQueue`s for each device than its queue plan takes: at most
+    /// [`round_robin`](QueueLimits::round_robin) for the round robin its command queues share,
+    /// and at most [`presenting`](QueueLimits::presenting) reserved for presenting queues. `None`
+    /// (the default) takes the plan: the round robin up to 16 (at least four where the families
+    /// have them, NVIDIA's graphics family of 16 giving it 14) and two for presenting.
+    ///
+    /// What it changes: how many `VkQueue`s the device makes, and so what making and dropping it
+    /// cost. Each queue is made with the device and destroyed with it: on an RTX 5080 Laptop GPU
+    /// (NVIDIA 615.71.09), one device made and dropped at a time, the plan's 17 queues (14 for the
+    /// round robin, 2 for presenting and the staging queue) took 445 ms in `vkCreateDevice` and
+    /// 110 ms in `vkDestroyDevice`, and 2 queues (limits of one for the round robin and none for
+    /// presenting) 145 ms and 44 ms, about 20 ms a queue to make; and the driver makes devices
+    /// one at a time across processes. On a device whose families have no queue to spare (RADV's
+    /// and lavapipe's one graphics queue) the limits leave the plan as it is.
+    ///
+    /// What it costs a program: its command queues share `VkQueue`s past the limit, so one
+    /// queue's command buffers wait behind another's whole command buffer where Metal's would not
+    /// ([`CommandQueue`](crate::CommandQueue)); a queue made by
+    /// [`Device::new_command_queue_unshared`](crate::Device::new_command_queue_unshared) may share
+    /// too, and one made for presenting past the limit's shares with the round robin
+    /// (`shared-present-queue`) or with an earlier presenting queue. The reserved and extra
+    /// queues take the queues the limits leave. Wherever the limits change a placement from what
+    /// the plan gives, the device says so in an informational message
+    /// (`metal2vulkan-queue-limits-reached`, through [`messages`](Self::messages) or on stderr):
+    /// a command queue the program makes, unshared or not, that takes a `VkQueue` another took
+    /// where the plan gives it one of its own (counted among the program's queues: the runtime's
+    /// own, its in-place check's, shares as it does on a device of one queue); a presenting queue past the limit's where the plan reserves it one;
+    /// reserved or extra queues placed otherwise than the plan places them (as the device is
+    /// made); and each read of the device's queue sharing (`Device::settle_queue_switch_check`,
+    /// `Device::queue_switch_check_report`) on a device whose queues the limits changed. No Metal
+    /// counterpart: a Vulkan-side option, for tests and tools that make many devices.
+    pub queue_limits: Option<QueueLimits>,
+}
+
+/// The most `VkQueue`s a device takes for its command queues ([`DeviceOptions::queue_limits`]).
+/// No Metal counterpart: a Vulkan-side option.
+///
+/// The limits bound the program's queues alone. The staging queue, where the device's plan
+/// reserves one (of a family of transfers alone, or, where no memory the host caches may hold a
+/// texture's image, as on an RX 7900 XTX, of a family of compute work beside the device's own), is
+/// the runtime's own queue for textures' CPU copies, which no command queue shares: the device
+/// makes it under any limits as it does without them, it counts against neither limit, and the
+/// limits' message never names it. A device made with limits of one and none copies its textures
+/// as one made without them does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct QueueLimits {
+    /// The most the round robin its command queues share takes: at least one (0 is taken as 1),
+    /// and the plan's ceiling of 16 at most.
+    pub round_robin: u32,
+    /// The most reserved for presenting queues: the plan's two at most.
+    pub presenting: u32,
 }
 
 impl std::fmt::Debug for DeviceOptions {
@@ -306,10 +385,14 @@ impl std::fmt::Debug for DeviceOptions {
             lowering_refuses,
             record_executions,
             fail_in_place_check,
+            assume_submissions_merge,
+            pending_audit,
             withheld_attachment_formats,
+            color_attachment_limit,
             pipeline_records,
             extra_queues,
             reserved_queues,
+            queue_limits,
         } = self;
         f.debug_struct("DeviceOptions")
             .field("policy", policy)
@@ -336,7 +419,10 @@ impl std::fmt::Debug for DeviceOptions {
             .field("lowering_refuses", lowering_refuses)
             .field("record_executions", record_executions)
             .field("fail_in_place_check", fail_in_place_check)
+            .field("assume_submissions_merge", assume_submissions_merge)
+            .field("pending_audit", pending_audit)
             .field("withheld_attachment_formats", withheld_attachment_formats)
+            .field("color_attachment_limit", color_attachment_limit)
             .field(
                 "pipeline_records",
                 &pipeline_records.as_ref().map(|_| "hook"),
@@ -348,6 +434,7 @@ impl std::fmt::Debug for DeviceOptions {
                     .collect::<Vec<_>>(),
             )
             .field("reserved_queues", reserved_queues)
+            .field("queue_limits", queue_limits)
             .finish()
     }
 }
@@ -470,9 +557,14 @@ impl MessageSink {
         severity >= self.least
     }
 
-    /// Hand `message` to the sink, where it hears it; a panic inside it is caught.
+    /// Hand `message` to the sink, where it hears it; a panic inside it is caught. On a thread
+    /// inside a passing hold of the device's resources, once its outermost ended
+    /// (`resource_ids.rs`): the program's code runs in none.
     pub(crate) fn deliver(&self, message: &DebugMessage) {
         if message.degradation.is_none() && !self.hears(message.severity) {
+            return;
+        }
+        if crate::resource_ids::held_past_passing_hold(self, message) {
             return;
         }
         crate::exit_guard::program(|| (self.receive)(message));
@@ -614,19 +706,46 @@ pub(super) unsafe extern "system" fn deliver(
     vk::FALSE
 }
 
-/// Whether `entry`'s loader lists `VK_KHR_portability_enumeration`.
-pub(super) fn lists_portability(entry: &ash::Entry) -> Result<bool, Error> {
-    lists_instance_extension(entry, ash::khr::portability_enumeration::NAME)
-}
+/// The instance extensions a loader lists, read with one `vkEnumerateInstanceExtensionProperties`:
+/// the loader scans its driver and layer manifests again at each such call, and loads and asks
+/// each driver it finds, so the making of an instance reads the list once and answers every
+/// question of it from this.
+pub(crate) struct ListedExtensions(Vec<vk::ExtensionProperties>);
 
-/// Whether the loader lists the instance extension `name`.
-fn lists_instance_extension(entry: &ash::Entry, name: &CStr) -> Result<bool, Error> {
-    // SAFETY: a global command of a loaded entry.
-    let available =
-        unsafe { entry.enumerate_instance_extension_properties(None) }.map_err(vulkan)?;
-    Ok(available
-        .iter()
-        .any(|extension| extension.extension_name_as_c_str() == Ok(name)))
+/// The room [`ListedExtensions::of`] gives its first call: more extensions than a loader lists
+/// (20 on lavapipe's alone, 26 with RADV's beside it).
+pub(crate) const LISTED_ROOM: usize = 64;
+
+impl ListedExtensions {
+    /// The instance extensions `entry`'s loader lists, read in one call into room for
+    /// [`LISTED_ROOM`] of them, and again into twice the room while the loader answers
+    /// `VK_INCOMPLETE`. Not the usual two-call read (the count, then the list), which is two
+    /// scans of the manifests.
+    pub(crate) fn of(entry: &ash::Entry) -> Result<ListedExtensions, Error> {
+        let enumerate = entry.fp_v1_0().enumerate_instance_extension_properties;
+        let mut room = LISTED_ROOM;
+        loop {
+            let mut listed = vec![vk::ExtensionProperties::default(); room];
+            let mut count = u32::try_from(room).unwrap_or(u32::MAX);
+            // SAFETY: a global command of a loaded entry, for no layer, into `count` properties.
+            let answer = unsafe { enumerate(std::ptr::null(), &mut count, listed.as_mut_ptr()) };
+            match answer {
+                vk::Result::SUCCESS => {
+                    listed.truncate(count as usize);
+                    return Ok(ListedExtensions(listed));
+                }
+                vk::Result::INCOMPLETE => room *= 2,
+                error => return Err(vulkan(error)),
+            }
+        }
+    }
+
+    /// Whether the loader listed the instance extension `name`.
+    pub(crate) fn lists(&self, name: &CStr) -> bool {
+        self.0
+            .iter()
+            .any(|extension| extension.extension_name_as_c_str() == Ok(name))
+    }
 }
 
 /// The instance API version `requested` asks for (`DeviceOptions::instance_api_version`):
@@ -715,22 +834,31 @@ pub(super) unsafe fn new_instance(
 
 /// The instance of `options`.
 fn create_instance(options: &DeviceOptions) -> Result<Arc<InstanceShared>, Error> {
-    let entry = open_loader(options.loader.as_deref())?;
-    let portability = lists_portability(&entry)?;
+    instance_of(open_loader(options.loader.as_deref())?, options)
+}
+
+/// The instance of `options` from the loader `entry`, which lists its instance extensions once
+/// ([`ListedExtensions`]).
+pub(crate) fn instance_of(
+    entry: ash::Entry,
+    options: &DeviceOptions,
+) -> Result<Arc<InstanceShared>, Error> {
+    let listed = ListedExtensions::of(&entry)?;
+    let portability = listed.lists(ash::khr::portability_enumeration::NAME);
     let mut extensions: Vec<&CStr> = Vec::new();
     if portability {
         extensions.push(ash::khr::portability_enumeration::NAME);
     }
     // The relay of a driver's command-buffer failures needs a messenger of its own
     // (`relay.rs`): debug utils wherever the instance lists them.
-    let relays = lists_instance_extension(&entry, ash::ext::debug_utils::NAME)?;
+    let relays = listed.lists(ash::ext::debug_utils::NAME);
     if options.messages.is_some() || relays {
         extensions.push(ash::ext::debug_utils::NAME);
     }
     // MoltenVK's Metal argument buffers, asked for where the instance can take layer settings,
     // ahead of the consumer's own, which win (`argument_buffers.rs`); and, where the relay hears
     // its failures, that it keep a device after a command buffer fails (`relay.rs`).
-    let asks = lists_instance_extension(&entry, ash::ext::layer_settings::NAME)?;
+    let asks = listed.lists(ash::ext::layer_settings::NAME);
     let chained_settings: Vec<LayerSetting> = asks
         .then(super::argument_buffers::setting)
         .into_iter()
@@ -981,9 +1109,11 @@ pub(crate) struct QueuePlan {
     /// The queues reserved for the caller (`DeviceOptions::reserved_queues`), after `present` in
     /// the same order: at most as many as asked, none where the families taken have no more.
     pub(crate) reserved: Vec<(u32, u32)>,
-    /// The queue reserved for staging copies (`device/staging.rs`): the first queue of the first
-    /// family of transfers alone whose copies take any texel (a granularity of one texel), which
-    /// is none of the families above; `None` where there is none.
+    /// The queue reserved for staging copies (`device/staging.rs`), of a family none of the
+    /// queues above are of, whose copies take any texel (a granularity of one texel): the first
+    /// queue of the first family of transfers alone (a copy engine); else, where a texture's
+    /// image has no memory the host caches, of the first family of graphics or compute work;
+    /// `None` where there is none ([`queue_plan`]).
     pub(crate) staging: Option<(u32, u32)>,
 }
 
@@ -1002,15 +1132,47 @@ pub(crate) struct QueuePlan {
 /// took before. The next queues in that order, at most [`PRESENT_QUEUES`], are reserved for
 /// presenting queues, and the next, at most `reserved`, for the caller: the round robin keeps its
 /// first [`LEAST_QUEUES`] and presenting its queues before the caller has any (NVIDIA's 16 with
-/// one reserved give the round robin 13). A queue of a family of transfers alone
-/// is reserved for staging copies: a copy engine, which runs beside the graphics family's work
-/// where another of its queues waits behind it; an asynchronous compute queue is none (its work
-/// waited up to 1.05 s on a Radeon 780M and 1.19 s on an RTX 3090 behind a kernel that filled the
-/// GPU). `None` where no family does graphics and compute work.
+/// one reserved give the round robin 13).
+///
+/// A queue of a family of transfers alone is reserved for staging copies (`device/staging.rs`):
+/// a copy engine, which runs beside the graphics family's work where another of its queues waits
+/// behind it. Where the device has none, a queue of another family that does graphics or compute
+/// work is, only where a texture's image has no memory the host caches (`cached` false,
+/// `memory::host_cached_placement`: a discrete GPU with no device-local type the host caches, an
+/// RX 7900 XTX), whose textures' CPU copies would otherwise read and write through the host's
+/// mapping of uncached memory: most 1920 x 1080 `get_bytes` calls took 1.26 to 1.71 s that way on
+/// the XTX, and 2.0 to 2.2 ms on its compute family's queue (`device/staging.rs`). Such
+/// an asynchronous compute queue's work may wait behind a kernel that fills the GPU (up to 1.05 s
+/// on a Radeon 780M and 1.19 s on an RTX 3090), so where a texture's image has memory the host
+/// caches its copies stay on the host, and no such queue stages. `None` where no family does
+/// graphics and compute work.
 pub(crate) fn queue_plan(
     families: &[vk::QueueFamilyProperties],
     reserved: u32,
+    cached: bool,
 ) -> Option<QueuePlan> {
+    queue_plan_within(families, reserved, None, cached)
+}
+
+/// [`queue_plan`] within `limits` (`DeviceOptions::queue_limits`): the round robin at most
+/// `limits.round_robin` (at least one, its floor of [`LEAST_QUEUES`] no more than that) and at
+/// most `limits.presenting` queues reserved for presenting, limits past the plan's taking the
+/// plan's. `None` is the plan. The staging queue is the plan's whatever the limits (`cached` as
+/// [`queue_plan`] takes it): a queue of the runtime's own that no command queue shares
+/// ([`QueueLimits`]).
+pub(crate) fn queue_plan_within(
+    families: &[vk::QueueFamilyProperties],
+    reserved: u32,
+    limits: Option<QueueLimits>,
+    cached: bool,
+) -> Option<QueuePlan> {
+    let (ceiling, presenting) = match limits {
+        None => (ROUND_ROBIN_CEILING, PRESENT_QUEUES),
+        Some(limits) => (
+            limits.round_robin.clamp(1, ROUND_ROBIN_CEILING),
+            limits.presenting.min(PRESENT_QUEUES),
+        ),
+    };
     let wanted = vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE;
     let (primary, first) = families
         .iter()
@@ -1030,30 +1192,42 @@ pub(crate) fn queue_plan(
     let mut order = (0..first.queue_count)
         .flat_map(|index| taken.iter().map(move |&family| (family, index)))
         .collect::<Vec<_>>();
-    let past = (PRESENT_QUEUES as usize).saturating_add(reserved as usize);
+    let past = (presenting as usize).saturating_add(reserved as usize);
     let round_robin = (order.len().saturating_sub(past))
-        .clamp(LEAST_QUEUES as usize, ROUND_ROBIN_CEILING as usize)
+        .clamp(LEAST_QUEUES.min(ceiling) as usize, ceiling as usize)
         .min(order.len());
     let mut rest = order.split_off(round_robin).into_iter();
-    let present = rest.by_ref().take(PRESENT_QUEUES as usize).collect();
+    let present = rest.by_ref().take(presenting as usize).collect();
     let reserved = rest.take(reserved as usize).collect();
-    // Transfers alone (sparse binding and protected memory aside: no graphics, compute, video or
-    // optical flow work), and copies of any texel.
+    // Copies of any texel, on a family none of the queues above are of.
     let unit = vk::Extent3D {
         width: 1,
         height: 1,
         depth: 1,
     };
+    let stages = |index: usize, family: &vk::QueueFamilyProperties| {
+        !taken.contains(&(index as u32))
+            && family.queue_count > 0
+            && family.min_image_transfer_granularity == unit
+    };
+    // Transfers alone (sparse binding and protected memory aside: no graphics, compute, video or
+    // optical flow work).
     let besides =
         vk::QueueFlags::TRANSFER | vk::QueueFlags::SPARSE_BINDING | vk::QueueFlags::PROTECTED;
-    let staging = (families.iter().enumerate())
-        .find(|&(index, family)| {
-            !taken.contains(&(index as u32))
-                && family.queue_count > 0
-                && family.queue_flags.contains(vk::QueueFlags::TRANSFER)
-                && (family.queue_flags & !besides).is_empty()
-                && family.min_image_transfer_granularity == unit
-        })
+    let copy_engine = (families.iter().enumerate()).find(|&(index, family)| {
+        stages(index, family)
+            && family.queue_flags.contains(vk::QueueFlags::TRANSFER)
+            && (family.queue_flags & !besides).is_empty()
+    });
+    // A family of graphics or compute work transfers too, whether or not it lists the bit.
+    let work = vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE;
+    let beside = || match cached {
+        true => None,
+        false => (families.iter().enumerate())
+            .find(|&(index, family)| stages(index, family) && family.queue_flags.intersects(work)),
+    };
+    let staging = copy_engine
+        .or_else(beside)
         .map(|(index, _)| (index as u32, 0));
     // Where every family is equivalent, the primary is family 0, so either way the primary
     // family's first queue leads (internal submissions go there).
@@ -1065,6 +1239,64 @@ pub(crate) fn queue_plan(
         staging,
     })
 }
+
+/// What the queue plan gives a device of `families` whose queue limits
+/// (`DeviceOptions::queue_limits`) gave it `plan` and `extra_places`, for `reserved` reserved and
+/// `extra` extra queues asked for, on a device whose textures' images may lie in memory the host
+/// caches or not (`cached`, as [`queue_plan`] takes it): where the limits changed any of it, the
+/// plan's; `None` where they changed nothing. The staging queue is the same in both before the
+/// extra queues are placed ([`queue_plan_within`]).
+pub(crate) fn planned_queues(
+    families: &[vk::QueueFamilyProperties],
+    reserved: u32,
+    extra: &[vk::QueueFlags],
+    plan: &QueuePlan,
+    extra_places: &[Option<(u32, u32)>],
+    cached: bool,
+) -> Option<PlannedQueues> {
+    let mut planned = queue_plan(families, reserved, cached)?;
+    let planned_extra = extra_queue_places(families, &mut planned, extra);
+    let changed = planned != *plan || planned_extra != extra_places;
+    changed.then_some(PlannedQueues {
+        round_robin: planned.queues.len(),
+        presenting: planned.present.len(),
+        reserved: planned.reserved,
+        extra: planned_extra,
+    })
+}
+
+/// What the queue plan gives a device whose queue limits changed its queues ([`planned_queues`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PlannedQueues {
+    /// The round robin's `VkQueue`s.
+    pub(crate) round_robin: usize,
+    /// The `VkQueue`s reserved for presenting queues.
+    pub(crate) presenting: usize,
+    /// The queues reserved for the caller, each its family and index there.
+    pub(crate) reserved: Vec<(u32, u32)>,
+    /// Each extra queue's place, `None` for one the device has none of.
+    pub(crate) extra: Vec<Option<(u32, u32)>>,
+}
+
+/// Whether the `made`th queue counted from 0 of the round robin, or of the presenting queues,
+/// that the limits give `limited` `VkQueue`s takes one another took where the plan's `planned`
+/// give it one of its own (`DeviceOptions::queue_limits`).
+pub(crate) fn shares_past_limit(made: u64, limited: usize, planned: usize) -> bool {
+    made >= limited as u64 && made < planned as u64
+}
+
+/// The informational message a device whose queue limits changed what the queue plan gives says
+/// where they did, `what` saying what (`DeviceOptions::queue_limits`).
+pub(crate) fn queue_limits_reached(device: &str, what: &str) -> String {
+    format!(
+        "metal2vulkan: on {device}, {what}: the device's queue limits \
+         (DeviceOptions::queue_limits) changed that from what its queue plan gives \
+         [{QUEUE_LIMITS_REACHED}]"
+    )
+}
+
+/// The id name of the informational message of [`queue_limits_reached`].
+pub(crate) const QUEUE_LIMITS_REACHED: &str = "metal2vulkan-queue-limits-reached";
 
 /// The queue of each of `asked` (`DeviceOptions::extra_queues`) on a device of `families` whose
 /// own queues are `plan`'s, in `asked`'s order, `None` for one the device has none of: a queue the
@@ -1160,6 +1392,16 @@ pub(crate) fn reserved_queues_absent(asked: u32, reserved: usize, device: &str) 
 /// options asked for sends as it is made ([`reserved_queues_absent`]).
 pub(crate) const RESERVED_QUEUES_ABSENT: &str = "metal2vulkan-reserved-queues-absent";
 
+/// `description` with its `maxColorAttachments` and `maxFragmentOutputAttachments` held to
+/// `limit` where it is lower (`DeviceOptions::color_attachment_limit`); as it is for `None`.
+pub(crate) fn hold_color_attachments(description: &mut DeviceDescription, limit: Option<u32>) {
+    if let Some(limit) = limit {
+        let limits = &mut description.limits;
+        limits.max_color_attachments = limits.max_color_attachments.min(limit);
+        limits.max_fragment_output_attachments = limits.max_fragment_output_attachments.min(limit);
+    }
+}
+
 /// `description` with each of `withheld` no color attachment
 /// (`DeviceOptions::withheld_attachment_formats`): its tilings' `COLOR_ATTACHMENT` and blend
 /// features and its attachment sample counts left out.
@@ -1210,6 +1452,33 @@ pub(crate) fn dma_buf_names(listed: &BTreeSet<CString>) -> Option<[&'static CStr
         .iter()
         .all(|name| listed.contains(*name))
         .then_some(names)
+}
+
+/// The extension of buffers whose memory another API imports (`exported_memory.rs`) of a device
+/// listing `listed`: `VK_KHR_external_memory_fd`, where the device lists it. The runtime's own
+/// need, outside the vocabulary as the dma-buf route's are ([`dma_buf_names`], which enable it
+/// too).
+pub(crate) fn memory_fd_name(listed: &BTreeSet<CString>) -> Option<&'static CStr> {
+    let name = ash::khr::external_memory_fd::NAME;
+    listed.contains(name).then_some(name)
+}
+
+/// The extension of the acquire of a dma-buf-exportable buffer's memory from the foreign agent
+/// that wrote it (`exported_memory.rs`, `Buffer::external_write_done`) of a device listing
+/// `listed`: `VK_EXT_queue_family_foreign`, where the device lists it and the dma-buf route's
+/// ([`dma_buf_names`]). The runtime's own need, outside the vocabulary as the route's are; the
+/// route's image extensions name it too ([`dma_buf_image_names`]), which enable it then.
+pub(crate) fn foreign_family_name(listed: &BTreeSet<CString>) -> Option<&'static CStr> {
+    let name = ash::ext::queue_family_foreign::NAME;
+    (dma_buf_names(listed).is_some() && listed.contains(name)).then_some(name)
+}
+
+/// The extension of shared events whose timeline semaphore another API imports
+/// (`exported_semaphore.rs`) of a device listing `listed`: `VK_KHR_external_semaphore_fd`, where
+/// the device lists it. The runtime's own need, outside the vocabulary.
+pub(crate) fn semaphore_fd_name(listed: &BTreeSet<CString>) -> Option<&'static CStr> {
+    let name = ash::khr::external_semaphore_fd::NAME;
+    listed.contains(name).then_some(name)
 }
 
 /// The extensions of the images of textures over the dma-buf route's pages (`dma_buf.rs`) of a
@@ -1284,6 +1553,27 @@ unsafe fn host_image_copy_supported(
             .get_physical_device_features2(physical, &mut features)
     };
     host.host_image_copy == vk::TRUE
+}
+
+/// Whether `physical` has `zeroInitializeDeviceMemory`.
+///
+/// # Safety
+///
+/// `physical` was enumerated from `instance`, made at Vulkan 1.1 or later, and lists
+/// `VK_EXT_zero_initialize_device_memory`.
+unsafe fn zero_initialize_device_memory_supported(
+    instance: &InstanceShared,
+    physical: vk::PhysicalDevice,
+) -> bool {
+    let mut zero = crate::enables::ZeroInitializeDeviceMemoryFeatures::default();
+    let mut features = vk::PhysicalDeviceFeatures2::default().push_next(&mut zero);
+    // SAFETY: the caller's contract; the chain lives for the call.
+    unsafe {
+        instance
+            .raw
+            .get_physical_device_features2(physical, &mut features)
+    };
+    zero.zero_initialize_device_memory == vk::TRUE
 }
 
 /// Whether a device that lists `listed` links its render pipelines from graphics pipeline
@@ -1554,17 +1844,22 @@ pub(super) fn argument_buffers_kept(description: &DeviceDescription) -> Result<(
 }
 
 /// A device on `physical`, made from `instance`.
-fn create_on(
+/// A device of `physical` made with `options`, a generation handle of it: the first generation of
+/// a new line, or with `recovering`, the next generation of that line (`line.rs`), made the same
+/// way.
+pub(super) fn create_on(
     instance: &Arc<InstanceShared>,
     physical: vk::PhysicalDevice,
     options: &DeviceOptions,
     cache: &CacheSetup,
+    recovering: Option<&Arc<Line>>,
 ) -> Result<Device, Error> {
     // SAFETY: `physical` was enumerated from the instance, created at `api_version`.
     let mut description =
         unsafe { DeviceDescription::query(&instance.raw, physical, instance.api_version) }
             .map_err(device_error)?;
     withhold_attachments(&mut description, &options.withheld_attachment_formats);
+    hold_color_attachments(&mut description, options.color_attachment_limit);
     // SAFETY: as above.
     unsafe { timeline_conformant(&instance.raw, physical) }?;
     argument_buffers_kept(&description)?;
@@ -1574,8 +1869,40 @@ fn create_on(
             .raw
             .get_physical_device_queue_family_properties(physical)
     };
-    let mut plan = queue_plan(&families, options.reserved_queues).ok_or(Error::NoDevice)?;
+    // Whether a texture's image may lie in memory the host caches, which decides whether a queue
+    // of compute work stages its CPU copies where no copy engine does (`queue_plan`), within the
+    // queue limits or not (`QueueLimits`).
+    // SAFETY: as above.
+    let (memory, ty) = unsafe {
+        let raw = &instance.raw;
+        let ty = raw.get_physical_device_properties(physical).device_type;
+        (raw.get_physical_device_memory_properties(physical), ty)
+    };
+    let types =
+        &memory.memory_types[..(memory.memory_type_count as usize).min(vk::MAX_MEMORY_TYPES)];
+    let unified = DeviceKind::of(ty).has_unified_memory();
+    let cached =
+        crate::memory::host_cached_placement(types, u32::MAX, MemoryClass::Private, unified)
+            .is_some();
+    let mut plan = queue_plan_within(
+        &families,
+        options.reserved_queues,
+        options.queue_limits,
+        cached,
+    )
+    .ok_or(Error::NoDevice)?;
     let extra_places = extra_queue_places(&families, &mut plan, &options.extra_queues);
+    let planned = options.queue_limits.and_then(|_| {
+        planned_queues(
+            &families,
+            options.reserved_queues,
+            &options.extra_queues,
+            &plan,
+            &extra_places,
+            cached,
+        )
+    });
+    let reserved_places = plan.reserved.clone();
     let queue_family = plan.primary;
     let api = description.api_version;
     let mut set = enable_set(&description, options);
@@ -1611,6 +1938,13 @@ fn create_on(
     // The runtime's own needs, outside the vocabulary, where listed (`dma_buf.rs`).
     let dma_buf = dma_buf_names(&listed);
     let dma_buf_images = dma_buf_image_names(&listed);
+    // Wherever listed (`exported_memory.rs`); the dma-buf route's names enable it already.
+    let memory_fd = memory_fd_name(&listed);
+    // Beside the route, wherever listed (`exported_memory.rs`); the route's image names enable it
+    // already where they are enabled.
+    let foreign_family = foreign_family_name(&listed);
+    // Wherever listed (`exported_semaphore.rs`).
+    let semaphore_fd = semaphore_fd_name(&listed);
     let extra: Vec<CString> = options
         .device_extensions
         .iter()
@@ -1618,7 +1952,10 @@ fn create_on(
         .chain(calibration.map(|extension| extension.name().to_owned()))
         .chain((creation_feedback && !feedback_asked).then(|| feedback_name.to_owned()))
         .chain(dma_buf.into_iter().flatten().map(CStr::to_owned))
+        .chain((memory_fd.filter(|_| dma_buf.is_none())).map(CStr::to_owned))
+        .chain(semaphore_fd.map(CStr::to_owned))
         .chain(dma_buf_images.into_iter().flatten().map(CStr::to_owned))
+        .chain((foreign_family.filter(|_| dma_buf_images.is_none())).map(CStr::to_owned))
         .collect();
     let mut enables = Enables::of(&set, api, &listed, &extra)?;
     // The features of the caller's extensions whose structures the runtime knows, as the device
@@ -1673,6 +2010,17 @@ fn create_on(
     });
     if host_image_copy {
         enables.enable_host_image_copy(host_names);
+    }
+    // The runtime's own need, outside the vocabulary, where listed with its feature: a `Shared`
+    // or `Managed` texture's image that copies on the host starts in memory the driver zeroed
+    // (`texture/host_copy.rs`).
+    let zero_initialize_device_memory = host_image_copy
+        && listed.contains(crate::enables::ZERO_INITIALIZE_DEVICE_MEMORY)
+        // SAFETY: `physical` was enumerated from the instance, made at Vulkan 1.2, and lists the
+        // extension.
+        && unsafe { zero_initialize_device_memory_supported(instance, physical) };
+    if zero_initialize_device_memory {
+        enables.enable_zero_initialize_device_memory();
     }
     // The runtime's own need, outside the vocabulary, where listed with its feature and what it
     // requires: textures over buffers' memory render into their linear images in place
@@ -1790,7 +2138,7 @@ fn create_on(
         })
         .map_err(vulkan)?;
     // SAFETY: the device was just created: its word is the loader's.
-    let loader_word = unsafe { LoaderWord::of_device(raw.handle()) };
+    let loader_word = unsafe { DeviceWord::of_device(raw.handle()) };
     let primary = families.get(queue_family as usize);
     let memory_reads = MemoryReads::of(
         primary.map_or(vk::QueueFlags::empty(), |family| family.queue_flags),
@@ -1804,6 +2152,7 @@ fn create_on(
         loader_word,
         queue_family,
         present_queues: plan.present.len(),
+        planned: (planned.as_ref()).map(|planned| (planned.round_robin, planned.presenting)),
         queues: plan.queues.into_iter().chain(plan.present).collect(),
         staging: plan.staging,
         reserved_queues: plan.reserved,
@@ -1822,9 +2171,12 @@ fn create_on(
         record_executions: options.record_executions,
         pipeline_records: options.pipeline_records.clone(),
         fail_in_place_check: options.fail_in_place_check,
+        assume_submissions_merge: options.assume_submissions_merge,
+        pending_audit: options.pending_audit,
         view_reinterpretation,
         generated_commands,
         host_image_copy,
+        zero_initialize_device_memory,
         linear_color_attachment,
         graphics_pipeline_library,
         ycbcr_conversion,
@@ -1832,10 +2184,23 @@ fn create_on(
         creation_feedback: creation_feedback || feedback_asked,
         dma_buf: dma_buf.is_some(),
         dma_buf_images: dma_buf_images.is_some(),
+        memory_fd: memory_fd.is_some(),
+        foreign_family: foreign_family.is_some(),
+        semaphore_fd: semaphore_fd.is_some(),
         sparse_features,
         memory_reads,
         owned: true,
         cache: cache.clone(),
+        line: recovering.cloned(),
+        recipe: match recovering {
+            Some(_) => None,
+            None => Some(Recipe {
+                instance: Arc::clone(instance),
+                physical,
+                options: options.clone(),
+                cache: cache.clone(),
+            }),
+        },
     };
     // SAFETY: the device was made from these parts just now.
     let device = unsafe { Device::assemble(parts) }?;
@@ -1851,6 +2216,30 @@ fn create_on(
     }
     if let Some(text) = reserved_queues_absent(options.reserved_queues, reserved, device.name()) {
         device.inform(RESERVED_QUEUES_ABSENT, text);
+    }
+    if let Some(planned) = &planned {
+        if planned.reserved != reserved_places {
+            let what = format!(
+                "the queues reserved for the caller are {reserved_places:?} (family, index), \
+                 where the plan reserves {:?}",
+                planned.reserved
+            );
+            device.inform(
+                QUEUE_LIMITS_REACHED,
+                queue_limits_reached(device.name(), &what),
+            );
+        }
+        if planned.extra != extra_places {
+            let what = format!(
+                "the extra queues are at {extra_places:?} (family, index), where the plan places \
+                 them at {:?}",
+                planned.extra
+            );
+            device.inform(
+                QUEUE_LIMITS_REACHED,
+                queue_limits_reached(device.name(), &what),
+            );
+        }
     }
     if let Some(why) = cache_kept {
         let object = format!("the device, on {}", device.name());
@@ -1900,7 +2289,7 @@ struct Made {
     /// The options' pipeline records' hook, which each of the group's devices holds.
     records: Option<std::sync::Weak<dyn Fn(crate::PipelineRecord) + Send + Sync>>,
     instance: Weak<InstanceShared>,
-    devices: Vec<(vk::PhysicalDevice, WeakDevice)>,
+    devices: Vec<(vk::PhysicalDevice, Weak<Line>)>,
 }
 
 impl Made {
@@ -1920,12 +2309,13 @@ impl Made {
         (sinks && records && same_options(&self.options, options)).then_some(instance)
     }
 
-    /// The live device of `physical`, if the group has one.
+    /// The live device of `physical`, if the group has one: a root handle of its line.
     fn device(&self, physical: vk::PhysicalDevice) -> Option<Device> {
         self.devices
             .iter()
             .find(|(of, _)| *of == physical)
-            .and_then(|(_, device)| device.revive())
+            .and_then(|(_, line)| line.upgrade())
+            .and_then(holds::revive_root)
     }
 }
 
@@ -1939,7 +2329,7 @@ pub(crate) fn live_devices_with(options: &DeviceOptions) -> usize {
         .find(|group| group.instance_for(options).is_some());
     of.map_or(0, |group| {
         let devices = group.devices.iter();
-        devices.filter(|(_, device)| device.lives()).count()
+        devices.filter(|(_, line)| line.strong_count() > 0).count()
     })
 }
 
@@ -1969,10 +2359,14 @@ fn same_options(a: &DeviceOptions, b: &DeviceOptions) -> bool {
         lowering_refuses,
         record_executions,
         fail_in_place_check,
+        assume_submissions_merge,
+        pending_audit,
         withheld_attachment_formats,
+        color_attachment_limit,
         pipeline_records: _,
         extra_queues,
         reserved_queues,
+        queue_limits,
     } = a;
     *policy == b.policy
         && *layers == b.layers
@@ -1994,9 +2388,13 @@ fn same_options(a: &DeviceOptions, b: &DeviceOptions) -> bool {
         && *lowering_refuses == b.lowering_refuses
         && *record_executions == b.record_executions
         && *fail_in_place_check == b.fail_in_place_check
+        && *assume_submissions_merge == b.assume_submissions_merge
+        && *pending_audit == b.pending_audit
         && *withheld_attachment_formats == b.withheld_attachment_formats
+        && *color_attachment_limit == b.color_attachment_limit
         && *extra_queues == b.extra_queues
         && *reserved_queues == b.reserved_queues
+        && *queue_limits == b.queue_limits
 }
 
 /// The group of `made` for `options`: the live one, or a new one on a new instance. Its index.
@@ -2037,9 +2435,11 @@ fn device_of(
     if let Some(device) = group.device(physical) {
         return Ok(device);
     }
-    let device = create_on(instance, physical, options, cache)?;
-    group.devices.retain(|(_, weak)| weak.lives());
-    group.devices.push((physical, device.downgrade()));
+    let device = create_on(instance, physical, options, cache, None)?.root();
+    group.devices.retain(|(_, line)| line.strong_count() > 0);
+    group
+        .devices
+        .push((physical, Arc::downgrade(device.line())));
     Ok(device)
 }
 
@@ -2071,7 +2471,7 @@ impl Device {
         for physical in ranked(&instance, options)? {
             match device_of(&mut made[at], &instance, physical, options, &cache) {
                 Ok(device) => {
-                    keep_drivers_loaded(&instance.entry);
+                    keep_drivers_loaded(&instance);
                     return Ok(device);
                 }
                 Err(error) => {
@@ -2083,17 +2483,11 @@ impl Device {
     }
 
     /// The identity of the physical device [`Device::system_default_with`] makes its device of
-    /// with `options`, read without making any device: the same selection, in the same order (the
-    /// preferred qualifying kind, then enumeration order), over the same physical devices, by the
-    /// same calls (`ranked`, `identified`, `properties::query`), so the two cannot name
-    /// different physical devices. A runtime extension, no Metal call (Metal's program holds an
-    /// `MTLDevice` to ask it anything).
-    ///
-    /// What is read is the physical device's own identity, which the device made of it answers:
-    /// `properties::query`'s property reads of the physical device, and no `vkCreateDevice`, no
-    /// compile device and no queue. The instance is the one of the devices of equal options while
-    /// one lives (as [`Device::system_default_with`] takes it), else one made for the call, which
-    /// goes with it.
+    /// with `options`, read without making any device: the first of
+    /// [`Device::identities_with`]'s, whose order (the preferred qualifying kind, then
+    /// enumeration order) and physical devices are the ones that call tries, so the two cannot
+    /// name different physical devices. A runtime extension, no Metal call (Metal's program holds
+    /// an `MTLDevice` to ask it anything).
     ///
     /// The physical device named is the one [`Device::system_default_with`] tries first. Where
     /// that call then refuses it as it makes its device (unsupported, or without a graphics and
@@ -2108,41 +2502,58 @@ impl Device {
     pub fn system_default_identity_with(
         options: &DeviceOptions,
     ) -> Result<PhysicalDeviceIdentity, Error> {
-        let mut made = lock(&MADE);
-        let (_, instance) = group(&mut made, options)?;
-        let ranked = ranked(&instance, options)?;
-        let identity = (identified(&instance, ranked).into_iter().next()).map(|(_, physical)| {
-            // SAFETY: `physical` was enumerated from the instance, created at Vulkan 1.2 or
-            // later, and `identified` kept only physical devices at Vulkan 1.2 or later.
-            let (identity, _) =
-                unsafe { super::properties::query(&instance.raw, physical, instance.api_version) };
-            PhysicalDeviceIdentity::of(&identity)
-        });
-        drop(made);
-        // The instance made for the call goes here, outside the lock.
-        drop(instance);
-        identity.ok_or(Error::NoDevice)
+        let first = Device::identities_with(options)?.into_iter().next();
+        first.ok_or(Error::NoDevice)
     }
 
     /// The registry IDs ([`Device::registry_id`], `registryID`) of the physical devices
     /// [`Device::all_with`] makes its devices of, in its order, read without making any device: a
-    /// runtime extension, no Metal call (Metal lists its devices, not their IDs). The physical
-    /// devices of `options.kinds` at Vulkan 1.2 or later are listed, each by its `deviceUUID`; one
-    /// the runtime refuses as it makes its device (unsupported, or without a graphics and compute
+    /// runtime extension, no Metal call (Metal lists its devices, not their IDs). They are the
+    /// [`PhysicalDeviceIdentity::registry_id`]s of [`Device::identities_with`], one per physical
+    /// device it lists: one the runtime refuses as it makes its device (unsupported, or without a
+    /// graphics and compute queue), which [`Device::all_with`] leaves out, is listed all the
+    /// same, and [`Device::with_registry_id`] answers its refusal.
+    pub fn registry_ids_with(options: &DeviceOptions) -> Result<Vec<u64>, Error> {
+        let identities = Device::identities_with(options)?.into_iter();
+        Ok(identities.map(|identity| identity.registry_id).collect())
+    }
+
+    /// The identity of each physical device `options` admit, in [`Device::system_default_with`]'s
+    /// order (the preferred qualifying kind, then enumeration order), read without making any
+    /// device. No Metal call: a runtime extension,
+    /// whose nearest Metal counterpart is `MTLCopyAllDevices`, which answers devices that exist
+    /// where this answers what a device of each physical device would answer, before any is
+    /// made, so a consumer can choose a GPU and make only its device
+    /// ([`Device::with_registry_id`]).
+    ///
+    /// The physical devices of `options.kinds` at Vulkan 1.2 or later are listed. Each identity
+    /// is read by the property reads the device made of it takes its own from
+    /// (`properties::query`), with no `vkCreateDevice`, no compile device and no queue. One the
+    /// runtime refuses as it makes its device (unsupported, or without a graphics and compute
     /// queue), which [`Device::all_with`] leaves out, is listed all the same, and
     /// [`Device::with_registry_id`] answers its refusal. The instance is the one of the devices of
     /// equal options while one lives (as [`Device::system_default_with`] takes it), else one made
-    /// for the call, which goes with it.
-    pub fn registry_ids_with(options: &DeviceOptions) -> Result<Vec<u64>, Error> {
+    /// for the call, which goes with it. [`Device::registry_ids_with`] and
+    /// [`Device::system_default_identity_with`] answer from this list.
+    pub fn identities_with(options: &DeviceOptions) -> Result<Vec<PhysicalDeviceIdentity>, Error> {
         let mut made = lock(&MADE);
         let (_, instance) = group(&mut made, options)?;
         let ranked = ranked(&instance, options)?;
-        let ids = identified(&instance, ranked).into_iter().map(|(id, _)| id);
-        let ids = ids.collect();
+        let identities = identified(&instance, ranked)
+            .into_iter()
+            .map(|(_, physical)| {
+                // SAFETY: `physical` was enumerated from the instance, created at Vulkan 1.2 or
+                // later, and `identified` kept only physical devices at Vulkan 1.2 or later.
+                let (identity, _) = unsafe {
+                    super::properties::query(&instance.raw, physical, instance.api_version)
+                };
+                PhysicalDeviceIdentity::of(&identity)
+            });
+        let identities = identities.collect();
         drop(made);
         // The instance made for the call goes here, outside the lock.
         drop(instance);
-        Ok(ids)
+        Ok(identities)
     }
 
     /// The device of the physical device whose registry ID ([`Device::registry_id`]) is
@@ -2164,7 +2575,7 @@ impl Device {
             return Err(Error::NoDevice);
         };
         let device = device_of(&mut made[at], &instance, physical, options, &cache)?;
-        keep_drivers_loaded(&instance.entry);
+        keep_drivers_loaded(&instance);
         Ok(device)
     }
 
@@ -2193,7 +2604,7 @@ impl Device {
             }
         }
         if !devices.is_empty() {
-            keep_drivers_loaded(&instance.entry);
+            keep_drivers_loaded(&instance);
         }
         Ok(devices)
     }

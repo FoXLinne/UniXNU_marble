@@ -1490,10 +1490,18 @@ fn a_single_sampled_colour_resolve_copies_its_texels() {
 /// as the linear channel it is) and an `RGBA8Unorm` one `80808080` (every channel's codes
 /// averaged), whichever format the attachment is. Into an sRGB texture the resolve decodes and
 /// encodes by the device's own sRGB conversions, so each color channel there stands within the
-/// two codes `device-rounded-resolve` states of Metal's ([`twin_resolved`]).
+/// two codes `device-rounded-resolve` states of Metal's ([`twin_resolved`]). The clear's codes
+/// are the device's conversion of the clear color, which Vulkan leaves to it (either code nearest
+/// a channel's value, and the sRGB encode), announced as `device-color-conversion`: on a device
+/// whose clear is not Metal's (no `DriverFact::ColorClearIsMetals`) each color channel of the
+/// agreeing samples' texel stands within a code of Metal's (ANV on the Iris Xe of RPL-P clears an
+/// `RGBA8Unorm_sRGB` channel's 0.5, 187.52 codes, to `0xbb` where Metal stores `0xbc`).
 #[test]
 fn a_resolve_into_the_srgb_twin_resolves_in_the_resolve_texture_s_encoding() {
     let (messages, _cache, lane) = lane();
+    let metals_clear =
+        (lane.device.properties().driver_facts).contains(&DriverFact::ColorClearIsMetals);
+    let mut cleared_apart = false;
     let unorm = PixelFormat::RGBA8Unorm;
     let srgb = PixelFormat::RGBA8UnormSRGB;
     for (attachment, into, view) in [
@@ -1554,21 +1562,39 @@ fn a_resolve_into_the_srgb_twin_resolves_in_the_resolve_texture_s_encoding() {
                 }
             })
             .unwrap();
-            twin_resolved(
-                &lane.read(&resolve, (0, 0), 4, BlitOption::None),
-                texel,
-                srgb_written,
-                &format!(
-                    "{attachment:?} into {into:?} through a view of {view:?}, samples {}",
-                    match draw {
-                        true => "that disagree",
-                        false => "that agree",
-                    }
-                ),
+            let got = lane.read(&resolve, (0, 0), 4, BlitOption::None);
+            let what = format!(
+                "{attachment:?} into {into:?} through a view of {view:?}, samples {}",
+                match draw {
+                    true => "that disagree",
+                    false => "that agree",
+                }
             );
+            let either = clear.is_some() && !metals_clear;
+            twin_resolved_within(&got, texel, twin_codes(srgb_written, either), &what);
+            cleared_apart |= either && got.chunks(4).any(|t| t != texel);
         }
     }
+    // A clear whose codes stand apart from Metal's was announced.
+    let notices = counts(&messages.take_notices());
+    assert!(
+        !cleared_apart || notices.contains_key(&Degradation::DeviceColorConversion),
+        "a clear apart from Metal's codes, unannounced: {notices:?}"
+    );
     quiet(lane, &messages);
+}
+
+/// The codes each channel of a twin resolve's texel may stand from Metal's: where the resolve
+/// writes an sRGB texture (`srgb`), a color channel within the two `device-rounded-resolve` states;
+/// where the texel is a clear's codes the device converts its own way (`cleared`), a color channel
+/// within one; the alpha exactly.
+fn twin_codes(srgb: bool, cleared: bool) -> [u8; 4] {
+    let color = match (srgb, cleared) {
+        (true, _) => 2,
+        (false, true) => 1,
+        (false, false) => 0,
+    };
+    [color, color, color, 0]
 }
 
 /// Hold each texel of a twin resolve's `got` to Metal's `texel` (the lane's 4x4 texture): every
@@ -1577,12 +1603,16 @@ fn a_resolve_into_the_srgb_twin_resolves_in_the_resolve_texture_s_encoding() {
 /// channel within the two codes `device-rounded-resolve` states and the alpha exactly. A texel
 /// apart from Metal's is printed.
 pub(super) fn twin_resolved(got: &[u8], texel: [u8; 4], srgb: bool, what: &str) {
-    let codes = |c: usize| if srgb && c < 3 { 2 } else { 0 };
+    twin_resolved_within(got, texel, twin_codes(srgb, false), what);
+}
+
+/// [`twin_resolved`], each channel `c` within `codes[c]` codes of Metal's `texel`.
+fn twin_resolved_within(got: &[u8], texel: [u8; 4], codes: [u8; 4], what: &str) {
     let within = got.chunks(4).all(|t| {
         t.iter()
             .zip(texel)
-            .enumerate()
-            .all(|(c, (&g, m))| g.abs_diff(m) <= codes(c))
+            .zip(codes)
+            .all(|((&g, m), codes)| g.abs_diff(m) <= codes)
     });
     assert!(
         within && got.len() == 4 * (SIZE * SIZE) as usize,
@@ -2143,10 +2173,11 @@ enum Split {
 /// keeping its texels, which Metal's debug layer stops and plain Metal runs; two slices of one
 /// array likewise, a Metal probe on the M3 Max and an M4). The samples are those of a Metal probe
 /// on an M4 (depths 0.5, 0.1, 0.9 and 0.3, stencils 20 to 23); each resolve texture holds depth
-/// 0.75 and stencil 7 before the pass. A stencil drawn after the pass (`DepthResolvedSample` after
-/// `Min` or `Max`, or a depth the device has no mode for) is `NotImplemented(DepthStencilResolve)`
-/// in a split resolve, as is a pair of modes the device lacks; a device that refuses the separate
-/// textures' sample copies prints its refusal.
+/// 0.75 and stencil 7 before the pass. An aspect drawn after the pass (a stencil by
+/// `DepthResolvedSample` after `Min` or `Max`, or a depth the device has no mode for) is drawn
+/// into its own resolve texture, printed as a "drawn:" line; both aspects drawn is
+/// `NotImplemented(DepthStencilResolve)` in a split resolve, as is a pair of modes the device
+/// lacks; a device that refuses the separate textures' sample copies prints its refusal.
 #[test]
 fn split_depth_and_stencil_resolves_are_metals() {
     use MultisampleDepthResolveFilter as D;
@@ -2290,7 +2321,29 @@ fn split_depth_and_stencil_resolves_are_metals() {
             Split::Separate => (PixelFormat::Depth32Float, PixelFormat::Stencil8),
             Split::TwoTextures | Split::TwoSlices => (combined, combined),
         };
-        let depth_msaa = lane.msaa(depth_pf);
+        // A drawn aspect: a depth picked where the device has no mode for it, or a stencil
+        // picked by depth after `Min` or `Max`, each drawn from the samples, read through
+        // sampled views (separate textures' through the image they render through, which the
+        // runtime makes sampled).
+        let depth_mode = depth.map(|_| match depth_filter {
+            D::Sample0 => Mode::SAMPLE_ZERO,
+            D::Min => Mode::MIN,
+            D::Max => Mode::MAX,
+            other => panic!("{name}: a filter the cases do not name: {other:?}"),
+        });
+        let depth_drawn = depth_mode.is_some_and(&drawn);
+        let stencil_drawn = stencil.is_some()
+            && stencil_filter == S::DepthResolvedSample
+            && depth_filter != D::Sample0;
+        let depth_msaa = match split {
+            Split::Separate => lane.msaa(depth_pf),
+            _ if depth_drawn || stencil_drawn => lane.texture(
+                depth_pf,
+                MSAA,
+                TextureUsage::RENDER_TARGET | TextureUsage::SHADER_READ,
+            ),
+            _ => lane.msaa(depth_pf),
+        };
         let stencil_msaa = match split {
             Split::Separate => lane.msaa(stencil_pf),
             Split::TwoTextures | Split::TwoSlices => depth_msaa.clone(),
@@ -2357,22 +2410,18 @@ fn split_depth_and_stencil_resolves_are_metals() {
                 h.push(mask);
             }
         });
-        // Each resolved aspect in a subpass of its own; a drawn one is not built here.
-        let depth_mode = depth.map(|_| match depth_filter {
-            D::Sample0 => Mode::SAMPLE_ZERO,
-            D::Min => Mode::MIN,
-            D::Max => Mode::MAX,
-            other => panic!("{name}: a filter the cases do not name: {other:?}"),
-        });
-        let picked = (depth_mode.is_some_and(&drawn))
-            || (stencil.is_some()
-                && stencil_filter == S::DepthResolvedSample
-                && depth.is_some()
-                && depth_filter != D::Sample0);
-        let stencil_mode = stencil.map(|_| Mode::SAMPLE_ZERO);
-        let built = !picked
-            && device_resolves(depth_mode, None, true)
-            && device_resolves(None, stencil_mode, true);
+        // Each aspect a subpass resolves in a subpass of its own, and one drawn into its own
+        // texture after the pass; both drawn is not built here.
+        let subpass_depth = depth_mode.filter(|_| !depth_drawn);
+        let subpass_stencil = stencil
+            .map(|_| Mode::SAMPLE_ZERO)
+            .filter(|_| !stencil_drawn);
+        let built = !(depth_drawn && stencil_drawn)
+            && device_resolves(subpass_depth, None, true)
+            && device_resolves(None, subpass_stencil, true);
+        if built && (depth_drawn || stencil_drawn) {
+            eprintln!("drawn: {name}: the depth {depth_drawn}, the stencil {stencil_drawn}");
+        }
         // The separate textures' scratch image, and its copies, are made before the resolve.
         match (built, ran) {
             (_, Err(Error::Unsupported(u))) if split == Split::Separate => {
@@ -2498,7 +2547,8 @@ fn split_depth_and_stencil_resolves_are_metals() {
         D::Max,
         [&then[0], &then[1]],
     );
-    let max_built = !drawn(Mode::MAX) && device_resolves(Some(Mode::MAX), None, true);
+    // A drawn depth is no subpass's: it is drawn into its own texture after the pass.
+    let max_built = device_resolves(Some(Mode::MAX).filter(|&m| !drawn(m)), None, true);
     let ran = ran.and_then(|()| lane.run(&loaded, |_, _, _| {}));
     match (max_built, ran) {
         (_, Err(Error::Unsupported(u))) => {

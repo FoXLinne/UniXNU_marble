@@ -60,6 +60,33 @@ pub const REGISTRY: &[EnvVar] = &[
                  its memory class (placed), bytes, offset and block, to show what makes and \
                  frees blocks; set to anything but empty or 0",
     },
+    EnvVar {
+        name: "METAL2VULKAN_PENDING_AUDIT",
+        default: "unset (off)",
+        effect: "metal2vulkan-runtime's diagnostics: each device checks, at each \
+                 vkBeginCommandBuffer, vkResetCommandPool and command pool given back to its \
+                 spares, and at each submission of a command buffer submitted before, that the \
+                 GPU completed every submission carrying the command buffers concerned (a \
+                 secondary through each primary that executes it), reading those submissions' \
+                 timelines with vkGetSemaphoreCounterValue; it logs each one found pending, \
+                 through the device's message sink or on stderr, with the thread's backtrace for \
+                 the first 8, and changes no work. Costs when set: a lock of the device's ledger \
+                 at each of those calls and at each vkCmdExecuteCommands, an entry per command \
+                 buffer per submission until a check finds it completed, one \
+                 vkGetSemaphoreCounterValue per carrying timeline at each check of a command \
+                 buffer still in the ledger; set to anything but empty or 0",
+    },
+    EnvVar {
+        name: "METAL2VULKAN_LOG_SHADOWS",
+        default: "unset (off)",
+        effect: "metal2vulkan-runtime's diagnostics: one line per shadow a device makes of a \
+                 texture (over a buffer's bytes, an IOSurface plane's among them; a usage \
+                 shadow; a rotated, two-plane, tiled depth or YCbCr texture's), through the \
+                 device's message sink or on stderr: the call, the texture's format, size, \
+                 levels and usage, its truth (the buffer's storage mode, length and object ID, \
+                 the texels' offset and row pitch, or its own image), and what made it a \
+                 shadow; set to anything but empty or 0",
+    },
 ];
 
 /// Multi-line `--help` block listing every registry var.
@@ -99,6 +126,21 @@ pub fn log_pipelines() -> bool {
 /// allocation, only what is printed.
 pub fn log_memory() -> bool {
     std::env::var_os("METAL2VULKAN_LOG_MEMORY")
+        .is_some_and(|value| !value.is_empty() && value != "0")
+}
+
+/// Whether metal2vulkan-runtime logs each shadow a device makes of a texture (`REGISTRY`): set,
+/// and neither empty nor `0`. A default-off diagnostic: it changes no
+/// texture, only what is printed.
+pub fn log_shadows() -> bool {
+    std::env::var_os("METAL2VULKAN_LOG_SHADOWS")
+        .is_some_and(|value| !value.is_empty() && value != "0")
+}
+
+/// Whether each metal2vulkan-runtime device runs its pending audit (`REGISTRY`): set, and neither
+/// empty nor `0`. A default-off diagnostic: it reads timelines and prints, and changes no work.
+pub fn pending_audit() -> bool {
+    std::env::var_os("METAL2VULKAN_PENDING_AUDIT")
         .is_some_and(|value| !value.is_empty() && value != "0")
 }
 

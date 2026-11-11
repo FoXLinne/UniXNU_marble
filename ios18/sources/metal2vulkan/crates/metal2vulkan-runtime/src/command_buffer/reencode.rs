@@ -43,11 +43,12 @@
 //!   its host step needs. Work a host step recorded again since (with the barriers between its
 //!   commands, `gpu_execute::Rerecord`, or as a route outgrew it, `DeferredPass::outgrown`)
 //!   keeps that step's recording.
-//! - **Runs of passes.** An encoder encoded again that was a pass of a run of passes over a
-//!   shadowed texture merged once (`pass_runs.rs`) leaves the run once it is put in place: the
-//!   merge of the run's pass before it, which it took over, records after all, and it keeps the
-//!   run's scratch after its own merge where a later pass went on over it (`State::replaying_keeps`,
-//!   recorded by `EncoderCore::finish_replay`). Its run's other passes are not encoded again.
+//! - **Runs of passes.** An encoder encoded again that was a pass of a run of passes merged once
+//!   (a shadowed texture's or a linear attachment's, `pass_runs.rs`) leaves the run once it is
+//!   put in place: the merge of the run's pass before it, which it took over, records after all,
+//!   and it keeps the run's scratch after its own merge where a later pass went on over it, a
+//!   linear attachment's run's box copied in again first (`State::replaying_keeps`, recorded by
+//!   `EncoderCore::finish_replay`). Its run's other passes are not encoded again.
 //! - **What cannot be encoded again stays as before.** An encoder whose log is gone (a compute
 //!   encoder of a command buffer that used command predication whose unit laid a step before it
 //!   opened, or one of its own that the unit's later encoders read, or a loop, or left work out;
@@ -95,6 +96,7 @@ impl CommandBufferShared {
     /// first recording, which its group's submission fails. A command buffer that completed
     /// encodes nothing again.
     pub(crate) fn reencode(self: &Arc<Self>) {
+        let _for = self.notices_for();
         let turn = lock(&self.reencoding);
         let marked = self.reencode.load(Ordering::Acquire);
         if marked == 0 {
@@ -335,9 +337,10 @@ impl State {
     /// `VkCommandBuffer`s go with the pool unsubmitted. Refused, changing nothing and giving
     /// `replayed` back, where its place holds other parts than the encoding again's, or a segment
     /// but one whose pipelines are being made (which goes, the encoding again having left one of
-    /// its own in its place), work its commit recorded on the GPU alone, or a run's merge (which
-    /// goes, the encoding again merging after itself, `pass_runs.rs`), or its group was
-    /// submitted, or the command buffer completed.
+    /// its own in its place), work its commit recorded on the GPU alone, a run's merge (which
+    /// goes, the encoding again merging after itself, `pass_runs.rs`), or a staged gather (which
+    /// goes, the encoding again copying through the imports, `host_ram/copy.rs`), or its group
+    /// was submitted, or the command buffer completed.
     pub(super) fn splice_replay(
         &mut self,
         at: usize,
@@ -352,7 +355,10 @@ impl State {
             let recorded = &self.recorded[*part];
             recorded.sparse.is_empty()
                 && (recorded.segments.iter()).all(|segment| {
-                    segment.keeps_pipelines() || segment.gpu_alone || segment.work.joins_a_run()
+                    segment.keeps_pipelines()
+                        || segment.gpu_alone
+                        || segment.work.joins_a_run()
+                        || segment.work.recorded_by_an_encoding_again()
                 })
         };
         let unjudged = self.unjudged_parts();
@@ -398,7 +404,8 @@ impl State {
             recorded.raws = raws;
             recorded.summary = summary;
             // Its first segments go: the encoding again left a segment of its own in each
-            // pending dispatch's place, and its work on the GPU alone in segments of its own.
+            // pending dispatch's place, and its work on the GPU alone in segments of its own, and
+            // recorded each staged gather's copy at once.
             // What the commit recorded of one stays retained, never submitted, as the first
             // recording does.
             for segment in recorded.segments.drain(..) {

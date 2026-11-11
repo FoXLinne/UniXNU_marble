@@ -723,11 +723,13 @@ fn moltenvk_on_apple_carries_the_early_tests_image_write_defect() {
     desc.driver_id = Some(vk::DriverId::MESA_RADV);
     // Every rasterizer but Apple's hands a clipped primitive's fragments other coverage than
     // Metal's pieces, and every tessellator but Apple's orders a patch's triangles its own way;
-    // RADV's own interpolation defect holds on any vendor.
+    // RADV's own interpolation facts and its fused half conversion hold on any vendor.
     assert_eq!(
         workarounds(&desc),
         [
+            W::HalfConversionFusedWithArithmetic,
             W::InterpolationNeedsTheWholeQuad,
+            W::PerspectiveReadsExtrapolated,
             W::ClippedCoverageNotMetals,
             W::TessellatorNotMetals
         ]
@@ -814,34 +816,39 @@ fn moltenvk_on_apple_carries_the_per_sample_writer_defect_at_every_release() {
     }
 }
 
-/// `DriverWorkaround::InterpolationNeedsTheWholeQuad` is keyed on RADV by the measured table
-/// (`driver_facts::DEFECTS`): carried at every release, whatever the vendor ID (the row names
+/// `DriverWorkaround::InterpolationNeedsTheWholeQuad` and
+/// `DriverWorkaround::PerspectiveReadsExtrapolated` are keyed on RADV by the measured table
+/// (`driver_facts::DEFECTS`): each carried at every release, whatever the vendor ID (the rows name
 /// none), and not by another driver.
 #[test]
-fn radv_carries_the_whole_quad_interpolation_defect_at_every_release() {
+fn radv_carries_its_interpolation_facts_at_every_release() {
     use crate::device::profile::DriverWorkaround;
-    let defect = DriverWorkaround::InterpolationNeedsTheWholeQuad;
-    let carries = |desc: &DeviceDescription| {
-        Device::new(desc.clone(), DevicePolicy::default())
-            .unwrap()
-            .profile()
-            .fields()
-            .workarounds
-            .contains(&defect)
-    };
-    let mut desc = profile("amd-780m-radv");
-    assert_eq!(desc.driver_id, Some(vk::DriverId::MESA_RADV));
-    assert!(carries(&desc));
-    desc.driver_version += 1;
-    assert!(carries(&desc), "at another release");
-    desc.vendor_id = 0x8086;
-    assert!(carries(&desc), "on another vendor's ID");
-    desc.driver_id = Some(vk::DriverId::INTEL_OPEN_SOURCE_MESA);
-    assert!(!carries(&desc), "under ANV");
-    for (stem, text) in committed_profiles() {
-        let desc = DeviceDescription::from_khronos_json(&text, None).unwrap();
-        let radv = desc.driver_id == Some(vk::DriverId::MESA_RADV);
-        assert_eq!(carries(&desc), radv, "{stem}");
+    for fact in [
+        DriverWorkaround::InterpolationNeedsTheWholeQuad,
+        DriverWorkaround::PerspectiveReadsExtrapolated,
+    ] {
+        let carries = |desc: &DeviceDescription| {
+            Device::new(desc.clone(), DevicePolicy::default())
+                .unwrap()
+                .profile()
+                .fields()
+                .workarounds
+                .contains(&fact)
+        };
+        let mut desc = profile("amd-780m-radv");
+        assert_eq!(desc.driver_id, Some(vk::DriverId::MESA_RADV));
+        assert!(carries(&desc), "{fact:?}");
+        desc.driver_version += 1;
+        assert!(carries(&desc), "{fact:?} at another release");
+        desc.vendor_id = 0x8086;
+        assert!(carries(&desc), "{fact:?} on another vendor's ID");
+        desc.driver_id = Some(vk::DriverId::INTEL_OPEN_SOURCE_MESA);
+        assert!(!carries(&desc), "{fact:?} under ANV");
+        for (stem, text) in committed_profiles() {
+            let desc = DeviceDescription::from_khronos_json(&text, None).unwrap();
+            let radv = desc.driver_id == Some(vk::DriverId::MESA_RADV);
+            assert_eq!(carries(&desc), radv, "{fact:?} on {stem}");
+        }
     }
 }
 
@@ -1057,6 +1064,42 @@ fn nvidia_carries_the_folded_half_conversion_pair() {
     assert!(carries(&desc));
     desc.driver_id = Some(vk::DriverId::MESA_NVK);
     assert!(!carries(&desc));
+}
+
+/// `DriverWorkaround::HalfConversionFusedWithArithmetic` is keyed on RADV whatever its GPU and on
+/// nothing else: every committed RADV profile carries it (the Radeon 780M, 680M and RX 7800 XT)
+/// and no other committed profile does; the 780M's description under another driver does not.
+/// Such a profile keeps the conversion under the float controls (`QuantizeForm::Controlled`).
+#[test]
+fn radv_carries_the_fused_half_conversion() {
+    use crate::device::profile::DriverWorkaround;
+    let defect = DriverWorkaround::HalfConversionFusedWithArithmetic;
+    let profile_of = |desc: &DeviceDescription| {
+        Device::new(desc.clone(), DevicePolicy::default())
+            .unwrap()
+            .profile()
+            .clone()
+    };
+    let mut radv = 0;
+    for (stem, text) in committed_profiles() {
+        let desc = DeviceDescription::from_khronos_json(&text, None).unwrap();
+        let on_radv = desc.driver_id == Some(vk::DriverId::MESA_RADV);
+        let p = profile_of(&desc);
+        assert_eq!(p.workarounds().contains(&defect), on_radv, "{stem}");
+        if on_radv {
+            radv += 1;
+            assert_eq!(
+                crate::lower::arith::narrow::quantize_form(&p),
+                crate::spirv::builder::QuantizeForm::Controlled,
+                "{stem}"
+            );
+        }
+    }
+    assert!(radv >= 3, "{radv} RADV profiles");
+    let mut desc = profile("amd-780m-radv");
+    assert!(profile_of(&desc).workarounds().contains(&defect));
+    desc.driver_id = Some(vk::DriverId::AMD_OPEN_SOURCE);
+    assert!(!profile_of(&desc).workarounds().contains(&defect));
 }
 
 /// `DriverWorkaround::RegisterAllocatorOverflowsLargeModules` is keyed on ANV, whatever its GPU

@@ -35,7 +35,7 @@ use crate::budget::Budget;
 use crate::device::profile::{Containment, DeviceProfile, GuestIsolation, Robustness};
 use crate::device::requirements::VkFeature;
 use crate::device::{ContainmentPolicy, Device, DeviceDescription, DevicePolicy};
-use crate::error::{Error, Feature, LowerFamily, Unsupported};
+use crate::error::{Capability, Error, Feature, LowerFamily, Unsupported};
 use crate::library::Library;
 use crate::lower::select::{LowerInputs, Plan};
 use crate::metal::{PixelFormat, TextureType};
@@ -55,6 +55,8 @@ use crate::spirv::interp::{run_with_images, Buffer, Config, Image, Order, Resour
 use crate::spirv::ir::TypedModule;
 use crate::spirv::testing::committed_profiles;
 use crate::vk;
+
+mod through;
 
 /// The kernels, compiled with `xcrun metal -O2` (Metal 4.0, AIR 2.8) from this MSL, written for
 /// this test, with the debug and type metadata the decoder does not read removed:
@@ -1204,16 +1206,20 @@ const TEXTURE: SlotRef = SlotRef {
     index: 0,
 };
 
-/// One thread per entry of `p`: `[[buffer(0)]]` holds `p`, `[[buffer(1)]]` `out` bytes.
-fn resources(plan: &Plan, p: &[[u32; 4]], out: usize) -> Resources {
+/// One thread per entry of `p`: `[[buffer(0)]]` holds `p`, `[[buffer(1)]]` `out` bytes, and the
+/// texture's level count is `levels` (a storage texture's read at a level reads it).
+fn resources(plan: &Plan, p: &[[u32; 4]], out: usize, levels: u32) -> Resources {
     let mut spec = BTreeMap::new();
     for axis in [Axis::X, Axis::Y, Axis::Z] {
         spec.insert(SpecKey::LocalSize(axis), 1);
     }
     spec.insert(SpecKey::FlatLocalSize, 1);
-    let push = vec![0u8; plan.push.push_range.map_or(0, |(_, end)| end as usize)];
+    let mut push = vec![0u8; plan.push.push_range.map_or(0, |(_, end)| end as usize)];
     for f in &plan.push.fields {
         match (f.field, f.loc) {
+            (PushField::TextureLevels(TEXTURE), PushLoc::Push { offset }) => {
+                push[offset as usize..offset as usize + 4].copy_from_slice(&levels.to_le_bytes());
+            }
             (PushField::SlotBindOffset(_) | PushField::DispatchRegion, PushLoc::Push { .. }) => {}
             // A bound value read as data, which the interpreter writes from `spec`.
             (PushField::Specialized(_), PushLoc::Push { .. }) => {}
@@ -1244,11 +1250,51 @@ fn resources(plan: &Plan, p: &[[u32; 4]], out: usize) -> Resources {
     }
 }
 
-/// Run `threads` threadgroups of one thread in both scheduling orders; both must agree.
+/// The images slot 0 binds for `image` under `plan`: `image` itself, or, where the slot is declared
+/// as level views (a storage texture read at a level), its views as the binder binds them, element
+/// `i` level `i` of `image` alone where it has that level, else a 1x1 neutral.
+fn bound(plan: &Plan, image: &Image) -> Vec<Image> {
+    let views = plan.families.texture.slots[&0]
+        .decl
+        .as_ref()
+        .and_then(|d| d.level_views);
+    let Some(n) = views else {
+        return vec![image.clone()];
+    };
+    (0..n)
+        .map(|e| {
+            let extent = match e < image.levels {
+                true => image.level_extent(e),
+                false => [1, 1, 1],
+            };
+            let mut view =
+                Image::new(image.slot, extent, image.layers, 1, image.samples).at_element(e);
+            view.robust = image.robust;
+            if e < image.levels {
+                let [w, h, d] = extent;
+                for layer in 0..image.layers {
+                    for z in 0..d {
+                        for y in 0..h {
+                            for x in 0..w {
+                                let from = image.index(e, layer, 0, [x, y, z]).expect("texel");
+                                let to = view.index(0, layer, 0, [x, y, z]).expect("texel");
+                                view.texels[to] = image.texels[from];
+                            }
+                        }
+                    }
+                }
+            }
+            view
+        })
+        .collect()
+}
+
+/// Run `threads` threadgroups of one thread in both scheduling orders over `images` (slot 0's);
+/// both must agree. The first image after the run.
 fn run_both(
     m: &TypedModule,
     res: &Resources,
-    image: &Image,
+    images: &[Image],
     threads: u32,
     stem: &str,
 ) -> (Vec<Vec<u8>>, Image) {
@@ -1259,7 +1305,7 @@ fn run_both(
             order,
             ..Config::default()
         };
-        let (o, mut imgs) = run_with_images(m, &cfg, res.clone(), vec![image.clone()])
+        let (o, mut imgs) = run_with_images(m, &cfg, res.clone(), images.to_vec())
             .unwrap_or_else(|e| panic!("{stem}: {e:?}"));
         outs.push((o.buffers, imgs.remove(0)));
     }
@@ -1327,13 +1373,17 @@ enum Out {
     Alpha,
     /// The texel's lanes reversed.
     Reversed,
+    /// A sparse read's texel with lane 3 replaced by `2.0` where it is resident: its residency
+    /// is observed, and its alpha too, which reaches the kernel through memory (a sparse block
+    /// read's texels go through the block's array).
+    Resident,
 }
 
 impl Out {
     fn bytes(self, t: [u32; 4]) -> Vec<u8> {
         match self {
             Out::Vec4 => t.iter().flat_map(|w| w.to_le_bytes()).collect(),
-            Out::Rgb2 => [t[0], t[1], t[2], fl(2.0)]
+            Out::Rgb2 | Out::Resident => [t[0], t[1], t[2], fl(2.0)]
                 .iter()
                 .flat_map(|w| w.to_le_bytes())
                 .collect(),
@@ -1353,7 +1403,7 @@ impl Out {
 
     fn len(self) -> usize {
         match self {
-            Out::Vec4 | Out::Rgb2 | Out::Lane0 | Out::Reversed => 16,
+            Out::Vec4 | Out::Rgb2 | Out::Lane0 | Out::Reversed | Out::Resident => 16,
             Out::First | Out::Alpha => 4,
             Out::Half4 => 8,
         }
@@ -1396,7 +1446,9 @@ impl ReadCase {
     /// Whether the kernel observes its texel's alpha.
     fn alpha(&self) -> bool {
         match self.out {
-            Out::Vec4 | Out::Half4 | Out::Lane0 | Out::Alpha | Out::Reversed => true,
+            Out::Vec4 | Out::Half4 | Out::Lane0 | Out::Alpha | Out::Reversed | Out::Resident => {
+                true
+            }
             Out::Rgb2 | Out::First => false,
         }
     }
@@ -1404,26 +1456,47 @@ impl ReadCase {
     /// Run on every profile, with each out-of-bounds alpha, and check Metal's result; returns the
     /// classes it ran on.
     fn check(&self, bc: &[u8]) -> Vec<Class> {
+        self.check_beyond(bc, Beyond::Nothing)
+    }
+
+    /// [`ReadCase::check`] of a kernel whose read does `beyond` what a plain read does.
+    fn check_beyond(&self, bc: &[u8], beyond: Beyond) -> Vec<Class> {
         let mut ran = Vec::new();
         for (stem, p) in profiles() {
+            if beyond == Beyond::LevelViews && !p.fields().descriptors.non_uniform_storage_image {
+                let refused = typed_module(bc, self.entry, &p).err();
+                assert!(
+                    refused.as_ref().is_some_and(refuses_level_views),
+                    "{stem}: {}: {refused:?}",
+                    self.entry
+                );
+                continue;
+            }
             let Some((plan, m)) = module(bc, self.entry, &stem, &p) else {
                 continue;
             };
             let class = class(&p, self.buffer);
             let fact = RuntimeFact::OutOfBoundsAlpha { slot: TEXTURE };
+            let selects = class != Class::Device || beyond != Beyond::Nothing;
             assert_eq!(
                 plan.facts.contains(&fact),
-                class != Class::Device && self.alpha(),
+                selects && self.alpha(),
                 "{stem}: {}: {class:?}",
                 self.entry
             );
             for alpha in [0, self.texel.one()] {
                 let img = image(self.texel, self.shape, robust(class, alpha));
                 let p_rows: Vec<[u32; 4]> = self.rows.iter().map(|(r, _)| *r).collect();
-                let mut res = resources(&plan, &p_rows, self.rows.len() * self.out.len());
+                let mut res = resources(
+                    &plan,
+                    &p_rows,
+                    self.rows.len() * self.out.len(),
+                    self.shape.2,
+                );
                 res.spec
                     .insert(SpecKey::OutOfBoundsAlpha(TEXTURE), u64::from(alpha != 0));
-                let (bufs, _) = run_both(&m, &res, &img, self.rows.len() as u32, &stem);
+                let images = bound(&plan, &img);
+                let (bufs, _) = run_both(&m, &res, &images, self.rows.len() as u32, &stem);
                 let want: Vec<u8> = self
                     .rows
                     .iter()
@@ -1457,6 +1530,27 @@ impl ReadCase {
         ran.dedup();
         ran
     }
+}
+
+/// What a read kernel's read does beyond a plain read's ([`ReadCase::check_beyond`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Beyond {
+    /// Nothing: the read is a plain one.
+    Nothing,
+    /// It observes its residency: the shader selects Metal's out-of-bounds texel on every class.
+    Residency,
+    /// It reads a storage texture at a level, through the slot's level views: the shader selects
+    /// Metal's out-of-bounds texel on every class, and a profile that cannot index the views by
+    /// a dynamic level refuses it ([`refuses_level_views`]).
+    LevelViews,
+}
+
+/// Whether `e` is the refusal of level views indexed by a dynamic level, on a profile without
+/// non-uniform storage image indexing.
+fn refuses_level_views(e: &Error) -> bool {
+    let want = Capability::Feature(VkFeature::ShaderStorageImageArrayNonUniformIndexing);
+    let want = Unsupported::needs(Feature::Lowering(LowerFamily::Texture), want);
+    matches!(e, Error::Unsupported(u) if (&u.feature, &u.needs) == (&want.feature, &want.needs))
 }
 
 /// Every class a read kernel must run on.
@@ -1731,8 +1825,9 @@ fn check_writes(
         };
         let class = class(&p, buffer);
         let img = image(Texel::Float, (shape.0, shape.1, 1, 1), robust(class, 0));
-        let res = resources(&plan, rows, 0);
-        let (_, after) = run_both(&m, &res, &img, rows.len() as u32, &stem);
+        let res = resources(&plan, rows, 0, 1);
+        let images = [img.clone()];
+        let (_, after) = run_both(&m, &res, &images, rows.len() as u32, &stem);
         let (level, layer, sample, xyz) = written;
         let w = img.index(level, layer, sample, xyz).expect("in bounds");
         for (i, (got, was)) in after.texels.iter().zip(&img.texels).enumerate() {
@@ -1852,10 +1947,11 @@ fn a_read_where_its_thread_wrote_out_of_bounds_is_zero() {
             for alpha in [0, 1] {
                 let img = image(Texel::Int, (extent, 1, 1, 1), robust(class, alpha));
                 let p_rows: Vec<[u32; 4]> = rows.iter().map(|(r, _)| *r).collect();
-                let mut res = resources(&plan, &p_rows, rows.len() * 16);
+                let mut res = resources(&plan, &p_rows, rows.len() * 16, 1);
                 res.spec
                     .insert(SpecKey::OutOfBoundsAlpha(TEXTURE), u64::from(alpha != 0));
-                let (bufs, _) = run_both(&m, &res, &img, rows.len() as u32, &stem);
+                let images = [img.clone()];
+                let (bufs, _) = run_both(&m, &res, &images, rows.len() as u32, &stem);
                 for (i, ((r, inside), got)) in rows
                     .iter()
                     .zip(bufs[1].as_chunks::<16>().0.iter())
@@ -2210,13 +2306,14 @@ fn edge_reads_short() -> String {
     format!("{head}{DECLARE}{tail}")
 }
 
-/// Metal 4.1's `read(sampler s, coord)` addresses through `s` (MSL 4.1 §6.13). Only a constexpr
-/// `address::clamp_to_edge` sampler of default state, read at `int` coordinates, is modelled: a
-/// read through an argument sampler, a repeating one, or a clamp-to-edge one with another field
-/// (linear filtering) or 16-bit coordinates is refused on every profile, never read as out of
-/// bounds; the clamp-to-edge one translates.
+/// Metal 4.1's `read(sampler s, coord)` addresses through `s` (MSL 4.1 §6.13), whatever its state:
+/// a read through a runtime sampler, a repeating one, or a filtered one translates on every
+/// profile. A cube's read through a sampler, which the M3 reads unclamped (zero past the face at
+/// the read's level, the base level's texel within it) and which is not built, is refused on every
+/// profile, never read as out of bounds, and so is one at 16-bit coordinates, which no Metal 4.1
+/// overload takes.
 #[test]
-fn a_read_through_a_sampler_other_than_clamp_to_edge_is_refused() {
+fn a_cube_s_or_a_narrow_read_through_a_sampler_is_refused() {
     let Some(sampled) = assemble_text("sampled_reads", SAMPLED_READS) else {
         return;
     };
@@ -2227,12 +2324,7 @@ fn a_read_through_a_sampler_other_than_clamp_to_edge_is_refused() {
         return;
     };
     for (stem, p) in profiles() {
-        for (bc, entry) in [
-            (&sampled, "read_arg_sampler"),
-            (&edge, "read_repeat"),
-            (&edge, "read_linear"),
-            (&short, "edge_2d"),
-        ] {
+        for (bc, entry) in [(&edge, "edge_cube"), (&short, "edge_2d")] {
             match typed_module(bc, entry, &p) {
                 Err(Error::Unsupported(u)) => assert_eq!(
                     u.feature,
@@ -2243,16 +2335,23 @@ fn a_read_through_a_sampler_other_than_clamp_to_edge_is_refused() {
                 Err(e) => panic!("{stem}: {entry}: {e}"),
             }
         }
-        typed_module(&sampled, "read_clamped", &p)
-            .unwrap_or_else(|e| panic!("{stem}: read_clamped: {e}"));
+        for (bc, entry) in [
+            (&sampled, "read_arg_sampler"),
+            (&sampled, "read_clamped"),
+            (&edge, "read_repeat"),
+            (&edge, "read_linear"),
+        ] {
+            typed_module(bc, entry, &p).unwrap_or_else(|e| panic!("{stem}: {entry}: {e}"));
+        }
     }
 }
 
 /// Metal 4.1's `sparse_read(sampler s, ...)` through a clamp-to-edge sampler is an edge read
-/// whose status word the function observes. What clamp-to-edge addressing does to its residency
-/// the specification does not say, and no OS at hand runs Metal 4.1, so it is refused on every
-/// profile, never given the slot residency of a plain read. The same read with its status word
-/// unused is a clamp-to-edge read, and translates.
+/// whose status word the function observes. What clamp-to-edge addressing does to the residency
+/// of a sparse texture's texels the specification does not say, and the M3 measured it only over
+/// a texture that is not sparse, so it is refused on every profile, never given the slot
+/// residency of a plain read. The same read with its status word unused is a clamp-to-edge read,
+/// and translates.
 #[test]
 fn a_sparse_read_through_a_clamp_to_edge_sampler_is_refused() {
     let Some(bc) = assemble_text("sparse_edge_reads", SPARSE_EDGE_READS) else {
@@ -2278,168 +2377,204 @@ fn int(x: i32) -> u32 {
     x as u32
 }
 
-/// A read through a constexpr clamp-to-edge sampler (MSL 4.1 §6.13) reads a coordinate past the
-/// texture, negative or past its extent, at its edge: the coordinate (plus the offset) is clamped
-/// into the level read, lane by lane, as a signed `int`. A level, layer, face, or sample index out
-/// of range is out of bounds as in a plain read, zero with the format's alpha. The evidence is the
-/// specification's text, not a measurement: no OS at hand runs Metal 4.1.
+/// The owned fixture `engine/kernel_block_read`'s module (Metal 4.1's block reads), assembled.
+fn block_reads() -> Option<Vec<u8>> {
+    let path = engine_dir().join("kernel_block_read.ll");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path:?}: {e}"));
+    assemble_text("kernel_block_read", &text)
+}
+
+/// How a block reads: its offset, where its second texel is, and whether it goes through the
+/// clamp-to-edge sampler.
+struct Block {
+    offset: [i32; 2],
+    second: [i32; 2],
+    edge: bool,
+}
+
+impl Block {
+    /// The rows of a block kernel over a texture of `extent` (a 2D level 0), `levels` levels and
+    /// `layers` layers: each point, layer, and level of `points`, each texel of the block, with
+    /// the texel Metal reads (measured on the M3 Max, `canon::block_read`). Through the read
+    /// sampler texel `k` lies at `p + offset + d_k` of level `clamp(lod, 0, levels - 1)` (a
+    /// signed `int`), zero outside it; through the clamp-to-edge sampler at that coordinate
+    /// clamped into level 0, which it reads at every level.
+    fn rows(
+        &self,
+        extent: [u32; 2],
+        (levels, layers): (u32, u32),
+        points: &[[i32; 3]],
+    ) -> Vec<([u32; 4], Option<At>)> {
+        let mut rows = Vec::new();
+        for layer in 0..layers {
+            for &[x, y, lod] in points {
+                for k in 0..2 {
+                    let d = if k == 1 { self.second } else { [0, 0] };
+                    let at =
+                        [0, 1].map(|i| [x, y][i].wrapping_add(self.offset[i]).wrapping_add(d[i]));
+                    let top = i32::try_from(levels).expect("levels") - 1;
+                    let level = if self.edge { 0 } else { lod.clamp(0, top) };
+                    let size = extent.map(|e| i64::from(e >> level).max(1));
+                    let texel = if self.edge {
+                        let c = [0, 1].map(|i| i64::from(at[i]).clamp(0, size[i] - 1) as u32);
+                        Some((level as u32, layer, 0, [c[0], c[1], 0]))
+                    } else {
+                        let inside = (0..2).all(|i| (0..size[i]).contains(&i64::from(at[i])));
+                        inside.then(|| (level as u32, layer, 0, [at[0] as u32, at[1] as u32, 0]))
+                    };
+                    let w = k + 2 * layer;
+                    rows.push(([int(x), int(y), int(lod), w], texel));
+                }
+            }
+        }
+        rows
+    }
+}
+
+/// Metal 4.1's `block_read<W, H>` and `sparse_block_read<W, H>` (the owned fixture
+/// `engine/kernel_block_read`) read the block's texels as reads do, as measured on the M3 Max
+/// (macOS 27.0.1, Apple metal 32023.922): through the read sampler at `coord + offset` and the
+/// next texel right or below, at the level clamped into the texture's (a level of 2 or 5 over two
+/// levels reads level 1, of `-1` level 0), zero outside it; through a constexpr clamp-to-edge
+/// sampler at that coordinate clamped into the base level, which it reads at every level. On 2D
+/// textures of `float`, `uint`, `int`, and `half`, a 2D array, a depth texture, a `read_write`
+/// one, and a sparse block read (each texel resident: the texture is not sparse), on every
+/// profile, in both scheduling orders.
 #[test]
-fn a_clamp_to_edge_read_clamps_its_coordinate_into_the_texture() {
-    let Some(bc) = assemble_text("edge_reads", EDGE_READS) else {
+fn block_reads_read_their_texels_as_reads_do() {
+    let Some(bc) = block_reads() else {
         return;
     };
-    let cases = [
-        ReadCase {
-            entry: "edge_2d",
-            texel: Texel::Float,
-            shape: ([4, 4, 1], 1, 2, 1),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([1, 2, 0, 0], Some((0, 0, 0, [1, 2, 0]))),
-                ([int(-1), 2, 0, 0], Some((0, 0, 0, [0, 2, 0]))),
-                ([5, int(-3), 0, 0], Some((0, 0, 0, [3, 0, 0]))),
-                ([MAX, 0, 0, 0], Some((0, 0, 0, [0, 0, 0]))),
-                ([int(i32::MIN), 7, 0, 0], Some((0, 0, 0, [0, 3, 0]))),
-                ([int(i32::MAX), 1, 0, 0], Some((0, 0, 0, [3, 1, 0]))),
-                ([5, 5, 1, 0], Some((1, 0, 0, [1, 1, 0]))),
-                ([int(-5), 9, 1, 0], Some((1, 0, 0, [0, 1, 0]))),
-                ([0, 0, 2, 0], None),
-                ([1, 1, MAX, 0], None),
-            ],
-        },
-        ReadCase {
-            entry: "edge_2d_offset",
-            texel: Texel::Int,
-            shape: ([4, 4, 1], 1, 1, 1),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([2, 0, 0, 0], Some((0, 0, 0, [0, 3, 0]))),
-                ([5, 0, 0, 0], Some((0, 0, 0, [3, 3, 0]))),
-                ([1, int(-3), 0, 0], Some((0, 0, 0, [0, 0, 0]))),
-                ([3, int(-1), 0, 0], Some((0, 0, 0, [1, 2, 0]))),
-                ([MAX, 2, 0, 0], Some((0, 0, 0, [0, 3, 0]))),
-            ],
-        },
-        ReadCase {
-            entry: "edge_dynamic_offset",
-            texel: Texel::Float,
-            shape: ([4, 4, 1], 1, 1, 1),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([1, 1, int(-2), 1], Some((0, 0, 0, [0, 2, 0]))),
-                ([3, 0, 7, int(-8)], Some((0, 0, 0, [3, 0, 0]))),
-                ([0, 3, 0, 0], Some((0, 0, 0, [0, 3, 0]))),
-            ],
-        },
-        ReadCase {
-            entry: "edge_2d_array",
-            texel: Texel::Int,
-            shape: ([4, 4, 1], 3, 2, 1),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([int(-1), 5, 1, 0], Some((0, 1, 0, [0, 3, 0]))),
-                ([2, 2, 3, 0], None),
-                ([9, int(-9), 2, 1], Some((1, 2, 0, [1, 0, 0]))),
-                ([0, 0, 0, 2], None),
-                ([1, 1, MAX, 0], None),
-            ],
-        },
-        ReadCase {
-            entry: "edge_3d",
-            texel: Texel::Float,
-            shape: ([4, 4, 4], 1, 2, 1),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([int(-1), 4, 2, 0], Some((0, 0, 0, [0, 3, 2]))),
-                ([7, 7, 7, 1], Some((1, 0, 0, [1, 1, 1]))),
-                ([0, 0, 0, 2], None),
-            ],
-        },
-        ReadCase {
-            entry: "edge_cube",
-            texel: Texel::Float,
-            shape: ([4, 4, 1], 6, 2, 1),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([int(-1), 9, 2, 0], Some((0, 2, 0, [0, 3, 0]))),
-                ([1, 1, 6, 0], None),
-                ([5, 5, 5, 1], Some((1, 5, 0, [1, 1, 0]))),
-                ([0, 0, 0, 2], None),
-            ],
-        },
-        ReadCase {
-            entry: "edge_ms",
-            texel: Texel::Float,
-            shape: ([4, 4, 1], 1, 1, 4),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([int(-2), 1, 3, 0], Some((0, 0, 3, [0, 1, 0]))),
-                ([9, 9, 0, 0], Some((0, 0, 0, [3, 3, 0]))),
-                ([1, 1, 4, 0], None),
-            ],
-        },
-        ReadCase {
-            entry: "edge_rw",
-            texel: Texel::Int,
-            shape: ([4, 4, 1], 1, 1, 1),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([int(-1), int(-1), 0, 0], Some((0, 0, 0, [0, 0, 0]))),
-                ([4, 4, 0, 0], Some((0, 0, 0, [3, 3, 0]))),
-                ([2, 1, 0, 0], Some((0, 0, 0, [2, 1, 0]))),
-            ],
-        },
-        ReadCase {
-            entry: "edge_1d",
-            texel: Texel::Float,
-            shape: ([8, 1, 1], 1, 1, 1),
-            buffer: false,
-            out: Out::Vec4,
-            rows: vec![
-                ([int(-3), 0, 0, 0], Some((0, 0, 0, [0, 0, 0]))),
-                ([100, 0, 0, 0], Some((0, 0, 0, [7, 0, 0]))),
-                ([5, 0, 0, 0], Some((0, 0, 0, [5, 0, 0]))),
-            ],
-        },
+    let points = [
+        [1, 1, 0],
+        [6, 1, 0],
+        [7, 1, 0],
+        [8, 1, 0],
+        [-1, 1, 0],
+        [2, 3, 0],
+        [-3, -2, 0],
+        [3, 1, 1],
+        [1, 0, 1],
+        [9, 5, 1],
+        [1, 0, 2],
+        [3, 1, 5],
+        [1, 1, -1],
+        [i32::MIN, 0, 0],
     ];
-    for case in &cases {
-        assert_eq!(case.check(&bc), ALL, "{}", case.entry);
+    let (right, below) = ([1, 0], [0, 1]);
+    let read = |offset, second| Block {
+        offset,
+        second,
+        edge: false,
+    };
+    let edge = |offset, second| Block {
+        offset,
+        second,
+        edge: true,
+    };
+    let plane = ([8, 4, 1], 1, 2, 1);
+    // Each kernel, its texel, texture, output, block, and what its reads do beyond a plain read's.
+    let cases = [
+        (
+            "br_2x1",
+            Texel::Float,
+            plane,
+            Out::Vec4,
+            read([0, 0], right),
+            Beyond::Nothing,
+        ),
+        (
+            "br_1x2_offset",
+            Texel::Int,
+            plane,
+            Out::Vec4,
+            read([-1, 2], below),
+            Beyond::Nothing,
+        ),
+        (
+            "br_edge",
+            Texel::Float,
+            plane,
+            Out::Vec4,
+            edge([1, 0], right),
+            Beyond::Nothing,
+        ),
+        (
+            "br_edge_1x2",
+            Texel::Int,
+            plane,
+            Out::Vec4,
+            edge([0, 0], below),
+            Beyond::Nothing,
+        ),
+        (
+            "br_half",
+            Texel::Float,
+            plane,
+            Out::Half4,
+            read([0, 0], right),
+            Beyond::Nothing,
+        ),
+        (
+            "br_array",
+            Texel::Float,
+            ([8, 4, 1], 3, 2, 1),
+            Out::Vec4,
+            read([0, 0], below),
+            Beyond::Nothing,
+        ),
+        (
+            "br_depth",
+            Texel::Float,
+            plane,
+            Out::First,
+            read([0, 0], right),
+            Beyond::Nothing,
+        ),
+        (
+            "br_sparse",
+            Texel::Float,
+            plane,
+            Out::Resident,
+            read([0, 0], right),
+            Beyond::Residency,
+        ),
+        (
+            "br_rw",
+            Texel::Float,
+            plane,
+            Out::Vec4,
+            read([0, 0], right),
+            Beyond::LevelViews,
+        ),
+    ];
+    for (entry, texel, shape, out, block, beyond) in &cases {
+        let ([w, h, _], layers, levels, _) = *shape;
+        let case = ReadCase {
+            entry,
+            texel: *texel,
+            shape: *shape,
+            buffer: false,
+            out: *out,
+            rows: block.rows([w, h], (levels, layers), &points),
+        };
+        let ran = case.check_beyond(&bc, *beyond);
+        assert!(ran.contains(&Class::Shader), "{entry}: {ran:?}");
     }
-    // Every kernel links and passes `spirv-val` where it translates.
+    // Every kernel links and passes `spirv-val` where it translates, its block reads made reads.
     let mut validated = 0;
     for (stem, p) in profiles() {
-        for entry in cases.iter().map(|c| c.entry).chain(["edge_buffer"]) {
+        for (entry, .., beyond) in &cases {
             match compile(&bc, entry, &p) {
                 Ok(a) => {
                     link_and_validate(&a, &p).unwrap_or_else(|e| panic!("{stem}: {entry}: {e}"));
                     validated += 1;
                 }
                 Err(Error::NeedsInput(_)) => {}
+                Err(e) if *beyond == Beyond::LevelViews && refuses_level_views(&e) => {}
                 Err(e) => panic!("{stem}: {entry}: {e}"),
             }
         }
     }
     assert!(validated > 0);
-    let buffer = ReadCase {
-        entry: "edge_buffer",
-        texel: Texel::Float,
-        shape: ([8, 1, 1], 1, 1, 1),
-        buffer: true,
-        out: Out::Vec4,
-        rows: vec![
-            ([3, 0, 0, 0], Some((0, 0, 0, [3, 0, 0]))),
-            ([int(-1), 0, 0, 0], Some((0, 0, 0, [0, 0, 0]))),
-            ([8, 0, 0, 0], Some((0, 0, 0, [7, 0, 0]))),
-            ([int(i32::MIN), 0, 0, 0], Some((0, 0, 0, [0, 0, 0]))),
-        ],
-    };
-    assert_eq!(buffer.check(&bc), [Class::Device, Class::Shader]);
 }

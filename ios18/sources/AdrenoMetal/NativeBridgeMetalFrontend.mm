@@ -595,7 +595,7 @@ static bool textureFlag(id descriptor,const char *name) {
 // Diagnostic, render server only, while /private/var/ngpu/debug/texture-log exists when it starts: every texture made over an
 // IOSurface or a no-copy buffer is logged "native-metal: texture-log ..." with the surface's own size, rows, format and planes
 // next to the texture's, to tell which memory and which shape a garbled layer was drawn from.
-static const bool gLogTextures=isRenderServer() && access("/private/var/ngpu/debug/texture-log",F_OK)==0;
+static const bool gLogTextures=false;
 static std::atomic<uint64_t> gTexturesLogged;
 // The first 2000 texture-log lines, then every 100th: the uploads run every frame.
 static bool textureLogTurn() {const uint64_t n=++gTexturesLogged;return n<=2000 || n%100==0;}
@@ -845,6 +845,9 @@ static NSString *compileArguments(MTLCompileOptions *options) {
  [arguments addObject:fast?@"-ffast-math":@"-fno-fast-math"];
  if(options.preserveInvariance)[arguments addObject:@"-fpreserve-invariance"];
  if(options.optimizationLevel==MTLLibraryOptimizationLevelSize)[arguments addObject:@"-Os"];
+ NSBundle *plugin=[NSBundle bundleForClass:NSClassFromString(@"NativeAdrenoMetalDevice")];
+ NSString *coreImageHeader=[plugin pathForResource:@"CIKernelMetalLib" ofType:@"h"];
+ if(coreImageHeader)[arguments addObject:compileArgument([@"-I" stringByAppendingString:coreImageHeader.stringByDeletingLastPathComponent])];
  [options.preprocessorMacros enumerateKeysAndObjectsUsingBlock:^(NSString *name,NSObject *value,BOOL *) {
   [arguments addObject:compileArgument([NSString stringWithFormat:@"-D%@=%@",name,value])];
  }];
@@ -932,6 +935,7 @@ static void waitForResource(id resource);
 @property(nonatomic) NmbTextureDescriptor descriptor;
 @property(nonatomic,strong) NBBuffer *buffer;
 @property(nonatomic) IOSurfaceRef surface;
+- (NBBuffer *)backingBuffer;
 @property(nonatomic) NSUInteger surfacePlane;
 @property(nonatomic) NSUInteger offset,rowBytes;
 @property(nonatomic,strong) id<MTLTexture> parent;
@@ -966,7 +970,9 @@ static void releaseSurface(void *context,void *,uint64_t) {DetailSpan timing(7,(
 - (MTLStorageMode)storageMode {return (MTLStorageMode)((_options&MTLResourceStorageModeMask)>>MTLResourceStorageModeShift);}
 - (MTLCPUCacheMode)cpuCacheMode {return (MTLCPUCacheMode)((_options&MTLResourceCPUCacheModeMask)>>MTLResourceCPUCacheModeShift);}
 - (MTLHazardTrackingMode)hazardTrackingMode {return (MTLHazardTrackingMode)((_options&MTLResourceHazardTrackingModeMask)>>MTLResourceHazardTrackingModeShift);}
-- (void)didModifyRange:(NSRange)range {(void)range;}
+- (void)didModifyRange:(NSRange)range {
+ if(!nmb_buffer_did_modify_range(_handle,range.location,range.length))NBLOG(@"native-metal: didModifyRange: %@",lastError());
+}
 - (MTLPurgeableState)setPurgeableState:(MTLPurgeableState)state {
  const uint64_t answer=nmb_buffer_set_purgeable_state(_handle,state);
  if(!answer)NBLOG(@"native-metal: buffer setPurgeableState refused: %@",lastError());
@@ -1195,6 +1201,7 @@ static bool textureDescriptor(MTLTextureDescriptor *d,NmbTextureDescriptor *out)
 - (IOSurfaceRef)iosurface {return _surface;}
 - (NSUInteger)iosurfacePlane {return _surfacePlane;}
 - (id<MTLBuffer>)buffer {return _surface?nil:(id<MTLBuffer>)_buffer;}
+- (NBBuffer *)backingBuffer {return _buffer;}
 - (NSUInteger)bufferOffset {return _offset;}
 - (NSUInteger)bufferBytesPerRow {return _rowBytes;}
 - (id<MTLTexture>)parentTexture {return _parent;}
@@ -1271,8 +1278,10 @@ static bool flushImports(NSMutableSet *resources,bool acquire,uint64_t *flushed)
  std::unordered_set<NmbBuffer *> imports;
  for(id resource in resources) {
   NBTexture *texture=[resource isKindOfClass:[NBTexture class]]?(NBTexture *)resource:nil;
-  NBBuffer *buffer=texture?texture.buffer:([resource isKindOfClass:[NBBuffer class]]?(NBBuffer *)resource:nil);
-  if(!buffer || (!buffer.wrapped && !buffer.importedSurface))continue;
+  NBBuffer *buffer=texture?texture.backingBuffer:([resource isKindOfClass:[NBBuffer class]]?(NBBuffer *)resource:nil);
+  // Runtime-owned buffers can also import fresh host pages. The runtime
+  // decides whether this allocation needs synchronization.
+  if(!buffer)continue;
   if(!imports.insert(buffer.handle).second){gSurfaceFlushDuplicates++;continue;}
   const uint64_t began=nowUs();
   if(!nmb_buffer_sync_import(buffer.handle,acquire,gImportSync))return false;
@@ -1290,26 +1299,29 @@ static NBTexture *textureOnBuffer(NBBuffer *buffer,MTLTextureDescriptor *d,NSUIn
 }
 // myron: a two-plane extended-range surface ('b3a8', RGB10A8_2P_XR10) whose planes report no row bytes. IOSurfaceGetBytesPerRowOfPlane
 // answers 0 for it on these ports, so the texture used to be refused (step 3) and its layer left undrawn (Data A Live bb43, same SoC, the
-// App Library there). Its allocation is two linear planes, rows aligned to 64 bytes, one after the other: {offset0, row0, offset1, row1},
-// or false when the surface reports its rows itself or the computed planes do not fit the allocation.
+// App Library there). WebKit allocates each plane with IOSurface's allocation
+// alignment; alpha starts after the aligned color allocation, including padding.
 static bool b3a8Planes(IOSurfaceRef surface,size_t allocation,size_t planes[4]) {
  if(!surface || IOSurfaceGetPixelFormat(surface)!=0x62336138 || IOSurfaceGetPlaneCount(surface)!=2)return false;
  if(IOSurfaceGetBytesPerRowOfPlane(surface,0) && IOSurfaceGetBytesPerRowOfPlane(surface,1))return false;
  const size_t w=IOSurfaceGetWidth(surface),h=IOSurfaceGetHeight(surface);
- const size_t row0=(w*4+63)&~(size_t)63,row1=(w+63)&~(size_t)63;
- if(!w || !h || row0*h+row1*h>allocation)return false;
- planes[0]=0;planes[1]=row0;planes[2]=row0*h;planes[3]=row1;
- static std::atomic<int> told{0};
- if(told.fetch_add(1)<8)GLOG(@"native-metal: b3a8 %lux%lu planes computed (row %lu at 0, row %lu at %lu; %lu of %lu bytes)",(unsigned long)w,
-  (unsigned long)h,(unsigned long)row0,(unsigned long)row1,(unsigned long)(row0*h),(unsigned long)(row0*h+row1*h),(unsigned long)allocation);
+ if(!w || !h || w>SIZE_MAX/4)return false;
+ const size_t row0=IOSurfaceAlignProperty(kIOSurfaceBytesPerRow,w*4);
+ const size_t row1=IOSurfaceAlignProperty(kIOSurfaceBytesPerRow,w);
+ if(row0<w*4 || row1<w || row0>allocation/h || row1>allocation/h)return false;
+ const size_t colorBytes=IOSurfaceAlignProperty(kIOSurfaceAllocSize,row0*h);
+ const size_t alphaBytes=IOSurfaceAlignProperty(kIOSurfaceAllocSize,row1*h);
+ if(colorBytes<row0*h || alphaBytes<row1*h || colorBytes>allocation || alphaBytes>allocation-colorBytes)return false;
+ planes[0]=0;planes[1]=row0;planes[2]=colorBytes;planes[3]=row1;
  gSurfaceB3a8++;
  return true;
 }
 // A texture over a two-plane surface: the runtime reads plane 1 from the surface's own layout (two-plane RGB and YCbCr formats).
 static NBTexture *textureOnSurface(NBBuffer *buffer,MTLTextureDescriptor *d,IOSurfaceRef surface,NSUInteger plane,NSUInteger offset,NSUInteger row) {
  NmbTextureDescriptor descriptor;if(!buffer || !textureDescriptor(d,&descriptor))return nil;
- const uint64_t base=(uintptr_t)IOSurfaceGetBaseAddress(surface),chroma=(uintptr_t)IOSurfaceGetBaseAddressOfPlane(surface,1);
- uint64_t chromaOffset=chroma>=base?chroma-base:0,chromaRow=IOSurfaceGetBytesPerRowOfPlane(surface,1);
+ const bool hasChroma=IOSurfaceGetPlaneCount(surface)>1;
+ const uint64_t base=(uintptr_t)IOSurfaceGetBaseAddress(surface),chroma=hasChroma?(uintptr_t)IOSurfaceGetBaseAddressOfPlane(surface,1):0;
+ uint64_t chromaOffset=chroma>=base?chroma-base:0,chromaRow=hasChroma?IOSurfaceGetBytesPerRowOfPlane(surface,1):0;
  size_t computed[4];   // myron: a 'b3a8' surface without plane rows
  if(!chromaRow && b3a8Planes(surface,IOSurfaceGetAllocSize(surface),computed)){chromaOffset=computed[2];chromaRow=computed[3];}
  NmbTexture *handle=nmb_texture_new_on_surface(buffer.handle,&descriptor,offset,row,IOSurfaceGetPixelFormat(surface),plane,
@@ -1758,7 +1770,7 @@ static void notified(void *context,uint64_t value) {
 // samples (a texture over an IOSurface or over a no-copy buffer, at most 1 MiB of rows) is hashed at commit and again at completion.
 // One that changed in between was rewritten by its client while the GPU could read it, which puts two frames' rows into one frame
 // (garbled labels, the status bar clock). Logged "native-metal: source-race ...", the first 50 of each kind and every 500th.
-static const bool gWatchSources=isRenderServer() && access("/private/var/ngpu/debug/source-race",F_OK)==0;
+static const bool gWatchSources=false;
 struct WatchedSource {const uint8_t *bytes;size_t length;uint64_t hash;bool surface;uint32_t width,height,row;};
 static std::atomic<uint64_t> gSourcesWatched[2],gSourcesRaced[2];
 static uint64_t hashSource(const uint8_t *bytes,size_t length) {
@@ -2379,8 +2391,20 @@ static uint64_t encodeCommandOf(id object) {
  const std::array<uint64_t,3> g={group.width,group.height,group.depth};
  ENCODE([self check:nmb_compute_dispatch_indirect(self.handle,[(NBBuffer *)buffer handle],offset,g.data()) what:"indirect dispatch"]);
 }
-- (void)useResource:(id<MTLResource>)r usage:(MTLResourceUsage)u {(void)r;(void)u;}
-- (void)memoryBarrierWithScope:(MTLBarrierScope)s {(void)s;}
+- (void)useResource:(id<MTLResource>)r usage:(MTLResourceUsage)u {
+ NBBuffer *buffer=[(id)r isKindOfClass:[NBBuffer class]]?(NBBuffer *)r:nil;
+ NBTexture *texture=[(id)r isKindOfClass:[NBTexture class]]?(NBTexture *)r:nil;
+ if(!buffer && !texture){[self.commandBuffer refuse:@"missing or foreign indirect resource"];return;}
+ [self.commandBuffer.resourceOwners addObject:r];
+ if(texture.surface)[self.commandBuffer.surfaces addObject:texture];
+ ENCODE([self check:nmb_encoder_use_resource(self.handle,buffer.handle,texture.handle,u,0) what:"useResource"]);
+}
+- (void)useResources:(const id<MTLResource> __unsafe_unretained [])resources count:(NSUInteger)count usage:(MTLResourceUsage)usage {
+ for(NSUInteger i=0;i<count;i++)[self useResource:resources[i] usage:usage];
+}
+- (void)memoryBarrierWithScope:(MTLBarrierScope)s {
+ ENCODE([self check:nmb_compute_memory_barrier(self.handle,s) what:"memoryBarrierWithScope"]);
+}
 @end
 
 @interface NBRenderEncoder : NBEncoder
@@ -2593,7 +2617,23 @@ static uint64_t encodeCommandOf(id object) {
  if(!ci || !ib){[self.commandBuffer refuse:@"nil control point index or indirect buffer"];return;}
  [self patches:n start:0 count:0 patchIndex:pi offset:po points:ci offset:co instances:0 base:0 indirect:ib offset:io];
 }
-- (void)useResource:(id<MTLResource>)r usage:(MTLResourceUsage)u stages:(MTLRenderStages)s {(void)r;(void)u;(void)s;}
+- (void)useResource:(id<MTLResource>)r usage:(MTLResourceUsage)u stages:(MTLRenderStages)s {
+ NBBuffer *buffer=[(id)r isKindOfClass:[NBBuffer class]]?(NBBuffer *)r:nil;
+ NBTexture *texture=[(id)r isKindOfClass:[NBTexture class]]?(NBTexture *)r:nil;
+ if(!buffer && !texture){[self.commandBuffer refuse:@"missing or foreign indirect resource"];return;}
+ [self.commandBuffer.resourceOwners addObject:r];
+ if(texture.surface)[self.commandBuffer.surfaces addObject:texture];
+ ENCODE([self check:nmb_encoder_use_resource(self.handle,buffer.handle,texture.handle,u,s) what:"useResource:stages:"]);
+}
+- (void)useResource:(id<MTLResource>)r usage:(MTLResourceUsage)u {
+ [self useResource:r usage:u stages:MTLRenderStageVertex|MTLRenderStageFragment];
+}
+- (void)useResources:(const id<MTLResource> __unsafe_unretained [])resources count:(NSUInteger)count usage:(MTLResourceUsage)usage stages:(MTLRenderStages)stages {
+ for(NSUInteger i=0;i<count;i++)[self useResource:resources[i] usage:usage stages:stages];
+}
+- (void)useResources:(const id<MTLResource> __unsafe_unretained [])resources count:(NSUInteger)count usage:(MTLResourceUsage)usage {
+ [self useResources:resources count:count usage:usage stages:MTLRenderStageVertex|MTLRenderStageFragment];
+}
 - (void)updateFence:(id<MTLFence>)fence afterStages:(MTLRenderStages)stages {[self fence:fence stages:stages update:true];}
 - (void)waitForFence:(id<MTLFence>)fence beforeStages:(MTLRenderStages)stages {[self fence:fence stages:stages update:false];}
 @end
@@ -2693,7 +2733,18 @@ static uint64_t encodeCommandOf(id object) {
                          (unsigned long)t.pixelFormat,(unsigned long)t.textureType,(unsigned long)t.mipmapLevelCount].UTF8String;
  ENCODE([self check:nmb_blit_generate_mipmaps(self.handle,[(NBTexture *)t handle]) what:what.c_str()]);
 }
-- (void)synchronizeResource:(id<MTLResource>)r {(void)r;}
+- (void)synchronizeResource:(id<MTLResource>)r {
+ NBBuffer *buffer=[(id)r isKindOfClass:[NBBuffer class]]?(NBBuffer *)r:nil;
+ NBTexture *texture=[(id)r isKindOfClass:[NBTexture class]]?(NBTexture *)r:nil;
+ if(!buffer && !texture){[self.commandBuffer refuse:@"missing or foreign synchronized resource"];return;}
+ [self.commandBuffer.resourceOwners addObject:r];
+ if(texture.surface)[self.commandBuffer.surfaces addObject:texture];
+ ENCODE([self check:nmb_blit_synchronize_resource(self.handle,buffer.handle,texture.handle) what:"synchronizeResource"]);
+}
+- (void)synchronizeTexture:(id<MTLTexture>)texture slice:(NSUInteger)slice level:(NSUInteger)level {
+ if(![self textures:NB_OBJECTS(texture) count:1])return;
+ ENCODE([self check:nmb_blit_synchronize_texture(self.handle,[(NBTexture *)texture handle],slice,level) what:"synchronizeTexture"]);
+}
 @end
 
 static void completed(void *context);
@@ -4263,7 +4314,7 @@ static bool pipelineArchives(NSArray *list,std::vector<NmbBinaryArchive *> &arch
  if(start<(uintptr_t)base || start-(uintptr_t)base>=allocation || !row){refuseSurface(3,surface,d,plane,start-(uintptr_t)base,row);return nil;}
  const size_t bytes=(allocation+page-1)&~(page-1);
  NBBuffer *buffer=surfaceBuffer(surface,base,bytes);if(!buffer){refuseSurface(4,surface,d,plane,start-(uintptr_t)base,row);return nil;}
- NBTexture *texture=planes>=2?textureOnSurface(buffer,d,surface,plane,start-(uintptr_t)base,row):textureOnBuffer(buffer,d,start-(uintptr_t)base,row,true);
+ NBTexture *texture=planes?textureOnSurface(buffer,d,surface,plane,start-(uintptr_t)base,row):textureOnBuffer(buffer,d,start-(uintptr_t)base,row,true);
  if(!texture){refuseSurface(5,surface,d,plane,start-(uintptr_t)base,row);return nil;}
  if(planes>=2 && IOSurfaceGetPixelFormat(surface)!=0x62336138) {
   static std::atomic<unsigned> videoLogs{0};

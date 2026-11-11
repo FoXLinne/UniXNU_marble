@@ -29,7 +29,8 @@ def paths(ctx):
 
 def check_args(arguments):
     for value in arguments:
-        if not re.fullmatch(r'[A-Za-z0-9_.\-]+(=[A-Za-z0-9_.,/\-]+)?', value):
+        # A value may hold ':' and '=' (exec-env=NAME:VAR=VALUE); no space, quote or shell character.
+        if not re.fullmatch(r'[A-Za-z0-9_.\-]+(=[A-Za-z0-9_.,/\-:=]+)?', value):
             raise Error(f'unsupported kernel argument: {value}')
     line = ' '.join(arguments)
     # DarwinBoot copies the command line into a 1024-byte buffer and refuses a longer one.
@@ -66,8 +67,8 @@ def check_native_root(kernel, arguments, vmm_present=False):
             values.setdefault(key, []).append(value)
     if '1' not in values.get('native-ufs-root', []):
         return
-    if values.get('sheng-pmgr') != ['2']:
-        raise Error('native UFS root boot needs exactly one sheng-pmgr=2; the unchanged target AMFI otherwise panics with No PMGR')
+    if values.get('pmgr') != ['2']:
+        raise Error('native UFS root boot needs exactly one pmgr=2; the unchanged target AMFI otherwise panics with No PMGR')
     symbols = run([tool('llvm-nm', 'brew install llvm'), '--defined-only', kernel], capture=True)
     if not any(line.split()[-1:] == ['_sheng_pmgr_run'] for line in symbols.splitlines()):
         raise Error('the native UFS root kernel lacks the linked sheng PMGR integration')
@@ -111,9 +112,10 @@ def build(ctx, kernel=None):
     if not kernel.is_file():
         raise Error(f'kernel not found: {kernel}; run "unixnu build kernel" or pass --kernel FILE')
     extra = list(getattr(args, 'kernel_arg', None) or [])
-    # An extra NAME=VALUE replaces the board's argument of the same name.
+    # An extra NAME=VALUE replaces the board's argument of the same name. The extra arguments come first: a run's own switches
+    # (autoreset above all, which brings an unattended run back to fastboot) are the last to go if the line is ever cut short.
     names = {item.split('=', 1)[0] for item in extra}
-    arguments = [item for item in spec.get('kernel_args', []) if item.split('=', 1)[0] not in names] + extra
+    arguments = extra + [item for item in spec.get('kernel_args', []) if item.split('=', 1)[0] not in names]
     line = check_args(arguments)
     log(f'kernel args: {line}')
     check_native_root(kernel, arguments, bool(ctx.board.get('adt', {}).get('defaults', {}).get('u32', {}).get('vmm-present')))

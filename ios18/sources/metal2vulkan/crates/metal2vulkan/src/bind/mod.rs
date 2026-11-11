@@ -66,7 +66,9 @@
 //! depth or stencil aspect moves between images without colour copies through the draws of
 //! [`depth_stencil_copy_modules`] and the kernel of [`stencil_split_module`], and resolves where
 //! the device's resolve modes do not state Metal's filter through the draws of
-//! [`depth_stencil_resolve_modules`]. The mipmaps of a format the device's blits cannot filter are
+//! [`depth_stencil_resolve_modules`]. The runtime's check of render targets in place over host
+//! pages draws into one through [`check_draw_modules`]. The mipmaps of a format the device's
+//! blits cannot filter are
 //! a bilinear filter in `float` through the
 //! [`MipmapFilterChain`] dispatches of [`mipmap_filter_module`]. Compute commands
 //! a kernel encodes into an indirect command buffer replay on the device where it has device
@@ -88,7 +90,9 @@
 //! [`shadow_copy_in_module`] copies a merged texture's texels in and keeps them with one dispatch.
 //! A copy of many
 //! equal rows between two buffers is one dispatch of [`rows_copy_module`] where a copy's region
-//! per row costs more. A blit through a `BGRA10_XR` texture Metal keeps losslessly compressed
+//! per row costs more. A copy of 32-bit float depths into a depth image of a device that takes
+//! none outside `[0, 1]` clamps them first through [`depth_clamp_module`] ([`clamped_depth`] on
+//! the CPU). A blit through a `BGRA10_XR` texture Metal keeps losslessly compressed
 //! writes Metal's canonical encoding of its texels through [`extended_canonical_module`] where
 //! the policy asks for it. A blit between a buffer
 //! and a two-plane extended-range texture moves its color words through [`plane_words_module`],
@@ -132,8 +136,10 @@ pub(crate) mod acceleration;
 pub(crate) mod argument_buffer;
 pub(crate) mod astc_decode;
 pub(crate) mod block_decode;
+pub(crate) mod check_draw;
 pub(crate) mod chroma_decode;
 pub(crate) mod color_resolve;
+pub(crate) mod depth_clamp;
 pub(crate) mod depth_stencil_copy;
 pub(crate) mod depth_stencil_resolve;
 pub(crate) mod dispatch;
@@ -193,6 +199,7 @@ pub use argument_buffer::{
 };
 pub use astc_decode::{astc_decode_module, AstcDecode, AstcTexels};
 pub use block_decode::BlockDecodeModule;
+pub use check_draw::{check_draw_modules, CheckDrawModules};
 pub use chroma_decode::{
     chroma_decode_module, chroma_sample_module, ChromaDecode, ChromaSampleModule,
 };
@@ -200,6 +207,7 @@ pub use color_resolve::{
     color_resolve_modules, ColorResolveFormat, ColorResolveModules, ResolveChannel, ResolveRule,
     ResolveSource, SRGB_RESOLVE_LINEAR, SRGB_RESOLVE_THRESHOLDS,
 };
+pub use depth_clamp::{clamped_depth, depth_clamp_module, DepthClampModule};
 pub use depth_stencil_copy::{
     depth_split_module, depth_stencil_copy_modules, stencil_split_module, CopySource,
     DepthSplitModule, DepthStandInForm, DepthStencilCopy, DepthStencilCopyModules, StencilBit,
@@ -216,7 +224,7 @@ pub use extended_canonical::{
 };
 pub use extended_shadow::{extended_shadow_module, ExtendedShadowModule};
 pub use graphics::{
-    DrawCall, DrawCommands, IndexOverrun, MeshDispatch, MeshGroups, MeshRecordsRegion,
+    DrawCall, DrawCommands, IndexOverrun, MeshDispatch, MeshGroups, MeshRecordsRegion, SlotRebinds,
     TessellationDispatch, TessellationRecords,
 };
 pub use heap::{

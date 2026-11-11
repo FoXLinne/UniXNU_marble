@@ -1330,6 +1330,11 @@ fn int_ref(op: IntFn, bits: u8, a: &[u64]) -> Option<u64> {
         IntFn::Max(sg) => wrap(val(sg, 0).max(val(sg, 1))),
         IntFn::Min3(sg) => wrap(val(sg, 0).min(val(sg, 1)).min(val(sg, 2))),
         IntFn::Max3(sg) => wrap(val(sg, 0).max(val(sg, 1)).max(val(sg, 2))),
+        IntFn::Median3(sg) => {
+            let mut v = [val(sg, 0), val(sg, 1), val(sg, 2)];
+            v.sort_unstable();
+            wrap(v[1])
+        }
         IntFn::Clamp(sg) => wrap(val(sg, 0).max(val(sg, 1)).min(val(sg, 2))),
         IntFn::MulHi(sg) => wrap(hi(sg)),
         IntFn::MadHi(sg) => wrap(hi(sg) + u(2)),
@@ -1421,6 +1426,59 @@ fn int_ref(op: IntFn, bits: u8, a: &[u64]) -> Option<u64> {
     })
 }
 
+/// The edges of an integer width: zero, one, all ones (`-1` signed, the unsigned maximum), the
+/// signed minimum and maximum, and their neighbours.
+fn width_edges(bits: u8) -> [u64; 7] {
+    let (m, smin) = (mask(bits), 1u64 << (bits - 1));
+    [0, 1, m, m - 1, smin, smin - 1, smin + 1]
+}
+
+/// Every ordered triple of `values`, `lanes` to a case: each operand's lanes are the triples'
+/// first, second and third values.
+fn triples(values: &[u64], lanes: usize) -> Vec<Case> {
+    let mut all = Vec::new();
+    for &a in values {
+        for &b in values {
+            for &c in values {
+                all.push([a, b, c]);
+            }
+        }
+    }
+    all.chunks_exact(lanes)
+        .map(|t| (0..3).map(|k| t.iter().map(|v| v[k]).collect()).collect())
+        .collect()
+}
+
+/// Metal's integer `median3` answers the middle one of its operands at 8, 16, 32 and 64 bits,
+/// signed and unsigned, on scalars and on 4-lane vectors: every ordered triple of the width's
+/// edges, so every order of three distinct values, two alike in each position, all three alike,
+/// and the extremes (`INT_MIN`, `INT_MAX`, `UINT_MAX`) beside each other and beside zero.
+#[test]
+fn integer_median3_answers_the_middle_one_at_ties_and_extremes() {
+    for bits in [8u8, 16, 32, 64] {
+        let edges = width_edges(bits);
+        for s in [Sign::Signed, Sign::Unsigned] {
+            let op = IntFn::Median3(s);
+            for lanes in [1u8, 4] {
+                let f = vec(int(bits), lanes);
+                check(
+                    &format!("{op:?} i{bits} x{lanes}"),
+                    &[f; 3],
+                    f,
+                    &|fb, x| math::int_fn(fb, op, f, x),
+                    &triples(&edges, usize::from(lanes)),
+                    &|c| {
+                        (0..usize::from(lanes))
+                            .map(|l| int_ref(op, bits, &[c[0][l], c[1][l], c[2][l]]))
+                            .collect::<Option<Vec<u64>>>()
+                    },
+                    false,
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn sixty_four_bit_bit_fields_work_per_lane() {
     let f = vec(int(64), 2);
@@ -1487,6 +1545,7 @@ fn integer_functions(part: usize, of: usize) {
             IntFn::Clamp(s),
             IntFn::Min3(s),
             IntFn::Max3(s),
+            IntFn::Median3(s),
             IntFn::MulHi(s),
             IntFn::MadHi(s),
             IntFn::MadSat(s),
@@ -2465,6 +2524,59 @@ const KHR_FACTS: super::FloatFacts = super::FloatFacts {
     native_min_max: false,
     nan_moves: false,
 };
+
+/// `ldexp` on `float` is lowered on the bits ([`math::ldexp_bits`]), which answer a NaN operand
+/// itself, bit for bit, as Metal does (`NanAnswer::Operand`): no NaN of the device's reaches the
+/// result, so the call records no `NativeNanEncoding` and leaves no NaN answer to the device, on a
+/// device of either NaN encoding. A `half` `ldexp` multiplies, so its NaN is the device's product's
+/// where Metal answers its canonical `half` NaN, and stays noted on a device not measured to answer
+/// that.
+#[test]
+fn float_ldexp_answers_metals_nan_itself() {
+    use super::nan::NanAnswer as A;
+    use crate::air::ir::FastMath;
+    use crate::device::profile::NanEncoding;
+    use crate::pipeline::artifact::PrecisionNote;
+    let form = |fmt| Form {
+        held: Held::Float(fmt),
+        lanes: 1,
+    };
+    assert!(FloatFn::Ldexp.metal_nans(FloatFmt::F32));
+    assert!(!FloatFn::Ldexp.metal_nans(FloatFmt::Half));
+    let every = FastMath::ALL
+        .iter()
+        .fold(FastMath::NONE, |a, (b, _)| a.union(*b));
+    for nans in [NanEncoding::Native, NanEncoding::MetalCanonical] {
+        let facts = super::FloatFacts { nans, ..KHR_FACTS };
+        for fmf in [FastMath::NONE, every] {
+            let call = super::float_call(FloatFn::Ldexp, false, fmf, form(FloatFmt::F32), facts)
+                .expect("float ldexp");
+            assert_eq!(call.nan, None, "{nans:?} {fmf:?}");
+            let noted = (call.notes.always.iter())
+                .chain(&call.notes.unless_metal_fast)
+                .any(|n| matches!(n, PrecisionNote::NativeNanEncoding));
+            assert!(!noted, "{nans:?} {fmf:?}: {:?}", call.notes);
+        }
+        let half = super::float_call(
+            FloatFn::Ldexp,
+            false,
+            FastMath::NONE,
+            form(FloatFmt::Half),
+            facts,
+        )
+        .expect("half ldexp");
+        assert_eq!(half.nan, Some(A::Canonical), "{nans:?}");
+        if nans == NanEncoding::Native {
+            assert!(
+                half.notes
+                    .always
+                    .contains(&PrecisionNote::NativeNanEncoding),
+                "{:?}",
+                half.notes
+            );
+        }
+    }
+}
 
 /// Precise `pow` on `float` leaves its NaNs to the device (the device's `Pow`, and the device's sum
 /// of NaN operands), where Metal's NaN is measured: the canonical NaN, but a NaN base to the

@@ -2,7 +2,8 @@
 //!
 //! A texture over a buffer of the runtime's memory is a linear image over the buffer's bytes where
 //! the device makes one that lies on Metal's layout there (`Device::alias_image`; one over a
-//! no-copy buffer's host pages is a shadow), and a heap's texture may be a linear image
+//! no-copy buffer's host pages is an image in place where the device's check passed for an image
+//! that renders, `in_place.rs`, else a shadow), and a heap's texture may be a linear image
 //! (`texture/heap.rs`). On a device that enabled `VK_NV_linear_color_attachment`'s
 //! `linearColorAttachment` (`enables.rs`), such an image of a format whose linear tiling has
 //! `LINEAR_COLOR_ATTACHMENT_NV` takes color attachment usage (`ImageFacts::linear`), and a pass
@@ -329,7 +330,7 @@ fn through_backing(
     reason: impl FnOnce() -> String,
 ) -> Result<(), Error> {
     attachment_stand_in::check_copies(&color.target)?;
-    let queue = maker.command_queue().id();
+    let queue = maker.queue_place().id();
     let own = color.target.clone();
     color.target = attachment_stand_in::kept_backing(maker, &own, queue, true)?;
     let format = own.texture.pixel_format();

@@ -17,7 +17,7 @@
 //! the depth the function writes, clamped as the runtime clamps it. Each case prints its outcome
 //! and form.
 
-use super::{form, library};
+use super::{fetches, form, library};
 use crate::runtime_lane::buffer_with;
 use crate::runtime_lane::resolves::{lane, quiet, FULL};
 use metal2vulkan::metal::state::DepthStencilDescriptor;
@@ -201,6 +201,9 @@ fn cases() -> Vec<Case> {
 #[test]
 fn a_fetch_that_returns_its_depth_is_tested_by_the_depth_it_returns() {
     let (messages, _cache, lane) = lane();
+    if !fetches(&lane.device) {
+        return;
+    }
     let vertices = library(&lane, "rt6_resolves");
     let returning = library(&lane, "dsx_fetch_returned_depth");
     let device = lane.device.name();

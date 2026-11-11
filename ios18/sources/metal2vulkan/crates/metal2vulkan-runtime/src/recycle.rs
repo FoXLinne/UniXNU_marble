@@ -52,7 +52,7 @@
 //!   `buffers_parked`, `images_evicted`, ...). A build of `--cfg m2v_no_recycle` parks nothing,
 //!   the control that measures what recycling changes.
 
-use super::memory::{Memory, MemoryClass, Placement};
+use super::memory::{Holds, Memory, MemoryClass, Placement};
 use crate::image_plan::ImagePlan;
 use crate::key_hash::KeyMap;
 use crate::release::{self, Released};
@@ -67,7 +67,8 @@ use std::time::{Duration, Instant};
 pub(crate) struct Bounds {
     most: usize,
     most_bytes: u64,
-    parked_for: Duration,
+    /// The longest an object stays parked: one parked longer goes at the next park or take.
+    pub(crate) parked_for: Duration,
 }
 
 /// The most parked: none in a build of `--cfg m2v_no_recycle` (each object then goes as it is
@@ -106,13 +107,16 @@ pub(crate) struct ImageMaking {
 }
 
 /// What fixes a buffer's making (`Device::placed_new_buffer`): its size (padded), the memory
-/// class it lies in, and whether it lies in fresh pages it imported (`fresh_pages.rs`), its
-/// `VkBuffer` made for host allocations.
+/// class it lies in, whether it lies in fresh pages it imported (`fresh_pages.rs`), its
+/// `VkBuffer` made for host allocations, and the kind of block it lies in otherwise
+/// (`memory.rs`'s `Holds`), whose `VkBuffer` names the block's handle type where it has one, and
+/// which a buffer that declares its padding unobserved takes plain.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct BufferMaking {
     pub(crate) size: u64,
     pub(crate) class: MemoryClass,
     pub(crate) fresh_pages: bool,
+    pub(crate) holds: Holds,
 }
 
 /// A parked object.
@@ -337,6 +341,14 @@ impl<R: Copy + Eq + Hash, M: Clone + Eq + Hash> Recycler<R, M> {
 }
 
 impl<R: Released, M> Recycler<R, M> {
+    /// Every parked object destroyed and its memory freed, and none parked from now on: each
+    /// live one goes as its last holder lets go of it (`park` hands it back). A lost device whose
+    /// recovery carried its objects on, on which nothing is made again (`device/carry.rs`).
+    pub(crate) fn close(&mut self, device: &ash::Device, memory: &mut Memory) {
+        self.live.clear();
+        self.destroy(device, memory);
+    }
+
     /// Every parked object, destroyed and its memory freed, as the device goes.
     pub(crate) fn destroy(&mut self, device: &ash::Device, memory: &mut Memory) {
         self.index.clear();

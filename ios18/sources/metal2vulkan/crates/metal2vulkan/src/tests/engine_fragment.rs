@@ -928,8 +928,9 @@ fn image_accesses(words: &[u32]) -> (usize, usize) {
 /// unshadowed) and writes both (one write more), passes L3, and plans the same variant against
 /// itself, writing `WriteSource::ExtendedShadow`. `rt6_resolve_white`, writing a `BGRA10_XR` color
 /// 0 unblended through an ordinary output, takes the storage form under the shadow and writes the
-/// codes and the shadow, reading neither. A layered pass's and a multisampled pipeline's shadow are
-/// refused, as the interlocked colors' are.
+/// codes and the shadow, reading neither. A layered pass's shadow is refused, and so is a
+/// multisampled plain writer's, as the interlocked colors' are (the storage form would run it per
+/// sample).
 #[test]
 fn a_shadowed_extended_range_attachment_reads_and_writes_its_half() {
     use crate::metal::{BlendFactor, ColorWriteMask};
@@ -1120,6 +1121,448 @@ fn a_shadowed_extended_range_attachment_reads_and_writes_its_half() {
         );
     }
     assert!(checked > 0, "no profile compiled the shadow");
+}
+
+/// The shadow's `Rgba16f` storage image types in `words`: each declaration's (arrayed,
+/// multisampled).
+fn shadow_image_types(words: &[u32]) -> Vec<(bool, bool)> {
+    // `OpTypeImage` (25): result, sampled type, dim, depth, arrayed, MS, sampled, format
+    // (`Rgba16f` is 2).
+    let mut out = Vec::new();
+    let mut at = 5;
+    while let Some(&word) = words.get(at) {
+        let count = ((word >> 16) as usize).max(1);
+        if word & 0xffff == 25 && words.get(at + 8) == Some(&2) {
+            out.push((words[at + 5] == 1, words[at + 6] == 1));
+        }
+        at += count;
+    }
+    out
+}
+
+/// In a multisampled pipeline that blends a `BGRA10_XR` color 0 (`rt6_samples`'s `half4` fill,
+/// premultiplied over, four samples), a draw whose instance holds the color's shadow runs the
+/// variant that reads and writes it per sample, as the storage form holds the samples: a
+/// multisampled `Rgba16f` image where the device has multisampled storage images (the RTX 5080's
+/// and RADV's profiles), a 2D array of one layer per sample elsewhere (MoltenVK's and ANV's). The
+/// blend's destination is read from the shadow in place of the codes and both are written, the
+/// variant passes L3 and plans the same variant against itself. Before, every multisampled
+/// pipeline's shadow was refused, so a four-sample pass's blends saw the stored codes.
+#[test]
+fn a_multisampled_blend_holds_its_half_shadow_per_sample() {
+    use crate::metal::BlendFactor;
+    let Some(samples) = fixture("rt6_samples") else {
+        return;
+    };
+    let function = |name: &str| {
+        StageSource::Function(FunctionDescriptor::new(
+            Library::from_air(&samples)
+                .expect("library")
+                .function(name)
+                .expect("function"),
+        ))
+    };
+    let blended = || {
+        let mut d = RenderPipelineDescriptor::new(function("rt6_fill_vertex"));
+        d.fragment = Some(function("rt6_fill_rgba16float"));
+        let mut over = ColorAttachmentDescriptor::new(PixelFormat::BGRA10XR);
+        over.blending_enabled = true;
+        over.source_rgb_blend_factor = BlendFactor::One;
+        over.destination_rgb_blend_factor = BlendFactor::OneMinusSourceAlpha;
+        over.destination_alpha_blend_factor = BlendFactor::OneMinusSourceAlpha;
+        d.color_attachments[0] = Some(over);
+        d.raster_sample_count = 4;
+        d
+    };
+    let fragment_words = |p: &crate::pipeline::RenderPipeline| {
+        p.stages
+            .iter()
+            .find(|m| m.stage == vk::ShaderStage::FRAGMENT)
+            .map(|m| m.spirv.to_vec())
+            .expect("a fragment stage")
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    for (stem, planes) in [
+        ("moltenvk-m3", true),
+        ("intel-uhd770-rpls-anv", true),
+        ("amd-780m-radv", false),
+        ("nvidia-rtx5080-laptop", false),
+    ] {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("../metal2vulkan-validation/profiles/{stem}.json"));
+        let text = std::fs::read_to_string(path).expect("profile");
+        let desc = DeviceDescription::from_khronos_json(&text, None).expect("description");
+        let dev = Device::new(desc, DevicePolicy::default()).expect("device");
+        assert!(
+            crate::lower::fragment::interlock_orders(dev.profile()),
+            "{stem}"
+        );
+        assert_eq!(
+            !dev.profile().images().storage_multisample,
+            planes,
+            "{stem}"
+        );
+        let d = blended();
+        let base = match dev.compile_render_pipeline(&d, &Budget::standard()) {
+            Ok(base) => base,
+            // A device without the raw format's storage at the count refuses the form whatever
+            // the shadow.
+            Err(Error::Unsupported(u)) if u.needs != Needs::NotImplemented => continue,
+            Err(e) => panic!("{stem}: {e}"),
+        };
+        assert!(
+            base.graphics
+                .storage_attachments
+                .iter()
+                .any(|a| a.color_index == 0),
+            "{stem}"
+        );
+        assert!(
+            shadow_image_types(&fragment_words(&base)).is_empty(),
+            "{stem}"
+        );
+        let (reads, writes) = image_accesses(&fragment_words(&base));
+        let state = BindState {
+            extended_shadows: [0].into(),
+            ..Default::default()
+        };
+        let plan = base
+            .plan(&dev, &state.shape())
+            .unwrap_or_else(|e| panic!("{stem}: plan: {e:?}"));
+        assert_eq!(plan.variant.extended_shadows, [0].into(), "{stem}");
+        let variant = dev
+            .compile_render_variant(&d, &plan.variant, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: variant: {e}"));
+        let words = fragment_words(&variant);
+        assert_eq!(
+            shadow_image_types(&words),
+            [(planes, !planes)],
+            "{stem}: the shadow holds the samples as the codes' storage image does"
+        );
+        assert_eq!(
+            image_accesses(&words),
+            (reads, writes + 1),
+            "{stem}: the shadow's read replaces the codes' and both are written"
+        );
+        for m in &variant.stages {
+            check_words_valid(&m.spirv, &variant.requirements, dev.profile())
+                .unwrap_or_else(|e| panic!("{stem}: L3: {e}"));
+        }
+        let again = variant.plan(&dev, &state.shape()).expect("variant plan");
+        assert_eq!(again.variant, plan.variant, "{stem}: a fixed point");
+        assert!(
+            again
+                .descriptors
+                .iter()
+                .any(|w| w.source == WriteSource::ExtendedShadow { color_index: 0 }),
+            "{stem}"
+        );
+        seen.insert(planes);
+    }
+    assert_eq!(seen.len(), 2, "both shapes compiled");
+}
+
+/// The execution modes the SPIR-V module `words` declares (`OpExecutionMode`, 16).
+fn execution_modes(words: &[u32]) -> Vec<u32> {
+    let mut out = Vec::new();
+    let mut at = 5;
+    while let Some(&word) = words.get(at) {
+        let count = ((word >> 16) as usize).max(1);
+        if word & 0xffff == 16 {
+            out.extend(words.get(at + 2).copied());
+        }
+        at += count;
+    }
+    out
+}
+
+/// Whether `modes` holds one of the fragment shader interlocks (`PixelInterlockOrderedEXT` 5366
+/// to `ShadingRateInterlockUnorderedEXT` 5371).
+fn interlocked(modes: &[u32]) -> bool {
+    modes.iter().any(|m| (5366..=5371).contains(m))
+}
+
+/// On a device that orders framebuffer fetch through rasterization-order input attachments (the
+/// committed lavapipe profiles), a draw whose instance holds an extended-range attachment's `half`
+/// shadow runs the variant that keeps the attachment the subpass's and reads and writes the shadow
+/// beside it inside the pixel interlock (`lower::fragment`'s `input_shadow`).
+/// `con_fetch_coverage`, blending a `half4` into its `RGB10A8_2P_XR10` color 0 (premultiplied
+/// over) beside a depth and stencil attachment and fetching color 1, planned with colors 0 and 5
+/// shadowed asks for color 0's alone: the variant binds an `ExtendedShadow(0)` storage image, keeps
+/// both colors' input attachments and no storage attachment, reads the blend's destination from
+/// the shadow in place of the codes (as many image reads as the pipeline unshadowed) and writes it
+/// (one write more), declares the interlock the pipeline did not and early fragment tests, passes
+/// L3 and plans the same variant against itself. `rt6_resolve_white`, writing a `BGRA10_XR` color 0
+/// unblended through an ordinary output, writes the shadow and reads nothing; `rt6_samples`' blend
+/// under a mask of red, green and blue reads the kept alpha from the shadow (and its code from the
+/// input attachment, for the codes); in four samples (on
+/// a profile that renders the raw format at four) its shadow is refused (the function would run
+/// per sample), where `rt6_samples`' four-sample blend holds a multisampled shadow. A profile
+/// without the interlock refuses the shadowed variant by what it lacks. Before, the runtime kept
+/// every such draw on the codes.
+#[test]
+fn a_shadowed_extended_range_attachment_over_its_input_attachment_holds_its_half() {
+    use crate::metal::{BlendFactor, ColorWriteMask};
+    let (Some(coverage), Some(io), Some(resolves), Some(fills)) = (
+        fixture("con_fetch_coverage"),
+        fixture("stage_io"),
+        fixture("rt6_resolves"),
+        fixture("rt6_samples"),
+    ) else {
+        return;
+    };
+    let function = |bc: &[u8], name: &str| {
+        StageSource::Function(FunctionDescriptor::new(
+            Library::from_air(bc)
+                .expect("library")
+                .function(name)
+                .expect("function"),
+        ))
+    };
+    let over = |pf: PixelFormat| {
+        let mut c = ColorAttachmentDescriptor::new(pf);
+        c.blending_enabled = true;
+        c.source_rgb_blend_factor = BlendFactor::One;
+        c.destination_rgb_blend_factor = BlendFactor::OneMinusSourceAlpha;
+        c.destination_alpha_blend_factor = BlendFactor::OneMinusSourceAlpha;
+        c
+    };
+    let blended = || {
+        let mut d = RenderPipelineDescriptor::new(function(&io, "stage_io_vertex_position"));
+        d.fragment = Some(function(&coverage, "con_fetch_coverage"));
+        let mut read = ColorAttachmentDescriptor::new(PixelFormat::RG16Float);
+        read.write_mask = ColorWriteMask::NONE;
+        let mut unwritten = ColorAttachmentDescriptor::new(PixelFormat::RGB10A82PXR10);
+        unwritten.write_mask = ColorWriteMask::NONE;
+        d.color_attachments[0] = Some(over(PixelFormat::RGB10A82PXR10));
+        d.color_attachments[1] = Some(read);
+        d.color_attachments[2] = Some(unwritten);
+        d.depth_format = Some(PixelFormat::Depth32FloatStencil8);
+        d.stencil_format = Some(PixelFormat::Depth32FloatStencil8);
+        d
+    };
+    let plain = || {
+        let mut d = RenderPipelineDescriptor::new(function(&resolves, "rt6_resolve_full"));
+        d.fragment = Some(function(&resolves, "rt6_resolve_white"));
+        d.color_attachments[0] = Some(ColorAttachmentDescriptor::new(PixelFormat::BGRA10XR));
+        d
+    };
+    let sampled = || {
+        let mut d = RenderPipelineDescriptor::new(function(&fills, "rt6_fill_vertex"));
+        d.fragment = Some(function(&fills, "rt6_fill_rgba16float"));
+        d.color_attachments[0] = Some(over(PixelFormat::BGRA10XR));
+        d.raster_sample_count = 4;
+        d
+    };
+    let fragment_words = |p: &crate::pipeline::RenderPipeline| {
+        p.stages
+            .iter()
+            .find(|m| m.stage == vk::ShaderStage::FRAGMENT)
+            .map(|m| m.spirv.to_vec())
+            .expect("a fragment stage")
+    };
+    let shadows = |p: &crate::pipeline::RenderPipeline| -> Vec<(u32, vk::DescriptorType)> {
+        p.layout
+            .sets
+            .iter()
+            .flat_map(|s| &s.bindings)
+            .filter_map(|b| match b.source {
+                BindingSource::ExtendedShadow(c) => Some((c, b.ty)),
+                _ => None,
+            })
+            .collect()
+    };
+    let inputs = |p: &crate::pipeline::RenderPipeline| -> Vec<u32> {
+        p.graphics
+            .input_attachments
+            .iter()
+            .map(|a| a.color_index)
+            .collect()
+    };
+    let refused = |r: Result<crate::bind::BindingPlan, BindError>| match r {
+        Err(BindError::Unsupported(u)) => {
+            (u.feature, u.needs) == (Feature::FramebufferFetch, Needs::NotImplemented)
+        }
+        _ => false,
+    };
+    let valid = |stem: &str, what: &str, p: &crate::pipeline::RenderPipeline, dev: &Device| {
+        for m in &p.stages {
+            check_words_valid(&m.spirv, &p.requirements, dev.profile())
+                .unwrap_or_else(|e| panic!("{stem}: {what}: L3: {e}"));
+        }
+    };
+    let state = BindState {
+        extended_shadows: [0, 5].into(),
+        ..Default::default()
+    };
+    let shadowed = BindState {
+        extended_shadows: [0].into(),
+        ..Default::default()
+    };
+    let mut checked = 0;
+    for (stem, p) in committed_profiles().expect("profiles") {
+        if !crate::lower::fragment::fetch::inputs_order(&p)
+            || crate::lower::fragment::interlock_orders(&p)
+        {
+            continue;
+        }
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("../metal2vulkan-validation/profiles/{stem}.json"));
+        let text = std::fs::read_to_string(path).expect("profile");
+        let desc = DeviceDescription::from_khronos_json(&text, None).expect("description");
+        let dev = Device::new(desc, DevicePolicy::default()).expect("device");
+        // The blend over the input attachment, beside depth and stencil.
+        let d = blended();
+        let base = match dev.compile_render_pipeline(&d, &Budget::standard()) {
+            Ok(base) => base,
+            // A device without the raw formats' storage refuses the form whatever the shadow.
+            Err(Error::Unsupported(u)) if u.needs != Needs::NotImplemented => continue,
+            Err(e) => panic!("{stem}: {e}"),
+        };
+        assert!(shadows(&base).is_empty(), "{stem}");
+        assert!(inputs(&base).contains(&1), "{stem}: {:?}", inputs(&base));
+        let base_words = fragment_words(&base);
+        assert!(!interlocked(&execution_modes(&base_words)), "{stem}");
+        let (reads, writes) = image_accesses(&base_words);
+        let plan = base.plan(&dev, &state.shape()).expect("plan");
+        assert_eq!(plan.variant.extended_shadows, [0].into(), "{stem}");
+        // A device without the interlock (SwiftShader) has no shadow beside an input attachment,
+        // which its runtime never asks for: the variant is refused by what the device lacks.
+        if !p.fields().fragment.pixel_interlock {
+            match dev.compile_render_variant(&d, &plan.variant, &Budget::standard()) {
+                Err(Error::Unsupported(u)) => {
+                    assert_eq!(u.feature, Feature::FramebufferFetch, "{stem}");
+                    assert_ne!(u.needs, Needs::NotImplemented, "{stem}");
+                }
+                other => panic!("{stem}: {:?}", other.map(|_| ())),
+            }
+            continue;
+        }
+        checked += 1;
+        let variant = dev
+            .compile_render_variant(&d, &plan.variant, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: variant: {e}"));
+        assert_eq!(
+            shadows(&variant),
+            [(0, vk::DescriptorType::STORAGE_IMAGE)],
+            "{stem}"
+        );
+        assert!(variant.graphics.storage_attachments.is_empty(), "{stem}");
+        assert!(inputs(&variant).contains(&1), "{stem}");
+        // The shadow's writes are the product's, not the function's.
+        assert!(!variant.graphics.fragment_writes_memory, "{stem}: blended");
+        let words = fragment_words(&variant);
+        assert_eq!(shadow_image_types(&words), [(false, false)], "{stem}");
+        assert_eq!(
+            image_accesses(&words),
+            (reads, writes + 1),
+            "{stem}: the shadow's read replaces the codes' and it is written"
+        );
+        let modes = execution_modes(&words);
+        assert!(interlocked(&modes), "{stem}: {modes:?}");
+        assert!(
+            modes.contains(&9),
+            "{stem}: early fragment tests: {modes:?}"
+        );
+        valid(&stem, "blended", &variant, &dev);
+        let again = variant.plan(&dev, &state.shape()).expect("variant plan");
+        assert_eq!(again.variant, plan.variant, "{stem}: a fixed point");
+        assert!(
+            again
+                .descriptors
+                .iter()
+                .any(|w| w.source == WriteSource::ExtendedShadow { color_index: 0 }),
+            "{stem}: {:?}",
+            again.descriptors
+        );
+        // An unblended write: the shadow written, nothing read.
+        let d = plain();
+        let base = dev
+            .compile_render_pipeline(&d, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: unblended: {e}"));
+        let plan = base.plan(&dev, &shadowed.shape()).expect("unblended plan");
+        assert_eq!(plan.variant.extended_shadows, [0].into(), "{stem}");
+        let variant = dev
+            .compile_render_variant(&d, &plan.variant, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: unblended variant: {e}"));
+        assert!(variant.graphics.storage_attachments.is_empty(), "{stem}");
+        let words = fragment_words(&variant);
+        assert_eq!(
+            image_accesses(&words),
+            (0, 1),
+            "{stem}: the shadow written, nothing read"
+        );
+        assert!(interlocked(&execution_modes(&words)), "{stem}: unblended");
+        assert!(
+            !variant.graphics.fragment_writes_memory,
+            "{stem}: unblended"
+        );
+        valid(&stem, "unblended", &variant, &dev);
+        // A blend under a mask of the color channels keeps alpha as the shadow held it, and the
+        // codes keep their own alpha code.
+        let mut d = sampled();
+        d.raster_sample_count = 1;
+        let mut masked = over(PixelFormat::BGRA10XR);
+        masked.write_mask = ColorWriteMask::RED
+            .union(ColorWriteMask::GREEN)
+            .union(ColorWriteMask::BLUE);
+        d.color_attachments[0] = Some(masked);
+        let base = dev
+            .compile_render_pipeline(&d, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: masked: {e}"));
+        let (reads, writes) = image_accesses(&fragment_words(&base));
+        let plan = base.plan(&dev, &shadowed.shape()).expect("masked plan");
+        assert_eq!(plan.variant.extended_shadows, [0].into(), "{stem}: masked");
+        let variant = dev
+            .compile_render_variant(&d, &plan.variant, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: masked variant: {e}"));
+        assert_eq!(
+            shadows(&variant),
+            [(0, vk::DescriptorType::STORAGE_IMAGE)],
+            "{stem}: masked"
+        );
+        assert_eq!(
+            image_accesses(&fragment_words(&variant)),
+            (reads + 2, writes + 1),
+            "{stem}: masked: the blend's destination and the kept alpha read from the shadow, \
+             the kept code still from the input attachment"
+        );
+        valid(&stem, "masked", &variant, &dev);
+        // In four samples, where the profile renders the raw format at four (a profile captured
+        // without the count refuses the pipeline whatever the shadow), the plain writer's shadow
+        // is refused,
+        let mut d = plain();
+        d.raster_sample_count = 4;
+        let base = match dev.compile_render_pipeline(&d, &Budget::standard()) {
+            Ok(base) => base,
+            Err(Error::Unsupported(u)) if u.needs != Needs::NotImplemented => continue,
+            Err(e) => panic!("{stem}: multisampled: {e}"),
+        };
+        assert!(
+            refused(base.plan(&dev, &shadowed.shape())),
+            "{stem}: multisampled plain writer"
+        );
+        // and a four-sample blend holds a multisampled shadow.
+        let d = sampled();
+        let base = dev
+            .compile_render_pipeline(&d, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: four-sample blend: {e}"));
+        let (reads, writes) = image_accesses(&fragment_words(&base));
+        let plan = base
+            .plan(&dev, &shadowed.shape())
+            .expect("four-sample plan");
+        let variant = dev
+            .compile_render_variant(&d, &plan.variant, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: four-sample variant: {e}"));
+        let words = fragment_words(&variant);
+        assert_eq!(shadow_image_types(&words), [(false, true)], "{stem}");
+        assert_eq!(image_accesses(&words), (reads, writes + 1), "{stem}");
+        valid(&stem, "four-sample blend", &variant, &dev);
+    }
+    assert!(
+        checked > 0,
+        "no profile orders fetch through input attachments"
+    );
 }
 
 /// `fragment_fetch` with `fetch_scalar` discarding a fragment whose color input is negative.
@@ -2579,6 +3022,7 @@ fn a_second_source_blend_without_fast_math_reads_the_second_output() {
         match pipeline(&safe, "stage_io_fragment_point") {
             Err(Error::InvalidDescriptor(crate::error::DescriptorError::ColorAttachment {
                 index: 0,
+                metal: crate::error::MetalAnswer::NilWithError,
             })) => {}
             r => panic!("{stem}: no second output: {:?}", r.map(|_| ())),
         }
@@ -2956,7 +3400,8 @@ fn an_extended_range_blend_through_input_attachments_is_computed_in_the_shader()
 /// takes color 0: the write stores Metal's unblended write of the output (`exf_fetch_blend`'s
 /// `float4`, and `exf_fetch_three`'s `float4` and `half4` to two such attachments, the `_sRGB` twin
 /// among them), the fact names no blend, and the module passes L3. A mask of some of the channels
-/// is refused `NotImplemented`; a blend of the `float4` output is the device's arithmetic. The whole
+/// keeps the masked codes from the texel the function read (`extended_range::encode_keeping`;
+/// refused `NotImplemented` before); a blend of the `float4` output is the device's arithmetic. The whole
 /// pipeline is made on `moltenvk-m3` (no vertex descriptor), color 0 a written
 /// storage attachment of the raw format, and a stage compiled under it links into no pipeline that
 /// blends color 0.
@@ -2999,11 +3444,6 @@ fn a_fetched_extended_range_attachment_is_written_unblended_in_the_shader() {
         ));
         inputs
     };
-    let ni =
-        |r: Result<std::sync::Arc<crate::library::FunctionArtifact>, Error>, f: Feature| match r {
-            Err(Error::Unsupported(u)) => (u.feature, u.needs) == (f, Needs::NotImplemented),
-            _ => false,
-        };
     let fetched = |a: &crate::library::FunctionArtifact, color: u32| {
         a.facts.iter().find_map(|f| match f {
             RuntimeFact::InterlockedFramebufferFetch {
@@ -3039,15 +3479,20 @@ fn a_fetched_extended_range_attachment_is_written_unblended_in_the_shader() {
         link_and_validate(&a, &p).unwrap_or_else(|e| panic!("{stem}: three: L3: {e}"));
         assert_eq!(fetched(&a, 0), Some((true, None)), "{stem}: {:?}", a.facts);
         assert_eq!(fetched(&a, 2), Some((true, None)), "{stem}: {:?}", a.facts);
-        // A mask of some of the channels; a `float4` output's blend, its own model.
-        let some = colors(PixelFormat::RGB10A82PXR10, ColorWriteMask::RED);
-        assert!(
-            ni(
-                compile_with(&blend, "exf_fetch_blend", &p, &state(&[0], &some, &p)),
-                Feature::FramebufferFetch
-            ),
-            "{stem}: a mask of red"
-        );
+        // A mask of some of the channels, whose kept codes the write takes from the texel it
+        // read; a `float4` output's blend, its own model.
+        for mask in [
+            ColorWriteMask::RED,
+            ColorWriteMask::ALPHA,
+            ColorWriteMask::RED.union(ColorWriteMask::ALPHA),
+        ] {
+            let some = colors(PixelFormat::RGB10A82PXR10, mask);
+            let a = compile_with(&blend, "exf_fetch_blend", &p, &state(&[0], &some, &p))
+                .unwrap_or_else(|e| panic!("{stem}: mask {}: {e}", mask.as_raw()));
+            link_and_validate(&a, &p)
+                .unwrap_or_else(|e| panic!("{stem}: mask {}: L3: {e}", mask.as_raw()));
+            assert_eq!(fetched(&a, 0), Some((true, None)), "{stem}: {:?}", a.facts);
+        }
         let mut over = guest();
         if let Some(c) = over[0].as_mut() {
             c.blending_enabled = true;
@@ -4298,9 +4743,10 @@ fn check_interlocked(m: &TypedModule, mode: ExecMode, what: &str) -> FuncId {
     body
 }
 
-/// A function that names a raster order group on a buffer, a texture, or an unused buffer runs its
-/// body inside `PixelInterlockOrderedEXT` where the device has pixel interlock, and passes L3
-/// there; elsewhere it is refused.
+/// A function that names a raster order group on a buffer or a texture it uses runs its body inside
+/// `PixelInterlockOrderedEXT` where the device has pixel interlock, and passes L3 there; elsewhere
+/// it is refused. (A group on a parameter the body never uses interlocks nothing:
+/// `tests::engine_dead_reads`.)
 #[test]
 fn raster_order_groups_run_the_body_inside_the_interlock() {
     let Some(bc) = fixture("fragment_rog") else {
@@ -4481,6 +4927,68 @@ fn an_interlocked_discard_kills_only_in_the_entry() {
             link_and_validate(&a, p).unwrap_or_else(|e| panic!("{what}: L3: {e}"));
         }
     }
+}
+
+/// A function reads each color it fetches in the storage form once, before its body, and every
+/// use takes that texel: the coverage chain's discarding fill (`dsx_coverage_chain`'s
+/// `chain_color_discarding`, its coverage fetched, under the lane's attachments) tests the
+/// coverage for its discard and multiplies its color by it, two uses in two blocks, and reads
+/// the coverage's image once, in the first block of the function that holds the read, on every
+/// committed profile that orders fetch through the interlock. Every module passes L3, and on
+/// `moltenvk-m3` compiles through SPIRV-Cross to Metal.
+#[test]
+fn a_fetched_color_is_read_once_before_the_body() {
+    let Some(chain) = fixture("dsx_coverage_chain") else {
+        return;
+    };
+    let entry = "chain_color_discarding";
+    let colors = [
+        PixelFormat::RGBA16Float,
+        PixelFormat::RG16Float,
+        PixelFormat::RGBA16Float,
+    ]
+    .map(|f| Some(ColorAttachmentDescriptor::new(f)));
+    let mut inputs = LoweringInputs::new();
+    inputs.framebuffer_fetch = Some(FramebufferFetchInputs::of([1], &colors, true, false, 1));
+    let mut checked = 0;
+    for (stem, p) in committed_profiles().expect("profiles") {
+        if !crate::lower::fragment::interlock_orders(&p) {
+            continue;
+        }
+        let what = format!("{entry} on {stem}");
+        let a = match compile_with(&chain, entry, &p, &inputs) {
+            Ok(a) => a,
+            // A device without the attachments' storage formats refuses the form.
+            Err(Error::Unsupported(_)) => continue,
+            Err(e) => panic!("{what}: {e}"),
+        };
+        let (_, m) =
+            typed_module_with(&chain, entry, &p, &inputs).unwrap_or_else(|e| panic!("{what}: {e}"));
+        // Each image read, with whether it sits in its function's first block.
+        let reads: Vec<bool> = (m.functions().iter())
+            .flat_map(|f| {
+                f.blocks.iter().enumerate().flat_map(|(i, b)| {
+                    (m.blocks()[b.index()].insts.iter())
+                        .filter(|n| matches!(n.inst, Inst::ImageRead { .. }))
+                        .map(move |_| i == 0)
+                })
+            })
+            .collect();
+        assert_eq!(reads, [true], "{what}: one read, in a first block");
+        let (_, words) = link_and_validate(&a, &p).unwrap_or_else(|e| panic!("{what}: L3: {e}"));
+        if is_moltenvk_capture(&stem) {
+            match moltenvk_msl_compile(&words) {
+                Ok(()) => {}
+                Err(AssembleError::Missing(why)) => eprintln!("SKIPPED MSL: {why}"),
+                Err(AssembleError::Rejected(why)) => panic!("{what}: MSL: {why}"),
+            }
+        }
+        checked += 1;
+    }
+    assert!(
+        checked > 0,
+        "no interlock profile compiled the storage form"
+    );
 }
 
 /// One function the interlock coherence test compiles: its fixture, its entry, the
@@ -5134,6 +5642,79 @@ fn helper_guards(m: &TypedModule) -> usize {
         .count()
 }
 
+/// The `optnone` calls of `m` an identity shuffle fences (`spirv::helper_branches`'s `Fences`):
+/// those whose result, or a member of it, an `OpGroupNonUniformShuffle` at the
+/// `SubgroupLocalInvocationId` the module loads reads.
+fn helper_fences(m: &TypedModule) -> usize {
+    use crate::spirv::ir::ValueOrigin;
+    use crate::spirv::ir::{BinOp, Contraction, GlobalKind, GlslOp, GroupInst, ShuffleOp, UnOp};
+    let defs: std::collections::HashMap<_, _> = m
+        .blocks()
+        .iter()
+        .flat_map(|b| &b.insts)
+        .filter_map(|n| n.result.map(|r| (r, &n.inst)))
+        .collect();
+    let lane = |v| match defs.get(&v) {
+        Some(Inst::Load { ptr, .. }) => match m.values().get(ptr.index()).map(|d| d.origin) {
+            Some(ValueOrigin::Global(g)) => m.globals().get(g.index()).is_some_and(|g| {
+                matches!(
+                    g.kind,
+                    GlobalKind::BuiltIn {
+                        builtin: crate::spv::BuiltIn::SubgroupLocalInvocationId,
+                        ..
+                    }
+                )
+            }),
+            _ => false,
+        },
+        _ => false,
+    };
+    let optnone = |v| {
+        matches!(
+            defs.get(&v),
+            Some(
+                Inst::Binary {
+                    op: BinOp::FAdd | BinOp::FSub | BinOp::FMul,
+                    contract: Contraction::Forbidden,
+                    ..
+                } | Inst::Binary {
+                    op: BinOp::UMulExtended | BinOp::SMulExtended,
+                    ..
+                } | Inst::Unary {
+                    op: UnOp::QuantizeToF16,
+                    ..
+                } | Inst::Glsl {
+                    op: GlslOp::Reflect,
+                    ..
+                }
+            )
+        )
+    };
+    let mut fenced = std::collections::BTreeSet::new();
+    for inst in defs.values() {
+        let Inst::Group {
+            op:
+                GroupInst::Shuffle {
+                    op: ShuffleOp::Shuffle,
+                    value,
+                    x,
+                },
+            ..
+        } = inst
+        else {
+            continue;
+        };
+        let call = match defs.get(value) {
+            Some(Inst::CompositeExtract { composite, .. }) => *composite,
+            _ => *value,
+        };
+        if lane(*x) && optnone(call) {
+            fenced.insert(call);
+        }
+    }
+    fenced.len()
+}
+
 /// On MoltenVK on an Apple GPU (`DriverWorkaround::DiscardDropsSimdgroupStores`), Apple's compiler
 /// loses a simdgroup's storage writes after an `optnone` call only its helper invocations make,
 /// with no discard: the quad helpers past a primitive's edges take a branch alone. The owned
@@ -5143,12 +5724,13 @@ fn helper_guards(m: &TypedModule) -> usize {
 /// it. There the branch's helper invocations take its empty arm where nothing they compute
 /// differently reaches a derivative: `rch_helper_branch` (no implicit LOD) and
 /// `rch_helper_branch_late` (an implicit-LOD sample after the branch at the pixel) are guarded,
-/// census `fragment.helper-guard`, and record no note. `rch_helper_branch_gradient`, whose
-/// implicit-LOD sample reads a coordinate the branch computes, is not guarded and records no note
-/// either: the sample reads the product after it. `rch_helper_branch_loop`, whose product is in a
-/// loop as long as the coverage, records `PrecisionNote::HelperBranchDropsSimdgroupStores`. One
+/// census `fragment.helper-guard`. `rch_helper_branch_gradient`, whose implicit-LOD sample reads
+/// a coordinate the branch computes, is neither guarded nor fenced: the sample reads the product
+/// after it. `rch_helper_branch_loop`, whose product is in a loop as long as the coverage, is
+/// fenced: an identity shuffle of what each `optnone` call there computes follows it, census
+/// `fragment.helper-fence`. None records `PrecisionNote::HelperBranchDropsSimdgroupStores`. One
 /// that samples nothing (`rch_helper_branch_unsampled`) is left as it is. A device without the
-/// defect (`intel-arl-anv`) guards nothing. Every module passes L3.
+/// defect (`intel-arl-anv`) guards and fences nothing. Every module passes L3.
 #[test]
 fn helper_invocations_skip_an_optnone_branch_on_a_driver_that_drops_a_simdgroups_stores() {
     let Some(bc) = fixture("rch_helper_branch") else {
@@ -5158,7 +5740,8 @@ fn helper_invocations_skip_an_optnone_branch_on_a_driver_that_drops_a_simdgroups
     let anv = profile("intel-arl-anv", DevicePolicy::default()).expect("profile");
     let noted = PrecisionNote::HelperBranchDropsSimdgroupStores;
     let census = "fragment.helper-guard";
-    // (entry, guarded on `moltenvk-m3`, noted there)
+    let fence_census = "fragment.helper-fence";
+    // (entry, guarded on `moltenvk-m3`, fenced there)
     let cases = [
         ("rch_helper_branch", true, false),
         ("rch_helper_branch_late", true, false),
@@ -5167,22 +5750,33 @@ fn helper_invocations_skip_an_optnone_branch_on_a_driver_that_drops_a_simdgroups
         ("rch_helper_branch_loop", false, true),
     ];
     let inputs = LoweringInputs::new();
-    for (entry, guarded, note) in cases {
-        for (stem, p, guarded, note) in [
-            ("moltenvk-m3", &mvk, guarded, note),
+    for (entry, guarded, fenced) in cases {
+        for (stem, p, guarded, fenced) in [
+            ("moltenvk-m3", &mvk, guarded, fenced),
             ("intel-arl-anv", &anv, false, false),
         ] {
             let what = format!("{entry} on {stem}");
             let (_, m) =
                 typed_module_with(&bc, entry, p, &inputs).unwrap_or_else(|e| panic!("{what}: {e}"));
             let guards = helper_guards(&m);
+            let fences = helper_fences(&m);
             let a = compile_with(&bc, entry, p, &inputs).unwrap_or_else(|e| panic!("{what}: {e}"));
             let counted = a.strategies.entries.get(census).map(|u| u.uses as usize);
+            let fences_counted = a.strategies.entries.get(fence_census).map(|u| u.uses);
             let noted_here = a.precision.contains(&noted);
-            eprintln!("observed: {what}: guards {guards}, census {counted:?}, note {noted_here}");
+            eprintln!(
+                "observed: {what}: guards {guards}, census {counted:?}, fences {fences} \
+                 ({fences_counted:?}), note {noted_here}"
+            );
             assert_eq!(guards > 0, guarded, "{what}: {guards} guards");
             assert_eq!(counted, guarded.then_some(guards), "{what}: the census");
-            assert_eq!(noted_here, note, "{what}: the note");
+            assert_eq!(fences > 0, fenced, "{what}: {fences} fences");
+            assert_eq!(
+                fences_counted.map(|c| c as usize),
+                fenced.then_some(fences),
+                "{what}: the fence census"
+            );
+            assert!(!noted_here, "{what}: the note");
             link_and_validate(&a, p).unwrap_or_else(|e| panic!("{what}: L3: {e}"));
         }
     }
@@ -5239,16 +5833,17 @@ fn a_branch_every_invocation_takes_alike_leaves_no_helper_alone() {
 
 /// Apple's compiler loses nothing after an `optnone` call only helper invocations make where they
 /// make a tangled instruction (an implicit-LOD sample, a derivative, an LOD query, a simdgroup
-/// operation) after it, so such a call records no note where every path from it passes a tangled
-/// instruction reading what it computes. The owned fixture `rch_helper_tangle` takes the high
-/// words of products (`mulhi`, an `OpUMulExtended`, which SPIRV-Cross writes through its `optnone`
+/// operation) after it that reads what it computes, so a call is fenced only where some path from
+/// it passes none. The owned fixture `rch_helper_tangle` takes the high words of products
+/// (`mulhi`, an `OpUMulExtended`, which SPIRV-Cross writes through its `optnone`
 /// `spvMulExtended`) where only the quad helpers past a primitive's edges run more than once or at
 /// all, beside a tangled instruction, and writes a texture after it. On `moltenvk-m3` no arm is
 /// guarded; the `after` functions, whose tangled instruction reads the products (in the arm an
 /// implicit-LOD sample at them, `dfdx`, `quad_sum`, the LOD query; a sample after the branch's
-/// merge; a sample after a loop only helpers repeat), record no
-/// `HelperBranchDropsSimdgroupStores`; the `before` functions and `rch_tangle_unread`, whose
-/// tangled instruction reads none of them, record it. Every module passes L3.
+/// merge; a sample after a loop only helpers repeat), are not fenced; the `before` functions and
+/// `rch_tangle_unread`, whose tangled instruction reads none of them, are: an identity shuffle of
+/// the products' members follows the call, census `fragment.helper-fence`. None
+/// records `HelperBranchDropsSimdgroupStores`. Every module passes L3.
 #[test]
 fn a_tangled_instruction_reading_a_helper_call_keeps_the_note_away() {
     let Some(bc) = fixture("rch_helper_tangle") else {
@@ -5256,7 +5851,7 @@ fn a_tangled_instruction_reading_a_helper_call_keeps_the_note_away() {
     };
     let p = profile("moltenvk-m3", DevicePolicy::default()).expect("profile");
     let noted = PrecisionNote::HelperBranchDropsSimdgroupStores;
-    // (entry, noted on `moltenvk-m3`)
+    // (entry, fenced on `moltenvk-m3`)
     let cases = [
         ("rch_tangle_sample_after", false),
         ("rch_tangle_dfdx_after", false),
@@ -5269,19 +5864,71 @@ fn a_tangled_instruction_reading_a_helper_call_keeps_the_note_away() {
         ("rch_tangle_unread", true),
     ];
     let inputs = LoweringInputs::new();
-    for (entry, note) in cases {
+    for (entry, fenced) in cases {
         let what = format!("{entry} on moltenvk-m3");
         let (_, m) =
             typed_module_with(&bc, entry, &p, &inputs).unwrap_or_else(|e| panic!("{what}: {e}"));
         let a = compile_with(&bc, entry, &p, &inputs).unwrap_or_else(|e| panic!("{what}: {e}"));
         let noted_here = a.precision.contains(&noted);
+        let fences = helper_fences(&m);
+        let counted = a
+            .strategies
+            .entries
+            .get("fragment.helper-fence")
+            .map(|u| u.uses);
         eprintln!(
-            "observed: {what}: guards {}, note {noted_here}",
+            "observed: {what}: guards {}, fences {fences} ({counted:?}), note {noted_here}",
             helper_guards(&m)
         );
         assert_eq!(helper_guards(&m), 0, "{what}: guards");
-        assert_eq!(noted_here, note, "{what}: the note");
+        assert_eq!(fences > 0, fenced, "{what}: {fences} fences");
+        assert_eq!(
+            counted.map(|c| c as usize),
+            fenced.then_some(fences),
+            "{what}: the fence census"
+        );
+        assert!(!noted_here, "{what}: the note");
         link_and_validate(&a, &p).unwrap_or_else(|e| panic!("{what}: L3: {e}"));
+    }
+}
+
+/// A call no identity shuffle can follow stays bare and records the note: on `moltenvk-m3` with
+/// the fragment stage's shuffle taken out of its subgroup model (the `SHUFFLE` operation, or the
+/// fragment stage), `rch_tangle_sample_before` and `rch_tangle_unread`, whose tangled instruction
+/// is an implicit-LOD sample that reads none of the products, are not fenced and record
+/// `PrecisionNote::HelperBranchDropsSimdgroupStores`, as every profile with the defect and no
+/// fragment shuffle does. (`rch_tangle_quad_before`'s `quad_sum` needs the fragment shuffle
+/// itself.) Every module passes L3.
+#[test]
+fn a_helper_call_no_shuffle_can_follow_keeps_the_note() {
+    let Some(bc) = fixture("rch_helper_tangle") else {
+        return;
+    };
+    let base = profile("moltenvk-m3", DevicePolicy::default()).expect("profile");
+    let mut no_op = base.clone();
+    no_op
+        .edit(|f| f.subgroup.fragment.ops = OpBits(f.subgroup.fragment.ops.0 & !OpBits::SHUFFLE.0));
+    let mut no_stage = base.clone();
+    no_stage.edit(|f| f.subgroup.fragment.supported = false);
+    let noted = PrecisionNote::HelperBranchDropsSimdgroupStores;
+    let inputs = LoweringInputs::new();
+    for (form, p) in [
+        ("no fragment SHUFFLE", &no_op),
+        ("no fragment stage", &no_stage),
+    ] {
+        for entry in ["rch_tangle_sample_before", "rch_tangle_unread"] {
+            let what = format!("{entry} on moltenvk-m3 with {form}");
+            let (_, m) =
+                typed_module_with(&bc, entry, p, &inputs).unwrap_or_else(|e| panic!("{what}: {e}"));
+            let a = compile_with(&bc, entry, p, &inputs).unwrap_or_else(|e| panic!("{what}: {e}"));
+            assert_eq!(helper_fences(&m), 0, "{what}: the fences");
+            assert!(
+                !a.strategies.entries.contains_key("fragment.helper-fence"),
+                "{what}: the fence census"
+            );
+            assert!(a.precision.contains(&noted), "{what}: the note");
+            link_and_validate(&a, p).unwrap_or_else(|e| panic!("{what}: L3: {e}"));
+        }
     }
 }
 

@@ -24,9 +24,10 @@
 //! fetches through the pixel interlock (RADV, ANV, NVIDIA, MoltenVK) the function computes Metal's
 //! blend itself, exactly, announcing none of them, which is asserted. Through input attachments
 //! (lavapipe) the device blends; what it announces and how many channels are Metal's is printed.
-//! Each draw prints a `FETCH-BLEND16-NARROW` line, naming its blend.
+//! Each draw prints a `FETCH-BLEND16-NARROW` line, naming its blend. A device that has neither
+//! form skips it (`fetches`).
 
-use super::super::{form, library, through_inputs};
+use super::super::{fetches, form, library, through_inputs};
 use super::{half_bits, half_value, Words, NOTES, SIDE, TEXELS};
 use crate::runtime_lane::buffer_with;
 use crate::runtime_lane::degrade_notices::counts;
@@ -153,6 +154,9 @@ fn a_two_lane_output_into_a_blended_two_channel_fetch_stores_metals_blend() {
     let (messages, _cache, lane) = lane_with(|options| {
         options.announce_each = kinds.into_iter().collect();
     });
+    if !fetches(&lane.device) {
+        return;
+    }
     let fixture = library(&lane, "fbl_fetch_blend16_narrow");
     let device = lane.device.name();
     let interlock = !through_inputs(&lane);

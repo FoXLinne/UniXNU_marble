@@ -379,6 +379,34 @@ pub(crate) fn extended_range_colors(
         .collect()
 }
 
+/// Whether color attachment `c`, of an extended-range form that holds its three color codes in
+/// one raw component (`BGR10_XR`, the two-plane forms' color word, and their `_sRGB` twins), is
+/// written unblended under a mask of some of those codes ([`merges_extended`]): no mask of the
+/// raw components keeps one code of a word and writes another, so the fragment function merges its
+/// codes into the word it reads first: in the interlocked storage form (`lower::fragment::fetch`)
+/// where the device orders fetch through the pixel interlock alone, over the attachment's input
+/// attachment (`lower::fragment`'s `input_blend`, `RuntimeFact::WordInputMerge`) where it orders
+/// it through rasterization-order input attachments. On a device that orders fetch in neither
+/// form, link names the orderings the merge needs
+/// (`lower::fragment::fetch::unordered_extended_fetch`).
+pub(crate) fn merged_extended(c: &ColorAttachmentDescriptor) -> bool {
+    merges_extended(c.pixel_format, c.write_mask, c.blending_enabled)
+}
+
+/// [`merged_extended`] of an attachment of `pf` written under `mask`, blended where `blended`.
+pub(crate) fn merges_extended(
+    pf: metal::PixelFormat,
+    mask: metal::ColorWriteMask,
+    blended: bool,
+) -> bool {
+    use metal::format::ExtendedRange as X;
+    use metal::ColorWriteMask as M;
+    let word = matches!(X::of(pf), Some(X::Bgr10 { .. } | X::Planes { .. }));
+    let rgb = M::RED.union(M::GREEN).union(M::BLUE);
+    let color = mask & rgb;
+    word && !blended && !color.is_empty() && color != rgb
+}
+
 /// The word view through which profile `p`'s device renders color attachment `index` of a
 /// render pipeline, described by `c`, that covers by alpha where `alpha_to_coverage`
 /// (`LoweringInputs::word_colors`): `metal::format::WordAttachment::of` the attachment's format,
@@ -635,6 +663,55 @@ pub(crate) fn wanted_alpha_in_red(
     let mut out = alpha_in_red_colors(colors, p);
     out.retain(|a| used.contains(a));
     out
+}
+
+/// Whether the fragment function computes Metal's blend into color attachment `c` of a render
+/// pipeline on `p` itself, over the texel it reads: an attachment held with its channels rotated
+/// (`ARGB8Unorm` in `R8G8B8A8_UNORM`, `metal::format::rotated_channels`) whose blend no Vulkan
+/// state on the rotated image gives (`rotated_blend` refuses it `NotImplemented(Format)`: Metal's
+/// destination alpha in a color factor, the saturated source alpha, the blend color's red, green
+/// or blue, different color and alpha operations), whose factors read no second source, on a
+/// device that orders framebuffer fetch (`lower::fragment::fetch`). Metal blends the format as
+/// `RGBA8Unorm` with its channels rotated, so the function computes Metal's 8-bit unorm blend
+/// (`extended_range::Blend::unorm8`, which takes every factor and operation but the second
+/// source's) over the texel rotated into Metal's order: in the interlocked storage form where the
+/// device orders fetch through the pixel interlock (`lower::fragment::fetch`), over the
+/// attachment's input attachment where it orders it through rasterization-order input attachments
+/// (`lower::fragment`'s `input_blend`). A device that orders fetch in neither form refuses the
+/// pipeline (`fetch::unordered_extended_fetch`, at link).
+pub(crate) fn shader_rotated_blend(c: &ColorAttachmentDescriptor, p: &DeviceProfile) -> bool {
+    rotated_blend_in_shader(c, p) && !crate::lower::fragment::fetch::fetch_unordered(p)
+}
+
+/// Whether the blend of color attachment `c` of a render pipeline on `p` is one the fragment
+/// function computes over the texel where the device orders framebuffer fetch
+/// ([`shader_rotated_blend`]'s, whatever the device's orderings).
+pub(crate) fn rotated_blend_in_shader(c: &ColorAttachmentDescriptor, p: &DeviceProfile) -> bool {
+    use metal::BlendFactor as F;
+    if !metal::format::rotated_channels(c.pixel_format) || !c.blending_enabled {
+        return false;
+    }
+    let refused = Error::from(crate::error::Unsupported::not_implemented(
+        crate::error::Feature::Format,
+    ));
+    if rotated_blend(c, p).err() != Some(refused) {
+        return false;
+    }
+    let c = c.specialized();
+    let second = [
+        c.source_rgb_blend_factor,
+        c.destination_rgb_blend_factor,
+        c.source_alpha_blend_factor,
+        c.destination_alpha_blend_factor,
+    ]
+    .iter()
+    .any(|f| {
+        matches!(
+            f,
+            F::Source1Color | F::OneMinusSource1Color | F::Source1Alpha | F::OneMinusSource1Alpha
+        )
+    });
+    !second
 }
 
 /// The second outputs of the attachments of `colors` held with their channels rotated, on `p`

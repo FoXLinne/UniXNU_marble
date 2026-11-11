@@ -105,6 +105,7 @@ pub fn mechanism(fact: &RuntimeFact, profile: &DeviceProfile) -> Mechanism {
         RuntimeFact::TileAttachmentFormat { .. } => Mechanism::KeyProjection,
         // The binder specializes the alpha from the bound texture's pixel format.
         RuntimeFact::OutOfBoundsAlpha { .. } => Mechanism::Specialization,
+        RuntimeFact::BorderTexels { .. } => Mechanism::Specialization,
         // The bound format's treatment is specialized; the planner refuses an unmeasured
         // format.
         RuntimeFact::BicubicTexels { .. } => Mechanism::Specialization,
@@ -150,6 +151,11 @@ pub fn mechanism(fact: &RuntimeFact, profile: &DeviceProfile) -> Mechanism {
         // The depth a kernel's call stack was sized for: the compile layer checks it against the
         // pipeline's; nothing on the device reads it.
         RuntimeFact::CallStackDepth { .. } => Mechanism::None,
+        // The mode a kernel was compiled in: the compile layer checks it against the pipeline's;
+        // nothing on the device reads it.
+        RuntimeFact::OpenClMode => Mechanism::None,
+        // The binder's local-size rules read it: a one-row region of the planned pipeline.
+        RuntimeFact::RowLockstep => Mechanism::PlanTimeCheck,
         // A pipeline compiled under the flat-grid variant; its plans state it.
         RuntimeFact::FlatGrid => Mechanism::Variant,
         // A sparse texture's writes are dropped under the slot's `SparseTexture` specialization;
@@ -230,6 +236,9 @@ pub fn mechanism(fact: &RuntimeFact, profile: &DeviceProfile) -> Mechanism {
         // Link gives the attachment no Vulkan blend and its input attachment, which the consumer
         // binds as `GraphicsState::input_attachments` states.
         RuntimeFact::ExtendedRangeInputBlend { .. } => Mechanism::RenderPassContract,
+        // Link gives the rotated attachment no Vulkan blend and its input attachment, which the
+        // consumer binds as `GraphicsState::input_attachments` states.
+        RuntimeFact::RotatedInputBlend { .. } => Mechanism::RenderPassContract,
         // Link writes the whole word and gives the attachment its input attachment, which the
         // consumer binds as `GraphicsState::input_attachments` states.
         RuntimeFact::WordInputMerge { .. } => Mechanism::RenderPassContract,

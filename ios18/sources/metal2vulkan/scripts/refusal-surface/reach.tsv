@@ -144,16 +144,19 @@ gap	AccelerationStructures	rare	ray tracing (out of scope by ruling)
 gap	FeatureEnable	none	device creation with a feature the runtime's chain lacks
 gap	ExtensionEnable	none	device creation with an extension under an unknown name
 gap	Render	system	render pass, resolve and attachment forms not built (20 sites: see the appendix)
-gap	TexelsPastBufferLength	rare	a texture over a buffer past its length
+gap	TexelsPastBufferLength	rare	a YCbCr, two-plane, 4:2:2, depth, BC or rotated texture over an IOSurface plane past its surface
 gap	OverlappingSurfaceRows	rare	an IOSurface plane whose rows overlap
 gap	MemorylessSurfacePlane	rare	a memoryless texture over an IOSurface plane
-gap	SurfacePlaneShape	rare	a texture over an IOSurface plane past one 2D image of its rows
+gap	SurfacePlaneShape	rare	a texture over an IOSurface plane past one 2D image of its rows, or a BC one of 16-byte blocks off 16
 gap	IndirectCommandPastSize	none	an indirect command at or past the buffer's size
 gap	ExecutionRangePastBuffer	rare	an execution range whose 8 bytes run past its buffer
 gap	ExecutionRangeOffFour	rare	an execution range at an offset off 4 bytes
 gap	IndirectCommandUnstridedBuffer	rare	an executed indirect command's buffer bound without the attribute stride the dynamic layout of its pipeline reads, where the pipeline's descriptor turned `support_dynamic_attribute_stride` on (with it off there is no stride word, and the runtime answers the bind at stride 0 as Metal does)
 gap	SamplePositionsAtBegin	rare	custom sample positions Vulkan takes only at begin
 gap	InterpolateAtSampleWithPositions	rare	interpolate_at_sample in a pass at custom sample positions
+gap	ExportableMemory	none	a runtime extension's exportable buffer on a device without the opaque-fd export
+gap	DmaBufExport	none	a runtime extension's dma-buf-exportable buffer on a device without the dma-buf export
+gap	ExportableSemaphore	none	a runtime extension's exportable shared event on a device without the opaque-fd export
 gap	SharedEventAcrossDevices	rare	a shared event opened on another device
 gap	VkImagePlaneCopy	none	a runtime extension's texture over a plane of the caller's VkImage copied, filled, mipmapped or rendered to
 gap	ViewportDepthRange	rare	viewport depth outside [0, 1] without the device features
@@ -239,5 +242,7 @@ feature	SeqCstFence	rare	a seq_cst fence in a vertex or fragment stage without i
 gap	MultisampledBufferCopy	rare	a buffer<->multisampled-texture copy on a device without sample-rate shading, an integer multisample attachment at the count, or the copy format's storage; and, where maintenance8's depth/colour copies are missing or wrong, what the sample-rate draws cannot move: a 16-bit depth on a driver whose codes the fragment-depth draw is not measured to keep, or a depth or stencil texture they cannot sample or render to (emulated elsewhere; the consumer's Maps pans and screensaver make the copy)
 gap	MultisampledBufferLayout	rare	a buffer<->multisampled-texture copy at a bytesPerRow of 0 from an offset that is a multiple of 16, or of pixels of 32 bytes or more at a pitch below a row or off the pixel: Metal copies these by rules not yet reduced, and its API validation rejects them
 gap	ColorAttachmentGroups	app	in a render pass of more color attachments than the device draws at once (five or more on a device of four), or one at an index past them: a pipeline state of other colors, a tile state, an execution of render commands, a draw reading another group's attachment
+gap	MadeBeforeRecovery	app	any object a program made before its device recovered from a lost VkDevice that the recovery does not carry (a pooled Shared or Managed buffer in memory the device allocated, a texture, a pipeline state), used after the recovery
+gap	AdoptedDeviceRecovery	none	the recovery test hook on a device the consumer made itself
 feature	WideLines	none	a line under the Apple-private setLineWidth: at a width other than 1 drawn as the band, whose pipeline form the translator does not build (a selected slice or viewport, barycentric weights, multiview, synthesized geometry, too many stage outputs)
 gap	WideLines	none	under the Apple-private setLineWidth: at a width other than 1, a line strip drawn as the band whose list of segments the runtime cannot draw (past what a u32 counts or one storage range binds, or indices an unordered draw wrote)

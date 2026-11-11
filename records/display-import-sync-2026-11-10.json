@@ -1,0 +1,38 @@
+{
+  "device": "marble",
+  "build": {
+    "plugin": "arm64e iOS18 build and 4 KiB signing passed",
+    "transport": "tu_darwin_sync_import exported by retained Turnip library",
+    "image": "packed; kernel USB, 8 CPUs and native services retained",
+    "device_result": "User reports black/corrupt webpage remains after boot"
+  },
+  "fix": {
+    "candidate": "safari-import-sync-20261110",
+    "status": "packed",
+    "cause": "flushImports used NBTexture.buffer, which intentionally returns nil for IOSurface textures; surface allocations skipped cache maintenance",
+    "change": "use private backingBuffer accessor for import synchronization",
+    "source_sha256": "ac41bd05d088cf0c7f7c4291cca50d23e3fad3d873727bf3309e72d964ca8a67",
+    "diagnostic_sampling": "disabled",
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/safari-import-sync-20261110/boot/marble_temporary_boot.img",
+    "image_sha256": "e2e1417885f6981b03c2913f2edf237eaf44076a540c2e3b4416579db9bee8bb",
+    "manifest": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/safari-import-sync-20261110/boot/temporary-boot.json",
+    "kernel_sha256": "da576760da27d1b89d96636e5c7a240b98a3a0963216df37a13954777bf02fc0",
+    "gpu_addon_sha256": "e048c8c18331de36f8f94be764ab33f873783711e1d4be4e7ed783ae4637f633",
+    "boot_args": "sheng-aks-sls=3 offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-skip-setup=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 sheng-diag=0 marble-wifi-service=1 rootstage-runtime-usb=1 marble-native-services=1 cpus=8 appsync=1 marble-ui-identity=1602 marble-display-scale=3",
+    "plugin_cdhash": "13b4eb1d7cf0b8988e021b0b2160caf529ea3c48"
+  },
+  "implementation": {
+    "public_texture_buffer": "Returns nil for IOSurface textures, matching the Metal API",
+    "prior_cache_lookup": "flushImports obtained buffer through that public getter and skipped the texture",
+    "corrected_cache_lookup": "NBTexture.backingBuffer returns the retained internal allocation for cache publication/acquisition",
+    "scope": "Shared IOSurface imports and their texture views",
+    "runtime_sampling": "Texture-layout and sampled-source switches disabled"
+  },
+  "upstream_reference": {
+    "repository": "UniXNU/AdrenoMetal",
+    "revision": "6d7f73437087c57ee54a41adceb1735daaea405e",
+    "function": "flushSurfaces",
+    "behavior": "Obtains IOSurface address and allocation size from the texture surface"
+  },
+  "source_sha256": "ac41bd05d088cf0c7f7c4291cca50d23e3fad3d873727bf3309e72d964ca8a67"
+}

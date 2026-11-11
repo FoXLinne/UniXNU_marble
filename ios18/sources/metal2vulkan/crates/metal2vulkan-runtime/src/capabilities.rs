@@ -24,7 +24,9 @@
 //!
 //! The fields are fixed when the device is made. An answer that changes while the device lives is
 //! a method of its object's step on `Device` instead: step 5's per-format mipmap verdict, settled
-//! by the first mipmap generation of each format.
+//! by the first mipmap generation of each format. So is one the device's images decide, worked out
+//! for every format at the first query of any and fixed from there:
+//! `Device::minimum_linear_texture_alignment_for_pixel_format`.
 
 use super::device::argument_buffers::APPLE;
 use super::device::DeviceKind;
@@ -233,7 +235,8 @@ pub(crate) struct DeviceIdentity {
     /// `sampledImageColorSampleCounts & sampledImageDepthSampleCounts`.
     pub sampled_sample_counts: SampleCountFlags,
     /// The size of the device's largest `DEVICE_LOCAL` memory heap, where it was read
-    /// (`VkPhysicalDeviceMemoryProperties`): what bounds [`DeviceProperties::max_buffer_length`].
+    /// (`VkPhysicalDeviceMemoryProperties`): what bounds [`DeviceProperties::max_buffer_length`],
+    /// and what `PhysicalDeviceIdentity::recommended_max_working_set_size` answers.
     pub device_local_heap: Option<u64>,
 }
 
@@ -246,8 +249,9 @@ pub(crate) fn working_set_buffer_bound(working_set: u64) -> u64 {
 
 /// The class of Mac a device presents, whose GPU decides answers Metal gives without a property
 /// of its own: what a new `Private` texture reads before anything writes it, the encoding a GPU
-/// blit through a compressed texture writes, and a `half` NaN clear's sign (docs/API.md, the
-/// accepted differences). Every Mac's Metal answers one class's way, by the GPU it has (Apple
+/// blit through a compressed texture writes, a `half` NaN clear's sign, and how far a `Clear`
+/// load reaches past the render area of a pass without a draw call (docs/API.md, the accepted
+/// differences). Every Mac's Metal answers one class's way, by the GPU it has (Apple
 /// silicon, or an Intel or AMD GPU); the runtime answers the class the consumer declares
 /// ([`DeviceOptions::mac_class`](crate::DeviceOptions::mac_class)), else the one of the device's
 /// GPU ([`MacClass::of_vendor`]), and states it as
@@ -260,8 +264,11 @@ pub enum MacClass {
     /// colour format of neither `ShaderWrite` nor `PixelFormatView` usage): a new `Private` such
     /// texture reads Metal's fixed pattern over its first levels and zero elsewhere, blits
     /// through it write three formats' canonical encodings, and a `half` NaN clear keeps its
-    /// sign. The runtime writes the pattern and the zeros (a pattern no clear or copy writes
-    /// exactly reads zero, announced as `fresh-pattern-zeroed`).
+    /// sign. A `Clear` load in a pass of one layer without a draw call clears such a texture's
+    /// whole level and slice past the render area, and any other texture's render area rounded
+    /// up to 32x32 tiles, as a pass with a draw call clears every texture, other levels and
+    /// slices untouched (our probes and the consumer's on the M3 Max). The runtime writes the pattern and the zeros (a pattern no clear or copy writes
+    /// exactly reads zero, announced as `fresh-pattern-zeroed`), and clears so.
     AppleSilicon,
     /// A Mac with an Intel or AMD GPU, which keeps no texture compressed: a new `Private`
     /// texture holds what its memory held (zero, or a released texture's texels: an Intel UHD
@@ -269,7 +276,10 @@ pub enum MacClass {
     /// through `half`. On a GPU that keeps no texture compressed the runtime writes nothing into
     /// a new `Private` texture (`WorkCounts::private_textures_unfilled`); on an Apple GPU, whose
     /// own compressed texture would read Apple's pattern, it fills it with zeros
-    /// (`WorkCounts::private_textures_zero_filled`).
+    /// (`WorkCounts::private_textures_zero_filled`). A `Clear` load in a pass of one layer
+    /// without a draw call clears the whole level and slice past the render area, the AMD Radeon
+    /// Pro 5300M's answer; an Intel UHD 630 clears anything from the render area alone to the
+    /// whole texture there, by format and shape (the consumer's probes).
     IntelOrAmd,
 }
 
@@ -426,8 +436,10 @@ impl DeviceProperties {
     /// otherwise is refused, `Unsupported(PullModelInterpolation)`. What differs from Metal: an
     /// offset is read on the device's grid and within its range
     /// (`PrecisionNote::DeviceInterpolationOffset`), a centroid where Vulkan puts it
-    /// (`PrecisionNote::MultisamplePosition`), and a draw at custom sample positions through a
-    /// function that reads at a sample is refused
+    /// (`PrecisionNote::MultisamplePosition`), a perspective interpolant read at a sample or an
+    /// offset on RADV is the driver's extrapolation from the pixel center
+    /// (`PrecisionNote::ExtrapolatedInterpolation`), and a draw at custom sample positions through
+    /// a function that reads at a sample is refused
     /// ([`RuntimeGap::InterpolateAtSampleWithPositions`]).
     pub fn supports_pull_model_interpolation(&self) -> Result<bool, RuntimeGap> {
         Query::PullModelInterpolation.answer(self.pull_model_interpolation)
@@ -483,31 +495,29 @@ impl DeviceProperties {
     /// visibility result all complete and leave the pages as they were, and a colour attachment with
     /// [`StoreAction::Store`](crate::StoreAction::Store), a resolve target or a depth or stencil
     /// attachment over such memory ends its command buffer in error. On macOS, where the device
-    /// imports the pages through a read-only view of them, that is yes; elsewhere the import is of
-    /// the caller's own pages and this answers no, with the difference announced
-    /// ([`Degradation::PrivateResourceOption`](crate::Degradation::PrivateResourceOption)).
+    /// imports the pages through a read-only view of them, that is yes. Elsewhere the memory is a
+    /// copy of the pages whose GPU writes are dropped, announced
+    /// ([`Degradation::CopiedHostPages`](crate::Degradation::CopiedHostPages)), and this answers
+    /// no: the CPU and the command buffers committed after a writer's completion read the pages'
+    /// own bytes, but a command buffer committed before it may read the GPU's writes, and a render
+    /// pass's store-out into the copy completes.
     pub fn drops_gpu_writes_to_read_only_memory(&self) -> bool {
         crate::read_only_view::VIEWS_DROP_WRITES
     }
+}
 
-    /// `minimumLinearTextureAlignmentForPixelFormat:`: the alignment of a texture's offset and
-    /// rows in a buffer, 16 bytes for every format a buffer can back, as Metal answers on an M3 Max
-    /// and an M4. Refused, `Invalid` with
-    /// [`BufferTextureProblem::NotLinear`](crate::BufferTextureProblem::NotLinear), for a
-    /// compressed, depth or stencil format, on which Metal's query asserts, and for a format Metal
-    /// describes none of ([`Device::pixel_format_info`](crate::Device::pixel_format_info) answers
-    /// [`PixelFormatInfo::INVALID`](crate::PixelFormatInfo::INVALID)), on which it asserts too.
-    pub fn minimum_linear_texture_alignment_for_pixel_format(
-        &self,
-        format: PixelFormat,
-    ) -> Result<u64, Error> {
-        linear_alignment(format).map_err(|problem| {
-            invalid(
-                "minimum_linear_texture_alignment_for_pixel_format",
-                Problem::BufferTexture(problem),
-            )
-        })
-    }
+/// Metal's rule for `minimumLinearTextureAlignmentForPixelFormat:` of `format`: 16 bytes for every
+/// format a buffer can back, as Metal answers on an Apple M3 Max and an M4, the least the device
+/// answers (`Device::minimum_linear_texture_alignment_for_pixel_format`); refused, `Invalid` with
+/// `BufferTextureProblem::NotLinear`, for a compressed, depth or stencil format, on which Metal's
+/// query asserts, and for a format Metal describes none of, on which it asserts too.
+pub(crate) fn linear_alignment_rule(format: PixelFormat) -> Result<u64, Error> {
+    linear_alignment(format).map_err(|problem| {
+        invalid(
+            "minimum_linear_texture_alignment_for_pixel_format",
+            Problem::BufferTexture(problem),
+        )
+    })
 }
 
 /// Whether `count` samples is one of the Vulkan sample counts `flags` holds: a power of two whose

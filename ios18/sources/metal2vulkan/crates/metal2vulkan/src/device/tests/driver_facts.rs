@@ -4,7 +4,7 @@
 use crate::device::driver_facts::{among, Measured, MEASURED, NVIDIA_RTX_3090};
 use crate::device::{DeviceDescription, DriverFact};
 use crate::vk::DriverId;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 const APPLE: u32 = 0x106B;
@@ -183,10 +183,11 @@ fn taken(p: &crate::device::DeviceProfile) -> Vec<crate::error::DriverDeviation>
 /// sampler, compute cube route and the rest of the seventeen), with the graphics cube route and the
 /// per-sample depth of macOS 27's Apple9 identity, that identity's normalized
 /// storage writes, full quads, normalized vertex fetch, alpha to coverage, moved NaNs, pack conversions, half conversions, small-float NaN stores and unary denormals, and every Apple GPU's 16-bit unorm depth stores, interpolation
-/// and first-vertex indices; lavapipe's `float` color NaNs and half-float storage writes; RADV's on
-/// the Radeon 780M, ANV's on the Iris Xe of RPL-P and the UHD 770 of RPL-S, and NVIDIA's on the
-/// RTX 3090 and the RTX 5080 Laptop GPU, as measured there; the 8-bit linear filter's bound where
-/// measured. Every other committed profile takes none. MoltenVK on another
+/// and first-vertex indices; lavapipe's `float` color NaNs and half-float storage writes; RADV's
+/// half-float storage writes on every GPU and its others on the Radeon 780M, ANV's on the Iris Xe
+/// of RPL-P and the UHD 770 of RPL-S, and NVIDIA's on the RTX 3090 and the RTX 5080 Laptop GPU, as
+/// measured there; the 8-bit linear filter's bound where measured. Every other committed profile
+/// takes none. MoltenVK on another
 /// vendor's GPU takes none, its cube routes unmeasured; another driver on Apple's vendor takes its
 /// own driver's rows, with Vulkan's cube rule. `InterpolateAtOffsetCentered` follows the driver alone.
 #[test]
@@ -290,6 +291,8 @@ fn the_profile_takes_the_deviations_its_driver_is_measured_with() {
                 D::MetalNormStorageWrites,
                 D::MetalDepth16Stores,
             ],
+            // RADV's driver-wide row alone on the RADV GPUs no other row names.
+            (false, "amd-rdna3-radv" | "amd-rdna2-apu-radv") => vec![D::MetalHalfStorageWrites],
             (false, "intel-irisxe-rplp-anv") => vec![
                 D::MetalFloatDenormals,
                 D::MetalSmallFloatColorWrites,
@@ -374,12 +377,10 @@ fn the_profile_takes_the_deviations_its_driver_is_measured_with() {
 
 const ZERO: DriverFact = DriverFact::RobustIndexFetchReadsZero;
 const DENORMALS: DriverFact = DriverFact::DepthImageKeepsDenormals;
-const OUTSIDE: DriverFact = DriverFact::DepthImageKeepsValuesOutsideUnitRange;
 const FRAGDEPTH: DriverFact = DriverFact::FragmentDepthStoresUnchanged;
 const APART: DriverFact = DriverFact::DepthStencilImagesLieApart;
 const AVERAGE: DriverFact = DriverFact::ColorResolveAverageIsMetals;
 const CLEAR: DriverFact = DriverFact::ColorClearIsMetals;
-const EITHER_CODE: DriverFact = DriverFact::ColorClearTakesEitherCode;
 const HIDE: DriverFact = DriverFact::CompressedImagesHideAliasedWrites;
 const HOST: DriverFact = DriverFact::HostTransferImagesKeepTheirBytes;
 const OPTIMIZED: DriverFact = DriverFact::DepthStencilImagesStayGpuOptimized;
@@ -387,7 +388,6 @@ const DEPTH16: DriverFact = DriverFact::FragmentDepthKeepsDepth16Codes;
 const FETCH: DriverFact = DriverFact::SampledFetchRecoversCodes;
 const SPLIT: DriverFact = DriverFact::InterlockedPassSplitNoSlower;
 const RESTART: DriverFact = DriverFact::DynamicRestartWarns;
-const FILL: DriverFact = DriverFact::FillCompiledPerCommandPool;
 const DONT_CARE: DriverFact = DriverFact::DontCareStoreIsMetals;
 const STAMPS: DriverFact = DriverFact::TimestampsWaitForEveryQueue;
 const COLOR_BLOCKS: DriverFact = DriverFact::ColorBlockDecodeIsMetals;
@@ -403,21 +403,22 @@ const ONE_OF_METALS: DriverFact = DriverFact::DontCareStoreIsOneOfMetals;
 const COPY_BACK: DriverFact = DriverFact::ShadowCopyBackDispatchFaster;
 const COPY_IN: DriverFact = DriverFact::ShadowCopyInDispatchFaster;
 const ROWS: DriverFact = DriverFact::RowCopiesDispatchFaster;
-const MERGES: DriverFact = DriverFact::SubmissionsWithoutSignalsMerge;
 const MESSENGER: DriverFact = DriverFact::QueueFailuresReportedByMessenger;
 const STALL: DriverFact = DriverFact::SemaphoreOperationsStallSubmits;
 const STALL_1024: DriverFact = DriverFact::SignallingSubmitsStallEvery1024;
 const SAMPLED_HIZ: DriverFact = DriverFact::SampledDepthKeepsHiZ;
 const MSAA_DEPTH: DriverFact = DriverFact::MultisampledDepthFasterOutOfGeneral;
 const TILE_STORE: DriverFact = DriverFact::TileStoreIsMetals;
-const FOLLOWS: DriverFact = DriverFact::PointerImportsFollowTheirAddress;
 const INTERLOCK_ORDER: DriverFact = DriverFact::InterlockOrdersDraws;
+const INTERLOCK_RACE: DriverFact = DriverFact::InterlockedDrawsRaceUnderLoad;
 const BLENDLESS: DriverFact = DriverFact::BlendlessColorAttachmentsWarn;
 const HEAP_COLORS: DriverFact = DriverFact::ColorImagesLieAsMetalHeapTextures;
 const HEAP_MULTISAMPLE_COLORS: DriverFact =
     DriverFact::MultisampleColorImagesLieAsMetalHeapTextures;
 const LINE_TIES: DriverFact = DriverFact::LineTiesAreMetals;
 const SUBPIXEL_SNAP: DriverFact = DriverFact::SubpixelSnapIsMetals;
+const CLEARED_DEPTH: DriverFact = DriverFact::ClearedDepthAtStandardPositions;
+const PLAIN_HOLDS: DriverFact = DriverFact::PlainAllocationsHoldSubmissions;
 
 /// Each committed profile's driver has the runtime's driver facts its rows name, on its vendor and
 /// GPU, at its release as at any other.
@@ -449,8 +450,7 @@ fn the_committed_profiles_drivers_have_their_facts() {
                 BC6H,
                 BC7,
                 ONE_OF_METALS,
-                MERGES,
-                FOLLOWS,
+                PLAIN_HOLDS,
             ],
         ),
         (
@@ -463,19 +463,18 @@ fn the_committed_profiles_drivers_have_their_facts() {
                 BC6H,
                 BC7,
                 ONE_OF_METALS,
-                MERGES,
-                FOLLOWS,
+                PLAIN_HOLDS,
             ],
         ),
         ("amd-rdna2-apu-radv", vec![ZERO]),
         ("amd-rdna3-radv", vec![ZERO]),
         (
             "gate-lavapipe",
-            vec![DENORMALS, FRAGDEPTH, DEPTH16, FETCH, BC6H, MERGES, FOLLOWS],
+            vec![DENORMALS, FRAGDEPTH, DEPTH16, FETCH, BC6H],
         ),
         (
             "gate-lavapipe-x86_64",
-            vec![DENORMALS, FRAGDEPTH, DEPTH16, FETCH, BC6H, MERGES, FOLLOWS],
+            vec![DENORMALS, FRAGDEPTH, DEPTH16, FETCH, BC6H],
         ),
         (
             "intel-arl-anv",
@@ -498,10 +497,8 @@ fn the_committed_profiles_drivers_have_their_facts() {
                 ONE_OF_METALS,
                 COPY_BACK,
                 ROWS,
-                MERGES,
                 SAMPLED_HIZ,
                 MSAA_DEPTH,
-                FOLLOWS,
                 INTERLOCK_ORDER,
             ],
         ),
@@ -518,18 +515,13 @@ fn the_committed_profiles_drivers_have_their_facts() {
                 COPY_BACK,
                 COPY_IN,
                 ROWS,
-                MERGES,
             ],
         ),
-        (
-            "lavapipe",
-            vec![DENORMALS, FRAGDEPTH, DEPTH16, FETCH, BC6H, MERGES, FOLLOWS],
-        ),
+        ("lavapipe", vec![DENORMALS, FRAGDEPTH, DEPTH16, FETCH, BC6H]),
         (
             "moltenvk-m3",
             vec![
                 DENORMALS,
-                OUTSIDE,
                 APART,
                 AVERAGE,
                 CLEAR,
@@ -539,7 +531,6 @@ fn the_committed_profiles_drivers_have_their_facts() {
                 SPLIT,
                 RESTART,
                 BLENDLESS,
-                FILL,
                 DONT_CARE,
                 STAMPS,
                 COLOR_BLOCKS,
@@ -551,6 +542,7 @@ fn the_committed_profiles_drivers_have_their_facts() {
                 SCARCE_POOLS,
                 MESSENGER,
                 TILE_STORE,
+                INTERLOCK_RACE,
                 HEAP_COLORS,
                 HEAP_MULTISAMPLE_COLORS,
                 LINE_TIES,
@@ -562,17 +554,7 @@ fn the_committed_profiles_drivers_have_their_facts() {
         (
             "nvidia-rtx5080-laptop",
             vec![
-                ZERO,
-                DENORMALS,
-                EITHER_CODE,
-                FETCH,
-                SPLIT,
-                PLANES,
-                BC6H,
-                BC7,
-                ROWS,
-                STALL,
-                STALL_1024,
+                ZERO, DENORMALS, FETCH, SPLIT, PLANES, BC6H, BC7, ROWS, STALL, STALL_1024,
             ],
         ),
     ]
@@ -713,23 +695,51 @@ fn nvidia_s_every_1024th_signalling_submit_stall_holds_on_the_gpu_measured() {
     );
 }
 
-/// RADV on the RX 7900 XTX takes the facts measured on it: its pointer imports follow their
-/// address and its submissions without signals merge, as the 780M's do, and it reads zero past a
-/// bound index range, RADV's on every GPU; no answer measured on the 780M alone (its block decodes,
-/// `DONT_CARE` stores, interlocked split, sampled fetch) is taken. Another release takes the same.
+/// RADV on a GPU no row names takes RADV's driver-wide fact alone: the Radeon 780M's own
+/// description presented under a `deviceID` no table names (0x1114) reads zero past a bound index
+/// range, as RADV does on every GPU, and takes no answer measured on the 780M alone (its block
+/// decodes, `DONT_CARE` stores, interlocked split, sampled fetch, plain allocations that hold its
+/// submissions), at another release too. Under
+/// the RX 7900 XTX's (0x744c) it takes the one answer measured there too, BC1 to BC3's block
+/// decode, and none of the 780M's others; under the RX 550's (0x699f) the one answer measured
+/// there, a cleared depth at the standard positions. Whether its submissions merge and whether
+/// its pointer imports follow their address are no facts of the table: the runtime's device
+/// checks answer them on each device (`submit_check.rs` in the runtime), so a GPU no row names
+/// takes those paths too.
 #[test]
-fn the_rx_7900_xtx_takes_the_facts_measured_on_it() {
-    use crate::device::driver_facts::AMD_RX_7900_XTX;
+fn a_radv_gpu_no_row_names_takes_radv_s_driver_wide_fact_alone() {
+    use crate::device::driver_facts::{AMD_RX_550, AMD_RX_7900_XTX};
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../metal2vulkan-validation/profiles");
     let text = std::fs::read_to_string(dir.join("amd-780m-radv.json")).expect("amd-780m-radv");
-    let mut navi31 = DeviceDescription::from_khronos_json(&text, None).expect("profile parses");
-    navi31.device_id = AMD_RX_7900_XTX;
-    let measured =
-        std::collections::BTreeSet::from([FOLLOWS, MERGES, DriverFact::RobustIndexFetchReadsZero]);
-    assert_eq!(navi31.driver_facts(), measured);
-    let mut other = navi31.clone();
-    other.driver_version += 1;
-    assert_eq!(other.driver_facts(), measured);
+    let phoenix = DeviceDescription::from_khronos_json(&text, None).expect("profile parses");
+    let answers = BTreeSet::from([
+        FETCH,
+        SPLIT,
+        COLOR_BLOCKS,
+        BC6H,
+        BC7,
+        ONE_OF_METALS,
+        PLAIN_HOLDS,
+    ]);
+    let measured = BTreeSet::from([DriverFact::RobustIndexFetchReadsZero]);
+    assert_eq!(
+        phoenix.driver_facts(),
+        answers.union(&measured).copied().collect()
+    );
+    let xtx = BTreeSet::from([DriverFact::RobustIndexFetchReadsZero, COLOR_BLOCKS]);
+    let rx550 = BTreeSet::from([DriverFact::RobustIndexFetchReadsZero, CLEARED_DEPTH]);
+    for (device_id, facts) in [
+        (AMD_RX_7900_XTX, &xtx),
+        (AMD_RX_550, &rx550),
+        (0x1114, &measured),
+    ] {
+        let mut unlisted = phoenix.clone();
+        unlisted.device_id = device_id;
+        assert_eq!(&unlisted.driver_facts(), facts, "{device_id:#x}");
+        let mut other = unlisted.clone();
+        other.driver_version += 1;
+        assert_eq!(&other.driver_facts(), facts, "{device_id:#x}");
+    }
 }
 
 /// MoltenVK's warning of a pipeline whose restart may be disabled (`MVKPipeline.mm` lines 881-893

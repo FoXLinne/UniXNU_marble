@@ -40,8 +40,8 @@ use crate::indirect_commands::{
 };
 use crate::library_facts::{FunctionDescriptorSpec, LibraryFacts};
 use crate::mesh_descriptors::{
-    DescriptorSpec as MeshDescriptorSpec, MeshDescriptorFacts, SuppliedLists as MeshSuppliedLists,
-    AWAY as MESH_AWAY,
+    DescriptorLimits as MeshDescriptorLimits, DescriptorSpec as MeshDescriptorSpec,
+    MeshDescriptorFacts, SuppliedLists as MeshSuppliedLists, AWAY as MESH_AWAY,
 };
 use crate::pass_descriptors::{
     AttachmentFacts, Indices, Numbers, PassDescriptorFacts, PassSpec, Reads, Row, Shape,
@@ -52,6 +52,9 @@ use crate::pipeline_functions::{FunctionsDescriptorFacts, FunctionsDescriptorSpe
 use crate::pipeline_handlers::{
     BothPaths, Delivered, Form as PipelineForm, Handled, StateFacts,
     IMAGEBLOCK as HANDLER_IMAGEBLOCK,
+};
+use crate::pipeline_limits::{
+    floored, ComputeLimitsSpec, ComputeStateLimits, Creation, MeshLimitsSpec, MeshStateLimits,
 };
 use crate::pipeline_option_reflection::UnderOptions;
 use crate::pipeline_options::{OptionOutcome, FRAGMENT_STAGE, KERNEL_STAGE, VERTEX_STAGE};
@@ -101,11 +104,11 @@ use metal2vulkan::pipeline::{
 use metal2vulkan_runtime::{
     ArgumentEncoder, BinaryArchive, BinaryArchiveDescriptor, BlitOption, Buffer, ClearColor,
     CommandBuffer, CommandBufferStatus, CommandQueue, ComputePipelineState, Coordinate2D,
-    DepthStencilState, Device, DrawPrimitiveType, DynamicLibrary, Fence, Heap, HeapDescriptor,
-    HeapType, HostMemory, IndirectCommand, IndirectCommandBuffer, IndirectCommandBufferDescriptor,
-    IndirectDraw, IoSurfacePlane, IoSurfaceYCbCr, Library, LoadAction,
-    MultisampleDepthResolveFilter, MultisampleStencilResolveFilter, Origin, PipelineOption,
-    PipelineOptions, PurgeableState, RasterizationRateMap, Region,
+    DepthStencilState, Device, DeviceKind, DrawPrimitiveType, DynamicLibrary, Fence, Heap,
+    HeapDescriptor, HeapType, HostMemory, IndirectCommand, IndirectCommandBuffer,
+    IndirectCommandBufferDescriptor, IndirectDraw, IoSurfacePlane, IoSurfaceYCbCr, Library,
+    LoadAction, MultisampleDepthResolveFilter, MultisampleStencilResolveFilter, Origin,
+    PipelineOption, PipelineOptions, PurgeableState, RasterizationRateMap, Region,
     RenderPassColorAttachmentDescriptor, RenderPassDepthAttachmentDescriptor, RenderPassDescriptor,
     RenderPassStencilAttachmentDescriptor, RenderPipelineFunctionsDescriptor, RenderPipelineState,
     ResourceOptions, ResourceRef, ResourceStateCommandEncoder, SamplePosition, SamplerState,
@@ -528,6 +531,24 @@ fn state_mesh_descriptor(descriptor: &mut MeshPipelineDescriptor, options: &mut 
     descriptor.depth_format = Some(MESH_AWAY.depth_format);
     descriptor.stencil_format = Some(MESH_AWAY.stencil_format);
     descriptor.support_indirect_command_buffers = MESH_AWAY.support_indirect_command_buffers;
+    // Metal's 0 and zero size are the runtime's `None`; the table states none of them.
+    let limits = MESH_AWAY.limits;
+    descriptor.max_total_threads_per_object_threadgroup =
+        Some(limits.max_total_threads_per_object_threadgroup);
+    descriptor.max_total_threads_per_mesh_threadgroup =
+        Some(limits.max_total_threads_per_mesh_threadgroup);
+    descriptor.object_threadgroup_size_is_multiple_of_thread_execution_width =
+        limits.object_threadgroup_size_is_multiple_of_thread_execution_width;
+    descriptor.mesh_threadgroup_size_is_multiple_of_thread_execution_width =
+        limits.mesh_threadgroup_size_is_multiple_of_thread_execution_width;
+    descriptor.payload_memory_length = Some(limits.payload_memory_length);
+    descriptor.max_total_threadgroups_per_mesh_grid =
+        Some(limits.max_total_threadgroups_per_mesh_grid);
+    descriptor.max_vertex_amplification_count = limits.max_vertex_amplification_count;
+    descriptor.required_threads_per_object_threadgroup =
+        Some(limits.required_threads_per_object_threadgroup);
+    descriptor.required_threads_per_mesh_threadgroup =
+        Some(limits.required_threads_per_mesh_threadgroup);
     for color in MESH_AWAY.colors {
         let mut attachment = ColorAttachmentDescriptor::new(color.pixel_format);
         attachment.blending_enabled = color.blending_enabled;
@@ -597,6 +618,30 @@ fn read_mesh_descriptor(
             .as_raw(),
         support_indirect_command_buffers: descriptor.support_indirect_command_buffers,
         binary_archives: options.binary_archives.len() as u64,
+        // A field the runtime holds as `None` is Metal's 0 or zero size.
+        limits: MeshDescriptorLimits {
+            max_total_threads_per_object_threadgroup: descriptor
+                .max_total_threads_per_object_threadgroup
+                .unwrap_or(0),
+            max_total_threads_per_mesh_threadgroup: descriptor
+                .max_total_threads_per_mesh_threadgroup
+                .unwrap_or(0),
+            object_threadgroup_size_is_multiple_of_thread_execution_width: descriptor
+                .object_threadgroup_size_is_multiple_of_thread_execution_width,
+            mesh_threadgroup_size_is_multiple_of_thread_execution_width: descriptor
+                .mesh_threadgroup_size_is_multiple_of_thread_execution_width,
+            payload_memory_length: descriptor.payload_memory_length.unwrap_or(0),
+            max_total_threadgroups_per_mesh_grid: descriptor
+                .max_total_threadgroups_per_mesh_grid
+                .unwrap_or(0),
+            max_vertex_amplification_count: descriptor.max_vertex_amplification_count,
+            required_threads_per_object_threadgroup: descriptor
+                .required_threads_per_object_threadgroup
+                .unwrap_or([0; 3]),
+            required_threads_per_mesh_threadgroup: descriptor
+                .required_threads_per_mesh_threadgroup
+                .unwrap_or([0; 3]),
+        },
         supplied: supplied.then_some(MeshSuppliedLists {
             object_linked_functions: object_linked,
             mesh_linked_functions: mesh_linked,
@@ -1834,6 +1879,7 @@ impl Side for RuntimeSide<'_> {
                 properties.api_version.major, properties.api_version.minor
             ),
             lossless_compression: properties.lossless_compression,
+            host: (properties.kind == DeviceKind::Cpu).then(crate::case::host_vector_isa),
         }
     }
 
@@ -3040,6 +3086,95 @@ impl Side for RuntimeSide<'_> {
             &options,
             !spec.shape.resets(),
         ))
+    }
+
+    fn mesh_pipeline_limits(
+        &mut self,
+        library: Handle,
+        spec: &MeshLimitsSpec<'_>,
+    ) -> Answer<Creation<MeshStateLimits>> {
+        let library = self
+            .libraries
+            .get(library.0 as usize)
+            .ok_or_else(|| Failure::named("NoSuchHandle", format!("library {}", library.0)))?;
+        let stage = |name: &str| -> Answer<StageSource> {
+            Ok(StageSource::Function(
+                library
+                    .new_function_with_name(name)
+                    .map_err(Failure::from_error)?
+                    .function_descriptor(),
+            ))
+        };
+        // Metal's 0 is the runtime's `None`: the descriptor's default.
+        let given = |value: u32| (value != 0).then_some(value);
+        let mut descriptor = MeshPipelineDescriptor::new(stage(spec.mesh)?);
+        descriptor.object = spec.object.map(stage).transpose()?;
+        descriptor.rasterization_enabled = false;
+        descriptor.max_total_threads_per_object_threadgroup = given(spec.max_object);
+        descriptor.max_total_threads_per_mesh_threadgroup = given(spec.max_mesh);
+        descriptor.max_total_threadgroups_per_mesh_grid = given(spec.max_grid);
+        descriptor.payload_memory_length = given(spec.payload);
+        descriptor.max_vertex_amplification_count = spec.amplification;
+        let state = match crate::states::making_a_state(self.device)
+            .new_mesh_render_pipeline_state(&descriptor, &PipelineOptions::default())
+        {
+            Ok(state) => state,
+            Err(error) if refuses_as_metal(&error) => return Ok(Creation::refused()),
+            Err(error) => return Err(Failure::of(&error)),
+        };
+        let axes = |held: metal2vulkan_runtime::Size| [held.width, held.height, held.depth];
+        let object = spec.object.is_some();
+        Ok(Creation::made(MeshStateLimits {
+            max_total_threads_per_object_threadgroup: object
+                .then(|| floored(u64::from(state.max_total_threads_per_object_threadgroup()))),
+            max_total_threads_per_mesh_threadgroup: floored(u64::from(
+                state.max_total_threads_per_mesh_threadgroup(),
+            )),
+            object_thread_execution_width: object
+                .then(|| u64::from(state.object_thread_execution_width())),
+            mesh_thread_execution_width: u64::from(state.mesh_thread_execution_width()),
+            max_total_threadgroups_per_mesh_grid: u64::from(
+                state.max_total_threadgroups_per_mesh_grid(),
+            ),
+            required_threads_per_object_threadgroup: axes(
+                state.required_threads_per_object_threadgroup(),
+            ),
+            required_threads_per_mesh_threadgroup: axes(
+                state.required_threads_per_mesh_threadgroup(),
+            ),
+            max_total_threads_per_threadgroup: u64::from(state.max_total_threads_per_threadgroup()),
+        }))
+    }
+
+    fn compute_pipeline_limits(
+        &mut self,
+        library: Handle,
+        spec: &ComputeLimitsSpec<'_>,
+    ) -> Answer<Creation<ComputeStateLimits>> {
+        let library = self
+            .libraries
+            .get(library.0 as usize)
+            .ok_or_else(|| Failure::named("NoSuchHandle", format!("library {}", library.0)))?;
+        let function = library
+            .new_function_with_name(spec.entry)
+            .map_err(|error| Failure::of(&error))?;
+        let mut descriptor = metal2vulkan::pipeline::ComputePipelineDescriptor::new(
+            StageSource::Function(function.function_descriptor()),
+        );
+        descriptor.max_total_threads_per_threadgroup =
+            (spec.max_total_threads != 0).then_some(spec.max_total_threads);
+        let state = match crate::states::making_a_state(self.device)
+            .new_compute_pipeline_state(&descriptor, &PipelineOptions::default())
+        {
+            Ok(state) => state,
+            Err(error) if refuses_as_metal(&error) => return Ok(Creation::refused()),
+            Err(error) => return Err(Failure::of(&error)),
+        };
+        Ok(Creation::made(ComputeStateLimits {
+            max_total_threads_per_threadgroup: floored(u64::from(
+                state.max_total_threads_per_threadgroup(),
+            )),
+        }))
     }
 
     fn pass_descriptor_facts(&mut self, spec: &PassSpec) -> Answer<PassDescriptorFacts> {
@@ -4914,7 +5049,6 @@ impl Side for RuntimeSide<'_> {
 
     fn minimum_linear_texture_alignment(&mut self, format: PixelFormat) -> Answer<u64> {
         self.device
-            .properties()
             .minimum_linear_texture_alignment_for_pixel_format(format)
             .map_err(Failure::from_error)
     }
@@ -6544,6 +6678,7 @@ fn sparse_texture_descriptor(spec: &SparseTextureSpec) -> TextureDescriptor {
         TextureUsage::SHADER_READ
     };
     descriptor.resource_options = ResourceOptions::private();
+    descriptor.allow_gpu_optimized_contents = spec.gpu_optimized;
     descriptor
 }
 
@@ -6740,7 +6875,9 @@ impl RuntimeSide<'_> {
         {
             *slot = Some(*format);
         }
-        descriptor.max_total_threads_per_threadgroup = spec.max_total_threads_per_threadgroup;
+        // Metal's 0 is no limit.
+        descriptor.max_total_threads_per_threadgroup =
+            Some(spec.max_total_threads_per_threadgroup).filter(|&limit| limit != 0);
         descriptor.threadgroup_size_matches_tile_size = spec.threadgroup_size_matches_tile_size;
         Ok(descriptor)
     }
@@ -7657,6 +7794,21 @@ fn encode_pass(command_buffer: &CommandBuffer, pass: &RenderPass, pools: &Pools)
                     )
                     .map_err(Failure::from_error)?;
             }
+            RenderStep::VertexBufferWithStride {
+                buffer: held,
+                offset,
+                stride,
+                index,
+            } => encoder
+                .set_vertex_buffer_with_stride(Some(buffer(*held)?), *offset, *stride, *index)
+                .map_err(Failure::from_error)?,
+            RenderStep::VertexBytesWithStride {
+                bytes,
+                stride,
+                index,
+            } => encoder
+                .set_vertex_bytes_with_stride(bytes, *stride, *index)
+                .map_err(Failure::from_error)?,
         }
     }
     encoder.end_encoding().map_err(Failure::from_error)
@@ -8195,14 +8347,21 @@ fn runtime_step(
                         .add_tile_render_pipeline_functions(&descriptor)
                         .is_err()
                 }
-                // `addMeshRenderPipelineFunctionsWithDescriptor:error:` has no counterpart on this
-                // side: `BinaryArchive` has three adders and Metal has four. Answered as the
-                // refusal it is, so the case reads `Refused` with the call named, rather than as a
-                // bool that differed.
-                Added::Mesh { .. } => {
-                    return Err(Failure::unavailable(
-                        "addMeshRenderPipelineFunctionsWithDescriptor",
-                    ))
+                Added::Mesh {
+                    library,
+                    object,
+                    mesh,
+                    fragment,
+                } => {
+                    let mut descriptor =
+                        MeshPipelineDescriptor::new(runtime_stage(built, library, mesh)?);
+                    descriptor.object = Some(runtime_stage(built, library, object)?);
+                    descriptor.fragment = Some(runtime_stage(built, library, fragment)?);
+                    descriptor.color_attachments[0] =
+                        Some(ColorAttachmentDescriptor::new(program.attachment));
+                    archive
+                        .add_mesh_render_pipeline_functions(&descriptor)
+                        .is_err()
                 }
             };
             Ok(Observation::Made { refused })
@@ -8377,4 +8536,17 @@ impl RuntimeMaker {
             }
         }
     }
+}
+
+/// Whether the runtime refused a creation by one of Metal's own rules (a descriptor Metal's
+/// creation refuses, or misuse Metal refuses), which a limits case records as the refusal Metal
+/// answers ([`crate::pipeline_limits`]), rather than by a gap of its own.
+fn refuses_as_metal(error: &metal2vulkan_runtime::Error) -> bool {
+    matches!(
+        error,
+        metal2vulkan_runtime::Error::Invalid(_)
+            | metal2vulkan_runtime::Error::Compile(metal2vulkan::error::Error::InvalidDescriptor(
+                _
+            ))
+    )
 }

@@ -45,7 +45,7 @@
 //! 8x4 blocks through the pixel interlock on MoltenVK) run under the default depth state and, as
 //! the consumer draws, under `GreaterEqual` without writes over a depth cleared to 0.
 
-use super::{form, library};
+use super::{fetches, form, library};
 use crate::runtime_lane::buffer_with;
 use crate::runtime_lane::host_memory::{no_copy, Mapping};
 use crate::runtime_lane::memoryless::memoryless_options;
@@ -58,7 +58,7 @@ use metal2vulkan::pipeline::{ColorAttachmentDescriptor, RenderPipelineDescriptor
 use metal2vulkan_runtime::{
     BlitOption, Buffer, ClearColor, Deallocator, Error, IoSurfacePlane, Library, LoadAction,
     PipelineOptions, Region, RenderCommandEncoder, RenderPassDescriptor, RenderPipelineState,
-    ResourceOptions, ScissorRect, StoreAction, Texture, TextureDescriptor,
+    ResourceOptions, ScissorRect, StoreAction, Texture, TextureDescriptor, WorkCounts,
 };
 
 /// The target's width and height.
@@ -743,6 +743,9 @@ fn lost(coverage: Coverage, color: [u16; 4], texels: &[u8]) -> (usize, Vec<(u32,
 #[test]
 fn a_coverage_chain_through_fetch_keeps_every_block() {
     let (messages, _cache, lane) = lane();
+    if !fetches(&lane.device) {
+        return;
+    }
     let chain = library(&lane, "dsx_coverage_chain");
     let device = lane.device.name().to_owned();
     let mut failed = Vec::new();
@@ -763,13 +766,22 @@ fn a_coverage_chain_through_fetch_keeps_every_block() {
             pipeline(&lane, &chain, ("chain_rects", "chain_coverage"), false),
             pipeline(&lane, &chain, ("chain_rects", colour), false),
         ];
+        let before = lane.device.work_counts();
         let texels = drawn(&lane, case, &pipelines);
+        let after = lane.device.work_counts();
         let (count, blocks) = lost(case.coverage, color, &texels);
+        let ran = |count: fn(&WorkCounts) -> u64| count(&after) - count(&before);
         eprintln!(
             "coverage chain, {}, on {device} through {}: {count} texels from Metal's, 8x4 blocks \
-             (x, y) {blocks:?}",
+             (x, y) {blocks:?}; {} instances begun, split for interlocked writes {}, for a \
+             barrier {}, for a memoryless write {}; draws dropped {}",
             case.name,
-            form(&lane)
+            form(&lane),
+            ran(|c| c.render_passes_begun_instances),
+            ran(|c| c.instance_splits_interlocked_writes),
+            ran(|c| c.instance_splits_barrier),
+            ran(|c| c.instance_splits_memoryless_write),
+            ran(|c| c.draws_dropped_still_making + c.draws_dropped_unmade),
         );
         if count != 0 {
             failed.push(case.name);

@@ -63,6 +63,7 @@ mod discard;
 pub(crate) mod fetch;
 mod imageblock;
 mod input_blend;
+mod input_shadow;
 mod interpolate;
 mod rog;
 mod snapshot;
@@ -113,8 +114,12 @@ pub use fetch::{
     StorageColor,
 };
 pub use imageblock::{select_output as select_imageblock_output, ImageblockPlan};
-pub(crate) use input_blend::texel as input_blend_texel;
-pub use input_blend::{select_second_output as select_input_second_output, InputBlend};
+pub(crate) use input_blend::{rotated_texel as rotated_input_texel, texel as input_blend_texel};
+pub use input_blend::{
+    select_second_output as select_input_second_output, InputBlend, RotatedInputBlend,
+};
+pub use input_shadow::InputShadow;
+pub(crate) use input_shadow::{shadows as input_shadow, store as input_shadow_store};
 #[cfg(test)]
 pub(crate) use snapshot::{decode as snapshot_decode, encode as snapshot_encode};
 pub(crate) use snapshot::{prepare as snapshot_prepare, read as snapshot_read};
@@ -204,10 +209,17 @@ pub struct FragmentPlan {
     /// The extended-range attachments whose blend the function computes over their input
     /// attachments, on a device that orders fetch through them (`input_blend`), by index.
     pub input_blends: BTreeMap<u32, InputBlend>,
+    /// The attachments held with their channels rotated whose blend the function computes over
+    /// their input attachments, on a device that orders fetch through them (`input_blend`), by
+    /// index.
+    pub rotated_blends: BTreeMap<u32, RotatedInputBlend>,
     /// The word attachments whose word the function merges into the texel's over their input
     /// attachments, on a device that orders fetch through them (`word_input`), by index: the bits
     /// of the fields each write keeps from the texel.
     pub word_merges: BTreeMap<u32, u32>,
+    /// The extended-range attachments whose `half` shadow the draw's instance holds, on a device
+    /// that orders fetch through input attachments (`input_shadow`), by index.
+    pub input_shadows: BTreeMap<u32, InputShadow>,
     /// The stage interface's `FragCoord` object, which gives the pixel of the storage form and
     /// of the shader-side stencil.
     pub fetch_coord: Option<usize>,
@@ -346,17 +358,21 @@ pub fn finish(cx: &mut SelectCx<'_>, m: &mut Meter) -> Result<(), Error> {
     imageblock::finish(cx)?;
     fetch::finish(cx)?;
     stencil::finish(cx)?;
-    // An imageblock, an attachment in the storage form, and the shadow of a shader-side stencil
-    // are read and written inside the critical section whether or not the function names a
-    // raster order group.
+    // An imageblock, an attachment in the storage form, the shadow of a shader-side stencil and
+    // an extended-range attachment's shadow over its input attachment are read and written inside
+    // the critical section whether or not the function names a raster order group.
     let shadow = cx.families.fragment.stencil.is_some();
-    let storage = !cx.families.fragment.fetch.is_empty() || shadow;
-    let interlock =
-        if rog::declared(cx.entry) || cx.families.fragment.imageblock.is_some() || storage {
-            Some(rog::mode(cx)?)
-        } else {
-            None
-        };
+    let input_shadows = !cx.families.fragment.input_shadows.is_empty();
+    // A function looping over its covered samples runs no interlocked body (`wrap_entry`).
+    if input_shadows && looped {
+        return Err(Unsupported::not_implemented(Feature::FramebufferFetch).into());
+    }
+    let storage = !cx.families.fragment.fetch.is_empty() || shadow || input_shadows;
+    let interlock = if rog::declared(cx) || cx.families.fragment.imageblock.is_some() || storage {
+        Some(rog::mode(cx)?)
+    } else {
+        None
+    };
     let snapshot = snapshot::finish(cx, interlock.is_some(), looped)?;
     let sites: Vec<InstId> = cx.families.fragment.discards.keys().copied().collect();
     let discard::DiscardPlan {
@@ -413,6 +429,11 @@ pub fn finish(cx: &mut SelectCx<'_>, m: &mut Meter) -> Result<(), Error> {
         ))
         .saturating_add(stencil::words(cx, rets))
         .saturating_add(input_blend::words(cx, returns(cx)))
+        .saturating_add(input_shadow::words(
+            cx,
+            color::uses(cx, &cx.families.fragment.colors),
+            returns(cx),
+        ))
         .saturating_add(word_input::words(cx, returns(cx)))
         .saturating_add(depth_test::words(cx, rets))
         .saturating_add(killing_rets.saturating_mul(RETURN_KILL_WORDS))
@@ -456,7 +477,8 @@ pub struct Declared {
     /// The stand-in of the stencil attachment an in-shader stencil test reads and writes.
     pub stencil_stand_in: Option<GlobalId>,
     /// The `half` shadow of each extended-range attachment the storage form reads and writes
-    /// against it (`fetch::StorageColor::shadowed`), by color index.
+    /// against it (`fetch::StorageColor::shadowed`), or that a function on a device that fetches
+    /// through input attachments reads and writes beside them (`input_shadow`), by color index.
     pub extended_shadows: BTreeMap<u32, GlobalId>,
     /// The `Private u32` holding the sample of the loop's pass over the covered samples.
     pub loop_sample: Option<GlobalId>,
@@ -504,13 +526,18 @@ pub fn declare(
         mb,
         &fp.colors,
         (&fp.fetch, &fp.input_blends, &fp.word_merges),
+        &fp.rotated_blends,
         fp.fetch_sample.is_some(),
     )?;
     for (&color, sc) in &fp.fetch {
         if sc.shadowed {
             d.extended_shadows
-                .insert(color, fetch::declare_shadow(mb, color)?);
+                .insert(color, fetch::declare_shadow(mb, color, sc.view.samples)?);
         }
+    }
+    for (&color, shadow) in &fp.input_shadows {
+        d.extended_shadows
+            .insert(color, fetch::declare_shadow(mb, color, shadow.samples)?);
     }
     d.imageblock = imageblock::declare(mb, fp.imageblock.as_ref())?;
     d.shadow_stencil = stencil::declare(mb, fp.stencil.as_ref())?;
@@ -618,6 +645,7 @@ pub fn select_param(cx: &mut SelectCx<'_>, b: &ParamBinding) -> Result<(), Error
 pub fn plan_entry(cx: &mut SelectCx<'_>) -> Result<(), Error> {
     fetch::plan(cx)?;
     input_blend::plan(cx)?;
+    input_shadow::plan(cx)?;
     word_input::plan(cx)?;
     coverage::plan(cx)
 }
@@ -696,8 +724,12 @@ pub(crate) fn shader_blend(
             .map(|form| (sc.view.blend, form, sc.view.stores_nothing()));
     }
     fp.input_blends.get(&color).map(|ib| {
-        let stores = ib.blend.is_some();
-        (stores.then_some(ib.equation), ib.form, !stores)
+        let blends = ib.blend.is_some();
+        (
+            blends.then_some(ib.equation).flatten(),
+            ib.form,
+            !blends && !ib.merges(),
+        )
     })
 }
 
@@ -718,16 +750,29 @@ pub fn writes_outside_interface(cx: &SelectCx<'_>) -> bool {
 }
 
 /// The work before the body, in the function's first block: read the imageblock input, place the
-/// fragment's tile in the pass's tile memory, and copy the textures read through snapshots
-/// (`snapshot`).
+/// fragment's tile in the pass's tile memory, copy the textures read through snapshots
+/// (`snapshot`), and read the texel of each storage-form color the function reads
+/// (`EmitCx::fetched`), which every use of the color then takes.
 pub fn emit_entry(cx: &mut EmitCx<'_>, fb: &mut FunctionBuilder<'_>) -> BResult<()> {
     imageblock::emit_entry(cx, fb)?;
     crate::lower::access::tile_memory::emit_entry(cx, fb)?;
-    snapshot::emit_entry(cx, fb)
+    snapshot::emit_entry(cx, fb)?;
+    let fp = &cx.plan.families.fragment;
+    let read: BTreeSet<u32> = fp
+        .colors
+        .iter()
+        .map(|c| c.color)
+        .filter(|color| fp.fetch.contains_key(color))
+        .collect();
+    for color in read {
+        let texel = fetch::texel(cx, fb, color)?;
+        cx.fetched.push((color, texel));
+    }
+    Ok(())
 }
 
 /// The value of parameter `b` in its lowered representation, read by an instruction or a
-/// terminator: a color input's texel, read at each use.
+/// terminator: a color input's texel (`color::value`).
 pub fn param_value(
     cx: &mut EmitCx<'_>,
     fb: &mut FunctionBuilder<'_>,

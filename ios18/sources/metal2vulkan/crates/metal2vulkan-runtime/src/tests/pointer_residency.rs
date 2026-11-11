@@ -4,15 +4,17 @@
 //! The memory is guest RAM as QEMU's `memory-backend-memfd,share=on` makes it, a sealed `memfd`
 //! mapped shared, imported by its pointer (`HostMemory::new`), as ANV, NVIDIA and lavapipe import
 //! it; on a device that refuses that pointer (RADV, which imports the `memfd`'s dma-bufs,
-//! `tests/host_residency.rs`), private anonymous pages, which RADV imports by their pointer. Where
-//! the driver's pointer imports follow their address
-//! (`DriverFact::PointerImportsFollowTheirAddress`: ANV on i915, RADV, lavapipe), the device
-//! releases such an import while idle and imports it again at the same pointer at its next blit.
+//! `tests/host_residency.rs`, and makes a no-copy buffer over it with no source a copy of its
+//! pages), private anonymous pages, which RADV imports by their pointer. Where
+//! the device's check found its pointer imports follow their address (`submit_check.rs`,
+//! `Device::pointer_imports_follow_their_address`: ANV on i915, RADV and lavapipe answer so), the
+//! device releases such an import while idle and imports it again at the same pointer at its next
+//! blit.
 //! The tests release imports at once through the crate's hook (`Device::release_idle_host_imports`)
 //! and check:
-//! - that a kept import reads the pages a remap put at its address, which is the fact itself, on
-//!   a device with it; on any other the test prints the pages it read, a measurement of the
-//!   driver;
+//! - that a kept import reads the pages a remap put at its address, which is what the check
+//!   found, on a device where it found so, for the guest's shared pages too, which the check does
+//!   not map; on any other the test prints the pages it read, a measurement of the driver;
 //! - the counts that show the release and the import again ran (`WorkCounts::host_imports_released`,
 //!   `host_imports_reimported`, `host_imports_resident`, `host_imports_live`), and none of a
 //!   dma-buf's descriptors kept;
@@ -21,25 +23,30 @@
 //! - that a released import reads after a remap the pages the kept one would read;
 //! - that a buffer whose Metal address was handed out stays imported.
 //!
-//! A device whose driver is not measured with the fact keeps every pointer import: the hook
+//! A device whose check found otherwise keeps every pointer import: the hook
 //! releases none, and each test says so and passes. Where the device refuses the pointers of both
 //! kinds of pages each test says so and passes without running.
 //!
 //! A device test: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
-//! `m2v_cpu_icd`), on Linux, on the kind of device the cfg selects.
+//! `m2v_cpu_icd`), on Linux, on the kind of device the cfg selects. Its remap of a file's pages under
+//! a kept import ([`a_file_s_pages_mapped_under_a_kept_pointer_import`]) is a GPU hazard: on a GPU
+//! it compiles only with `m2v_gpu_hazards` too (docs/VALIDATION.md).
 
 use super::host_residency::{
     counting, device, gpu_fill, gpu_read, host_page, read, release, residency, Ram, Scratch,
 };
-use crate::{Buffer, Device, Error, HostMemory, ResourceOptions};
-use metal2vulkan::device::DriverFact;
+use crate::{Buffer, Device, Error, HostBacking, HostMemory, ResourceOptions};
 use metal2vulkan::error::Feature;
 use std::ptr::NonNull;
 
-/// Whether `device`'s driver is measured to have its pointer imports follow their address, so
-/// that the device releases them while idle.
+/// Whether `device`'s check found its pointer imports follow their address, so that the device
+/// releases them while idle: once its checks answered.
 pub(super) fn follows(device: &Device) -> bool {
-    (device.properties().driver_facts).contains(&DriverFact::PointerImportsFollowTheirAddress)
+    assert!(
+        device.settle_submit_checks(crate::tests::SETTLE),
+        "the submission checks never answered"
+    );
+    device.pointer_imports_follow_their_address()
 }
 
 /// Run `test` on the device the cfg selects.
@@ -172,9 +179,10 @@ impl Drop for Pages {
 }
 
 /// A no-copy buffer over `bytes.len()` bytes of new pages holding `bytes`, imported by its
-/// pointer: guest RAM's view, or, where the device refuses its pointer, private anonymous pages
-/// (the module docs). `None`, printed, where the device refuses both, which a device with the fact
-/// never does. The buffer drops before the pages.
+/// pointer: guest RAM's view, or, where the device refuses its pointer (the call refused, or the
+/// buffer a copy of the pages, `HostBacking::Copied`), private anonymous pages (the module docs).
+/// `None`, printed, where the device refuses both, which a device with the fact never does. The
+/// buffer drops before the pages.
 fn no_copy(test: &str, device: &Device, bytes: &[u8]) -> Option<(Pages, Buffer)> {
     let mut refused = Vec::new();
     for pages in [Pages::shared(bytes.len()), Pages::private(bytes.len())] {
@@ -190,6 +198,9 @@ fn no_copy(test: &str, device: &Device, bytes: &[u8]) -> Option<(Pages, Buffer)>
             )
         };
         match made {
+            Ok(buffer) if buffer.host_backing() == Some(HostBacking::Copied) => {
+                refused.push(format!("{}: copied", pages.kind()));
+            }
             Ok(buffer) => {
                 let imported = device.work_counts().host_imports_live - before;
                 assert_eq!(imported, 1, "{test}: one import of the pointer");
@@ -383,6 +394,7 @@ fn a_released_pointer_import_reads_after_a_remap_what_the_kept_one_would() {
 
 /// What a command buffer did, read once it completed or [`FILE_REMAP_WAIT`] passed: `None` where
 /// it completed with no error.
+#[cfg(any(m2v_cpu_icd, all(m2v_gpu, m2v_gpu_hazards)))]
 fn outcome(command_buffer: &crate::CommandBuffer) -> Option<String> {
     let waited = command_buffer.wait_until_completed_for(FILE_REMAP_WAIT);
     match (waited, command_buffer.error()) {
@@ -393,16 +405,22 @@ fn outcome(command_buffer: &crate::CommandBuffer) -> Option<String> {
 }
 
 /// How long [`a_file_s_pages_mapped_under_a_kept_pointer_import`] waits for each command buffer.
+#[cfg(any(m2v_cpu_icd, all(m2v_gpu, m2v_gpu_hazards)))]
 const FILE_REMAP_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// A file's pages (a `memfd`'s, mapped shared) mapped over a no-copy buffer's private anonymous
 /// pages while its pointer import is kept, the device told (`Device::host_range_remapped`): a
 /// remap `HostMemory::new`'s contract forbids under a live buffer (`docs/FAST-PATHS.md`, known
 /// gaps). Then a command buffer that fills another buffer alone, and one that copies the no-copy
-/// buffer. On RADV both fail and the device is lost: amdgpu's userptr takes only pages with no file
-/// behind them and gets each live import's pages again at every submission, whose list holds every
-/// memory the device imported (Mesa 26.2.4). On lavapipe both complete and the copy reads the
-/// file's pages. On any other driver the test prints what each did.
+/// buffer. On RADV both fail and the `VkDevice` is lost: amdgpu's userptr takes only pages with no
+/// file behind them and gets each live import's pages again at every submission, whose list holds
+/// every memory the device imported (Mesa 26.2.4). The device then recovers, a new `VkDevice` behind
+/// it (`Degradation::DeviceRecovered`, its command buffers in flight failed as the hang and its
+/// victims), or answers as lost where that new one could not be made: either passes. On lavapipe
+/// both complete and the copy reads the file's pages. On any other driver the test prints what each
+/// did. A GPU hazard (`m2v_gpu_hazards`): it loses a GPU's device on purpose, and on the RX 7900 XTX
+/// (RADV) the loss put the GPU through a recovery.
+#[cfg(any(m2v_cpu_icd, all(m2v_gpu, m2v_gpu_hazards)))]
 #[test]
 fn a_file_s_pages_mapped_under_a_kept_pointer_import() {
     const TEST: &str = "pointer import file remap";
@@ -483,9 +501,10 @@ fn a_file_s_pages_mapped_under_a_kept_pointer_import() {
             Err(failed) => failed.clone(),
         };
         let lost = device.is_lost();
+        let recoveries = device.work_counts().device_recoveries;
         eprintln!(
             "FILE-REMAP {TEST}: on {} (the fact {}): another buffer's fill {}; the copy {read_of}; \
-             the device lost: {lost}",
+             the device lost: {lost}; its recoveries: {recoveries}",
             device.name(),
             follows(device),
             filled.as_deref().unwrap_or("completed"),
@@ -494,7 +513,10 @@ fn a_file_s_pages_mapped_under_a_kept_pointer_import() {
             Some(metal2vulkan::vk::DriverId::MESA_RADV) => {
                 assert!(filled.is_some(), "{TEST}: another buffer's fill completed");
                 assert!(read_back.is_err(), "{TEST}: the copy {read_of}");
-                assert!(lost, "{TEST}: the device is not lost");
+                assert!(
+                    lost || recoveries > 0,
+                    "{TEST}: the device is neither lost nor recovered"
+                );
             }
             Some(metal2vulkan::vk::DriverId::MESA_LLVMPIPE) => {
                 assert_eq!(filled, None, "{TEST}: another buffer's fill");

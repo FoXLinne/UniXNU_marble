@@ -445,6 +445,11 @@ fn interpolant(cx: &mut SelectCx<'_>, b: &ParamBinding, v: &Varying) -> Result<(
         perspective,
     };
     note_device_interpolation(cx, interp);
+    if perspective
+        && (reads.contains(&InterpolateAt::Sample) || reads.contains(&InterpolateAt::Offset))
+    {
+        note_extrapolated_read(cx);
+    }
     // The center read's pixel form, as a center varying's.
     let at_center = center && cx.inputs.multisampled;
     let by_device = at_center && device_reads_center_varyings_at_pixel(cx);
@@ -732,6 +737,18 @@ pub fn param(cx: &mut SelectCx<'_>, b: &ParamBinding) -> Result<(), Error> {
                         ..
                     }
                 );
+            // Each pass reads it through `InterpolateAtSample` at its sample.
+            if at_loop_sample
+                && matches!(
+                    interp,
+                    Interpolation::Smooth {
+                        perspective: true,
+                        ..
+                    }
+                )
+            {
+                note_extrapolated_read(cx);
+            }
             let center = cx.inputs.multisampled
                 && matches!(
                     interp,
@@ -1054,8 +1071,10 @@ enum AmplifiedIndex {
 /// attachment a write of every channel. Zero is every format's zero code, so no lane rounds; the
 /// map of the attachment's color writes is recorded as a written attachment's is. What the
 /// function writes to `color` itself is stored nowhere: plain Metal stores the zero there all the
-/// same (a Metal probe). A function that reads `color` is not lowered (what Metal reads there is
-/// unmeasured).
+/// same (a Metal probe). A function that declares a color input at `color`, read or not, is no
+/// pipeline's: plain Metal refuses its pipeline whether or not the body reads the input
+/// (`pipeline::compile`'s `color_inputs_attached`), so compiled alone under such inputs it is not
+/// lowered.
 fn zeroed_output(
     cx: &mut SelectCx<'_>,
     color: u32,
@@ -1785,6 +1804,24 @@ fn note_device_interpolation(cx: &mut SelectCx<'_>, interp: Interpolation) {
     }
 }
 
+/// Records that the fragment function reads a perspective input at a sample or an offset other
+/// than the pixel center (`InterpolateAtSample`, `InterpolateAtOffset`) on a device whose driver
+/// answers such a read with the pixel center's value extrapolated along the quad's derivatives
+/// (`DriverWorkaround::PerspectiveReadsExtrapolated`): the device's answer, which the module
+/// records. The pixel-center form of a center read (`InterpolateAtOffset` at offset 0) moves
+/// nothing and records nothing.
+fn note_extrapolated_read(cx: &mut SelectCx<'_>) {
+    if cx
+        .profile
+        .fields()
+        .workarounds
+        .contains(&DriverWorkaround::PerspectiveReadsExtrapolated)
+    {
+        cx.precision
+            .insert(PrecisionNote::ExtrapolatedInterpolation);
+    }
+}
+
 /// The raw index's flat `uint` variable in direction `dir`: a vertex function's output, or the
 /// input of a fragment function compiled under `LoweringInputs::viewport_index_varying` or
 /// `LoweringInputs::render_target_array_index_varying`. Its type is fixed, so a `ushort` index on
@@ -1991,9 +2028,11 @@ fn input_builtin(
                 None,
             )
         }
+        // A `bool` argument, or an integer one an older front end's ABI passes it in (`i8`,
+        // truncated to `i1` where read): the face as 1 or 0 (`to_lowered`).
         Bi::FrontFacing if !vertex => {
             if f.held != Held::Bool || f.lanes != 1 {
-                return Err(not_lowered());
+                int_scalar(f)?;
             }
             (
                 B::FrontFacing,

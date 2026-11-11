@@ -422,7 +422,8 @@ fn a_heap_s_texture_buffer_takes_its_row_at_16_bytes_as_metal_s_does() {
 
 /// A heap texture takes its image's bytes of a heap, in whole granularity pages, at the image's
 /// alignment or the granularity's; on a device whose driver answers a compressed image's size short
-/// of its compression data (ANV on Xe-LP GPUs), the image also takes whole 256-byte chunks.
+/// of its compression data (ANV on Xe-LP GPUs), an image it may compress also takes whole 256-byte
+/// chunks, and one it keeps uncompressed none.
 #[test]
 fn a_heap_texture_takes_its_image_s_bytes_in_whole_pages() {
     use crate::texture::heap::heap_extent;
@@ -455,6 +456,57 @@ fn a_heap_texture_takes_its_image_s_bytes_in_whole_pages() {
     let compressed = requirements(4112, 65536);
     assert_eq!(heap_extent(&compressed, chunks(1)), answer(4352, 65536));
     assert_eq!(heap_extent(&compressed, pages(1)), answer(4112, 65536));
+    // An image the driver keeps uncompressed (a linear one, or one of host-transfer usage) writes
+    // no compression data past its size: it takes its own bytes in a heap, in no chunk, and whole
+    // granularity pages alone elsewhere.
+    let linear = requirements(64, 64);
+    assert_eq!(heap_extent(&linear, chunks(1).in_heap()), answer(256, 64));
+    let alone = chunks(1).in_heap().uncompressed();
+    assert_eq!(heap_extent(&linear, alone), answer(64, 64));
+    let paged = chunks(4096).uncompressed();
+    assert_eq!(heap_extent(&linear, paged), answer(4096, 4096));
+}
+
+/// A heap's image takes the aux map's chunks by its tiling and route
+/// (`texture::heap::image_placement`): on ANV's Xe-LP placement a linear image, and an optimal one
+/// of host-transfer usage, which the driver keeps uncompressed, take their own size; an optimal
+/// image of any other route, which the driver may compress, still takes whole 256-byte chunks.
+#[test]
+fn a_heap_s_uncompressed_image_takes_no_aux_map_chunk() {
+    use crate::texture::heap::{heap_extent, image_placement, AliasRoute};
+    use crate::texture::ImagePlacement;
+    use crate::SizeAndAlign;
+    use ash::vk::{ImageTiling, MemoryRequirements};
+    use metal2vulkan::error::RuntimeDriverDefect;
+    use std::collections::BTreeSet;
+    let short = RuntimeDriverDefect::ImageSizeShortOfCompressionData;
+    let anv = ImagePlacement::new(64, &BTreeSet::from([short])).in_heap();
+    let image = MemoryRequirements {
+        size: 64,
+        alignment: 64,
+        memory_type_bits: 1,
+    };
+    let extent = |tiling, route| heap_extent(&image, image_placement(anv, tiling, route));
+    let own = SizeAndAlign {
+        size: 64,
+        align: 64,
+    };
+    let chunked = SizeAndAlign {
+        size: 256,
+        align: 64,
+    };
+    for route in [AliasRoute::Direct, AliasRoute::Linear] {
+        assert_eq!(extent(ImageTiling::LINEAR, route), own, "linear, {route:?}");
+    }
+    let optimal = ImageTiling::OPTIMAL;
+    assert_eq!(extent(optimal, AliasRoute::HostTransfer), own);
+    for route in [
+        AliasRoute::Direct,
+        AliasRoute::Compressed,
+        AliasRoute::Hidden,
+    ] {
+        assert_eq!(extent(optimal, route), chunked, "optimal, {route:?}");
+    }
 }
 
 /// A heap texture's footprint is Metal's answer, not the running driver's granularity. A heap's
@@ -540,7 +592,7 @@ fn a_heap_texture_is_held_to_metal_s_answer_by_its_image_or_by_a_shadow() {
     // A plain single-sample texture whose image binds in the heap's memory.
     let plain = HeapTextureShape {
         apart: false,
-        four_two_two: false,
+        rows: false,
         multisample: false,
     };
     // Whether a shadow of its bytes fits its planes, counting each time it is asked.
@@ -605,10 +657,10 @@ fn a_heap_texture_is_held_to_metal_s_answer_by_its_image_or_by_a_shadow() {
         );
     }
     assert_eq!(asked.get(), 0);
-    // A 4:2:2 texture is a shadow of the heap's bytes even where its image would fit: Metal lays
-    // its rows out linearly there, which its image does not.
+    // A 4:2:2 or one-plane YCbCr texture is a shadow of the heap's bytes even where its image
+    // would fit: Metal lays its rows out linearly there, which its image does not.
     let chroma = HeapTextureShape {
-        four_two_two: true,
+        rows: true,
         ..plain
     };
     assert_eq!(
@@ -840,9 +892,8 @@ fn a_heap_shadow_keeps_each_aspect_in_planes_at_multiples_of_four_bytes() {
     use metal2vulkan::vk::Format as F;
     // (aspect, level, layers, offset, width, height) of each region, and the bytes spanned.
     let planes = |format, pf, extent, levels, layers| {
-        let (regions, length) = heap_planes(format, pf, extent, levels, layers);
-        let regions: Vec<_> = regions
-            .iter()
+        let (copies, length) = heap_planes(format, pf, extent, levels, layers);
+        let regions: Vec<_> = (copies.into.iter())
             .map(|r| {
                 let s = r.image_subresource;
                 assert_eq!((r.buffer_row_length, r.buffer_image_height), (0, 0));
@@ -913,6 +964,54 @@ fn a_heap_shadow_keeps_each_aspect_in_planes_at_multiples_of_four_bytes() {
     );
 }
 
+/// A heap texture over a combined depth and stencil image moves only the aspects its format
+/// presents (`texel_units`): a `Depth32Float` texture over `D32_SFLOAT_S8_UINT`
+/// (`DepthInCombined`) has its depth's planes alone, 1024 bytes for 16 x 16, as over
+/// `D32_SFLOAT`, and its image holds Metal's 4-byte depth elements; an `X32Stencil8` or a
+/// `Stencil8` texture over a combined image (`StencilInCombined`) has its stencil's, 256 bytes,
+/// as `Stencil8` over `S8_UINT`, and its image holds Metal's 1-byte stencil elements. A
+/// `Depth32Float_Stencil8` texture, which presents both, keeps both planes.
+#[test]
+fn a_heap_texture_over_a_combined_image_moves_only_the_aspects_its_format_presents() {
+    use crate::texture::heap::heap_plane_layout;
+    use crate::texture::heap_tiled::holds_metal_texels;
+    use metal2vulkan::metal::PixelFormat as P;
+    use metal2vulkan::vk::Format as F;
+    use metal2vulkan::vk::ImageAspectFlags as A;
+    let planes = |format, pf| {
+        let (planes, end) = heap_plane_layout(format, pf, [16, 16, 1], 1, 1);
+        let aspects: Vec<_> = planes
+            .iter()
+            .map(|p| (p.aspect, p.offset, p.unit))
+            .collect();
+        (aspects, end)
+    };
+    let depth = (vec![(A::DEPTH, 0, 4)], 1024);
+    let stencil = (vec![(A::STENCIL, 0, 1)], 256);
+    assert_eq!(planes(F::D32_SFLOAT, P::Depth32Float), depth);
+    assert_eq!(planes(F::D32_SFLOAT_S8_UINT, P::Depth32Float), depth);
+    assert_eq!(planes(F::S8_UINT, P::Stencil8), stencil);
+    assert_eq!(planes(F::D32_SFLOAT_S8_UINT, P::Stencil8), stencil);
+    assert_eq!(planes(F::D24_UNORM_S8_UINT, P::Stencil8), stencil);
+    assert_eq!(planes(F::D32_SFLOAT_S8_UINT, P::X32Stencil8), stencil);
+    assert_eq!(
+        planes(F::D32_SFLOAT_S8_UINT, P::Depth32FloatStencil8),
+        (vec![(A::DEPTH, 0, 4), (A::STENCIL, 1024, 1)], 1280)
+    );
+    for (pf, format, bytes) in [
+        (P::Depth32Float, F::D32_SFLOAT, 4),
+        (P::Depth32Float, F::D32_SFLOAT_S8_UINT, 4),
+        (P::Stencil8, F::S8_UINT, 1),
+        (P::Stencil8, F::D32_SFLOAT_S8_UINT, 1),
+        (P::X32Stencil8, F::D32_SFLOAT_S8_UINT, 1),
+    ] {
+        assert!(
+            holds_metal_texels(pf, format, bytes),
+            "{pf:?} over {format:?}"
+        );
+    }
+}
+
 /// A heap shadow of a colour, a compressed and a 3D texture (a no-copy heap's texture that no
 /// image over the heap's memory serves) lays each level's images out tightly, a level at a
 /// multiple of 4 bytes and of its block's bytes, and `HeapPlane::row` finds a row of blocks
@@ -959,8 +1058,7 @@ fn a_heap_shadow_lays_colour_compressed_and_3d_levels_out_tightly() {
     assert_eq!(end, 26);
     assert_eq!(planes[0].row(3, 1, 2), 23);
     let (regions, length) = heap_planes(F::R8_UNORM, P::R8Unorm, [3, 2, 4], 2, 1);
-    let copies: Vec<_> = regions
-        .iter()
+    let copies: Vec<_> = (regions.into.iter())
         .map(|r| {
             (
                 r.buffer_offset,
@@ -971,6 +1069,119 @@ fn a_heap_shadow_lays_colour_compressed_and_3d_levels_out_tightly() {
         .collect();
     assert_eq!(copies, vec![(0, 4, 1), (24, 2, 1)]);
     assert_eq!(length, 26);
+}
+
+/// Each texel of `regions` (`VkBufferImageCopy`s of `unit`-byte texels of a 2D image or array):
+/// its slice, column and row in the image, and its first byte in the buffer.
+fn region_texels(regions: &[ash::vk::BufferImageCopy], unit: u64) -> Vec<((u32, u32, u32), u64)> {
+    let mut texels = Vec::new();
+    for r in regions {
+        let e = r.image_extent;
+        let row = u64::from(match r.buffer_row_length {
+            0 => e.width,
+            length => length,
+        });
+        let height = u64::from(match r.buffer_image_height {
+            0 => e.height,
+            rows => rows,
+        });
+        let s = r.image_subresource;
+        for layer in 0..s.layer_count {
+            for y in 0..e.height {
+                for x in 0..e.width {
+                    let at = r.buffer_offset
+                        + (u64::from(layer) * height * row + u64::from(y) * row + u64::from(x))
+                            * unit;
+                    let texel = (
+                        s.base_array_layer + layer,
+                        r.image_offset.x as u32 + x,
+                        r.image_offset.y as u32 + y,
+                    );
+                    texels.push((texel, at));
+                }
+            }
+        }
+    }
+    texels
+}
+
+/// A heap's one-plane YCbCr texture lies as Metal's blits lay it (`texture/heap.rs`,
+/// `one_plane_pitch`; an Apple M3 Max under macOS 27.0.1, `probes/one_plane_ycbcr_heap_rows.m`):
+/// a row of 16 bytes or more off a multiple of 16 the row rounded down to 16 bytes apart, so
+/// consecutive rows share the rest (13 x 7 at 4:2:2, 26-byte rows 16 apart; 33 x 3, 66-byte rows
+/// 64 apart; 13 x 7 at 4:4:4, 52-byte rows 48 apart; a 13 x 7 x 3 array's slices 256 bytes apart,
+/// as its answer counts them); a row that is a multiple of 16, or under 16 bytes, one packed row
+/// apart. Into the shadow's image every texel reads its bytes at `slice x slicePitch + y x pitch +
+/// x x texel`, the shared ones for both rows; back out of it every byte of the span is written
+/// once, a shared one from the earlier row, as Vulkan asks of one copy's destination regions
+/// (`VUID-vkCmdCopyImageToBuffer-pRegions-12485`).
+#[test]
+fn a_heap_one_plane_texture_s_rows_lie_as_metal_s_blits_lay_them() {
+    use crate::texture::heap::{heap_plane_layout, heap_planes};
+    use metal2vulkan::metal::PixelFormat as P;
+    use metal2vulkan::vk::Format as F;
+    let (four_two_two, four_four_four) = (
+        (F::R16_UINT, P::YCBCR84221P, 2),
+        (F::R32_UINT, P::YCBCR104441P, 4),
+    );
+    for ((format, pf, unit), [w, h], layers, pitch, slice_pitch) in [
+        (four_two_two, [13u32, 7u32], 1u32, 16u64, 112u64),
+        (four_two_two, [33, 3], 1, 64, 192),
+        (four_two_two, [100, 30], 1, 192, 5760),
+        (four_four_four, [13, 7], 1, 48, 336),
+        (four_two_two, [13, 7], 3, 16, 256),
+        (four_two_two, [16, 4], 1, 32, 128),
+        (four_two_two, [6, 3], 1, 12, 36),
+        (four_two_two, [13, 1], 1, 26, 26),
+    ] {
+        let what = format!("{pf:?} {w} x {h} x {layers}");
+        let (planes, end) = heap_plane_layout(format, pf, [w, h, 1], 1, layers);
+        let plane = &planes[0];
+        assert_eq!(
+            (plane.pitch, plane.image_pitch),
+            (pitch, slice_pitch),
+            "{what}"
+        );
+        let row = u64::from(w) * unit;
+        let span = u64::from(layers - 1) * slice_pitch + u64::from(h - 1) * pitch + row;
+        assert_eq!(end, span, "{what}");
+        let (copies, length) = heap_planes(format, pf, [w, h, 1], 1, layers);
+        assert_eq!(length, span, "{what}");
+        let at = |(slice, x, y): (u32, u32, u32)| {
+            u64::from(slice) * slice_pitch + u64::from(y) * pitch + u64::from(x) * unit
+        };
+        let mut into = region_texels(&copies.into, unit);
+        into.sort_unstable();
+        let every: Vec<_> = (0..layers)
+            .flat_map(|slice| (0..h).flat_map(move |y| (0..w).map(move |x| (slice, x, y))))
+            .map(|texel| (texel, at(texel)))
+            .collect();
+        let mut sorted = every.clone();
+        sorted.sort_unstable();
+        assert_eq!(into, sorted, "{what}: into the image");
+        // Back out of it: every byte of each slice's rows once, a shared byte from the earlier
+        // row (rows are written later to earlier, so the earlier's bytes stand).
+        let mut writer = vec![None; span as usize];
+        for (texel, at) in region_texels(&copies.back, unit) {
+            for byte in at..at + unit {
+                let earlier = writer[byte as usize].replace(texel);
+                assert_eq!(earlier, None, "{what}: byte {byte} written twice");
+            }
+        }
+        let mut standing = vec![None; span as usize];
+        for &(texel, at) in every.iter().rev() {
+            for byte in at..at + unit {
+                standing[byte as usize] = Some(texel);
+            }
+        }
+        for slice in 0..u64::from(layers) {
+            let rows = slice * slice_pitch..slice * slice_pitch + u64::from(h - 1) * pitch + row;
+            for byte in rows {
+                let byte = byte as usize;
+                assert_eq!(writer[byte], standing[byte], "{what}: byte {byte} back");
+            }
+        }
+    }
 }
 
 /// A heap's one-level 2D two-plane texture lays its planes out as an Apple M4 does: plane 0's rows

@@ -40,7 +40,7 @@
 //! - **the level** moves it: level 0 of this texture is 16 tiles, level 1 is 4, level 2 is 1, and
 //!   the tail is one page however small a region names it;
 //! - **the slice** moves it: a second slice's tiles are tiles of their own, and a slice **past**
-//!   the texture's own moves it where plain Metal takes a page for one and we take none
+//!   the texture's own moves it, plain Metal's and ours alike, by a page for one
 //!   ([`a_slice_past_the_textures`], which also reads the texels four mapped tiles hold either
 //!   side of such an update, because `usedSize` cannot say which tiles one reached);
 //! - **the move** does not move it, which is the point of its row: the runtime's own
@@ -746,6 +746,14 @@ fn tiles_of(rect: &TileRect) -> Vec<[u64; 2]> {
 /// reading after it a measurement: four tiles holding four distinct markers say the fills landed
 /// and say which tile each one is, so a later all-zero reading is a tile the move did not reach
 /// rather than a fill that never ran.
+///
+/// Both textures are made with `allowGPUOptimizedContents` off. Under Metal's default this oracle
+/// keeps such a shader-read texture losslessly compressed, and a tile a move rebound in one then
+/// reads its own texels in only 128 of its 4,096 words and 0 in the rest, where every descriptor
+/// that turns compression off reads all 4,096 (`probes/sparse_move_compression.m`). A move is
+/// documented to move the tile's mapping, and the rows read which tiles it moved, so they read
+/// them where compression's own state cannot hide one; docs/API.md's accepted differences say
+/// what a compressed texture reads.
 fn moved(
     held: &[(usize, TileRect)],
     moves: MappingStep,
@@ -796,7 +804,8 @@ fn moved(
         });
     }
     steps.push(MappingStep::Commit);
-    program(vec![plain(), plain()], Vec::new(), 0, steps)
+    let texture = plain().unoptimized();
+    program(vec![texture, texture], Vec::new(), 0, steps)
 }
 
 /// A move of `size` tiles at `from` of level 0 slice 0 of [`SOURCE`] onto `to` of [`DESTINATION`].
@@ -1154,8 +1163,9 @@ pub fn slices_of_an_array() -> SparseMappings {
     }
 }
 
-/// The case of a slice past the texture's own, which our side maps nothing for and plain Metal
-/// takes a page for, with the texels four mapped tiles hold either side of it.
+/// The case of a slice past the texture's own, which plain Metal and our side both take a page
+/// for, with the texels four mapped tiles hold either side of it (plain Metal's page lands in one
+/// of them, ours nowhere: an accepted difference, `docs/API.md`).
 pub fn a_slice_past_the_textures() -> SparseMappings {
     SparseMappings {
         row: &A_SLICE_PAST_THE_TEXTURES,

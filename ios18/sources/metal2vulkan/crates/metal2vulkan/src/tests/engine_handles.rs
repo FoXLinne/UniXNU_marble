@@ -777,15 +777,9 @@ declare i32 @air.get_width_texture_2d(ptr addrspace(1), i32)
     );
 }
 
-/// Two `read_write` argument-buffer textures of one heap class are one array, so a read through one
-/// member and a write through the other may meet at one element out of bounds. Where the device is
-/// left both (`robustImageAccess2`), the class's array is `Volatile` and every group of it says so;
-/// where the shader checks reads and guards writes, none is, and the module passes L3 either way.
-#[test]
-fn a_heap_class_read_and_written_through_two_members_is_volatile() {
-    let Some(bc) = assemble(
-        "heap_rw",
-        r#"%struct.T = type { ptr addrspace(1) }
+/// A kernel reading texel `gid` of one `read_write` argument-buffer texture and writing zero to
+/// the same texel of another, of one heap class.
+const HEAP_RW: &str = r#"%struct.T = type { ptr addrspace(1) }
 %struct.R = type { %struct.T, %struct.T }
 define void @heap_rw(ptr addrspace(2) %r, ptr addrspace(1) %out, i32 %gid) {
   %pa = getelementptr inbounds %struct.R, ptr addrspace(2) %r, i64 0, i32 0, i32 0
@@ -819,8 +813,15 @@ declare void @air.write_texture_2d.v4f32(ptr addrspace(1), <2 x i32>, <4 x float
 !8 = !{i32 2, !"air.thread_position_in_grid", !"air.arg_type_name", !"uint", !"air.arg_name", !"gid"}
 !9 = !{i32 2, i32 8, i32 0}
 !10 = !{!"Metal", i32 4, i32 0, i32 0}
-"#,
-    ) else {
+"#;
+
+/// Two `read_write` argument-buffer textures of one heap class are one array, so a read through one
+/// member and a write through the other may meet at one element out of bounds. Where the device is
+/// left both (`robustImageAccess2`), the class's array is `Volatile` and every group of it says so;
+/// where the shader checks reads and guards writes, none is, and the module passes L3 either way.
+#[test]
+fn a_heap_class_read_and_written_through_two_members_is_volatile() {
+    let Some(bc) = assemble("heap_rw", HEAP_RW) else {
         return;
     };
     for (p, volatile) in [(m3(), true), (without_robust_images("moltenvk-m3"), false)] {
@@ -843,6 +844,31 @@ declare void @air.write_texture_2d.v4f32(ptr addrspace(1), <2 x i32>, <4 x float
         assert_eq!(arrays.len(), 1, "one class, one array");
         let want = if volatile { arrays } else { Vec::new() };
         assert_eq!(volatile_ids, want, "{volatile}");
+    }
+}
+
+/// A `read_write` argument-buffer texture's float read and write convert a member the heap views
+/// through its storage choice's alias (`bind::heap::storage_conversions`): on lavapipe, which
+/// stores no 8-bit sRGB format and no `A2R10G10B10`, the search carries each handle's red-blue
+/// order beside its class, and the read's decode of an sRGB member's codes notes
+/// `SrgbTexelDecode` and the write's encode `DevicePackConversion`; on the M3 Max's MoltenVK, which
+/// stores each such format itself, the module converts nothing and notes neither. Each validates.
+#[test]
+fn a_heap_storage_access_converts_the_members_its_heap_views_through_an_alias() {
+    let Some(bc) = assemble("heap_rw", HEAP_RW) else {
+        return;
+    };
+    for (stem, converts) in [("lavapipe", true), ("moltenvk-m3", false)] {
+        let p = profile(stem, DevicePolicy::default()).expect("profile");
+        let (plan, _) = typed_module(&bc, "heap_rw", &p).expect("heap_rw");
+        assert_eq!(plan.families.access.heap_red_blue, converts, "{stem}");
+        let a = ok(&bc, "heap_rw", &p);
+        for note in [
+            PrecisionNote::SrgbTexelDecode,
+            PrecisionNote::DevicePackConversion,
+        ] {
+            assert_eq!(a.precision.contains(&note), converts, "{stem} {note:?}");
+        }
     }
 }
 
@@ -1664,11 +1690,30 @@ declare i32 @air.get_width_texture_2d(ptr addrspace(1), i32)
                 // conversion.
                 let a8 = crate::metal::format::alpha_in_red(crate::metal::PixelFormat::A8Unorm, &p);
                 let alpha = if a8 { 100 } else { 0 };
-                let bound = alpha + if p.fields().leaf.int64 { 1_600 } else { 2_300 };
+                // And a member the heap views through its storage choice's alias converted
+                // (`bind::heap::storage_conversions`): an sRGB member's encode, the device's
+                // conversion, noted, and a blue-first member's exchange.
+                let conversions = crate::bind::heap::storage_conversions(&p);
+                let srgb = conversions.iter().any(|c| {
+                    matches!(
+                        c.class,
+                        crate::pipeline::lower_inputs::StorageImageClass::SrgbEncode
+                            | crate::pipeline::lower_inputs::StorageImageClass::SrgbEncodeBgra
+                    )
+                });
+                assert_eq!(
+                    a.precision
+                        .contains(&crate::pipeline::PrecisionNote::DevicePackConversion),
+                    srgb,
+                    "{stem}"
+                );
+                let converted = if conversions.is_empty() { 0 } else { 700 };
+                let bound = alpha + converted + if p.fields().leaf.int64 { 1_600 } else { 2_300 };
                 assert!(
                     a.module.words.len() <= bound,
-                    "{stem}: {} words over {bound} (alpha in red {a8})",
-                    a.module.words.len()
+                    "{stem}: {} words over {bound} (alpha in red {a8}, {} conversions)",
+                    a.module.words.len(),
+                    conversions.len()
                 );
                 assert_eq!(uses(&a, "texture.write.heap"), 1, "{stem}");
                 assert_eq!(uses(&a, "texture.query.heap"), 1, "{stem}");
@@ -1731,8 +1776,10 @@ declare void @air.write_texture_2d.{elem}(ptr addrspace(1), <2 x i32>, {ty}, i32
 /// packed small float texture, whose stored NaN is the device's; but for a `float` texel on a
 /// profile whose stores of a `float` NaN into the half-float and the packed small float formats
 /// are measured to be Metal's (`DriverDeviation::MetalHalfStorageNans` and
-/// `DriverDeviation::MetalSmallFloatNans`: MoltenVK on the M3 Max's identity), which then
-/// requires `VkProperty::MetalSmallFloatNans`.
+/// `DriverDeviation::MetalSmallFloatNans`: MoltenVK on the M3 Max's identity). A `half` texel's
+/// note holds under the families the heap can name (`SpecKey::HeapNanFamilies`, held in
+/// `tests::engine_extended_range::heap`). Either texel requires `VkProperty::MetalSmallFloatNans`
+/// where the profile takes `DriverDeviation::MetalSmallFloatNans`.
 #[test]
 fn a_heap_texel_write_is_the_devices_write() {
     for float in [false, true] {
@@ -1770,7 +1817,7 @@ fn a_heap_texel_write_is_the_devices_write() {
                 a.requirements
                     .properties
                     .contains(&crate::device::requirements::VkProperty::MetalSmallFloatNans),
-                float && small,
+                small,
                 "{what}"
             );
             compiled += 1;
@@ -2796,9 +2843,12 @@ define void @k(ptr addrspace(2) %m, ptr addrspace(1) %out{param}, i32 %gid) {{
 }
 
 /// A heap texture's linear sample, through a constexpr sampler of linear filters (2D and 3D), a
-/// runtime sampler slot, or the sampler its argument buffer holds, is the device's sample, with no
-/// filter note; the census names the sample by its source, and the module states no `TexelFormat`
-/// specialization. A 2D sample through a constexpr or runtime sampler also emulates a raw-held
+/// runtime sampler slot, or the sampler its argument buffer holds, is the device's sample; the
+/// census names the sample by its source, and the module states no `TexelFormat`
+/// specialization. On a profile that samples through Metal's own sampler a 2D sample records the
+/// filter note only under what the command's handles can name (a two-plane YCbCr texture,
+/// `SpecKey::HeapYCbCrTextures`), never outright; a 3D one, whose class holds no two-plane
+/// texture, records none. A 2D sample through a constexpr or runtime sampler also emulates a raw-held
 /// texture's, in a branch on the class the handle carries (the search's flagged form, whose masks
 /// and table the census counts under `HEAP_CLASS_CENSUS`). Each validates; a profile without the
 /// sampled heap refuses each. (The interpreter models no sample; the runtime lane
@@ -2856,10 +2906,21 @@ fn heap_linear_samples_are_the_device_s() {
                 raw,
                 "{what}"
             );
-            assert!(
-                !a.precision.contains(&PrecisionNote::FloatSampleFilter),
+            let filter = PrecisionNote::FloatSampleFilter;
+            assert_eq!(
+                a.precision.contains(&filter),
+                !three && metal_sampler(&p),
                 "{what}"
             );
+            let clauses: Vec<_> = (a.specialized.iter())
+                .filter(|s| s.note == filter)
+                .flat_map(|s| &s.when)
+                .collect();
+            assert_eq!(clauses.is_empty(), three || !metal_sampler(&p), "{what}");
+            for c in clauses {
+                let heap = SpecKey::HeapYCbCrTextures(crate::pipeline::sym::Stage::Kernel);
+                assert!(c.all.iter().any(|t| t.key == heap), "{what}: {c:?}");
+            }
             assert!(
                 !a.interface
                     .read_keys()

@@ -263,12 +263,11 @@
 //!   (above): Metal lets a program write the records until it commits. A command's vertex buffer
 //!   set without an attribute stride, where its pipeline state's layout of
 //!   `MTLBufferLayoutStrideDynamic` reads the stride, on a buffer whose descriptor supports
-//!   dynamic attribute strides, is the runtime's own gap, as a compute encoder's kernel buffer is
-//!   (`NotImplemented(RuntimeGap::IndirectCommandUnstridedBuffer)`): plain Metal takes the command
-//!   and completes it, and its fetch reads the buffer at stride 2^32 - 1, which the 32-bit fetch
-//!   cannot place (the gap's doc). On a buffer without that support the records hold no stride
-//!   word and Metal reads stride 0, which the plan path gives exactly, so the command is taken, as
-//!   the encoder's own draw reads such a buffer at stride 0 (`render/vertex_strides.rs`).
+//!   dynamic attribute strides, is read at stride 2^32 - 1, as plain Metal's fetch reads it and as
+//!   a compute encoder's kernel buffer is (`indirect_execute::unstrided_stride`): vertex 0's
+//!   element, and zero for one past the buffer. On a buffer without that support the records hold
+//!   no stride word and Metal reads stride 0, which the plan path gives exactly, as the encoder's
+//!   own draw reads such a buffer at stride 0 (`render/vertex_strides.rs`).
 
 use super::bound::Bound;
 use super::mesh::MeshGrid;
@@ -304,8 +303,9 @@ use crate::indirect_command_buffer::{
     WrittenRecords,
 };
 use crate::indirect_dispatch;
-use crate::indirect_execute::{self, unstrided_buffer, ExecutionRange};
+use crate::indirect_execute::{self, unstrided_stride, ExecutionRange};
 use crate::kept_commands;
+use crate::live_bind::LiveBind;
 use crate::pipeline::budget::Urgency;
 use crate::pipeline::RenderPipelineState;
 use crate::pipeline::Settled;
@@ -1023,12 +1023,15 @@ struct Snapshot {
 type Command = (CommandRecord, Option<RenderPipelineState>);
 
 /// What an execution's recording found: resident-set misses and faults, and the runs its draws
-/// that reach the tile threadgroup memory began, and those its commands' barriers began.
+/// that reach the tile threadgroup memory began, those its draws that reach interlocked storage
+/// an earlier draw of the run wrote began where the driver's such draws race under load, and
+/// those its commands' barriers began.
 #[derive(Default)]
 struct Found {
     misses: u32,
     faults: ReplayFaults,
     tile_memory_splits: usize,
+    interlocked_splits: usize,
     barrier_splits: usize,
 }
 
@@ -1818,8 +1821,14 @@ impl RenderLowering {
     /// class), the variant in the large-buffer form and the `VkPipeline` of the draw in the
     /// execution's instance, an indexed draw's alike ([`settle_draw_of`](Self::settle_draw_of)).
     /// A tessellation or mesh pipeline's draws, and a state the pass refuses, are left to the
-    /// step, which meets them as they are then. Announces nothing: it draws nothing.
-    fn settle_draws(&mut self, pipeline: &RenderPipelineState, made: &mut Vec<SettledDraw>) {
+    /// step, which meets them as they are then. Announces nothing: it draws nothing. The draws
+    /// settle with the bind state `live`.
+    fn settle_draws(
+        &mut self,
+        live: &mut LiveBind,
+        pipeline: &RenderPipelineState,
+        made: &mut Vec<SettledDraw>,
+    ) {
         let RenderStateKind::Graphics(state) = pipeline.kind() else {
             return;
         };
@@ -1849,7 +1858,7 @@ impl RenderLowering {
         // The encoder's pipeline state, which its bind state reads, as a command's draw sets it.
         self.pipeline = Some(pipeline.clone());
         for &primitive_type in types {
-            if let Ok(settled) = self.settle_draw_of(state, primitive_type) {
+            if let Ok(settled) = self.settle_draw_of(live, state, primitive_type) {
                 made.push(settled);
             }
         }
@@ -1869,6 +1878,7 @@ impl RenderLowering {
     /// (a layout of per-bind strides that are not dynamic state).
     fn settle_draw_of(
         &self,
+        live: &mut LiveBind,
         state: &DrawingState,
         primitive_type: PrimitiveType,
     ) -> Result<SettledDraw, Error> {
@@ -1878,11 +1888,10 @@ impl RenderLowering {
         let settings = self.draw_settings(CALL, state, assembly, false)?;
         let mut argument_samplers = ArgumentSamplers::taken(self.core.device());
         let function_tables = state.function_tables();
-        let live = Arc::clone(&self.live);
         let pass_start = PassStartTables::default();
         let sampler_maps = self.sampler_maps(state, &pass_start)?;
         let settled = self.settle_draw(
-            &mut lock(&live),
+            live,
             (
                 state,
                 &settings,
@@ -1953,7 +1962,7 @@ impl RenderLowering {
             specialization: plan.specialization.clone(),
             topology,
             primitive_restart,
-            pass: self.current.shape.clone(),
+            pass: self.current.shape.keyed(),
             strides: Vec::new(),
             fixed: FixedState::without_dynamic(fixed, &graphics.dynamic_states),
             sample_positions: self.layout.sample_positions.clone(),
@@ -2091,6 +2100,8 @@ impl RenderExecution {
             (storage, layout, residency.clone()),
             forms,
         );
+        // The commands' draws start from an empty bind state, as an encoder's first draw may.
+        let mut live = LiveBind::default();
         if !step {
             // Counted before the records are read: a write meanwhile records it again.
             self.read_at.store(self.icb.cpu_writes(), Ordering::Release);
@@ -2102,7 +2113,8 @@ impl RenderExecution {
             let (written, copies) = reads.read(&self.icb)?;
             let (commands, written, _) = self.named_commands(&device, range.start, written);
             found.faults = ReplayFaults(found.faults.0 | written.0);
-            self.replay(&mut encoder, commands.iter().flatten(), residency, found)?;
+            let replaying = (&mut encoder, &mut live);
+            self.replay(replaying, commands.iter().flatten(), residency, found)?;
             copies.keep(&self.icb);
             return self.finish(encoder, found, rendered, &device);
         }
@@ -2117,7 +2129,7 @@ impl RenderExecution {
                     self.report(command_buffer, read, start, executed);
                 }
                 let commands = commands.iter().flatten();
-                self.replay(&mut encoder, commands, residency, found)?;
+                self.replay((&mut encoder, &mut live), commands, residency, found)?;
                 continue;
             }
             let (commands, released) = self.icb.render_records(piece, Reader::Commit)?;
@@ -2133,7 +2145,7 @@ impl RenderExecution {
                 let read = (RecordsRead::Commit, residency);
                 self.report(command_buffer, read, start, executed);
             }
-            self.replay(&mut encoder, &commands, residency, found)?;
+            self.replay((&mut encoder, &mut live), &commands, residency, found)?;
         }
         self.finish(encoder, found, rendered, &device)
     }
@@ -2172,7 +2184,7 @@ impl RenderExecution {
     /// plain draw (`RenderLowering::replay_plain`).
     fn replay<'c>(
         &self,
-        encoder: &mut RenderLowering,
+        (encoder, live): (&mut RenderLowering, &mut LiveBind),
         commands: impl IntoIterator<Item = &'c Command>,
         residency: &Residency,
         found: &mut Found,
@@ -2246,6 +2258,21 @@ impl RenderExecution {
                     |stage, count| self.buffers(record, (stage, count), residency, misses);
                 encoder.vertex =
                     table(BufferStage::Vertex, descriptor.max_vertex_buffer_bind_count);
+                // A vertex buffer set without a stride that a layout of
+                // `MTLBufferLayoutStrideDynamic` reads is read at `unstrided_stride`'s, as plain
+                // Metal's fetch reads it; one no such layout reads takes no stride, as the
+                // encoder's own draw binds it.
+                let unstrided = unstrided_stride(descriptor.support_dynamic_attribute_stride);
+                if let (Some(stride), Some(pipeline)) = (unstrided, encoder.pipeline.as_ref()) {
+                    let vertex = &mut encoder.vertex;
+                    let read: Vec<u32> = (vertex.buffers.keys().copied())
+                        .filter(|index| !vertex.attribute_strides.contains_key(index))
+                        .filter(|&index| reads_vertex_stride(pipeline, index))
+                        .collect();
+                    for index in read {
+                        vertex.attribute_strides.insert(index, stride);
+                    }
+                }
                 encoder.fragment = table(
                     BufferStage::Fragment,
                     descriptor.max_fragment_buffer_bind_count,
@@ -2253,38 +2280,17 @@ impl RenderExecution {
                 encoder.object =
                     table(BufferStage::Object, descriptor.max_object_buffer_bind_count);
                 encoder.mesh = table(BufferStage::Mesh, descriptor.max_mesh_buffer_bind_count);
-                // A vertex buffer set without a stride that a dynamic layout reads, on a buffer
-                // that supports dynamic attribute strides: Metal takes the command and its fetch
-                // reads at stride 2^32 - 1, which the 32-bit fetch cannot place
-                // (`unstrided_buffer`). Without that support Metal reads stride 0, which the plan
-                // path gives exactly.
-                let table = &encoder.vertex;
-                let unstrided = encoder.pipeline.as_ref().and_then(|pipeline| {
-                    let bound = table
-                        .buffers
-                        .keys()
-                        .copied()
-                        .filter(|index| !table.attribute_strides.contains_key(index));
-                    unstrided_buffer(
-                        descriptor.support_dynamic_attribute_stride,
-                        bound,
-                        |index| reads_vertex_stride(pipeline, index),
-                    )
-                });
-                if let Some(refusal) = unstrided {
-                    return Err(refusal);
-                }
             }
             match draw {
                 Draw::Primitives(assembly, draw) => {
-                    encoder.draw(CALL, assembly, draw, DrawBuffers::default(), false)?
+                    encoder.draw(live, CALL, assembly, draw, DrawBuffers::default(), false)?
                 }
                 Draw::Indexed(draw, (buffer, offset)) => {
-                    encoder.draw_indexed(CALL, draw, &buffer, offset)?;
+                    encoder.draw_indexed(live, CALL, draw, &buffer, offset)?;
                 }
                 Draw::Mesh(grid, object, mesh) => {
                     encoder.replay_plain = false;
-                    encoder.draw_mesh(CALL, grid, object, mesh)?
+                    encoder.draw_mesh(live, CALL, grid, object, mesh)?
                 }
                 Draw::Patches {
                     mut draw,
@@ -2315,7 +2321,7 @@ impl RenderExecution {
                         PointIndices::Zero => zeros.as_ref().map(|zero| (zero, 0)),
                         PointIndices::Buffer((b, offset)) => Some((b, *offset)),
                     };
-                    encoder.draw_patch_range(CALL, draw, patch_indices, points)?;
+                    encoder.draw_patch_range(live, CALL, draw, patch_indices, points)?;
                 }
             }
         }
@@ -2344,6 +2350,7 @@ impl RenderExecution {
             current,
             tile_memory,
             tile_memory_splits,
+            interlocked_splits,
             barrier_splits,
             imageblock,
             shadow,
@@ -2351,6 +2358,7 @@ impl RenderExecution {
             ..
         } = encoder;
         found.tile_memory_splits += tile_memory_splits;
+        found.interlocked_splits += interlocked_splits;
         found.barrier_splits += barrier_splits;
         // Commands that ran as several keep the pass's memoryless attachments across their runs,
         // in the backings of the instances that run them.
@@ -2412,7 +2420,7 @@ impl RenderExecution {
             unsafe { core.command_buffer().end_raw(*raw) }.map_err(vulkan)?;
         }
         Ok(Recorded {
-            core,
+            core: EncoderCore::unboxed(core),
             runs,
             storage: PassStorage {
                 tile_memory: tile_memory.into_buffer(),
@@ -2440,7 +2448,7 @@ impl RenderExecution {
         let mut shadows = InstanceShadows::default();
         shadows.add(&self.shadows, &[]);
         RenderLowering {
-            core,
+            core: core.boxed(),
             earlier: Vec::new(),
             current: Instance {
                 draws,
@@ -2491,6 +2499,8 @@ impl RenderExecution {
             // Each command's mesh draw takes its own (`object_threadgroup_lengths`).
             object_threadgroup_lengths: BTreeMap::new(),
             visibility,
+            // A replay measures no reader (`render/coverage.rs`).
+            readers: super::coverage::Readers::default(),
             tile: ArgumentTable::default(),
             dispatches: Vec::new(),
             dispatched: false,
@@ -2512,6 +2522,7 @@ impl RenderExecution {
             attached_read_splits: 0,
             driver_restarts: false,
             tile_memory_splits: 0,
+            interlocked_splits: 0,
             // The pass's buffer of every tile's memory, with the arguments the encoder set at the
             // call (`render/tile_memory.rs`).
             tile_memory: snapshot
@@ -2558,9 +2569,9 @@ impl RenderExecution {
             pass_start: snapshot.pass_start.notes(),
             // An execution's draws restart at the all-ones index whatever the encoder's call.
             restart: None,
-            live: Arc::default(),
             log: None,
-            quiet_bound_values: None,
+            quiet_bound_values: Default::default(),
+            attached: Default::default(),
             bind_memo: crate::binding::BindMemo::default(),
             shape_memo: Default::default(),
             last_retained: Default::default(),
@@ -2573,6 +2584,10 @@ impl RenderExecution {
             // No pass of several color groups executes render commands
             // (`render/color_groups.rs`).
             grouped: None,
+            // The commands' draws pin no color: no instance of theirs records inline
+            // (`render/snapshot.rs`).
+            pinned_through: 0,
+            pins_frozen: false,
         }
     }
 
@@ -2620,11 +2635,12 @@ impl RenderExecution {
             (storage, snapshot.layout.clone(), residency.clone()),
             BufferForms::Large,
         );
+        let mut live = LiveBind::default();
         for pipeline in named {
-            encoder.settle_draws(pipeline, made);
+            encoder.settle_draws(&mut live, pipeline, made);
         }
         let RenderLowering { core, .. } = encoder;
-        core
+        EncoderCore::unboxed(core)
     }
 
     /// What its check, if any, may see among commands whose records may hold `written`
@@ -2718,6 +2734,8 @@ impl RenderExecution {
                 continue;
             };
             table.buffers.insert(index, bound);
+            // A vertex buffer set without a stride takes `unstrided_stride`'s where a dynamic
+            // layout reads it, once the command's state is known (`replay`).
             if let Some(stride) = binding.attribute_stride {
                 table
                     .attribute_strides
@@ -3206,7 +3224,7 @@ impl DeferredPass {
             layout: self.layout.clone(),
             bare: self.bare.clone(),
             backed: Vec::new(),
-            queue: command_buffer.command_queue().id(),
+            queue: command_buffer.queue_place().id(),
         };
         for (at, execution) in self.executions.iter().enumerate() {
             let gpu = forms.get(at).and_then(Option::as_ref);
@@ -3491,6 +3509,7 @@ impl DeferredPass {
             let causes = SplitCauses {
                 shadow: shadow_runs > 0,
                 tile_memory: found.tile_memory_splits,
+                interlocked_writes: found.interlocked_splits,
                 barriers: found.barrier_splits,
                 viewed,
                 ..SplitCauses::default()

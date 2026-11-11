@@ -860,6 +860,81 @@ fn the_state_retires_only_through_the_completed_value() {
     assert_eq!(queue.entries(), 0);
 }
 
+/// A batch's count of the earlier batches of its `VkQueue` the host has not seen complete
+/// ([`Tracker::pending_before`], which `WorkCounts::batches_with_none_pending` and kin count) is
+/// the tracker's own, from the completed value its plan retires by: a read after the write of the
+/// batch before it has a barrier exactly where that batch is counted pending. A count from a
+/// later read of the queue's value could find that batch complete where the plan ordered after it.
+#[test]
+fn a_batch_is_counted_pending_behind_exactly_the_work_its_plan_orders_after() {
+    let write = || one(&[writes(1, bytes(0..256), copy_write())]);
+    let read = || one(&[reads(1, bytes(0..256), copy_read())]);
+    for seen in [0, 1] {
+        let mut queue = Tracker::default();
+        assert_eq!(queue.pending_before(at(1)), 0);
+        assert_eq!(commit(&mut queue, &[write()], 1), [None]);
+        queue.completed(0, seen);
+        let pending = queue.pending_before(at(2));
+        let barriers = commit(&mut queue, &[read()], 2);
+        let ordered = (seen == 0)
+            .then(|| barrier(copy_write(), copy_read()))
+            .flatten();
+        assert_eq!(
+            (pending, barriers),
+            (1 - seen, vec![ordered]),
+            "seen {seen}"
+        );
+    }
+    // Another queue's completion, and an older value, leave a queue's count as it was.
+    let mut queue = Tracker::default();
+    for value in 1..=3 {
+        assert_eq!(commit(&mut queue, &[read()], value), [None]);
+    }
+    queue.completed(0, 2);
+    queue.completed(1, 3);
+    queue.completed(0, 1);
+    assert_eq!(queue.pending_before(at(4)), 1);
+    assert_eq!(queue.pending_before(on(1, 4)), 0);
+}
+
+/// The chain of `runtime_lane::commit_work`'s chained batches, on one `VkQueue`: a fill of link
+/// 0, then a batch for each later link copying the link before into it. Planned while the batch
+/// before it is in flight (the tracker has not seen it complete), each copy begins with a barrier
+/// after that batch's write, and counts it pending; planned after it completed, neither. The
+/// device lane cannot hold a batch in flight for the host (no batch is submitted waiting for a
+/// value the host sets, `event_timeline.rs`), so this sets the tracker's state.
+#[test]
+fn a_chain_of_copies_orders_each_after_the_one_before_only_while_it_is_in_flight() {
+    const CHAIN: u64 = 8;
+    let link = || bytes(0..4096);
+    for in_flight in [true, false] {
+        let mut queue = Tracker::default();
+        let fill = one(&[writes(0, link(), copy_write())]);
+        assert_eq!(commit(&mut queue, &[fill], 1), [None]);
+        for to in 1..=CHAIN {
+            let value = to + 1;
+            if !in_flight {
+                queue.completed(0, value - 1);
+            }
+            let copy = one(&[
+                reads(to - 1, link(), copy_read()),
+                writes(to, link(), copy_write()),
+            ]);
+            let pending = queue.pending_before(at(value));
+            let barriers = commit(&mut queue, &[copy], value);
+            let (want_pending, ordered) = match in_flight {
+                true => (value - 1, barrier(copy_write(), copy_read())),
+                false => (0, None),
+            };
+            assert_eq!(
+                (pending, barriers),
+                (want_pending, vec![ordered]),
+                "link {to}, in flight {in_flight}"
+            );
+        }
+    }
+}
+
 /// A completion looks only at the resources its batches touched: a thousand batches in flight,
 /// each reading a resource of its own, and the first one's completion retires its resource alone.
 #[test]

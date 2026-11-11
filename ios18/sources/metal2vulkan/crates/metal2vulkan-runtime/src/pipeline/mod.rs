@@ -501,7 +501,7 @@ impl Kernel {
     }
 
     /// The lowering inputs of the function's variant `key`: a compute descriptor's stage input
-    /// descriptor, or a tile descriptor's color attachment formats by index and its
+    /// descriptor and OpenCL mode, or a tile descriptor's color attachment formats by index and its
     /// `threadgroupSizeMatchesTileSize`, and either's `maxCallStackDepth` past Metal's default, 1,
     /// as the compile layer compiles a `Function` stage of each.
     fn inputs(&self, key: &VariantKey) -> metal2vulkan::pipeline::LoweringInputs {
@@ -511,6 +511,7 @@ impl Kernel {
                 inputs.stage_input = descriptor.stage_input.clone();
                 inputs.max_call_stack_depth =
                     Some(descriptor.max_call_stack_depth).filter(|&k| k > 1);
+                inputs.open_cl_mode = descriptor.open_cl_mode_enabled;
             }
             Kernel::Tile(descriptor) => {
                 inputs.tile_attachments = Some(
@@ -558,13 +559,24 @@ impl Device {
         function: &Function,
         options: &PipelineOptions,
     ) -> Result<ComputePipelineState, Error> {
+        self.at_serving(|device| {
+            device.new_compute_pipeline_state_with_function_now(function, options)
+        })
+    }
+
+    /// [`Device::new_compute_pipeline_state_with_function`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_compute_pipeline_state_with_function_now(
+        &self,
+        function: &Function,
+        options: &PipelineOptions,
+    ) -> Result<ComputePipelineState, Error> {
         if !function.device().same(self) {
-            return Err(invalid(
-                "new_compute_pipeline_state_with_function",
-                Problem::ForeignObject,
-            ));
+            return Err(function
+                .device()
+                .foreign("new_compute_pipeline_state_with_function", self));
         }
-        self.new_compute_pipeline_state(
+        self.new_compute_pipeline_state_now(
             &ComputePipelineDescriptor::new(StageSource::Function(function.function_descriptor())),
             options,
         )
@@ -611,6 +623,15 @@ impl Device {
         descriptor: &ComputePipelineDescriptor,
         options: &PipelineOptions,
     ) -> Result<ComputePipelineState, Error> {
+        self.at_serving(|device| device.new_compute_pipeline_state_now(descriptor, options))
+    }
+
+    /// [`Device::new_compute_pipeline_state`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_compute_pipeline_state_now(
+        &self,
+        descriptor: &ComputePipelineDescriptor,
+        options: &PipelineOptions,
+    ) -> Result<ComputePipelineState, Error> {
         ComputePipelineState::create(self, descriptor, options, None)
     }
 
@@ -625,7 +646,19 @@ impl Device {
         descriptor: &ComputePipelineDescriptor,
         options: &PipelineOptions,
     ) -> Result<(ComputePipelineState, Option<ComputePipelineReflection>), Error> {
-        let state = self.new_compute_pipeline_state(descriptor, options)?;
+        self.at_serving(|device| {
+            device.new_compute_pipeline_state_with_reflection_now(descriptor, options)
+        })
+    }
+
+    /// [`Device::new_compute_pipeline_state_with_reflection`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_compute_pipeline_state_with_reflection_now(
+        &self,
+        descriptor: &ComputePipelineDescriptor,
+        options: &PipelineOptions,
+    ) -> Result<(ComputePipelineState, Option<ComputePipelineReflection>), Error> {
+        let state = self.new_compute_pipeline_state_now(descriptor, options)?;
         // The descriptor the state was made from, with the dynamic libraries its creation loaded
         // (`dynamic_library.rs`).
         let made = match &state.0.descriptor {
@@ -648,13 +681,25 @@ impl Device {
         function: &Function,
         options: &PipelineOptions,
     ) -> Result<(ComputePipelineState, Option<ComputePipelineReflection>), Error> {
+        self.at_serving(|device| {
+            device.new_compute_pipeline_state_with_function_and_reflection_now(function, options)
+        })
+    }
+
+    /// [`Device::new_compute_pipeline_state_with_function_and_reflection`] on the generation
+    /// that serves (`device/line.rs`).
+    pub(crate) fn new_compute_pipeline_state_with_function_and_reflection_now(
+        &self,
+        function: &Function,
+        options: &PipelineOptions,
+    ) -> Result<(ComputePipelineState, Option<ComputePipelineReflection>), Error> {
         if !function.device().same(self) {
-            return Err(invalid(
+            return Err(function.device().foreign(
                 "new_compute_pipeline_state_with_function_and_reflection",
-                Problem::ForeignObject,
+                self,
             ));
         }
-        self.new_compute_pipeline_state_with_reflection(
+        self.new_compute_pipeline_state_with_reflection_now(
             &ComputePipelineDescriptor::new(StageSource::Function(function.function_descriptor())),
             options,
         )
@@ -1064,7 +1109,11 @@ impl ComputePipelineState {
         self.0.base.pipeline.metal_info.thread_execution_width
     }
 
-    /// `staticThreadgroupMemoryLength`.
+    /// `staticThreadgroupMemoryLength`: the kernel's own static threadgroup memory, as Metal
+    /// reports it. Where the device runs the kernel's simdgroups emulated, their scratch takes
+    /// threadgroup memory beside it, and a dispatch whose `setThreadgroupMemoryLength:` lengths
+    /// fit beside this length but not beside the scratch is refused
+    /// (`Unsupported(ThreadgroupMemorySize)`), where Metal runs it.
     pub fn static_threadgroup_memory_length(&self) -> u32 {
         self.0
             .base
@@ -1805,7 +1854,7 @@ impl Variant {
     }
 
     /// The variant's layouts and module.
-    pub(super) fn objects(&self) -> &Arc<VariantObjects> {
+    pub(crate) fn objects(&self) -> &Arc<VariantObjects> {
         &self.objects
     }
 
@@ -1913,7 +1962,7 @@ fn compile_error(device: &Device, error: metal2vulkan::error::Error) -> Error {
             if unsupported.feature == Feature::IndirectRenderState =>
         {
             let apple10 = GpuFamily::Apple10.raw();
-            if device.supports_family(apple10) {
+            if device.supports_family_now(apple10) {
                 return Error::NotImplemented(RuntimeGap::IndirectRenderCommands);
             }
             unsupported.needs = Needs::MetalGpuFamily(apple10);
@@ -1921,7 +1970,7 @@ fn compile_error(device: &Device, error: metal2vulkan::error::Error) -> Error {
         }
         metal2vulkan::error::Error::Unsupported(mut unsupported)
             if unsupported.feature == Feature::GlobalBuiltinInFragment
-                && !device.supports_family(GpuFamily::Apple10.raw()) =>
+                && !device.supports_family_now(GpuFamily::Apple10.raw()) =>
         {
             unsupported.needs = Needs::MetalRefuses(GLOBAL_BUILTIN_IN_FRAGMENT_REFUSED_ON);
             Error::Unsupported(unsupported)

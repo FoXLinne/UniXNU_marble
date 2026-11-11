@@ -269,9 +269,14 @@ pub(super) fn decode_of(plan: &ImagePlan) -> Option<PvrtcDecode> {
 
 /// The carrier's format of `texture`, whose bytes a carrier holds for copies alone: a PVRTC,
 /// ETC2 or EAC texture's blocks, or a 4:2:2 texture's texels (`chroma_pairs.rs`), without a
-/// decoded twin (the module docs, `etc.rs`); `None` for any other texture.
+/// decoded twin (the module docs, `etc.rs`), or the texels of a format the translator holds for
+/// copies alone (`metal::format::copies_only`), which nothing decodes; `None` for any other
+/// texture.
 pub(super) fn held_for_copies(texture: &Texture) -> Option<Format> {
     let plan = texture.image_plan().ok()?;
+    if plan.mapping.emulation == FormatEmulation::CopiesOnly {
+        return Some(plan.format);
+    }
     let carried = holds_blocks(plan)
         || super::etc::decode_of(plan).is_some()
         || super::chroma_pairs::holds_pairs(plan);
@@ -355,23 +360,44 @@ pub(super) fn degrade_unreadable<'a>(
     textures: impl IntoIterator<Item = &'a Texture>,
     command: &str,
 ) {
-    let Some((texture, carrier)) = textures
-        .into_iter()
-        .find_map(|texture| Some((texture, held_for_copies(texture)?)))
-    else {
-        return;
-    };
-    device.degrade(Degradation::UnreadableHandleTexture, || {
-        (
-            format!(
-                "{:?} texture at resource ID {}",
-                texture.pixel_format(),
-                texture.gpu_resource_id().0
-            ),
-            format!(
-                "{command}: a function reading texture handles from memory reaches the texture, \
-                 whose bytes a {carrier:?} image holds for copies alone"
-            ),
-        )
-    });
+    if let Some(found) = textures.into_iter().find_map(Unreadable::of) {
+        found.announce(device, command);
+    }
+}
+
+/// What [`degrade_unreadable`] names of a texture whose bytes a carrier image holds for copies
+/// alone: kept without the texture, for a notice made once no lock or hold is (`heap_sets.rs`).
+pub(super) struct Unreadable {
+    pixel_format: PixelFormat,
+    id: u64,
+    carrier: Format,
+}
+
+impl Unreadable {
+    /// What `texture` is named by, where a carrier holds its bytes for copies alone.
+    pub(super) fn of(texture: &Texture) -> Option<Unreadable> {
+        Some(Unreadable {
+            carrier: held_for_copies(texture)?,
+            pixel_format: texture.pixel_format(),
+            id: texture.gpu_resource_id().0,
+        })
+    }
+
+    /// Announce it, reached by `command`.
+    pub(super) fn announce(&self, device: &Device, command: &str) {
+        let Unreadable {
+            pixel_format,
+            id,
+            carrier,
+        } = self;
+        device.degrade(Degradation::UnreadableHandleTexture, || {
+            (
+                format!("{pixel_format:?} texture at resource ID {id}"),
+                format!(
+                    "{command}: a function reading texture handles from memory reaches the \
+                     texture, whose bytes a {carrier:?} image holds for copies alone"
+                ),
+            )
+        });
+    }
 }

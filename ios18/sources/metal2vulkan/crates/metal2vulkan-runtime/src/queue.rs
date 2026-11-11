@@ -74,6 +74,21 @@
 //!   handlers and deallocators) while every slot is held by a committed command buffer, where
 //!   Metal's never returns, it refuses at once (`WaitWouldDeadlock`, `command_buffer/own.rs`).
 //! - The limit is the queue's alone: another queue's command buffers are made meanwhile.
+//!
+//! **Across the device's recoveries.** Metal's queue survives a GPU recovery. A queue here is its
+//! device's root handle and, in a cell, its place on one generation of the device
+//! (`device/line.rs`): its `VkQueue`, its slots, its pools and its hangs in flight, which its
+//! command buffers hold. A recovery retires every queue's place; the queue takes a new one on the
+//! new generation, as it took its first, at its next command buffer (or lent `VkQueue`), and its
+//! label and its count of the GPU errors its command buffers caused (`revocation.rs`) go on.
+//!
+//! **The runtime's own queues.** The device's in-place check of render targets takes its passes on
+//! a queue of its own (`in_place_check.rs`), made as a program's is but for Metal's device ID
+//! rules: Metal's device makes its texture pool and takes its sampler ID at the program's first
+//! command queue (`resource_ids.rs`), and the check runs on its thread while the program makes its
+//! objects, so a queue of its that counted as the program's would keep the pool's first range
+//! beside a texture reservation the program made after it, and ignore a sampler reservation.
+//! Every place of such a queue, a recovery's new one included, touches neither rule.
 
 use super::attachment_stand_in::BackingPool;
 use super::command_buffer::hang::QueueHangs;
@@ -82,22 +97,61 @@ use super::command_buffer::revocation::QueueErrors;
 use super::command_buffer::CommandBuffer;
 use super::contexts;
 use super::degradation::Degradation;
+use super::device::carry::RestWatch;
 use super::device::{lock, Device};
 use super::error::{Error, Invalid, Problem};
 use super::queue_share::Choice;
 use super::texture::copy_images::CopyImages;
 use super::texture::kept_image::KeptImages;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::time::Instant;
 
 /// The uncompleted command buffers a queue holds when made with `new_command_queue`: Metal's
 /// default `maxCommandBufferCount`, measured.
 const DEFAULT_MAX_COMMAND_BUFFER_COUNT: usize = 64;
 
-/// A Metal command queue (`MTLCommandQueue`). Cheap to clone (a retain); `Send + Sync`.
+/// A Metal command queue (`MTLCommandQueue`). Cheap to clone (a retain); `Send + Sync`. It
+/// survives the device's recoveries, as Metal's does (the module docs).
 #[derive(Clone)]
-pub struct CommandQueue(Arc<QueueShared>);
+pub struct CommandQueue(Arc<QueueLine>);
+
+/// A command queue (the module docs): its device, what it was made as, what every place of it
+/// shares, and its place on the generation that serves.
+pub(crate) struct QueueLine {
+    /// The device: a root handle (`device/line.rs`).
+    device: Device,
+    /// Which constructor made it.
+    kind: Kind,
+    /// Whether the program made it, for Metal's device ID rules.
+    made_for: MadeFor,
+    /// Its `maxCommandBufferCount`.
+    count: usize,
+    common: Arc<QueueCommon>,
+    cell: Mutex<Place>,
+}
+
+/// What every place of a command queue shares (the module docs).
+pub(crate) struct QueueCommon {
+    label: Mutex<Option<String>>,
+    /// Its command buffers that completed with a GPU error they caused, which revoke it at the
+    /// second (`command_buffer/revocation.rs`).
+    errors: QueueErrors,
+}
+
+/// A command queue's cell (the module docs).
+enum Place {
+    /// Its place on a generation of the device.
+    Serving(QueueGen),
+    /// A recovery made the generation of its place lost: it takes a new place at its next
+    /// command buffer.
+    Retired,
+}
+
+/// A command queue's place on one generation of its device: what the command buffers made there
+/// hold. Cheap to clone (a retain).
+#[derive(Clone)]
+pub(crate) struct QueueGen(Arc<QueueShared>);
 
 impl std::fmt::Debug for CommandQueue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -121,6 +175,17 @@ enum Kind {
     Presenting,
 }
 
+/// Whom a queue was made for, and so whether its places count toward Metal's device ID rules
+/// (the module docs, `resource_ids.rs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MadeFor {
+    /// A constructor the program called: Metal's device makes its texture pool and takes its
+    /// sampler ID at its first queue.
+    Program,
+    /// The runtime's own (`Device::own_command_queue_now`): touches neither rule.
+    Runtime,
+}
+
 /// [`QueueShared::sharing`]: one of its command buffers ran long (`queue_share::LONG_HEAD`).
 const LONG: u8 = 1;
 /// [`QueueShared::sharing`]: a long queue that settled, for good.
@@ -130,7 +195,10 @@ const SETTLED: u8 = 2;
 const PINNED: u8 = 4;
 
 struct QueueShared {
+    /// The generation of the device the place is on: a generation handle.
     device: Device,
+    /// What every place of the queue shares.
+    common: Arc<QueueCommon>,
     /// The queue's identity among the device's logical queues.
     id: u64,
     /// The index of the device's `VkQueue` the queue submits to. Changed only under its slots'
@@ -142,15 +210,15 @@ struct QueueShared {
     kind: Kind,
     /// Its part in the sharing: [`LONG`], [`SETTLED`], [`PINNED`].
     sharing: AtomicU8,
-    label: Mutex<Option<String>>,
     /// The slots its uncompleted command buffers hold.
     slots: Arc<Slots>,
     /// The latest GPU end, in nanoseconds of the host's clock, of its command buffers completed
     /// so far, which the completion turns place in its order (`gpu_time.rs`). A leaf lock:
     /// taken under a command buffer's, never held while another is taken.
     latest_gpu_end: Mutex<u64>,
-    /// The backings of memoryless attachments its passes render into images of their own
-    /// (`attachment_stand_in::pooled_backing`). A leaf lock: never held while another is taken.
+    /// The backings of memoryless attachments its passes render into images of their own, and of
+    /// colors they store `DontCare` that render so (`attachment_stand_in::pooled_backing`). A leaf
+    /// lock: never held while another is taken.
     memoryless_backings: Mutex<BackingPool>,
     /// The kept images its merges' keeps made, kept for its later keeps
     /// (`texture/kept_image.rs`).
@@ -161,9 +229,6 @@ struct QueueShared {
     /// Its command buffers Metal's GPU hangs at that are in flight, and those committed with an
     /// event wait meanwhile (`command_buffer/hang.rs`).
     hangs: Arc<QueueHangs>,
-    /// Its command buffers that completed with a GPU error they caused, which revoke it at the
-    /// second (`command_buffer/revocation.rs`).
-    errors: QueueErrors,
 }
 
 /// A queue's slots: one per uncompleted command buffer, at most `max`.
@@ -174,6 +239,9 @@ pub(crate) struct Slots {
     freed: Condvar,
     /// The device's slots open, over all its queues.
     uncommitted: Arc<Uncommitted>,
+    /// What its last slot to come back tells its generation, for that generation's rest once its
+    /// recovery carried its objects (`device/carry.rs`): set as the queue's place is made.
+    rest: OnceLock<RestWatch>,
 }
 
 /// The command buffers of a device's queues made and not committed (nor dropped): its slots open,
@@ -212,7 +280,13 @@ impl Slots {
             held: Mutex::new(Held::default()),
             freed: Condvar::new(),
             uncommitted,
+            rest: OnceLock::new(),
         })
+    }
+
+    /// Whether a command buffer holds one of its slots.
+    pub(crate) fn held_any(&self) -> bool {
+        self.lock().all > 0
     }
 
     /// The slots held, locked.
@@ -248,28 +322,48 @@ impl Slot {
 
 impl Drop for Slot {
     fn drop(&mut self) {
-        {
+        let none = {
             let mut held = self.slots.lock();
             held.all -= 1;
             if self.open {
                 held.open -= 1;
                 self.slots.uncommitted.0.fetch_sub(1, Ordering::SeqCst);
             }
-        }
+            held.all == 0
+        };
         self.slots.freed.notify_one();
+        // The last of its command buffers that may record on the generation: its rest, where its
+        // recovery carried its objects (`device/carry.rs`).
+        if let (true, Some(rest)) = (none, self.slots.rest.get()) {
+            rest.last_slot_back();
+        }
     }
 }
 
 impl Device {
     /// `newCommandQueue`: a queue of at most 64 uncompleted command buffers, as Metal's.
     pub fn new_command_queue(&self) -> Result<CommandQueue, Error> {
-        self.new_command_queue_with_max_command_buffer_count(DEFAULT_MAX_COMMAND_BUFFER_COUNT)
+        self.at_serving(|device| device.new_command_queue_now())
+    }
+
+    /// [`Device::new_command_queue`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_command_queue_now(&self) -> Result<CommandQueue, Error> {
+        self.new_command_queue_with_max_command_buffer_count_now(DEFAULT_MAX_COMMAND_BUFFER_COUNT)
     }
 
     /// `newCommandQueueWithMaxCommandBufferCount:`: a queue of at most `count` uncompleted
     /// command buffers. A count of 0 is refused (`Invalid`, `MaxCommandBufferCount`), where
     /// Metal's validation ends the process.
     pub fn new_command_queue_with_max_command_buffer_count(
+        &self,
+        count: usize,
+    ) -> Result<CommandQueue, Error> {
+        self.at_serving(|device| device.new_command_queue_with_max_command_buffer_count_now(count))
+    }
+
+    /// [`Device::new_command_queue_with_max_command_buffer_count`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_command_queue_with_max_command_buffer_count_now(
         &self,
         count: usize,
     ) -> Result<CommandQueue, Error> {
@@ -280,10 +374,21 @@ impl Device {
             )));
         }
         if self.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.lost_refusal());
         }
-        let (id, vk_queue) = self.next_queue();
-        Ok(self.command_queue(id, vk_queue, count, Kind::RoundRobin))
+        Ok(self.command_queue(count, Kind::RoundRobin, MadeFor::Program))
+    }
+
+    /// No Metal counterpart: a queue the runtime makes for its own work (the module docs), as
+    /// [`new_command_queue`](Self::new_command_queue)'s on the generation that serves, but that
+    /// makes no texture pool and takes no sampler ID of Metal's device (`resource_ids.rs`).
+    /// Refused as that call is on a lost device (`DeviceLost`).
+    pub(crate) fn own_command_queue_now(&self) -> Result<CommandQueue, Error> {
+        if self.is_lost() {
+            return Err(self.lost_refusal());
+        }
+        let count = DEFAULT_MAX_COMMAND_BUFFER_COUNT;
+        Ok(self.command_queue(count, Kind::RoundRobin, MadeFor::Runtime))
     }
 
     /// No Metal counterpart: a command queue of at most `count` uncompleted command buffers, as
@@ -317,6 +422,14 @@ impl Device {
     /// Refused as that call is: a count of 0 (`Invalid`, `MaxCommandBufferCount`), and a lost
     /// device (`DeviceLost`).
     pub fn new_command_queue_unshared(&self, count: usize) -> Result<CommandQueue, Error> {
+        self.at_serving(|device| device.new_command_queue_unshared_now(count))
+    }
+
+    /// [`Device::new_command_queue_unshared`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn new_command_queue_unshared_now(
+        &self,
+        count: usize,
+    ) -> Result<CommandQueue, Error> {
         if count == 0 {
             return Err(Error::Invalid(Invalid::new(
                 "new_command_queue_unshared",
@@ -324,17 +437,9 @@ impl Device {
             )));
         }
         if self.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.lost_refusal());
         }
-        let (id, vk_queue) = match self.place_unshared() {
-            Some(vk_queue) => (self.new_queue_id(), vk_queue),
-            None => {
-                let (id, vk_queue) = self.next_queue();
-                self.shared().queues[vk_queue].share.unshared_took();
-                (id, vk_queue)
-            }
-        };
-        Ok(self.command_queue(id, vk_queue, count, Kind::Unshared))
+        Ok(self.command_queue(count, Kind::Unshared, MadeFor::Program))
     }
 
     /// No Metal counterpart: a queue for presenting, of at most 64 uncompleted command buffers as
@@ -355,38 +460,93 @@ impl Device {
     /// `Device::from_raw`) gives the queue its `VkQueue` round robin, as `new_command_queue`
     /// does, and announces `Degradation::SharedPresentQueue` (`shared-present-queue`) once.
     pub fn new_command_queue_for_presenting(&self) -> Result<CommandQueue, Error> {
-        if self.is_lost() {
-            return Err(Error::DeviceLost);
-        }
-        let (id, vk_queue) = match self.next_presenting_queue() {
-            Some(reserved) => reserved,
-            None => {
-                self.degrade(Degradation::SharedPresentQueue, || {
-                    (
-                        "a command queue made for presenting".to_owned(),
-                        "the device reserved no `VkQueue` for presenting: its queue families \
-                         have no queue past the ones its other command queues share"
-                            .to_owned(),
-                    )
-                });
-                self.next_queue()
-            }
-        };
-        Ok(self.command_queue(
-            id,
-            vk_queue,
-            DEFAULT_MAX_COMMAND_BUFFER_COUNT,
-            Kind::Presenting,
-        ))
+        self.at_serving(|device| device.new_command_queue_for_presenting_now())
     }
 
-    /// A queue of identity `id` on the device's `VkQueue` at `vk_queue`, of at most `count`
-    /// uncompleted command buffers, made by `kind`'s constructor. One on a round robin's `VkQueue`
+    /// [`Device::new_command_queue_for_presenting`] on the generation that serves
+    /// (`device/line.rs`).
+    pub(crate) fn new_command_queue_for_presenting_now(&self) -> Result<CommandQueue, Error> {
+        if self.is_lost() {
+            return Err(self.lost_refusal());
+        }
+        let count = DEFAULT_MAX_COMMAND_BUFFER_COUNT;
+        Ok(self.command_queue(count, Kind::Presenting, MadeFor::Program))
+    }
+
+    /// A queue of at most `count` uncompleted command buffers made by `kind`'s constructor for
+    /// `made_for`, with its place on this generation, known to the device's line, whose
+    /// recoveries retire it (`device/line.rs`).
+    fn command_queue(&self, count: usize, kind: Kind, made_for: MadeFor) -> CommandQueue {
+        let common = Arc::new(QueueCommon {
+            label: Mutex::new(None),
+            errors: QueueErrors::default(),
+        });
+        let place = self.queue_place((count, kind, made_for), &common);
+        let queue = CommandQueue(Arc::new(QueueLine {
+            device: self.root(),
+            kind,
+            made_for,
+            count,
+            common,
+            cell: Mutex::new(Place::Serving(place)),
+        }));
+        self.line().queue_made(Arc::downgrade(&queue.0));
+        queue
+    }
+
+    /// The `VkQueue` a queue `kind`'s constructor made takes on this generation, and its identity
+    /// among the device's logical queues: the round robin's next; for an unshared queue one no
+    /// command queue holds where the device shares; for a presenting one a reserved queue, else
+    /// the round robin's next, announced (`shared-present-queue`). The queue limits' notes
+    /// (`DeviceOptions::queue_limits`) count the program's queues alone: the runtime's own
+    /// (`made_for`) shares as it does on a device of one queue.
+    fn place_queue(&self, kind: Kind, made_for: MadeFor) -> (u64, usize) {
+        match kind {
+            Kind::RoundRobin => {
+                self.next_queue((made_for == MadeFor::Program).then_some("a command queue"))
+            }
+            Kind::Unshared => match self.place_unshared() {
+                Some(vk_queue) => (self.new_queue_id(), vk_queue),
+                None => {
+                    let (id, vk_queue) = self.next_queue(Some("an unshared command queue"));
+                    self.shared().queues[vk_queue].share.unshared_took();
+                    (id, vk_queue)
+                }
+            },
+            Kind::Presenting => match self.next_presenting_queue() {
+                Some(reserved) => reserved,
+                None => {
+                    self.degrade(Degradation::SharedPresentQueue, || {
+                        (
+                            "a command queue made for presenting".to_owned(),
+                            "the device reserved no `VkQueue` for presenting: its queue families \
+                             have no queue past the ones its other command queues share"
+                                .to_owned(),
+                        )
+                    });
+                    self.next_queue(None)
+                }
+            },
+        }
+    }
+
+    /// A queue's place on this generation (the module docs), of at most `count` uncompleted
+    /// command buffers, made by `kind`'s constructor for `made_for`, `common` what its places
+    /// share: on the `VkQueue` [`place_queue`](Self::place_queue) gives. One the program made
+    /// takes Metal's device sampler ID and makes its texture pool, as Metal's first queue does
+    /// (`resource_ids.rs`); the runtime's own touches neither. One on a round robin's `VkQueue`
     /// counts itself there (an unshared one counted itself already), and the first starts the
     /// device's check of its GPU's idling between `VkQueue`s (`queue_share.rs`).
-    fn command_queue(&self, id: u64, vk_queue: usize, count: usize, kind: Kind) -> CommandQueue {
-        self.take_device_sampler();
-        self.make_texture_pool();
+    fn queue_place(
+        &self,
+        (count, kind, made_for): (usize, Kind, MadeFor),
+        common: &Arc<QueueCommon>,
+    ) -> QueueGen {
+        let (id, vk_queue) = self.place_queue(kind, made_for);
+        if made_for == MadeFor::Program {
+            self.take_device_sampler();
+            self.make_texture_pool();
+        }
         self.keep_room();
         let shared = self.shared();
         if vk_queue < shared.round_robin() {
@@ -395,21 +555,59 @@ impl Device {
             }
             self.start_queue_switch_check();
         }
-        CommandQueue(Arc::new(QueueShared {
+        // Its slots, which its command buffers hold while they may record, watched for the
+        // generation's rest once its recovery carried its objects (`device/carry.rs`).
+        let slots = Slots::new(count, Arc::clone(&self.shared().uncommitted));
+        let rest = (shared.carry).queue(self.shared_arc(), &slots);
+        let _set = slots.rest.set(rest);
+        QueueGen(Arc::new(QueueShared {
             device: self.clone(),
+            common: Arc::clone(common),
             id,
             vk_queue: AtomicUsize::new(vk_queue),
             kind,
             sharing: AtomicU8::new(0),
-            label: Mutex::new(None),
-            slots: Slots::new(count, Arc::clone(&self.shared().uncommitted)),
+            slots,
             latest_gpu_end: Mutex::new(0),
             memoryless_backings: Mutex::new(BackingPool::default()),
             kept_images: KeptImages::default(),
             copy_images: CopyImages::default(),
             hangs: Arc::default(),
-            errors: QueueErrors::default(),
         }))
+    }
+}
+
+impl QueueLine {
+    /// The queue's place on the generation that serves: the one in its cell, else a new one made
+    /// on that generation, after its recovery (the module docs). The cell's lock is not held
+    /// while the device's line is asked for its generation, whose recovery retires the queue.
+    fn serving(&self) -> QueueGen {
+        if let Place::Serving(place) = &*lock(&self.cell) {
+            if place.serves() {
+                return place.clone();
+            }
+        }
+        let device = self.device.current();
+        let mut cell = lock(&self.cell);
+        if let Place::Serving(place) = &*cell {
+            // Another thread's call made it meanwhile, or the device cannot recover and the lost
+            // generation answers.
+            if place.serves() || place.0.device.same(&device) {
+                return place.clone();
+            }
+        }
+        let place = device.queue_place((self.count, self.kind, self.made_for), &self.common);
+        let retired = std::mem::replace(&mut *cell, Place::Serving(place.clone()));
+        drop(cell);
+        drop(retired);
+        place
+    }
+
+    /// A recovery made the generation of the queue's place lost: it takes a new place at its next
+    /// command buffer (`device/line.rs`). The place goes once the command buffers made there went.
+    pub(crate) fn retire(&self) {
+        let retired = std::mem::replace(&mut *lock(&self.cell), Place::Retired);
+        drop(retired);
     }
 }
 
@@ -432,18 +630,21 @@ impl Drop for QueueShared {
 }
 
 impl CommandQueue {
-    /// `device`.
+    /// `device`: a handle that follows the device across its recoveries (`device/line.rs`).
     pub fn device(&self) -> &Device {
         &self.0.device
     }
 
-    /// `commandBuffer`: a new command buffer of this queue. While the queue holds its
-    /// `maxCommandBufferCount` uncompleted command buffers, it blocks until one completes or is
-    /// dropped uncommitted, as Metal's does; in the queue's own context, where none can complete
-    /// first, it is refused (`WaitWouldDeadlock` of `DeadlockCause::OwnQueue`) unless an
-    /// uncommitted one may still be dropped. From another queue's handler it waits as
+    /// `commandBuffer`: a new command buffer of this queue, on its place on the generation of the
+    /// device that serves (the module docs). While the queue holds its `maxCommandBufferCount`
+    /// uncompleted command buffers, it blocks until one completes or is dropped uncommitted, as
+    /// Metal's does; in the queue's own context, where none can complete first, it is refused
+    /// (`WaitWouldDeadlock` of `DeadlockCause::OwnQueue`) unless an uncommitted one may still be
+    /// dropped. From another queue's handler it waits as
     /// [`CommandBuffer::wait_until_completed`](crate::CommandBuffer::wait_until_completed) does,
-    /// refused where that one is.
+    /// refused where that one is. A device that recovers from the loss of its `VkDevice` makes the
+    /// command buffer on its new one, waiting out the recovery; one that cannot is refused
+    /// (`DeviceLost`).
     ///
     /// Once per fetched render target that takes its storage form (`fetched-target-storage`,
     /// docs/API.md) at the commit of a command buffer with a submission check, the next command
@@ -451,17 +652,92 @@ impl CommandQueue {
     /// submitted it, at most 100 ms, and not at all on the scheduler's thread (a check that makes
     /// one); past that the target keeps its old image for a later commit.
     pub fn command_buffer(&self) -> Result<CommandBuffer, Error> {
+        // A generation lost between the place's taking and the command buffer's making recovers,
+        // and the queue takes its next place there; each turn is a recovery that made a new
+        // `VkDevice`, and a line that cannot make one answers with its lost place
+        // (`device/line.rs`).
+        let mut place = self.0.serving();
+        loop {
+            match place.command_buffer(self) {
+                Err(error) if place.device().is_lost() => {
+                    let next = self.0.serving();
+                    if Arc::ptr_eq(&next.0, &place.0) {
+                        return Err(error);
+                    }
+                    place = next;
+                }
+                made => return made,
+            }
+        }
+    }
+
+    /// The queue's place on the generation that serves (the module docs).
+    pub(crate) fn serving(&self) -> QueueGen {
+        self.0.serving()
+    }
+
+    /// `setLabel:`.
+    pub fn set_label(&self, label: &str) {
+        *lock(&self.0.common.label) = Some(label.to_owned());
+    }
+
+    /// `label`.
+    pub fn label(&self) -> Option<String> {
+        lock(&self.0.common.label).clone()
+    }
+
+    /// No Metal counterpart, for the lanes that watch command queues share `VkQueue`s
+    /// (`queue_share.rs`): the index of the device's `VkQueue` the queue submits to now, and
+    /// whether it is long.
+    #[doc(hidden)]
+    pub fn vk_queue_sharing(&self) -> (usize, bool) {
+        self.serving().vk_queue_sharing()
+    }
+}
+
+impl QueueGen {
+    /// The generation of the device the place is on: a generation handle.
+    pub(crate) fn device(&self) -> &Device {
+        &self.0.device
+    }
+
+    /// Whether the place is on the generation that serves: one relaxed load
+    /// (`Device::generation_serves`).
+    fn serves(&self) -> bool {
+        self.0.device.generation_serves()
+    }
+
+    /// What every place of the queue shares: its identity across the device's recoveries
+    /// (`device/line.rs`).
+    pub(crate) fn common(&self) -> &Arc<QueueCommon> {
+        &self.0.common
+    }
+
+    /// The queue's `label`.
+    pub(crate) fn label(&self) -> Option<String> {
+        lock(&self.0.common.label).clone()
+    }
+
+    /// A new command buffer of `root`, the queue this is a place of
+    /// ([`CommandQueue::command_buffer`]).
+    fn command_buffer(&self, root: &CommandQueue) -> Result<CommandBuffer, Error> {
         if self.0.device.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.0.device.lost_refusal());
         }
         let (slot, joined) = self.slot()?;
         if self.0.device.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(self.0.device.lost_refusal());
         }
         // Counted with its slot: it waits out a fetched render target's switch to its storage
         // form, if one is under way (`texture/storage_form.rs`).
         self.0.device.storage_form_wait();
-        let command_buffer = CommandBuffer::new(self, slot);
+        // Refused on a lost generation at rest, past its loss check, its slot held
+        // (`device/carry.rs`).
+        if self.0.device.shared().carry.refuses() {
+            drop(slot);
+            return Err(self.0.device.lost_refusal());
+        }
+        let command_buffer = CommandBuffer::new(self, root, slot);
         if joined {
             self.0.device.degrade_once(Degradation::QueueSharing, || {
                 (
@@ -593,16 +869,6 @@ impl CommandQueue {
         queue.vk_queue.load(Ordering::Acquire)
     }
 
-    /// `setLabel:`.
-    pub fn set_label(&self, label: &str) {
-        *lock(&self.0.label) = Some(label.to_owned());
-    }
-
-    /// `label`.
-    pub fn label(&self) -> Option<String> {
-        lock(&self.0.label).clone()
-    }
-
     /// The queue's identity among the device's logical queues.
     pub(super) fn id(&self) -> u64 {
         self.0.id
@@ -614,17 +880,15 @@ impl CommandQueue {
         self.0.vk_queue.load(Ordering::Acquire)
     }
 
-    /// No Metal counterpart, for the lanes that watch command queues share `VkQueue`s
-    /// (`queue_share.rs`): the index of the device's `VkQueue` the queue submits to now, and
-    /// whether it is long.
-    #[doc(hidden)]
-    pub fn vk_queue_sharing(&self) -> (usize, bool) {
+    /// The index of the device's `VkQueue` the place submits to now, and whether it is long
+    /// ([`CommandQueue::vk_queue_sharing`]).
+    fn vk_queue_sharing(&self) -> (usize, bool) {
         let long = self.0.sharing.load(Ordering::Acquire) & LONG != 0;
         (self.vk_queue(), long)
     }
 
-    /// The backings of memoryless attachments the queue keeps for its passes
-    /// (`attachment_stand_in::pooled_backing`).
+    /// The backings of memoryless attachments, and of colors stored `DontCare`, the queue keeps
+    /// for its passes (`attachment_stand_in::pooled_backing`).
     pub(super) fn memoryless_backings(&self) -> &Mutex<BackingPool> {
         &self.0.memoryless_backings
     }
@@ -647,9 +911,9 @@ impl CommandQueue {
     }
 
     /// Its command buffers that completed with a GPU error they caused
-    /// (`command_buffer/revocation.rs`).
+    /// (`command_buffer/revocation.rs`): the queue's, over every place of it.
     pub(super) fn errors(&self) -> &QueueErrors {
-        &self.0.errors
+        &self.0.common.errors
     }
 
     /// Place a command buffer of the queue that completed after every one placed before: `place`

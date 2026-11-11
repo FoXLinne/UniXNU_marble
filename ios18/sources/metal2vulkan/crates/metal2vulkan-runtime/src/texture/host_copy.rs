@@ -34,15 +34,31 @@
 //!   device with unified memory, `Shared` memory the host caches (a Radeon 780M's
 //!   system memory, where its GPU uses the image as fast as in device-local memory or faster, and a
 //!   1080p `get_bytes` takes 2.6 ms where it took 108 ms from RADV's uncached device-local type);
-//!   else the class's memory as before, counted (`WorkCounts::uncached_host_images`): the copies
-//!   stay on the host there too, slowly, since a copy through a submission on the device's first
-//!   queue would wait behind the program's work, and forever behind a command buffer waiting on an
-//!   event only a later command of the calling thread signals. Where the device reserved a staging
-//!   queue on a copy engine (`device/staging.rs`; NVIDIA), a color texture copies on the host only
-//!   from host-cached memory, and else on that queue (`texture/staging_copy.rs`).
+//!   else the class's memory as before, counted (`WorkCounts::uncached_host_images`). Where the
+//!   device reserved a staging queue (`device/staging.rs`: a copy engine, NVIDIA's; or, on a
+//!   device where no memory the host caches holds a texture's image, a queue of compute work
+//!   beside its own, an RX 7900 XTX's), a color texture copies on the host only from host-cached
+//!   memory, and else on that queue (`texture/staging_copy.rs`). Elsewhere (no such queue to
+//!   stage on, or a depth texture) the copies stay on the host from uncached memory too, slowly,
+//!   since a copy through a submission on the device's first queue waits behind the program's
+//!   work submitted there (`device/staging.rs` has what it waits for, and what it never waits
+//!   for).
 //! - **Made.** The making moves the image to `GENERAL` and writes zeros over every texel on the
 //!   host ([`start`]), as Metal's new `Shared` and `Managed` textures read zero: no first move
-//!   waits for a submission (`first_move.rs`), and nothing waits for the GPU.
+//!   waits for a submission (`first_move.rs`). Where the device enabled
+//!   `VK_EXT_zero_initialize_device_memory`'s `zeroInitializeDeviceMemory`, its blocks of images
+//!   are allocated zero-initialized (`Memory::zero_image_blocks`), the image is made in
+//!   `VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT`, and where it lies past every range placed in its
+//!   block before (`Placement::fresh`) it moves to `GENERAL` out of that layout on the host
+//!   ([`transition_from`]): its zeros are the driver's, and no write of the host's touches its
+//!   memory as it is made. Elsewhere it moves out of `UNDEFINED`, which any image may whatever
+//!   its layout, and is zeroed as above. In an RX 7900 XTX's device-local memory (RADV, Mesa
+//!   26.2.6) the host's write of zeros into new memory waited for the program's queued GPU work,
+//!   0.2 to 1.1 s behind about 1.5 s of fills, and the zeroed start took 0.3 ms
+//!   (`tests/zeroed_start.rs`); that GPU copies its color textures on the staging queue, as
+//!   above. Counted: `WorkCounts::images_started_zeroed`. The blocks of the pool these images
+//!   place in are made ready ahead, every page of their mapping read before any image is placed
+//!   in them, as a first touch may wait for the memory's kernel work (`memory/ready.rs`).
 //! - **Copied.** `replace_region` copies the caller's bytes into the image on the host, straight
 //!   from them where they are laid out packed
 //!   (`HostLayout::is_packed`), else from packed bytes, and `get_bytes` copies the image's texels
@@ -120,8 +136,8 @@ pub(crate) unsafe fn reaches_general(
 }
 
 /// Move the new `image` (no command or host copy used it yet) of `aspects` from `UNDEFINED` to
-/// `GENERAL` on the host, then copy `zeros` over every texel `copies` reach (`zero_copies`, each
-/// within `zeros` from its start).
+/// `GENERAL` on the host, whatever layout it was made in, then copy `zeros` over every texel
+/// `copies` reach (`zero_copies`, each within `zeros` from its start).
 ///
 /// # Safety
 ///
@@ -154,9 +170,43 @@ pub(super) unsafe fn transition(
     image: vk::Image,
     aspects: vk::ImageAspectFlags,
 ) -> Result<(), Error> {
+    // SAFETY: the caller's contract.
+    unsafe {
+        transition_from(
+            functions,
+            device,
+            image,
+            aspects,
+            vk::ImageLayout::UNDEFINED,
+        )
+    }
+}
+
+/// `VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT` (`VK_EXT_zero_initialize_device_memory`), which
+/// `ash 0.38` predates: the layout of a new image whose memory reads zero, which a move out of it
+/// keeps.
+pub(super) const ZERO_INITIALIZED: vk::ImageLayout = vk::ImageLayout::from_raw(1_000_620_000);
+
+/// [`transition`] of an image in `from` (`UNDEFINED`, which any image may move out of whatever
+/// its layout, or [`ZERO_INITIALIZED`] for an image over bytes that read zero, which the move
+/// keeps).
+///
+/// # Safety
+///
+/// As [`start`]'s; the image is in `from` or `from` is `UNDEFINED`, and where `from` is
+/// [`ZERO_INITIALIZED`], the device enabled `zeroInitializeDeviceMemory` and the image is bound
+/// to bytes of memory allocated with `VK_MEMORY_ALLOCATE_ZERO_INITIALIZE_BIT_EXT` that no
+/// resource used.
+pub(super) unsafe fn transition_from(
+    functions: &DeviceFn,
+    device: vk::Device,
+    image: vk::Image,
+    aspects: vk::ImageAspectFlags,
+    from: vk::ImageLayout,
+) -> Result<(), Error> {
     let transition = vk::HostImageLayoutTransitionInfoEXT::default()
         .image(image)
-        .old_layout(vk::ImageLayout::UNDEFINED)
+        .old_layout(from)
         .new_layout(vk::ImageLayout::GENERAL)
         .subresource_range(vk::ImageSubresourceRange {
             aspect_mask: aspects,
@@ -165,7 +215,8 @@ pub(super) unsafe fn transition(
             base_array_layer: 0,
             layer_count: vk::REMAINING_ARRAY_LAYERS,
         });
-    // SAFETY: the caller's contract; the image is in `UNDEFINED`, which the move leaves.
+    // SAFETY: the caller's contract; the image is in `from`, or `from` is `UNDEFINED`, which a
+    // move may name in place of any layout, and the move takes every subresource of it.
     unsafe { (functions.transition_image_layout_ext)(device, 1, &transition) }
         .result()
         .map_err(vulkan)
@@ -203,6 +254,27 @@ unsafe fn write(
     unsafe { (functions.copy_memory_to_image_ext)(device, &info) }
         .result()
         .map_err(vulkan)
+}
+
+impl crate::Device {
+    /// Whether the device copies a color texture on the host: it copies on the host
+    /// ([`reaches_general`]), host copies reach `R8G8B8A8_UNORM` ([`reaches_format`]), which has
+    /// `HOST_IMAGE_TRANSFER` at optimal tiling, and a color texture's copies do not go to the
+    /// staging queue for want of memory the host caches (`Device::host_placed_image`'s tests,
+    /// `texture/staging_copy.rs`). The pool such images place in gets its blocks made ready ahead
+    /// (`memory/ready.rs`).
+    pub(crate) fn copies_color_on_the_host(&self) -> bool {
+        let shared = self.shared();
+        let format = Format::R8G8B8A8_UNORM;
+        let staged = self.has_staging_queue()
+            && !lock(&shared.memory).has_host_cached(crate::memory::MemoryClass::Private);
+        shared.host_copies.is_some()
+            && reaches_format(format, &self.properties().driver_defects)
+            && !staged
+            && (shared.textures.facts(self.compile_device().profile()))
+                .optimal(format)
+                .contains(metal2vulkan::vk::FormatFeatureFlags2::HOST_IMAGE_TRANSFER)
+    }
 }
 
 impl Image {

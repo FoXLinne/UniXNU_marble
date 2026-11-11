@@ -49,6 +49,7 @@ static IOReturn recordTransport(IOReturn result,uint32_t ocs) {
 static uint32_t hostCompletionCount(unsigned) { return 0; }
 static bool hostInterruptMode() { return false; }
 static void hostWaitCompletion(unsigned, uint32_t, uint64_t) { IODelay(2); }
+static void hostWaitDone(uint64_t) {}
 static uint64_t hostDmaAddress(const void *) { return 0; }   // no zero copy in the host model
 #include "../RootCommands.h"
 #include "../RootQueue.h"

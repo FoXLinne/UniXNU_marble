@@ -52,18 +52,28 @@ pub(crate) enum KeptTexels {
     /// the texture's size.
     Conversion,
     /// The planes lie in memory no such image is made over: fresh pages, a no-copy buffer's
-    /// pages, the caller's `VkBuffer`.
+    /// pages, the caller's `VkBuffer`, or memory the runtime exports (`exported_memory.rs`), whose
+    /// image would name its handle type (`VUID-vkBindImageMemory-memory-02728`) and so start
+    /// `UNDEFINED`, which no check covers for such an image; or a buffer's dedicated allocation
+    /// (`VUID-vkBindImageMemory-memory-10926`). Its memory's record decides
+    /// (`memory.rs`'s `Memory::bound_memory`): only memory of no export or import takes it.
     Memory,
     /// The driver's image lays the planes out otherwise, or does not fit the buffer there.
     Layout,
+    /// The planes lie in a block of the runtime's buffers allocated exportable and never
+    /// exported (`memory.rs`'s "Buffers in exportable blocks"), whose image would name one of its
+    /// handle types (`VUID-vkBindImageMemory-memory-02728`) and so start `UNDEFINED`, which the
+    /// device's check of such blocks covers for single-plane images alone.
+    ExportableBlock,
 }
 
 impl KeptTexels {
     /// The reasons, in their counters' order.
-    pub(crate) const ALL: [KeptTexels; 3] = [
+    pub(crate) const ALL: [KeptTexels; 4] = [
         KeptTexels::Conversion,
         KeptTexels::Memory,
         KeptTexels::Layout,
+        KeptTexels::ExportableBlock,
     ];
 }
 
@@ -128,7 +138,11 @@ impl Device {
         else {
             return Ok(Err(KeptTexels::Conversion));
         };
-        if texels.buffer.caller_memory().is_some() || texels.buffer.in_fresh_pages() {
+        let bound = texels.buffer.bound_memory();
+        if bound == crate::memory::BoundMemory::Blocks {
+            return Ok(Err(KeptTexels::ExportableBlock));
+        }
+        if texels.buffer.caller_memory().is_some() || bound != crate::memory::BoundMemory::Own {
             return Ok(Err(KeptTexels::Memory));
         }
         let [luma_at, luma_row] = planes.luma.map(u64::from);

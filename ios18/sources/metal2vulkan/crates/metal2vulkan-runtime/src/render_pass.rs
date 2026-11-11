@@ -758,11 +758,19 @@ pub(super) struct ColorTarget {
     /// The clear color of a `Clear` load the device converts with its rounding in question
     /// (`clear_value::rounds_apart`), whose `device-color-conversion` the pass's load operation
     /// does not owe: on a driver whose load operation clears as Metal's `Clear` load action does
-    /// (`DriverFact::ColorClearIsMetals`), of an attachment the pass's render area covers. The
-    /// clear made otherwise, before the pass, of an attachment its first instance leaves out
+    /// (`DriverFact::ColorClearIsMetals`), of an attachment the pass's render area covers. Its
+    /// clear command of a whole level and layer stores the same texel, so a clear made by it
+    /// (an attachment the first instance leaves out cleared before the pass, a memoryless
+    /// backing, a copy of the attachment cleared for a read after a barrier) owes none either;
+    /// a clear made otherwise, as sample planes or by a render pass of the attachment alone
     /// (`render.rs`), announces it ([`degrade_clear_conversion`]). `None` elsewhere: such a
     /// clear's note is announced as the pass is laid out ([`layout`]).
     pub(super) withheld_clear: Option<[f64; 4]>,
+    /// A clear before the pass cleared the attachment over its reach past the render area, which
+    /// the pass then loads (`clear_reach::ReachClears::load_in_pass`): the pass changes its
+    /// texels though its load is `Load`, which a pass that reaches no tile leaves alone otherwise
+    /// (`render/shadows.rs`).
+    pub(super) cleared_ahead: bool,
 }
 
 impl std::fmt::Debug for ColorTarget {
@@ -787,6 +795,7 @@ impl std::fmt::Debug for ColorTarget {
             .field("stand_in", &self.stand_in)
             .field("planes", &self.planes)
             .field("withheld_clear", &self.withheld_clear)
+            .field("cleared_ahead", &self.cleared_ahead)
             .finish()
     }
 }
@@ -1492,7 +1501,7 @@ pub(super) fn layout(
     descriptor: &RenderPassDescriptor,
 ) -> Result<PassLayout, Error> {
     let device = maker.device();
-    let foreign = || invalid(call, Problem::ForeignObject);
+    let foreign = |other: &Device| other.foreign(call, device);
     let not_yet = || Error::NotImplemented(RuntimeGap::Render);
     // Each attachment's load and store actions as the pass takes them ([`taken_actions`]): a
     // depth attachment's `CustomSampleDepthStore` as `Store` (a color or stencil attachment's is
@@ -1548,7 +1557,7 @@ pub(super) fn layout(
         let unresolved = color.resolve_texture.is_none() && !color.store_action.resolves();
         if unresolved && AstcDecode::of(texture.pixel_format()).is_some() {
             if !texture.device().same(device) {
-                return Err(foreign());
+                return Err(foreign(texture.device()));
             }
             let facts = Facts::of(texture.record());
             let sub = check_target(
@@ -1631,11 +1640,9 @@ pub(super) fn layout(
         // The device converts a float clear its own way, which can stand a code from Metal's
         // where the rounding is in question (`clear_value::rounds_apart`), announced once the
         // render area is known (below); a word attachment's clear is Metal's codes.
-        let either =
-            (device.properties().driver_facts).contains(&DriverFact::ColorClearTakesEitherCode);
         let withheld_clear = (color.load_action == LoadAction::Clear
             && word.is_none()
-            && clear_value::rounds_apart(texture.pixel_format(), channels, either))
+            && clear_value::rounds_apart(texture.pixel_format(), channels))
         .then_some(channels);
         let straight_clear = ExtendedRange::of(texture.pixel_format()).and_then(|_| {
             clear_value::color(texture.pixel_format(), channels, ClearRoute::Straight)
@@ -1683,6 +1690,7 @@ pub(super) fn layout(
             stand_in,
             planes: None,
             withheld_clear,
+            cleared_ahead: false,
         }));
     }
     while colors.last().is_some_and(Option::is_none) {
@@ -1752,7 +1760,7 @@ pub(super) fn layout(
     let extents = &extents[..attached];
     if let Some(buffer) = &descriptor.visibility_result_buffer {
         if !buffer.device().same(device) {
-            return Err(foreign());
+            return Err(foreign(buffer.device()));
         }
     }
     let (extent, samples) = area(
@@ -1863,7 +1871,7 @@ fn target(
     length: u64,
 ) -> Result<Target, Error> {
     if !texture.device().same(device) {
-        return Err(invalid(call, Problem::ForeignObject));
+        return Err(texture.device().foreign(call, device));
     }
     let facts = Facts::of(texture.record());
     let sub = check_target(call, which, &facts, subresource, length)?;
@@ -2194,11 +2202,13 @@ fn depth_stencil(
                 depth: None,
                 stencil: t.clone(),
             };
+            // No depth, so no resolve drawn after the pass (`resolve::may_draw`).
             let scratch = depth_stencil_scratch::scratch(
                 maker,
                 &separate,
                 [depth_load, s.load_action],
                 [d.store_action, s.store_action],
+                false,
             )?;
             (scratch, Some(separate))
         }
@@ -2220,11 +2230,21 @@ fn depth_stencil(
                 depth: Some(a.clone()),
                 stencil: b.clone(),
             };
+            // A resolve drawn after the pass reads the scratch image's samples.
+            let drawn = resolve::may_draw(
+                device,
+                a.format,
+                Wanted::of(true, &d.resolve_texture, (0, 0, 0), d.store_action).as_ref(),
+                Wanted::of(true, &s.resolve_texture, (0, 0, 0), s.store_action).as_ref(),
+                d.depth_resolve_filter,
+                s.stencil_resolve_filter,
+            );
             let scratch = depth_stencil_scratch::scratch(
                 maker,
                 &separate,
                 [depth_load, s.load_action],
                 [d.store_action, s.store_action],
+                drawn,
             )?;
             (scratch, Some(separate))
         }

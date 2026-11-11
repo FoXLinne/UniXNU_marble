@@ -37,6 +37,7 @@ fn rules() -> LocalRules {
         required_subgroup_size: None,
         stage_flags: vk::PipelineShaderStageCreateFlags::empty(),
         scratch: None,
+        rows: false,
         tile: false,
         tile_threadgroup: None,
     }
@@ -101,6 +102,7 @@ fn template() -> ComputeTemplate {
         storage_alignment: 64,
         resources: Default::default(),
         stage_in_region: false,
+        stage_in_grid: Vec::new(),
     }
 }
 
@@ -543,6 +545,58 @@ fn a_partial_simdgroup_asks_for_the_emulated_simdgroups_variant() {
     );
 }
 
+/// A flattened kernel whose simdgroup semantics are only lockstep barriers that order pairs
+/// meeting across rows (`LocalRules::rows`, `RuntimeFact::RowLockstep`) runs a threadgroup of one
+/// row on its planned pipeline whatever its width, that region without `REQUIRE_FULL_SUBGROUPS`
+/// where it is not whole subgroups: its simdgroups lie within the row. A partial threadgroup of two
+/// rows, or a `dispatchThreads` grid with such an edge, still asks for the emulated-simdgroups
+/// variant, and whole subgroups keep the flag.
+#[test]
+fn a_row_of_a_row_lockstep_kernel_runs_on_the_planned_pipeline() {
+    let mut t = flat_template();
+    t.local.rows = true;
+    let plan = compute_plan(&t, VariantKey::new());
+    let mut emulated = VariantKey::new();
+    emulated.emulated_simdgroups = true;
+    let full = vk::PipelineShaderStageCreateFlags::REQUIRE_FULL_SUBGROUPS;
+    for (n, flags) in [
+        (1, vk::PipelineShaderStageCreateFlags::empty()),
+        (16, vk::PipelineShaderStageCreateFlags::empty()),
+        (48, vk::PipelineShaderStageCreateFlags::empty()),
+        (32, full),
+        (64, full),
+    ] {
+        let d = groups([n, 1, 1]);
+        assert_eq!(plan.dispatch_variant(&d), Ok(VariantKey::new()), "{n}");
+        let c = plan.instantiate_dispatch(&state(0), &d).expect("runs");
+        assert_eq!(c.regions.len(), 1);
+        assert_eq!(c.regions[0].stage_flags, flags, "{n}");
+        assert_eq!(c.regions[0].required_subgroup_size, Some(32), "{n}");
+    }
+    // A grid of rows whose edge is one partial row: the whole rows keep the flag.
+    let edge = Dispatch::Threads {
+        threads: [100, 1, 1],
+        threads_per_group: [32, 1, 1],
+    };
+    assert_eq!(plan.dispatch_variant(&edge), Ok(VariantKey::new()));
+    let c = plan.instantiate_dispatch(&state(0), &edge).expect("runs");
+    let flags: Vec<_> = c.regions.iter().map(|r| r.stage_flags).collect();
+    assert_eq!(flags, [full, vk::PipelineShaderStageCreateFlags::empty()]);
+    for d in [
+        groups([8, 2, 1]),
+        groups([5, 3, 1]),
+        Dispatch::Threads {
+            threads: [16, 4, 1],
+            threads_per_group: [16, 3, 1],
+        },
+    ] {
+        assert_eq!(plan.dispatch_variant(&d), Ok(emulated.clone()), "{d:?}");
+    }
+    // Without the fact every partial region asks for the variant.
+    let plain = compute_plan(&flat_template(), VariantKey::new());
+    assert_eq!(plain.dispatch_variant(&groups([16, 1, 1])), Ok(emulated));
+}
+
 /// The plan of the emulated-simdgroups variant (its local size not flattened, no multiple) states
 /// the key and runs every threadgroup size with the local size as Metal gave it.
 #[test]
@@ -930,4 +984,130 @@ fn a_flat_region_that_cannot_cover_the_grid_is_refused() {
     // The split covers it: 9 x 5 x 3 threadgroups in chunks of two per axis.
     let planned = regions(&rules, &d, false).expect("the split");
     assert_eq!(planned.regions.len(), 5 * 3 * 2);
+}
+
+/// A dispatch's `StageInReach` is false exactly where every element a thread-position fetch reads
+/// ends in the first `2^32` bytes from its bind offset: the element `origin + min(position / rate,
+/// size - 1)` at its furthest, at the layout's stride, plus the end of its attribute's bytes. It is
+/// true where nothing bounds the element (an indirect grid over a region of size 0) or the origin's
+/// add wraps.
+#[test]
+fn a_dispatch_reaches_where_an_element_may_end_past_four_gigabytes() {
+    use crate::metal::{AttributeFormat, StepFunction};
+    use crate::pipeline::stage_io::StageInFetch;
+    // A `uint` at offset 4 of an element of buffer 1: an element's bytes end 8 past its start.
+    let fetch = |stride, step_function, step_rate| StageInFetch {
+        format: AttributeFormat::UInt,
+        buffer_index: 1,
+        offset: 4,
+        stride,
+        step_function,
+        step_rate,
+        index: None,
+    };
+    let (x, y) = (
+        StepFunction::ThreadPositionInGridX,
+        StepFunction::ThreadPositionInGridY,
+    );
+    let bound = |stride: Option<u32>| {
+        let mut s = state(0);
+        let kernel = s.stages.get_mut(&Stage::Kernel).expect("kernel");
+        kernel.buffers.insert(
+            1,
+            BoundBuffer::Buffer {
+                length: 4096,
+                offset: 0,
+                gpu_address: 0x2_0000,
+                device_address: None,
+                attribute_stride: stride,
+            },
+        );
+        s
+    };
+    let unbound = bound(None);
+    let along_x = |o: u32, z: u32| StageInRegion::new([o, 0, 0], [z, 1, 1]);
+    let reach = |fetches: Vec<StageInFetch>, region, grid, state: &BindState| {
+        let mut t = template();
+        t.stage_in_region = true;
+        t.stage_in_grid = fetches;
+        stage_in_reach(&t, Some(region), grid, state)
+    };
+    let quarter = 1 << 30;
+    // At a fixed 2^30, elements 0 to 3 end by 3 · 2^30 + 8, and element 4 at 2^32 + 8.
+    let fixed = || vec![fetch(Some(quarter), x, 1)];
+    assert!(!reach(fixed(), along_x(0, 4), [64, 1, 1], &unbound));
+    assert!(reach(fixed(), along_x(0, 5), [64, 1, 1], &unbound));
+    // The origin adds to every element.
+    assert!(reach(fixed(), along_x(1, 4), [64, 1, 1], &unbound));
+    // The grid's last position bounds a larger region, over the step's rate.
+    assert!(!reach(fixed(), along_x(0, 64), [4, 1, 1], &unbound));
+    let quartered = || vec![fetch(Some(quarter), x, 4)];
+    assert!(!reach(quartered(), along_x(0, 64), [16, 1, 1], &unbound));
+    assert!(reach(quartered(), along_x(0, 64), [17, 1, 1], &unbound));
+    // A region of size 0 clamps nothing: the grid alone bounds it, and an indirect one, whose
+    // grid only the GPU knows, nothing; a region of a size bounds an indirect grid.
+    assert!(!reach(fixed(), along_x(0, 0), [4, 1, 1], &unbound));
+    assert!(reach(fixed(), along_x(0, 0), [0; 3], &unbound));
+    assert!(!reach(fixed(), along_x(0, 4), [0; 3], &unbound));
+    // The step's axis: a region of 4 along y, of 64 along x.
+    let rows = StageInRegion::new([0; 3], [64, 4, 1]);
+    assert!(!reach(
+        vec![fetch(Some(quarter), y, 1)],
+        rows,
+        [64, 64, 1],
+        &unbound
+    ));
+    assert!(reach(
+        vec![fetch(Some(quarter), x, 1)],
+        rows,
+        [64, 64, 1],
+        &unbound
+    ));
+    // An origin whose add wraps reaches any element.
+    assert!(reach(
+        vec![fetch(Some(4), x, 1)],
+        along_x(u32::MAX, 2),
+        [64, 1, 1],
+        &unbound
+    ));
+    // At stride 0 every element is the first one's bytes.
+    assert!(!reach(
+        vec![fetch(Some(0), x, 1)],
+        along_x(u32::MAX, 2),
+        [64, 1, 1],
+        &unbound
+    ));
+    // A dynamic layout reads the bound stride, 0 where none is bound; `MTLAttributeStrideStatic`
+    // is its low 32 bits, past which only the first element is held.
+    let dynamic = || vec![fetch(None, x, 1)];
+    assert!(!reach(dynamic(), along_x(0, 64), [64, 1, 1], &unbound));
+    assert!(!reach(
+        dynamic(),
+        along_x(0, 1),
+        [64, 1, 1],
+        &bound(Some(u32::MAX))
+    ));
+    assert!(reach(
+        dynamic(),
+        along_x(0, 2),
+        [64, 1, 1],
+        &bound(Some(u32::MAX))
+    ));
+    assert!(!reach(
+        dynamic(),
+        along_x(0, 2),
+        [64, 1, 1],
+        &bound(Some((1 << 31) + 4))
+    ));
+    assert!(reach(
+        dynamic(),
+        along_x(0, 3),
+        [64, 1, 1],
+        &bound(Some((1 << 31) + 4))
+    ));
+    // Any fetch that may reach makes the region's key true.
+    let both = vec![fetch(Some(4), x, 1), fetch(Some(quarter), x, 1)];
+    assert!(reach(both, along_x(0, 5), [64, 1, 1], &unbound));
+    // A kernel without a thread-position fetch reaches nothing.
+    assert!(!reach(Vec::new(), along_x(0, 64), [64, 1, 1], &unbound));
 }

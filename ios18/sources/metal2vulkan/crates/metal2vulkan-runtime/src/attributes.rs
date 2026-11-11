@@ -140,6 +140,15 @@ impl ResourceAttributes {
         }
     }
 
+    /// The label and purgeable state now, for the resource carried to its device's next
+    /// generation (`device/carry.rs`).
+    pub(super) fn carried(&self) -> ResourceAttributes {
+        ResourceAttributes {
+            label: Mutex::new(lock(&self.label).clone()),
+            purgeable: Mutex::new(*lock(&self.purgeable)),
+        }
+    }
+
     /// `setLabel:`.
     pub(super) fn set_label(&self, label: &str) {
         *lock(&self.label) = Some(label.to_owned());
@@ -187,6 +196,8 @@ impl Buffer {
     /// Metal answers where its validation stops every call there, a query included. Fails only when
     /// zeroing a `Managed` buffer's bytes on a device without unified memory fails.
     pub fn set_purgeable_state(&self, state: PurgeableState) -> Result<PurgeableState, Error> {
+        // Its parts held while the call reaches them, across a recovery (`Buffer::held_parts`).
+        let _held = self.held_parts();
         if self.heap().is_some() {
             return Ok(PurgeableState::NonVolatile);
         }

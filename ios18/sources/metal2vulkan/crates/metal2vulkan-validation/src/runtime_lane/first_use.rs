@@ -27,9 +27,11 @@
 //!   memory whose fills are not transfers its zeros are one `vkCmdFillBuffer`
 //!   (`WorkCounts::new_buffer_zero_fills`), elsewhere copies of the device's zeros.
 //! - **A heap texture's `replace_region` waits for nothing**: its copy is staged for the device's
-//!   next submission; a later command buffer reads the later of two calls' bytes, and `get_bytes`
-//!   the staged bytes. A new heap texture's staged copy lands where that submission also carries
-//!   the texture's first move, a command buffer's or `get_bytes`'s, in one `vkQueueSubmit`.
+//!   next submission, or made in the heap's bytes where the texture is a shadow of them; a later
+//!   command buffer reads the later of two calls' bytes, and `get_bytes` the staged bytes. A new
+//!   heap texture's staged copy lands where that submission also carries the texture's first move,
+//!   a command buffer's or `get_bytes`'s, in one `vkQueueSubmit`; a shadow's `get_bytes` reads the
+//!   heap's bytes on the host, with no submission.
 //! - **Neutrals and sparse textures wait for nothing**: kernels whose texture and texel-buffer
 //!   slots nothing is bound to are encoded and committed, and a sparse texture is made, while the
 //!   busy work runs, with no internal submission; the kernels then complete cleanly and the sparse
@@ -59,16 +61,17 @@ use super::degrade_notices::{
     assert_once_allowing, forced, made_compute_kinds, shared_in_system_memory,
 };
 use super::gpu_times::{disagreeable_kinds, read_kinds};
+use super::host_memory::on_device;
+use super::host_memory::on_device_with;
 use super::host_memory::{no_copy, not_importable, recording, Mapping, Seen, GUEST_PAGE};
 use super::rebind_reach::{node, walk, Outputs, Uses, A, POINTER_WALKER};
 use super::rebinds::rebind;
 use super::sparse_textures::{lacks_sparse, SparseFacts};
 use super::{
-    buffer_with, case_bound_value_kinds, case_making_kinds, encode_case, pipeline_state,
+    at_plan, buffer_with, case_bound_value_kinds, case_making_kinds, encode_case, pipeline_state,
     public_case, read_buffer, CaseResources, Messages, WAIT,
 };
 use crate::air_library::AirLibrary;
-use crate::runtime_lane::host_memory::on_device;
 use metal2vulkan::bind::{StatusReport, TileMapping};
 use metal2vulkan::device::DriverFact;
 use metal2vulkan::metal::{PixelFormat, TextureType, TextureUsage};
@@ -256,9 +259,32 @@ impl Busy {
         (BusyWork { links }, words)
     }
 
+    /// Encode one spin into `command_buffer` between its other work, on the flag that is
+    /// `words`' first word ([`release`]), zero until released: the spin publishes 5 in the word
+    /// after it once released (it leaves it where its cap ended it), and binds `words` whole, so
+    /// a command before it that writes `words`' bytes past those two runs before it, and one after
+    /// it that reads the published word runs after it, as the tracker orders uses of one buffer.
+    /// The spin's ticket's buffer, which it raises from 1 to 2 as it starts.
+    pub(super) fn spin_in(
+        &self,
+        device: &Device,
+        command_buffer: &CommandBuffer,
+        words: &Buffer,
+    ) -> Buffer {
+        let cap = buffer_with(device, &self.cap.to_le_bytes()).unwrap();
+        self.spin(device, command_buffer, words, &cap)
+    }
+
     /// Encode one spin into `command_buffer`: one threadgroup with a ticket of its own (the kernel
     /// takes the ticket's value and raises it), spinning on `words`' flag for at most `cap`'s loads.
-    fn spin(&self, device: &Device, command_buffer: &CommandBuffer, words: &Buffer, cap: &Buffer) {
+    /// The ticket's buffer.
+    fn spin(
+        &self,
+        device: &Device,
+        command_buffer: &CommandBuffer,
+        words: &Buffer,
+        cap: &Buffer,
+    ) -> Buffer {
         let ticket = buffer_with(device, &1u32.to_le_bytes()).unwrap();
         let mut encoder = command_buffer.compute_command_encoder().unwrap();
         encoder.set_compute_pipeline_state(&self.state).unwrap();
@@ -268,6 +294,7 @@ impl Busy {
         let one = Size::new(1, 1, 1);
         encoder.dispatch_threadgroups(one, one).unwrap();
         encoder.end_encoding().unwrap();
+        ticket
     }
 }
 
@@ -925,7 +952,7 @@ fn first_after(device: &Device, queue: &CommandQueue, failure: Option<&str>) -> 
 /// through resources placed in a new heap, aliased, which its fill never overwrites.
 #[test]
 fn a_new_resource_s_zeros_come_before_every_use_on_every_queue() {
-    on_device(|device| {
+    on_device_with(at_plan, |device| {
         let name = device.name();
         let first = device.new_command_queue().unwrap();
         let second = device.new_command_queue().unwrap();
@@ -1057,10 +1084,7 @@ fn a_new_private_buffer_reads_zero_through_its_first_fill() {
         command_buffer.wait_until_completed_for(WAIT).unwrap();
         assert_eq!(command_buffer.error(), None, "on {name}");
         let filled = device.work_counts().new_buffer_zero_fills - before;
-        let properties = device.properties();
-        let by_transfers =
-            (properties.driver_facts).contains(&DriverFact::FillCompiledPerCommandPool);
-        let fills = !properties.has_unified_memory && !by_transfers;
+        let fills = !device.properties().has_unified_memory;
         println!(
             "FIRST-USE on {name}: a new {len}-byte Private buffer {} the released one's memory, \
              its zeros {}",
@@ -1340,8 +1364,13 @@ fn a_heap_texture_s_replace_region_waits_for_no_gpu_work() {
 /// `get_bytes`'s internal submission (`device/submit.rs`) each read the copy's bytes, in one
 /// `vkQueueSubmit` of one `VkSubmitInfo` (the internal one followed by the relay's call of no
 /// work where the runtime relays the driver's failures, `commit_work::relay_marks`: after the
-/// runtime's own submission a fence alone, of no `VkSubmitInfo`). Then an empty command buffer committed after a new texture is made carries its
-/// first move in its batch's one `VkSubmitInfo`.
+/// runtime's own submission a fence alone, of no `VkSubmitInfo`). A texture that is a shadow of
+/// the heap's bytes (its elements in Metal's tiles there, a compressed one's uncompressed tiles:
+/// the RX 7900 XTX's `Shared` one here) stages nothing: `replace_region` writes those bytes and
+/// `get_bytes` reads them on the host (`WorkCounts::heap_shadow_cpu_copies`), with no
+/// submission, and the blit's submission carries the move from them. Then an empty command
+/// buffer committed after a new texture is made carries its first move in its batch's one
+/// `VkSubmitInfo`.
 #[test]
 fn a_new_heap_texture_s_staged_copy_lands_in_its_first_move_s_submission() {
     on_device(|device| {
@@ -1363,6 +1392,14 @@ fn a_new_heap_texture_s_staged_copy_lands_in_its_first_move_s_submission() {
                 .unwrap();
             let staged = device.work_counts();
             let path = if by_get_bytes { "get_bytes" } else { "a blit" };
+            // A shadow of the heap's bytes copies in them on the host: nothing is staged.
+            let hosted = staged.heap_shadow_cpu_copies - before.heap_shadow_cpu_copies;
+            assert!(
+                hosted <= 1,
+                "{path} on {name}: {hosted} copies in the heap's bytes"
+            );
+            let hosted = hosted == 1;
+            println!("FIRST-USE on {name}: {path}: replace_region in the heap's bytes {hosted}");
             assert_eq!(
                 (
                     staged.queue_submissions,
@@ -1402,18 +1439,29 @@ fn a_new_heap_texture_s_staged_copy_lands_in_its_first_move_s_submission() {
                 after.host_texel_copies, before.host_texel_copies,
                 "{path} on {name}: a host copy"
             );
+            // get_bytes of a shadow of the heap's bytes reads them on the host: no submission.
+            let read_hosted = by_get_bytes && hosted;
+            assert_eq!(
+                after.heap_shadow_cpu_copies - staged.heap_shadow_cpu_copies,
+                u64::from(read_hosted),
+                "{path} on {name}: get_bytes in the heap's bytes"
+            );
             assert_eq!(
                 after.internal_submissions - before.internal_submissions,
-                u64::from(by_get_bytes),
+                u64::from(by_get_bytes && !read_hosted),
                 "{path} on {name}: internal submissions"
             );
-            let calls = 1 + if by_get_bytes { marks } else { 0 };
+            let (calls, infos) = match (by_get_bytes, read_hosted) {
+                (_, true) => (0, 0),
+                (true, false) => (1 + marks, 1),
+                (false, false) => (1, 1),
+            };
             assert_eq!(
                 (
                     after.queue_submissions - before.queue_submissions,
                     after.submit_infos - before.submit_infos,
                 ),
-                (calls, 1),
+                (calls, infos),
                 "{path} on {name}: the move, the copy and the work in one VkSubmitInfo"
             );
             drop((texture, heap));
@@ -1588,9 +1636,12 @@ fn shared_textures_copy_on_the_host_while_the_gpu_is_busy() {
 /// frame target is: `get_bytes` reads what a completed blit wrote, texel for texel, each of
 /// `FRAME_READS` times, and a command buffer committed after `replace_region` reads the bytes it
 /// wrote. Prints each call's time (`FRAME-COPY` lines). With about 2 s of GPU work running, it
-/// reads `replace_region`'s texels up to `LOADED_READS` times, until the work ends; where it copies
-/// on the host or the staging queue, the first read returns while the work runs, and the line gives
-/// the distribution of those that did.
+/// reads `replace_region`'s texels up to `LOADED_READS` times, over about [`BUSY`]; where it copies
+/// on the host or the staging queue, a command buffer behind the work waits for an event the host
+/// signals only once the reads returned, and they return before it, however long a read takes on
+/// the device (a 1080p read on the host from an RX 7900 XTX's uncached device-local memory took
+/// up to 1.7 s); the line gives the distribution of those that returned while the work ran.
+/// Elsewhere the reads wait for the work, which ends at its cap.
 #[test]
 fn frame_sized_textures_copy_texel_exact() {
     const WIDTH: u64 = 1920;
@@ -1628,11 +1679,11 @@ fn frame_sized_textures_copy_texel_exact() {
             let hosted = made.images_started_on_the_host > before.images_started_on_the_host;
             let staged = made.staging_moves_queued > before.staging_moves_queued;
             let cached = takes_host_cached_memory(device);
-            if has_a_copy_engine(device) && !cached {
+            if has_a_family_to_stage_on(device) && !cached {
                 assert!(
                     staged,
-                    "{mode:?} on {name}: a device with a copy engine and no memory the host caches \
-                     for a texture copies on its staging queue"
+                    "{mode:?} on {name}: a device with a queue family to stage on and no memory \
+                     the host caches for a texture copies on its staging queue"
                 );
             }
             let uncached = made.uncached_host_images > before.uncached_host_images;
@@ -1707,40 +1758,89 @@ fn frame_sized_textures_copy_texel_exact() {
                 read_buffer(&out, 0, FRAME_BYTES as u64).unwrap() == written,
                 "{mode:?} on {name}: a later command buffer reads replace_region's texels"
             );
-            // With about 2 s of GPU work running: on the host or the staging queue, `get_bytes`
-            // returns while it runs (an absolute time is not portable), still texel exact. The
-            // reads go on until it ends, at most `LOADED_READS`; the times of those that
-            // returned while it ran are their distribution under load.
+            // With GPU work running: on the host or the staging queue, `get_bytes` returns while
+            // it runs (an absolute time is not portable), still texel exact. There a command buffer
+            // behind the busy work on its queue waits for an event the host signals only once the
+            // reads returned, or `WAIT` passed: a read that waited for the queue's work would wait
+            // for that signal, and one that waits for none returns first however long it takes,
+            // though a slow one may outlast the busy work. Elsewhere the reads wait for the busy
+            // work, which ends at its cap. The reads go on for about `BUSY`, at most
+            // `LOADED_READS`, or until it ended, on a thread of their own where the event gates the
+            // queue; the times of those that returned while it ran are their distribution under
+            // load.
+            let apart = hosted || staged;
             let (busy_work, mark) = busy.commit(device, &queue);
-            busy_work.scheduled();
-            let mut loaded = Vec::new();
-            let mut ended_after = None;
-            for _ in 0..LOADED_READS {
-                let mut read = vec![0xee; FRAME_BYTES];
-                let at = Instant::now();
-                texture
-                    .get_bytes(&mut read, FRAME_ROW, 0, region, 0, 0)
+            let event = device.new_shared_event().unwrap();
+            let gated = apart.then(|| {
+                let command_buffer = queue.command_buffer().unwrap();
+                command_buffer
+                    .encode_wait_for_event((&event).into(), 1)
                     .unwrap();
-                let took = millis(at.elapsed());
-                let running = read_mark(&mark) == 0;
-                assert!(
-                    read == written,
-                    "{mode:?} on {name}: get_bytes under load reads replace_region's texels"
-                );
-                if !running {
-                    ended_after = Some(took);
-                    break;
+                command_buffer.commit().unwrap();
+                command_buffer
+            });
+            busy_work.scheduled();
+            // Each read's time, and whether the busy work still ran once it returned.
+            let read_loaded = || {
+                let reading = Instant::now();
+                let mut times = Vec::new();
+                for _ in 0..LOADED_READS {
+                    let mut read = vec![0xee; FRAME_BYTES];
+                    let at = Instant::now();
+                    texture
+                        .get_bytes(&mut read, FRAME_ROW, 0, region, 0, 0)
+                        .unwrap();
+                    let took = millis(at.elapsed());
+                    let running = read_mark(&mark) == 0;
+                    assert!(
+                        read == written,
+                        "{mode:?} on {name}: get_bytes under load reads replace_region's texels"
+                    );
+                    times.push((took, running));
+                    if !running || reading.elapsed() >= BUSY {
+                        break;
+                    }
                 }
-                loaded.push(took);
-            }
+                times
+            };
+            let times = match &gated {
+                Some(_) => {
+                    let (done, finished) = std::sync::mpsc::channel();
+                    let returned = std::thread::scope(|scope| {
+                        let read_loaded = &read_loaded;
+                        scope.spawn(move || {
+                            let _ = done.send(read_loaded());
+                        });
+                        let returned = finished.recv_timeout(WAIT).ok();
+                        event.set_signaled_value(1);
+                        returned
+                    });
+                    returned.unwrap_or_else(|| {
+                        panic!(
+                            "{mode:?} on {name}: get_bytes waited for the queued work, past \
+                             {WAIT:?}"
+                        )
+                    })
+                }
+                None => read_loaded(),
+            };
             release(&mark);
             busy_work.wait_until_completed_for(WAIT).unwrap();
-            if hosted || staged {
-                assert!(
-                    !loaded.is_empty(),
-                    "{mode:?} on {name}: get_bytes waited for the busy work ({ended_after:.2?} ms)"
+            if let Some(gated) = &gated {
+                gated.wait_until_completed_for(WAIT).unwrap();
+                assert_eq!(
+                    gated.error(),
+                    None,
+                    "{mode:?} on {name}: the gated command buffer"
                 );
             }
+            let mut loaded: Vec<f64> = (times.iter())
+                .filter(|&&(_, running)| running)
+                .map(|&(took, _)| took)
+                .collect();
+            let ended_after = (times.iter())
+                .find(|&&(_, running)| !running)
+                .map(|&(took, _)| took);
             loaded.sort_by(f64::total_cmp);
             let under_load = match (loaded.first(), loaded.last()) {
                 (Some(best), Some(worst)) => format!(
@@ -1766,10 +1866,14 @@ fn frame_sized_textures_copy_texel_exact() {
     });
 }
 
-/// Whether `device` lists a copy engine the runtime stages on, as Vulkan itself reports the
-/// physical device, so a runtime that took no staging queue is caught: a family of transfers
-/// alone (sparse binding and protected memory aside) whose copies take any texel.
-fn has_a_copy_engine(device: &Device) -> bool {
+/// Whether `device` lists a queue family the runtime stages a texture's CPU copies on where no
+/// memory the host caches holds a texture's image, as Vulkan itself reports the physical device,
+/// so a runtime that took no staging queue is caught: one whose copies take any texel, of
+/// transfers alone (sparse binding and protected memory aside: a copy engine), or of graphics or
+/// compute work (an RX 7900 XTX's compute family), other than the first family that does both, on
+/// a device whose families are not all equivalent to that one (MoltenVK's are, and a device takes
+/// queues of all of them).
+fn has_a_family_to_stage_on(device: &Device) -> bool {
     use ash::vk;
     // SAFETY: the handles are used only here, while the device lives, to query the physical
     // device.
@@ -1784,13 +1888,31 @@ fn has_a_copy_engine(device: &Device) -> bool {
         height: 1,
         depth: 1,
     };
+    let work = vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE;
+    let Some(first) = (families.iter())
+        .position(|family| family.queue_count > 0 && family.queue_flags.contains(work))
+    else {
+        return false;
+    };
+    let primary = families[first];
+    let equivalent = |family: &vk::QueueFamilyProperties| {
+        family.queue_flags == primary.queue_flags
+            && family.queue_count == primary.queue_count
+            && family.timestamp_valid_bits == primary.timestamp_valid_bits
+            && family.min_image_transfer_granularity == primary.min_image_transfer_granularity
+    };
+    if families.iter().all(equivalent) {
+        return false;
+    }
     let besides =
         vk::QueueFlags::TRANSFER | vk::QueueFlags::SPARSE_BINDING | vk::QueueFlags::PROTECTED;
-    families.iter().any(|family| {
-        family.queue_count > 0
-            && family.queue_flags.contains(vk::QueueFlags::TRANSFER)
-            && (family.queue_flags & !besides).is_empty()
+    (families.iter().enumerate()).any(|(index, family)| {
+        let flags = family.queue_flags;
+        let copy_engine = flags.contains(vk::QueueFlags::TRANSFER) && (flags & !besides).is_empty();
+        index != first
+            && family.queue_count > 0
             && family.min_image_transfer_granularity == unit
+            && (copy_engine || flags.intersects(work))
     })
 }
 
@@ -1801,7 +1923,7 @@ fn has_a_copy_engine(device: &Device) -> bool {
 /// device measured.
 fn takes_host_cached_memory(device: &Device) -> bool {
     use ash::vk;
-    // SAFETY: as in `has_a_copy_engine`.
+    // SAFETY: as in `has_a_family_to_stage_on`.
     let raw = unsafe { device.raw() };
     // SAFETY: a physical device of the instance.
     let memory = unsafe {
@@ -1829,7 +1951,7 @@ fn takes_host_cached_memory(device: &Device) -> bool {
 /// Prints the route (`STAGING-HANG` lines).
 #[test]
 fn cpu_copies_return_while_queued_work_waits_on_a_later_event() {
-    on_device(|device| {
+    on_device_with(at_plan, |device| {
         let name = device.name();
         let managed = ResourceOptions::new(
             StorageMode::Managed,

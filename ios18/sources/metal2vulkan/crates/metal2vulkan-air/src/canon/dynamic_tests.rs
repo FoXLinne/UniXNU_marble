@@ -270,6 +270,7 @@ fn client(kernel: Def<'_>, defs: &[Def<'_>], dead: bool) -> (Module, AirAbi) {
         func: k,
         stage: Stage::Kernel {
             max_total_threads: None,
+            work_group_size: None,
         },
         params: vec![ParamBinding {
             param: 0,
@@ -309,6 +310,7 @@ fn store(f: &mut FunctionBuilder<'_>, val: Value, ptr: Value) {
 fn request() -> SpecRequest {
     SpecRequest {
         call_stack_depth: 1,
+        open_cl_mode: false,
         entry: "k".into(),
         constants: BTreeMap::new(),
     }

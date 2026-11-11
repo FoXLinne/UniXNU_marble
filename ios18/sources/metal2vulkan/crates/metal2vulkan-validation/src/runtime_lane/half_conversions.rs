@@ -13,13 +13,16 @@
 //! The module rounds each `half` through the device's conversion of the `float` to 16 bits. Where
 //! the profile takes the deviation (MoltenVK on the Apple M3 Max's macOS 27 identity) the
 //! conversion kernels record no `PrecisionNote::NativeHalfConversion` and every lane is Metal's
-//! word; the `tanh` kernel records it there, as a `half` function computed in `float`. Elsewhere a
-//! kernel that rounds through the conversion records the note, and its lanes are the device's,
-//! which the test prints as `HALF-CONVERSIONS` lines.
+//! word; the `tanh` kernel records it there, as a `half` function computed in `float`. Under the
+//! float controls (ANV, RADV) the conversion is Metal's and records no note, but where the driver
+//! fuses the sum, the product or the fused multiply-add into it and rounds the exact result once
+//! (RADV, `DriverWorkaround::HalfConversionFusedWithArithmetic`), which records it. Elsewhere a
+//! kernel that rounds through the conversion records the note. A kernel that records it may answer
+//! the device's lanes, which the test prints as `HALF-CONVERSIONS` lines.
 
-use super::degrade_notices::on_device;
+use super::degrade_notices::on_device_with;
 use super::driver_deviations::stage_notes;
-use super::{buffer_with, read_buffer, WAIT};
+use super::{at_plan, buffer_with, read_buffer, WAIT};
 use crate::air_library::AirLibrary;
 use metal2vulkan::device::VkProperty;
 use metal2vulkan::pipeline::{ComputePipelineDescriptor, PrecisionNote, StageSource};
@@ -239,7 +242,7 @@ fn run(device: &Device, kernel: &Kernel, air: &[u8], lanes: &[[f32; 3]]) -> Vec<
 fn half_conversions_are_metals_where_measured_and_noted_elsewhere() {
     let air = llvm_assemble_text(&library()).unwrap();
     let ties = tie_floats();
-    on_device(|device, _| {
+    on_device_with(at_plan, |device, _| {
         let measured = device
             .compile_device()
             .profile()

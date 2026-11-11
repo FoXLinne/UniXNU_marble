@@ -1,10 +1,31 @@
 //! The debug builds' check that a stage table brought in place is the table read whole
 //! (`ArgumentTable::check_reading`, `argument_table.rs`), which compares a sampler as it prints
-//! without printing it (`same_as_printed`); and the offset a table takes at an index with no
-//! buffer bound, which a render stage's table answers as a compute one does.
+//! without printing it (`same_as_printed`); the offset a table takes at an index with no buffer
+//! bound, which a render stage's table answers as a compute one does; and the stamps threads draw
+//! at once, each from a block of its own, which no two calls share.
 
-use super::super::argument_table::{same_as_printed, ArgumentTable};
+use super::super::argument_table::{per_bind_stride, same_as_printed, ArgumentTable, Stamp};
 use metal2vulkan::bind::{BoundSampler, SamplerDescriptor, StageTable};
+
+/// A stride form's stride is its low 32 bits, and `MTLAttributeStrideStatic`'s (`u64::MAX`) too:
+/// a layout of `MTLBufferLayoutStrideDynamic` reads `2^32 - 1` and so the element at the bind
+/// offset and zero past it, as plain Metal on an Apple M3 Max under macOS 27.0.1 answered the
+/// compute encoder's four stride forms and the render encoder's vertex form
+/// (`metal2vulkan-conformance`'s `attribute-stride-*` recordings).
+#[test]
+fn the_static_constant_is_the_widest_stride() {
+    for (stride, held) in [
+        (0u64, 0u32),
+        (8, 8),
+        (1 << 32, 0),
+        ((1 << 32) + 8, 8),
+        ((1 << 63) + 8, 8),
+        (u64::from(u32::MAX), u32::MAX),
+        (u64::MAX, u32::MAX),
+    ] {
+        assert_eq!(per_bind_stride(stride), held, "{stride}");
+    }
+}
 
 /// `setBufferOffset:atIndex:`, and its stride form, at an index with no buffer bound: a render
 /// stage's table answers exactly as a compute one does, and neither keeps anything
@@ -149,4 +170,31 @@ fn the_check_compares_every_field() {
             "reduction_mode"
         ]
     );
+}
+
+/// Threads drawing stamps at once, each past more than one block of its own, draw no stamp
+/// another call drew, on their threads or another's (`Stamp::fresh`): the identity a reader of a
+/// table compares holds across threads as it did when every stamp came from one counter.
+#[test]
+fn stamps_drawn_on_threads_at_once_are_all_distinct() {
+    const THREADS: usize = 4;
+    // Past a block's stamps, so each thread takes a second block while the others draw.
+    const EACH: usize = (1 << 16) + 1000;
+    let start = std::sync::Barrier::new(THREADS);
+    let drawn: Vec<Vec<Stamp>> = std::thread::scope(|scope| {
+        let threads: Vec<_> = (0..THREADS)
+            .map(|_| {
+                scope.spawn(|| {
+                    start.wait();
+                    (0..EACH).map(|_| Stamp::fresh()).collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        threads.into_iter().map(|t| t.join().unwrap()).collect()
+    });
+    let mut all: Vec<u64> = drawn.iter().flatten().map(|stamp| stamp.raw()).collect();
+    let total = all.len();
+    all.sort_unstable();
+    all.dedup();
+    assert_eq!(all.len(), total, "a stamp drawn twice");
 }

@@ -54,6 +54,7 @@ mod buffer;
 mod buffer_descriptor;
 mod buffer_texture;
 mod capabilities;
+mod check_draw;
 mod chroma_pairs;
 mod churn_counts;
 mod clear_reach;
@@ -70,6 +71,7 @@ mod copy_plan;
 mod creation;
 mod deferred;
 mod degradation;
+mod depth_clamp;
 mod depth_copy;
 mod depth_stand_in;
 mod depth_stencil;
@@ -102,10 +104,14 @@ mod families;
 #[doc(hidden)]
 pub use execution::{ExecutedPipeline, Execution};
 mod exit_guard;
-pub use exit_guard::process_exiting;
+pub use exit_guard::{process_exiting, program_instance_made};
 #[doc(hidden)]
 pub use exit_guard::{registrations as exit_registrations, Registrations as ExitRegistrations};
 mod executed_commands;
+#[cfg(unix)]
+mod exported_memory;
+#[cfg(unix)]
+mod exported_semaphore;
 mod fence;
 mod fetch_reach;
 mod fill_value;
@@ -170,6 +176,7 @@ mod neutral;
 mod noted_apart;
 mod owned_kernel;
 mod pass_runs;
+mod pending_audit;
 mod pending_dispatch;
 mod pipeline;
 mod pixel_format_info;
@@ -213,6 +220,7 @@ mod shader_cache;
 mod shadow;
 mod shadow_copy_back;
 mod shadow_copy_in;
+mod shadow_log;
 mod shadow_merge;
 mod shadow_standing;
 mod shadow_stencil;
@@ -222,10 +230,13 @@ mod sorted_chunks;
 mod spares;
 mod sparse;
 mod stencil_copy;
+mod step_aside;
 mod storage_placeholder;
+mod submit_check;
 mod tessellation;
 mod texture;
 mod texture_descriptor;
+mod texture_placement;
 mod tile_pass;
 mod tracker;
 mod trails;
@@ -259,7 +270,7 @@ pub use attributes::PurgeableState;
 pub use binary_archive::{BinaryArchive, BinaryArchiveDescriptor};
 pub use blit::BlitCommandEncoder;
 pub use buffer::Buffer;
-pub use buffer_descriptor::{BufferContents, BufferDescriptor};
+pub use buffer_descriptor::{BufferContents, BufferDescriptor, MemoryExport};
 pub use buffer_texture::IoSurfacePlane;
 pub use capabilities::{DeviceProperties, MacClass, Query};
 pub use churn_counts::{ObjectChurn, ShadowKeeps};
@@ -273,11 +284,11 @@ pub use depth_stencil::DepthStencilState;
 pub use device::{
     DebugMessage, Device, DeviceHandles, DeviceKind, DeviceOptions, ExtraQueue, LayerSetting,
     LayerSettingValue, MessageKind, MessageSeverity, MessageSink, PhysicalDeviceIdentity,
-    RawDevice, ReservedQueue,
+    QueueLimits, RawDevice, ReservedQueue,
 };
 pub use dirty_pages::{DirtyPages, DirtyStamp};
 #[cfg(unix)]
-pub use dma_buf::{DmaBufChunk, DmaBufRequest, DmaBufSource};
+pub use dma_buf::{DmaBufChunk, DmaBufRequest, DmaBufRunsSource, DmaBufSource};
 pub use dynamic_library::DynamicLibrary;
 pub use error::DynamicLibraryError;
 pub use error::ExtensionFeature;
@@ -300,6 +311,8 @@ pub use exactness::Exactness;
 pub use executed_commands::{
     ExecutedCommand, ExecutedCommands, ExecutedCommandsHandler, RecordsRead,
 };
+#[cfg(unix)]
+pub use exported_memory::ExportedMemory;
 pub use families::{
     FamilyRow, FeatureRow, FormatCapabilities, FormatCapability, FormatRow, Framework, GpuFamily,
     LimitRow, Refusal, RowAudit, RowState,
@@ -367,6 +380,9 @@ pub use sparse::encoder::ResourceStateCommandEncoder;
 pub use sparse::{SparsePageSize, SparseProblem, SparseTextureRegionAlignmentMode};
 pub use texture::{SharedTextureHandle, Texture, VkImageLayouts, WrappedImageProblem};
 pub use texture_descriptor::{TextureDescriptor, TextureProblem, TextureSwizzleChannels};
+pub use texture_placement::{
+    InPlaceAccess, InPlaceRefusal, InPlaceRowEnds, TexturePlacement, TextureShadowReason,
+};
 pub use used_resources::{EncoderKind, EndedEncoder, UsedResources};
 pub use values::{
     CommandBufferStatus, Coordinate2D, CpuCacheMode, HazardTrackingMode, Origin, Region,
@@ -375,6 +391,6 @@ pub use values::{
 pub use view_plan::ViewProblem;
 pub use visibility::{VisibilityProblem, VisibilityResultMode, VisibilityResultType};
 pub use warm::{PipelineRecord, WarmStatistics};
-pub use work_counts::{CopySite, MemoryFrees, WorkCounts};
+pub use work_counts::{CopySite, DeviceCheckWork, MemoryFrees, WorkCounts};
 pub use wrapped_buffer::{VkBufferMemory, WrappedBufferProblem};
 pub use ycbcr::{IoSurfaceYCbCr, SurfaceYCbCrMatrix};

@@ -412,6 +412,7 @@ impl Store {
                     object_id: None,
                     misplaced: None,
                     call: None,
+                    command_buffer: None,
                 }),
                 format!(
                     "metal2vulkan: an entry of the shader cache directory {root} was not \

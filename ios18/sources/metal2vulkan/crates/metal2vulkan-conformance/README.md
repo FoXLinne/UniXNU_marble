@@ -77,7 +77,10 @@ instead. That fact rides in the failure's own recorded value, beside the typed e
 the comparison wherever in a case the refusal happened: a case whose site is one node but whose rows
 are many names the row in its abort and pushes the node at the site, and filing the fact under a
 path the case states twice is how one run came to score the same missing extension `refused` in one
-family and `lacks-feature` in another.
+family and `lacks-feature` in another. A getter whose answer is the device's limit reads the same
+way where the device refused the work of Metal's size as its gap: a tile state whose descriptor
+states no limit answers the device's `maxTotalThreadsPerThreadgroup`, below Metal's 1024 where the
+device holds fewer threads of the pipeline, and its tile dispatch of Metal's threadgroup is refused.
 
 ## Does it answer the same thing twice?
 
@@ -118,9 +121,11 @@ the case needs is not a gap of ours at all — that is its own verdict, per site
 A row may also name the **venue** it is expected on, because a gap can be one venue's and not
 another's: a pipeline the runtime refuses on MoltenVK for a structural reason can translate on
 lavapipe, and a global row would then fail the lavapipe run for existing. The field is held, without
-case, against the venue's own description — its device name, driver and API version — so a row can
-name one device (`Apple M3 Max`), one implementation (`llvmpipe`) or a family of them, and a venue
-that joins later needs no new vocabulary. `*` means every venue, and it is the
+case, against the venue's own description — its device name, for a CPU implementation the host's
+widest vector instruction set (`llvmpipe (LLVM 23.1.4, 256 bits) on x86-64 AVX-512`, which its
+compiler targets and its answers follow), then its driver and API version — so a row can name one
+device (`Apple M3 Max`), one implementation (`llvmpipe`), one host's (`on x86-64 AVX2`) or a family
+of them, and a venue that joins later needs no new vocabulary. `*` means every venue, and it is the
 **stronger** claim rather than the looser one: the row is then held on every venue the run selected
 its case on, so widening a row's scope makes it harder to satisfy. That is what stops a
 venue-scoped row from becoming a way to silence a venue. A venue pattern that matches nothing holds
@@ -263,6 +268,12 @@ Both shapes, as two commands, because a bound is written from both or it is not 
 
 A case's cost record lives in its own recording file, beside the Metal answers, so a host with no
 Metal reads it with the rest of the case.
+
+**A record names the venue and the build.** The committed records are measured by the debug binary
+(`target/debug/conformance`), whose debug assertions take paths of their own (a kept draw rebound
+again takes the whole check at its first and every second hit), so a release build's counts are not
+its counts: a release build's runs name their venue `<device>, release build`, are `unmeasured`
+against the debug records, and its `--write` keeps a record of its own beside them.
 
 **Counts are ours, never Metal's.** Metal has no counterpart for any of them and a host with no
 Metal can have no answer, so a count never enters the comparison with Metal and never produces a
@@ -438,7 +449,9 @@ over 1,755 states, 1.519 each, the worst row `swizzled-storage-rgba8unorm` at 11
 hold none, and for a reason the record states: 453 cases create no pipeline state, so there is no
 denominator, and 11 carry a recorded refusal instead. A bound measured over a selection would not
 do: `judge` refuses any selection but the whole set, which is the shape the gate runs in, so the
-bound is written from a whole-set `cost --runs 8 --write` and nothing smaller.
+bound is written from a whole-set `cost --runs 8 --write` and nothing smaller: `cost --write` of a
+selection refuses before it runs (`cost::write_refusal`), and `cost --alone --write`, whose shape
+no selection changes, writes from any.
 
 `cost`'s own per-case wall-clock figure stays **advisory**: it is printed so a reader can see where
 the counts are large, and it is neither recorded nor gated. Timing against Metal is the times half,

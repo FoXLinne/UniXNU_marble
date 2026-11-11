@@ -4,8 +4,8 @@
 #include "NativeAdrenoUserClient.h"
 #include <kern/task.h>
 extern "C" volatile uint32_t native_adreno_trace_stage;
-/* 0 keeps user BOs cacheable and maintained before every submission (int-070..097); the board sets it from the sheng-gpu-wc boot argument. */
-/* sheng-gpu-owned-coherent=1: the GPU's own BOs use the IO-coherent path (CPU write-back view, GPU write-back inner-shareable mapping) instead of
+/* 0 keeps user BOs cacheable and maintained before every submission (int-070..097); the board sets it from the gpu-wc boot argument. */
+/* gpu-owned-coherent=1: the GPU's own BOs use the IO-coherent path (CPU write-back view, GPU write-back inner-shareable mapping) instead of
  * write-combine: no write-combined audit and no cache maintenance per submission. Effective only once the board proved IO coherence. */
 extern "C" {volatile uint32_t native_adreno_wc_enabled=1,native_adreno_owned_coherent=0;extern volatile uint32_t native_adreno_io_coherent;}
 static bool ownedCoherent() {return native_adreno_owned_coherent && native_adreno_io_coherent;}
@@ -309,8 +309,14 @@ IOReturn NativeAdrenoUserClient::syncBo(const NativeAdrenoAbiBoSync *request)
     const size_t length=entry->memory.bytes();
     if(request->offset>=length || request->bytes>length-request->offset)return kIOReturnBadArgument;
     const size_t begin=request->offset&~size_t(4095),end=(request->offset+request->bytes+4095)&~size_t(4095);
-    return request->acquire?entry->memory.acquireDeviceWrites(begin,end-begin,NativeAdrenoPhaseComplete):
+    const IOReturn status=request->acquire?entry->memory.acquireDeviceWrites(begin,end-begin,NativeAdrenoPhaseComplete):
         entry->memory.publishForDevice(begin,end-begin,true,false,NativeAdrenoPhaseSubmit);
+    /* Runtime staging imports never call BoSync. Keep kernel publication for
+     * those allocations; only a successful full publication opts a BO into
+     * the frontend's per-command ownership contract. */
+    if(!status && !request->acquire && !begin && end==length)
+        return vm_->markClientMaintained(entry->mapped);
+    return status;
 }
 IOReturn NativeAdrenoUserClient::mapBo(const NativeAdrenoAbiBoMap *request,
     NativeAdrenoAbiBoMapReply *reply)
@@ -343,7 +349,7 @@ IOReturn NativeAdrenoUserClient::mapBo(const NativeAdrenoAbiBoMap *request,
     const bool coherent=(entry->memory.imported() && native_adreno_io_coherent && !importedWrite) ||
                         (!entry->memory.imported() && ownedCoherent());
     const IOReturn status=vm_->map(&entry->memory,0,request->iova,permissions,
-        coherent?1u:request->writeback,coherent?3u:request->shareability,&handle,entry->memory.imported());
+        coherent?1u:request->writeback,coherent?3u:request->shareability,&handle);
     if(status)return status;
     entry->mapped=handle;entry->iova=request->iova;entry->mapped_state=true;
     if(end>window_peak_)window_peak_=end;

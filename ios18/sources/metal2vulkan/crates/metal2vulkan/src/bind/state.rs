@@ -1132,6 +1132,48 @@ impl BoundBuffer {
             } => BufferShape::Bytes { attribute_stride },
         }
     }
+
+    /// Whether this binding and `other` have one shape under `view_base_alignment`, as their
+    /// [`shape`](Self::shape)s compare: a length or bind offset the two share is not classed.
+    pub fn same_shape(&self, other: &BoundBuffer, view_base_alignment: u32) -> bool {
+        match (*self, *other) {
+            (
+                BoundBuffer::Buffer {
+                    length,
+                    offset,
+                    device_address,
+                    attribute_stride,
+                    ..
+                },
+                BoundBuffer::Buffer {
+                    length: other_length,
+                    offset: other_offset,
+                    device_address: other_address,
+                    attribute_stride: other_stride,
+                    ..
+                },
+            ) => {
+                attribute_stride == other_stride
+                    && device_address.is_some() == other_address.is_some()
+                    && (length == other_length
+                        || length_class(length) == length_class(other_length))
+                    && (offset == other_offset
+                        || offset_alignment(offset, view_base_alignment)
+                            == offset_alignment(other_offset, view_base_alignment))
+            }
+            (
+                BoundBuffer::Bytes {
+                    attribute_stride, ..
+                },
+                BoundBuffer::Bytes {
+                    attribute_stride: other_stride,
+                    ..
+                },
+            ) => attribute_stride == other_stride,
+            (BoundBuffer::Buffer { .. }, BoundBuffer::Bytes { .. })
+            | (BoundBuffer::Bytes { .. }, BoundBuffer::Buffer { .. }) => false,
+        }
+    }
 }
 
 /// The alignment class of bind offset `offset` (a buffer's,
@@ -1330,10 +1372,9 @@ pub enum BoundBuffer {
         /// `MTLBufferLayoutStrideDynamic` reads the bytes at; `None` for the plain setters, which
         /// such a layout reads at stride 0, as plain Metal reads them.
         /// `MTLAttributeStrideStatic` is `Some(u32::MAX)`, its low 32 bits: an M4 read element 0
-        /// of inline bytes bound so and zeros past it, where a buffer bound so reads stride 0;
-        /// the binder refuses a layout that reads inline bytes at that stride
-        /// ([`BindError::MissingVertexStride`](crate::error::BindError::MissingVertexStride), and
-        /// a kernel's stage-in `NotImplemented(KernelStageIn)`).
+        /// of inline bytes bound so and zeros past it, which the pulled fetch, a vertex
+        /// attribute's or a kernel stage-in's, reads at that stride (every element past the first
+        /// lies past the bytes).
         #[cfg_attr(feature = "serde", serde(default))]
         attribute_stride: Option<u32>,
     },
@@ -2070,6 +2111,13 @@ impl TextureShape {
     /// its neutral.
     pub(crate) fn out_of_bounds_alpha(&self) -> Option<u64> {
         crate::metal::format::out_of_bounds_alpha_one(self.pixel_format()).map(u64::from)
+    }
+
+    /// The `SpecKey::BorderTexels` of a slot bound to this texture: Metal's border texels of its
+    /// pixel format and swizzle (`metal::sampler::border_texels`). `None` for a placeholder pixel
+    /// format, whose slot reads its neutral.
+    pub(crate) fn border_texels(&self) -> Option<u64> {
+        crate::metal::sampler::border_texels(self.pixel_format(), self.swizzle()).map(u64::from)
     }
 
     /// The bound texture's swizzle: a texture's or a texture buffer's.

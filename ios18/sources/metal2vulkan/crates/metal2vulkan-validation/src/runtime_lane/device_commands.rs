@@ -10,7 +10,7 @@
 //! queue family presents to; a venue without one prints its gap and only loads.
 
 use super::{
-    layer_reported_nothing_at_all, nothing_reported_without_the_layer, validated_device,
+    at_plan, layer_reported_nothing_at_all, nothing_reported_without_the_layer, validated_device,
     validated_device_with, Messages, ScratchCache,
 };
 use crate::gpu::wait::{self, SubmissionBackend};
@@ -161,6 +161,7 @@ fn make(
     layered: bool,
 ) -> Device {
     validated_device_with(TEST_DEVICE, messages, cache, |options| {
+        at_plan(options);
         if !layered {
             options.layers.clear();
         }
@@ -198,6 +199,7 @@ fn a_device_is_made_and_used_while_moltenvk_names_it_in_each_message() {
     let messages = Messages::default();
     {
         let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+            at_plan(options);
             options.layers.clear();
             options.layer_settings.extend(immediate_tracking());
         })
@@ -451,4 +453,92 @@ fn caller_s_commands(device: &Device, moltenvk: bool, headless: bool, layered: b
     }
     // SAFETY: the swapchain over it is destroyed.
     unsafe { surface_fn.destroy_surface(surface, None) };
+}
+
+/// The devices [`the_device_s_checks_run_beside_the_caller_s_loader_served_calls`] makes, each
+/// over a cache of its own, so that each runs its checks.
+const BESIDE_DEVICES: usize = 5;
+
+/// The caller's loads through `Device::device_proc_addr` (each a `vkGetDeviceProcAddr` the
+/// loader serves, reading the device's word) in each round, after its two command buffers.
+const LOADS_A_ROUND: usize = 64;
+
+/// On MoltenVK, with each activity logged at once, the device's checks that run beside the
+/// program on threads of their own (its submission checks; its in-place check, which runs no
+/// round on such a device; its queue-switch check where its driver lends two `VkQueue`s it can
+/// time) run while the caller's thread makes calls the loader serves, round after round until
+/// every check answered: two command buffers of a fill committed on a new queue and waited for
+/// (as each completes, a queue waiter gives its pool back and allocates the pool's secondary
+/// through the loader, `spares.rs` of the runtime), then [`LOADS_A_ROUND`] loads of a command
+/// through `Device::device_proc_addr`. Each check holds the device's loader word across its
+/// submissions, and across its whole steps where the runtime found the word overwritten
+/// (`loader_word.rs` of the runtime), so no such call reads the magic as its table: no `SIGSEGV`,
+/// on [`BESIDE_DEVICES`] devices. With the word's lock taken by no one, the queue waiter's
+/// `vkAllocateCommandBuffers` faulted on the magic in four runs of five on an M3 Max (MoltenVK
+/// 1.4.2), and with the lock in none of ten. Printed (`API device commands beside the checks`):
+/// each device's loads, and which checks ran. Elsewhere nothing writes the word, and the test
+/// says so and ends.
+#[test]
+fn the_device_s_checks_run_beside_the_caller_s_loader_served_calls() {
+    for made in 0..BESIDE_DEVICES {
+        let cache = ScratchCache::new().unwrap();
+        let messages = Messages::default();
+        {
+            let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+                at_plan(options);
+                options.layers.clear();
+                options.layer_settings.extend(immediate_tracking());
+                options.policy.host_page_textures =
+                    metal2vulkan::device::HostPageTexturePolicy::InPlace;
+            })
+            .unwrap();
+            if device.properties().description.driver_id != Some(DriverId::MOLTENVK) {
+                eprintln!(
+                    "API device commands beside the checks: not MoltenVK, nothing writes the \
+                     word; not run"
+                );
+                return;
+            }
+            let answered = |device: &Device| {
+                device.settle_submit_checks(Duration::ZERO)
+                    && device.settle_in_place_checks(Duration::ZERO)
+                    && device.settle_queue_switch_check(Duration::ZERO)
+            };
+            let start = std::time::Instant::now();
+            let mut loads = 0;
+            while !answered(&device) {
+                assert!(start.elapsed() < WAIT, "the device's checks never answered");
+                {
+                    let queue = device.new_command_queue().unwrap();
+                    let buffer = device.new_buffer(256, ResourceOptions::private()).unwrap();
+                    for _ in 0..2 {
+                        let command_buffer = queue.command_buffer().unwrap();
+                        let mut blit = command_buffer.blit_command_encoder().unwrap();
+                        blit.fill_buffer(&buffer, 0..256, 0x5a).unwrap();
+                        blit.end_encoding().unwrap();
+                        command_buffer.commit().unwrap();
+                        command_buffer.wait_until_completed_for(WAIT).unwrap();
+                    }
+                }
+                for _ in 0..LOADS_A_ROUND {
+                    let loaded = device.device_proc_addr(c"vkGetDeviceQueue");
+                    assert!(loaded.is_some(), "vkGetDeviceQueue loads");
+                }
+                loads += LOADS_A_ROUND;
+            }
+            let counts = device.work_counts();
+            eprintln!(
+                "API device commands beside the checks: device {made}, {loads} loads: \
+                 submission checks run {}, in-place checks run {}, queue-switch checks run {}; \
+                 {}; {}",
+                counts.submit_checks_run,
+                counts.in_place_checks_run,
+                counts.queue_switch_checks_run,
+                device.submit_check_report(),
+                device.queue_switch_check_report()
+            );
+            assert_eq!(counts.submit_checks_run, 1, "the submission checks ran");
+        }
+        nothing_reported_without_the_layer(&messages, "nothing MoltenVK said fails");
+    }
 }

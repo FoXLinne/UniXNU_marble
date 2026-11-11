@@ -56,7 +56,7 @@
 use super::attachment_stand_in::{Cause, StandIn};
 use super::binding::{CommandUses, ResidentPrefix};
 use super::color_resolve;
-use super::device::{DebugMessage, Device, MessageKind, MessageSeverity};
+use super::device::{DebugMessage, Device, DeviceShared, MessageKind, MessageSeverity};
 use super::error::Error;
 use super::fragment_imageblock::PassImageblock;
 use super::pipeline::objects::{may_pass_support, set_layout_support, SetSupport};
@@ -103,6 +103,16 @@ fn tested_slots<'a>(
             _ => None,
         })
         .collect()
+}
+
+/// Whether `note` is a filter note (`PrecisionNote::HalfSampleFilter`, `FloatSampleFilter`): its
+/// clauses test a two-plane YCbCr format bound at a slot that Metal's own sampler filters
+/// (`metal2vulkan::lower`'s `filter_note`), announced as [`Degradation::YCbCrFilterNotExact`].
+fn filter_note(note: PrecisionNote) -> bool {
+    matches!(
+        note,
+        PrecisionNote::HalfSampleFilter | PrecisionNote::FloatSampleFilter
+    )
 }
 
 /// The format a draw or dispatch binds at each texture slot a specialized note tests
@@ -234,8 +244,10 @@ degradations! {
         /// there (`in_place.rs`): the policy keeps the exact form
         /// ([`metal2vulkan::device::HostPageTexturePolicy::Shadow`]), the texture's usage renders
         /// into it or writes it (`RenderTarget`, `ShaderWrite`, `ShaderAtomic`), the device's
-        /// check that the move keeps every byte over that kind of pages has not answered yet,
-        /// found a byte changed or made no image, or no image in place serves the texels (its rows
+        /// check that the move keeps every byte over that kind of pages, for texels that share a
+        /// line of the device's memory (`nonCoherentAtomSize`) with bytes beside them or not as
+        /// the texture's do, has not answered yet, found a byte changed or made no image, or no
+        /// image in place serves the texels (its rows
         /// share bytes, the device lays no linear image's rows at the buffer's pitch, the image's
         /// placement or memory misses the pages, the bytes were detached, or no dma-buf of the
         /// texture's own pages serves); the notice names which; or its rows (or an array's slices) lie with the buffer's
@@ -245,7 +257,11 @@ degradations! {
         /// attachment's image subresource, and Metal leaves them as the program writes them; or no
         /// linear image of the device lays its texels out as Metal does in the buffer's memory,
         /// holding no byte past them; or the buffer is over the caller's `VkBuffer`, whose memory
-        /// backs no image of the runtime's. Also a heap's texture over host pages imported as
+        /// backs no image of the runtime's; or it is a tiled texture of more than one level
+        /// (`Buffer::new_tiled_texture`), over any buffer: no image over the buffer's memory holds
+        /// levels past the first, so one image of its own holds every level, its first level's
+        /// texels copied from the bytes and back (the notice names the levels). Also a heap's
+        /// texture over host pages imported as
         /// dma-bufs where the device makes no image over a dma-buf of the texture's own pages (the
         /// notice names why). A heap's texture is a shadow of the heap's bytes in its range in
         /// three more shapes, each announced with its own reason (`texture/heap.rs`). A
@@ -276,7 +292,8 @@ degradations! {
              back after it; over a tracked private buffer of the runtime's own, copied in again \
              only once another command buffer wrote it)";
         /// A texture buffer is viewed through a staging buffer: its texels start where the
-        /// device views none (`minTexelBufferOffsetAlignment`).
+        /// device views none (`minTexelBufferOffsetAlignment`), or run past its buffer's length,
+        /// where its staging buffer is its tail.
         StagedTextureBuffer = "staged-texture-buffer", Performance,
             "its texels are copied into a staging buffer before each use and back after each \
              write";
@@ -472,7 +489,9 @@ degradations! {
             "one Vulkan dispatch per region (the interior and each partial edge, per chunk of \
              group counts), each on its own specialized pipeline, a barrier between each two";
         /// A dispatch whose threadgroups are not whole subgroups of the kernel's pinned
-        /// subgroup size runs on the kernel's emulated-simdgroups variant.
+        /// subgroup size runs on the kernel's emulated-simdgroups variant. A threadgroup of one
+        /// row of a kernel whose only simdgroup semantics are lockstep barriers that order pairs
+        /// meeting across rows (`RuntimeFact::RowLockstep`) runs on the kernel's own pipeline.
         EmulatedSimdgroups = "emulated-simdgroups", Performance,
             "a second compile of the kernel whose simdgroup operations go through threadgroup \
              memory between barriers";
@@ -493,7 +512,10 @@ degradations! {
              resolve texture after the pass through a staging buffer";
         /// A pass resolves into a texture that cannot be an attachment (its usage lacks
         /// `RenderTarget`), or a layered pass into a texture whose slices from the resolve slice
-        /// hold fewer layers than the pass's.
+        /// hold fewer layers than the pass's, or a pass resolves color into a 3D texture's planes
+        /// past its first, or into more than one, on a device whose resolve into a 2D view of a
+        /// 3D image is written where the view begins only at its first plane
+        /// (`RuntimeDriverDefect::VolumeResolveFirstPlane`: RADV, NVIDIA's).
         ResolveScratch = "resolve-scratch", Performance,
             "the pass resolves into a scratch image, whose render area is copied into the \
              texture after the pass";
@@ -530,7 +552,10 @@ degradations! {
         /// what the pass's load actions and earlier draws stored where the barrier orders them
         /// (`texture/attached_reads.rs`), but for a read of the clear alone before any draw of
         /// the pass, whose copy is cleared to it instead where it can be
-        /// (`WorkCounts::attachment_read_clears`). Not where the interlock alone splits the pass,
+        /// (`WorkCounts::attachment_read_clears`); or a draw reads and writes a color through the
+        /// pixel interlock after an earlier draw of its instance wrote it, on a driver whose such
+        /// draws race under load (`DriverFact::InterlockedDrawsRaceUnderLoad`), and records into
+        /// an instance after the one that wrote it. Not where the interlock alone splits the pass,
         /// on a device whose driver ran such a pass no slower split than whole
         /// (`DriverFact::InterlockedPassSplitNoSlower`): its faster form.
         RenderPassSplit = "render-pass-split", Performance,
@@ -577,7 +602,9 @@ degradations! {
             "a scratch image per pass, the texture copied into it before the pass on a `Load` \
              and back after it on a `Store`";
         /// A runtime texture that a pass rendered into a scratch image for want of `STORAGE`
-        /// (`fetch-through-scratch` through the pixel interlock) took its storage form: its image
+        /// (`fetch-through-scratch` through the pixel interlock), or whose draw that read it at
+        /// its own pixels after a barrier split its pass for want of it (`render/snapshot.rs`),
+        /// took its storage form: its image
         /// made again with `STORAGE` and its texels copied in once, at the commit of the device's
         /// only uncommitted command buffer (`texture/storage_form.rs`); with a submission check,
         /// once that command buffer's checks ran at its submission and every encoder of it ran.
@@ -793,7 +820,10 @@ degradations! {
         /// device stores it (`STORE`), Metal's answer where its tiler overflows
         /// (`render_target.rs`). Not a texture over a buffer the pass renders through an image it
         /// copies nothing back from (a shadow, a stand-in: `kept_bytes.rs`), which keeps the
-        /// buffer's bytes, Metal's answer; only one whose image the pass renders in place.
+        /// buffer's bytes, Metal's answer, nor, under `DontCareColorPolicy::Kept`, a texture's own
+        /// image stored `DontCare` that the pass renders through a backing its queue keeps
+        /// (`kept_bytes.rs`), which keeps its earlier texels, Metal's answer; only one whose image
+        /// the pass renders in place.
         DontCareStore = "dont-care-store", Precision,
             "the attachment's texels after the pass are each its earlier texel or the one the \
              pass rendered, both Metal's answers, but not always the one Metal's tiler keeps";
@@ -852,12 +882,16 @@ degradations! {
         UnlistedArgumentSampler = "unlisted-argument-sampler", Precision,
             "a function reading the state through its ID in an argument buffer reads the \
              neutral sampler, where Metal's reads the state";
-        /// An upload (`replace_region`, a blit from a buffer) into the 32-bit float depth of a
-        /// texture's depth image, on a device without `VK_EXT_depth_range_unrestricted` enabled,
-        /// where Vulkan leaves a value outside `[0, 1]` undefined, whose driver is not measured to
-        /// keep one (`DriverFact::DepthImageKeepsValuesOutsideUnitRange`). And a render pass's NaN
-        /// clear depth on such a device, which Metal stores as `0x7fc00000`, cleared to 1.0
-        /// (`nan_clear.rs`).
+        /// An upload (`replace_region`, a blit from a buffer, a copy from a colour texture, a fill
+        /// of a multisampled texture) into the 32-bit float depth of a texture's depth image, on
+        /// a device without `VK_EXT_depth_range_unrestricted` enabled (ANV on the Iris Xe,
+        /// MoltenVK on the M3 Max), where Vulkan takes no copied value outside `[0, 1]`: the
+        /// upload clamps each value into `[0, 1]`, a NaN to 1.0, as the device stores it
+        /// (`depth_clamp.rs`). And a render pass's NaN clear depth on such a device, which Metal stores as `0x7fc00000`, cleared to 1.0
+        /// (`nan_clear.rs`). And a heap's texture of such a depth whose shadow's copies in move the
+        /// heap's bytes into its image, announced as it is made: the copies in clamp each value
+        /// into `[0, 1]`, a NaN to 1.0, as the device stores it, and its copies back write each
+        /// value as the image stored it, one no command wrote too (`texture/heap_tiled.rs`).
         RestrictedDepthUpload = "restricted-depth-upload", Precision,
             "a value outside [0, 1] may be stored clamped to [0, 1], where Metal's keeps it, so \
              reads, samples, comparisons and depth tests of it can differ";
@@ -948,7 +982,11 @@ degradations! {
         /// writes through an alias
         /// ([`metal2vulkan::device::DriverFact::CompressedImagesHideAliasedWrites`]), whose image
         /// takes host-transfer usage, which the driver keeps uncompressed in the heap's bytes
-        /// ([`metal2vulkan::device::DriverFact::HostTransferImagesKeepTheirBytes`]).
+        /// ([`metal2vulkan::device::DriverFact::HostTransferImagesKeepTheirBytes`]). Also, on any
+        /// device, a single-sample colour texture Metal keeps compressed, or whose layout Metal's
+        /// model does not state, whose image of the route it first took takes more bytes or a
+        /// coarser alignment than Metal's answer, where this one fits the answer: it lies in the
+        /// heap's bytes in place of a shadow of them (`texture/heap.rs`).
         HeapTextureHostTransfer = "heap-texture-host-transfer", Performance,
             "the texture's image is kept uncompressed, so writes through the heap's buffers and \
              textures over its bytes show in it as Metal's do: a clear of it loses the driver's \
@@ -957,7 +995,13 @@ degradations! {
         /// A colour texture made in a heap on such a device whose image takes no host-transfer
         /// usage (the device did not enable `hostImageCopy`, or an adopted device's consumer did
         /// not say so, or the format or shape takes none there): a linear image, which the driver does not compress, where one does all the
-        /// optimal image does for the texture.
+        /// optimal image does for the texture. Also, on any device, a single-sample colour
+        /// texture whose image of the route it first took takes more bytes or a coarser
+        /// alignment than Metal's answer, where no image of host-transfer usage fits the answer
+        /// and a linear one does: it lies in the heap's bytes in place of a shadow of them
+        /// (`texture/heap.rs`). Of a texture Metal keeps uncompressed, whose bytes are Metal's
+        /// tiles, only a linear image whose every element lies where those tiles place it (a
+        /// level of one element or one row), and no image of host-transfer usage.
         HeapTextureLinear = "heap-texture-linear", Performance,
             "the texture's image is linear, so writes through the heap's buffers and textures \
              over its bytes show in it as Metal's do: its reads and writes go without the \
@@ -1027,8 +1071,8 @@ degradations! {
              placed one";
         /// A heap of the runtime's memory or an indirect command buffer made with
         /// `MTLResourceOptions` bit 24
-        /// ([`ResourceOptions::PRIVATE_BIT`](crate::ResourceOptions::PRIVATE_BIT)), or off macOS a
-        /// no-copy buffer or heap over the caller's bytes, which Metal makes and keeps the GPU's
+        /// ([`ResourceOptions::PRIVATE_BIT`](crate::ResourceOptions::PRIVATE_BIT)), which Metal
+        /// makes and keeps the GPU's
         /// writes from the memory of (the M3 Max under macOS 27.0.1, `read_only_view.rs`: what a
         /// shader or the blit engine writes reaches neither the CPU nor a later command buffer,
         /// which read the memory's bytes -- a blit's fill, a kernel's stores, a vertex- or
@@ -1038,9 +1082,10 @@ degradations! {
         /// machinery writes **faults** the command buffer -- a colour attachment over that memory,
         /// a resolve into it, a depth or stencil attachment in a heap of the bit, and a blit into a
         /// texture over or in it), is
-        /// made as without it, and reports its options without it, as Metal's does. On macOS a
-        /// no-copy buffer or heap with the bit drops the GPU's writes as Metal's does, its pages
-        /// imported through a read-only view of them (`read_only_view.rs`), announcing nothing.
+        /// made as without it, and reports its options without it, as Metal's does. A no-copy
+        /// buffer or heap with the bit drops the GPU's writes as Metal's does: on macOS its pages
+        /// imported through a read-only view of them (`read_only_view.rs`), announcing nothing;
+        /// elsewhere made over a copy of them that drops them (`copied-host-pages`).
         /// A buffer of the runtime's memory or a texture descriptor with the bit is refused, as
         /// Metal ends the process there; a buffer placed in a heap without the bit is made as
         /// without it, as Metal's is, announcing nothing.
@@ -1074,19 +1119,47 @@ degradations! {
         /// A texture of an IOSurface plane whose rows share bytes on Metal's GPU
         /// (`Buffer::new_texture_with_iosurface_plane`, `linear_plan.rs`): more than one row of
         /// over 16 bytes whose `bytesPerRow` rounded down to 16 is below the row, so consecutive
-        /// rows share 1 to 15 bytes, a whole number of texels. Metal's reads see the sharing and
-        /// so do the runtime's, through a shadow whose two copy regions each way hold it; but
-        /// where two rows' writes meet the shared bytes take whichever of the two rows Metal's
-        /// command wrote last, and that order is no one order (an Apple M3 Max under macOS
-        /// 27.0.1, one case a process, `probes/overlapping_plane_row_writes.m`): it follows the
-        /// command, the GPU pitch and the row count, a kernel's winner moving with the
-        /// threadgroup shape. A kernel is the only writer such a plane takes here, every blit
-        /// into one being refused (`linear_plan.rs`'s **Rows that overlap**), so the earlier
-        /// row's bytes are one of the rows a kernel of Metal's leaves there.
+        /// rows share 1 to 15 bytes, a whole number of texels; or, over a plane whose offset and
+        /// `bytesPerRow` are multiples of 16, rows wider than `bytesPerRow`, which share bytes on
+        /// the CPU too, any whole number of texels, a byte shared by as many rows as reach it.
+        /// Metal's reads see the sharing and so do the runtime's, through a shadow whose copy
+        /// regions hold it; but where rows' writes meet the shared bytes take whichever row
+        /// Metal's command wrote last, and that order is no one order (an Apple M3 Max under
+        /// macOS 27.0.1, one case a process, `probes/overlapping_plane_row_writes.m`): it follows
+        /// the command, the GPU pitch and the row count, a kernel's winner moving with the
+        /// threadgroup shape. A kernel is the only GPU writer such a plane takes here, every blit
+        /// into one being refused (`linear_plan.rs`'s **Rows that overlap**), so the earliest
+        /// row's bytes are one of the rows a kernel of Metal's leaves there. The CPU's writes of
+        /// rows wider than the pitch leave the latest row's, as Metal's `replaceRegion` does.
         CollidingSurfaceRowWrites = "colliding-surface-row-writes", Precision,
-            "where two of the plane's rows write the bytes they share the earlier row's stand, \
-             one of the rows a kernel of Metal's leaves there, whose winner moves with the \
-             threadgroup shape; reads, CPU access and every other byte are Metal's";
+            "where the plane's rows write the bytes they share the earliest row's stand, one of \
+             the rows a kernel of Metal's leaves there, whose winner moves with the threadgroup \
+             shape; reads, CPU access and every other byte are Metal's";
+        /// A texture of an IOSurface plane of a surface with planes, which Metal makes, some of
+        /// whose texels it lays out in no one place (`Buffer::new_texture_with_iosurface_plane`,
+        /// `linear_plan.rs`'s **Beyond the plane's rows**; an Apple M3 Max under macOS 27.0.1,
+        /// `probes/surface_texture_envelope.m`): its texels past the buffer standing for its
+        /// surface, where its blits read zeros, its kernels zeros and, 32 KiB past the plane, the
+        /// plane's rows again, its `getBytes` zeros and other memory, and its writes change no
+        /// byte of the surface; and a 2D array's slices past its first, which its blits and
+        /// `getBytes` read at the plane's offset, over the first slice, its kernels one image on,
+        /// and its writes put at the plane's offset.
+        SurfaceTexelsTail = "surface-texels-tail", Precision,
+            "those texels lie in a tail of the texture's own, zero when made, which every path \
+             reads and writes alike and which reaches no byte of the surface; its texels in place \
+             are Metal's";
+        /// A texture over a plane of an IOSurface with planes whose texels Metal lays out in no
+        /// one place, its first level's and slice's among them
+        /// (`Buffer::new_texture_with_iosurface_plane`, `linear_plan.rs`'s **Beyond the plane's
+        /// rows**): a 2D texture of more than one level, a 3D texture and a 2D multisample one.
+        /// Metal makes it, and on an Apple M3 Max under macOS 27.0.1
+        /// (`probes/surface_texture_envelope.m`) its GPU reads those texels from other bytes than
+        /// its writes and its CPU put them; the x86 Macs under macOS 26.7.1 keep its first level
+        /// and slice over the plane.
+        SurfaceTexelsApart = "surface-texels-apart", Precision,
+            "its texels lie in memory of its own, zero when made, which every path reads and \
+             writes alike, and no byte of the surface's; Metal's GPU and CPU reach the surface's \
+             bytes in no one place";
         /// A pipeline state's function may read an argument its function constants removed (a
         /// texture's read, sample, gather, query or atomic, or a sample through a removed
         /// sampler; `RuntimeFact::AbsentArgumentRead`), which Metal gives no value: its compiler
@@ -1208,11 +1281,13 @@ degradations! {
              reason names, can land changed; every other value lands as Metal's copy leaves it";
         /// A texture bound by a slot as a storage image without `ShaderWrite` usage, or as a
         /// sampled one without `ShaderRead`, whose image lacks that usage because adding it
-        /// would cost the image its size or the driver's compression: the binding takes an image
-        /// of its own with both shader usages, a shadow of the texture's texels
-        /// (`texture/usage_shadow.rs`). Also a texture without `RenderTarget` usage that a render
-        /// pass renders as an attachment, through a scratch image that has it
-        /// (`attachment_stand_in.rs`).
+        /// would cost the image its size or the driver's compression, or, for an image in place
+        /// over host pages, because the device's check failed for what the usage lets reach them
+        /// (`texture/in_place_image.rs`): the binding takes an image of its own with both shader
+        /// usages, a shadow of the texture's texels (`texture/usage_shadow.rs`). Also a texture
+        /// without `RenderTarget` usage that a render pass renders as an attachment, through a
+        /// scratch image that has it (`attachment_stand_in.rs`), but one in place whose image took
+        /// the attachment usage where the device's check passed for renders over its pages.
         UndeclaredUsageShadow = "undeclared-usage-shadow", Performance,
             "its texels are copied into an image of its own before each command that binds it \
              beyond its declared usage, and back after each write through it";
@@ -1240,6 +1315,24 @@ degradations! {
              writes lay them, and read as written; the later levels' texels lie apart from the \
              heap's bytes, and a 1D array's GPU reads read each texel, where Metal's paths \
              address those texels at bytes that differ by path";
+        /// A texture of one of Apple's one-plane YCbCr formats (`YCBCR8_422_1P`,
+        /// `YCBCR10_444_1P` and their twins, held for copies alone) made in a heap whose texels
+        /// lie otherwise than Metal's blits lay them (`texture/heap.rs`; an Apple M3 Max under
+        /// macOS 27.0.1, `probes/one_plane_ycbcr_heap_rows.m`): a 2D texture or array of more
+        /// than one row whose row is under 16 bytes, whose rows Metal lays 16 bytes apart, past
+        /// the texture's answer, and whose copies out read none of the rows past the first back
+        /// from there, where the runtime lays them one packed row apart, as that answer counts
+        /// them; and a mipmapped or 3D texture, whose texels Metal lays at bytes that differ by
+        /// path, its first level past its answer, where the runtime keeps them in memory of its
+        /// own, apart from the heap's bytes. Every other such texture lies as Metal lays it, rows
+        /// of 16 bytes or more off a multiple of 16 the row rounded down to 16 bytes apart among
+        /// them. Announced once per device, in the call that made the first such texture.
+        HeapOnePlaneLayout = "heap-one-plane-layout", Precision,
+            "the texture's size and alignment answers are Metal's and its copies read what they \
+             wrote, but its texels lie in the heap's bytes one packed row apart, or apart from \
+             the heap's bytes, where Metal's blits lay its rows 16 bytes apart or its levels at \
+             bytes that differ by path: a buffer over the heap meets them at other bytes than on \
+             Metal";
         /// A MoltenVK device at a release whose `pipelineCacheUUID` layout the runtime has not
         /// read (`device/argument_buffers.rs`): whether MoltenVK binds through Metal argument
         /// buffers is unknown, so a device without them is not refused (as at a read release).
@@ -1423,8 +1516,9 @@ degradations! {
         /// and off Metal's fixed-point read (lavapipe, Mesa 26.0.8, its 8-bit 4:4:4 layout,
         /// random planes, every texel: within 0.04/2048 of Vulkan's conversion past the `half`
         /// its image stores, and of Metal's within 6/2048 where the result lies in `[0, 1]`;
-        /// outside it by what Metal's clamp takes off). Announced where the texture is made,
-        /// naming its layout. So do the samples of a texture whose planes are read in place
+        /// outside it by what Metal's clamp takes off). Announced at the texture's first
+        /// conversion, naming its layout: a texture whose planes every function reads in place
+        /// converts none, and announces nothing. So do the samples of a texture whose planes are read in place
         /// through the device's conversion of a linear image of them (`texture/ycbcr_planes.rs`),
         /// the device's filter of the codes too: announced where the image is made.
         ///
@@ -1443,7 +1537,20 @@ degradations! {
         /// natively filters such a texture as its own sampler does, announced as `device-sampling`.
         /// Announced, in place of those notes' own notices for the slot, where the specialized
         /// pipeline is made, or at a draw or dispatch that binds such a texture there (through a
-        /// runtime sampler, whatever its word states), naming the slot and the format.
+        /// runtime sampler slot, only where the sampler bound there filters: a linear
+        /// minification, magnification or mip filter, anisotropy, or a cubic filter; one that
+        /// reads one texel of one level takes the texel the view holds, Metal's read), naming the
+        /// slot and the format; and at a draw or dispatch whose function filters a texture an
+        /// argument buffer holds where a texture the command makes resident or binds that its
+        /// handles can name is two-plane YCbCr, through an argument buffer's sampler only where a
+        /// live sampler state filters (which state the buffer's memory names is not read).
+        ///
+        /// And, on any device, a linear sample of a 4:2:0 texture whose planes the function reads
+        /// in place through a texel buffer by Vulkan's Y′CbCr model of the codes
+        /// (`YCbCrInPlacePolicy::Model`, the default; `lower::sampler::in_place`): the stage
+        /// records the same notes under the bound converted 4:2:0 format (through a runtime
+        /// sampler slot, only where the bound word filters linearly and addresses no border),
+        /// announced as above at a draw or dispatch that binds such a texture there.
         YCbCrFilterNotExact = "ycbcr-filter-not-exact", Precision,
             "where the device converts the planes' format, the texels are its own Y′CbCr \
              conversion's, at its precision and unclamped where it does not clamp, not Metal's \
@@ -1631,17 +1738,31 @@ degradations! {
         /// A draw whose render pipeline state blends into, or reads (a framebuffer fetch, or the
         /// interlocked storage form an extended-range blend takes), a color attachment of an
         /// extended-range format (`BGR10_XR`, `BGRA10_XR`, `RGB10A8_2P_XR10` and their sRGB
-        /// twins) that an earlier draw or execution of render commands of the same render pass
-        /// may have written (`render.rs`); an execution of render commands in a pass with such
-        /// an attachment, whose commands may blend onto each other. Metal's tile memory holds
-        /// such an attachment as `half` through the pass (a clear's, a load's, a write's or a
-        /// blend's value rounded to `half`) and rounds it to its codes once, at the store (on an
-        /// Apple M4; the M3 Max's run of the same probes), where the runtime stores the codes at
-        /// each draw, so a later blend or read sees the stored codes.
+        /// twins) or a padded 10-bit one (`R10Unorm_X6`, `RG10Unorm_X12`, their sRGB twins,
+        /// `RGB10A2Unorm_sRGB`) that an earlier draw or execution of render commands of the same
+        /// render pass may have written, or whose clear Metal's tile holds between two codes
+        /// (`render.rs`); an execution of render commands in a pass with such an attachment,
+        /// whose commands may blend onto each other. Metal's tile memory holds such an attachment
+        /// as `half` through the pass (a clear's, a load's, a write's or a blend's value rounded
+        /// to `half`; a padded one's past `[0, 1]` unclamped) and rounds it to its codes once, at the store (on
+        /// an Apple M4; the M3 Max's run of the same probes, and for the padded formats the M3
+        /// Max's), where the runtime stores the codes at each draw, so a later blend or read sees
+        /// the stored codes. Not a color whose `half` shadow the runtime holds, which is never a
+        /// padded one's (`render/extended_shadow.rs`): in a pass of one layer on a
+        /// device that orders framebuffer fetch through the pixel interlock alone, or through
+        /// input attachments (lavapipe) with the pixel interlock, fragment stores and `Rgba16f`
+        /// storage images (multisampled ones at more than one sample), from the pass's clear or
+        /// (at one sample) its load, a draw's blend or read sees the `half` Metal's tile holds.
+        /// In a multisampled pass that loads the color, and once a draw ends the shadow, the
+        /// codes stay. Over input attachments in a pass that holds no shadow it also names a draw
+        /// that writes some of an extended-range word's codes under a mask (`BGR10_XR`'s, a
+        /// two-plane format's color word), whose function reads the word only to keep the other
+        /// codes, exactly: the pipeline's state does not tell that read from the function's own
+        /// fetch.
         ExtendedRangeBlendsStoredCodes = "extended-range-blends-stored-codes", Precision,
-            "a blend into, or a read of, an extended-range color an earlier draw of the pass \
-             wrote sees the codes the runtime stored at that draw (each channel rounded to its \
-             10-bit code, the two-plane format's alpha to its byte), where Metal's tile memory \
+            "a blend into, or a read of, an extended-range or padded 10-bit color an earlier \
+             draw of the pass wrote sees the codes the runtime stored at that draw (each channel \
+             rounded to its 10-bit code, the two-plane format's alpha to its byte), where Metal's tile memory \
              holds the color as half through the pass and rounds it once at the store: a \
              blended or read value can differ from Metal's by a code, and the difference can \
              grow over many draws that blend onto each other";
@@ -1728,16 +1849,16 @@ degradations! {
              differs";
         /// A texture of a BC format (`BC1_RGBA` to `BC7_RGBAUnorm_sRGB`) made on a device whose
         /// driver is not measured to decode its texels as Metal does (BC1 to BC3
-        /// `DriverFact::ColorBlockDecodeIsMetals`: MoltenVK on Apple's GPUs, RADV on the 780M;
-        /// BC4 and BC5 `DriverFact::ChannelBlockDecodeIsMetals`: MoltenVK on Apple's GPUs; BC6H
-        /// `DriverFact::Bc6hBlockDecodeIsMetals` and BC7 `DriverFact::Bc7BlockDecodeIsMetals`:
-        /// MoltenVK on Apple's GPUs, NVIDIA's on the RTX 3090 and RTX 5080 Laptop GPU, RADV on the
-        /// 780M, ANV on the Iris Xe of Raptor Lake-P, and lavapipe's BC6H). Its image is its own
-        /// BC image, which the
-        /// device samples through its own decode: a BC texture keeps no decoded twin
-        /// (`texture/decoded_twin.rs` keeps twins of carried textures alone). The bounds are the
-        /// largest differences from Metal's texels measured on random blocks of every format; a
-        /// driver not named is unmeasured, and validation derives no tolerance from them.
+        /// `DriverFact::ColorBlockDecodeIsMetals`: MoltenVK on Apple's GPUs, RADV on the 780M and
+        /// the RX 7900 XTX; BC4 and BC5 `DriverFact::ChannelBlockDecodeIsMetals`: MoltenVK on
+        /// Apple's GPUs; BC6H `DriverFact::Bc6hBlockDecodeIsMetals` and BC7
+        /// `DriverFact::Bc7BlockDecodeIsMetals`: MoltenVK on Apple's GPUs, NVIDIA's on the RTX 3090
+        /// and RTX 5080 Laptop GPU, RADV on the 780M, ANV on the Iris Xe of Raptor Lake-P, and
+        /// lavapipe's BC6H). Its image is its own BC image, which the device samples through its
+        /// own decode: a BC texture keeps no decoded twin (`texture/decoded_twin.rs` keeps twins of
+        /// carried textures alone). The bounds are the largest differences from Metal's texels
+        /// measured on random blocks of every format; a driver not named is unmeasured, and
+        /// validation derives no tolerance from them.
         CompressedTexelDecode = "compressed-texel-decode", Precision,
             "a read, sample or gather of its texels answers the device's decode of its blocks \
              (an sRGB form's code through the device's sRGB decode), where Metal interpolates \
@@ -1750,15 +1871,15 @@ degradations! {
         /// A CPU copy into a texture with a decoded twin (`replace_region`) whose CPU copies go
         /// on the host or the staging queue: its region is decoded on the CPU, on the device's
         /// decode thread, and copied into the twin; the first command buffer that may read the
-        /// texture waits at its submission for that, and the call itself where a command buffer
-        /// that may read it is submitted and not yet complete (which then reads the copied
-        /// texels, as Metal's does) or the texture is untracked (`texture/twin_decode.rs`).
+        /// texture waits at its submission for that (every command buffer, where the texture is
+        /// untracked). The call itself waits for no GPU work, as Metal's does not: only for room,
+        /// while 256 MiB of written blocks wait for the thread (`texture/twin_decode.rs`).
         CpuBlockDecode = "cpu-block-decode", Performance,
             "the written blocks decoded on the CPU, on the device's decode thread split over up \
              to 8 threads, and their texels copied into the decoded twin on the host or the \
              staging queue: the first command buffer that may read the texture waits at its \
-             submission for that, and the call waits for it where a command buffer that may read \
-             the texture is submitted and not yet complete, or the texture is untracked";
+             submission for that (every command buffer, where the texture is untracked), and the \
+             call waits only for room, while 256 MiB of written blocks wait for the thread";
         /// A texture of an ASTC LDR format (`ASTC_4x4_LDR` to `ASTC_12x12_LDR`, the sRGB forms
         /// too) made on a device without that ASTC format (`textureCompressionASTC_LDR`), of an
         /// ASTC HDR format (`ASTC_4x4_HDR` to `ASTC_12x12_HDR`) on a device without its `SFLOAT`
@@ -1840,9 +1961,10 @@ degradations! {
         QueueSharing = "queue-sharing", Performance,
             "its command buffers run in one `VkQueue`'s order with those of the command queues \
              that share it, where Metal's queues wait for each other only inside one command: \
-             the first command buffer of each such queue whose GPU work runs over 2 ms holds \
-             the command buffers the others committed behind it for its whole length, and its later ones while its queue holds work, until that queue moves at \
-             its next idle point; a command buffer's GPU start time includes the other queues' \
+             the first command buffer of each such queue whose GPU work, or whose wait on the \
+             GPU for another `VkQueue`'s work, runs over 2 ms holds the command buffers the \
+             others committed behind it for its whole length, and its later ones while its \
+             queue holds work, until that queue moves at its next idle point; a command buffer's GPU start time includes the other queues' \
              work before it; QueueSharingPolicy::PerQueue keeps each command queue on the \
              `VkQueue` it took at its creation";
         /// A heap texture sized or made (`heap_texture_size_and_align`, `Heap::new_texture`)
@@ -1925,28 +2047,27 @@ degradations! {
              (through a texture over them, or a table of the live buffers it holds) lets go of \
              them, or the batches submitted before the import's memory went complete, where \
              Metal's runs at the release; the pages stay mapped until then";
-        /// A no-copy buffer, heap or rebind was made over host pages the process maps
-        /// read-only, from the caller's dma-buf source (`HostMemory::with_dma_buf`): on Linux,
-        /// where drivers pin a pointer's imported pages for writing, such pages are imported only
-        /// as dma-bufs of their pages, whose memory the GPU writes. Where the caller's gate
-        /// refuses their import, or that import fails, they are a copy whose GPU writes are
-        /// dropped instead (`CopiedHostPages`). Announced once per device, by the call that makes
-        /// it, or at each such call where `DeviceOptions::announce_each` asks.
-        ReadOnlyPagesWritten = "read-only-pages-written", Precision,
-            "the GPU's writes through it reach the pages, and the CPU then reads them there, \
-             where after Metal's GPU writes into pages the process maps read-only the CPU reads \
-             them as they were (an M3 Max under macOS 27.0.1, private and shared memory alike)";
         /// A no-copy buffer, a no-copy heap or a buffer's rebind was made over a copy of the
         /// caller's host pages in memory of the device's own, which no import maps (`copied.rs`;
         /// a heap's textures shadows of its bytes): the caller's gate
-        /// (`HostMemory::with_import_gate`) refused the pages' import, or the import the device
+        /// (`HostMemory::with_import_gate`) refused the pages' import, or the device refused the
+        /// pointer's import and no dma-buf of the pages served it, the caller giving no source of
+        /// them (`HostMemory::with_dma_buf`) or one that failed or whose dma-bufs the device
+        /// refused (RADV refuses shared memory, a `memfd` mapping among it,
+        /// `WorkCounts::copied_host_buffers_device_refused`), or the import the device
         /// and the gate admitted failed, of the pointer or of the caller's dma-bufs (out of
         /// memory, or another Vulkan error, such as a driver out of the mappings the host kernel
         /// allows), or the runtime kept pages the kernel cannot pin from a driver whose failed
         /// import of them breaks it (`RuntimeDriverDefect::UnpinnablePagesBreakHostMemory`) and no
-        /// dma-buf of them served. A copy of pages the process maps read-only drops the GPU's
-        /// writes, as Metal drops them: never written to the pages
-        /// (`WorkCounts::copied_dropped_bytes`; the detail says so). A copy whose own allocation
+        /// dma-buf of them served; or, on Linux, the process maps some of the pages read-only,
+        /// whose pointer drivers pin for writing and whose dma-bufs would take the GPU's writes
+        /// (`WorkCounts::copied_unwritable_pages`), the gate asked first where the pointer would
+        /// be imported; or, off macOS, the memory is of Metal's private option bit 24
+        /// (`ResourceOptions::PRIVATE_BIT`), which no import there keeps the GPU's writes from, and
+        /// which is copied without asking the gate (`WorkCounts::copied_read_only_memory`). A copy
+        /// of pages the process maps read-only, or of bit-24 memory, drops the GPU's writes, as
+        /// Metal drops them: never written to the pages (`WorkCounts::copied_dropped_bytes`; the
+        /// detail says so). A copy whose own allocation
         /// fails refuses the call (`OutOfMemory`).
         /// Announced once per device, by the call that makes it, or at each such call where
         /// `DeviceOptions::announce_each` asks. Counted: `WorkCounts::copied_host_buffers_made`.
@@ -1958,8 +2079,11 @@ degradations! {
              changed in the pages since, and from which each batch's completion writes back \
              every byte the GPU changed, where Metal's GPU reads and writes the pages \
              themselves: a CPU write the GPU reads mid-command-buffer, or a GPU write the CPU \
-             reads before the batch completes, is not seen, and each commit and completion \
-             compares every byte of every copy";
+             reads before the batch completes, is not seen; each commit compares, of the copies \
+             its command buffer uses (every copy where a command may reach memory no use \
+             names), every byte of one whose pages carry no log of their writes (only the pages \
+             its log reports written where they do), and each completion every copy its batches \
+             may have written";
         /// Batches of command buffers committed on one queue that the scheduler found ready
         /// together, or held while two or more earlier submissions of their queue ran, went to the
         /// driver in one `vkQueueSubmit`, only the last signalling its queue's timeline and their
@@ -2057,13 +2181,12 @@ degradations! {
         /// one, a blit into its depth, a pass's written NaN clear), or at the commit of the command
         /// buffer of a pass that loads a new texture's pattern (a NaN with the sign set) before a
         /// write covered it in commit order (`fresh_unwritten.rs`), on a device that keeps such a
-        /// value there
-        /// (`VK_EXT_depth_range_unrestricted` enabled, or
-        /// `DriverFact::DepthImageKeepsValuesOutsideUnitRange`; elsewhere `restricted-depth-upload`
-        /// is announced). A device whose depth test compares magnitudes as Metal's
-        /// (`DriverFact::DepthTestComparesMagnitudes`: MoltenVK, whose test and store are the GPU's
-        /// own Metal ones) announces it instead at a pass that loads and stores the depth and sets
-        /// a state with depth writes but draws under none, which its pass leaves signed. A render
+        /// value there (`VK_EXT_depth_range_unrestricted` enabled; elsewhere a copy clamps it and
+        /// `restricted-depth-upload` is announced). Such a device whose depth test compares
+        /// magnitudes as Metal's (`DriverFact::DepthTestComparesMagnitudes`: MoltenVK, whose test
+        /// and store are the GPU's own Metal ones, were it to enable the extension) announces it
+        /// instead at a pass that loads and stores the depth and sets a state with depth writes
+        /// but draws under none, which its pass leaves signed. A render
         /// pass's NaN clear depth, which Metal stores as
         /// `0x7fc00000` and tests above every value, is written into the depth before the pass and
         /// loaded (`nan_clear.rs`); where the device writes no such word (a memoryless depth, a
@@ -2097,6 +2220,26 @@ degradations! {
             "the driver keeps its own cache of the device's pipelines beside the shader cache's \
              records, with whatever it writes to disk and holds in memory for it; the pipelines \
              made are the same";
+        /// A device whose `VkDevice` was lost made a new one behind it, as Metal's device
+        /// survives its GPU's recovery (`device/line.rs`): its command buffers in flight failed,
+        /// the oldest incomplete one as the hang (`GpuHang`) and the rest as its victims
+        /// (`GpuRecoveryVictim`); every later call goes to the new `VkDevice`. Announced at each
+        /// recovery, from the call that made it; the payload names the culprit (where two or more
+        /// `VkQueue`s had work in flight it is an inference, and says so) and the recovery's
+        /// time, and the objects it carried to the new `VkDevice` and left refused, by kind
+        /// (`device/carry.rs`). Announced as well, at most once each per recovery, whatever an
+        /// earlier recovery announced: where a call waited past 10 seconds for the recovery under
+        /// way (it waits on), where its command buffers in flight took past 10 seconds to fail (it
+        /// waits on), and where its new `VkDevice` could not be made (the device then answers as
+        /// a lost one).
+        DeviceRecovered = "device-recovered", Performance,
+            "the events, uses of guest RAM, no-copy buffers, `Private` buffers and buffers in the \
+             runtime's own pages (fresh pages, and the blocks of pages the `Shared` and `Managed` \
+             buffers lie in where the device's checks found a held host-page import costs its \
+             submissions nothing and textures over such pages take what they take over its own \
+             memory) made before it go on, a `Private` buffer's contents lost (it \
+             reads zero); the other objects made before it are refused (`MadeBeforeRecovery`), \
+             where Metal's go on; the calls during it wait for it";
         /// Apple's private device properties the device has no answer for
         /// (`private_properties.rs`): no document describes them and nothing the device reports
         /// maps to them. Announced once, when `Device::private_properties` is first read; the
@@ -2139,12 +2282,15 @@ degradations! {
              or a box";
         /// A draw of lines at a width other than 1 (Apple's `setLineWidth:`), or of a triangle's
         /// edges in fill mode `Lines` or of a mesh draw, drawn by the device's own lines
-        /// (`render/line_width.rs`) where they are not Metal's parallelogram: strict lines (the
-        /// rectangle the width spans across the segment, square ends), lines Vulkan does not state
-        /// as parallelograms (`nonStrictWideLinesUseParallelogram` unset, or a width below 1), or a
-        /// width off the device's `lineWidthGranularity`, which rounds it. Under
+        /// (`render/line_width.rs`), which no device's are taken to draw as Metal's
+        /// parallelogram: strict lines (the rectangle the width spans across the segment, square
+        /// ends), lines Vulkan does not state as parallelograms
+        /// (`nonStrictWideLinesUseParallelogram` unset, or a width below 1), a width off the
+        /// device's `lineWidthGranularity`, which rounds it, and a driver's parallelograms, whose
+        /// ends and endpoints' snap are the driver's (RADV on the Radeon RX 7900 XTX draws 21 of
+        /// 48 scattered lines at width 2.5 a row or a column off Metal's at an end). Under
         /// `WideLinePolicy::Exact` a draw of lines or of a triangle's edges takes the band variant
-        /// there instead, on a device with `tessellationShader`.
+        /// instead, on a device with `tessellationShader`.
         DeviceWideLines = "device-wide-lines", Precision,
             "the lines can cover pixels Metal's parallelogram does not, and miss others, at each \
              end and along each edge";
@@ -2152,6 +2298,7 @@ degradations! {
         /// edges in fill mode `Lines` or of a mesh draw, that neither the device's own lines at
         /// that width nor the band variant draws (`render/line_width.rs`), drawn by the device's
         /// own lines at the width nearest it they draw: the width clamped into `lineWidthRange`
+        /// and put on the nearer step of `lineWidthGranularity`'s grid from its bottom (never 0)
         /// where the device enables `wideLines`, else 1. A mesh draw's lines and edges and a
         /// tessellated patch draw's edges, which the band does not draw, where the device's lines
         /// do not draw the width (every such draw on a device without `wideLines`, MoltenVK among
@@ -2239,6 +2386,25 @@ degradations! {
         VisibilityCountPerColor = "visibility-count-per-color", Precision,
             "the result is Metal's count multiplied by the colors the draw writes; a `Boolean` \
              result keeps its contract";
+        /// A draw under a visibility result (`Counting` or `Boolean`) whose fragment function
+        /// declares `[[early_fragment_tests]]` and writes the `SampleMask` output
+        /// ([`metal2vulkan::pipeline::GraphicsState::writes_sample_mask`]: the render pipeline's
+        /// private sample mask or coverage, which the function applies itself under early tests,
+        /// or its own `[[sample_mask]]` return), on a device that does not state
+        /// `earlyFragmentMultisampleCoverageAfterSampleCounting`
+        /// ([`metal2vulkan::device::Limits::early_fragment_multisample_coverage_after_sample_counting`]:
+        /// ANV on the Iris Xe of RPL-P), where Vulkan lets the fragment shading and its mask come
+        /// before sample counting. Metal counts every sample the early tests pass, the private
+        /// masks applied to the colors alone; the device's query may leave out the samples the
+        /// mask drops. No other form keeps Metal's count at no cost to the draws: the colors'
+        /// masks are the function's `SampleMask` output or a discard, both fragment operations the
+        /// device may count after, so only a second draw of each counted draw, without the masks
+        /// and its writes, would count as Metal does. Announced at the draw's call, and counted
+        /// (`WorkCounts::draws_counted_past_early_masks`); the payload names the draw.
+        VisibilityPastEarlyMask = "visibility-past-early-mask", Precision,
+            "the result may leave out the samples the fragment function's sample mask drops, \
+             which Metal counts under early tests: a `Counting` result counts fewer, and a \
+             `Boolean` one may be 0 where Metal's passed";
         /// A pass writes a `Boolean` visibility result (`visibility.rs`): where a sample passed,
         /// its word is the device's occlusion query result without
         /// `VK_QUERY_CONTROL_PRECISE_BIT`, which Vulkan states only as nonzero ("When any samples
@@ -2322,6 +2488,7 @@ degradations! {
         DeviceColorConversion = "device-color-conversion";
         DeviceInterpolation = "device-interpolation";
         DeviceInterpolationOffset = "device-interpolation-offset";
+        ExtrapolatedInterpolation = "extrapolated-interpolation";
         QuadsSplitByClipping = "quads-split-by-clipping";
         VertexSimdgroupGrouping = "vertex-simdgroup-grouping";
         FragmentSimdgroupGrouping = "fragment-simdgroup-grouping";
@@ -2474,9 +2641,11 @@ degradations! {
         /// Vulkan format holds them): a linear value within one `f32` ulp of Metal's, an encoded
         /// code within one (`R10Unorm_X6_sRGB`'s and `RGB10A2Unorm_sRGB`'s colour within two
         /// below `0.0031308`), a `half` result within one `half` ulp. A texture a heap holds
-        /// by its raw texels alone, which a function's `float` read through an argument buffer
-        /// decodes so, is announced naming the texture, at the first command that binds a heap
-        /// set holding it, whether or not its function reads it.
+        /// by its raw texels alone, which a function's `float` read, sample or gather through an
+        /// argument buffer decodes so, is announced naming the texture, at the first command that
+        /// binds a heap set holding it, whether or not its function reads it; and by the stage
+        /// that decodes it, at a draw or dispatch whose command makes such a texture resident or
+        /// binds one (`SpecKey::HeapRawTextures`).
         DevicePackConversion = "device-pack-conversion";
         /// A render pipeline whose color attachments the device draws in more than one group:
         /// each draw runs once per group, each group's variant over its own copy of the pass's
@@ -2589,6 +2758,31 @@ pub struct DegradeNotice {
     /// its place among the encoder's calls. `None` for a notice announced inside the program's
     /// call itself, and for every other notice.
     pub call: Option<EncoderCall>,
+    /// The command buffer whose work announced it: its ID
+    /// ([`CommandBuffer::object_id`](crate::CommandBuffer::object_id)). A runtime extension;
+    /// Metal has no notices, and reports a command buffer's errors on the command buffer
+    /// (`MTLCommandBuffer.error`). Set for a notice announced while the runtime
+    /// does one command buffer's work on the announcing thread: a call of one of its encoders,
+    /// that call's lowering after it returned (`RenderLoweringPolicy::Worker`, on whichever
+    /// thread lowers it), the opening of an encoder of it, its commit (at the call, or once a
+    /// render encoder's end it waited for was lowered), the submission of a batch of it and the
+    /// settling of what rode on that batch, a host step of it on the scheduler's steps thread (an
+    /// indirect command buffer's execution recorded there among them) and a predicated loop's run
+    /// again of what such steps recorded, on that loop's thread, an encoding again of its
+    /// encoders at a rebind, and a read of its GPU times once it completed
+    /// ([`CommandBuffer::gpu_start_time`](crate::CommandBuffer::gpu_start_time),
+    /// [`CommandBuffer::gpu_end_time`](crate::CommandBuffer::gpu_end_time)). A notice a bind
+    /// announces at every occurrence (`DeviceOptions::announce_each`) names the command buffer of
+    /// that bind, not of the bind that first made it. `None` for every other notice: one
+    /// announced by the device, a library, a pipeline state, a resource or a queue outside any
+    /// command buffer's work (making, releasing, rebinding or detaching one, and the pages of a
+    /// detached or released no-copy buffer); one about several command buffers' batches together
+    /// ([`Degradation::GroupedCompletion`]); and one of a recovery of the device
+    /// ([`Degradation::DeviceRecovered`]), whichever call met it. The program's code the runtime
+    /// calls (a handler, a submission check, an indirect command check, a message sink) is no
+    /// command buffer's work: what its calls announce names none, but a call of an encoder, which
+    /// names the encoder's command buffer.
+    pub command_buffer: Option<ObjectId>,
 }
 
 /// A notice announced where the runtime's rule announces none
@@ -2651,7 +2845,23 @@ impl DegradeNotice {
             object_id: None,
             misplaced: None,
             call: crate::render::lowering::current(),
+            command_buffer: NoticesFor::current(),
         }
+    }
+
+    /// The notice as announced now, by a bind that announces it again as made by an earlier bind
+    /// (`Device::announce_bound`): the call being lowered and the command buffer whose work runs
+    /// on this thread now, in place of the earlier bind's.
+    fn announced_here(&self) -> Option<DegradeNotice> {
+        let (call, command_buffer) = (crate::render::lowering::current(), NoticesFor::current());
+        if self.call == call && self.command_buffer == command_buffer {
+            return None;
+        }
+        Some(DegradeNotice {
+            call,
+            command_buffer,
+            ..self.clone()
+        })
     }
 
     /// The notice as a message: a warning of the performance kind (a performance degradation)
@@ -2760,6 +2970,107 @@ impl Announced {
 }
 
 thread_local! {
+    /// The command buffer whose work this thread does now, and its generation ([`NoticesFor`]).
+    static NOTICES_FOR: Cell<Scope> = const {
+        Cell::new(Scope {
+            command_buffer: 0,
+            generation: 0,
+        })
+    };
+}
+
+/// What a thread's [`NoticesFor`] names: the command buffer whose work it does (its
+/// `ObjectId`'s number), and that command buffer's generation of its device, the address of its
+/// `DeviceShared`, which a buffer its device's recovery carried answers its parts of
+/// (`Buffer::carried`, `device/carry.rs`); 0 for none of either. Two words, as one optional
+/// `ObjectId` is, which each scope of a command buffer's work sets and puts back.
+#[derive(Clone, Copy)]
+struct Scope {
+    command_buffer: u64,
+    generation: usize,
+}
+
+/// This thread doing one command buffer's work, from its making until it is dropped: every notice
+/// announced meanwhile names that command buffer ([`DegradeNotice::command_buffer`]), and a
+/// buffer its device's recovery carried answers its parts of that command buffer's generation
+/// ([`NoticesFor::generation`]). Made where the runtime holds the command buffer, at each place
+/// that does its work (`CommandBuffer::notices_for`); one made inside another names its own
+/// command buffer until it goes, then the other's again, and [`NoticesFor::none`] names none
+/// meanwhile, the generation left as it was. Neither `Send` nor `Sync`: it is this thread's.
+pub(crate) struct NoticesFor {
+    outer: Scope,
+    _thread: std::marker::PhantomData<*const ()>,
+}
+
+impl NoticesFor {
+    /// The work of the command buffer of ID `command_buffer`, made on `generation`, from now.
+    pub(crate) fn new(command_buffer: ObjectId, generation: &DeviceShared) -> NoticesFor {
+        let scope = Scope {
+            command_buffer: command_buffer.get(),
+            generation: std::ptr::from_ref(generation).addr(),
+        };
+        NoticesFor {
+            outer: NOTICES_FOR.with(|current| current.replace(scope)),
+            _thread: std::marker::PhantomData,
+        }
+    }
+
+    /// This thread's reads of a carried object's parts answer those of the generation at
+    /// `generation` (the address of its `DeviceShared`), until the scope goes, inside whatever
+    /// command buffer's work it does: a call outside command buffers' work that holds a buffer's
+    /// parts there (`Buffer::held_parts`).
+    pub(crate) fn of_generation(generation: usize) -> NoticesFor {
+        let outer = NOTICES_FOR.with(|current| {
+            let outer = current.get();
+            current.set(Scope {
+                generation,
+                ..outer
+            });
+            outer
+        });
+        NoticesFor {
+            outer,
+            _thread: std::marker::PhantomData,
+        }
+    }
+
+    /// Work for no command buffer, from now, inside one's: what is announced about several
+    /// command buffers, or about the device. The work is the outer command buffer's generation's
+    /// still, where it is inside one's.
+    pub(crate) fn none() -> NoticesFor {
+        let outer = NOTICES_FOR.with(|current| {
+            let outer = current.get();
+            current.set(Scope {
+                command_buffer: 0,
+                ..outer
+            });
+            outer
+        });
+        NoticesFor {
+            outer,
+            _thread: std::marker::PhantomData,
+        }
+    }
+
+    /// The command buffer whose work this thread does now, if any.
+    pub(crate) fn current() -> Option<ObjectId> {
+        NOTICES_FOR.with(|current| ObjectId::of_number(current.get().command_buffer))
+    }
+
+    /// The generation whose command buffer's work this thread does now, if any: the address of
+    /// its `DeviceShared`.
+    pub(crate) fn generation() -> Option<usize> {
+        NOTICES_FOR.with(|current| Some(current.get().generation).filter(|&at| at != 0))
+    }
+}
+
+impl Drop for NoticesFor {
+    fn drop(&mut self) {
+        NOTICES_FOR.with(|current| current.set(self.outer));
+    }
+}
+
+thread_local! {
     /// How many notices this thread met that their device announces, or refuses, at every
     /// occurrence ([`EachWatch`]).
     static MET_EACH: Cell<u64> = const { Cell::new(0) };
@@ -2849,10 +3160,7 @@ impl Kinds {
             let notes = stage.precision_notes.iter().copied();
             for note in notes.chain(stage.specialized_notes.iter().map(|s| s.note)) {
                 kinds.add(Degradation::from_precision_note(note));
-                if matches!(
-                    note,
-                    PrecisionNote::HalfSampleFilter | PrecisionNote::FloatSampleFilter
-                ) {
+                if filter_note(note) {
                     kinds.add(Degradation::YCbCrFilterNotExact);
                 }
             }
@@ -3038,24 +3346,55 @@ fn attachment_read_notice(call: &'static str) -> (String, String) {
     )
 }
 
-impl Device {
+impl super::encoder::EncoderCore {
+    // A draw's checks, of the generation its command buffer holds (`CommandBuffer::generation`).
+
     /// Announce `AttachmentReadInPlace` where `uses`, what a draw of `call` binds or reaches,
-    /// share memory with an attachment of `layout`'s render pass instance
-    /// (`render_target::shares_attachment`). The check runs only while the kind would be
-    /// announced: once it was, a device that announces it once skips it.
+    /// share memory with an attachment of its render pass instance, as `shares` answers
+    /// (`render_target::shares_attachment`, or a render encoder's `AttachedMemo` of it). The check
+    /// runs only while the kind would be announced: once it was, a device that announces it once
+    /// skips it.
     pub(super) fn degrade_attachment_reads(
         &self,
         call: &'static str,
-        layout: &PassLayout,
+        shares: impl FnOnce(&[Use<ResourceKey>]) -> Result<bool, Error>,
         uses: &[Use<ResourceKey>],
     ) -> Result<(), Error> {
         let kind = Degradation::AttachmentReadInPlace;
-        if !self.shared().announced.pending(kind)
-            || !render_target::shares_attachment(layout, uses)?
-        {
+        if !self.generation().announced.pending(kind) || !shares(uses)? {
             return Ok(());
         }
-        self.degrade(kind, || attachment_read_notice(call));
+        self.device().degrade(kind, || attachment_read_notice(call));
+        Ok(())
+    }
+
+    /// [`degrade_attachment_reads`](Self::degrade_attachment_reads) of a draw whose `uses` differ
+    /// from those of the last draw of its encoder, drawn against the same attachments, only in
+    /// `moved` (a draw moved: `render/draw_again/rebound.rs`): of those alone, as each other use
+    /// is that draw's, which the check found sharing none while it ran (checked in builds with
+    /// debug assertions).
+    pub(super) fn degrade_moved_attachment_reads(
+        &self,
+        call: &'static str,
+        mut shares: impl FnMut(&[Use<ResourceKey>]) -> Result<bool, Error>,
+        (moved, uses): (&[Use<ResourceKey>], &[Use<ResourceKey>]),
+    ) -> Result<(), Error> {
+        let kind = Degradation::AttachmentReadInPlace;
+        if !self.generation().announced.pending(kind) {
+            return Ok(());
+        }
+        let shared = shares(moved)?;
+        #[cfg(debug_assertions)]
+        assert_eq!(
+            shared,
+            shares(uses)?,
+            "a draw moved's uses but the moved ones share memory with an attachment"
+        );
+        #[cfg(not(debug_assertions))]
+        let _ = uses;
+        if shared {
+            self.device().degrade(kind, || attachment_read_notice(call));
+        }
         Ok(())
     }
 
@@ -3067,34 +3406,39 @@ impl Device {
     pub(super) fn degrade_resident_attachment_reads(
         &self,
         call: &'static str,
-        (layout, version): (&PassLayout, Option<u64>),
+        (mut shares, version): (
+            impl FnMut(&[Use<ResourceKey>]) -> Result<bool, Error>,
+            Option<u64>,
+        ),
         (uses, prefix): (&mut CommandUses, ResidentPrefix),
     ) -> Result<(), Error> {
         let kind = Degradation::AttachmentReadInPlace;
-        if !self.shared().announced.pending(kind) {
+        if !self.generation().announced.pending(kind) {
             return Ok(());
         }
         let past = version.map_or(0, |version| uses.apart(version));
-        let shares = render_target::shares_attachment(layout, &uses[past..])?;
+        let shared = shares(&uses[past..])?;
         #[cfg(debug_assertions)]
         assert_eq!(
-            shares,
-            render_target::shares_attachment(layout, uses)?,
+            shared,
+            shares(uses)?,
             "a draw's uses checked against the attachments by their identity less than its uses"
         );
         if past == 0 {
-            let counts = self.shared().counts.thread();
+            let counts = self.generation().counts.thread();
             counts.resident_uses_against_attachments(prefix.len as u64);
-            if let Some(version) = version.filter(|_| !shares) {
+            if let Some(version) = version.filter(|_| !shared) {
                 uses.apart_from(version);
             }
         }
-        if shares {
-            self.degrade(kind, || attachment_read_notice(call));
+        if shared {
+            self.device().degrade(kind, || attachment_read_notice(call));
         }
         Ok(())
     }
+}
 
+impl Device {
     /// Announce `degradation` unless the device announced it before (but a kind its options ask
     /// for at each occurrence, `DeviceOptions::announce_each`), `describe` giving the object and
     /// the reason: through the device's message sink, else on stderr, on the calling thread (the
@@ -3135,6 +3479,35 @@ impl Device {
         // rule 1), and a sink keeping what it heard in its thread's state would miss it.
         let misplaced = check_announcement(degradation, shared.announced.each(degradation));
         let (object, reason) = describe();
+        let message = DegradeNotice::new(degradation, object, reason).message();
+        self.deliver_placed(degradation, message, misplaced);
+    }
+
+    /// Announce a recovery of the device from the loss of its `VkDevice`
+    /// (`Degradation::DeviceRecovered`, `device/line.rs`): at each, whatever the kind's record
+    /// says, since each names its own culprit; inside the program's call that made it.
+    pub(super) fn degrade_recovered(&self, describe: impl FnOnce() -> (String, String)) {
+        let degradation = Degradation::DeviceRecovered;
+        let misplaced = check_announcement(degradation, true);
+        let (object, reason) = describe();
+        // The device's, whichever command buffer's work met it.
+        let _device = NoticesFor::none();
+        let message = DegradeNotice::new(degradation, object, reason).message();
+        self.deliver_placed(degradation, message, misplaced);
+    }
+
+    /// Announce a step of a recovery of the device that went past its bound or failed
+    /// (`Degradation::DeviceRecovered`, `device/line.rs`): a call's wait for the recovery past
+    /// `RECOVERY_NOTICE`, its command buffers in flight taking past it to fail, or its new
+    /// `VkDevice`'s failure. Whatever the kind's record says, as each recovery's notices are its
+    /// own, the line announcing each step at most once per recovery; met where no program call
+    /// may be (a runtime thread's call waiting for the recovery), as `degrade_once`'s kinds are.
+    pub(super) fn degrade_recovery_step(&self, describe: impl FnOnce() -> (String, String)) {
+        let degradation = Degradation::DeviceRecovered;
+        let misplaced = check_announcement(degradation, false);
+        let (object, reason) = describe();
+        // The device's, whichever command buffer's work met it.
+        let _device = NoticesFor::none();
         let message = DegradeNotice::new(degradation, object, reason).message();
         self.deliver_placed(degradation, message, misplaced);
     }
@@ -3260,6 +3633,11 @@ impl Device {
     /// announces once without counting. Counted whether or not the device's options ask for
     /// each occurrence (`DeviceOptions::announce_each`). No Metal counterpart.
     pub fn degraded_objects(&self, kind: Degradation) -> Option<u64> {
+        self.current().degraded_objects_now(kind)
+    }
+
+    /// [`Device::degraded_objects`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn degraded_objects_now(&self, kind: Degradation) -> Option<u64> {
         self.shared().counts.degraded_objects(kind)
     }
 
@@ -3334,6 +3712,14 @@ impl Device {
         }
         for (degradation, message) in notices {
             met_each();
+            // Made by an earlier bind: named as this one's.
+            let here = (message.degradation.as_ref())
+                .and_then(DegradeNotice::announced_here)
+                .map(|notice| DebugMessage {
+                    degradation: Some(notice),
+                    ..message.clone()
+                });
+            let message = here.as_ref().unwrap_or(message);
             match check_announcement(*degradation, true) {
                 None => self.deliver(message),
                 misplaced => self.deliver_placed(*degradation, message.clone(), misplaced),
@@ -3378,27 +3764,10 @@ impl Device {
         }
     }
 
-    /// `options` of `call`'s no-copy buffer or heap over the caller's bytes without
-    /// [`ResourceOptions::PRIVATE_BIT`], and whether its memory drops the GPU's writes, as Metal's
-    /// does where the options set the bit: on macOS, where the runtime imports the pages through
-    /// a read-only view of them (`read_only_view.rs`). Elsewhere the GPU's writes reach the
-    /// pages, announced once ([`Degradation::PrivateResourceOption`]).
-    pub(super) fn no_copy_options(
-        &self,
-        call: &'static str,
-        options: ResourceOptions,
-    ) -> (ResourceOptions, bool) {
-        if !crate::read_only_view::VIEWS_DROP_WRITES {
-            return (self.take_options(call, options), false);
-        }
-        options.without_private_bit()
-    }
-
     /// `options` as the runtime makes `call`'s resource of them where Metal makes it with
     /// [`ResourceOptions::PRIVATE_BIT`] and keeps the GPU's writes from its memory (a heap of
-    /// the runtime's memory; a no-copy buffer or heap off macOS, [`Device::no_copy_options`]; an
-    /// indirect command buffer, whose GPU-written records under it are not measured): without the
-    /// bit, announced once ([`Degradation::PrivateResourceOption`]).
+    /// the runtime's memory; an indirect command buffer, whose GPU-written records under it are
+    /// not measured): without the bit, announced once ([`Degradation::PrivateResourceOption`]).
     pub(super) fn take_options(
         &self,
         call: &'static str,
@@ -3460,6 +3829,11 @@ impl Device {
                 // Announced at a draw or dispatch that lists a state needing it
                 // (`Device::degrade_argument_pixel_samplers`), not at the making or a bind.
                 if note == PrecisionNote::ArgumentPixelSamplerScaling {
+                    continue;
+                }
+                // Announced at a draw that rasterizes points (`Device::degrade_point_size`), the
+                // one primitive a point size sizes, not at the making or a bind.
+                if note == PrecisionNote::DevicePointSize {
                     continue;
                 }
                 self.degrade_at(at, Degradation::from_precision_note(note), || {
@@ -3674,17 +4048,26 @@ impl Device {
     /// reads as data or a bound sampler's word (`SpecClause::tests_bound_values`: a bound
     /// texture's format class, `SpecKey::BoundSamplerWord`) and holds where the draw's plan gives
     /// the values `bound` gives (`BindingPlan::specialized_value`;
-    /// `StageModule::note_clauses_bound`). No pipeline's key
-    /// carries those values, so no making can announce such a clause: one `VkPipeline` serves
-    /// every bound value. The reason names each texture slot a holding clause tests and, where
-    /// the command knows them (`formats`), the format it binds there. A kind already announced
-    /// costs one atomic load.
+    /// `StageModule::note_clauses_bound`; and what the command's handles can name,
+    /// `SpecKey::HeapYCbCrTextures`, `SpecKey::HeapRawTextures` and
+    /// `SpecKey::FilteringArgumentSampler`, which the plan gives too: a filter note's heap
+    /// texture, a heap decode's raw one), the class of the format `formats` binds at each
+    /// texture slot such a clause also tests (`SpecKey::BoundTexelFormat`: a filter note's
+    /// two-plane YCbCr format under a runtime sampler's filtering word). A clause testing a slot
+    /// bound to nothing does not hold, as [`degrade_bound_formats`](Self::degrade_bound_formats)
+    /// reads it; a command whose formats are not known (`None`) holds each such test. No
+    /// pipeline's key carries those values, so no making can announce such a clause: one
+    /// `VkPipeline` serves every bound value. The reason names each texture slot a holding clause
+    /// tests and, where the command knows them, the format it binds there. A kind already
+    /// announced costs one atomic load (a filter note's kind `ycbcr-filter-not-exact`, which its
+    /// clauses announce).
     ///
     /// Whether it was quiet: no clause of a note it tested held. Which clauses hold is a function
-    /// of `stages`, `specialization` and `bound` alone, and a note it skipped as announced stays
-    /// skipped (a kind announced at every occurrence is never skipped), so another call with the
-    /// same three after a quiet one announces nothing: a caller may leave it out (`render.rs`,
-    /// `QuietBoundValues`).
+    /// of `stages`, `specialization`, `bound` and the formats at the slots they test, which the
+    /// plan whose values `bound` gives fixes (each bound texture's format is in the shape it is
+    /// planned for), and a note it skipped as announced stays skipped (a kind announced at every
+    /// occurrence is never skipped), so another call with the same three after a quiet one
+    /// announces nothing: a caller may leave it out (`render.rs`, `QuietBoundValues`).
     pub(crate) fn degrade_bound_values(
         &self,
         stages: &[StageModule],
@@ -3692,21 +4075,36 @@ impl Device {
         bound: &dyn Fn(SpecKey) -> Option<u64>,
         formats: Option<BoundFormats<'_>>,
     ) -> bool {
+        // The plan's values, and the class of each format the command binds.
+        let values = |key: SpecKey| match key {
+            SpecKey::BoundTexelFormat(slot) => formats
+                .and_then(|f| f(slot))
+                .map(|pf| u64::from(metal2vulkan::metal::format::bound_texel_format(pf))),
+            key => bound(key),
+        };
+        // A slot bound to nothing reads zero: a clause testing one does not hold.
+        let unbound = |slot: SlotRef| formats.is_some_and(|f| f(slot).is_none());
         let mut quiet = true;
         for stage in stages {
             for s in &stage.specialized_notes {
+                let kind = match filter_note(s.note) {
+                    true => Degradation::YCbCrFilterNotExact,
+                    false => Degradation::from_precision_note(s.note),
+                };
                 if !s.when.iter().any(|c| c.tests_bound_values())
-                    || !self
-                        .shared()
-                        .announced
-                        .pending(Degradation::from_precision_note(s.note))
+                    || !self.shared().announced.pending(kind)
                 {
                     continue;
                 }
                 let clauses: Vec<_> = stage
-                    .note_clauses_bound(s.note, specialization, bound)
+                    .note_clauses_bound(s.note, specialization, &values)
                     .into_iter()
                     .filter(|c| c.tests_bound_values())
+                    .filter(|c| {
+                        !c.all.iter().any(
+                            |t| matches!(t.key, SpecKey::BoundTexelFormat(slot) if unbound(slot)),
+                        )
+                    })
                     .collect();
                 quiet &= clauses.is_empty();
                 self.degrade_clauses(
@@ -3724,9 +4122,11 @@ impl Device {
 
     /// Announce `note` of `stage`, `at` ([`Occurrence`]), where `clauses`, the clauses of its
     /// specialized note that hold, are not empty: a filter note's slot bound to a two-plane YCbCr
-    /// texture as its own kind, and the note's kind where a clause that holds tests another slot,
-    /// or none, the reason naming each such slot (with its bound format, where `formats` knows it)
-    /// after `under`.
+    /// texture (or, where the command's formats are not known, `formats` `None`, to the format its
+    /// clause tests, a two-plane YCbCr one), and its clause of a heap's texture
+    /// (`SpecKey::HeapYCbCrTextures`), as its own kind, and the note's kind where a clause that
+    /// holds tests another slot, or none, the reason naming each such slot (with its bound
+    /// format, where `formats` knows it) after `under`.
     fn degrade_clauses(
         &self,
         stage: &StageModule,
@@ -3742,27 +4142,47 @@ impl Device {
         let all = tested_slots(clauses.iter().copied());
         // A filter note's slot bound to a two-plane YCbCr texture: its own kind, naming the slot
         // and the format; the note's own where a clause that holds tests another slot, or none.
-        let filter = matches!(
-            note,
-            PrecisionNote::HalfSampleFilter | PrecisionNote::FloatSampleFilter
-        );
-        let ycbcr: Vec<(SlotRef, PixelFormat)> = all
+        let ycbcr: Vec<(SlotRef, Option<PixelFormat>)> = all
             .iter()
-            .filter(|_| filter)
-            .filter_map(|&slot| {
-                let format = formats.and_then(|f| f(slot))?;
-                metal2vulkan::metal::format::ycbcr_format(format).map(|_| (slot, format))
+            .filter(|_| filter_note(note))
+            .filter_map(|&slot| match formats {
+                Some(f) => {
+                    let format = f(slot)?;
+                    metal2vulkan::metal::format::ycbcr_format(format).map(|_| (slot, Some(format)))
+                }
+                None => Some((slot, None)),
             })
             .collect();
         let held = |slot: &SlotRef| ycbcr.iter().any(|(y, _)| y == slot);
         for &(slot, format) in &ycbcr {
             self.degrade_at(at, Degradation::YCbCrFilterNotExact, || {
+                let bound = match format {
+                    Some(format) => format!("bound as {format:?}"),
+                    None => "of a format the GPU's commands bind".to_owned(),
+                };
                 (
                     stage_object(stage.stage).to_owned(),
                     format!(
-                        "a filtered sample of texture {} bound as {format:?} takes the device's \
-                         filter, not Metal's exact filter of the format: {}",
+                        "a filtered sample of texture {} {bound} takes the device's filter, not \
+                         Metal's exact filter of the format: {}",
                         slot.index,
+                        self.note_reason(note)
+                    ),
+                )
+            });
+        }
+        // A filter note's clause of a heap's texture: a two-plane YCbCr texture the stage's
+        // handles can name (`SpecKey::HeapYCbCrTextures`), its own kind too.
+        let heap = |c: &&metal2vulkan::pipeline::SpecClause| {
+            filter_note(note)
+                && (c.all.iter()).any(|t| matches!(t.key, SpecKey::HeapYCbCrTextures(_)))
+        };
+        if clauses.iter().any(heap) {
+            self.degrade_at(at, Degradation::YCbCrFilterNotExact, || {
+                (
+                    stage_object(stage.stage).to_owned(),
+                    format!(
+                        "a filtered sample of a texture its argument buffers name takes the                          device's filter, not Metal's exact filter of the format, and a texture                          the command makes resident or binds that they can name is two-plane                          YCbCr: {}",
                         self.note_reason(note)
                     ),
                 )
@@ -3770,7 +4190,7 @@ impl Device {
         }
         let covered = |c: &&metal2vulkan::pipeline::SpecClause| {
             let tested = tested_slots([*c]);
-            !tested.is_empty() && tested.iter().all(held)
+            heap(c) || (!tested.is_empty() && tested.iter().all(held))
         };
         if clauses.iter().all(covered) {
             return;
@@ -3818,10 +4238,7 @@ impl Device {
                 // A filter note's clauses of the bound formats test a two-plane YCbCr format
                 // alone (`metal2vulkan::lower`'s filter of such a texture by Metal's own sampler):
                 // its own kind.
-                let filter = matches!(
-                    s.note,
-                    PrecisionNote::HalfSampleFilter | PrecisionNote::FloatSampleFilter
-                );
+                let filter = filter_note(s.note);
                 let kind = match filter {
                     true => Degradation::YCbCrFilterNotExact,
                     false => Degradation::from_precision_note(s.note),
@@ -3988,6 +4405,28 @@ impl Device {
         });
     }
 
+    /// Announce `PrecisionNote::DevicePointSize` at `call`'s draw of a state of `stages` that
+    /// rasterizes points: where a stage records the note, the size it writes past the device's
+    /// largest point draws at that bound. `[[point_size]]` sizes points alone (Metal has no point
+    /// fill mode, and Vulkan reads `PointSize` only where it rasterizes points), so a draw of
+    /// lines or triangles of the same state is Metal's exactly and announces nothing. Nothing else
+    /// announces the note.
+    pub(crate) fn degrade_point_size(&self, call: &'static str, stages: &[StageModule]) {
+        const NOTE: PrecisionNote = PrecisionNote::DevicePointSize;
+        let Some(stage) = stages.iter().find(|s| s.precision_notes.contains(&NOTE)) else {
+            return;
+        };
+        self.degrade(Degradation::DevicePointSize, || {
+            (
+                stage_object(stage.stage).to_owned(),
+                format!(
+                    "{}: {call} draws points of the size it writes",
+                    self.note_reason(NOTE)
+                ),
+            )
+        });
+    }
+
     /// The stage of `stages` whose note [`degrade_argument_pixel_samplers`] may announce: one
     /// that records `PrecisionNote::ArgumentPixelSamplerScaling`, where the device has not
     /// announced it yet; `None` where it would announce nothing, whatever the states.
@@ -4077,7 +4516,7 @@ impl Device {
                 let reason = if resolve.split {
                     format!(
                         "its depth ({}) and its stencil ({}) resolve into different textures, \
-                         each through a scratch image of its own",
+                         each a subpass resolves through a scratch image of its own",
                         resolve_mode(resolve.depth_mode),
                         resolve_mode(resolve.stencil_mode)
                     )
@@ -4128,6 +4567,10 @@ impl Device {
                         "a layered pass of {} layers resolves into {} slices of it, the layers that fit",
                         scratch.layers, texture.layers
                     )
+                } else if super::resolve::is_volume(texture) && super::resolve::first_plane_only(self) {
+                    "the device's resolve into a 2D view of a 3D image is written where the view \
+                     begins only at its first depth plane (RuntimeDriverDefect::VolumeResolveFirstPlane)"
+                        .to_owned()
                 } else {
                     "its image cannot be an attachment: the texture's usage lacks `RenderTarget`"
                         .to_owned()
@@ -4360,11 +4803,14 @@ impl Device {
         // call renders into a backing of its own, which copies nothing back: its texture keeps
         // its texels, as Metal's keeps them there (`render.rs`). So does one whose samples a
         // resolve after the pass reads, rendered through the image its texture keeps, from which
-        // the pass copies nothing back either (`resolve::keep_samples`).
+        // the pass copies nothing back either (`resolve::keep_samples`), and, under
+        // `DontCareColorPolicy::Kept`, a texture's own image stored `DontCare` through a backing
+        // its queue keeps (`kept_bytes.rs`).
         let kept = |color: &ColorTarget| {
             (color.clears_and_resolves_across_formats()
                 && color.stand_in.as_ref().is_some_and(|s| !s.copies()))
-                || (color.stand_in.as_ref()).is_some_and(|s| s.cause == Cause::KeptSamples)
+                || (color.stand_in.as_ref())
+                    .is_some_and(|s| matches!(s.cause, Cause::KeptSamples | Cause::KeptTexels))
         };
         // A texture over a buffer rendered through an image the pass copies nothing back from
         // where it does not store it (a shadow, `render/shadows.rs`; a stand-in, which copies
@@ -4571,6 +5017,10 @@ pub(super) struct SplitCauses {
     /// The splits between draws that reach the pass's tile threadgroup memory
     /// (`render/tile_memory.rs`).
     pub(super) tile_memory: usize,
+    /// The splits before a draw that reaches interlocked storage an earlier draw of its instance
+    /// wrote, on a driver whose such draws race under load
+    /// (`DriverFact::InterlockedDrawsRaceUnderLoad`, `render.rs`'s `InterlockedStorage`).
+    pub(super) interlocked_writes: usize,
     /// The splits before a draw that reads a color attachment's texture after a memory barrier,
     /// the pass's load actions included where the barrier came before its first draw
     /// (`texture/attached_reads.rs`).
@@ -4603,6 +5053,7 @@ impl Device {
             dispatches,
             barriers,
             tile_memory,
+            interlocked_writes,
             attached_reads,
             viewed,
         } = causes;
@@ -4657,6 +5108,7 @@ impl Device {
             && dispatches == 0
             && barriers == 0
             && tile_memory == 0
+            && interlocked_writes == 0
             && attached_reads == 0;
         if instances > 1 && !chosen {
             let color = changed.and_then(|(index, interlock)| {
@@ -4715,6 +5167,13 @@ impl Device {
                          writes in order, which Vulkan gives one draw of another's storage writes \
                          across render pass instances alone, ending {tile_memory} of them, so it \
                          runs as {instances} Vulkan render pass instances"
+                    ),
+                    None if interlocked_writes > 0 => format!(
+                        "draws that read and write a color through the pixel interlock after an \
+                         earlier draw of their Vulkan render pass instance wrote it, whose order \
+                         the driver does not keep under load, each run in an instance after the \
+                         one that wrote it, ending {interlocked_writes} of them, so it runs as \
+                         {instances} Vulkan render pass instances"
                     ),
                     None if attached_reads > 0 => format!(
                         "draws that read a color attachment's texture after a memory barrier read \
@@ -4864,11 +5323,12 @@ impl Device {
                 });
             } else if matches!(
                 stand_in.cause,
-                Cause::Linear | Cause::KeptBytes | Cause::KeptSamples
+                Cause::Linear | Cause::KeptBytes | Cause::KeptSamples | Cause::KeptTexels
             ) {
                 // Announced where `linear_attachment.rs` or `kept_bytes.rs` chose the kept image.
                 // An image that keeps an attachment's samples for a resolve after the pass makes
-                // the pass Metal's, which no notice names (`resolve::keep_samples`).
+                // the pass Metal's, which no notice names (`resolve::keep_samples`), as does a
+                // backing that keeps a texture's texels (`kept_bytes.rs`).
             } else if memoryless
                 && (index.is_some_and(fetched) || (index.is_none() && shadow) || !chosen)
             {

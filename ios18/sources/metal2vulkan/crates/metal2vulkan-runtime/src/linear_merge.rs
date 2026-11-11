@@ -43,7 +43,9 @@
 //!   (`WorkCounts::linear_merge_scratches_made`, `linear_merge_scratches_reused`).
 //! - **Runs.** Passes over one attachment one after another, with nothing between them that may
 //!   touch its bytes or the kept image, keep once and merge once, after the last
-//!   (`pass_runs.rs`): one copy in, keep and merge a run, not one a pass.
+//!   (`pass_runs.rs`): one copy in, keep and merge a run, not one a pass. A pass of a run that a
+//!   rebind encodes again alone copies the run's box in again and keeps it after its own merge,
+//!   for the run's later passes ([`LinearMerge::record_reload`]).
 //!
 //! - **Reloaded at a barrier.** A draw after a memory barrier inside the pass may read the
 //!   surface's bytes (a sampled texture over them, a buffer): before the render pass instance that
@@ -370,6 +372,34 @@ impl LinearMerge {
         self.lend();
     }
 
+    /// Record in `core`'s command buffer, after a pass of the merge's run encoded again alone that
+    /// a later pass of the run went on over (`pass_runs.rs`'s **Encoded again**), the box's copy in
+    /// from the surface, whose bytes that pass's merge and the merge before it left holding what
+    /// every pass before wrote, and its keep, between barriers: the run's later passes render
+    /// over what Metal's would load, and its merge writes only what they change. Its uses are
+    /// that pass's own copy in's, keep's and merge's: the same images.
+    pub(super) fn record_reload(&self, core: &mut EncoderCore) {
+        core.barrier(Barrier::everything());
+        core.command(vk::PipelineStageFlags2::COPY, &[], |device, raw| {
+            // SAFETY: the encoder's command buffer is recording outside a render pass; the copy's
+            // region lies in both images (the box, inside the render area), which rest in
+            // `GENERAL` with the transfer usage the copies in take, and which the merge's run
+            // retains until it completes.
+            unsafe {
+                device.cmd_copy_image(
+                    raw,
+                    self.surface,
+                    vk::ImageLayout::GENERAL,
+                    self.backing,
+                    vk::ImageLayout::GENERAL,
+                    &[self.copy_in],
+                );
+            }
+        });
+        self.record_keep(core);
+        core.device().shared().counts.linear_run_reloaded();
+    }
+
     /// Lend the scratch to the command buffer's later merges, once: the last command that
     /// touches it lies before every command recorded from here on (`merge_scratch.rs`).
     pub(super) fn lend(&self) {
@@ -429,6 +459,34 @@ impl LinearMerge {
             self.keep_in(device, command_buffer);
             Barrier::everything().record(device, command_buffer);
         }
+    }
+
+    /// Record into `command_buffer`, between two render pass instances of the pass, the keep
+    /// that follows its stand-in's copy in there, where the instances before rendered the
+    /// attachment itself (`render/snapshot.rs`'s pins), as [`record_keep`](Self::record_keep)
+    /// records it before the pass: first, where it has one, the scratch's fill with zero; each
+    /// between barriers. The pass's uses hold the keep's ([`keep_uses`](Self::keep_uses)).
+    ///
+    /// # Safety
+    ///
+    /// As for [`LinearMerge::reload_in`].
+    pub(super) unsafe fn keep_in_pass(&self, device: &Vk, command_buffer: vk::CommandBuffer) {
+        // SAFETY: the caller's contract; the scratch is the merge's, a transfer destination, and
+        // the filled range is its two parts, whole words.
+        unsafe {
+            Barrier::everything().record(device, command_buffer);
+            if let Some((offset, size)) = self.padding {
+                device.cmd_fill_buffer(command_buffer, self.scratch, offset, size, 0);
+                Barrier::everything().record(device, command_buffer);
+            }
+            self.keep_in(device, command_buffer);
+            Barrier::everything().record(device, command_buffer);
+        }
+    }
+
+    /// The keep's uses: the kept image's read.
+    pub(super) fn keep_uses(&self) -> &[Use<ResourceKey>] {
+        &self.keep_uses
     }
 
     /// The keep's copy.

@@ -4,9 +4,10 @@
 //! in `Boolean` mode a nonzero value when any sample of the draws while it was set passed and 0
 //! otherwise, in `Counting` mode the samples that passed; an offset set with no draw after it gets
 //! 0, an offset the encoder never set keeps its bytes, and a later pass rewrites only its own
-//! offsets (measured on an M4 with macOS 27.0.1). The nonzero `Boolean` value is the device's: an
-//! Apple M3 Max writes 1, Metal on the AMD Radeon Pro 5300M and the Intel UHD Graphics 630
-//! (macOS 26.7.1) the samples that passed, and the runtime the device's occlusion query's result
+//! offsets (Metal's answers on an Apple M3 Max with macOS 27.0.1, which the conformance suite's
+//! `visibility` cases record). The nonzero `Boolean` value is the device's: an Apple M3 Max writes
+//! 1, Metal on the AMD Radeon Pro 5300M and the Intel UHD Graphics 630 (macOS 26.7.1) the samples
+//! that passed, and the runtime the device's occlusion query's result
 //! (`Degradation::DeviceBooleanVisibility`).
 //!
 //! - **Queries.** Each mode set is an occlusion query of the encoder's own pools, begun in the
@@ -58,6 +59,17 @@
 //!   color attachment runs, and the device announces `Degradation::VisibilityCountPerColor`: its
 //!   result is the samples times those colors, not divided back. `Boolean` results keep their
 //!   contract: zero where no sample passed.
+//! - **A device that may count after a fragment function's mask** (no
+//!   `earlyFragmentMultisampleCoverageAfterSampleCounting`, ANV): a draw under a visibility
+//!   result whose fragment function declares `[[early_fragment_tests]]` and writes its
+//!   `SampleMask` output (Metal's private sample mask or coverage, which the function applies
+//!   itself there, or its own `[[sample_mask]]` return) runs, counted in
+//!   `WorkCounts::draws_counted_past_early_masks`, and the device announces
+//!   `Degradation::VisibilityPastEarlyMask`: Metal counts every sample the early tests pass, and
+//!   the device's query may leave out those the mask drops. Keeping Metal's count would take a
+//!   second draw of each counted draw without the mask, as every form that masks the colors
+//!   alone (the `SampleMask` output, a discard) is a fragment operation such a device may count
+//!   after.
 //! - **An offset taken again in its mode** stops Metal's validation ("using the same offset ...
 //!   twice in the same command encoder is not allowed"); plain Metal adds the draws since to its
 //!   result: `Counting` sums them (16 and 16 write 32), `Boolean` writes 1 when either passed a

@@ -10,10 +10,11 @@ import tempfile
 source = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / 'NativeLegacyDisplay.cpp'
 text = source.read_text()
 methods = []
-for start, end in [('    bool gpuWrote(', '    static void fenceFired('),
-                   ('    bool cancelSwapsAfterTimeout()', '\n#endif')]:
+# The cancellation method ends at its closing brace: it answers differently on macOS inside its own conditional block.
+for start, end, keep in [('    bool gpuWrote(', '    static void fenceFired(', ''),
+                         ('    bool cancelSwapsAfterTimeout()', '\n    }\n#endif', '\n    }')]:
     at = text.index(start)
-    methods.append(text[at:text.index(end, at)].replace(' override', ''))
+    methods.append(text[at:text.index(end, at)].replace(' override', '') + keep)
 
 harness = r'''
 #include <cassert>

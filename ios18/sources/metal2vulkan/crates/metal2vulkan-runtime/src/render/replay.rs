@@ -7,7 +7,7 @@
 //!   the encoders ended before it left), running each call again, and ending the pass as
 //!   `end_encoding` ends it, but into the ended encoder's place
 //!   ([`RenderLowering::finish_replay`]). A call refused as the program made it is refused
-//!   again, and the calls after it run ([`RenderLowering::logged`]); one a lowering thread
+//!   again, and the calls after it run ([`Lowering::logged`]); one a lowering thread
 //!   refused failed the command buffer, which keeps no log.
 //! - **Kept** as the compute encoder's log is (`EncoderCore::end_with_replay`): where a command
 //!   named a buffer over host pages, and the pass left no segment for later but its executions of
@@ -15,7 +15,7 @@
 //!   commit did (no draw whose pipeline was still being made).
 //! - **Per-stage calls** share a variant, with the [`Table`] they set.
 
-use super::RenderLowering;
+use super::{Lowering, RenderLowering};
 use crate::amplification::VertexAmplificationViewMapping;
 use crate::buffer::Buffer;
 use crate::command_buffer::CommandBuffer;
@@ -125,7 +125,7 @@ impl RenderLog {
     /// (`render/color_groups.rs`). A call refused there was refused in the first group's
     /// encoder, whose answer the program had, or is a divergence the later group's encoder notes
     /// (`RenderCommandEncoder::group_outcome`): either way the calls after it run.
-    pub(crate) fn replay_into(&self, encoder: &mut RenderLowering) {
+    pub(crate) fn replay_into(&self, encoder: &mut Lowering) {
         for call in &self.calls.calls {
             let _ = render(encoder, (&self.calls, &self.indexed), call);
         }
@@ -647,18 +647,31 @@ pub(crate) struct DrawIndexedPatchesIndirect {
 
 impl RenderLowering {
     /// Log the call `call` makes of the log, before it runs, where the encoder logs (the module
-    /// docs). Every call but a direct draw and a vertex or fragment buffer or bytes bind logs
-    /// itself so, which forgets the encoder's kept draw, whatever the call changes
-    /// (`render/draw_again.rs`).
+    /// docs). Every call but a direct draw, a bind, a pipeline state set and a set of the
+    /// encoder's render state logs itself so, which forgets the encoder's kept draws, whatever
+    /// the call changes (`render/draw_again.rs`).
     pub(crate) fn log(&mut self, call: impl FnOnce(&mut CallLog<RenderCall>) -> RenderCall) {
         self.forget_again();
+        self.log_keeping(call);
+    }
+
+    /// [`log`](Self::log) a call that sets the encoder's render state alone (its viewports,
+    /// scissor rectangles, cull mode, winding, depth/stencil state, stencil references, depth
+    /// bias, depth clip mode, fill mode or blend color): its kept draws are kept, restated, and
+    /// the next draw of each derives again what the state decides of it
+    /// (`render/draw_again/restated.rs`).
+    pub(crate) fn log_restating(
+        &mut self,
+        call: impl FnOnce(&mut CallLog<RenderCall>) -> RenderCall,
+    ) {
+        self.restate_again();
         self.log_keeping(call);
     }
 
     /// [`log`](Self::log) a call that keeps the encoder's kept draw: a `draw_primitives` call,
     /// drawn again as it was kept or keeping itself, and a vertex or fragment buffer, bytes,
     /// texture or sampler state bind, which changes its table's slots alone, whose stamp the next
-    /// draw compares (`render/draw_again.rs`).
+    /// draw compares, and a pipeline state set (`render/draw_again.rs`).
     pub(crate) fn log_keeping(
         &mut self,
         call: impl FnOnce(&mut CallLog<RenderCall>) -> RenderCall,
@@ -669,16 +682,19 @@ impl RenderLowering {
             log.calls.push(call, extra);
         }
     }
+}
 
+impl Lowering {
     /// Run `run`, a public call made at once (`RenderCommandEncoder::at_call`, a call its checks
-    /// do not cover, `render/deferral.rs`), which logs itself as it starts ([`log`](Self::log)):
-    /// where it is refused, its log notes it so (`CallLog::refuse`), and an encoding again
-    /// refuses it again and goes on (`replay.rs`). A call refused before it logged itself left
-    /// nothing in the log.
+    /// do not cover, `render/deferral.rs`), which logs itself as it starts
+    /// (`RenderLowering::log`): where it is refused, its log notes it so (`CallLog::refuse`), and
+    /// an encoding again refuses it again and goes on (`replay.rs`). A call refused before it
+    /// logged itself left nothing in the log.
     pub(crate) fn logged<T>(
         &mut self,
-        run: impl FnOnce(&mut RenderLowering) -> Result<T, Error>,
+        run: impl FnOnce(&mut Lowering) -> Result<T, Error>,
     ) -> Result<T, Error> {
+        let _for = self.core.notices_for();
         let at = self.log.as_ref().map(|log| log.calls.calls.len());
         let ran = run(self);
         if let (Err(_), Some(at), Some(log)) = (&ran, at, &mut self.log) {
@@ -688,7 +704,9 @@ impl RenderLowering {
         }
         ran
     }
+}
 
+impl RenderLowering {
     /// Log a `draw_indexed_primitives` call, whose arguments `draw` makes of the log, before it
     /// runs, where the encoder logs: its arguments go into the log's list of them. It keeps the
     /// encoder's kept draw, as [`log_keeping`](Self::log_keeping) does.
@@ -712,7 +730,7 @@ impl RenderLowering {
 /// `indexed`: a rebind's encoding again, a later color group's, or a deferred call's lowering
 /// (`render/deferral.rs`).
 pub(super) fn render(
-    encoder: &mut RenderLowering,
+    encoder: &mut Lowering,
     (log, indexed): (&CallLog<RenderCall>, &[DrawIndexed]),
     call: &RenderCall,
 ) -> Result<(), Error> {
@@ -889,13 +907,16 @@ pub(super) fn render(
             encoder.set_vertex_amplification_count(*count, mappings.as_deref())
         }
         C::DrawPrimitives(primitive, start, count, instances, base) => {
-            encoder.draw_primitives(*primitive, *start, *count, *instances, *base)
+            let (encoder, live) = encoder.parts();
+            encoder.draw_primitives(live, *primitive, *start, *count, *instances, *base)
         }
         C::DrawIndexedPrimitives(at) => {
             let call = indexed
                 .get(*at as usize)
                 .ok_or_else(|| crate::error::internal("a logged indexed draw past its list"))?;
+            let (encoder, live) = encoder.parts();
             encoder.draw_indexed_primitives(
+                live,
                 call.primitive_type,
                 call.index_count,
                 call.index_type,
@@ -907,52 +928,73 @@ pub(super) fn render(
             )
         }
         C::DrawPrimitivesIndirect(primitive, buffer, offset) => {
-            encoder.draw_primitives_indirect(*primitive, buffer, *offset)
+            let (encoder, live) = encoder.parts();
+            encoder.draw_primitives_indirect(live, *primitive, buffer, *offset)
         }
-        C::DrawIndexedPrimitivesIndirect(call) => encoder.draw_indexed_primitives_indirect(
-            call.primitive_type,
-            call.index_type,
-            &call.index_buffer,
-            call.index_buffer_offset,
-            &call.indirect_buffer,
-            call.indirect_buffer_offset,
-        ),
-        C::DrawPatches(call) => encoder.draw_patches(
-            call.control_points,
-            call.patch_start,
-            call.patch_count,
-            call.patch_index_buffer.as_ref(),
-            call.patch_index_buffer_offset,
-            call.instance_count,
-            call.base_instance,
-        ),
-        C::DrawPatchesIndirect(call) => encoder.draw_patches_indirect(
-            call.control_points,
-            call.patch_index_buffer.as_ref(),
-            call.patch_index_buffer_offset,
-            &call.indirect_buffer,
-            call.indirect_buffer_offset,
-        ),
-        C::DrawIndexedPatches(call) => encoder.draw_indexed_patches(
-            call.control_points,
-            call.patch_start,
-            call.patch_count,
-            call.patch_index_buffer.as_ref(),
-            call.patch_index_buffer_offset,
-            &call.control_point_index_buffer,
-            call.control_point_index_buffer_offset,
-            call.instance_count,
-            call.base_instance,
-        ),
-        C::DrawIndexedPatchesIndirect(call) => encoder.draw_indexed_patches_indirect(
-            call.control_points,
-            call.patch_index_buffer.as_ref(),
-            call.patch_index_buffer_offset,
-            &call.control_point_index_buffer,
-            call.control_point_index_buffer_offset,
-            &call.indirect_buffer,
-            call.indirect_buffer_offset,
-        ),
+        C::DrawIndexedPrimitivesIndirect(call) => {
+            let (encoder, live) = encoder.parts();
+            encoder.draw_indexed_primitives_indirect(
+                live,
+                call.primitive_type,
+                call.index_type,
+                &call.index_buffer,
+                call.index_buffer_offset,
+                &call.indirect_buffer,
+                call.indirect_buffer_offset,
+            )
+        }
+        C::DrawPatches(call) => {
+            let (encoder, live) = encoder.parts();
+            encoder.draw_patches(
+                live,
+                call.control_points,
+                call.patch_start,
+                call.patch_count,
+                call.patch_index_buffer.as_ref(),
+                call.patch_index_buffer_offset,
+                call.instance_count,
+                call.base_instance,
+            )
+        }
+        C::DrawPatchesIndirect(call) => {
+            let (encoder, live) = encoder.parts();
+            encoder.draw_patches_indirect(
+                live,
+                call.control_points,
+                call.patch_index_buffer.as_ref(),
+                call.patch_index_buffer_offset,
+                &call.indirect_buffer,
+                call.indirect_buffer_offset,
+            )
+        }
+        C::DrawIndexedPatches(call) => {
+            let (encoder, live) = encoder.parts();
+            encoder.draw_indexed_patches(
+                live,
+                call.control_points,
+                call.patch_start,
+                call.patch_count,
+                call.patch_index_buffer.as_ref(),
+                call.patch_index_buffer_offset,
+                &call.control_point_index_buffer,
+                call.control_point_index_buffer_offset,
+                call.instance_count,
+                call.base_instance,
+            )
+        }
+        C::DrawIndexedPatchesIndirect(call) => {
+            let (encoder, live) = encoder.parts();
+            encoder.draw_indexed_patches_indirect(
+                live,
+                call.control_points,
+                call.patch_index_buffer.as_ref(),
+                call.patch_index_buffer_offset,
+                &call.control_point_index_buffer,
+                call.control_point_index_buffer_offset,
+                &call.indirect_buffer,
+                call.indirect_buffer_offset,
+            )
+        }
         C::VisibilityResultMode(mode, offset) => encoder.set_visibility_result_mode(*mode, *offset),
         C::UseResource(resource, usage, stages) => {
             encoder.use_resource(resource.as_ref(), *usage, *stages)
@@ -995,15 +1037,24 @@ pub(super) fn render(
         }
         C::MeshThreadgroups(call) => {
             let (groups, object, mesh) = **call;
-            encoder.draw_mesh_threadgroups(groups, object, mesh)
+            {
+                let (encoder, live) = encoder.parts();
+                encoder.draw_mesh_threadgroups(live, groups, object, mesh)
+            }
         }
         C::MeshThreads(call) => {
             let (threads, object, mesh) = **call;
-            encoder.draw_mesh_threads(threads, object, mesh)
+            {
+                let (encoder, live) = encoder.parts();
+                encoder.draw_mesh_threads(live, threads, object, mesh)
+            }
         }
         C::MeshThreadgroupsIndirect(call) => {
             let (buffer, offset, object, mesh) = &**call;
-            encoder.draw_mesh_threadgroups_indirect(buffer, *offset, *object, *mesh)
+            {
+                let (encoder, live) = encoder.parts();
+                encoder.draw_mesh_threadgroups_indirect(live, buffer, *offset, *object, *mesh)
+            }
         }
         C::PrimitiveRestartEnabled(enabled, index) => {
             encoder.set_primitive_restart_enabled(*enabled, *index);

@@ -1,5 +1,7 @@
 # marble iOS 18 GPU 修复目标
 
+> 2026-11-11 维护注记：本文件保留 GPU 目标及 2026-11-06 至 07 日的阶段证据。近期结果与设备终态见 [阶段说明](docs/STATUS.md)；完整实验历史见 [CURRENT 归档](records/archive/current-2026-11-11.json)。手机处于 Android，设备操作停止。
+
 设备：marble / SM7475 / Adreno 725。系统：iOS 18.7.11（22H384），XNU 11417.140.69 arm64e RELEASE。
 
 用户指定 UI 型号：iPhone 15 Pro Max（`iPhone16,2`）。界面身份、设备名称与 artwork subtype 按该型号配置；实体显示为 1080×2400。状态栏、大屏布局、壁纸及图标着色共同验证。

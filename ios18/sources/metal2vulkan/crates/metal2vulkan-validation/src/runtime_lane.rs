@@ -42,7 +42,7 @@ use metal2vulkan::pipeline::LinkedFunctions;
 use metal2vulkan_devtools::{llvm_assemble, AssembleError};
 use metal2vulkan_runtime::{
     CommandBufferStatus, ComputePipelineState, DebugMessage, Degradation, Device, DeviceOptions,
-    Execution, Function, LayerSetting, LayerSettingValue, PipelineOptions,
+    Execution, Function, LayerSetting, LayerSettingValue, PipelineOptions, QueueLimits,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -57,8 +57,9 @@ const WAIT: Duration = Duration::from_secs(60);
 
 /// `device`'s work counts once its pipeline pool holds no piece (`WorkCounts::pipeline_pool_busy`),
 /// waiting at most [`WAIT`]: a draw that took its key's general form does not wait for its own
-/// key's making, which may outlast the draw's command buffer, and a state's creation hands its
-/// predicted key's making to the pool after its general form's, not waiting for it.
+/// key's making, which may outlast the draw's command buffer, and under
+/// `PipelineWaitPolicy::Bounded` a state's creation hands its predicted key's making to the pool
+/// and returns.
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 fn pipelines_settled(device: &Device) -> metal2vulkan_runtime::WorkCounts {
     let until = std::time::Instant::now() + WAIT;
@@ -312,6 +313,8 @@ mod commit_latency;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod commit_work;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod composite_costs;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod compressed_blits;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod compressed_decode;
@@ -362,6 +365,8 @@ mod depth_stencil_churn;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod depth_texel_reads;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod depth_upload_clamps;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod detach;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod detach_textures;
@@ -371,6 +376,8 @@ mod device_commands;
 mod device_copies;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod device_lockstep;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod device_recovery;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod discard_counts;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
@@ -459,6 +466,8 @@ mod freed_memory;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod frees_in_flight;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod fresh_clear_reach;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod fresh_contents;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod fresh_costs;
@@ -507,7 +516,11 @@ mod heap_layouts;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod heap_metal_sizes;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod heap_one_plane;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod heap_sample_moves;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod heap_shadow_costs;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod heap_textures;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
@@ -528,6 +541,8 @@ mod host_memory;
 mod host_replay_frames;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod host_step_frames;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod in_place_rows;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod in_place_textures;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
@@ -589,9 +604,13 @@ mod level_writes_by_usage;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod line_widths;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod linear_alignments;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod linear_attachments;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod linked_functions;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod linked_signatures;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod logic_ops;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
@@ -659,6 +678,8 @@ mod patch_primitive_ids;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod patches;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod pending_pools;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod pipeline_creation;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod pipeline_records;
@@ -678,6 +699,8 @@ mod pointer_uploads;
 mod pool_churn;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod pool_slots;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod pooled_draw_costs;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod post_depth_coverage;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
@@ -899,6 +922,8 @@ mod vertex_cost;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod vertex_strides;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod video_frames;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod view_attachments;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod view_base_offsets;
@@ -1018,10 +1043,13 @@ const METAL_CACHE_KEPT: &str = "metal2vulkan-driver-pipeline-cache-kept";
 
 /// [`creation_checked`] of `heard`, every message `device`'s making delivered to a sink that hears
 /// every message (not the lane's, which keeps notices and failures alone): its notices exactly
-/// its [`creation_kinds`], one each, and its other messages exactly the informational ones the
-/// device sends as it is made, each once and in this order: [`LAYERS_DROPPED`] where the loader could not provide the instance layers the device asked for, which the device
-/// alone can say (the instance's answer, not the loader's listing: a layer the loader lists and
-/// cannot load answers the same); then [`METAL_CACHE_KEPT`] exactly where its driver keeps its
+/// its [`creation_kinds`], one each, and its other messages, after the loader's own at
+/// `vkCreateInstance` (its warning that the host lists a layer twice, the host's listing; and
+/// where the device was made without a layer, its message about each), exactly the informational
+/// ones the device sends as it is made, each once and in this order: [`LAYERS_DROPPED`] where the
+/// loader could not provide the instance layers the device asked for, which the device alone can
+/// say (the instance's answer, not the loader's listing: a layer the loader lists and cannot load
+/// answers the same); then [`METAL_CACHE_KEPT`] exactly where its driver keeps its
 /// internal pipeline cache and that cache is Metal's own ([`metal_cache_kept`], read from the
 /// driver apart from the runtime), an informational message naming the device and ending in its id
 /// name; and nothing else.
@@ -1047,16 +1075,22 @@ pub(crate) fn creation_heard_checked(
     let cache_kept = metal_cache_kept(device);
     let mut expected: Vec<String> = Vec::new();
     let mut rest = &informed[..];
-    // Where the device was made without a layer it asked for, the loader said so first, at
-    // `vkCreateInstance`: one message of its own per layer it could not provide (`layer_claim`).
-    if dropped.is_some() {
-        while let Some((first, after)) = rest.split_first() {
-            if !crate::candidate::runtime_case::loader_layer_message(&first.id_name, &first.text) {
-                break;
-            }
-            expected.push(first.text.clone());
-            rest = after;
+    // The loader speaks first, at `vkCreateInstance`: where the host lists a layer twice, a
+    // warning of which copy it removed, and of each driver manifest it ignored, its reports, the
+    // host's listing and nothing the device said; and where the device was made without a layer
+    // it asked for, one message per layer it could not provide (`layer_claim`).
+    let ignored = crate::candidate::runtime_case::IgnoredDrivers::of_messages(&informed);
+    while let Some((first, after)) = rest.split_first() {
+        let (id_name, text) = (&first.id_name, &first.text);
+        let loader = crate::candidate::runtime_case::loader_duplicate_layer_message(id_name, text)
+            || ignored.explains(id_name, text)
+            || (dropped.is_some()
+                && crate::candidate::runtime_case::loader_layer_message(id_name, text));
+        if !loader {
+            break;
         }
+        expected.push(first.text.clone());
+        rest = after;
     }
     if let Some(text) = &dropped {
         let tag = format!("[{LAYERS_DROPPED}]");
@@ -1259,11 +1293,43 @@ fn metal_cache_kept(device: &Device) -> bool {
 }
 
 /// The options of a lane device: the validation layer reporting to `messages`, its shader cache in
-/// `cache` (`runtime_case::validated_options`, the executor's too), and the checks the lane's
-/// switch enables ([`LaneChecks`]).
+/// `cache` (`runtime_case::validated_options`, the executor's too), the checks the lane's switch
+/// enables ([`LaneChecks`]), and the lane's queue limits ([`LANE_QUEUE_LIMITS`]).
 pub fn validated_options(messages: &Messages, cache: &Path) -> DeviceOptions {
     let mut options = crate::candidate::runtime_case::validated_options(messages, cache);
     LaneChecks::switched().apply(&mut options);
+    options.queue_limits = Some(LANE_QUEUE_LIMITS);
+    options
+}
+
+/// The queue limits of a lane device (`DeviceOptions::queue_limits`): one `VkQueue` for the round
+/// robin its command queues share and none reserved for presenting queues, beside the staging
+/// queue. A device's `VkQueue`s are made and dropped with it, and on an RTX 5080 Laptop GPU a
+/// device of its plan's 17 took 445 ms to make and 110 ms to drop, one of these 2 queues 145 ms
+/// and 44 ms, the driver making one device at a time across processes: the lane, which makes
+/// thousands, takes 28 minutes there at these limits, its tests whose work needs the plan making
+/// theirs at it, and 51 with every device at its plan. On a device whose families have no queue to
+/// spare the limits leave its plan as it is. Where they change a placement from what the plan
+/// gives, the device says so (`metal2vulkan-queue-limits-reached`), which fails the run
+/// ([`QUEUE_LIMITS_REACHED`](crate::candidate::runtime_case::QUEUE_LIMITS_REACHED)): a test whose
+/// work places a second command queue, a presenting, unshared, reserved or extra one, or reads the
+/// device's queue sharing, makes its device with the plan through its own `adjust` ([`at_plan`]).
+pub const LANE_QUEUE_LIMITS: QueueLimits = QueueLimits {
+    round_robin: 1,
+    presenting: 0,
+};
+
+/// The `adjust` of a lane device whose test's work the lane's queue limits change
+/// ([`LANE_QUEUE_LIMITS`]): the device takes its queue plan.
+pub fn at_plan(options: &mut DeviceOptions) {
+    options.queue_limits = None;
+}
+
+/// [`validated_options`] for a lane device whose test's work the lane's queue limits change: the
+/// device takes its queue plan ([`at_plan`]).
+pub fn validated_plan_options(messages: &Messages, cache: &Path) -> DeviceOptions {
+    let mut options = validated_options(messages, cache);
+    at_plan(&mut options);
     options
 }
 

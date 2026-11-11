@@ -81,6 +81,7 @@ impl CommandBuffer {
     /// Refused as every encoder is: the command buffer committed, or an encoder open or abandoned
     /// (`Invalid`).
     pub fn resource_state_command_encoder(&self) -> Result<ResourceStateCommandEncoder, Error> {
+        let _for = self.notices_for();
         // The last render encoder's end, where its call left it to the device's lowering thread.
         self.settle_end();
         self.refuse_protected_state_encoder()?;
@@ -134,7 +135,8 @@ impl ResourceStateCommandEncoder {
     /// arguments its own validation layer stops (`UnitGrid::clipped_region`, where the
     /// measurement is): level 9 of a nine-level texture and an origin past the level's tiles map
     /// nothing, and a region running past them maps the level's own tiles. A slice past the
-    /// texture's maps none, where plain Metal's `usedSize` took one page for it.
+    /// texture's maps none, and its heap's `usedSize` counts the region's tiles there as plain
+    /// Metal's does, one page each, given back on an unmap of each.
     ///
     /// Refused, recording nothing: a texture of another device (`Invalid`); a view of a pixel
     /// format whose tile is not its texture's (`NotImplemented(SparseHeaps)`: not measured).
@@ -146,6 +148,7 @@ impl ResourceStateCommandEncoder {
         level: u64,
         slice: u64,
     ) -> Result<(), Error> {
+        let _for = self.open.command_buffer.notices_for();
         self.update_texture_mappings(texture, mode, &[region], &[level], &[slice])
     }
 
@@ -162,6 +165,7 @@ impl ResourceStateCommandEncoder {
         levels: &[u64],
         slices: &[u64],
     ) -> Result<(), Error> {
+        let _for = self.open.command_buffer.notices_for();
         const CALL: &str = "update_texture_mappings";
         if levels.len() != regions.len() || slices.len() != regions.len() {
             return Err(invalid(CALL, Problem::Sparse(SparseProblem::Lengths)));
@@ -199,12 +203,12 @@ impl ResourceStateCommandEncoder {
     /// of no size on an axis, or of a level or slice past the texture's, maps nothing; and the
     /// regions the count names past the buffer map nothing.
     ///
-    /// Differs, in the heap's count alone: plain Metal **bounds the level and the origin and does
-    /// not bound the slice**, charging a region of a slice past the texture's exactly what the
-    /// same region on an in-bounds slice costs — the region clipped to the level's tiles, one
-    /// page each — where the runtime maps and counts none, so its `usedSize` is lower by those
-    /// tiles. Metal's charge is an ordinary one in every other way: idempotent per region, given
-    /// back on an unmap of it, and never taking the count below where it stood
+    /// Plain Metal **bounds the level and the origin and does not bound the slice**, charging a
+    /// region of a slice past the texture's exactly what the same region on an in-bounds slice
+    /// costs — the region clipped to the level's tiles, one page each — and so does the runtime's
+    /// heap, mapping none of them. Metal's charge is an ordinary one in every other way:
+    /// idempotent per tile, given back on an unmap of it, and never taking the count below where
+    /// it stood
     /// (`metal2vulkan-conformance/probes/sparse_indirect_usedsize.m`, the M3 Max under macOS
     /// 27.0.1, plain Metal, one shape per process, each reading twice, with the in-bounds region
     /// through the same selector as its control). A level past the texture's levels and an origin
@@ -226,13 +230,14 @@ impl ResourceStateCommandEncoder {
         indirect_buffer: &Buffer,
         indirect_buffer_offset: u64,
     ) -> Result<(), Error> {
+        let _for = self.open.command_buffer.notices_for();
         const CALL: &str = "update_texture_mapping_indirect";
         let offset = indirect_buffer_offset - indirect_buffer_offset % 4;
         if !indirect_buffer
             .device()
             .same(self.open.command_buffer.device())
         {
-            return Err(invalid(CALL, Problem::ForeignObject));
+            return Err((indirect_buffer.device()).foreign(CALL, self.open.command_buffer.device()));
         }
         let Some(sparse) = self.sparse(CALL, texture)? else {
             return Ok(());
@@ -328,6 +333,7 @@ impl ResourceStateCommandEncoder {
         destination_level: u64,
         destination_origin: Origin,
     ) -> Result<(), Error> {
+        let _for = self.open.command_buffer.notices_for();
         const CALL: &str = "move_texture_mappings";
         let (from, to) = match (self.sparse(CALL, source)?, self.sparse(CALL, destination)?) {
             (Some(from), Some(to)) => (from, to),
@@ -364,8 +370,11 @@ impl ResourceStateCommandEncoder {
     ///
     /// Refused (`Invalid`): a fence of another device.
     pub fn update_fence(&mut self, fence: &Fence) -> Result<(), Error> {
+        let _for = self.open.command_buffer.notices_for();
         if !fence.device().same(self.open.command_buffer.device()) {
-            return Err(invalid("update_fence", Problem::ForeignObject));
+            return Err(fence
+                .device()
+                .foreign("update_fence", self.open.command_buffer.device()));
         }
         let key = fence.key();
         if !self.fence_updates.contains(&key) {
@@ -382,9 +391,12 @@ impl ResourceStateCommandEncoder {
     ///
     /// Refused (`Invalid`): a fence of another device.
     pub fn wait_for_fence(&mut self, fence: &Fence) -> Result<(), Error> {
+        let _for = self.open.command_buffer.notices_for();
         const CALL: &str = "wait_for_fence";
         if !fence.device().same(self.open.command_buffer.device()) {
-            return Err(invalid(CALL, Problem::ForeignObject));
+            return Err(fence
+                .device()
+                .foreign(CALL, self.open.command_buffer.device()));
         }
         let key = fence.key();
         if !self.waits.contains(&key) {
@@ -399,6 +411,7 @@ impl ResourceStateCommandEncoder {
     /// `endEncoding`: the updates go to the command buffer, in a batch that binds them before
     /// the encoders after this one.
     pub fn end_encoding(self) -> Result<(), Error> {
+        let _for = self.open.command_buffer.notices_for();
         let ResourceStateCommandEncoder {
             mut open,
             updates,
@@ -434,6 +447,7 @@ impl ResourceStateCommandEncoder {
             Recorded {
                 encoder,
                 raws: Vec::new(),
+                barriered: None,
                 segments: Vec::new(),
                 summary: Summary::of_fences(waits, fence_updates),
                 sparse: updates,
@@ -454,7 +468,9 @@ impl ResourceStateCommandEncoder {
         texture: &'a Texture,
     ) -> Result<Option<&'a SparseImage>, Error> {
         if !texture.device().same(self.open.command_buffer.device()) {
-            return Err(invalid(call, Problem::ForeignObject));
+            return Err(texture
+                .device()
+                .foreign(call, self.open.command_buffer.device()));
         }
         Ok(texture.sparse_image())
     }

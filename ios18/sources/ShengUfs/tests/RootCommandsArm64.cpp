@@ -50,6 +50,7 @@ static IOReturn recordTransport(IOReturn result,uint32_t ocs) {
 static uint32_t hostCompletionCount(unsigned) { return 0; }
 static bool hostInterruptMode() { return false; }
 static void hostWaitCompletion(unsigned, uint32_t, uint64_t) { IODelay(2); }
+static void hostWaitDone(uint64_t) {}
 // Zero copy: the guest's cached identity map covers 0x40000000..0x48000000.
 static uint64_t hostDmaAddress(const void *va) { const uint64_t a=reinterpret_cast<uintptr_t>(va); return a>=0x40000000ULL && a<0x48000000ULL ? a : 0; }
 #include "../RootCommands.h"

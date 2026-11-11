@@ -74,7 +74,7 @@ fn vk_queues(queues: &[CommandQueue]) -> Vec<vk::Queue> {
     let mut distinct: Vec<vk::Queue> = Vec::new();
     for queue in queues {
         // SAFETY: the handle is read and not kept; `f` calls no runtime and waits for nothing.
-        let vk_queue = unsafe { queue.with_vk_queue(|vk_queue, _| vk_queue) };
+        let vk_queue = unsafe { queue.with_vk_queue(|_, vk_queue, _| vk_queue) };
         if !distinct.contains(&vk_queue) {
             distinct.push(vk_queue);
         }
@@ -136,7 +136,7 @@ fn a_reserved_queue_is_a_runtime_family_s_and_no_command_queue_takes_it() {
         unreserved_count,
         presenting_taken.len(),
     );
-    let plan = queue_plan(&families, 1).unwrap();
+    let plan = queue_plan(&families, 1, true).unwrap();
     assert_eq!(
         (reserved.len(), taken.len()),
         (plan.reserved.len(), plan.queues.len()),
@@ -199,7 +199,7 @@ fn a_device_with_no_queue_to_spare_reports_the_reserved_queue_absent() {
     let scratch = Scratch::new("reserved-queue-absent");
     let probe_messages = Arc::new(Mutex::new(Vec::new()));
     let probe = device(&scratch.0, 0, &probe_messages);
-    let spare = queue_plan(&families(&probe), u32::MAX)
+    let spare = queue_plan(&families(&probe), u32::MAX, true)
         .unwrap()
         .reserved
         .len();
@@ -242,7 +242,8 @@ fn a_device_with_no_queue_to_spare_reports_the_reserved_queue_absent() {
 }
 
 /// A raw copy on a reserved queue moves the runtime's own buffers, with no ownership transfer:
-/// it waits for a command buffer's `encodeSignalEvent:` (the fill of its source), and signals
+/// it waits for a command buffer's `encodeSignalEvent:` (the fill of its source), where the
+/// signal is not reached as it asks (`VkEventWait::Reached` needs no wait), and signals
 /// what a later command buffer's `encodeWaitForEvent:` waits for (the copy of its destination
 /// into a buffer the host reads), through the event's semaphore. The later command buffer has
 /// not completed before the raw signal. Where the device reserved no queue, nothing is copied.
@@ -275,8 +276,14 @@ fn a_raw_copy_on_a_reserved_queue_moves_the_runtime_s_own_buffers() {
     first.encode_signal_event((&event).into(), 10).unwrap();
     first.commit().unwrap();
     first.wait_until_scheduled().unwrap();
-    let VkEventWait::Counter(wait) = event.vk_wait(10) else {
-        panic!("a submitted signal's counter: {:?}", event.vk_wait(10));
+    // The fill's signal, scheduled: a counter the raw copy waits for, or reached already where the
+    // first command buffer completed before the question (an RTX 5080's two fills of 4 KiB may),
+    // which needs no wait.
+    let filled = event.vk_wait(10);
+    let wait = match filled {
+        VkEventWait::Counter(wait) => wait,
+        VkEventWait::Reached => 0,
+        _ => panic!("a scheduled signal's counter: {filled:?}"),
     };
     // SAFETY: the signal is submitted below, once, after a wait for `after`.
     let reservation = unsafe { event.reserve_vk_signal(20) }.unwrap();
@@ -362,7 +369,7 @@ fn a_raw_copy_on_a_reserved_queue_moves_the_runtime_s_own_buffers() {
     );
     eprintln!(
         "RESERVED-QUEUE: {}: a raw copy on {reserved:?} moved the runtime's buffers \
-         (value 10 counter {wait}, value 20 counter {counter})",
+         (value 10 {filled:?}, value 20 counter {counter})",
         device.name()
     );
     drop((first, second));

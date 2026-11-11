@@ -5,7 +5,7 @@
 //! instance (`WorkCounts::resident_uses_gathered`, `render/shadows.rs`) or checks them against
 //! what its pass's fragment stages wrote and read (`WorkCounts::resident_uses_against_fragments`,
 //! `render/pass_start_reads.rs`) or its attachments
-//! (`WorkCounts::resident_uses_against_attachments`, `Device::degrade_attachment_reads`), or
+//! (`WorkCounts::resident_uses_against_attachments`, `EncoderCore::degrade_attachment_reads`), or
 //! notes them for hazard tracking (`WorkCounts::resident_uses_noted`, `noted_apart.rs`), nor
 //! works out again the keys it reaches through what the encoder made resident alone but those
 //! its bound buffers name and the last draw's named (`WorkCounts::resident_keys_settled`), and
@@ -13,9 +13,12 @@
 //! (`binding::kept_resident_checks`), and its gathering, checks and noting against those of its
 //! whole uses. The draws read through a root table and a handle table, so no draw of theirs is kept to
 //! draw again or rebind (`render/draw_again.rs`): each takes every step.
-//! A draw after the encoder made another resource resident, a draw of another plan, and the
-//! first draw of an encoder of the same residency's shape over other resources (the same plan, a
-//! residency of another generation) work them out again.
+//! A draw after the encoder made another resource resident, a draw of its pipeline state under
+//! another plan, and the first draw of an encoder of the same residency's shape over other
+//! resources (the same plan, a residency of another generation) work them out again. A draw after
+//! draws of another pipeline state keeps those its own state's last draw worked out, which its
+//! encoder set aside with that state's bind state (`live_bind.rs`), and notes them again: its
+//! encoder keeps only its last draw's noting apart.
 //!
 //! Device tests: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
 //! `m2v_cpu_icd`) with debug assertions, on the kind of device the cfg selects. The functions are
@@ -24,7 +27,7 @@
 
 use super::blit_holds::{Scratch, WAIT};
 use super::draw_again::{device, Heard};
-use super::encoder_holds::{pass, render_state};
+use super::encoder_holds::{pass, render_state, words_of};
 use crate::binding::kept_resident_checks;
 use crate::render::{kept_heap_checks, plan_facts_made};
 use crate::{
@@ -263,9 +266,12 @@ fn encode(scene: &Scene, resources: &Resources, later: u64) -> Vec<Drawn> {
 
 /// Two encoders, the second over other resources of the same residency's shape: within each,
 /// the draws after the first work out the uses of what it made resident only after it made
-/// another resource resident (the first encoder's fourth) and after a draw of another plan (the
-/// last), and only those walk them as they gather them for their render pass instance, check
-/// them against its fragment stages and attachments, and note them; every other draw keeps them,
+/// another resource resident (the first encoder's fourth), and only those walk them as they
+/// gather them for their render pass instance, check them against its fragment stages and
+/// attachments, and note them. The last, after a draw of another pipeline state, keeps those its
+/// state's last draw worked out and noted, and notes them again, as its encoder keeps only its
+/// last draw's noting apart; the keys it reaches through the resident set alone are those of its
+/// state's last draw, which bound the same table, so it moves none. Every other draw keeps them,
 /// and its kept uses are those it would make whole, and of the keys it reaches through the
 /// resident set alone moves only the two tables, the one it binds and the one the last draw
 /// bound, however many the encoder made resident. The second encoder's first draw, of the plan
@@ -280,7 +286,7 @@ fn draws_keep_the_uses_of_what_their_encoder_made_resident_until_it_or_their_pla
         let resources = Resources::new(&scene, corner);
         let each = encode(&scene, &resources, later);
         let entry_draws = POSITIONS as usize;
-        let made_again = [0, later as usize, entry_draws + 1];
+        let made_again = [0, later as usize];
         for (at, drawn) in each.iter().enumerate() {
             let what = format!("encoder {encoder} draw {at}: {drawn:?}");
             // No draw of the scene writes before its fragments: none checks against such writes.
@@ -307,6 +313,16 @@ fn draws_keep_the_uses_of_what_their_encoder_made_resident_until_it_or_their_pla
                     // The positions and the tables, worked out whole.
                     assert!(drawn.settled > POSITIONS, "{what}");
                 }
+                // After the slot shape's draw, from the entry state's own bind state.
+                at if at == entry_draws + 1 => {
+                    let (noted, kept) = (walked[4], [&walked[..4], &walked[5..]].concat());
+                    assert!(
+                        noted > 0 && kept.iter().all(|walked| *walked == 0),
+                        "{what}"
+                    );
+                    assert!(drawn.checked > 0, "{what}");
+                    assert_eq!(drawn.settled, 0, "{what}");
+                }
                 _ => {
                     assert_eq!(walked, [0; 9], "{what}");
                     assert!(drawn.checked > 0, "{what}");
@@ -316,6 +332,84 @@ fn draws_keep_the_uses_of_what_their_encoder_made_resident_until_it_or_their_pla
         }
         assert!(scene.covered() > 0, "encoder {encoder} drew nothing");
     }
+}
+
+/// Why draws through tables keep nothing to draw again (`WorkCounts::draws_unkept`), each counted
+/// in every group it met. The entry shape's, which read through a root table and a handle table
+/// (a heap's set) and write nothing, are counted for their tables alone, a buffer their encoder
+/// made resident for writing among their uses or not: a use writes where the function writes
+/// through it, not where its usage says it may. The tally shape's, whose fragments count
+/// themselves into the word their tally's pointer names, a buffer their encoder made resident,
+/// are counted for their tables (a root table, no heap's set), for a write among the uses of
+/// what their encoder made resident, and for both at once (`draws_unkept_tables_writing`).
+#[test]
+fn draws_through_tables_keep_nothing_for_their_tables_and_their_resident_writes() {
+    let scratch = Scratch::new("resident-writes");
+    let device = device(&scratch.0, &[], &Heard::default());
+    let scene = Scene::new(&device);
+    let resources = Resources::new(&scene, -0.9);
+    let tally = render_state(&device, FIXTURE, "rd_slot_vertex", "rd_tally_fragment");
+    let count = scene.buffer(&[0; 4]);
+    let names = scene.buffer(&count.gpu_address().0.to_le_bytes());
+    let both = RenderStages::VERTEX | RenderStages::FRAGMENT;
+    let writable = ResourceUsage::READ | ResourceUsage::WRITE;
+    // Each shape's draws: [`POSITIONS`] of them, and what they were counted for.
+    let counted_for = |tallies: bool, usage: ResourceUsage| {
+        let queue = device.new_command_queue().unwrap();
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut encoder = command_buffer
+            .render_command_encoder(&pass(&scene.target))
+            .unwrap();
+        resources.resident(&scene, &mut encoder);
+        let later = resources.later.as_resource();
+        (encoder.use_resource(later, usage, both)).unwrap();
+        let state = if tallies { &tally } else { &scene.entry };
+        if tallies {
+            let counted = count.as_resource();
+            (encoder.use_resource(counted, writable, RenderStages::FRAGMENT)).unwrap();
+        }
+        encoder.set_render_pipeline_state(state).unwrap();
+        let before = device.work_counts();
+        for at in 0..POSITIONS {
+            if tallies {
+                let position = &resources.positions[at as usize];
+                (encoder.set_vertex_buffer(Some(position), 0, 0)).unwrap();
+                (encoder.set_fragment_buffer(Some(&names), 0, 0)).unwrap();
+            } else {
+                let table = &resources.tables[(at % 2) as usize];
+                let offset = ENTRY * (1 + at % POSITIONS);
+                (encoder.set_vertex_buffer(Some(table), offset, 0)).unwrap();
+                (encoder.set_fragment_buffer(Some(table), offset, 0)).unwrap();
+            }
+            (encoder.draw_primitives(PrimitiveType::Triangle, 0, 3, 1, 0)).unwrap();
+        }
+        let after = device.work_counts();
+        encoder.end_encoding().unwrap();
+        command_buffer.commit().unwrap();
+        command_buffer.wait_until_completed_for(WAIT).unwrap();
+        assert_eq!(command_buffer.status(), CommandBufferStatus::Completed);
+        let counted = |count: fn(&crate::WorkCounts) -> u64| count(&after) - count(&before);
+        [
+            counted(|counts| counts.draws_unkept),
+            counted(|counts| counts.draws_unkept_tables),
+            counted(|counts| counts.draws_unkept_tables_heap),
+            counted(|counts| counts.draws_unkept_writing),
+            counted(|counts| counts.draws_unkept_writing_resident),
+            counted(|counts| counts.draws_unkept_tables_writing),
+        ]
+    };
+    let n = POSITIONS;
+    for usage in [writable, ResourceUsage::READ] {
+        let entry = counted_for(false, usage);
+        assert_eq!(entry, [n, n, n, 0, 0, 0], "the entry shape's, {usage:?}");
+    }
+    assert!(scene.covered() > 0, "the entry shape's draws drew nothing");
+    let tallied = counted_for(true, ResourceUsage::READ);
+    assert_eq!(tallied, [n, n, 0, n, n, n], "the tally shape's");
+    assert!(
+        words_of(&count)[0] > 0,
+        "the tally shape's fragments counted nothing"
+    );
 }
 
 /// The two encoders of the test above: within each, a draw works out its heap part (its plan's
@@ -488,9 +582,9 @@ fn draws_announce_each_read_of_what_their_encoder_made_resident_their_pass_s_fra
         let what = format!("draw {at}: {drawn:?}, announced {announced}");
         assert!(drawn.against > 0, "{what}");
         match at {
-            // Before the marker; the first after it, of a plan other than the last draw's.
+            // Before the marker; the rest, the first after it of its own state's bind state, which
+            // the marker's draw went beside.
             0 => assert!(drawn.made > 0 && *announced == 0, "{what}"),
-            1 => assert!(drawn.made > 0 && *announced == 1, "{what}"),
             _ => assert!(drawn.made == 0 && *announced == 1, "{what}"),
         }
     }
@@ -499,7 +593,7 @@ fn draws_announce_each_read_of_what_their_encoder_made_resident_their_pass_s_fra
 
 /// Draws of the entry shape whose encoder made their pass's attachment resident: each reads, in
 /// its fragment stage through what the encoder made resident, memory the attachment renders
-/// (`Device::degrade_attachment_reads`), and announces it at each occurrence, where the device
+/// (`EncoderCore::degrade_attachment_reads`), and announces it at each occurrence, where the device
 /// announces each, though those after the first keep the uses of what the encoder made resident:
 /// those found to share memory with an attachment are checked at each draw.
 #[test]

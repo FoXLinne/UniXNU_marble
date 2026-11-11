@@ -197,6 +197,14 @@
 //!   ([`ResolveSource`]), which an instance of no draws, and each resolve after the pass, resolves
 //!   from in its place. A memoryless attachment there, which takes no copy, is not built
 //!   (`NotImplemented(DepthStencilResolve)`).
+//! - **A render pass whose color resolve into a 3D image's planes holds at its first alone** (RADV,
+//!   NVIDIA's, `RuntimeDriverDefect::VolumeResolveFirstPlane`): its color resolve into a 2D view of
+//!   a 3D image is written where the view begins only at the image's first depth plane (RADV writes
+//!   the first plane whatever plane the view begins at, NVIDIA's no plane from plane 1). There a
+//!   resolve into a 3D texture's planes past its first, or into more than one, takes the scratch
+//!   image, whose layers are copied into the planes after the pass (the copy's depth from the
+//!   resolve's first plane); a level of the texture reaching past the attachment, whose clear there
+//!   would be of the planes alone, is not built (`NotImplemented(Render)`).
 //! - The multisampled attachment of `MultisampleResolve` is stored `DONT_CARE`: Metal leaves its
 //!   texels undefined (the recorded near-equivalent of a `DontCare` store).
 //!
@@ -206,7 +214,7 @@
 //! device's description states them (`VkProperty::{DepthResolveMode, StencilResolveMode,
 //! IndependentResolveNone, IndependentResolve}`), for which a resolve draw is the exact path; and
 //! `DepthResolvedSample` after `Min` or `Max` of an attachment whose image is not sampled, or
-//! whose stencil the draws cannot write; and a split resolve (below) with an aspect drawn after
+//! whose stencil the draws cannot write; and a split resolve (below) with both aspects drawn after
 //! the pass.
 //!
 //! **Split resolves**. Where the aspects resolve into different textures (separate depth and
@@ -215,8 +223,12 @@
 //! is checked against the attachment that names it, and each aspect resolves in a subpass of its
 //! own (the first in the draws' subpass, the second in a later pass) into a scratch image of the
 //! attachment's format, whose aspect alone is copied into its texture after the pass through a
-//! staging buffer, as one aspect at a time does. An aspect the pass does not resolve keeps its
-//! resolve texture's texels. Announced as `one-aspect-resolve`.
+//! staging buffer, as one aspect at a time does. An aspect drawn after the pass (a `Min` or `Max`
+//! depth on a device without the mode, or a `DepthResolvedSample` stencil after either) is drawn
+//! into its own resolve texture, or into a scratch image copied there, from the attachment's
+//! samples: separate textures' from the image they render through, which is then sampled
+//! (`depth_stencil_scratch::scratch`). An aspect the pass does not resolve keeps its resolve
+//! texture's texels. Announced as `one-aspect-resolve`.
 
 use super::attachment_stand_in::{self, Cause, StandIn};
 use super::blit::{reads, writes, TRANSFER};
@@ -364,7 +376,8 @@ pub(super) struct DepthStencilResolve {
     /// resolved aspect is drawn.
     pub(super) steps: Vec<ResolveStep>,
     /// The resolve attachment the draws write where no step resolves into one (every resolved
-    /// aspect drawn): the resolve texture's level and slice, or a scratch image copied there.
+    /// aspect drawn), or where the aspects resolve into different textures (`split`): the drawn
+    /// aspect's resolve texture's level and slice, or a scratch image copied there.
     pub(super) drawn_into: Option<Resolve>,
     /// Its aspects resolve into different textures (separate ones, or two for one combined
     /// texture): each step resolves one aspect into a scratch image copied into its own.
@@ -377,13 +390,12 @@ impl DepthStencilResolve {
         picked(self.depth_mode, self.stencil_mode)
     }
 
-    /// The resolve attachment the drawn aspects are written into: the first step's, or the
-    /// draws' own.
+    /// The resolve attachment the drawn aspects are written into: the draws' own, or the first
+    /// step's.
     pub(super) fn drawn_target(&self) -> Option<&Resolve> {
-        self.steps
-            .first()
-            .map(|step| &step.resolve)
-            .or(self.drawn_into.as_ref())
+        self.drawn_into
+            .as_ref()
+            .or(self.steps.first().map(|step| &step.resolve))
     }
 
     /// Each resolve attachment it writes, with the aspects of the resolve texture written there
@@ -704,7 +716,7 @@ pub(super) fn keep_samples(
     if executes {
         return Ok(());
     }
-    let queue = maker.command_queue().id();
+    let queue = maker.queue_place().id();
     for (index, color) in colors.iter_mut().enumerate() {
         let Some(color) = color else {
             continue;
@@ -834,33 +846,12 @@ pub(super) fn depth_stencil(
     // fragment depth stores the picked value unchanged (`depth_copy::copies_exactly`).
     let exact_depth = super::depth_copy::copies_exactly(device, source.format)
         && super::depth_copy::copies_exactly(device, destination.target.format);
-    let pick_or = |mode: ResolveMode, pick: DepthPick| match exact_depth
-        && !modes.depth.contains(mode.vk())
-    {
-        true => ResolveMode::Picked(pick),
-        false => mode,
-    };
-    let depth_mode = if depth_resolves {
-        match depth_filter {
-            MultisampleDepthResolveFilter::Sample0 => ResolveMode::SampleZero,
-            MultisampleDepthResolveFilter::Min => pick_or(ResolveMode::Min, DepthPick::Min),
-            MultisampleDepthResolveFilter::Max => pick_or(ResolveMode::Max, DepthPick::Max),
-        }
-    } else {
-        ResolveMode::None
-    };
-    let stencil_mode = match (stencil_resolves, stencil_filter) {
-        (false, _) => ResolveMode::None,
-        (true, MultisampleStencilResolveFilter::Sample0) => ResolveMode::SampleZero,
-        // The stencil of the sample the depth filter takes, the depth resolved or not: sample
-        // 0's after `Sample0`; after `Min` or `Max` no Vulkan mode states it, so it is drawn
-        // after the pass, picking Metal's sample (`depth_stencil_resolve.rs`).
-        (true, MultisampleStencilResolveFilter::DepthResolvedSample) => match depth_filter {
-            MultisampleDepthResolveFilter::Sample0 => ResolveMode::SampleZero,
-            MultisampleDepthResolveFilter::Min => ResolveMode::Picked(DepthPick::Min),
-            MultisampleDepthResolveFilter::Max => ResolveMode::Picked(DepthPick::Max),
-        },
-    };
+    let (depth_mode, stencil_mode) = aspect_modes(
+        &modes,
+        exact_depth,
+        (depth_resolves, depth_filter),
+        (stencil_resolves, stencil_filter),
+    );
     let subpass_stencil = stencil_mode.in_subpass();
     // A drawn depth's subpass mode is free, as the draws overwrite it: `NONE`, or `SAMPLE_ZERO`
     // where the device pairs no `NONE` with the stencil's mode (lavapipe), which spares the
@@ -881,18 +872,36 @@ pub(super) fn depth_stencil(
     // Every resolved aspect drawn: no subpass resolves, and the draws write their own resolve
     // attachment.
     let (mut steps, drawn_into) = if split {
-        // A split resolve resolves each aspect into a scratch image of `source` in a subpass of
-        // its own, and copies that aspect alone into its texture after the pass. An aspect drawn
-        // after the pass writes the first step's attachment, which a split resolve does not
-        // copy whole: not built.
-        if picked(depth_mode, stencil_mode).is_some() {
-            return Err(Error::NotImplemented(RuntimeGap::DepthStencilResolve));
-        }
+        // A split resolve resolves each aspect a subpass resolves into a scratch image of
+        // `source` in a subpass of its own, and copies that aspect alone into its texture after
+        // the pass; an aspect drawn after the pass is drawn into its own texture (or a scratch
+        // image copied there). Both aspects drawn, each into its own texture: not built.
+        let usage = ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
+        let drawn = match (depth_mode, stencil_mode) {
+            (ResolveMode::Picked(_), ResolveMode::Picked(_)) => {
+                return Err(Error::NotImplemented(RuntimeGap::DepthStencilResolve));
+            }
+            (ResolveMode::Picked(_), _) => depth_destination.clone(),
+            (_, ResolveMode::Picked(_)) => stencil_destination.clone(),
+            _ => None,
+        };
+        let drawn_into = match drawn {
+            Some(drawn) => Some(drawn.attach(maker, source, usage, false)?),
+            None => None,
+        };
         let aspects = [
-            (depth_mode, ImageAspectFlags::DEPTH, depth_destination),
-            (stencil_mode, ImageAspectFlags::STENCIL, stencil_destination),
+            (
+                depth_mode.in_subpass(),
+                ImageAspectFlags::DEPTH,
+                depth_destination,
+            ),
+            (
+                subpass_stencil,
+                ImageAspectFlags::STENCIL,
+                stencil_destination,
+            ),
         ];
-        (split_steps(maker, source, aspects, &modes)?, None)
+        (split_steps(maker, source, aspects, &modes)?, drawn_into)
     } else if subpass_depth == none && subpass_stencil == none {
         let usage = ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
         (
@@ -910,10 +919,13 @@ pub(super) fn depth_stencil(
         )?;
         (steps, None)
     };
-    // A drawn aspect is written into the first step's resolve attachment, which then holds it
-    // too (a scratch image's copy takes it), or into the draws' own.
-    if let (Some((_, aspects)), Some(step)) = (picked(depth_mode, stencil_mode), steps.first_mut())
-    {
+    // A drawn aspect is written into the draws' own resolve attachment, or else into the first
+    // step's, which then holds it too (a scratch image's copy takes it).
+    if let (Some((_, aspects)), Some(step), None) = (
+        picked(depth_mode, stencil_mode),
+        steps.first_mut(),
+        &drawn_into,
+    ) {
         step.aspects |= aspects;
     }
     let resolve = DepthStencilResolve {
@@ -930,6 +942,73 @@ pub(super) fn depth_stencil(
         super::depth_stencil_resolve::draws_run(device, source, &into.attachment, pick, aspects)?;
     }
     Ok(Some(resolve))
+}
+
+/// Each aspect's mode as Metal's filters state it on a device with `modes`, `ResolveMode::None`
+/// for an aspect that does not resolve (`depth.0`, `stencil.0`): `Sample0`, `Min` and `Max` are
+/// `SAMPLE_ZERO`, `MIN` and `MAX`, a `Min` or `Max` depth the device has no mode for picked by
+/// the draws after the pass where they store it unchanged (`exact_depth`,
+/// `depth_copy::copies_exactly`); a `DepthResolvedSample` stencil is sample 0's after `Sample0`,
+/// and picked after `Min` or `Max`, which no Vulkan mode states, the depth resolved or not.
+fn aspect_modes(
+    modes: &ResolveModes,
+    exact_depth: bool,
+    (depth_resolves, depth_filter): (bool, MultisampleDepthResolveFilter),
+    (stencil_resolves, stencil_filter): (bool, MultisampleStencilResolveFilter),
+) -> (ResolveMode, ResolveMode) {
+    let pick_or = |mode: ResolveMode, pick: DepthPick| match exact_depth
+        && !modes.depth.contains(mode.vk())
+    {
+        true => ResolveMode::Picked(pick),
+        false => mode,
+    };
+    let depth = match (depth_resolves, depth_filter) {
+        (false, _) => ResolveMode::None,
+        (true, MultisampleDepthResolveFilter::Sample0) => ResolveMode::SampleZero,
+        (true, MultisampleDepthResolveFilter::Min) => pick_or(ResolveMode::Min, DepthPick::Min),
+        (true, MultisampleDepthResolveFilter::Max) => pick_or(ResolveMode::Max, DepthPick::Max),
+    };
+    let stencil = match (stencil_resolves, stencil_filter) {
+        (false, _) => ResolveMode::None,
+        (true, MultisampleStencilResolveFilter::Sample0) => ResolveMode::SampleZero,
+        (true, MultisampleStencilResolveFilter::DepthResolvedSample) => match depth_filter {
+            MultisampleDepthResolveFilter::Sample0 => ResolveMode::SampleZero,
+            MultisampleDepthResolveFilter::Min => ResolveMode::Picked(DepthPick::Min),
+            MultisampleDepthResolveFilter::Max => ResolveMode::Picked(DepthPick::Max),
+        },
+    };
+    (depth, stencil)
+}
+
+/// Whether the resolve of a depth/stencil attachment whose depth is of `format` (`depth` and
+/// `stencil` its descriptors' resolves, under `depth_filter` and `stencil_filter`) may be drawn
+/// after the pass on `device`, the draws reading the attachment's samples through sampled views
+/// (`depth_stencil_resolve.rs`): the image the runtime renders separate textures through then
+/// takes `SAMPLED` usage (`depth_stencil_scratch::scratch`). It answers before the pass's store
+/// actions and resolve textures are checked, so it errs toward yes: an `Unknown` store action
+/// may resolve, and [`depth_stencil`] decides by the resolve texture's format too.
+pub(super) fn may_draw(
+    device: &Device,
+    format: Format,
+    depth: Option<&Wanted<'_>>,
+    stencil: Option<&Wanted<'_>>,
+    depth_filter: MultisampleDepthResolveFilter,
+    stencil_filter: MultisampleStencilResolveFilter,
+) -> bool {
+    let may_resolve = |wanted: Option<&Wanted<'_>>| {
+        wanted.is_some_and(|w| {
+            w.texture.is_some() && (w.store.resolves() || w.store == StoreAction::Unknown)
+        })
+    };
+    let modes = ResolveModes::of(device.compile_device().profile());
+    let exact_depth = super::depth_copy::copies_exactly(device, format);
+    let (depth, stencil) = aspect_modes(
+        &modes,
+        exact_depth,
+        (may_resolve(depth), depth_filter),
+        (may_resolve(stencil), stencil_filter),
+    );
+    picked(depth, stencil).is_some()
 }
 
 /// The pick of the aspects of `depth` and `stencil` mode drawn after the pass, and which: `None`
@@ -1091,7 +1170,9 @@ impl Destination {
     /// `needed` usage, else a scratch image whose render area is copied there after the pass. A
     /// render pass's depth/stencil resolve (`depth_stencil`) on a device that writes its resolve
     /// attachment image's first layer and level alone ([`first_subresource_only`]) takes the
-    /// scratch image where the destination begins at another.
+    /// scratch image where the destination begins at another, and a color resolve on a device
+    /// whose resolve into a 3D image holds at its first plane alone ([`first_plane_only`]) where the
+    /// destination is a 3D texture's planes past its first, or more than one.
     fn attach(
         self,
         maker: &CommandBuffer,
@@ -1106,6 +1187,13 @@ impl Destination {
         // resolved into through a scratch image too, whose overlap with it is copied.
         let misplaced =
             depth_stencil && first_subresource_only(device) && !at_first_subresource(&self.target);
+        // Nor does a color resolve into a 3D texture's planes past its first, or into more than
+        // one, on a device that writes it where the view begins only at the image's first plane
+        // ([`first_plane_only`]): the scratch image's layers are copied into the planes.
+        let off_plane = !depth_stencil
+            && first_plane_only(device)
+            && is_volume(&self.target)
+            && (self.target.layer != 0 || self.target.layers != 1);
         // Nor is a linear image the device renders only where every color attachment is linear
         // (`linear_attachment.rs`): the pass's are multisampled, never linear.
         let bound = !depth_stencil && linear_attachment::bound(device, &self.target)?;
@@ -1125,6 +1213,7 @@ impl Destination {
             && self.target.layers == source.layers
             && self.target.extent == source.extent
             && !misplaced
+            && !off_plane
             && !bound
         {
             return Ok(Resolve {
@@ -1135,11 +1224,14 @@ impl Destination {
                 clear: None,
             });
         }
-        // The scratch's copy into a 3D texture's planes, or into a 1D texture, is not built
-        // (`render_pass::not_2d`).
-        if !self.usage.contains(ImageUsageFlags::TRANSFER_DST)
-            || super::render_pass::not_2d(&self.target)
-        {
+        // The scratch's copy into a 1D texture is not built, nor into a 3D texture's planes where
+        // the level reaches past the attachment, whose clear there would be of the plane alone
+        // (`ResolveCopies`).
+        let past =
+            self.target.extent[0] > source.extent[0] || self.target.extent[1] > source.extent[1];
+        let copied_into =
+            !super::render_pass::not_2d(&self.target) || (is_volume(&self.target) && !past);
+        if !self.usage.contains(ImageUsageFlags::TRANSFER_DST) || !copied_into {
             return Err(Error::NotImplemented(RuntimeGap::Render));
         }
         // A twin resolve writes the resolve texture's format, so its scratch image is of that
@@ -1239,7 +1331,7 @@ fn destination(
     wanted: &Wanted<'_>,
 ) -> Result<Option<Destination>, Error> {
     if !texture.device().same(device) {
-        return Err(invalid(call, Problem::ForeignObject));
+        return Err(texture.device().foreign(call, device));
     }
     if texture.storage_mode() == StorageMode::Memoryless {
         return Err(problem(call, RenderPassProblem::MemorylessResolve(which)));
@@ -1489,6 +1581,21 @@ fn at_first_subresource(target: &Target) -> bool {
     target.layer == 0 && target.level == 0
 }
 
+/// Whether `device`'s render pass resolves a color attachment into a 2D view of a 3D image's
+/// planes where the view begins only at the image's first plane
+/// (`RuntimeDriverDefect::VolumeResolveFirstPlane`).
+pub(super) fn first_plane_only(device: &Device) -> bool {
+    device
+        .properties()
+        .driver_defects
+        .contains(&RuntimeDriverDefect::VolumeResolveFirstPlane)
+}
+
+/// Whether `target` is planes of a 3D texture's image: its layers are the image's depth planes.
+pub(super) fn is_volume(target: &Target) -> bool {
+    (target.texture.image_plan()).is_ok_and(|plan| plan.image_type == ImageType::TYPE_3D)
+}
+
 /// The copy a pass's depth/stencil resolves read on a device whose render pass resolves from the
 /// attachment image's first layer and level ([`first_subresource_only`]), where the pass's
 /// depth/stencil attachment begins at another: the pass's layers of the attachment, every aspect
@@ -1691,15 +1798,35 @@ impl ResolveCopies {
                 clears.push((to.texture.raw_image()?, bits, range));
             }
             if aspect == image_aspects(from.format) {
+                // Into a 3D texture's planes, the scratch image's layers are the region's depth
+                // from the first plane (`VUID-VkCopyImageInfo2-srcImage-01791`): the image has
+                // one layer.
+                let (dst_subresource, dst_offset, depth) = match is_volume(to) {
+                    true => (
+                        vk::ImageSubresourceLayers {
+                            aspect_mask: aspect.into(),
+                            mip_level: to.level,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        },
+                        vk::Offset3D {
+                            z: i32::try_from(to.layer)
+                                .map_err(|_| internal("a depth plane past i32"))?,
+                            ..vk::Offset3D::default()
+                        },
+                        count,
+                    ),
+                    false => (layers(to, aspect, count), vk::Offset3D::default(), 1),
+                };
                 let region = vk::ImageCopy {
                     src_subresource: layers(from, aspect, count),
                     src_offset: vk::Offset3D::default(),
-                    dst_subresource: layers(to, aspect, count),
-                    dst_offset: vk::Offset3D::default(),
+                    dst_subresource,
+                    dst_offset,
                     extent: vk::Extent3D {
                         width,
                         height,
-                        depth: 1,
+                        depth,
                     },
                 };
                 copies.push((from.texture.raw_image()?, to.texture.raw_image()?, region));

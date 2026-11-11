@@ -250,7 +250,10 @@ pub struct ShaderCacheStatistics {
     /// `APPLICATION_PIPELINE_CACHE_HIT`, or every stage's feedback is valid and says it. Drivers
     /// differ in where they say it: most for the whole pipeline; MoltenVK 1.4.1 for each stage
     /// alone, whose Metal function it found converted in the cache (its whole pipeline's
-    /// feedback is only ever valid).
+    /// feedback is only ever valid). The runtime's own pipelines (its copies, resolves and
+    /// kernels) count as the program's do; where the device links render pipelines from graphics
+    /// pipeline libraries, each library of shaders is such a making (its pre-rasterization or
+    /// fragment shader part), and the link itself is none.
     pub driver_pipeline_hits: u64,
     /// Such pipelines whose valid feedback says no hit, for the whole pipeline or for every
     /// stage: compiled, or a stage converted again.
@@ -817,6 +820,12 @@ impl ShaderCache {
         length
     }
 
+    /// The directory's root, which every generation of the device's line shares
+    /// (`device/line.rs`, `Device::shader_cache_directory`).
+    pub(super) fn directory_root(&self) -> std::path::PathBuf {
+        self.store.directory().root().to_owned()
+    }
+
     /// What the directory cost this device: its time, the asking threads' apart from the cache
     /// thread's, and the entries an asking thread wrote itself
     /// (`WorkCounts::shader_cache_read_nanos` and its fellows).
@@ -868,11 +877,17 @@ impl ShaderCache {
 impl Device {
     /// The device's shader cache counts since it was made. No Metal counterpart.
     pub fn shader_cache_statistics(&self) -> ShaderCacheStatistics {
+        self.current().shader_cache_statistics_now()
+    }
+
+    /// [`Device::shader_cache_statistics`] on the generation that serves (`device/line.rs`).
+    pub(crate) fn shader_cache_statistics_now(&self) -> ShaderCacheStatistics {
         self.shared().shader_cache.statistics()
     }
 
-    /// The device's shader cache directory. No Metal counterpart.
+    /// The device's shader cache directory, the same through its GPU's recoveries. No Metal
+    /// counterpart.
     pub fn shader_cache_directory(&self) -> &Path {
-        self.shared().shader_cache.store.directory().root()
+        &self.line().invariant.cache_directory
     }
 }

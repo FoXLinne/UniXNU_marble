@@ -80,12 +80,14 @@ use crate::pipeline::descriptor::{
     ColorAttachmentDescriptor, MeshPipelineDescriptor, RenderPipelineDescriptor,
     TessellationDescriptor, VertexDescriptor,
 };
+use crate::pipeline::facts::RuntimeFact;
 use crate::pipeline::graphics::GraphicsState;
 use crate::pipeline::interface::{PipelineInterface, StageDescriptor, StageInterface};
 use crate::pipeline::layout::{
     BindingSource, DescriptorBinding, DescriptorSetLayout, PipelineLayout, PushConstantRange,
 };
 use crate::pipeline::lower_inputs::ColorGroup;
+use crate::pipeline::stage_io::StageBuiltin;
 use crate::pipeline::sym::{
     CombinedSampler, HandleClass, ResourceKind, ResourceSlot, SlotClass, SlotRef, SpecKey, Stage,
 };
@@ -262,6 +264,7 @@ impl From<&MeshPipelineDescriptor> for RenderLinkInputs {
             alpha_to_coverage: d.alpha_to_coverage,
             alpha_to_one: d.alpha_to_one,
             rasterization_enabled: d.rasterization_enabled,
+            max_vertex_amplification_count: d.max_vertex_amplification_count,
             texture_write_rounding_mode: d.texture_write_rounding_mode,
             ..RenderLinkInputs::new()
         }
@@ -580,11 +583,20 @@ fn render_state(
     // The extended-range blends the fragment computes over input attachments, against this
     // pipeline's attachments.
     let input_blends = fetch::input_blends(r, fragment, p)?;
+    // Those of them held with their channels rotated, whose input attachments link admits for
+    // that blend alone.
+    let rotated_inputs: BTreeSet<u32> = (fragment.into_iter().flat_map(|f| &f.facts))
+        .filter_map(|fact| match *fact {
+            RuntimeFact::RotatedInputBlend { color, .. } => Some(color),
+            _ => None,
+        })
+        .collect();
     // The word merges the fragment computes over input attachments, against this pipeline's
     // write masks.
     fetch::word_merges(r, fragment, p)?;
     let fs = fragment.map(|f| &f.interface);
-    let mut gs = graphics::graphics_state(r, (geometry, fs), vi, ts, &input_blends, p)?;
+    let blends = (&input_blends, &rotated_inputs);
+    let mut gs = graphics::graphics_state(r, (geometry, fs), vi, ts, blends, p)?;
     // The color writes the fragment rounds against this pipeline's attachments, once the
     // descriptor's checks of its outputs passed.
     crate::pipeline::color_writes::check(
@@ -642,7 +654,8 @@ fn mismatch(expected: Stage, found: Stage) -> Error {
 
 /// The stages match the pipeline kind: one kernel; a vertex stage and a fragment stage exactly
 /// when rasterization is enabled; an optional object stage, a mesh stage, and a fragment stage
-/// exactly when rasterization is enabled; or any one stage alone.
+/// exactly when rasterization is enabled; or any one stage alone. A rasterizing render
+/// pipeline's vertex stage writes its position (`DescriptorError::RasterizedVoidVertex`).
 fn check_stages(ifaces: &[&StageInterface], inputs: &LinkInputs) -> Result<(), Error> {
     let stages: Vec<Stage> = ifaces.iter().map(|i| i.stage).collect();
     match inputs {
@@ -696,9 +709,19 @@ fn check_stages(ifaces: &[&StageInterface], inputs: &LinkInputs) -> Result<(), E
                     None => return Err(missing_stage(*want)),
                 }
             }
-            match stages.get(expected.len()) {
-                Some(extra) => Err(mismatch(*expected.last().unwrap_or(&Stage::Vertex), *extra)),
-                None => Ok(()),
+            if let Some(extra) = stages.get(expected.len()) {
+                return Err(mismatch(*expected.last().unwrap_or(&Stage::Vertex), *extra));
+            }
+            // Metal refuses a rasterizing pipeline whose vertex function returns `void`, the one
+            // vertex function without a position, which the compile read from its entry.
+            let positioned = |iface: &StageInterface| {
+                (iface.io.builtins.iter()).any(|b| matches!(b, StageBuiltin::Position { .. }))
+            };
+            match ifaces.first() {
+                Some(vertex) if r.rasterization_enabled && !positioned(vertex) => Err(
+                    Error::InvalidDescriptor(DescriptorError::RasterizedVoidVertex),
+                ),
+                _ => Ok(()),
             }
         }
     }
@@ -1491,6 +1514,7 @@ fn pipeline_interface(ifaces: &[&StageInterface]) -> PipelineInterface {
         out.numbered_samplers
             .push((i.stage, i.numbered_samplers.clone()));
         out.push.push(i.push.clone());
+        out.stage_in.extend(i.io.stage_in.iter().map(|s| s.fetch));
     }
     out
 }

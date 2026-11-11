@@ -13,8 +13,8 @@
 use super::degrade_notices::{assert_made_once, WRAPPED};
 use super::shared_kinds;
 use super::{
-    layer_reported_nothing_at_all, loader, read_buffer, validated_device, validated_device_with,
-    Messages, ScratchCache, VALIDATION_LAYER,
+    at_plan, layer_reported_nothing_at_all, loader, read_buffer, validated_device,
+    validated_device_with, Messages, ScratchCache, VALIDATION_LAYER,
 };
 use crate::candidate::LoaderWord;
 use crate::gpu::wait::{self, SubmissionBackend};
@@ -84,14 +84,39 @@ impl std::fmt::Display for PresentGap {
 }
 
 /// What the validation layer reported on the test's own instance: every error, and every warning
-/// of the validation type (`Messages`' rule). Bounded.
+/// of the validation type (`Messages`' rule), each its id name and text. Bounded.
 #[derive(Default)]
-struct Reported(Mutex<Vec<String>>);
+struct Reported(Mutex<Vec<(String, String)>>);
 
 impl Reported {
+    /// The texts reported, removed: all but the loader's own reports of the driver manifests it
+    /// ignored at `vkCreateInstance`, the host's listing of its drivers, each printed as a line
+    /// of its own as `Messages` passes them (`layer_claim`).
     fn take(&self) -> Vec<String> {
-        let mut reported = self.0.lock().unwrap_or_else(|p| p.into_inner());
-        reported.drain(..).collect()
+        let reported: Vec<(String, String)> = {
+            let mut reported = self.0.lock().unwrap_or_else(|p| p.into_inner());
+            reported.drain(..).collect()
+        };
+        let ignored = crate::candidate::runtime_case::IgnoredDrivers::of(
+            (reported.iter()).map(|(id_name, text)| (id_name.as_str(), text.as_str())),
+        );
+        let test = std::thread::current()
+            .name()
+            .unwrap_or("an unnamed thread")
+            .to_owned();
+        (reported.into_iter())
+            .filter_map(|(id_name, text)| {
+                if ignored.explains(&id_name, &text) {
+                    eprintln!(
+                        "LANE-LOADER-DRIVER {test}: passed, the loader's own report of a driver \
+                         manifest it ignored: {}",
+                        text.replace('\n', " ")
+                    );
+                    return None;
+                }
+                Some(text)
+            })
+            .collect()
     }
 }
 
@@ -108,9 +133,13 @@ unsafe extern "system" fn report(
     if fails && !data.is_null() && !user.is_null() {
         // SAFETY: the instance's messenger was made with a `Reported` that outlives it, and the
         // layer passes a valid callback data structure.
-        let (reported, text) = unsafe {
+        let (reported, id_name, text) = unsafe {
             (
                 &*user.cast::<Reported>().cast_const(),
+                (*data)
+                    .message_id_name_as_c_str()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
                 (*data)
                     .message_as_c_str()
                     .map(|text| text.to_string_lossy().into_owned())
@@ -119,7 +148,7 @@ unsafe extern "system" fn report(
         };
         let mut reported = reported.0.lock().unwrap_or_else(|p| p.into_inner());
         if reported.len() < 64 {
-            reported.push(text);
+            reported.push((id_name, text));
         }
     }
     vk::FALSE
@@ -759,7 +788,7 @@ fn a_rendered_texture_presents_through_the_tests_swapchain() {
         // SAFETY: the queue is used only inside the closure, under the runtime's lock; the
         // semaphore's signal is submitted (the command buffer is scheduled).
         let shown = unsafe {
-            queue.with_vk_queue(|vk_queue, _| swapchain_fn.queue_present(vk_queue, &info))
+            queue.with_vk_queue(|_, vk_queue, _| swapchain_fn.queue_present(vk_queue, &info))
         };
         shown.unwrap();
         command_buffer.wait_until_completed_for(WAIT).unwrap();
@@ -775,7 +804,7 @@ fn a_rendered_texture_presents_through_the_tests_swapchain() {
     // SAFETY: under the runtime's lock; every submission there completed but the presents,
     // which a fence submitted after them orders.
     unsafe {
-        queue.with_vk_queue(|vk_queue, _| {
+        queue.with_vk_queue(|_, vk_queue, _| {
             wait::vulkan::drain_queue(
                 &adopted.device,
                 vk_queue,
@@ -1010,7 +1039,8 @@ fn the_callers_image_comes_home_for_its_own_submission() {
         .signal_semaphores(&signals);
     // SAFETY: under the runtime's lock of the queue; `rendered`'s signal is submitted (the
     // runtime's command buffer is scheduled); `copied` is unsignaled; the fence is the test's.
-    unsafe { first.with_vk_queue(|queue, _| vkd.queue_submit(queue, &[submit], fence)) }.unwrap();
+    unsafe { first.with_vk_queue(|_, queue, _| vkd.queue_submit(queue, &[submit], fence)) }
+        .unwrap();
     wait::vulkan::wait_for_fence(vkd, fence, backend, "the test's own copy").unwrap();
     // SAFETY: the mapping covers the buffer's bytes, which the completed copy wrote.
     let own_bytes = unsafe { std::slice::from_raw_parts(mapped.cast::<u8>(), size as usize) };
@@ -1088,7 +1118,7 @@ fn wrapped_images_order_across_queues() {
     let cache = ScratchCache::new().unwrap();
     let messages = Messages::default();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         // SAFETY: used only while the device lives; the image is destroyed after its texture
         // and every command buffer that used it.
         let raw = unsafe { device.raw() };
@@ -1127,7 +1157,7 @@ fn wrapped_images_order_across_queues() {
         let handles: BTreeSet<vk::Queue> = queues
             .iter()
             // SAFETY: the handle is only compared.
-            .map(|queue| unsafe { queue.with_vk_queue(|vk_queue, _| vk_queue) })
+            .map(|queue| unsafe { queue.with_vk_queue(|_, vk_queue, _| vk_queue) })
             .collect();
         let size = u64::from(SIDE * SIDE * 4);
         let readback = device.new_buffer(size, ResourceOptions::shared()).unwrap();
@@ -1319,7 +1349,7 @@ fn interop_refusals_and_shared_textures() {
     let cache = ScratchCache::new().unwrap();
     let messages = Messages::default();
     {
-        let device = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         // SAFETY: used only while the device lives.
         let raw = unsafe { device.raw() };
         let queue = device.new_command_queue().unwrap();
@@ -1513,7 +1543,7 @@ fn interop_refusals_and_shared_textures() {
             Error::Nil(Nil::new("new_shared_texture", Problem::StorageMode))
         );
         assert!(device.new_shared_texture(&texels).unwrap().is_shareable());
-        let other = validated_device(TEST_DEVICE, &messages, cache.path()).unwrap();
+        let other = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         assert_eq!(
             other
                 .new_shared_texture_with_handle(&handle, IdPlacement::Any)

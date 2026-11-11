@@ -29,7 +29,8 @@
 //! M4 where its API validation asserts: it holds a buffer bound past its length, which a dispatch
 //! refuses only where the kernel reads the slot (a read there is past the buffer: memory decides
 //! it). A render stage's table refuses that at the call, as Metal's validation does; plain Metal's
-//! render form is not measured.
+//! render form is not measured. Both tables' stride forms hold a stride as its low 32 bits,
+//! `MTLAttributeStrideStatic`'s included ([`per_bind_stride`]).
 //!
 //! An offset set at an index with no buffer bound is no change in either, as plain Metal's render
 //! and compute encoders both take it ([`ArgumentTable::take_buffer_offset`]).
@@ -50,6 +51,7 @@ use super::sampler::SamplerState;
 use super::texture::Texture;
 use super::tracker::{Access, Use};
 use super::upload::Upload;
+use super::work_counts::Counting;
 use ash::vk;
 use metal2vulkan::bind::{BindState, BoundBuffer, BoundSampler, BoundTexture, StageTable};
 use metal2vulkan::pipeline::{
@@ -68,9 +70,6 @@ pub(super) const BUFFER_SLOTS: u32 = 31;
 pub(super) const TEXTURE_SLOTS: u32 = 128;
 /// Entries of a sampler table (`setSamplerState:atIndex:` and its stage forms).
 pub(super) const SAMPLER_SLOTS: u32 = 16;
-/// `MTLAttributeStrideStatic`: the stride argument that sets no per-bind stride, so the buffer
-/// is read at its layout's own stride, as by the plain setters.
-pub(super) const ATTRIBUTE_STRIDE_STATIC: u64 = u64::MAX;
 /// The most bytes one `setBytes:length:atIndex:` (or a stage form) takes: Metal's documented
 /// limit for inline bytes, 4 KiB.
 pub(super) const INLINE_BYTES_LIMIT: u64 = 4096;
@@ -152,9 +151,9 @@ pub(super) struct ArgumentTable {
     /// Neither `buffers` nor `function_tables` holds them.
     pub(super) null_tables: BTreeSet<u32>,
     /// The per-bind attribute strides of buffers in `buffers`, by index
-    /// (`setBuffer:offset:attributeStride:atIndex:` and its forms): a layout of
-    /// `MTLBufferLayoutStrideDynamic` reads its buffer at this stride. The plain setters bind
-    /// with `MTLAttributeStrideStatic`, which sets none.
+    /// (`setBuffer:offset:attributeStride:atIndex:` and its forms, [`per_bind_stride`]): a layout
+    /// of `MTLBufferLayoutStrideDynamic` reads its buffer at this stride. The plain setters set
+    /// none, which such a layout reads at stride 0.
     pub(super) attribute_strides: BTreeMap<u32, u32>,
     pub(super) textures: BTreeMap<u32, Texture>,
     /// The indices of `textures` that hold a memoryless texture, a texture buffer's too: none,
@@ -203,11 +202,38 @@ impl Clone for ArgumentTable {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Stamp(u64);
 
+/// The stamps a thread takes from the process's at once ([`Stamp::fresh`]).
+const STAMP_BLOCK: u64 = 1 << 16;
+
 impl Stamp {
-    /// A stamp no table took before.
-    fn fresh() -> Stamp {
+    /// A stamp no table took before: the next of the calling thread's block, a range of the
+    /// process's stamps no other thread draws from, its next block taken once it is spent. So a
+    /// call that changes a table writes no memory another thread's calls write: a consumer encodes
+    /// a queue's command buffers on threads of their own, and where each call drew its stamp from
+    /// one counter of the process, each thread's calls waited for that counter's line to come
+    /// back from the others'.
+    pub(super) fn fresh() -> Stamp {
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        Stamp(NEXT.fetch_add(1, Ordering::Relaxed))
+        thread_local! {
+            /// The calling thread's next stamp and the end of its block.
+            static BLOCK: std::cell::Cell<(u64, u64)> = const { std::cell::Cell::new((0, 0)) };
+        }
+        BLOCK.with(|block| {
+            let (mut next, mut end) = block.get();
+            if next == end {
+                next = NEXT.fetch_add(STAMP_BLOCK, Ordering::Relaxed);
+                end = next + STAMP_BLOCK;
+            }
+            block.set((next + 1, end));
+            Stamp(next)
+        })
+    }
+
+    /// Its number, which no other stamp has (read by `tests::argument_table`, a debug-build
+    /// test).
+    #[cfg(all(test, debug_assertions))]
+    pub(super) fn raw(self) -> u64 {
+        self.0
     }
 }
 
@@ -219,8 +245,11 @@ impl Default for Stamp {
 
 /// The slots of its last calls' changes a table keeps at least, once it noted as many, and the
 /// most slots a call notes ([`Changes`]): it keeps at most twice as many, and a reader that read it
-/// before those it keeps reads it whole.
-const CHANGES_KEPT: usize = 16;
+/// before those it keeps reads it whole. Enough for the binds between a pipeline state's draws
+/// where draws of a few others come between, each binding a few slots: the state's bind state,
+/// set aside meanwhile (`live_bind.rs`), and its kept draw, rebound (`render/draw_again.rs`),
+/// bring in only what changed, found by a scan back from the newest change to their stamp.
+const CHANGES_KEPT: usize = 64;
 
 /// The slots a table's last calls changed (or may have: a refused call's too), each with the
 /// stamp the table took at that call, oldest first, and the stamp before the oldest: a reader that
@@ -450,13 +479,24 @@ pub(super) fn check_bound_buffer(
     Ok(())
 }
 
-/// The per-bind stride `stride` names: none for `MTLAttributeStrideStatic`, else its low 32
-/// bits. Plain Metal reads a stride past 32 bits so, and its validation takes it (an M4 under macOS
-/// 27.0.1 and an M3 Max under 26.7, compute stage-in and vertex fetch, both binding forms: `2^32 +
-/// 8` and `2^63 + 8` read at 8, `2^33 + 4` at 4, `2^32` at 0).
-fn attribute_stride(stride: u64) -> Option<u32> {
+/// The per-bind stride a stride form's `stride` names in a compute table or a render stage's: its
+/// low 32 bits. Plain Metal reads a stride past 32 bits so, and its validation takes it (an M4
+/// under macOS 27.0.1 and an M3 Max under 26.7, compute stage-in and vertex fetch, both binding
+/// forms: `2^32 + 8` and `2^63 + 8` read at 8, `2^33 + 4` at 4, `2^32` at 0).
+///
+/// `MTLAttributeStrideStatic` (`u64::MAX`) is no exception: its low 32 bits, `2^32 - 1`, are the
+/// stride a layout of `MTLBufferLayoutStrideDynamic` reads, a kernel's stage-in layout or a vertex
+/// descriptor's. Plain Metal on an Apple M3 Max under macOS 27.0.1 answered each of the compute
+/// encoder's four stride forms, and the render encoder's `setVertexBuffer:offset:attributeStride:
+/// atIndex:`, bound so with the element at the bind offset for the first element and zero for
+/// every element past it, the bind offset reaching the first (`metal2vulkan-conformance`'s
+/// `attribute-stride-*` recordings, buffers of 512 and 64 bytes), which is a fetch at that stride:
+/// element 1 lies `2^32 - 1` bytes on, past the buffer (an indirect command buffer's command read
+/// the byte there in a buffer that holds it, `indirect_execute::unstrided_stride`).
+/// Metal's API validation stops a draw bound so.
+pub(super) fn per_bind_stride(stride: u64) -> u32 {
     // Truncation is the measured answer.
-    (stride != ATTRIBUTE_STRIDE_STATIC).then_some(stride as u32)
+    stride as u32
 }
 
 /// Bind `value` at `index` of `table`, or unbind the index when `value` is `None`: what was
@@ -641,12 +681,12 @@ impl ArgumentTable {
             .0
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner);
-        if retained.core != Some(id) || !object.held_by().is(id) {
+        let held_here = retained.core == Some(id) && object.held_by().is(id);
+        if !held_here {
             retained.unheld = true;
-            return;
         }
         #[cfg(debug_assertions)]
-        {
+        if held_here {
             let address = std::ptr::from_ref(object.held_by()).addr();
             if !retained.held.contains(&address) {
                 retained.held.push(address);
@@ -666,9 +706,9 @@ impl ArgumentTable {
         check_bound_buffer(core.device(), call, (buffer, offset), self.compute)
     }
 
-    /// `setBuffer:offset:atIndex:` (`None` unbinds the index) in an encoder of `core`: the
-    /// stride form with `MTLAttributeStrideStatic`. Refused: an index past the table, a buffer of
-    /// another device, and in a render stage's table an offset past the buffer's length.
+    /// `setBuffer:offset:atIndex:` (`None` unbinds the index) in an encoder of `core`, with no
+    /// per-bind stride. Refused: an index past the table, a buffer of another device, and in a
+    /// render stage's table an offset past the buffer's length.
     pub(super) fn set_buffer(
         &mut self,
         core: &mut EncoderCore,
@@ -677,11 +717,11 @@ impl ArgumentTable {
         offset: u64,
         index: u32,
     ) -> Result<(), Error> {
-        self.set_buffer_with_stride(core, call, buffer, offset, ATTRIBUTE_STRIDE_STATIC, index)
+        self.bind_buffer(core, call, buffer, offset, None, index)
     }
 
     /// `setBuffer:offset:attributeStride:atIndex:` (`None` unbinds the index) in an encoder of
-    /// `core`, a stride past 32 bits taken modulo `2^32`. Refused as
+    /// `core`, at the per-bind stride `stride` names ([`per_bind_stride`]). Refused as
     /// [`set_buffer`](Self::set_buffer) is.
     pub(super) fn set_buffer_with_stride(
         &mut self,
@@ -692,10 +732,24 @@ impl ArgumentTable {
         stride: u64,
         index: u32,
     ) -> Result<(), Error> {
+        let stride = per_bind_stride(stride);
+        self.bind_buffer(core, call, buffer, offset, Some(stride), index)
+    }
+
+    /// [`set_buffer_with_stride`](Self::set_buffer_with_stride) at the per-bind stride `stride`,
+    /// none for the plain setter.
+    fn bind_buffer(
+        &mut self,
+        core: &mut EncoderCore,
+        call: &'static str,
+        buffer: Option<&Buffer>,
+        offset: u64,
+        stride: Option<u32>,
+        index: u32,
+    ) -> Result<(), Error> {
         let same = buffer.is_some_and(|buffer| self.binds_buffer(index, buffer));
         self.changed_as(SlotClass::Buffer, index..index.saturating_add(1), same);
         check_index(call, index, BUFFER_SLOTS)?;
-        let stride = attribute_stride(stride);
         if let Some(buffer) = buffer {
             self.check_buffer(core, call, buffer, offset)?;
             self.note_bound(core, Bound::Buffer(buffer));
@@ -712,7 +766,7 @@ impl ArgumentTable {
     }
 
     /// `setBuffers:offsets:withRange:`: `buffers[i]` at offset `offsets[i]` at index `first + i`,
-    /// every stride `MTLAttributeStrideStatic`. Refused as [`set_buffer`](Self::set_buffer) is,
+    /// with no per-bind stride. Refused as [`set_buffer`](Self::set_buffer) is,
     /// and when the slices' lengths differ; a refusal binds none of them.
     pub(super) fn set_buffers(
         &mut self,
@@ -726,8 +780,8 @@ impl ArgumentTable {
     }
 
     /// `setBuffers:offsets:attributeStrides:withRange:`: as [`set_buffers`](Self::set_buffers),
-    /// each buffer at stride `strides[i]` (modulo `2^32`) where `strides` is given. Refused as
-    /// `set_buffers` is.
+    /// each buffer at the per-bind stride `strides[i]` names ([`per_bind_stride`]) where `strides`
+    /// is given. Refused as `set_buffers` is.
     pub(super) fn set_buffers_with_strides(
         &mut self,
         core: &mut EncoderCore,
@@ -747,7 +801,7 @@ impl ArgumentTable {
                 self.check_buffer(core, call, buffer, offset)?;
             }
         }
-        let strides = (0..buffers.len()).map(|i| strides.and_then(|s| attribute_stride(s[i])));
+        let strides = (0..buffers.len()).map(|i| strides.map(|s| per_bind_stride(s[i])));
         for (((buffer, &offset), stride), index) in
             buffers.iter().zip(offsets).zip(strides).zip(first..)
         {
@@ -766,8 +820,9 @@ impl ArgumentTable {
         Ok(())
     }
 
-    /// `setBufferOffset:atIndex:`: the stride form with `MTLAttributeStrideStatic`, so it clears
-    /// the index's stride, as the plain buffer setters do. Measured for the vertex form on an M4:
+    /// `setBufferOffset:atIndex:`: it clears the index's stride, as the plain buffer setters do,
+    /// and as the stride form with `MTLAttributeStrideStatic` does in a render stage's table.
+    /// Measured for the vertex form on an M4:
     /// after a stride form, Metal's validation stops the draw for "providing
     /// `MTLAttributeStrideStatic` to `attributeStride` when stride at buffer-layout index 0 is
     /// dynamic", and Metal without it reads the buffer at stride 0. Every stage's form sets this
@@ -787,18 +842,31 @@ impl ArgumentTable {
         offset: u64,
         index: u32,
     ) -> Result<(), Error> {
-        self.set_buffer_offset_with_stride(core, call, offset, ATTRIBUTE_STRIDE_STATIC, index)
+        self.move_buffer_offset(core, call, offset, None, index)
     }
 
-    /// `setBufferOffset:attributeStride:atIndex:` with `stride` (`MTLAttributeStrideStatic`
-    /// clears the index's stride; a stride past 32 bits is taken modulo `2^32`). Refused as
-    /// [`set_buffer_offset`](Self::set_buffer_offset) is.
+    /// `setBufferOffset:attributeStride:atIndex:` with the per-bind stride `stride` names
+    /// ([`per_bind_stride`]). Refused as [`set_buffer_offset`](Self::set_buffer_offset) is.
     pub(super) fn set_buffer_offset_with_stride(
         &mut self,
         core: &mut EncoderCore,
         call: &'static str,
         offset: u64,
         stride: u64,
+        index: u32,
+    ) -> Result<(), Error> {
+        let stride = per_bind_stride(stride);
+        self.move_buffer_offset(core, call, offset, Some(stride), index)
+    }
+
+    /// [`set_buffer_offset_with_stride`](Self::set_buffer_offset_with_stride) at the per-bind
+    /// stride `stride`, none for the plain setter.
+    fn move_buffer_offset(
+        &mut self,
+        core: &mut EncoderCore,
+        call: &'static str,
+        offset: u64,
+        stride: Option<u32>,
         index: u32,
     ) -> Result<(), Error> {
         // A buffer bound there keeps being bound, at another offset; inline bytes and a
@@ -808,7 +876,6 @@ impl ArgumentTable {
             && self.buffers.contains_key(&index);
         self.changed_as(SlotClass::Buffer, index..index.saturating_add(1), same);
         check_index(call, index, BUFFER_SLOTS)?;
-        let stride = attribute_stride(stride);
         if let Some(len) = self.bytes.get(&index).map(|bytes| bytes.len) {
             // Inline bytes then read as zeros, at any offset, until the index is bound again:
             // plain Metal on an M4 read 64 zero bytes after `setBytes` of 64 then an offset of
@@ -1342,15 +1409,17 @@ impl ArgumentTable {
     }
 
     /// The slots the table's calls changed since its stamp was `read`, where it keeps them
-    /// ([`Changes`]): those [`refresh_changed`](Self::refresh_changed) brings in.
+    /// ([`Changes`]): those [`refresh_changed`](Self::refresh_changed) brings in, each with
+    /// whether the call changed a buffer slot's offset alone, binding the buffer it bound
+    /// ([`changed_as`](Self::changed_as)), once for each call.
     pub(super) fn changed_since(
         &self,
         read: Stamp,
-    ) -> Option<impl Iterator<Item = (SlotClass, u32)> + '_> {
+    ) -> Option<impl Iterator<Item = (SlotClass, u32, bool)> + Clone + '_> {
         Some(
             self.changes
                 .since(read)?
-                .map(|changed| (changed.class, changed.index)),
+                .map(|changed| (changed.class, changed.index, changed.offset)),
         )
     }
 
@@ -1358,13 +1427,15 @@ impl ArgumentTable {
     /// through the same interface and maps: only the slots the table's calls changed since, where
     /// it keeps them ([`Changes`]) and its slots that tell the view base alignment apart are as
     /// `kept` holds them, so every other slot's binding and shape are as read then. Whether it
-    /// brought them in; else nothing is changed, and the table is to be read whole.
+    /// brought them in; else nothing is changed, and the table is to be read whole. What it
+    /// counts goes to `counts`, the caller's.
     pub(super) fn refresh_changed(
         &self,
         (kept, read): (&mut StageTable, Stamp),
         (stage, interface): (Stage, &PipelineInterface),
         (maps, views): (&SamplerMaps, &AtBindViews),
         reshape: &mut Reshape,
+        counts: Counting<'_>,
     ) -> bool {
         let Some(changed) = self.changes.since(read) else {
             return false;
@@ -1390,7 +1461,7 @@ impl ArgumentTable {
             match class {
                 SlotClass::Buffer if offset && bit(index) != 0 && whole & bit(index) == 0 => {
                     let read = (stage, interface);
-                    self.refresh_offset((kept, index), read, alignment, reshape)
+                    self.refresh_offset((kept, index), read, (alignment, counts), reshape)
                 }
                 SlotClass::Buffer => {
                     self.refresh_buffer((kept, index), (stage, interface), alignment, reshape)
@@ -1442,31 +1513,37 @@ impl ArgumentTable {
     /// addresses are as `kept` read them, as no no-copy buffer moved since (the callers' reads
     /// stand only while none did: `live_bind::ReadFrom`), so the buffer is not looked at
     /// (`WorkCounts::bound_offsets_moved`; checked against [`refresh_buffer`](Self::refresh_buffer)'s
-    /// binding in builds with debug assertions). Else as `refresh_buffer`.
+    /// binding in builds with debug assertions), and the length the two bindings share is not
+    /// classed to compare their shapes ([`BoundBuffer::same_shape`]). The function reads the slot
+    /// bound as `kept` was read: a buffer `kept` binds there was read bound, and no call since
+    /// bound a visible-function table there, which changes the slot otherwise than by its offset
+    /// ([`binds_buffer`](Self::binds_buffer)), through the same interface (checked in builds with
+    /// debug assertions). Else as `refresh_buffer`.
     fn refresh_offset(
         &self,
         (kept, index): (&mut StageTable, u32),
         read: (Stage, &PipelineInterface),
-        alignment: u32,
+        (alignment, counts): (u32, Counting<'_>),
         reshape: &mut Reshape,
     ) {
-        let held = match (self.buffers.get(&index), kept.buffers.get(&index)) {
-            (
-                Some((buffer, offset)),
-                Some(&BoundBuffer::Buffer {
-                    length,
-                    gpu_address,
-                    device_address,
-                    ..
-                }),
-            ) if !self.reads_unbound(read, index) && *offset <= buffer.length() => {
-                Some((buffer, *offset, (length, gpu_address, device_address)))
-            }
-            _ => None,
-        };
-        let Some((buffer, offset, (length, gpu_address, device_address))) = held else {
+        let a = kept.class_alignment(index, alignment);
+        let held = (self.buffers.get(&index)).filter(|(buffer, offset)| *offset <= buffer.length());
+        let (Some((buffer, offset)), Some(slot)) = (held, kept.buffers.get_mut(&index)) else {
             return self.refresh_buffer((kept, index), read, alignment, reshape);
         };
+        let BoundBuffer::Buffer {
+            length,
+            gpu_address,
+            device_address,
+            ..
+        } = *slot
+        else {
+            return self.refresh_buffer((kept, index), read, alignment, reshape);
+        };
+        debug_assert!(
+            !self.reads_unbound(read, index),
+            "a buffer slot whose offset alone moved is read unbound"
+        );
         let stride = self.attribute_strides.get(&index).copied();
         // The space's start before the buffer's byte 0, as `bound_buffer` states it.
         let base = length - buffer.length();
@@ -1480,17 +1557,11 @@ impl ArgumentTable {
         #[cfg(debug_assertions)]
         assert_eq!(
             Some(bound),
-            bound_buffer(buffer, offset, stride),
+            bound_buffer(buffer, *offset, stride),
             "a buffer slot whose offset alone moved brought in otherwise than read whole"
         );
-        buffer
-            .device()
-            .shared()
-            .counts
-            .thread()
-            .bound_offset_moved();
-        let a = kept.class_alignment(index, alignment);
-        reshape.slot(&mut kept.buffers, index, bound, |b| b.shape(a));
+        counts.bound_offset_moved();
+        reshape.replace_by(slot, bound, |was, now| was.same_shape(now, a));
     }
 
     /// Buffer slot `index` of `kept` brought in place as [`refresh_reading`](Self::refresh_reading)

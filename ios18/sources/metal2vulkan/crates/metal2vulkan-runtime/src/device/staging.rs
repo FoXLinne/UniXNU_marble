@@ -1,18 +1,38 @@
-//! The device's staging queue: the first queue of a family of transfers alone, a copy engine
-//! (`create::queue_plan`), where a `Shared` or `Managed` texture's CPU copies run on a device that
-//! copies none on the host from memory the host caches (`texture/host_copy.rs`). An image that
-//! copies here is concurrent among the device's families and this one ([`Device::staging_sharing`]),
-//! so no image changes owner; every other resource keeps the device's sharing (`sharing.rs`).
+//! The device's staging queue (`create::queue_plan`): the first queue of a family of transfers
+//! alone, a copy engine; else, on a device where no memory the host caches holds a texture's image
+//! (`memory::host_cached_placement`), the first queue of a family of graphics or compute work none
+//! of the device's own queues are of (an RX 7900 XTX's compute family). There a `Shared` or
+//! `Managed` texture's CPU copies run on a device that copies none on the host from memory the
+//! host caches (`texture/host_copy.rs`). An image that copies here is concurrent among the
+//! device's families and this one ([`Device::staging_sharing`]), so no image changes owner; every
+//! other resource keeps the device's sharing (`sharing.rs`).
 //!
-//! - **Why a copy engine.** A copy on the device's first `VkQueue` waits behind every command
+//! - **Why not the host, where its memory is uncached.** The host reads uncached memory slowly
+//!   (`memory::host_cached`). On the XTX (RADV, Mesa 26.2.6), which has no device-local type the
+//!   host caches, a texture's host-transfer image lay in its device-local host-visible type
+//!   (resizable BAR), and a `get_bytes` copied on the host out of it took 33 to 41 ms at
+//!   256 x 256, 1.26 to 1.71 s in most calls at 1920 x 1080 (3.2 and 5.4 ms at best), 36 to 49 ms
+//!   at 4096 x 4096, and past the end of 1.5 s of GPU fills when they ran; copied here, 0.10 to
+//!   0.13 ms, 2.0 to 2.2 ms (1.9 to 2.1 ms with the fills running) and 17 ms
+//!   (`tests::cpu_copy_times`).
+//! - **Why a queue of its own.** A copy on the device's first `VkQueue` waits behind every command
 //!   buffer submitted there before it: behind a 2 s kernel, a 1080p `get_bytes` returned after
-//!   1.99 s on an RTX 3090, and forever behind a command buffer waiting on an event only a later
-//!   command of the calling thread signals (the consumer's guest hang). Metal's `getBytes` and
+//!   1.99 s on an RTX 3090. It never waits for a wait no submitted signal meets: the scheduler
+//!   holds a command buffer whose event wait only a later commit's signal meets on the host,
+//!   unsubmitted (`scheduler/mod.rs`), so a copy beside it returns. Through an RX 550's first
+//!   `VkQueue` (RADV, Mesa 26.2.6, which has no host copies), a read, 4097 one-texel writes and a
+//!   read beside such a command buffer took 0.15 s, for an event and for a shared event
+//!   (`tests::copies_beside_a_held_wait`). A plain event's wait for a
+//!   signal the caller reserved (`Event::reserve_vk_signal`) goes to its `VkQueue` before that
+//!   signal is submitted, and there the same copies waited until it was. Metal's `getBytes` and
 //!   `replaceRegion` of shared storage are CPU copies that wait for no GPU work. Another queue of
 //!   the graphics family is not enough: on the 3090 (615.71.09) a readback there waited 1.88 s for
 //!   a 2 s kernel running on the first, where the copy engine's took 7.8 to 13.5 ms with the
 //!   kernel still running, and 2.65 ms idle (raw Vulkan). Here nothing but these
-//!   copies runs, so a copy waits for itself and the staging work submitted before it alone.
+//!   copies runs, so a copy waits for itself and the staging work submitted before it alone. A
+//!   queue of compute work shares the GPU's compute units with the program's work, so a copy
+//!   there may still wait behind a kernel that fills them (up to 1.05 s on a Radeon 780M):
+//!   which is why it stages only where the host's copies would read uncached memory.
 //! - **What it waits for.** Each submission waits, on the GPU, for the value through which each
 //!   of the device's other `VkQueue`s completed as the host saw it: work that already completed,
 //!   so the wait costs nothing, and the writes of every command buffer the program saw complete
@@ -33,7 +53,10 @@
 //!   carries them all ([`StagingLock::submit`]): the next batch or internal submission of the
 //!   device's makes it before its own, and a `get_bytes` carries them before its read. So none
 //!   of its work waits in `texture/first_move.rs` for a batch, and neither its making nor its
-//!   writes wait for a submission.
+//!   writes wait for a submission. A buffer's `VkBuffer` handed out, or its memory exported,
+//!   has its own fills still waiting (a new `Private` buffer's zeros or staged bytes) made here,
+//!   in a submission of their own the call waits for (`Device::settle_mine`): every buffer of the
+//!   device's is shared with this queue's family (`sharing.rs`).
 
 use super::{lock, Device, LoaderWord};
 use crate::error::{internal, vulkan, Error};
@@ -56,7 +79,8 @@ pub(crate) const BUFFERS: usize = 8;
 
 /// The staging queue and its objects.
 pub(super) struct StagingQueue {
-    /// The queue's family: one of transfers alone.
+    /// The queue's family: one of transfers alone, or of graphics or compute work none of the
+    /// device's own queues are of (the module docs).
     family: u32,
     /// The family's queue flags, which the barriers recorded for it follow (`image_barrier.rs`).
     flags: vk::QueueFlags,
@@ -73,6 +97,10 @@ pub(super) struct StagingQueue {
     timeline: OnceLock<vk::Semaphore>,
     /// The value the last submission made signals, stored under `objects`' lock once it was made.
     submitted: AtomicU64,
+    /// The tests' hold on the submissions ([`Device::hold_staging_submissions`]): a timeline and
+    /// a value each waits for on the GPU besides.
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    held: Mutex<Option<(vk::Semaphore, u64)>>,
 }
 
 struct Objects {
@@ -113,6 +141,8 @@ impl StagingQueue {
             objects: Mutex::new(Objects { queue, made: None }),
             timeline: OnceLock::new(),
             submitted: AtomicU64::new(0),
+            #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+            held: Mutex::new(None),
         }
     }
 
@@ -171,15 +201,16 @@ impl StagingLock<'_> {
     /// Record `record` into a free command buffer of the staging queue and submit it there,
     /// waiting on the GPU for what the device's other `VkQueue`s completed as the host saw (the
     /// module docs); the value it signals, not waited for ([`Device::wait_staging`]). `record`
-    /// runs outside a render pass, for a family of transfers alone, whose queue flags it is
-    /// given: it records copies, fills and barriers, of color aspects alone.
+    /// runs outside a render pass, for the staging queue's family (of transfers alone, or of
+    /// graphics or compute work), whose queue flags it is given: it records copies, fills and
+    /// barriers, of color aspects alone.
     pub(crate) fn submit(
         &mut self,
         record: impl FnOnce(&ash::Device, vk::CommandBuffer, vk::QueueFlags),
     ) -> Result<u64, Error> {
         let device = self.device;
         if device.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(device.lost_refusal());
         }
         let shared = device.shared();
         let raw = shared.vk();
@@ -212,6 +243,9 @@ impl StagingLock<'_> {
             .map(|slot| (slot.timeline, slot.completed_value()))
             .filter(|&(_, value)| value > 0)
             .collect();
+        #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+        let completed: Vec<(vk::Semaphore, u64)> =
+            completed.into_iter().chain(*lock(&staging.held)).collect();
         let wait_semaphores: Vec<vk::Semaphore> = completed.iter().map(|w| w.0).collect();
         let wait_values: Vec<u64> = completed.iter().map(|w| w.1).collect();
         let wait_stages = vec![vk::PipelineStageFlags::ALL_COMMANDS; completed.len()];
@@ -230,15 +264,26 @@ impl StagingLock<'_> {
             .command_buffers(&buffers)
             .signal_semaphores(&signal_semaphores)
             .push_next(&mut timeline);
+        // What the submission carries, to its value: the device's pending audit's
+        // (`pending_audit.rs`), where it is on.
+        let carried = (made.timeline, value);
+        if let Some(audit) = raw.pending_audit() {
+            audit.submitted(raw, carried, &[&buffers[..]]);
+        }
         // SAFETY: the queue is used under the staging lock alone; the command buffer is
         // executable; every value waited for was signalled (the host saw it); the signal of the
         // timeline is above its value.
         shared.counts.queue_submitted(1, buffers.len());
+        shared.queue_quiet.began();
         let submitted = unsafe {
             staging.word.restore();
             raw.queue_submit(queue, &[submit], vk::Fence::null())
         };
+        shared.queue_quiet.ended();
         exit_guard::called(Call::QueueSubmit);
+        if let (Err(_), Some(audit)) = (&submitted, raw.pending_audit()) {
+            audit.withdrawn(carried, &[&buffers[..]]);
+        }
         submitted.map_err(|error| device.failed(error))?;
         made.signalled = value;
         made.buffers[at].1 = value;
@@ -312,15 +357,29 @@ fn wait_for(device: &Device, timeline: vk::Semaphore, value: u64) -> Result<(), 
     let slice = WAIT_SLICE.as_nanos() as u64;
     while !reached(device, timeline, value, slice)? {
         if device.is_lost() {
-            return Err(Error::DeviceLost);
+            return Err(device.lost_refusal());
         }
     }
     Ok(())
 }
 
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+impl Device {
+    /// Have each staging submission made from now on wait on the GPU, besides, for `hold`'s
+    /// timeline to reach its value (`None`: no more), which the test signals from the host: the
+    /// tests' way to see batches submitted while a staging submission has not completed, whatever
+    /// the host's timing. No-op on a device without a staging queue.
+    pub(crate) fn hold_staging_submissions(&self, hold: Option<(vk::Semaphore, u64)>) {
+        if let Some(staging) = self.shared().staging.as_ref() {
+            *lock(&staging.held) = hold;
+        }
+    }
+}
+
 impl Device {
     /// Whether the device reserved a staging queue (the module docs): a device it created with a
-    /// family of transfers alone whose copies take any texel.
+    /// family of transfers alone whose copies take any texel, or, where no memory the host caches
+    /// holds a texture's image, with such a family of graphics or compute work beside its own.
     pub(crate) fn has_staging_queue(&self) -> bool {
         self.shared().staging.is_some()
     }

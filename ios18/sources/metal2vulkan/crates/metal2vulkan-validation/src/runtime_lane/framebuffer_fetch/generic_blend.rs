@@ -42,7 +42,7 @@
 //! texel, encoded by that table, meets within one code; Metal's without fast math, and within one
 //! code of the fast-math fixture's on our probe.
 
-use super::{form, library, through_inputs};
+use super::{fetches, form, library, through_inputs};
 use crate::runtime_lane::degrade_notices::counts;
 use crate::runtime_lane::resolves::{lane_with, quiet, Lane};
 use crate::runtime_lane::WAIT;
@@ -570,6 +570,9 @@ fn a_blended_fetch_of_another_format_stores_the_generic_blend() {
     let (messages, _cache, lane) = lane_with(|options| {
         options.announce_each = [kind].into_iter().collect();
     });
+    if !fetches(&lane.device) {
+        return;
+    }
     let device = lane.device.name();
     let mut drawn = 0;
     for safe in [false, true] {
@@ -612,6 +615,9 @@ fn a_second_source_blend_of_a_fetched_attachment_stores_the_generic_blend() {
     let (messages, _cache, lane) = lane_with(|options| {
         options.announce_each = [kind].into_iter().collect();
     });
+    if !fetches(&lane.device) {
+        return;
+    }
     let device = lane.device.name();
     let library = library(&lane, "fbl_fetch_dual");
     let formats = [

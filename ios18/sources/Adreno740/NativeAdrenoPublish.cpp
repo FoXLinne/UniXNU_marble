@@ -25,6 +25,14 @@
 #include "NativeGpuTrace.inc"
 
 extern "C" void proc_selfname(char *, int);
+/* The system's render server, the process that composes the display: backboardd on iPadOS, WindowServer on macOS. It gets the
+ * reserved row 0 and its mailbox page, the cache export and its own report line. */
+#if defined(XNU_TARGET_OS_OSX) && XNU_TARGET_OS_OSX
+static constexpr char kRenderServer[]="WindowServer";
+#else
+static constexpr char kRenderServer[]="backboardd";
+#endif
+static bool isRenderServer(const char *name,size_t size) {return !strncmp(name,kRenderServer,size);}
 extern "C" volatile uint32_t native_adreno_table_switches[8];
 /* The plugin's telemetry table (rows of text the Metal bridge keeps), sent as markers: 0xC000|row starts a row, 0x8000|(a<<7)|b appends two characters. */
 extern "C" {char native_adreno_metal_rows[48][96];volatile uint32_t native_adreno_metal_rows_seq;}
@@ -49,7 +57,7 @@ extern "C" {volatile uint32_t native_adreno_view_diag[6],native_adreno_view_kept
 /* The open type the Adreno plugin passes to IOServiceOpen ('AG'); it lets the driver tell the plugin from the original IOGPU library
  * (type 1 plus an API value) and from any other client of the accelerator. */
 enum : UInt32 {NativeAdrenoPluginOpenType=0x4147,NativeAdrenoTunnelMagic=0x4e544e4c /* 'NTNL' */};
-/* The display hand-off (boot-arg sheng-fb-gpu=1, drivers/GopFramebuffer) reaches the plugin through this already admitted connection: the
+/* The display hand-off (boot-arg fb-gpu=1, drivers/GopFramebuffer) reaches the plugin through this already admitted connection: the
  * original sandbox profiles admit this class but not the presenter's own service. Methods 0x7000 + the presenter's NGP_METHOD numbers (mode,
  * wait for a frame, complete it) are forwarded unchanged, without the GPU lock (a wait sleeps); memory type NativeAdrenoScanoutType is the
  * writable scanout. Nothing here touches the GPU. */
@@ -148,11 +156,11 @@ volatile uint32_t native_adreno_recover_log[8][12];volatile uint32_t native_adre
 /* checkCpSwitch's step results: createVm, probeBuffer, submit, waitAll, readTtbr0 (each 0 when it passed, ffffffff when not reached). */
 volatile uint32_t native_adreno_cp_check[6]={0xffffffffu,0xffffffffu,0xffffffffu,0xffffffffu,0xffffffffu,0xffffffffu};}
 /* Table switching (NativeAdrenoSubmit): 2 the CP switches in the ring (the default once the board opened the CP's SMMU aperture), 1 the
- * CPU writes TTBR0 with the GPU idle. sheng-gpu-ttbr=1 or 2 forces one. */
+ * CPU writes TTBR0 with the GPU idle. gpu-ttbr=1 or 2 forces one. */
 static unsigned tableMode()
 {
     unsigned mode=native_adreno_cp_aperture[0] && !(native_adreno_cp_aperture[0]>>31) && !native_adreno_cp_aperture[1]?2:1;
-    PE_parse_boot_argn("sheng-gpu-ttbr",&mode,sizeof mode);
+    PE_parse_boot_argn("gpu-ttbr",&mode,sizeof mode);
     return mode==2?2:1;
 }
 
@@ -292,7 +300,7 @@ OSDefineMetaClassAndStructors(AGXDeviceUserClient,IOUserClient)
 
 void nativeAdrenoMailboxPoller(void *,wait_result_t)
 {
-    thread_set_thread_name(current_thread(),"sheng-gpu-mailbox");
+    thread_set_thread_name(current_thread(),"gpu-mailbox");
     uint32_t last=0;
     for(;;) {
         IOSleep(1);
@@ -337,7 +345,7 @@ bool AGXDeviceUserClient::mount(bool kernel)
     if(!core)return false;
     IOLockLock(g.lock);
     bool ok=false;
-    const bool server=!kernel && !strncmp(name_,"backboardd",sizeof name_);
+    const bool server=!kernel && isRenderServer(name_,sizeof name_);
     NativeAdrenoProcessVm *space=nullptr;
     IOReturn opened=kIOReturnSuccess;
     if(kernel)opened=g.kernel_client?kIOReturnBusy:kIOReturnSuccess;
@@ -848,7 +856,7 @@ IOReturn AGXDeviceUserClient::runTimed(uint32_t method,const void *input,size_t 
         Piece piece{};
         if(input && input_size>=sizeof(piece))memcpy(&piece,input,sizeof(piece));
         const bool valid=!output_size && input && input_size>=sizeof(piece) && piece.bytes && piece.bytes<=NativeAdrenoExportMaxPiece &&
-            input_size==sizeof(piece)+piece.bytes && !strncmp(caller,"backboardd",sizeof caller);
+            input_size==sizeof(piece)+piece.bytes && isRenderServer(caller,sizeof caller);
         const int stored=valid && boot_log_export_put?boot_log_export_put(piece.generation,piece.total,piece.offset,
             static_cast<const uint8_t *>(input)+sizeof(piece),piece.bytes):-1;
         if(stored) {native_adreno_export_stats[1]=native_adreno_export_stats[1]+1;return kIOReturnBadArgument;}
@@ -1031,7 +1039,7 @@ extern "C" IOReturn native_adreno_new_user_client(IOService *provider,task_t own
                  * rewrites report2 every ten seconds, so the reason another process's device failed would be gone from it. */
                 char who[20]={};
                 proc_selfname(who,sizeof who);
-                if(value==0x7fff && strncmp(who,"backboardd",sizeof who)) {
+                if(value==0x7fff && !isRenderServer(who,sizeof who)) {
                     for(auto &entry:native_adreno_client_text) {
                         if(!entry.name[0]) strlcpy(entry.name,who,sizeof entry.name);
                         if(!strncmp(entry.name,who,sizeof entry.name)) {line=entry.text;break;}
@@ -1115,7 +1123,7 @@ extern "C" IOReturn native_adreno_new_user_client(IOService *provider,task_t own
         connection->setProperty("NativeSandboxGrant",kOSBooleanTrue);
         native_adreno_metal_diag.grants=native_adreno_metal_diag.grants+1;
     }
-    /* limit (boot-arg sheng-gpu-metal-opens, default 0 = none) caps the connections granted to each process name. No cap by default: a
+    /* limit (boot-arg gpu-metal-opens, default 0 = none) caps the connections granted to each process name. No cap by default: a
      * client that crashed and restarts (iconservicesagent, i-39b429634) must get the GPU again, or it is left without one for the boot. */
     const unsigned cap=limit;
     IOLockLock(g.lock);

@@ -457,6 +457,10 @@ pub struct Failure {
     /// What the venue lacks, where the typed refusal names capabilities a device could enable or
     /// a measured driver defect ([`device_gap`]). `None` where the refusal is ours to answer for.
     pub lacks: Option<String>,
+    /// The typed runtime error's own text where the failure is one ([`Failure::of`]); `None` for
+    /// a failure outside the runtime's typed errors. What a run that stopped at it reports
+    /// ([`Abort::stopped`]).
+    refusal: Option<String>,
 }
 
 impl Failure {
@@ -468,6 +472,7 @@ impl Failure {
                 payload: Box::new(Value::Lines(vec![error.to_string()])),
             },
             lacks: device_gap(error),
+            refusal: Some(error.to_string()),
         }
     }
 
@@ -495,6 +500,7 @@ impl Failure {
                 payload: Box::new(payload),
             },
             lacks: None,
+            refusal: None,
         }
     }
 
@@ -558,6 +564,7 @@ impl Failure {
         Self {
             error: Value::fields([(part, Value::Uint(index as u64)), (REFUSED, self.error)]),
             lacks: self.lacks,
+            refusal: self.refusal,
         }
     }
 }
@@ -612,6 +619,20 @@ pub struct Abort {
     pub failure: Failure,
 }
 
+impl Abort {
+    /// The line a run that stopped here reports, then the site: what the venue lacks where the
+    /// refusal is its own gap, else the typed runtime error the call answered, else that the call
+    /// did not answer (a failure outside the runtime's typed errors).
+    pub fn stopped(&self) -> String {
+        let what = match (&self.failure.lacks, &self.failure.refusal) {
+            (Some(lacks), _) => lacks.clone(),
+            (None, Some(error)) => format!("refused {error}"),
+            (None, None) => "a call did not answer".to_owned(),
+        };
+        format!("{what}, at {}", self.at)
+    }
+}
+
 /// The venue a side runs on: what a result carries so a report can say where it ran. A case never
 /// branches on any of it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -626,6 +647,13 @@ pub struct Venue {
     /// (`DeviceProperties::lossless_compression`), as the Apple silicon Mac every recording was
     /// taken on does: what a venue's own answer (`Justification::WithoutCompression`) holds by.
     pub lossless_compression: bool,
+    /// For a CPU implementation (`DeviceKind::Cpu`), the host's widest vector instruction set
+    /// ([`host_vector_isa`]), which its shader compiler targets; `None` for a GPU. The device's
+    /// name and driver do not carry it, and its answers follow it: one llvmpipe build (Mesa 26.2.6,
+    /// LLVM 23.1.4) stored a code from Metal's at 6,496 texels of `fetch-ordered-rgba8unorm-srgb`'s
+    /// `x3` on a host with AVX-512 (a Ryzen 7 7840HS) and at 6,304 on one with AVX2 alone (an
+    /// i9-13900H).
+    pub host: Option<String>,
 }
 
 impl Venue {
@@ -637,7 +665,51 @@ impl Venue {
 
 impl std::fmt::Display for Venue {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(out, "{} ({}, API {})", self.device, self.driver, self.api)
+        write!(out, "{}", self.device)?;
+        if let Some(host) = &self.host {
+            write!(out, " on {host}")?;
+        }
+        write!(out, " ({}, API {})", self.driver, self.api)
+    }
+}
+
+/// The host's widest vector instruction set, as a CPU implementation's shader compiler takes it:
+/// `x86-64 AVX-512` (with its `F`, `BW`, `DQ` and `VL` subsets), `x86-64 AVX2` (with `FMA`),
+/// `x86-64 AVX`, `x86-64 SSE4.1` or `x86-64 SSE2`; `AArch64 SVE` or `AArch64 NEON`; else the
+/// architecture's name. llvmpipe's compiler takes the host's own features (Mesa's
+/// `util_get_cpu_caps`), so a venue is a device on such a host ([`Venue::host`]).
+pub fn host_vector_isa() -> String {
+    #[cfg(target_arch = "x86_64")]
+    {
+        let avx512 = std::arch::is_x86_feature_detected!("avx512f")
+            && std::arch::is_x86_feature_detected!("avx512bw")
+            && std::arch::is_x86_feature_detected!("avx512dq")
+            && std::arch::is_x86_feature_detected!("avx512vl");
+        let tier = if avx512 {
+            "AVX-512"
+        } else if std::arch::is_x86_feature_detected!("avx2")
+            && std::arch::is_x86_feature_detected!("fma")
+        {
+            "AVX2"
+        } else if std::arch::is_x86_feature_detected!("avx") {
+            "AVX"
+        } else if std::arch::is_x86_feature_detected!("sse4.1") {
+            "SSE4.1"
+        } else {
+            "SSE2"
+        };
+        format!("x86-64 {tier}")
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        match std::arch::is_aarch64_feature_detected!("sve") {
+            true => "AArch64 SVE".to_owned(),
+            false => "AArch64 NEON".to_owned(),
+        }
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        std::env::consts::ARCH.to_owned()
     }
 }
 
@@ -1142,6 +1214,31 @@ pub trait Side {
     ) -> Answer<crate::mesh_descriptors::MeshDescriptorFacts> {
         let _ = (library, spec);
         Err(Failure::unavailable("mesh_descriptor_facts"))
+    }
+
+    /// `newRenderPipelineStateWithMeshDescriptor:options:reflection:error:` of the descriptor
+    /// `spec` states, and what the made state answers of its limits
+    /// ([`Creation`](crate::pipeline_limits::Creation)). A refusal of Metal's rule is an `Ok`, for
+    /// the reasons [`crate::pipeline_limits`] states; the state is kept by neither side.
+    fn mesh_pipeline_limits(
+        &mut self,
+        library: Handle,
+        spec: &crate::pipeline_limits::MeshLimitsSpec<'_>,
+    ) -> Answer<crate::pipeline_limits::Creation<crate::pipeline_limits::MeshStateLimits>> {
+        let _ = (library, spec);
+        Err(Failure::unavailable("mesh_pipeline_limits"))
+    }
+
+    /// `newComputePipelineStateWithDescriptor:options:reflection:error:` of the descriptor `spec`
+    /// states, and what the made state answers of its limit, as
+    /// [`mesh_pipeline_limits`](Side::mesh_pipeline_limits) does for a mesh state.
+    fn compute_pipeline_limits(
+        &mut self,
+        library: Handle,
+        spec: &crate::pipeline_limits::ComputeLimitsSpec<'_>,
+    ) -> Answer<crate::pipeline_limits::Creation<crate::pipeline_limits::ComputeStateLimits>> {
+        let _ = (library, spec);
+        Err(Failure::unavailable("compute_pipeline_limits"))
     }
 
     /// What a **render pass descriptor** answers of itself
@@ -2389,6 +2486,11 @@ pub trait Side {
     }
 }
 
+/// Metal's largest tile threadgroup: the `maxTotalThreadsPerThreadgroup` an Apple M3 Max answers
+/// for a tile state whose descriptor states no limit, and so the limit a case states where it
+/// means Metal's own maximum ([`TilePipelineSpec::max_total_threads_per_threadgroup`]).
+pub const METAL_TILE_THREADS: u32 = 1024;
+
 /// A tile render pipeline a case makes: `MTLTileRenderPipelineDescriptor`'s facts the cases state.
 ///
 /// The attachment formats are the case's own rather than one fixed format, because a tile
@@ -2400,28 +2502,30 @@ pub struct TilePipelineSpec<'a> {
     pub entry: &'a str,
     /// The color attachment formats, at attachment index 0 up in this order.
     pub attachments: &'a [PixelFormat],
-    /// `maxTotalThreadsPerThreadgroup`: `None` is Metal's 0, the pipeline's own maximum.
-    pub max_total_threads_per_threadgroup: Option<u32>,
+    /// `maxTotalThreadsPerThreadgroup`, which every case states and each side sets, as the compute
+    /// limit cases state theirs ([`crate::pipeline_limits::ComputeLimitsSpec`]); 0 is Metal's
+    /// default, the pipeline's own maximum. A state of no limit is answered from the compiler's
+    /// history: Metal keeps a tile pipeline it compiled and answers a later descriptor of the same
+    /// function that differs only in `requiredThreadsPerThreadgroup` with the first one's limit,
+    /// in the same process or a later one (an Apple M3 Max, macOS 27.0.1), so a re-record of a
+    /// state of no limit could take another pipeline's answer. A stated limit separates the
+    /// pipelines, as the validation oracle's tile pipelines state theirs; a case that means
+    /// Metal's own maximum states [`METAL_TILE_THREADS`].
+    pub max_total_threads_per_threadgroup: u32,
     /// `threadgroupSizeMatchesTileSize`.
     pub threadgroup_size_matches_tile_size: bool,
 }
 
 impl<'a> TilePipelineSpec<'a> {
-    /// The tile function `entry` over `attachments`, with Metal's defaults for the rest.
-    pub const fn new(entry: &'a str, attachments: &'a [PixelFormat]) -> Self {
+    /// The tile function `entry` over `attachments`, under a `maxTotalThreadsPerThreadgroup` of
+    /// `limit`, with Metal's defaults for the rest.
+    pub const fn new(entry: &'a str, attachments: &'a [PixelFormat], limit: u32) -> Self {
         Self {
             entry,
             attachments,
-            max_total_threads_per_threadgroup: None,
+            max_total_threads_per_threadgroup: limit,
             threadgroup_size_matches_tile_size: false,
         }
-    }
-
-    /// The descriptor with `maxTotalThreadsPerThreadgroup` set to `limit`.
-    #[must_use]
-    pub const fn limited(mut self, limit: u32) -> Self {
-        self.max_total_threads_per_threadgroup = Some(limit);
-        self
     }
 
     /// The descriptor with `threadgroupSizeMatchesTileSize` set.
@@ -2438,11 +2542,7 @@ impl<'a> TilePipelineSpec<'a> {
         for format in self.attachments {
             out.extend(format.as_raw().to_le_bytes());
         }
-        out.extend(
-            self.max_total_threads_per_threadgroup
-                .unwrap_or(0)
-                .to_le_bytes(),
-        );
+        out.extend(self.max_total_threads_per_threadgroup.to_le_bytes());
         out.push(u8::from(self.threadgroup_size_matches_tile_size));
         out
     }

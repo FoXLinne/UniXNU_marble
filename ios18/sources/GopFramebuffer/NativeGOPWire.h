@@ -9,7 +9,7 @@ enum { NGP_VERSION_BUFFERED=2,NGP_MAX_SCANOUT_BUFFERS=3 };
 struct NGPMode {uint32_t version,format;uint64_t width,height,stride,bytes;};
 struct NGPPresent {uint64_t address,bytes;uint32_t width,height,stride,format;};
 struct NGPTransfer {uint64_t sequence,bytes;};
-// GPU hand-off (boot-arg sheng-fb-gpu=1): the display driver offers a finished frame instead of copying it. A privileged client waits for it
+// GPU hand-off (boot-arg fb-gpu=1): the display driver offers a finished frame instead of copying it. A privileged client waits for it
 // (selector 2: the frame's pages are mapped read/write into the caller, at address), lets the GPU copy it into the scanout mapping (client
 // memory type 1, writable) and then completes it (selector 3), which retires the swap. Nothing here copies pixels.
 enum { NGP_METHOD_MODE=0,NGP_METHOD_PRESENT=1,NGP_METHOD_WAIT_SWAP=2,NGP_METHOD_COMPLETE_SWAP=3,NGP_MEMORY_SCANOUT_RW=1 };

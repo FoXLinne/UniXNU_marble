@@ -408,7 +408,8 @@ pub enum BitstreamError {
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BitcodeError {
-    /// The module's `VERSION` record states a version other than 2.
+    /// The module's `VERSION` record states a version other than 1 or 2 (version 0, absolute value
+    /// ids, is not read).
     UnsupportedBitcodeVersion {
         /// The version the record states.
         version: u64,
@@ -942,8 +943,6 @@ pub enum LinkProblem {
     Ambiguous,
     /// The function is not a visible function of its module (`!air.visible`).
     NotVisible,
-    /// The reference's function type is not the linked function's.
-    Signature,
     /// The linked function's module has another data layout than the module that references it.
     DataLayout,
     /// The linked function was made unspecialized (`newFunctionWithName:`), and what it reaches
