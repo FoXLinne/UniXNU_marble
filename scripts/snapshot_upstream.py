@@ -13,7 +13,8 @@ def source_digest(path):
     count = 0
     for directory, directories, filenames in os.walk(path):
         directories[:] = sorted(name for name in directories
-                                if name not in ('.git', '__pycache__'))
+                                if name not in ('.git', '__pycache__', 'target', '.cache')
+                                and not (name == 'observations' and Path(directory).name == 'corpus'))
         for name in sorted(filenames):
             source = Path(directory) / name
             relative = str(source.relative_to(path))
