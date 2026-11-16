@@ -1,0 +1,58 @@
+--- a/DarwinBootPkg/Driver/Resident.c
++++ b/DarwinBootPkg/Driver/Resident.c
+@@ -24,6 +24,24 @@
+ STATIC BOOLEAN mInterruptsSaved;
+ STATIC UINT64 *mReturnTables;
+ 
++// The contiguous kernel span and the separately reserved outside runs have
++// the same VM owner. Firmware diagnostics may follow either after panic.
++STATIC BOOLEAN ResidentOwnedRange(UINT64 Address,UINTN Bytes,UINT64 Base,UINT64 Size)
++{
++  if (Address>=Base && Bytes<=Size && Address-Base<=Size-Bytes) return TRUE;
++  EFI_GUID Guid=ROOT_STAGE_DRAM_GUID;
++  for (UINTN Index=0;Index<gST->NumberOfTableEntries;Index++) {
++    if (!CompareGuid(&Guid,&gST->ConfigurationTable[Index].VendorGuid)) continue;
++    CONST ROOT_STAGE_DRAM_TABLE *Table=gST->ConfigurationTable[Index].VendorTable;
++    if (Table->Magic!=ROOT_STAGE_DRAM_MAGIC || Table->Version!=1 || Table->Count>ROOT_STAGE_DRAM_RANGES) return FALSE;
++    for (UINTN Range=0;Range<Table->Count;Range++) {
++      UINT64 From=Table->Range[Range].Base,Length=Table->Range[Range].Bytes;
++      if (Address>=From && Bytes<=Length && Address-From<=Length-Bytes) return TRUE;
++    }
++  }
++  return FALSE;
++}
++
+ STATIC VOID *KernelPointer(UINT64 Address, UINTN Bytes, UINT64 Base, UINT64 Size, UINT64 Virtual)
+ {
+   UINTN Bits=64-((DarwinResidentFaultInfo[15]>>16)&63);
+@@ -33,14 +51,14 @@
+   UINT64 Table=DarwinResidentFaultInfo[14]&0x0000fffffffff000ULL;
+   UINTN First=4-(Bits-12+8)/9;
+   for (UINTN Level=First;Level<4;Level++) {
+-    if (Table<Base || Table-Base>Size-EFI_PAGE_SIZE) return NULL;
++    if (!ResidentOwnedRange(Table,EFI_PAGE_SIZE,Base,Size)) return NULL;
+     UINTN Shift=12+9*(3-Level);
+     UINT64 Entry=((UINT64 *)(UINTN)Table)[(WalkAddress>>Shift)&511];
+     if (!(Entry&1)) return NULL;
+     if (Level==3 || (Entry&3)==1) {
+       UINT64 BlockMask=(1ULL<<Shift)-1;
+       UINT64 Physical=(Entry&0x0000fffffffff000ULL&~BlockMask)|(WalkAddress&BlockMask);
+-      if (Physical<Base || Bytes>Size || Physical-Base>Size-Bytes) return NULL;
++      if (!ResidentOwnedRange(Physical,Bytes,Base,Size)) return NULL;
+       return (VOID *)(UINTN)Physical;
+     }
+     Table=Entry&0x0000fffffffff000ULL;
+@@ -287,8 +305,11 @@
+       EFI_MEMORY_DESCRIPTOR *D=(VOID *)((UINT8 *)Map+i);
+       if ((D->Type>=EfiLoaderCode && D->Type<=EfiRuntimeServicesData) || D->Type==EfiACPIReclaimMemory || D->Type==EfiACPIMemoryNVS) {
+         for (UINT64 P=D->PhysicalStart;P<D->PhysicalStart+EFI_PAGES_TO_SIZE(D->NumberOfPages);P+=64) {
+-          if (P>=Base && P<Base+Size) {
+-            P=Base+Size-64;
++          if (ResidentOwnedRange(P,64,Base,Size)) {
++            // Reserved VM pages carry no firmware state to preserve.
++            // Jump to the end of this descriptor when it is wholly VM-owned.
++            UINT64 End=D->PhysicalStart+EFI_PAGES_TO_SIZE(D->NumberOfPages);
++            if (P<End && ResidentOwnedRange(P,(UINTN)(End-P),Base,Size)) break;
+             continue;
+           }
+           __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");

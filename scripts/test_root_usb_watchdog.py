@@ -8,6 +8,7 @@ import tempfile
 repository = Path(__file__).resolve().parents[1]
 source = (repository / 'package/MarblePkg/RootUsb.c').read_text()
 helpers = source[source.index('STATIC VOID ServiceWatchdog'):source.index('typedef struct {')]
+helpers = helpers.replace('#include \"RootBootloaderReset.h\"', '')
 helpers = helpers.replace(
     '__asm__ volatile("mrs %0, cntfrq_el0" : "=r"(mWatchdogFrequency));',
     'mWatchdogFrequency=100;')
@@ -32,7 +33,8 @@ static typeof(stage) *mStage=&stage;
 static BOOLEAN mKernelRunning, published;
 static UINT64 mWatchdogControl, mWatchdogStatus, mWatchdogPetStatus;
 static UINT64 mWatchdogLastPet, mWatchdogFrequency, counter;
-static BOOLEAN mWatchdogService;
+static BOOLEAN mWatchdogService, mRecoveryArmed, mServiceStarted;
+static UINT64 mUsbLastCommand;
 static int active, statusError, disableError, pets;
 static UINT64 RootCounter(void) { return counter; }
 void MarbleDisplayService(void) {}
@@ -50,6 +52,9 @@ int main(void) {
   active=1; RetainUsbWatchdog(); assert(!active && mWatchdogService && !pets);
   active=1; disableError=1; RetainUsbWatchdog();
   assert(active && mWatchdogService && pets==1);
+  active=1; disableError=0; mRecoveryArmed=1;
+  RetainUsbWatchdog(); assert(active && pets==2);
+  mRecoveryArmed=0; pets=1; disableError=1;
   counter=99; ServiceWatchdog(); assert(pets==1);
   counter=100; ServiceWatchdog(); assert(pets==2);
   counter=200; ServiceWatchdog(); assert(pets==3);
@@ -66,6 +71,12 @@ int main(void) {
   stage.UsbHost.Heartbeat=UINT32_MAX;
   counter+=100; ServiceWatchdog();
   assert(stage.UsbHost.Heartbeat==MARBLE_USB_HEARTBEAT_TAG);
+  mRecoveryArmed=1; mServiceStarted=1; mKernelRunning=1;
+  mUsbLastCommand=counter; counter+=100; ServiceWatchdog();
+  int livePets=pets;
+  counter+=1100; ServiceWatchdog(); assert(pets==livePets+1);
+  counter+=6000; ServiceWatchdog(); assert(pets==livePets+2);
+  mUsbLastCommand=counter; counter+=100; ServiceWatchdog(); assert(pets==livePets+3);
   struct MarbleUsbHealth health={0};
   assert(!marble_usb_health_tick(&health,1,0));
   assert(!marble_usb_health_tick(&health,1,500));

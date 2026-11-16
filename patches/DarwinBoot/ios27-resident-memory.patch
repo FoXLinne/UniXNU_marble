@@ -1,0 +1,127 @@
+--- a/DarwinBootPkg/Driver/DarwinBoot.c
++++ b/DarwinBootPkg/Driver/DarwinBoot.c
+@@ -740,6 +740,54 @@
+   Inputs[DARWIN_INPUT_PAYLOAD_DISK].State |= DARWIN_INPUT_VERIFIED;
+ }
+ 
++// Retained firmware and XNU share the DRAM map. Reserve the outside runs
++// before XNU adopts them, so firmware allocations after panic preserve them.
++STATIC ROOT_STAGE_DRAM_TABLE mRetainedDram;
++
++STATIC EFI_STATUS
++ReserveResidentDram (UINT8 *Table, UINTN Capacity, UINTN *Count, UINT64 *Bytes)
++{
++  EFI_GUID Guid=ROOT_STAGE_DRAM_GUID;
++  ROOT_STAGE_DRAM_TABLE *Existing=NULL;
++  for (UINTN Index=0; Index<gST->NumberOfTableEntries; Index++) {
++    if (CompareGuid(&Guid,&gST->ConfigurationTable[Index].VendorGuid))
++      Existing=gST->ConfigurationTable[Index].VendorTable;
++  }
++  if (Existing!=NULL) {
++    if (Existing->Magic!=ROOT_STAGE_DRAM_MAGIC || Existing->Version!=1 ||
++        Existing->Count>Capacity || Existing->Count>ROOT_STAGE_DRAM_RANGES) return EFI_COMPROMISED_DATA;
++    *Count=Existing->Count; *Bytes=0;
++    ZeroMem(Table,Capacity*16);
++    for (UINTN Index=0; Index<*Count; Index++) {
++      DarwinRangeSet(Table,Index,Existing->Range[Index].Base,Existing->Range[Index].Bytes);
++      *Bytes+=Existing->Range[Index].Bytes;
++    }
++    return EFI_SUCCESS;
++  }
++  if (*Count>ROOT_STAGE_DRAM_RANGES) return EFI_BAD_BUFFER_SIZE;
++  ZeroMem(&mRetainedDram,sizeof(mRetainedDram));
++  mRetainedDram.Magic=ROOT_STAGE_DRAM_MAGIC; mRetainedDram.Version=1;
++  for (UINTN Index=0; Index<*Count; Index++) {
++    EFI_PHYSICAL_ADDRESS Address=DarwinRangeBase(Table,Index);
++    UINT64 Size=DarwinRangeSize(Table,Index);
++    EFI_STATUS Status=gBS->AllocatePages(AllocateAddress,EfiLoaderData,EFI_SIZE_TO_PAGES(Size),&Address);
++    if (EFI_ERROR(Status)) {
++      // A firmware allocation may consume a candidate between map reads.
++      // The actual successfully reserved list is the VM ownership contract.
++      Print(L"DARWINBOOT: outside reservation 0x%lx + 0x%lx: %r\n",Address,Size,Status);
++      continue;
++    }
++    UINTN Slot=mRetainedDram.Count++;
++    mRetainedDram.Range[Slot].Base=Address; mRetainedDram.Range[Slot].Bytes=Size;
++  }
++  *Count=mRetainedDram.Count; *Bytes=0; ZeroMem(Table,Capacity*16);
++  for (UINTN Index=0; Index<*Count; Index++) {
++    DarwinRangeSet(Table,Index,mRetainedDram.Range[Index].Base,mRetainedDram.Range[Index].Bytes);
++    *Bytes+=mRetainedDram.Range[Index].Bytes;
++  }
++  return gBS->InstallConfigurationTable(&Guid,&mRetainedDram);
++}
++
+ STATIC
+ EFI_STATUS
+ EFIAPI
+@@ -787,6 +835,7 @@
+   UINTN                           PolicyOffset;
+   UINT64                          PolicyAddress;
+   UINTN                           RootOffset;
++  VOID                            *ReturnReserve=NULL;
+   ROOT_STAGE_TABLE                *RootStage;
+   DARWIN_BOOT_ARGS                *Args;
+   EFI_MEMORY_DESCRIPTOR           *Map;
+@@ -970,10 +1019,6 @@
+         (RootStage->KernelBase == 0) || (RootStage->KernelBase & (BLOCK_SIZE - 1))) {
+       Status = EFI_COMPROMISED_DATA; goto Fail;
+     }
+-    if (ExcludedOffset != MAX_UINTN) {
+-      // The root stage already owns the whole window; an excluded-range head has no owner.
+-      Status = EFI_UNSUPPORTED; goto Fail;
+-    }
+     Address = RootStage->KernelBase + (Kernel.Base & (BLOCK_SIZE - 1));
+     Allocated = 0;
+   }
+@@ -1065,6 +1110,10 @@
+   Root->Close (Root); Root = NULL;
+   // Every file is read; the block device is asked once more, and only for a tree that wants the record.
+   if (InputsOffset != MAX_UINTN) { LocateInputs (Request, Inputs); }
++  if (RootStage!=NULL && OutsideOffset!=MAX_UINTN) {
++    ReturnReserve=AllocatePages(EFI_SIZE_TO_PAGES(SIZE_16MB));
++    if (ReturnReserve==NULL) { Status=EFI_OUT_OF_RESOURCES; goto Fail; }
++  }
+   Status = GetMap (&Map, &Capacity, &MapSize, &Key, &Stride);
+   if (EFI_ERROR (Status)) { goto Fail; }
+   Print (L"DARWINBOOT: ARM64 va=0x%lx pa=0x%lx args=0x%lx entry=0x%lx owned=0x%lx\n",
+@@ -1073,6 +1122,10 @@
+     // As this map gives it; the table XNU reads comes from the map ExitBootServices accepts.
+     OutsideCount = DarwinOutsideRanges (Map, MapSize, Stride, Address, WindowSize, SIZE_64KB, SIZE_1MB,
+                                         (UINT8 *)(UINTN)(TreeAddress + OutsideOffset), OutsideCapacity, &OutsideBytes);
++    if (RootStage != NULL) {
++      Status=ReserveResidentDram((UINT8 *)(UINTN)(TreeAddress+OutsideOffset),OutsideCapacity,&OutsideCount,&OutsideBytes);
++      if (EFI_ERROR(Status)) goto Fail;
++    }
+     Print (L"DARWINBOOT: free memory outside the window: %lu ranges of %lu, 0x%lx bytes\n",
+            (UINT64)OutsideCount, (UINT64)OutsideCapacity, OutsideBytes);
+     for (Index = 0; Index < OutsideCount; Index++) {
+@@ -1092,7 +1145,7 @@
+            Inputs[DARWIN_INPUT_INITRD].Base, Inputs[DARWIN_INPUT_INITRD].Size, (INT32)Inputs[DARWIN_INPUT_INITRD].Type,
+            Inputs[DARWIN_INPUT_INITRD].State, Inputs[DARWIN_INPUT_INITRD].Usable);
+   }
+-  if (ExcludedOffset != MAX_UINTN) {
++  if ((ExcludedOffset != MAX_UINTN) && (RootStage == NULL)) {
+     // The table as this map gives it; the map ExitBootServices accepts decides the one XNU reads.
+     Excluded = (UINT8 *)(UINTN)(TreeAddress + ExcludedOffset);
+     if (!DescribeWindow (Map, MapSize, Stride, Address, WindowSize, HeadSize, Excluded, ExcludedCapacity, Args, &ExcludedCount)) {
+@@ -1139,6 +1192,11 @@
+           READ_SYSREG (id_aa64mmfr0_el1) & 0xF, (((READ_SYSREG (id_aa64mmfr0_el1) >> 28) & 0xF) == 0xF) ? "NOT supported" : "supported"));
+   DEBUG ((DEBUG_ERROR, "ID_AA64PFR0_EL1  0x%lx\n", READ_SYSREG (id_aa64pfr0_el1)));
+   DEBUG ((DEBUG_ERROR, "\nExiting boot services. A green bar across the top\nmarks the loader handoff before the kernel branch.\n"));
++  if (ReturnReserve!=NULL) { FreePages(ReturnReserve,EFI_SIZE_TO_PAGES(SIZE_16MB)); ReturnReserve=NULL; }
++  if (RootStage!=NULL) {
++    Status=GetMap(&Map,&Capacity,&MapSize,&Key,&Stride);
++    if (EFI_ERROR(Status)) goto Fail;
++  }
+   if (RootStage && RootStage->WaitForHost) {
+     Status=DarwinResidentRun(RootStage,ArgsAddress,KernelAddress+Kernel.Entry-Kernel.Base,
+         Address,WindowSize,Video[0],Video[2]*Video[4],Map,MapSize,Stride);
+@@ -1197,6 +1255,7 @@
+   CpuDeadLoop ();
+   return EFI_ABORTED;
+ Fail:
++  if (ReturnReserve!=NULL) { FreePages(ReturnReserve,EFI_SIZE_TO_PAGES(SIZE_16MB)); }
+   if (Root != NULL) { Root->Close (Root); }
+   if (Image != NULL) { FreePool (Image); }
+   if (Tree != NULL) { FreePool (Tree); }

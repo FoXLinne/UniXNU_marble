@@ -9,6 +9,17 @@
 #define ROOT_STAGE_FAULT_GUID {0x1d7d3ce9,0x52a6,0x49c1,{0xb8,0x6e,0x35,0xb6,0x82,0x72,0x98,0xa4}}
 #define ROOT_STAGE_SERVICE_GUID {0x773d7f84,0x6185,0x4b98,{0xa3,0x16,0xec,0xb1,0xd8,0x2f,0x50,0x69}}
 #define ROOT_STAGE_SERVICE_MAGIC 0x3156534255535452ULL
+#define ROOT_STAGE_DRAM_GUID {0x49cf123a,0xb897,0x4c06,{0xa5,0x54,0x73,0x5b,0xd2,0x67,0x81,0x19}}
+#define ROOT_STAGE_DRAM_MAGIC 0x314d415244545352ULL
+#define ROOT_STAGE_DRAM_RANGES 64
+
+// Firmware reserves these conventional DRAM runs for the retained XNU VM.
+// A separate configuration table keeps ROOT_STAGE_TABLE v3's wire layout.
+typedef struct {
+  unsigned long long Magic;
+  unsigned int Version, Count;
+  struct { unsigned long long Base, Bytes; } Range[ROOT_STAGE_DRAM_RANGES];
+} ROOT_STAGE_DRAM_TABLE;
 #define ROOT_STAGE_USB_PHY_CALIBRATION_MAGIC 0x31594850u
 #define ROOT_STAGE_USB_PHY_CALIBRATION_OFFSETS \
   {0x54,0xb8,0x5c,0x60,0x58,0x68,0x6c,0x70,0x7c,0x78,0x64,0x3c}

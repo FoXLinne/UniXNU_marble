@@ -24,12 +24,18 @@ STATIC UINTN mVolumeSize;
 STATIC BOOLEAN mRootStage, mRootStorage;
 STATIC BOOLEAN mResidentUsb;
 STATIC BOOLEAN mNativeUsb;
+STATIC BOOLEAN mGicAwake;
 STATIC VOID *mTemporaryKernel;
 STATIC UINTN mTemporaryKernelBytes;
 EFI_STATUS MarbleRootUsbEnableResident(VOID);
 EFI_STATUS MarbleRootUsbEnableNative(VOID);
 EFI_STATUS MarbleRootUsbStartResident(VOID);
 EFI_STATUS MarbleRootStorage(VOID *TemporaryKernel, UINTN TemporaryKernelBytes);
+EFI_STATUS MarbleRootStoragePatch(CONST VOID *Patch, UINTN Bytes);
+STATIC CONST VOID *mKernelPatch;
+STATIC UINTN mKernelPatchBytes;
+STATIC UINT64 mTraceOffset;
+VOID MarbleRootUsbConfigureBootLog(UINT64);
 VOID MarbleDisplayPrepare(ROOT_STAGE_TABLE *Stage);
 VOID MarbleRtcPrepare(ROOT_STAGE_TABLE *Stage);
 EFI_STATUS MarbleRootUsb(VOID);
@@ -39,10 +45,29 @@ EFI_STATUS MarbleRootUsbPoll(VOID);
 EFI_STATUS MarbleRootUsbResume(ROOT_STAGE_TABLE *Stage);
 VOID MarbleRootUsbSetFirmwareLog(CONST VOID *Log);
 STATIC UINT8 mFirmwareLog[0x100000];
+STATIC UINT8 mPreviousBootLog[4096];
+VOID MarbleRootUsbSetPreviousBootLog(CONST VOID *);
 STATIC EFI_TEXT_STRING mOutputString;
 STATIC CHAR16 mBootText[32768];
 STATIC UINTN mBootTextUsed;
 STATIC UNIXNU_LOADER_BOOT mLoaderBoot;
+STATIC VOID RecordFirmwareBootEvent(UINT64 Event)
+{
+  volatile UINT64 *Log=(VOID *)(UINTN)0xB7001000;
+  UINT64 Counter,Frequency;
+  __asm__ volatile("mrs %0, cntpct_el0\n\tmrs %1, cntfrq_el0" : "=r"(Counter),"=r"(Frequency));
+  if (Log[0]!=0x314543415254424dULL) {
+    Log[0]=0x314543415254424dULL;Log[1]=0;Log[2]=Frequency;
+  }
+  UINT64 Index=Log[1];
+  volatile UINT64 *Entry=Log+4+4*(Index%120);
+  Entry[0]=Counter;Entry[1]=Event;Entry[2]=0;Entry[3]=0;
+  __asm__ volatile("dsb sy" ::: "memory");
+  Log[1]=Index+1;
+  for (UINTN Address=0xB7001000;Address<0xB7002000;Address+=64)
+    __asm__ volatile("dc civac, %0" :: "r"(Address) : "memory");
+  __asm__ volatile("dsb sy" ::: "memory");
+}
 
 STATIC VOID
 CaptureBootScreen(UINT8 *Buffer, UINTN Capacity)
@@ -81,8 +106,12 @@ CaptureBootScreen(UINT8 *Buffer, UINTN Capacity)
 STATIC EFI_STATUS EFIAPI
 BootOutput(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This, CHAR16 *Text)
 {
-  for (UINTN Index = 0; Text[Index] && mBootTextUsed + 1 < ARRAY_SIZE(mBootText); Index++)
-    mBootText[mBootTextUsed++] = Text[Index];
+  for (UINTN Index = 0; Text[Index] && mBootTextUsed + 1 < ARRAY_SIZE(mBootText); Index++) {
+    mBootText[mBootTextUsed] = Text[Index];
+    ((CHAR16 *)mFirmwareLog)[mBootTextUsed++] = Text[Index];
+  }
+  ((CHAR16 *)mFirmwareLog)[mBootTextUsed]=0;
+  __asm__ volatile("dmb ishst" ::: "memory");
   return mOutputString(This, Text);
 }
 
@@ -113,7 +142,7 @@ BootReturn(EFI_STATUS Status, UINTN Checkpoint)
   if (mOutputString) gST->ConOut->OutputString = mOutputString;
   Print(L"Marble boot checkpoint %u: %r\r\n", Checkpoint, Status);
   gBS->SetWatchdogTimer(0, 0, 0, NULL);
-  MarbleWatchdogCall(0x86000005, 2, 0, NULL);
+  if (!mResidentUsb || mNativeUsb) MarbleWatchdogCall(0x86000005, 2, 0, NULL);
   VOID *Log = AllocatePages(EFI_SIZE_TO_PAGES(0x100000));
   if (Log) {
     ZeroMem(Log, 0x100000);
@@ -222,10 +251,17 @@ FindVolume(VOID)
   while (Cursor + sizeof(PAYLOAD_BLOB) <= End) {
     PAYLOAD_BLOB *Blob = (VOID *)Cursor;
     if (!Blob->Name[0] || Blob->Size > (UINTN)(End - Cursor - sizeof(*Blob))) break;
+    if (CompareMem(Blob->Name,"root.gicawake",sizeof("root.gicawake"))==0) mGicAwake=TRUE;
     if (CompareMem(Blob->Name, "root.storage", sizeof("root.storage")) == 0) mRootStorage = TRUE;
     if (CompareMem(Blob->Name, "root.usb", sizeof("root.usb")) == 0) mResidentUsb = TRUE;
     if (CompareMem(Blob->Name, "root.nativeusb", sizeof("root.nativeusb")) == 0) mNativeUsb = TRUE;
     if (CompareMem(Blob->Name, "root.stage", sizeof("root.stage")) == 0) mRootStage = TRUE;
+    if (CompareMem(Blob->Name, "root.trace", sizeof("root.trace")) == 0 && Blob->Size==8)
+      CopyMem(&mTraceOffset,Blob+1,8);
+    if (CompareMem(Blob->Name, "kernel.patch", sizeof("kernel.patch")) == 0) {
+      mKernelPatch = Blob + 1;
+      mKernelPatchBytes = Blob->Size;
+    }
     if (CompareMem(Blob->Name, "kernel.seed", sizeof("kernel.seed")) == 0) {
       mTemporaryKernel = Blob + 1;
       mTemporaryKernelBytes = Blob->Size;
@@ -249,6 +285,7 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   EFI_EVENT LoaderEvent;
   VOID *Registration;
   EFI_GUID LoaderGuid = UNIXNU_LOADER_PROTOCOL_GUID;
+  MarbleRootUsbSetFirmwareLog(mFirmwareLog);
   mOutputString = gST->ConOut->OutputString;
   gST->ConOut->OutputString = BootOutput;
   Status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, LoaderAvailable, NULL, &LoaderEvent);
@@ -258,24 +295,47 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   Print(L"UniXNU marble\r\n");
   if (!FindVolume()) return BootReturn(EFI_NOT_FOUND, 1);
   // Dedicated panic log, inside marble's reserved 0xA8000000..0xB8000000 window.
+  CopyMem(mPreviousBootLog,(CONST VOID *)(UINTN)0xB7001000,sizeof(mPreviousBootLog));
+  MarbleRootUsbSetPreviousBootLog(mPreviousBootLog);
   ZeroMem((VOID *)(UINTN)0xB7000000, 0x100000);
+  RecordFirmwareBootEvent(1);
   if (mRootStorage) {
     if (mResidentUsb) {
       Status=mNativeUsb?MarbleRootUsbEnableNative():MarbleRootUsbEnableResident();
       if (EFI_ERROR(Status)) return BootReturn(Status,9);
     }
+    if (mGicAwake) {
+      // Snapshot actual firmware handoff state for all eight redistributors.
+      UINT32 Awake=1;
+      for (UINTN Core=0;Core<8;Core++)
+        if (*(volatile UINT32 *)(UINTN)(0x17180014+Core*0x40000)&6U) Awake=0;
+      volatile UINT32 *State=(VOID *)(UINTN)0xB7002000;
+      State[0]=0x31434947;State[1]=Awake;
+      __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)State) : "memory");
+    }
     Status=MarbleRootUsbPrepare(NULL);
     if (EFI_ERROR(Status)) Print(L"RootStage USB: %r\r\n",Status);
+    if (!EFI_ERROR(Status) && mTraceOffset) MarbleRootUsbConfigureBootLog(mTraceOffset);
     Status=MarbleRootStorage(mTemporaryKernel,mTemporaryKernelBytes);
     if (EFI_ERROR(Status)) { Print(L"UFS boot: %r\r\n",Status); return Status; }
+    if (mKernelPatch) {
+      Status=MarbleRootStoragePatch(mKernelPatch,mKernelPatchBytes);
+      if (EFI_ERROR(Status)) return BootReturn(Status,10);
+    }
+    RecordFirmwareBootEvent(2);
     if (mRootStage) {
       // Service the preboot session on the boot CPU before starting its AP owner.
       Status=MarbleRootUsbContinue();
       if (EFI_ERROR(Status)) return BootReturn(Status,10);
       mRootStage=FALSE;
     }
-    Status=MarbleRootUsbStartResident();
-    if (EFI_ERROR(Status)) return BootReturn(Status,10);
+    RecordFirmwareBootEvent(3);
+    // Keep one USB protocol consumer while the loader uses boot services.
+    // DarwinResident enters the resident service after loading its payload.
+    if (mNativeUsb) {
+      Status=MarbleRootUsbStartResident();
+      if (EFI_ERROR(Status)) return BootReturn(Status,10);
+    }
     for (UINTN Tick=0;Tick<500;Tick++) {
       Status=MarbleRootUsbPoll();
       if (EFI_ERROR(Status)) break;

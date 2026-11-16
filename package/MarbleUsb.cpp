@@ -10,6 +10,7 @@
 #include <IOKit/IOBufferMemoryDescriptor.h>
 #include <IOKit/IOPlatformExpert.h>
 #include <IOKit/IOWorkLoop.h>
+#include <libkern/OSKextLib.h>
 #include <kern/thread.h>
 #include <pexpert/pexpert.h>
 #include <Protocol/RootStage.h>

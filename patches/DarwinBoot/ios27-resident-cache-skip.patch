@@ -1,0 +1,31 @@
+--- a/DarwinBootPkg/Driver/Resident.c
++++ b/DarwinBootPkg/Driver/Resident.c
+@@ -324,11 +324,24 @@
+       EFI_MEMORY_DESCRIPTOR *D=(VOID *)((UINT8 *)Map+i);
+       if ((D->Type>=EfiLoaderCode && D->Type<=EfiRuntimeServicesData) || D->Type==EfiACPIReclaimMemory || D->Type==EfiACPIMemoryNVS) {
+         for (UINT64 P=D->PhysicalStart;P<D->PhysicalStart+EFI_PAGES_TO_SIZE(D->NumberOfPages);P+=64) {
+-          if (ResidentOwnedRange(P,64,Base,Size)) {
+-            // Reserved VM pages carry no firmware state to preserve.
+-            // Jump to the end of this descriptor when it is wholly VM-owned.
++          UINT64 OwnedEnd=0;
++          if (P>=Base && P<Base+Size) OwnedEnd=Base+Size;
++          else {
++            EFI_GUID Guid=ROOT_STAGE_DRAM_GUID;
++            for (UINTN Index=0;Index<gST->NumberOfTableEntries;Index++) {
++              if (!CompareGuid(&Guid,&gST->ConfigurationTable[Index].VendorGuid)) continue;
++              CONST ROOT_STAGE_DRAM_TABLE *Owned=gST->ConfigurationTable[Index].VendorTable;
++              if (Owned->Magic!=ROOT_STAGE_DRAM_MAGIC || Owned->Version!=1 || Owned->Count>ROOT_STAGE_DRAM_RANGES) break;
++              for (UINTN R=0;R<Owned->Count;R++) {
++                UINT64 From=Owned->Range[R].Base,Length=Owned->Range[R].Bytes;
++                if (P>=From && P-From<Length) { OwnedEnd=From+Length; break; }
++              }
++              break;
++            }
++          }
++          if (OwnedEnd>P) {
+             UINT64 End=D->PhysicalStart+EFI_PAGES_TO_SIZE(D->NumberOfPages);
+-            if (P<End && ResidentOwnedRange(P,(UINTN)(End-P),Base,Size)) break;
++            P=MIN(OwnedEnd,End)-64;
+             continue;
+           }
+           __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");

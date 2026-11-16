@@ -44,11 +44,15 @@ class RetainedKernel:
     def translate(self, address, root=None, bits=None):
         bits = self.bits if bits is None else bits
         address &= (1 << bits) - 1
-        table = (self.ttbr1 if root is None else root) & 0x0000fffffffff000
         first = 4 - (bits - 12 + 8) // 9
+        root_bits = bits - (12 + 9 * (3 - first))
+        root_bytes = 1 << (root_bits + 3)
+        # A 47-bit user pmap has a 2 KiB L0 table. Preserve its half-page
+        # physical offset; lower levels use full 4 KiB tables.
+        table = (self.ttbr1 if root is None else root) & 0x0000ffffffffffff & ~(root_bytes - 1)
         for level in range(first, 4):
             if table not in self.tables:
-                self.tables[table] = self.physical(table, 4096)
+                self.tables[table] = self.physical(table, root_bytes if level == first else 4096)
             shift = 12 + 9 * (3 - level)
             entry, = struct.unpack_from('<Q', self.tables[table], ((address >> shift) & 511) * 8)
             if not entry & 1:
@@ -165,6 +169,28 @@ def capture_init(memory, symbols, layout, symbolicate, output, proc=None, label=
     if 'task_cache_slide' in thread_layout:
         result['cache_slide'] = hex(int.from_bytes(memory.read(task + thread_layout['task_cache_slide'], 4), 'little'))
         result['image_info'] = hex(read64(task + thread_layout['task_image_info']))
+    if user_root and result.get('image_info') not in (None, '0x0'):
+        try:
+            user_bits = 64 - (memory.tcr & 63)
+            header = memory.read(int(result['image_info'], 16), 16, user_root, user_bits)
+            version, image_count, image_array = struct.unpack('<IIQ', header)
+            if 0 < image_count <= 4096 and image_array:
+                entries = memory.read(image_array, image_count * 24, user_root, user_bits)
+                images = []
+                for offset in range(0, len(entries), 24):
+                    address, path, modified = struct.unpack_from('<3Q', entries, offset)
+                    # The shared cache has a separate symbol database. Keep
+                    # executable and plugin mappings needed for board frames.
+                    if not address or address >= 0x180000000:
+                        continue
+                    try:
+                        name = memory.read(path, 512, user_root, user_bits).split(b'\0', 1)[0].decode(errors='replace')
+                        images.append({'address':hex(address),'path':name})
+                    except (ValueError,IOError) as error:
+                        images.append({'address':hex(address),'path':'','path_error':str(error)})
+                result['images'] = images
+        except (ValueError,IOError) as error:
+            result['images_error'] = str(error)
     context_path = output / f'{label}-context.json'
     context_path.write_text(json.dumps(result, indent=2) + '\n')
     seen = set()

@@ -46,6 +46,10 @@ STATIC UINT64 mUsbSession;
 STATIC UINT8 *mExport;
 STATIC UINTN mExportBytes;
 STATIC CONST VOID *mFirmwareLog;
+STATIC CONST VOID *mPreviousBootLog;
+STATIC UINT64 mBootLogOffset;
+STATIC UINT8 mRetainedPreviousBootLog[4096];
+VOID MarbleRootUsbSetPreviousBootLog(CONST VOID *Log) { mPreviousBootLog=Log; }
 
 VOID MarbleRootUsbSetFirmwareLog(CONST VOID *Log)
 {
@@ -54,6 +58,7 @@ VOID MarbleRootUsbSetFirmwareLog(CONST VOID *Log)
 STATIC UINT64 mWatchdogControl, mWatchdogStatus, mWatchdogPetStatus;
 STATIC UINT64 mWatchdogLastPet, mWatchdogFrequency;
 STATIC BOOLEAN mWatchdogService;
+STATIC BOOLEAN mRecoveryArmed;
 STATIC BOOLEAN mResidentService, mServiceStarted;
 STATIC BOOLEAN mNativeTransport;
 STATIC volatile UINT32 mServiceReady, mHostAction, mKernelRunning;
@@ -162,6 +167,14 @@ UINT64 MarbleRootUsbContext[16] __attribute__((aligned(64)));
 #define mServiceContext MarbleRootUsbContext
 STATIC VOID *mServiceStack;
 VOID MarbleRootUsbCore(VOID);
+VOID MarbleRootUsbConfigureBootLog(UINT64 Offset)
+{
+  if (!mStage || Offset>mStage->KernelBytes || 4096>mStage->KernelBytes-Offset) return;
+  mBootLogOffset=Offset;
+  UINT64 Fault[2]={0};
+  if (MarbleRootReadMemory(mRetainedPreviousBootLog,(CONST VOID *)(UINTN)(mStage->KernelBase+Offset),4096,Fault))
+    mPreviousBootLog=mRetainedPreviousBootLog;
+}
 STATIC EFI_STATUS RestartUsb(VOID);
 STATIC VOID UsbFailure(VOID);
 STATIC VOID RetainUsbWatchdog(VOID);
@@ -217,6 +230,9 @@ STATIC VOID ServiceWatchdog(VOID)
   if (!mWatchdogService) return;
   UINT64 Counter=RootCounter();
   if (Counter-mWatchdogLastPet<mWatchdogFrequency) return;
+  // The resident service owns watchdog progress. USB cable removal and host
+  // inactivity leave a running kernel independent of the diagnostic client.
+  // A stalled service still expires because this loop stops petting the timer.
   mWatchdogPetStatus=MarbleWatchdogCall(0x86000007,0,0,NULL);
   mWatchdogLastPet=Counter;
   if (mStage && mKernelRunning) {
@@ -228,6 +244,8 @@ STATIC VOID ServiceWatchdog(VOID)
     }
   }
 }
+
+#include "RootBootloaderReset.h"
 
 STATIC VOID RetainUsbWatchdog(VOID)
 {
@@ -242,6 +260,10 @@ STATIC VOID RetainUsbWatchdog(VOID)
   mWatchdogControl=0;
   mWatchdogStatus=MarbleWatchdogCall(0x86000006,0,0,&mWatchdogControl);
   if (mWatchdogStatus || !(mWatchdogControl&1)) return;
+  if (mRecoveryArmed) {
+    mWatchdogPetStatus=MarbleWatchdogCall(0x86000007,0,0,NULL);
+    return;
+  }
   MarbleWatchdogCall(0x86000005,2,0,NULL);
   mWatchdogStatus=MarbleWatchdogCall(0x86000006,0,0,&mWatchdogControl);
   if (!mWatchdogStatus && !(mWatchdogControl&1)) return;
@@ -260,6 +282,70 @@ STATIC BOOLEAN OwnedRange(UINT64 Address, UINT64 Bytes)
   UINT64 Capacity=mStage->KernelBytes+KERNEL_ALIGNMENT_SLACK;
   return Address>=mStage->KernelBase && Bytes<=Capacity &&
     Address-mStage->KernelBase<=Capacity-Bytes;
+}
+
+// The iOS 27 VM may adopt conventional DRAM outside its contiguous window.
+// Export the firmware's bounded ranges so the host can follow those page tables.
+STATIC struct {
+  CHAR8 Magic[8];
+  UINT32 Version, Count;
+  struct { UINT64 Base, Bytes; } Range[256];
+} mRetainedRanges;
+
+STATIC EFI_STATUS CaptureRetainedRanges(VOID)
+{
+  UINTN Bytes=0, Key=0, Stride=0;
+  UINT32 Version=0;
+  EFI_STATUS Status=gBS->GetMemoryMap(&Bytes,NULL,&Key,&Stride,&Version);
+  if (Status!=EFI_BUFFER_TOO_SMALL || !Stride) return EFI_DEVICE_ERROR;
+  UINTN Capacity=Bytes+16*Stride;
+  EFI_MEMORY_DESCRIPTOR *Map=AllocatePool(Capacity);
+  if (!Map) return EFI_OUT_OF_RESOURCES;
+  Bytes=Capacity;
+  Status=gBS->GetMemoryMap(&Bytes,Map,&Key,&Stride,&Version);
+  if (EFI_ERROR(Status)) { FreePool(Map); return Status; }
+  ZeroMem(&mRetainedRanges,sizeof(mRetainedRanges));
+  CopyMem(mRetainedRanges.Magic,"ROOTMEM1",8);
+  mRetainedRanges.Version=1;
+  mRetainedRanges.Range[0].Base=mStage->KernelBase;
+  mRetainedRanges.Range[0].Bytes=mStage->KernelBytes+KERNEL_ALIGNMENT_SLACK;
+  mRetainedRanges.Count=1;
+  EFI_GUID DramGuid=ROOT_STAGE_DRAM_GUID;
+  for (UINTN Index=0; Index<gST->NumberOfTableEntries; Index++) {
+    if (!CompareGuid(&DramGuid,&gST->ConfigurationTable[Index].VendorGuid)) continue;
+    CONST ROOT_STAGE_DRAM_TABLE *Dram=gST->ConfigurationTable[Index].VendorTable;
+    if (Dram->Magic!=ROOT_STAGE_DRAM_MAGIC || Dram->Version!=1 || Dram->Count>ROOT_STAGE_DRAM_RANGES) {
+      Status=EFI_COMPROMISED_DATA;
+      break;
+    }
+    for (UINTN Range=0; Range<Dram->Count; Range++) {
+      UINTN Slot=mRetainedRanges.Count++;
+      mRetainedRanges.Range[Slot].Base=Dram->Range[Range].Base;
+      mRetainedRanges.Range[Slot].Bytes=Dram->Range[Range].Bytes;
+    }
+  }
+  if (EFI_ERROR(Status)) { FreePool(Map); mRetainedRanges.Count=0; return Status; }
+  for (UINTN At=0; At<Bytes; At+=Stride) {
+    EFI_MEMORY_DESCRIPTOR *Entry=(VOID *)((UINT8 *)Map+At);
+    if (Entry->Type!=EfiConventionalMemory || !Entry->NumberOfPages) continue;
+    if (mRetainedRanges.Count==256) { Status=EFI_BUFFER_TOO_SMALL; break; }
+    UINTN Index=mRetainedRanges.Count++;
+    mRetainedRanges.Range[Index].Base=Entry->PhysicalStart;
+    mRetainedRanges.Range[Index].Bytes=EFI_PAGES_TO_SIZE(Entry->NumberOfPages);
+  }
+  FreePool(Map);
+  if (EFI_ERROR(Status)) mRetainedRanges.Count=0;
+  return Status;
+}
+
+STATIC BOOLEAN RetainedReadRange(UINT64 Address, UINT64 Bytes)
+{
+  if (OwnedRange(Address,Bytes)) return TRUE;
+  for (UINTN Index=1; Index<mRetainedRanges.Count; Index++) {
+    UINT64 Base=mRetainedRanges.Range[Index].Base, Size=mRetainedRanges.Range[Index].Bytes;
+    if (Address>=Base && Bytes<=Size && Address-Base<=Size-Bytes) return TRUE;
+  }
+  return FALSE;
 }
 
 STATIC EFI_STATUS ReadData(UINT64 Offset, UINTN Bytes, BOOLEAN Index)
@@ -544,6 +630,12 @@ STATIC EFI_STATUS UsbServiceEnter(VOID)
     return EFI_SUCCESS;
   }
   if (!mServiceStarted) {
+    // Start the kernel's recovery interval at the ownership handoff.
+    // Firmware loading and the preboot host session consume their own time.
+    if (mRecoveryArmed) {
+      EFI_STATUS Recovery=ArmRecoveryWatchdog();
+      if (EFI_ERROR(Recovery)) return Recovery;
+    }
   ZeroMem(&mStage->UsbHost,sizeof(mStage->UsbHost));
   ZeroMem(&mStage->UsbKernel,sizeof(mStage->UsbKernel));
   mStage->UsbHost.Heartbeat=MARBLE_USB_HEARTBEAT_TAG;
@@ -567,6 +659,7 @@ STATIC EFI_STATUS UsbServiceEnter(VOID)
     mServiceContext[7]=(UINTN)mServiceStack+65536;
     mServiceContext[8]=(UINTN)&UsbServiceLoop;
     __asm__ volatile("mov %0, x18" : "=r"(Value)); mServiceContext[9]=Value;
+    mUsbLastCommand=RootCounter();
     mServiceReady=0; mKernelRunning=1; mServiceStarted=TRUE;
     for (UINTN Offset=0;Offset<sizeof(mServiceContext);Offset+=64)
       __asm__ volatile("dc cvac, %0" :: "r"((UINTN)mServiceContext+Offset) : "memory");
@@ -670,6 +763,13 @@ EFI_STATUS MarbleRootUsbPrepare(ROOT_STAGE_TABLE *Stage)
   EFI_STATUS Status = InitializeUsb();
   if (EFI_ERROR(Status)) return Status;
   mRuntimeUsb = TRUE;
+  // Arm before UFS loading and AP startup. A stalled USB service expires into
+  // the bootloader; the host can boot the replacement image without Android.
+  if (mResidentService && !mNativeTransport) {
+    Status=ArmRecoveryWatchdog();
+    Print(L"RootStage recovery watchdog: %r\r\n",Status);
+    if (EFI_ERROR(Status)) return Status;
+  }
   UINTN ConnectedTicks=0;
   for (UINTN Tick=0;Tick<5000;Tick++) {
     USB_DEVICE_EVENT Event=UsbDeviceEventNoEvent;
@@ -758,6 +858,55 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       Text[51]=mButtonTimer ? (mButtonTimerPaused ? '3' : '1') : '0'; Text[52]=0;
       Reply("OKAY",Text);
     }
+    else if (!AsciiStrCmp(Command,"oem boot-log")) {
+      if (!mExport) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mExport);
+      else Status=EFI_SUCCESS;
+      if (EFI_ERROR(Status)) { Reply("FAIL","boot log buffer allocation failed"); continue; }
+      UINT64 Fault[2]={0};
+      if (!MarbleRootReadMemory(mExport,(CONST VOID *)(UINTN)(mBootLogOffset ? mStage->KernelBase+mBootLogOffset : 0xB7001000),4096,Fault)) {
+        Reply("FAIL","boot log read fault"); continue;
+      }
+      mExportBytes=4096;Reply("OKAY","");
+    }
+    else if (!AsciiStrCmp(Command,"oem previous-boot-log")) {
+      if (!mPreviousBootLog) { Reply("FAIL","previous boot log unavailable"); continue; }
+      if (!mExport) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mExport);
+      else Status=EFI_SUCCESS;
+      if (EFI_ERROR(Status)) { Reply("FAIL","previous log buffer allocation failed"); continue; }
+      CopyMem(mExport,mPreviousBootLog,4096);mExportBytes=4096;
+      Reply("OKAY","");
+    }
+    else if (!AsciiStrCmp(Command,"oem firmware-log")) {
+      if (!mFirmwareLog) { Reply("FAIL","firmware log unavailable"); continue; }
+      if (!mExport) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mExport);
+      else Status=EFI_SUCCESS;
+      if (EFI_ERROR(Status)) { Reply("FAIL","firmware log buffer allocation failed"); continue; }
+      __asm__ volatile("dmb ish" ::: "memory");
+      CopyMem(mExport,mFirmwareLog,65536);
+      mExportBytes=65536;
+      Reply("OKAY","");
+    }
+    else if (!AsciiStrCmp(Command,"getvar:gic-wakers")) {
+      CHAR8 Text[72];UINT64 Fault[2]={0};BOOLEAN Valid=TRUE;
+      for (UINTN I=0;I<8;I++) {
+        UINT32 Waker;
+        if (!MarbleRootReadRegister(&Waker,(CONST VOID *)(UINTN)(0x17180014+I*0x40000),0,Fault)) {Valid=FALSE;break;}
+        Hex(Text+9*I,Waker,8);Text[9*I+8]=I==7?0:':';
+      }
+      Reply(Valid?"OKAY":"FAIL",Valid?Text:"GIC frame read fault");
+    }
+    else if (!AsciiStrCmp(Command,"getvar:gic-waker")) {
+      UINT32 Values[4]={0};UINT64 Fault[2]={0};
+      if (!MarbleRootReadRegister(&Values[0],(CONST VOID *)(UINTN)0x17180014,0,Fault) ||
+          !MarbleRootReadRegister(&Values[1],(CONST VOID *)(UINTN)0x17180000,0,Fault) ||
+          !MarbleRootReadRegister(&Values[2],(CONST VOID *)(UINTN)0x17180008,0,Fault) ||
+          !MarbleRootReadRegister(&Values[3],(CONST VOID *)(UINTN)0x1718000c,0,Fault)) {
+        Reply("FAIL","GIC redistributor read fault");continue;
+      }
+      CHAR8 Text[36];
+      for (UINTN I=0;I<4;I++) {Hex(Text+I*9,Values[I],8);Text[I*9+8]=I==3?0:':';}
+      Reply("OKAY",Text);
+    }
     else if (!AsciiStrCmp(Command,"getvar:phase")) Reply("OKAY",mKernelRunning ? "kernel" : "firmware");
     else if (!AsciiStrCmp(Command,"getvar:usb-session")) {
       CHAR8 Text[17]; Hex(Text,mUsbSession,16); Reply("OKAY",Text);
@@ -835,10 +984,10 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       Reply("OKAY","");
     }
     else if (!AsciiStrCmp(Command,"reboot-bootloader")) {
-      if (!mKernelRunning) { Reply("FAIL","bootloader reset requires the kernel reboot service"); continue; }
-      if (UsbControl()) { Reply("FAIL","control request pending"); continue; }
-      if (!Reply("OKAY","bootloader reset requested")) continue;
-      PublishControl(2);
+      EFI_STATUS ResetStatus=PrepareBootloaderReset();
+      if (EFI_ERROR(ResetStatus)) { Reply("FAIL","bootloader reset preparation failed"); continue; }
+      if (!Reply("OKAY","firmware bootloader reset requested")) continue;
+      FirmwareBootloaderReset();
     }
     else if (!AsciiStrCmp(Command,"oem interrupt")) {
       if (!mKernelRunning) { Reply("OKAY","firmware"); continue; }
@@ -847,6 +996,7 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       PublishControl(1);
     }
     else if (!AsciiStrCmp(Command,"getvar:watchdog")) {
+      mWatchdogStatus=MarbleWatchdogCall(0x86000006,0,0,&mWatchdogControl);
       CHAR8 Text[51];
       Hex(Text,mWatchdogStatus,16); Text[16]=':';
       Hex(Text+17,mWatchdogControl,16); Text[33]=':';
@@ -869,14 +1019,23 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
       Hex(Text,Result.keys,16); Text[16]=':';
       Hex(Text+17,Result.authenticated,16); Reply("OKAY",Text);
     }
-    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache,zero-fill,memory-read,input-control");
+    else if (!AsciiStrCmp(Command,"getvar:features")) Reply("OKAY","runtime-usb,data-export,dirty-cache,zero-fill,memory-read,input-control,retained-ranges,firmware-reboot,firmware-log");
+    else if (!AsciiStrCmp(Command,"getvar:retained-ranges")) {
+      if (!mExport) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mExport);
+      else Status=EFI_SUCCESS;
+      if (!EFI_ERROR(Status)) Status=CaptureRetainedRanges();
+      if (EFI_ERROR(Status)) { Reply("FAIL","retained memory ranges unavailable"); continue; }
+      mExportBytes=16+16*mRetainedRanges.Count;
+      CopyMem(mExport,&mRetainedRanges,mExportBytes);
+      Reply("OKAY","");
+    }
     else if (!AsciiStrnCmp(Command,"oem memory-read:",16)) {
       if (AsciiStrLen(Command)!=41 || Command[32]!=':') {
         Reply("FAIL","invalid memory request"); continue;
       }
       UINT64 Address=AsciiStrHexToUint64(Command+16);
       UINTN Bytes=AsciiStrHexToUintn(Command+33);
-      if (!Bytes || Bytes>TRANSFER_BYTES || !OwnedRange(Address,Bytes)) {
+      if (!Bytes || Bytes>TRANSFER_BYTES || !RetainedReadRange(Address,Bytes)) {
         Reply("FAIL","outside retained kernel memory"); continue;
       }
       if (!mExport) Status=mUsb->AllocateTransferBuffer(TRANSFER_BYTES,(VOID **)&mExport);

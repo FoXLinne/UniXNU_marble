@@ -120,3 +120,33 @@ EFI_STATUS MarbleRootStorage(VOID *TemporaryKernel, UINTN TemporaryKernelBytes) 
 Done:
   FreePages(Header,1); return Status;
 }
+
+// Overlay the selected boot-image kernel in the RAM copy of the UFS seed.
+// DSP bytes and the persistent Data mailbox identity retain their offsets.
+EFI_STATUS MarbleRootStoragePatch(CONST VOID *Patch, UINTN Bytes)
+{
+  if (!mStorage || !Patch || Bytes<64 || CompareMem(Patch,"KPATCH01",8)) return EFI_COMPROMISED_DATA;
+  CONST UINT8 *Header=Patch;
+  UINT64 KernelBytes=ReadUnaligned64((CONST UINT64 *)(Header+8));
+  UINT64 ArgumentBytes=ReadUnaligned64((CONST UINT64 *)(Header+16));
+  if (!KernelBytes || !ArgumentBytes || ArgumentBytes>1000 || ArgumentBytes>Bytes-64 ||
+      KernelBytes!=Bytes-64-ArgumentBytes || Header[64+ArgumentBytes-1]!=0) return EFI_BAD_BUFFER_SIZE;
+  ROOT_STAGE_DISK *Disk=&mStorage->Disks[2];
+  if (Disk->Count!=1 || Disk->Bytes<0x100000) return EFI_COMPROMISED_DATA;
+  UINT8 *Data=(VOID *)(UINTN)Disk->Extents[0].Address;
+  UINT8 *Mailbox=Data+Disk->Bytes-0x100000;
+  UINT64 DspOffset=ReadUnaligned64((CONST UINT64 *)(Mailbox+104));
+  if (CompareMem(Mailbox,"ROOTLOG1",8) || DspOffset>Disk->Bytes-0x100000 ||
+      KernelBytes>DspOffset) return EFI_COMPROMISED_DATA;
+  ZeroMem(Data,(UINTN)DspOffset);
+  CopyMem(Data,Header+64+ArgumentBytes,(UINTN)KernelBytes);
+  ZeroMem(Mailbox+128,1000);
+  CopyMem(Mailbox+128,Header+64,(UINTN)ArgumentBytes);
+  for (UINTN I=0;I<16;I++) {
+    Disk->Identity[2*I]="0123456789abcdef"[Header[24+I]>>4];
+    Disk->Identity[2*I+1]="0123456789abcdef"[Header[24+I]&15];
+  }
+  Disk->Identity[32]=0;
+  Print(L"UniXNU selected kernel: %lu bytes, seed %a\r\n",KernelBytes,Disk->Identity);
+  return EFI_SUCCESS;
+}

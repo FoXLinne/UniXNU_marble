@@ -53,3 +53,16 @@ try:channel.write(b'kernel')
 except RuntimeError as error:assert 'firmware phase' in str(error)
 else:raise AssertionError('native upload accepted')
 print('Native USB client: ordered command replies, 4 KiB chunks, high offsets, FAIL and short-read handling passed')
+
+# A failed version request must release the interface for the next connection.
+from unittest.mock import patch
+class UnresponsiveDevice(Device):
+    def ctrl_transfer(self, *args):
+        raise TimeoutError('version request timed out')
+failed=UnresponsiveDevice()
+with patch('root_control.usb.util.dispose_resources') as release:
+    try:RootUsb(device=failed)
+    except TimeoutError:pass
+    else:raise AssertionError('version timeout accepted')
+    release.assert_called_once_with(failed)
+print('USB initialization timeout: interface resources released')

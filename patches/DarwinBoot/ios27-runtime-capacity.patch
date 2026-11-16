@@ -1,0 +1,11 @@
+--- a/DarwinBootPkg/Driver/DarwinBoot.c
++++ b/DarwinBootPkg/Driver/DarwinBoot.c
+@@ -924,7 +924,7 @@
+   //
+   CopyMem (TreePath, Request->KernelPath, Length);
+   StrCatS (TreePath, Length / sizeof (CHAR16) + 11, L".gpuaddon");
+-  Status = ReadFile (Root, TreePath, SIZE_64MB, &Addon, &AddonSize);
++  Status = ReadFile (Root, TreePath, SIZE_128MB, &Addon, &AddonSize);
+   if (EFI_ERROR (Status) && (Status != EFI_NOT_FOUND)) { goto Fail; }
+   if (Addon != NULL) {
+     if ((AddonOffset == MAX_UINTN) || (U64 ((UINT8 *)Tree + AddonOffset) != 0) || (U64 ((UINT8 *)Tree + AddonOffset + 8) != 0) ||

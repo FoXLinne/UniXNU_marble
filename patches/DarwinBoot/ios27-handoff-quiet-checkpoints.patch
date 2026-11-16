@@ -1,0 +1,19 @@
+--- a/DarwinBootPkg/Driver/Resident.c
++++ b/DarwinBootPkg/Driver/Resident.c
+@@ -268,7 +268,7 @@
+       __asm__ volatile("dc cvac, %0" :: "r"(I) : "memory");
+     __asm__ volatile("dsb sy" ::: "memory");
+   }
+-  Print(L"Handoff checkpoint %u\r\n",Stage);
++  if (Stage<3) Print(L"Handoff checkpoint %u\r\n",Stage);
+ }
+ 
+ EFI_STATUS DarwinResidentRun(ROOT_STAGE_TABLE *Stage, UINT64 Args, UINT64 Entry,
+@@ -369,6 +369,7 @@
+     DumpKernelFault(Base,Size,Args);
+   }
+   if (mInterruptsSaved) RestoreInterrupts();
++  Print(L"Handoff final checkpoint %u\r\n",((volatile UINT32 *)(UINTN)0xB7000000)[1]);
+   Stage->ReturnTest=0;
+   Stage->ReturnCount++;
+   __asm__ volatile("msr daif, %0" :: "r"(DarwinResidentContext[8]) : "memory");

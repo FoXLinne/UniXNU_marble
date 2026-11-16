@@ -1,0 +1,57 @@
+--- a/DarwinBootPkg/Driver/Resident.c
++++ b/DarwinBootPkg/Driver/Resident.c
+@@ -256,6 +256,21 @@
+   __asm__ volatile("dsb sy\n\tisb" ::: "memory");
+ }
+ 
++STATIC VOID HandoffCheckpoint(UINT64 Video, UINT64 Bytes, UINT32 Stage)
++{
++  volatile UINT32 *Marker=(volatile UINT32 *)(UINTN)0xB7000000;
++  Marker[0]=0x484E4446; Marker[1]=Stage;
++  __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)Marker) : "memory");
++  if (Video && Bytes>=4320*64) {
++    volatile UINT32 *Pixels=(volatile UINT32 *)(UINTN)Video;
++    for (UINTN I=0;I<1080*32;I++) Pixels[I]=0xFF000000U | (Stage*0x202010U);
++    for (UINTN I=Video;I<Video+4320*32;I+=64)
++      __asm__ volatile("dc cvac, %0" :: "r"(I) : "memory");
++    __asm__ volatile("dsb sy" ::: "memory");
++  }
++  Print(L"Handoff checkpoint %u\r\n",Stage);
++}
++
+ EFI_STATUS DarwinResidentRun(ROOT_STAGE_TABLE *Stage, UINT64 Args, UINT64 Entry,
+     UINT64 Base, UINT64 Size, UINT64 Video, UINT64 VideoBytes,
+     EFI_MEMORY_DESCRIPTOR *Map, UINTN MapSize, UINTN Stride)
+@@ -288,7 +303,9 @@
+       (VOID *)(UINTN)&DarwinResidentSave, (VOID *)(UINTN)&DarwinResidentReturn);
+   ZeroMem(DarwinResidentFaultInfo,sizeof(DarwinResidentFaultInfo));
+   mInterruptsSaved=FALSE;
++  HandoffCheckpoint(Video,VideoBytes,1);
+   if (DarwinResidentSave()==0) {
++    HandoffCheckpoint(Video,VideoBytes,2);
+     __asm__ volatile("msr daifset, #15" ::: "memory");
+     // Preserve the return frame before accessing interrupt-controller registers.
+     UINT64 Stack;
+@@ -298,7 +315,9 @@
+     for (UINT64 P=(UINTN)DarwinResidentContext;P<(UINTN)(DarwinResidentContext+48);P+=64)
+       __asm__ volatile("dc cvac, %0" :: "r"(P) : "memory");
+     __asm__ volatile("dsb sy\n\tmsr vbar_el1, %0\n\tisb" :: "r"((UINTN)&DarwinResidentVectors) : "memory");
++    HandoffCheckpoint(Video,VideoBytes,3);
+     SaveInterrupts();
++    HandoffCheckpoint(Video,VideoBytes,4);
+     mInterruptsSaved=TRUE;
+     // The kernel owns only its allocated window. Retained firmware must reach RAM.
+     for (UINTN i=0;i<MapSize;i+=Stride) {
+@@ -319,10 +338,12 @@
+     }
+     __asm__ volatile("dsb sy" ::: "memory");
+     VmWatchdogCall(VM_WDT_PET,0,0,NULL);
++    HandoffCheckpoint(Video,VideoBytes,5);
+     if (Service) {
+       Status=((EFI_STATUS (*)(VOID))(UINTN)Service->Enter)();
+       if (EFI_ERROR(Status)) { DisarmVmWatchdog(); return Status; }
+     }
++    HandoffCheckpoint(Video,VideoBytes,6);
+     DarwinEnter(Args,Stage->ReturnTest ? Stage->ReturnStub : Entry,Base,LoadedEnd-Base,Video,VideoBytes);
+   }
+   if (Service) ((VOID (*)(VOID))(UINTN)Service->Resume)();

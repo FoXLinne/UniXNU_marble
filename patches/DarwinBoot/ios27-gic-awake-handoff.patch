@@ -1,0 +1,15 @@
+--- a/DarwinBootPkg/Driver/DarwinBoot.c
++++ b/DarwinBootPkg/Driver/DarwinBoot.c
+@@ -322,6 +322,12 @@
+     Length = U32 (Data + *Offset + 32);
+     *Offset += 36;
+     if (Length > Size - *Offset) { return FALSE; }
++    if (AsciiStrCmp ((CONST CHAR8 *)(Data + *Offset - 36), "firmware-awake") == 0) {
++      if (Length!=4) return FALSE;
++      CONST volatile UINT32 *State=(CONST VOID *)(UINTN)0xB7002000;
++      UINT32 Awake=State[0]==0x31434947 && State[1]==1;
++      WriteUnaligned32((UINT32 *)(UINTN)(Data+*Offset),Awake);
++    }
+     if (AsciiStrCmp ((CONST CHAR8 *)(Data + *Offset - 36), "name") == 0) {
+       if (Name != NULL) { return FALSE; }
+       Name = Data + *Offset;
