@@ -10,13 +10,14 @@
 //! threadgroups or threads) compiles, links, and validates, and the CPU interpreter's run of it
 //! leaves records that `CommandBuffer::decode` reads back exactly as the host contract states them
 //! (`HostRecordsV1`): the round trip. A threadgroup length is kept as set, a multiple of 16 or not.
-//! A write the descriptor policy does not allow (a command index at the capacity, a binding past
-//! its count, a dynamic stride the descriptor does not enable, a pipeline set while inheriting it,
-//! a compute command in a render buffer, a copy whose result is Metal's private record layout) sets
-//! the header's fault flag and writes nothing, so `decode` fails as an encoding fault. A record
-//! buffer outside the resident set is root 0: contained, and counted under isolation. On the
-//! profiles without device addresses every encoder operation is `GpuEncodedIndirectCommands`,
-//! naming what they lack.
+//! Each command a kernel writes (a copy's destination too) has its written flag past the records
+//! set, and no other (`written_flag_offset`). A write the descriptor policy does not allow (a
+//! command index at the capacity, a binding past its count, a dynamic stride the descriptor does
+//! not enable, a pipeline set while inheriting it, a compute command in a render buffer, a copy
+//! whose result is Metal's private record layout) sets the header's fault flag and writes nothing,
+//! its written flag included, so `decode` fails as an encoding fault. A record buffer outside the
+//! resident set is root 0: contained, and counted under isolation. On the profiles without device
+//! addresses every encoder operation is `GpuEncodedIndirectCommands`, naming what they lack.
 //!
 //! `llvm-as` assembles the kernels; without it the tests skip visibly.
 
@@ -27,10 +28,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::bind::status::{ExecutionStatus, StatusBits, StatusWord};
 use crate::device::profile::{BufferAccess, DeviceProfile, GuestIsolation};
 use crate::error::{Error, Feature, Needs, Unsupported};
+use crate::indirect_commands::written_flag_offset;
 use crate::indirect_commands::{
-    Action, BufferBinding, BufferStage, CommandBuffer, CommandBufferError, CommandDescriptor,
-    CommandRecord, ComputeDispatch, Inheritance, RenderDraws, StateSource,
-    COMMAND_BUFFER_HEADER_BYTES, COMMAND_BYTES,
+    layout, Action, BufferBinding, BufferStage, CommandBuffer, CommandBufferError,
+    CommandDescriptor, CommandRecord, ComputeDispatch, Inheritance, RenderDraws, StateSource,
+    BINDING_COUNT, COMMAND_BUFFER_HEADER_BYTES, COMMAND_BYTES, WRITTEN_FLAG_BYTES,
 };
 use crate::lower::select::Plan;
 use crate::pipeline::interface::PushLoc;
@@ -501,10 +503,21 @@ impl Params {
     }
 }
 
-/// What one run left: the record buffer, a copy's source record buffer, the status words, and
-/// the sink.
+/// The little-endian `u32`s of `bytes`.
+fn words(bytes: &[u8]) -> Vec<u32> {
+    bytes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|w| u32::from_le_bytes(*w))
+        .collect()
+}
+
+/// What one run left: the record buffer (its header and records), its written flags, a copy's
+/// source record buffer, the status words, and the sink.
 struct Run {
     records: Vec<u8>,
+    flags: Vec<u32>,
     source: Option<Vec<u8>>,
     status: Vec<u32>,
     sink: Vec<u8>,
@@ -527,16 +540,25 @@ fn run_encoder(
 }
 
 /// [`run_encoder`] with argument buffer `enc`, the parameters' bytes `params`, and a second
-/// record buffer `source` resident at `SOURCE_GUEST`, when there is one.
+/// record buffer `source` resident at `SOURCE_GUEST`, when there is one. The record buffer holds
+/// a written flag a command past its records, each clear (`written_flag_offset`).
 fn run_records(
     plan: &Plan,
     m: &TypedModule,
     enc: Vec<u8>,
-    records: Vec<u8>,
+    mut records: Vec<u8>,
     source: Option<Vec<u8>>,
     params: Vec<u8>,
     resident: bool,
 ) -> Result<Run, InterpError> {
+    let length = records.len();
+    let commands = (length - COMMAND_BUFFER_HEADER_BYTES) / COMMAND_BYTES;
+    assert_eq!(
+        written_flag_offset(commands as u32, 0),
+        length as u64,
+        "the flags follow the records"
+    );
+    records.resize(length + commands * WRITTEN_FLAG_BYTES, 0);
     let mut set = vec![
         (DATA_HOST, DATA_GUEST, DATA_BYTES),
         (CONSTS_HOST, CONSTS_GUEST, CONSTS_BYTES),
@@ -605,8 +627,10 @@ fn run_records(
         spec,
     };
     let out = run(m, &Config::default(), res)?;
+    let (records, flags) = out.buffers[7].split_at(length);
     Ok(Run {
-        records: out.buffers[7].clone(),
+        records: records.to_vec(),
+        flags: words(flags),
         source: copies.then(|| out.buffers[8].clone()),
         status: out.buffers[6]
             .as_chunks::<4>()
@@ -639,9 +663,13 @@ fn storage(descriptor: &CommandDescriptor, inheritance: Inheritance) -> Vec<u8> 
     bytes
 }
 
-/// The record thread `t` with parameters `p` encodes ([`compute_kernel`]).
+/// The record thread `t` with parameters `p` encodes ([`compute_kernel`]), its pipeline the
+/// kernel's (`CommandRecord::kernel_pipeline`).
 fn compute_record(t: u32, p: Params) -> CommandRecord {
-    let mut r = CommandRecord::default();
+    let mut r = CommandRecord {
+        kernel_pipeline: true,
+        ..CommandRecord::default()
+    };
     let grid = [p.grid_x, 2, 3];
     r.action = if t % 2 == 1 {
         Action::DispatchThreads {
@@ -737,6 +765,12 @@ fn encoded_compute_records_round_trip_through_the_host_contract() {
                 r.encode_into(&mut exact[at..at + COMMAND_BYTES]).unwrap();
             }
             assert_eq!(run.records, exact, "{stem} dynamic={dynamic}: bytes");
+            // Each written command's flag set, and only those.
+            let mut flags = vec![0; THREADS as usize];
+            for p in &params {
+                flags[p.index as usize] = 1;
+            }
+            assert_eq!(run.flags, flags, "{stem} dynamic={dynamic}: written flags");
             assert!(run.sink.iter().all(|b| *b == 0), "{stem}: sink written");
             assert_eq!(
                 run.status[StatusWord::ResidentMisses.index() as usize],
@@ -785,6 +819,115 @@ fn encoded_render_records_round_trip_through_the_host_contract() {
             .collect();
         let got = decoded(&run.records, &descriptor).unwrap_or_else(|e| panic!("{stem}: {e}"));
         assert_eq!(got, want, "{stem}");
+    }
+}
+
+/// Each thread `t` resets command `t` (`air.reset_render_command`) where `reset`, else reads and
+/// writes nothing.
+fn render_reset_kernel(reset: bool) -> String {
+    let meta = COMPUTE_META.replace("compute_pipeline_state", "render_pipeline_state");
+    let body = match reset {
+        true => {
+            "%pc = getelementptr inbounds %enc, ptr addrspace(1) %enc, i64 0, i32 0
+  %cmd = load ptr addrspace(1), ptr addrspace(1) %pc, align 8
+  call void @air.reset_render_command(ptr addrspace(1) %cmd, i32 %t)"
+        }
+        false => "",
+    };
+    format!(
+        r#"%enc = type {{ ptr addrspace(1), ptr addrspace(1) }}
+
+define void @encode(ptr addrspace(1) %enc, ptr addrspace(1) %data, ptr addrspace(2) %consts, ptr addrspace(1) %params, i32 %t) {{
+entry:
+  {body}
+  ret void
+}}
+
+declare void @air.reset_render_command(ptr addrspace(1), i32)
+{meta}"#
+    )
+}
+
+/// A GPU reset clears what a command may have set and nothing else: its command words, the
+/// bindings below each stage's count in the header, and the words past the bindings
+/// (`default_record`). Every record starts holding a draw, a barrier, a vertex and a fragment
+/// binding below the counts (2 and 2), and threadgroup-length words; each byte of a binding past
+/// the counts (vertex 2, fragment 2, every object and mesh one) holds a mark, which no writer of
+/// the records puts there. After the reset every byte below the counts and of the words reads zero,
+/// and every mark stands: the reset wrote 64 + 4 x 16 + 136 bytes of each record, not 2248. The
+/// negative control: the same storage under a kernel that does not reset keeps every stale byte,
+/// so the zeros are the reset's.
+#[test]
+fn a_reset_clears_the_command_words_and_the_counted_bindings_alone() {
+    let descriptor = CommandDescriptor::Render {
+        draws: RenderDraws::PRIMITIVES,
+        max_vertex_buffer_bind_count: 2,
+        max_fragment_buffer_bind_count: 2,
+        max_object_buffer_bind_count: 0,
+        max_mesh_buffer_bind_count: 0,
+        support_dynamic_attribute_stride: false,
+    };
+    const MARK: u8 = 0xab;
+    let binding = |stage, slot: usize| {
+        let at = (layout::buffers(stage) + slot as u64 * layout::BINDING) as usize;
+        at..at + layout::BINDING as usize
+    };
+    // Each record's ranges a reset clears, and the marked ones it leaves.
+    let words = 0..layout::buffers(BufferStage::Kernel) as usize;
+    let mut cleared = vec![words];
+    let mut marked = Vec::new();
+    for slot in 0..BINDING_COUNT {
+        let below = slot < 2;
+        for stage in [BufferStage::Vertex, BufferStage::Fragment] {
+            match below {
+                true => cleared.push(binding(stage, slot)),
+                false => marked.push(binding(stage, slot)),
+            }
+        }
+        marked.push(binding(BufferStage::Mesh, slot));
+        marked.push(binding(BufferStage::Object, slot));
+    }
+    cleared.push(layout::THREADGROUP as usize..COMMAND_BYTES);
+    let mut stale = storage(&descriptor, OWNED);
+    for t in 0..THREADS as usize {
+        let record = COMMAND_BUFFER_HEADER_BYTES + t * COMMAND_BYTES;
+        for range in &cleared {
+            stale[record + range.start..record + range.end].fill(0x5a);
+        }
+        for range in &marked {
+            stale[record + range.start..record + range.end].fill(MARK);
+        }
+    }
+    for (reset, stem) in [(true, "reset"), (false, "unreset")] {
+        let Some(runs) = compiled(stem, &render_reset_kernel(reset)) else {
+            return;
+        };
+        for (profile, _, plan, m) in &runs {
+            let run = run_encoder(plan, m, stale.clone(), &[], true)
+                .unwrap_or_else(|e| panic!("{profile}: {e}"));
+            for t in 0..THREADS as usize {
+                let record = COMMAND_BUFFER_HEADER_BYTES + t * COMMAND_BYTES;
+                let bytes = &run.records[record..record + COMMAND_BYTES];
+                for range in &cleared {
+                    let want = match reset {
+                        true => 0,
+                        false => 0x5a,
+                    };
+                    let got = &bytes[range.clone()];
+                    assert!(
+                        got.iter().all(|&b| b == want),
+                        "{profile} {stem} {t} {range:?}"
+                    );
+                }
+                for range in &marked {
+                    let got = &bytes[range.clone()];
+                    assert!(
+                        got.iter().all(|&b| b == MARK),
+                        "{profile} {stem} {t} {range:?}"
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -972,6 +1115,7 @@ fn encoded_mesh_draws_round_trip_through_the_host_contract() {
                         ..CommandRecord::default()
                     };
                     r.bindings.pipeline = NonZeroU64::new(TOKEN);
+                    r.kernel_pipeline = true;
                     r.bindings.buffers_mut(BufferStage::Object)[0] =
                         plain(DATA_GUEST + 16 * u64::from(t));
                     r.bindings.buffers_mut(BufferStage::Mesh)[0] = plain(CONSTS_GUEST);
@@ -1064,6 +1208,12 @@ fn a_write_outside_the_descriptor_policy_faults_and_writes_nothing() {
                         .unwrap();
                 }
                 assert_eq!(run.records, want, "{stem} {what}");
+                // Thread 1's writes all faulted: the flags of the others' commands alone are set.
+                let mut flags = vec![0; THREADS as usize];
+                for (_, p) in params.iter().enumerate().filter(|(t, _)| *t != 1) {
+                    flags[p.index as usize] = 1;
+                }
+                assert_eq!(run.flags, flags, "{stem} {what}: written flags");
             }
         }
         let inherit = Inheritance {
@@ -1092,6 +1242,11 @@ fn a_write_outside_the_descriptor_policy_faults_and_writes_nothing() {
         let mut want = initial;
         want[4..8].copy_from_slice(&1u32.to_le_bytes());
         assert_eq!(run.records, want, "{stem} render descriptor");
+        assert_eq!(
+            run.flags,
+            vec![0; THREADS as usize],
+            "{stem} render descriptor: no written flag"
+        );
     }
 }
 
@@ -1431,10 +1586,12 @@ fn compute_command_setters_round_trip_through_the_host_contract() {
             "reset",
             "call void @air.reset_compute_command(ptr addrspace(1) %cmd, i32 %index)",
             "declare void @air.reset_compute_command(ptr addrspace(1), i32)",
-            // The pipeline the command executes with stays, reported cleared.
+            // The pipeline the command executes with stays, reported cleared, and a kernel's
+            // still: the one its write resolved.
             |r| {
                 *r = CommandRecord {
                     retained_pipeline: r.bindings.pipeline,
+                    kernel_pipeline: r.kernel_pipeline,
                     ..CommandRecord::default()
                 }
             },
@@ -1569,7 +1726,9 @@ fn copied_sources() -> Vec<CommandRecord> {
                 stride: if t == 2 { 48 } else { -1 },
                 ..Params::valid(t)
             };
+            // The host encodes them: their pipelines are not a kernel's.
             let mut r = compute_record(t, p);
+            r.kernel_pipeline = false;
             r.stage_in_region = [t, 1, 2, 3 + t, 4, 5];
             r.imageblock_size = [8 + t as u16, 4];
             r
@@ -1619,6 +1778,9 @@ fn copied_commands_round_trip_between_equal_descriptors() {
             );
             assert_eq!(run.source.as_ref(), Some(&full), "{name} on {stem}: source");
             assert_eq!(decoded(&run.records, &descriptor).unwrap(), want);
+            // Each destination's written flag set.
+            let flags = vec![1; THREADS as usize];
+            assert_eq!(run.flags, flags, "{name} on {stem}: written flags");
             // Within one buffer: commands 0 and 1 onto the empty 2 and 3, and onto themselves.
             let initial = encoded(&descriptor, OWNED, &sources[..2]);
             let run = run_copies(plan, m, initial, None, [(2, 0), (3, 1), (0, 0), (1, 1)])
@@ -1630,6 +1792,7 @@ fn copied_commands_round_trip_between_equal_descriptors() {
                 encoded(&descriptor, OWNED, &want),
                 "{name} on {stem}"
             );
+            assert_eq!(run.flags, flags, "{name} on {stem}: written flags");
             assert!(run.sink.iter().all(|b| *b == 0), "{name} on {stem}: sink");
         }
     }
@@ -1658,8 +1821,12 @@ fn a_copy_into_a_buffer_that_inherits_keeps_its_pipeline_and_buffers() {
         pipeline: StateSource::Parent,
         buffers: StateSource::Parent,
     };
+    // The host encodes them: their pipelines are not a kernel's.
     let sources: Vec<CommandRecord> = (0..THREADS)
-        .map(|t| compute_record(t, Params::valid(t)))
+        .map(|t| CommandRecord {
+            kernel_pipeline: false,
+            ..compute_record(t, Params::valid(t))
+        })
         .collect();
     let source = encoded(&source_descriptor, OWNED, &sources);
     let capacity = THREADS + 1;
@@ -1969,6 +2136,7 @@ fn encoded_indexed_draws_round_trip_through_the_host_contract() {
                 };
                 let mut r = CommandRecord {
                     action,
+                    kernel_pipeline: true,
                     ..CommandRecord::default()
                 };
                 r.bindings.pipeline = NonZeroU64::new(TOKEN);

@@ -41,7 +41,7 @@
 
 use super::super::key_hash::KeyMap;
 use super::super::resource::ResourceKey;
-use super::super::tracker::{Access, Use, UseRange};
+use super::super::tracker::{Access, ImagePlace, Use, UseRange};
 use super::super::Device;
 use super::image_aspects;
 use super::wrapped::Transition;
@@ -134,6 +134,7 @@ impl HeldImage {
                 aspects: self.aspects.into(),
                 levels: 0..self.levels,
                 layers: 0..self.layers,
+                place: ImagePlace::WHOLE,
             },
             Access::new(
                 vk::PipelineStageFlags2::ALL_COMMANDS,
@@ -175,12 +176,17 @@ impl HeldImages {
     }
 
     /// The moves of a batch whose encoders, in order, named `encoders`' keys and held the keys
-    /// beside them (`EncoderRecord`): for each encoder, the moves before it, and their uses.
-    /// Nothing is allocated where the batch moves nothing, and nothing is looked at where the
-    /// device holds no image.
+    /// beside them (`EncoderRecord`), each with the place of the encoder its moves go before, its
+    /// own or an earlier one's: for each encoder, the moves before it, and their uses. An encoder
+    /// whose commands a group of encoders' shared `VkCommandBuffer` holds (`encoder_fold.rs`) has
+    /// its moves go before the group's first, where that `VkCommandBuffer` begins: no member of a
+    /// group holds an image (a render encoder whose depth attachment the device holds takes no
+    /// group), so each needs every image it names in `GENERAL`, which a move before the group
+    /// leaves it in for all of them. Nothing is allocated where the batch moves nothing, and
+    /// nothing is looked at where the device holds no image.
     pub(crate) fn moves<'a>(
         &self,
-        encoders: impl ExactSizeIterator<Item = (&'a BTreeSet<ResourceKey>, &'a [ResourceKey])>,
+        encoders: impl ExactSizeIterator<Item = (usize, &'a BTreeSet<ResourceKey>, &'a [ResourceKey])>,
     ) -> BatchMoves {
         let count = encoders.len();
         let mut moves = BatchMoves::none();
@@ -189,7 +195,7 @@ impl HeldImages {
         }
         let images: Vec<Arc<HeldImage>> = self.lock().values().cloned().collect();
         let mut layouts: Vec<ImageLayout> = images.iter().map(|image| image.current()).collect();
-        for (at, (named, held)) in encoders.enumerate() {
+        for (at, named, held) in encoders {
             for (index, image) in images.iter().enumerate() {
                 if !named.contains(&image.key) && !held.contains(&image.key) {
                     continue;

@@ -123,6 +123,11 @@ impl RootSets {
         self.sets.len()
     }
 
+    /// Every interned set, in interning order.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &[Root]> {
+        self.sets.iter().map(|s| &**s)
+    }
+
     /// The sets alone, without the interning index and the join memo (for a finished plan).
     pub fn into_table(self) -> RootSets {
         RootSets {
@@ -249,12 +254,32 @@ impl Shape {
     }
 }
 
+/// The base-2 logarithm of the widest alignment an offset's [`PtrFact::align`] tracks: 16 bytes,
+/// the widest unit an access moves (`memory::leaf`'s `uvec4`).
+pub const ALIGN_LOG_CAP: u8 = 4;
+
+/// The base-2 logarithm of the greatest power of two, up to [`ALIGN_LOG_CAP`], that divides `x`
+/// (the cap for 0, which every power divides).
+pub fn twos(x: i128) -> u8 {
+    if x == 0 {
+        ALIGN_LOG_CAP
+    } else {
+        (x.trailing_zeros() as u8).min(ALIGN_LOG_CAP)
+    }
+}
+
 /// The analysis fact of one pointer value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PtrFact {
     pub roots: RootSetId,
     pub range: OffsetRange,
     pub shape: Shape,
+    /// The base-2 logarithm of a power of two (at most [`ALIGN_LOG_CAP`]) that divides every
+    /// offset the value may take from its root: the least over the values a `phi` or `select`
+    /// merges, and over a GEP's base and terms, a dynamic index's stride times the factor of two
+    /// its index is known to carry ([`known_twos`]). It is never widened: it only falls, and has
+    /// five values.
+    pub align: u8,
 }
 
 impl PtrFact {
@@ -262,6 +287,7 @@ impl PtrFact {
         roots: RootSetId::EMPTY,
         range: OffsetRange::Empty,
         shape: Shape::Empty,
+        align: ALIGN_LOG_CAP,
     };
 
     fn at(roots: RootSetId, offset: i64) -> PtrFact {
@@ -272,6 +298,7 @@ impl PtrFact {
                 hi: offset,
             },
             shape: Shape::Exact(offset),
+            align: twos(i128::from(offset)),
         }
     }
 
@@ -280,6 +307,7 @@ impl PtrFact {
             roots,
             range: OffsetRange::Top,
             shape: Shape::Top,
+            align: 0,
         }
     }
 }
@@ -739,6 +767,115 @@ pub(crate) fn gep_displacement(
     Ok((konst.and_then(|c| i64::try_from(c).ok()), strides))
 }
 
+/// The base-2 logarithm of the alignment (at most [`ALIGN_LOG_CAP`]) that the displacement of
+/// `getelementptr src_ty, _, idx..` is known to have: the least over its terms, a constant index's
+/// displacement and a dynamic index's stride times the factor of two its index carries
+/// ([`known_twos`]). The walk is [`gep_displacement`]'s, which refuses what it cannot size first; a
+/// term it cannot read here counts as unaligned.
+fn gep_twos(e: &Entry, layouts: &TypeLayouts, src_ty: TypeId, idx: &[Value]) -> u8 {
+    let mut least = ALIGN_LOG_CAP;
+    let mut cur = src_ty;
+    for (n, &i) in idx.iter().enumerate() {
+        let scale = if n == 0 {
+            layouts.alloc_size(src_ty)
+        } else {
+            match e.module.types().get(cur) {
+                Some(Type::Struct { fields, .. }) => {
+                    let field = const_index(e, i).and_then(|k| usize::try_from(k).ok());
+                    let off = field.and_then(|k| layouts.field_offsets(cur)?.get(k).copied());
+                    match (field.and_then(|k| fields.get(k)), off) {
+                        (Some(f), Some(off)) => {
+                            least = least.min(twos(i128::from(off)));
+                            cur = *f;
+                            continue;
+                        }
+                        _ => return 0,
+                    }
+                }
+                Some(Type::Array { elem, .. } | Type::Vector { elem, .. }) => {
+                    cur = *elem;
+                    layouts.alloc_size(*elem)
+                }
+                _ => None,
+            }
+        };
+        let Some(scale) = scale else { return 0 };
+        let term = match const_index(e, i) {
+            Some(k) => twos(i128::from(k) * i128::from(scale)),
+            None => twos(i128::from(scale))
+                .saturating_add(known_twos(e, i, KNOWN_TWOS_DEPTH))
+                .min(ALIGN_LOG_CAP),
+        };
+        least = least.min(term);
+    }
+    least
+}
+
+/// How deep [`known_twos`] reads an index's definition.
+const KNOWN_TWOS_DEPTH: u8 = 4;
+
+/// The base-2 logarithm of a power of two (at most [`ALIGN_LOG_CAP`]) that divides integer `v` in
+/// every execution, read from its definition up to `depth` instructions deep: a constant's own; a
+/// shift left by a constant adds the shift and a product adds its factors'; an `and` keeps the
+/// larger of its operands', a sum, difference, `or`, `xor` or `select` the smaller; an extension or
+/// truncation keeps its operand's (the cap is below every integer width but `i1`, whose values
+/// 0 and 1 a truncation to it would not keep, so that one is 0). Anything else is 0.
+fn known_twos(e: &Entry, v: Value, depth: u8) -> u8 {
+    use crate::air::ir::BinOp as IntOp;
+    if let Some(k) = const_index(e, v) {
+        return twos(i128::from(k));
+    }
+    let Value::Inst(id) = v else { return 0 };
+    if depth == 0 {
+        return 0;
+    }
+    let body = e.module.func(e.func).and_then(|f| f.body.as_ref());
+    let Some(inst) = body.and_then(|b| b.insts.get(id)) else {
+        return 0;
+    };
+    let d = depth - 1;
+    let of = |x: Value| known_twos(e, x, d);
+    match &inst.kind {
+        InstKind::BinOp {
+            op: IntOp::Shl,
+            a,
+            b,
+            ..
+        } => match const_index(e, *b).and_then(|s| u8::try_from(s).ok()) {
+            Some(s) => of(*a).saturating_add(s).min(ALIGN_LOG_CAP),
+            None => 0,
+        },
+        InstKind::BinOp {
+            op: IntOp::Mul,
+            a,
+            b,
+            ..
+        } => of(*a).saturating_add(of(*b)).min(ALIGN_LOG_CAP),
+        InstKind::BinOp {
+            op: IntOp::And,
+            a,
+            b,
+            ..
+        } => of(*a).max(of(*b)),
+        InstKind::BinOp {
+            op: IntOp::Add | IntOp::Sub | IntOp::Or | IntOp::Xor,
+            a,
+            b,
+            ..
+        } => of(*a).min(of(*b)),
+        InstKind::Select { t, f, .. } => of(*t).min(of(*f)),
+        InstKind::Cast {
+            op: CastOp::ZExt | CastOp::SExt,
+            v,
+        } => of(*v),
+        InstKind::Cast {
+            op: CastOp::Trunc,
+            v,
+        } if !matches!(e.module.types().get(inst.ty), Some(Type::Int(1))) => of(*v),
+        _ => 0,
+    }
+}
+
 /// The dense index of a pointer-typed argument or instruction.
 const NONE: u32 = u32::MAX;
 
@@ -1194,9 +1331,14 @@ impl<'a> Cx<'a> {
         const_index(self.e, v)
     }
 
-    /// The fact of `getelementptr src_ty, base, idx..`.
+    /// The fact of `getelementptr src_ty, base, idx..`. Over a base not reached yet
+    /// ([`PtrFact::BOTTOM`]) it is not reached either, whatever its indices' alignment: every check
+    /// of an operand not reached compares the fact with [`PtrFact::BOTTOM`] whole.
     fn gep(&self, base: PtrFact, src_ty: TypeId, idx: &[Value]) -> Result<PtrFact, Error> {
         let (delta, strides) = gep_displacement(self.e, self.layouts, src_ty, idx)?;
+        if base == PtrFact::BOTTOM {
+            return Ok(PtrFact::BOTTOM);
+        }
         let range = match (base.range, delta, strides.is_empty()) {
             (OffsetRange::Empty, _, _) => OffsetRange::Empty,
             (OffsetRange::Span { lo, hi }, Some(d), true) => {
@@ -1234,10 +1376,12 @@ impl<'a> Cx<'a> {
             }
             (Shape::Top, _, _) => Shape::Top,
         };
+        let align = base.align.min(gep_twos(self.e, self.layouts, src_ty, idx));
         Ok(PtrFact {
             roots: base.roots,
             range,
             shape,
+            align,
         })
     }
 
@@ -1475,6 +1619,7 @@ impl<'a> Cx<'a> {
             roots: self.sets.join(a.roots, b.roots, m)?,
             range: a.range.join(b.range),
             shape: a.shape.join(b.shape),
+            align: a.align.min(b.align),
         })
     }
 }
@@ -2028,6 +2173,8 @@ pub fn analyze(e: &Entry, layouts: &TypeLayouts, m: &mut Meter) -> Result<Proven
         }
     }
     cx.cells.bit_copies = bit_copies;
+    // And the pointers data may carry into a pool.
+    cx.cells.escapes = cells::escapes(&cx, body, m)?;
     for (id, inst) in body.insts.iter() {
         match &inst.kind {
             InstKind::Store { val, ptr, .. } if cx.space_of_value(*val).is_some() => {
@@ -2056,7 +2203,7 @@ pub fn analyze(e: &Entry, layouts: &TypeLayouts, m: &mut Meter) -> Result<Proven
     }
 
     // The fixpoint, in rounds: every alloca forwards until the verification of a round's facts
-    // opens it; a second failed verification opens every alloca.
+    // opens it or makes it a pool; a second failed verification opens every alloca.
     let flow = Flow {
         start: &start,
         users: &users,
@@ -2069,19 +2216,28 @@ pub fn analyze(e: &Entry, layouts: &TypeLayouts, m: &mut Meter) -> Result<Proven
                 None => err,
             }
         })?;
-        let failed = cells::verify(&mut cx, body, m)?;
-        if failed.is_empty() {
+        let verdict = cells::verify(&mut cx, body, m)?;
+        if verdict.holds() {
+            m.release(verdict.bytes());
             break;
         }
         failures += 1;
         if failures >= 2 {
             cx.cells.facts.all_open = true;
         } else {
-            for a in failed {
+            for &a in &verdict.open {
                 m.charge(map_entry_bytes::<InstId, ()>())?;
                 cx.cells.facts.open.insert(a);
+                if cx.cells.facts.pooled.remove(&a) {
+                    m.release(map_entry_bytes::<InstId, ()>());
+                }
+            }
+            for &a in &verdict.pooled {
+                m.charge(map_entry_bytes::<InstId, ()>())?;
+                cx.cells.facts.pooled.insert(a);
             }
         }
+        m.release(verdict.bytes());
     }
     cx.cells.reset(m);
     drop((users, start, out_deg));
@@ -2337,7 +2493,15 @@ fn fixpoint(
             if new == old {
                 continue;
             }
-            let changes = cx.changes.get(i).copied().unwrap_or(0).saturating_add(1);
+            // Only the offsets widen, so only their changes count: the alignment falls at most
+            // `ALIGN_LOG_CAP` times on its own.
+            let moved = new.range != old.range || new.shape != old.shape;
+            let changes = cx
+                .changes
+                .get(i)
+                .copied()
+                .unwrap_or(0)
+                .saturating_add(u8::from(moved));
             if changes > WIDEN_AFTER {
                 if new.range != OffsetRange::Empty {
                     new.range = OffsetRange::Top;
@@ -2659,7 +2823,8 @@ impl Walk<'_, '_> {
 
     /// Join the classes of the pointers stored into and loaded from each cell slot: a load at an
     /// exact offset reads the pointers stored there, and an access at an unknown offset meets
-    /// every slot of its cell. A slot copy moves a source slot's pointers to its destination slot,
+    /// every slot of its cell; every access of a pool meets every other pool's access, since data
+    /// moves pointers' bytes between pools. A slot copy moves a source slot's pointers to its destination slot,
     /// so they join that slot's too. The stores and loads that meet this way form the cell's slot
     /// groups ([`CellFacts::groups`]): one group's loads read the bytes its stores write.
     fn join_slot_classes(&mut self, m: &mut Meter) -> Result<(), Error> {
@@ -2668,10 +2833,13 @@ impl Walk<'_, '_> {
         let mut groups = SlotGroups::new(&self.cx.cells.facts.accesses, m)?;
         let len = self.slots.len();
         let at = |w: &Self, i: usize| w.slots.get(i).copied();
+        // The first pool's first access and a pointer value of the pools', once met.
+        let mut pools: Option<(InstId, Option<Value>)> = None;
         let mut i = 0;
         while let Some((cell, _, _, _)) = at(self, i) {
             let mut j = i;
-            let mut wild = false;
+            // A pool's accesses meet whatever their slots.
+            let mut wild = self.cx.cells.facts.pooled.contains(&cell);
             while let Some((a, s, _, _)) = at(self, j) {
                 if a != cell {
                     break;
@@ -2703,6 +2871,20 @@ impl Walk<'_, '_> {
                         m.tick(1)?;
                         if let Some((_, _, v, _)) = at(self, x) {
                             self.join_class(rep, v, m)?;
+                        }
+                    }
+                }
+                // Data moves pointers' bytes between pools: every pool's accesses meet.
+                if self.cx.cells.facts.pooled.contains(&cell) {
+                    match pools {
+                        None => pools = Some((first, rep)),
+                        Some((other, other_rep)) => {
+                            groups.union(other, first);
+                            if let (Some(a), Some(b)) = (other_rep, rep) {
+                                self.join_class(a, b, m)?;
+                            } else if other_rep.is_none() {
+                                pools = Some((other, rep));
+                            }
                         }
                     }
                 }

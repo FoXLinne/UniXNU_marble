@@ -11,14 +11,14 @@
 use crate::budget::Meter;
 use crate::error::DiagName;
 use crate::error::{Error, Feature, Unsupported};
-use crate::intrinsics::Tensor;
+use crate::intrinsics::{AirIntrinsic, Convert, Elem, Fp8, NumKind, NumTy, Tensor};
 use crate::ir::{
     AddrSpace, ArgIdx, BinOp, CallConv, CastOp, Const, FnAttrs, FuncId, Function, IntPredicate,
     Linkage, ModuleParts, Param, ParamAttrs, Type, TypeId, UnnamedAddr, Value, Visibility,
 };
 use crate::tensor_ops::{
     DataType, Descriptor, DescriptorType, Inner, MatMul2dFn, Mode, OperandForm, OperandIndex,
-    RunForm, TensorSpace, RESERVED_INDEX,
+    RunForm, TensorSpace, DYNAMIC_EXTENT, NO_SCALE, RESERVED_INDEX,
 };
 
 use super::super::out::Out;
@@ -74,21 +74,51 @@ fn elem_bytes(t: DataType) -> Option<u64> {
     match t {
         DataType::Float32 | DataType::Int32 => Some(4),
         DataType::Float16 | DataType::BFloat16 => Some(2),
-        DataType::Int8 => Some(1),
+        DataType::Int8 | DataType::Fp8E4M3 | DataType::Fp8E5M2 => Some(1),
         _ => None,
     }
 }
 
 /// Whether a product of these element types (left, right, destination) is modeled, as measured:
-/// float, half, or bfloat inputs into float, and `int8_t` inputs into `int32_t`.
+/// float, half, or bfloat inputs into float, 8-bit float inputs (both e4m3 or both e5m2) into
+/// float, and `int8_t` inputs into `int32_t`.
 fn modeled_types(types: [DataType; 3]) -> bool {
     matches!(
         types,
         [DataType::Float32, DataType::Float32, DataType::Float32]
             | [DataType::Float16, DataType::Float16, DataType::Float32]
             | [DataType::BFloat16, DataType::BFloat16, DataType::Float32]
+            | [DataType::Fp8E4M3, DataType::Fp8E4M3, DataType::Float32]
+            | [DataType::Fp8E5M2, DataType::Fp8E5M2, DataType::Float32]
             | [DataType::Int8, DataType::Int8, DataType::Int32]
     )
+}
+
+/// Refuse a product of 8-bit floats (`left` the left input's element type) beyond what was
+/// measured (`tns_mm_fp8`): the descriptor 32 x 32 x 32, the left input not transposed, without
+/// relaxed precision, over one simdgroup (`simdgroups`, when the form names its scope), and no
+/// cooperative input (`cooperative_input`: none was measured, and no `run` form takes one).
+fn fp8_measured(
+    left: DataType,
+    desc: &Descriptor,
+    simdgroups: Option<u32>,
+    cooperative_input: bool,
+) -> Result<(), Error> {
+    if !matches!(left, DataType::Fp8E4M3 | DataType::Fp8E5M2) {
+        return Ok(());
+    }
+    let measured = (desc.m, desc.n, desc.k) == (32, 32, Inner::Static(32))
+        && !desc.transpose_left
+        && !desc.relaxed_precision
+        && simdgroups.is_none_or(|s| s == 1);
+    if !measured {
+        let over = simdgroups.map_or(String::new(), |s| format!(" over {s} simdgroups"));
+        return Err(refuse(format!("matmul2d {desc} over {left:?}{over}")));
+    }
+    if cooperative_input {
+        return Err(refuse(format!("a cooperative matmul2d input of {left:?}")));
+    }
+    Ok(())
 }
 
 /// The simdgroups of a scope of `threads` threads (`air.get_simdgroup_size` is 32).
@@ -128,7 +158,7 @@ impl Helper {
         let holds = match arg(0).and_then(OperandIndex::from_raw) {
             Some(OperandIndex::Destination) => Holds::Destination,
             Some(OperandIndex::Right) => Holds::Right,
-            Some(OperandIndex::Left) => return Err(refuse("a cooperative left input")),
+            Some(OperandIndex::Left) => Holds::Left,
             None => return Err(refuse("a cooperative tensor of an unknown operand")),
         };
         let mut fields = [0u64; 7];
@@ -159,6 +189,7 @@ impl Helper {
             }
         }
         let elem = match holds {
+            Holds::Left => left,
             Holds::Destination => dest,
             Holds::Right => right,
         };
@@ -170,17 +201,23 @@ impl Helper {
                 ));
             }
         }
-        let layout = match pos.threads {
+        let simdgroups = match pos.threads {
             None => None,
             Some(i) => {
                 let threads = arg(i).ok_or_else(|| refuse("a matmul2d scope not constant"))?;
-                let simdgroups = scope(threads)?;
-                Some(Layout::of(holds, &desc, simdgroups).ok_or_else(|| {
-                    refuse(format!(
-                        "matmul2d {desc} {holds:?} over {simdgroups} simdgroups"
-                    ))
-                })?)
+                Some(scope(threads)?)
             }
+        };
+        if let Some(l) = left {
+            fp8_measured(l, &desc, simdgroups, holds != Holds::Destination)?;
+        }
+        let layout = match simdgroups {
+            None => None,
+            Some(simdgroups) => Some(Layout::of(holds, &desc, simdgroups).ok_or_else(|| {
+                refuse(format!(
+                    "matmul2d {desc} {holds:?} over {simdgroups} simdgroups"
+                ))
+            })?),
         };
         Ok(Helper {
             f,
@@ -221,15 +258,19 @@ pub(super) struct Run {
     form: RunForm,
     desc: Descriptor,
     dest: Layout,
+    /// A cooperative left input's layout.
+    left: Option<Layout>,
     /// A cooperative right input's layout.
     right: Option<Layout>,
 }
 
 impl Run {
     /// The `run` form `form` called with `args`, whose descriptor argument points at `desc`
-    /// (when it is a constant) and whose destination's (and a cooperative right input's) storage
+    /// (when it is a constant) and whose destination's (and a cooperative input's) storage
     /// `storage` reads as the helper call that made it. A refusal names the first of: the form,
-    /// the descriptor, the shape, then the storage.
+    /// the descriptor, the shape, then the storage. A `_v2` run whose tensor operands have no
+    /// scale factors and only dynamic extents passes them as the earlier form does, so it is that
+    /// form's run.
     pub fn of_call(
         form: RunForm,
         args: &[Value],
@@ -237,8 +278,8 @@ impl Run {
         eval: &dyn Fn(Value) -> Option<u64>,
         storage: &dyn Fn(Value) -> Option<Helper>,
     ) -> Result<Run, Error> {
-        if form.single_thread || form.v2 {
-            return Err(refuse("a matmul2d run of the single-thread or v2 form"));
+        if form.single_thread {
+            return Err(refuse("a matmul2d run of the single-thread form"));
         }
         if args.len() != form.arity() {
             return Err(refuse("a matmul2d run of another arity"));
@@ -249,9 +290,6 @@ impl Run {
                 "matmul2d over {:?} x {:?} into {:?}",
                 types[0], types[1], types[2]
             )));
-        }
-        if form.left.is_cooperative() {
-            return Err(refuse("a cooperative left input"));
         }
         if !form.destination.is_cooperative() {
             return Err(refuse("a matmul2d tensor destination"));
@@ -266,6 +304,20 @@ impl Run {
                 if kind.and_then(DescriptorType::from_raw) != Some(DescriptorType::Inline) {
                     return Err(refuse("a matmul2d tensor other than tensor_inline"));
                 }
+                if let Some([scale, block0, block1, extent0, extent1]) = form.v2_tensor_args(at) {
+                    let word = |i: usize| args.get(i).copied().and_then(eval);
+                    if word(scale) != Some(NO_SCALE)
+                        || word(block0) != Some(0)
+                        || word(block1) != Some(0)
+                    {
+                        return Err(refuse("a matmul2d tensor with scale factors"));
+                    }
+                    if word(extent0) != Some(DYNAMIC_EXTENT)
+                        || word(extent1) != Some(DYNAMIC_EXTENT)
+                    {
+                        return Err(refuse("a matmul2d tensor of a static extent"));
+                    }
+                }
             }
         }
         let desc =
@@ -279,14 +331,25 @@ impl Run {
             .and_then(eval)
             .ok_or_else(|| refuse("a matmul2d scope not constant"))?;
         let simdgroups = scope(threads)?;
+        fp8_measured(
+            types[0],
+            &desc,
+            Some(simdgroups),
+            form.left.is_cooperative() || form.right.is_cooperative(),
+        )?;
         let unmeasured = || refuse(format!("matmul2d {desc} over {simdgroups} simdgroups"));
         let dest_layout =
             Layout::of(Holds::Destination, &desc, simdgroups).ok_or_else(unmeasured)?;
-        let right_layout = if form.right.is_cooperative() {
-            Some(Layout::of(Holds::Right, &desc, simdgroups).ok_or_else(unmeasured)?)
-        } else {
-            None
+        let layout_of = |cooperative: bool, holds: Holds| -> Result<Option<Layout>, Error> {
+            match cooperative {
+                true => Ok(Some(
+                    Layout::of(holds, &desc, simdgroups).ok_or_else(unmeasured)?,
+                )),
+                false => Ok(None),
+            }
         };
+        let left_layout = layout_of(form.left.is_cooperative(), Holds::Left)?;
+        let right_layout = layout_of(form.right.is_cooperative(), Holds::Right)?;
         // The cooperative operands' storage is the header's `get_element_pointer` of the
         // reserved index, made for this descriptor.
         let made_for = |at: usize, holds: Holds| -> Result<(), Error> {
@@ -303,6 +366,9 @@ impl Run {
             Ok(())
         };
         made_for(dest, Holds::Destination)?;
+        if form.left.is_cooperative() {
+            made_for(left, Holds::Left)?;
+        }
         if form.right.is_cooperative() {
             made_for(right, Holds::Right)?;
         }
@@ -310,6 +376,7 @@ impl Run {
             form,
             desc,
             dest: dest_layout,
+            left: left_layout,
             right: right_layout,
         })
     }
@@ -487,10 +554,11 @@ fn helper(
         index32(out, arg_at(args, at)?, m)
     };
     match h.f {
-        // Construction zeroes the elements the thread holds (`+0` over floats), a destination's
-        // and a right input's alike: Metal's answers to `tns_init`, whose loop constructs each
-        // round's tensor over the storage the round before set, and to the gather kernels, which
-        // construct their destination in a loop's body and accumulate into it.
+        // Construction zeroes the elements the thread holds (`+0` over floats), a destination's,
+        // a right input's and a left input's alike: Metal's answers to `tns_init` and
+        // `tns_init_left`, whose loops construct each round's tensor over the storage the round
+        // before set, and to the gather kernels, which construct their destination in a loop's
+        // body and accumulate into it.
         MatMul2dFn::TensorInit => {
             let elem = h
                 .elem
@@ -607,8 +675,40 @@ fn load_wide(out: &mut Out<'_>, t: DataType, ptr: Value, m: &mut Meter) -> Resul
             let b = out.load(i8t, ptr, 1, m)?;
             out.cast(CastOp::SExt, b, i32t, m)
         }
+        DataType::Fp8E4M3 | DataType::Fp8E5M2 => {
+            let i8t = out.int_ty(8, m)?;
+            let b = out.load(i8t, ptr, 1, m)?;
+            fp8_wide(out, t, b, m)
+        }
         _ => Err(invariant("a lowered matmul2d element type")),
     }
+}
+
+/// The float of the 8-bit float `t` whose byte is `b` (an `i8`), exactly: an `air.convert` of
+/// the tensor's format ([`Fp8::TensorE4M3`], [`Fp8::TensorE5M2`]: Metal's reading, measured on the
+/// M3 Max, a subnormal kept, a signed zero kept; e4m3 has no infinity or NaN, `0x7F` and `0xFF`
+/// reading 480 and -480; e5m2's infinities are infinities and its NaNs the quiet NaN
+/// `0x7FC00000`). Lowering widens it as every 8-bit float conversion: through the device's own
+/// 8-bit float where the device has one of its encoding, else by integer arithmetic on the
+/// fields as Metal reads them.
+fn fp8_wide(out: &mut Out<'_>, t: DataType, b: Value, m: &mut Meter) -> Result<Value, Error> {
+    let (format, name) = match t {
+        DataType::Fp8E4M3 => (Fp8::TensorE4M3, "air.convert.f.f32.f.f8e4m3.tensor"),
+        DataType::Fp8E5M2 => (Fp8::TensorE5M2, "air.convert.f.f32.f.f8e5m2.tensor"),
+        _ => return Err(invariant("an 8-bit float of another format")),
+    };
+    let i8t = out.int_ty(8, m)?;
+    let f32t = out.ty(Type::Float, m)?;
+    let op = AirIntrinsic::Convert(Convert {
+        dst: NumTy::scalar(Elem::F32),
+        dst_kind: NumKind::Float,
+        src: NumTy::scalar(Elem::I8),
+        src_kind: NumKind::Float,
+        src_fp8: Some(format),
+        rounding: None,
+        saturate: false,
+    });
+    out.air_call(name, op, f32t, &[i8t], &[b], m)
 }
 
 /// A tensor operand's fields, read once from its object ([`tensor`]).
@@ -690,10 +790,10 @@ impl TensorView {
     }
 }
 
-/// The right input of a `run`.
-enum Right {
+/// An input of a `run`.
+enum Input {
     Tensor(TensorView),
-    /// A cooperative right input: its storage, element type, and layout.
+    /// A cooperative input: its storage, element type, and layout.
     Cooperative {
         storage: Value,
         elem: DataType,
@@ -701,11 +801,36 @@ enum Right {
     },
 }
 
+impl Input {
+    /// The input of `form` at argument `at` of `args`, `layout` a cooperative one's.
+    fn read(
+        out: &mut Out<'_>,
+        form: OperandForm,
+        args: &[Value],
+        at: usize,
+        layout: Option<Layout>,
+        m: &mut Meter,
+    ) -> Result<Input, Error> {
+        Ok(match form {
+            OperandForm::Tensor { space, elem } => {
+                Input::Tensor(TensorView::read(out, arg_at(args, at)?, space, elem, m)?)
+            }
+            OperandForm::Cooperative { elem } => Input::Cooperative {
+                storage: arg_at(args, at)?,
+                elem,
+                layout: layout.ok_or_else(|| invariant("a cooperative input's layout"))?,
+            },
+        })
+    }
+}
+
 /// `run`: every destination element the thread holds is, for `k` ascending below the
 /// descriptor's `k`, `acc = fma(a, b, acc)` over floats (one rounding per step, the order
 /// Metal's sums were measured to take, with or without relaxed precision) and `acc += a * b` over
 /// integers (wrapping), from `acc = C` in `multiply_accumulate` mode and from zero in `multiply`
-/// mode (`+0` over floats), where `a` and `b` read zero past their tensors' extents.
+/// mode (`+0` over floats), where `a` and `b` read zero past their tensors' extents. A
+/// cooperative input's element is another lane's, read with a shuffle every lane runs before any
+/// branch.
 fn run(
     out: &mut Out<'_>,
     r: &Run,
@@ -714,26 +839,8 @@ fn run(
     m: &mut Meter,
 ) -> Result<(), Error> {
     let [left_at, right_at, dest_at] = r.form.operand_args();
-    let OperandForm::Tensor { space, elem } = r.form.left else {
-        return Err(invariant("a lowered run with a cooperative left input"));
-    };
-    let a = TensorView::read(out, arg_at(args, left_at)?, space, elem, m)?;
-    let b = match r.form.right {
-        OperandForm::Tensor { space, elem } => Right::Tensor(TensorView::read(
-            out,
-            arg_at(args, right_at)?,
-            space,
-            elem,
-            m,
-        )?),
-        OperandForm::Cooperative { elem } => Right::Cooperative {
-            storage: arg_at(args, right_at)?,
-            elem,
-            layout: r
-                .right
-                .ok_or_else(|| invariant("a cooperative right input's layout"))?,
-        },
-    };
+    let a = Input::read(out, r.form.left, args, left_at, r.left, m)?;
+    let b = Input::read(out, r.form.right, args, right_at, r.right, m)?;
     let dest = arg_at(args, dest_at)?;
     let dest_ty = r.form.destination.elem();
     let acc_ty = wide_ty(out, dest_ty, m)?;
@@ -763,17 +870,20 @@ fn run(
             let [acc] = carried else {
                 return Err(invariant("a matmul2d accumulator"));
             };
-            // The right input's element (k, col) first: a cooperative one is another lane's,
-            // read with a shuffle every lane runs, before any branch.
-            let bv = match &b {
-                Right::Tensor(b) => b.element(out, if tr { (k, col) } else { (col, k) }, m)?,
-                Right::Cooperative {
-                    storage,
-                    elem,
-                    layout,
-                } => cooperative_right(out, *storage, *elem, layout, (k, col), lanes.lane, m)?,
+            // The cooperative inputs' elements first, A's (row, k) and B's (k, col): each is
+            // another lane's, read with a shuffle every lane runs, before any branch.
+            let av = shuffled(out, &a, true, (row, k), lanes.lane, m)?;
+            let bv = shuffled(out, &b, false, (k, col), lanes.lane, m)?;
+            let bv = match (&b, bv) {
+                (Input::Tensor(b), _) => b.element(out, if tr { (k, col) } else { (col, k) }, m)?,
+                (Input::Cooperative { .. }, Some(v)) => v,
+                (Input::Cooperative { .. }, None) => return Err(invariant("a shuffled input")),
             };
-            let av = a.element(out, if tl { (row, k) } else { (k, row) }, m)?;
+            let av = match (&a, av) {
+                (Input::Tensor(a), _) => a.element(out, if tl { (row, k) } else { (k, row) }, m)?,
+                (Input::Cooperative { .. }, Some(v)) => v,
+                (Input::Cooperative { .. }, None) => return Err(invariant("a shuffled input")),
+            };
             let next = if float {
                 let f32t = out.ty(Type::Float, m)?;
                 out.intrinsic(
@@ -798,19 +908,43 @@ fn run(
     Ok(())
 }
 
-/// The cooperative right input's element `(k, n)`, `n` a column of the lane's own destination
-/// elements: another lane's ([`Layout::right_holder`]), at an element index the same in every
-/// lane, so every lane loads its own element there and shuffles.
-fn cooperative_right(
+/// A cooperative input's element, `None` for a tensor: the left input's at `(row, k)` when `left`
+/// ([`Layout::left_holder`]), else the right input's at `(k, col)` ([`Layout::right_holder`]),
+/// `row` and `col` the place of one of the lane's own destination elements.
+fn shuffled(
+    out: &mut Out<'_>,
+    input: &Input,
+    left: bool,
+    at: (Value, Value),
+    lane: Value,
+    m: &mut Meter,
+) -> Result<Option<Value>, Error> {
+    let Input::Cooperative {
+        storage,
+        elem,
+        layout,
+    } = input
+    else {
+        return Ok(None);
+    };
+    let a = &mut Emit { out, m };
+    let held = match left {
+        true => layout.left_holder(a, at, lane)?,
+        false => layout.right_holder(a, at, lane)?,
+    };
+    cooperative_element(out, *storage, *elem, held, m).map(Some)
+}
+
+/// A cooperative input's element held by lane `src` at element `e` ([`Layout::left_holder`],
+/// [`Layout::right_holder`]), an index the same in every lane, so every lane loads its own
+/// element there and shuffles.
+fn cooperative_element(
     out: &mut Out<'_>,
     storage: Value,
     elem: DataType,
-    layout: &Layout,
-    (k, n): (Value, Value),
-    lane: Value,
+    (src, e): (Value, Value),
     m: &mut Meter,
 ) -> Result<Value, Error> {
-    let (src, e) = layout.right_holder(&mut Emit { out, m }, (k, n), lane)?;
     let size = elem_bytes(elem).ok_or_else(|| invariant("a lowered element type"))?;
     let mine = element_at(out, storage, e, size, m)?;
     let v = load_wide(out, elem, mine, m)?;
@@ -834,7 +968,7 @@ fn tensor_op(
     m: &mut Meter,
 ) -> Result<Option<Value>, Error> {
     match t {
-        Tensor::Extent => tensor::extent(out, args, m).map(Some),
+        Tensor::Extent { .. } => tensor::extent(out, args, m).map(Some),
         Tensor::InitStrided { .. } => tensor::init(out, args, rank, m).map(|()| None),
         Tensor::Slice => tensor::copy(out, args, rank, m).map(|()| None),
         Tensor::DescriptorSize => Err(invariant("a tensor size lowered as a body")),

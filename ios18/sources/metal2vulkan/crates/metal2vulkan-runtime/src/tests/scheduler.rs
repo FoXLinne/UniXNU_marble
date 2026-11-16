@@ -22,7 +22,7 @@
 //! committed in any order.
 
 use crate::event_timeline::{EventTimeline, Signal, WaitFor};
-use crate::scheduler::order::{Behind, Order};
+use crate::scheduler::order::{Behind, Order, Place};
 use std::cell::Cell;
 use std::collections::VecDeque;
 
@@ -129,6 +129,7 @@ impl Model {
         loop {
             let events = &self.events;
             let next = self.order.next(
+                |_| false,
                 |_, _| false,
                 |(_, spec)| {
                     let mut waits = Vec::new();
@@ -253,15 +254,15 @@ fn the_heads_update_in_place() {
         *head = head.to_ascii_uppercase();
     }
     assert_eq!(
-        order.next(|_, _| false, |_| Some(())),
+        order.next(|_| false, |_, _| false, |_| Some(())),
         Some((1, 0, 'A', ()))
     );
     assert_eq!(
-        order.next(|_, _| false, |_| Some(())),
+        order.next(|_| false, |_, _| false, |_| Some(())),
         Some((1, 1, 'b', ()))
     );
     assert_eq!(
-        order.next(|_, _| false, |_| Some(())),
+        order.next(|_| false, |_, _| false, |_| Some(())),
         Some((2, 2, 'C', ()))
     );
 }
@@ -274,18 +275,49 @@ fn the_order_takes_the_ready_head_committed_first() {
     order.push(1, ['d']);
     let ready = |held: &mut char| (*held != 'a').then_some(());
     // Queue 1's head is held: queue 2's goes, and queue 1's later batches wait behind its head.
-    assert_eq!(order.next(|_, _| false, ready), Some((2, 2, 'c', ())));
-    assert_eq!(order.next(|_, _| false, ready), None);
     assert_eq!(
-        order.next(|_, _| false, |_| Some(())),
+        order.next(|_| false, |_, _| false, ready),
+        Some((2, 2, 'c', ()))
+    );
+    assert_eq!(order.next(|_| false, |_, _| false, ready), None);
+    assert_eq!(
+        order.next(|_| false, |_, _| false, |_| Some(())),
         Some((1, 0, 'a', ()))
     );
     assert_eq!(
-        order.next(|_, _| false, |_| Some(())),
+        order.next(|_| false, |_, _| false, |_| Some(())),
         Some((1, 1, 'b', ()))
     );
     assert_eq!(order.drop_head(1, |held| *held == 'd'), ['d']);
     assert_eq!(order.len(), 0);
+}
+
+/// A head put first (an unshared queue's on a `VkQueue` whose other work is held back for it)
+/// goes before a ready head committed before it; not while it is not ready itself, nor while it
+/// waits behind an earlier batch; and the others then go in commit order.
+#[test]
+fn a_head_put_first_goes_before_the_ready_heads_committed_before_it() {
+    let mut order = Order::default();
+    order.push(1, ['a']);
+    order.push(2, ['b']);
+    order.push(3, ['U', 'V']);
+    let first = |head: &char| head.is_ascii_uppercase();
+    let all = |_: &mut char| Some(());
+    // Not ready: the others go in commit order.
+    let unready = |head: &mut char| (*head != 'U').then_some(());
+    assert_eq!(
+        order.next(first, |_, _| false, unready),
+        Some((1, 0, 'a', ()))
+    );
+    // Behind an earlier batch: the same.
+    let u_behind = |_: &Order<char>, sequence| sequence == 2;
+    assert_eq!(order.next(first, u_behind, all), Some((2, 1, 'b', ())));
+    order.push(1, ['c']);
+    // Ready: it goes, then its line's next, also put first, then the rest.
+    assert_eq!(order.next(first, |_, _| false, all), Some((3, 2, 'U', ())));
+    assert_eq!(order.next(first, |_, _| false, all), Some((3, 3, 'V', ())));
+    assert_eq!(order.next(first, |_, _| false, all), Some((1, 4, 'c', ())));
+    assert!(order.is_empty());
 }
 
 /// A batch taken and put back (its first submission waits for encoders a rebind encodes again)
@@ -297,25 +329,25 @@ fn a_batch_put_back_keeps_its_place() {
     let mut order = Order::default();
     order.push(1, ['a', 'b']);
     order.push(2, ['c']);
-    let (queue, sequence, held, ()) = order.next(|_, _| false, |_| Some(())).unwrap();
+    let (queue, sequence, held, ()) = order.next(|_| false, |_, _| false, |_| Some(())).unwrap();
     assert_eq!((queue, sequence, held), (1, 0, 'a'));
     order.put_back(queue, sequence, held);
     assert_eq!(order.len(), 3);
     assert_eq!(
-        order.next(|_, _| false, |_| Some(())),
+        order.next(|_| false, |_, _| false, |_| Some(())),
         Some((1, 0, 'a', ()))
     );
     let (queue, sequence, held, ()) = order
-        .next(|_, _| false, |head| (*head == 'c').then_some(()))
+        .next(|_| false, |_, _| false, |head| (*head == 'c').then_some(()))
         .unwrap();
     assert_eq!((queue, sequence, held), (2, 2, 'c'));
     order.put_back(queue, sequence, held);
     assert_eq!(
-        order.next(|_, _| false, |_| Some(())),
+        order.next(|_| false, |_, _| false, |_| Some(())),
         Some((1, 1, 'b', ()))
     );
     assert_eq!(
-        order.next(|_, _| false, |_| Some(())),
+        order.next(|_| false, |_, _| false, |_| Some(())),
         Some((2, 2, 'c', ()))
     );
     assert!(order.is_empty());
@@ -554,31 +586,71 @@ fn random_programs_complete_on_one_to_four_vk_queues() {
     }
 }
 
-/// A batch for the order across queues: held by the runtime (`step`: its host step or checks)
-/// or by a wait for an event the program has not reached (`event`), with the resources it reads
-/// and writes.
+/// A batch for the order across queues: held by the runtime (`step`: its checks, or a host step
+/// whose gate was taken; with `making`, its pipelines' making, before its step took a gate) or by
+/// a wait for an event the program has not reached (`event`), with the resources it reads and
+/// writes and the fences it names.
 #[derive(Clone, Copy, Debug)]
 struct Work {
     name: char,
     step: bool,
+    making: bool,
     event: bool,
     reads: &'static [u32],
     writes: &'static [u32],
+    fences: &'static [u32],
 }
 
 fn work(name: char, reads: &'static [u32], writes: &'static [u32]) -> Work {
     Work {
         name,
         step: false,
+        making: false,
         event: false,
         reads,
         writes,
+        fences: &[],
     }
 }
 
-/// `work` held by the runtime.
+/// `work` held by the runtime, keeping its place.
 fn stepping(work: Work) -> Work {
     Work { step: true, ..work }
+}
+
+/// `work` held for its pipelines' making, giving way.
+fn making(work: Work) -> Work {
+    Work {
+        step: true,
+        making: true,
+        ..work
+    }
+}
+
+/// `work` naming `fences`.
+fn fencing(work: Work, fences: &'static [u32]) -> Work {
+    Work { fences, ..work }
+}
+
+/// Where `work` stands in the order across queues, as the scheduler's `place_of` answers.
+fn place(work: &Work) -> Place {
+    match (work.event, work.making) {
+        (true, _) => Place::Stops,
+        (false, true) => Place::GivesWay,
+        (false, false) => Place::Keeps,
+    }
+}
+
+/// Whether `later` runs after `earlier`, committed first on another line, in commit order: a fence
+/// both name, or, where `earlier` keeps its place, a resource one of them writes that the other
+/// uses.
+fn conflicts(earlier: &Work, later: &Work, gives_way: bool) -> bool {
+    let meets = |a: &[u32], b: &[u32]| a.iter().any(|key| b.contains(key));
+    meets(earlier.fences, later.fences)
+        || (!gives_way
+            && (meets(earlier.writes, later.reads)
+                || meets(earlier.writes, later.writes)
+                || meets(earlier.reads, later.writes)))
 }
 
 /// `work` waiting for an event the program has not reached.
@@ -589,31 +661,27 @@ fn waiting(work: Work) -> Work {
     }
 }
 
-/// What a [`Work`] reads and writes.
-type Uses = (&'static [u32], &'static [u32]);
-
 /// The batch the scheduler submits next, as `submit_ready` takes it: the heads behind an earlier
 /// commit that keeps its place wait.
 fn take(order: &mut Order<Work>) -> Option<char> {
-    let meets = |a: &[u32], b: &[u32]| a.iter().any(|key| b.contains(key));
     let mut memo = Behind::default();
     let behind = |order: &Order<Work>, sequence| {
         order.is_behind(
             sequence,
             &mut memo,
             (
-                &mut |work: &Work| !work.event,
-                &mut |work: &Work| (work.reads, work.writes),
-                &|&(reads, writes): &Uses, &(later_reads, later_writes): &Uses| {
-                    meets(writes, later_reads)
-                        || meets(writes, later_writes)
-                        || meets(reads, later_writes)
-                },
+                &mut |work: &Work| place(work),
+                &mut |work: &Work| *work,
+                &conflicts,
             ),
         )
     };
     order
-        .next(behind, |work| (!work.step && !work.event).then_some(()))
+        .next(
+            |_| false,
+            behind,
+            |work| (!work.step && !work.event).then_some(()),
+        )
         .map(|(_, _, work, ())| work.name)
 }
 
@@ -622,6 +690,7 @@ fn stepped(order: &mut Order<Work>, name: char) {
     for head in order.heads_mut(&[]) {
         if head.name == name {
             head.step = false;
+            head.making = false;
         }
     }
 }
@@ -650,7 +719,6 @@ fn a_later_commit_that_conflicts_waits_behind_a_batch_held_for_its_step() {
 /// true for ([`Behind::behind`]), each looked up on its own line ([`Order::head_mut_at`]). The
 /// batch taken, then those names.
 fn take_and_behind(order: &mut Order<Work>) -> (Option<char>, Vec<char>) {
-    let meets = |a: &[u32], b: &[u32]| a.iter().any(|key| b.contains(key));
     let mut memo = Behind::default();
     let taken = {
         let behind = |order: &Order<Work>, sequence| {
@@ -658,18 +726,18 @@ fn take_and_behind(order: &mut Order<Work>) -> (Option<char>, Vec<char>) {
                 sequence,
                 &mut memo,
                 (
-                    &mut |work: &Work| !work.event,
-                    &mut |work: &Work| (work.reads, work.writes),
-                    &|&(reads, writes): &Uses, &(later_reads, later_writes): &Uses| {
-                        meets(writes, later_reads)
-                            || meets(writes, later_writes)
-                            || meets(reads, later_writes)
-                    },
+                    &mut |work: &Work| place(work),
+                    &mut |work: &Work| *work,
+                    &conflicts,
                 ),
             )
         };
         order
-            .next(behind, |work| (!work.step && !work.event).then_some(()))
+            .next(
+                |_| false,
+                behind,
+                |work| (!work.step && !work.event).then_some(()),
+            )
             .map(|(_, _, work, ())| work.name)
     };
     let mut held: Vec<char> = Vec::new();
@@ -729,6 +797,44 @@ fn a_held_line_keeps_the_place_of_every_batch_in_it() {
     assert_eq!(taken, ['a', 'e', 'b', 'c']);
 }
 
+/// A batch held for its pipelines' making gives way (`order.rs`, **Held batches give way**): a
+/// later commit of another queue that reads what it writes goes first, and so does one that
+/// writes it, as an x86 Mac's GPU may take them first; it goes once made.
+#[test]
+fn a_later_commit_goes_before_a_batch_held_for_its_making() {
+    let mut order = Order::default();
+    order.push(1, [making(work('a', &[3], &[1]))]);
+    order.push(2, [work('b', &[1], &[])]);
+    order.push(3, [work('c', &[], &[1])]);
+    assert_eq!(take_and_behind(&mut order), (Some('b'), vec![]));
+    assert_eq!(take_and_behind(&mut order), (Some('c'), vec![]));
+    assert_eq!(take(&mut order), None);
+    stepped(&mut order, 'a');
+    assert_eq!(take(&mut order), Some('a'));
+}
+
+/// A batch held for its making still holds back a later commit that shares a fence with it, and
+/// the batches after it on its line give way with it, a fence they share holding back alike.
+#[test]
+fn a_batch_held_for_its_making_holds_back_a_commit_sharing_a_fence() {
+    let mut order = Order::default();
+    order.push(
+        1,
+        [
+            fencing(making(work('a', &[], &[1])), &[9]),
+            fencing(work('e', &[], &[2]), &[8]),
+        ],
+    );
+    order.push(2, [fencing(work('b', &[], &[1]), &[9])]);
+    order.push(3, [work('c', &[2], &[])]);
+    order.push(4, [fencing(work('d', &[], &[]), &[8])]);
+    assert_eq!(take_and_behind(&mut order), (Some('c'), vec!['b']));
+    assert_eq!(take_and_behind(&mut order), (None, vec!['b', 'd']));
+    stepped(&mut order, 'a');
+    let taken: Vec<_> = std::iter::from_fn(|| take(&mut order)).collect();
+    assert_eq!(taken, ['a', 'e', 'b', 'd']);
+}
+
 /// A batch waiting for an event the program has not reached keeps no place, nor do the batches
 /// behind it on its line: Metal schedules them after the signal, so later commits go first.
 #[test]
@@ -752,17 +858,24 @@ fn take_counted(order: &mut Order<Work>, footprints: &Cell<usize>, keeps: &Cell<
             (
                 &mut |work: &Work| {
                     keeps.set(keeps.get() + 1);
-                    !work.event
+                    place(work)
                 },
                 &mut |work: &Work| {
                     footprints.set(footprints.get() + 1);
                     work.writes
                 },
-                &|earlier: &&[u32], later: &&[u32]| earlier.iter().any(|key| later.contains(key)),
+                &|earlier: &&[u32], later: &&[u32], _| {
+                    earlier.iter().any(|key| later.contains(key))
+                },
             ),
         )
     };
-    (order.next(behind, |work| (!work.step && !work.event).then_some(()))).is_some()
+    (order.next(
+        |_| false,
+        behind,
+        |work| (!work.step && !work.event).then_some(()),
+    ))
+    .is_some()
 }
 
 /// Whether a head waits behind an earlier batch is asked of the heads that would go alone: over

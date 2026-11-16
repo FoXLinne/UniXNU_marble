@@ -31,8 +31,9 @@ use crate::error::Error;
 use crate::function_table::VisibleFunctionTable;
 use crate::heap::Heap;
 use crate::pvrtc::degrade_unreadable;
-use crate::replay::Resource;
+use crate::replay::{CallLog, Resource};
 use crate::resource::ResourceRef;
+use crate::work_counts::LoggedCall;
 use metal2vulkan::metal::{RenderStages, ResourceUsage};
 
 impl RenderLowering {
@@ -43,7 +44,9 @@ impl RenderLowering {
         usage: ResourceUsage,
         stages: RenderStages,
     ) -> Result<(), Error> {
-        self.log(|_| RenderCall::UseResource(Resource::one(resource), usage, stages));
+        self.log_use(&[resource], |_| {
+            RenderCall::UseResource(Resource::one(resource), usage, stages)
+        });
         self.use_all("use_resource", &[resource], usage, stages)
     }
 
@@ -54,8 +57,26 @@ impl RenderLowering {
         usage: ResourceUsage,
         stages: RenderStages,
     ) -> Result<(), Error> {
-        self.log(|_| RenderCall::UseResources(Resource::all(resources), usage, stages));
+        self.log_use(resources, |_| {
+            RenderCall::UseResources(Resource::all(resources), usage, stages)
+        });
         self.use_all("use_resources", resources, usage, stages)
+    }
+
+    /// [`log`](Self::log) a use of `resources`, which keeps the encoder's kept draws
+    /// ([`log_across`](Self::log_across)) but where one is a memoryless texture, which fails
+    /// the command buffer (`render/draw_again.rs`): a use that changes the encoder's residency
+    /// gives it a new generation, which makes the next draw of each take every step
+    /// (`draw_again::Under`), and one that changes nothing makes nothing resident.
+    fn log_use(
+        &mut self,
+        resources: &[ResourceRef<'_>],
+        call: impl FnOnce(&mut CallLog<RenderCall>) -> RenderCall,
+    ) {
+        match resources.iter().any(ResourceRef::is_memoryless) {
+            true => self.log_letting_go(LoggedCall::Use, call),
+            false => self.log_across(LoggedCall::Use, call),
+        }
     }
 
     fn use_all(
@@ -74,7 +95,19 @@ impl RenderLowering {
             self.core.fail_memoryless_use();
             return Ok(());
         }
+        // A texture's shadow left unmade is made as the encoder makes it resident: its resource
+        // ID reads it from then on (`texture/lazy_shadow.rs`).
+        for resource in resources {
+            if let ResourceRef::Texture(texture) = resource {
+                texture.made_for_use()?;
+            }
+        }
         for &resource in resources {
+            // Its records held where they lie in device-local memory, before any listing of
+            // them reads where they lie (`indirect_command_buffer/home.rs`).
+            if let ResourceRef::IndirectCommandBuffer(icb) = resource {
+                icb.hold_records(&mut self.core, usage.contains(ResourceUsage::WRITE));
+            }
             if let Some(used) = self.residency.use_resource(resource, usage, stages) {
                 self.core.made_resident(used);
             }
@@ -90,13 +123,16 @@ impl RenderLowering {
 
     /// The lowering of [`RenderCommandEncoder::use_heap`].
     pub(crate) fn use_heap(&mut self, heap: &Heap, stages: RenderStages) -> Result<(), Error> {
-        self.log(|_| RenderCall::UseHeap(heap.clone(), stages));
+        // As a use of resources keeps the encoder's kept draws (`log_use`).
+        self.log_across(LoggedCall::Use, |_| {
+            RenderCall::UseHeap(heap.clone(), stages)
+        });
         self.use_heaps_of("use_heap", &[heap], stages)
     }
 
     /// The lowering of [`RenderCommandEncoder::use_heaps`].
     pub(crate) fn use_heaps(&mut self, heaps: &[&Heap], stages: RenderStages) -> Result<(), Error> {
-        self.log(|_| {
+        self.log_across(LoggedCall::Use, |_| {
             RenderCall::UseHeaps(heaps.iter().map(|&heap| heap.clone()).collect(), stages)
         });
         self.use_heaps_of("use_heaps", heaps, stages)
@@ -109,7 +145,7 @@ impl RenderLowering {
         stages: RenderStages,
     ) -> Result<(), Error> {
         for heap in heaps {
-            self.core.check_device(call, heap.device())?;
+            self.core.check_device(call, heap.generation())?;
         }
         for heap in heaps {
             for used in self.residency.use_heap(heap, stages) {
@@ -205,7 +241,9 @@ impl RenderCommandEncoder {
     /// placed in `heap` in render `stages` through an address held in memory, and every texture
     /// made in it or over a buffer placed in it through its resource ID, as Metal's contract makes
     /// a heap's resources resident for reading only (`residency.rs`): the textures that live now,
-    /// and each made later, from the first command encoded after it is made.
+    /// and each made later, from the first command encoded after it is made. As Metal's, it holds
+    /// the heap, not its textures: one the program released, which only command buffers that
+    /// used the heap hold, is not made resident again.
     ///
     /// A sparse heap's live sparse textures are made resident, as on a compute encoder.
     ///

@@ -88,7 +88,15 @@ class Layout:
         self.placements = {}
         self.cursor = align(max(len(cache.data), max(s['va'] + s['size'] - cache.base
                                                   for s in cache.segments)))
-        self.reserve('__TEXT', self.hole('__PRELINK_TEXT', self.segment('__TEXT')['size']))
+        # Native __TEXT (the entry's header, constants and strings) goes into a hole of the original __PRELINK_TEXT. The linker
+        # pads the segment to a 16 KiB multiple, and a retained kext may begin inside that padding: the hole only has to hold the
+        # segment's sections, and the segment is then mapped as the whole 4 KiB pages below the next retained segment.
+        used = self.used('__TEXT')
+        self.reserve('__TEXT', self.hole('__PRELINK_TEXT', used))
+        room = self.room('__PRELINK_TEXT', self.placements['__TEXT'])
+        self.mapped = {'__TEXT': min(self.segment('__TEXT')['size'], room // 0x1000 * 0x1000)}
+        if used > self.mapped['__TEXT']:
+            raise ValueError(f'No room for {used:#x} bytes in __PRELINK_TEXT: {self.mapped["__TEXT"]:#x} bytes of whole pages are free')
         const = self.roots['__DATA_CONST']
         self.reserve('__DATA_CONST', const['va'])
         self.reserve('__LASTDATA_CONST', align(self.end('__DATA_CONST')))
@@ -166,21 +174,41 @@ class Layout:
     def reserve(self, name, address):
         self.placements[name] = address
 
+    def span(self, name):
+        """Bytes of a native segment in the collection: its size, or for __TEXT what the hole lets it map."""
+        return self.mapped.get(name, self.segment(name)['size'])
+
+    def used(self, name):
+        """Bytes from a native segment's start to the end of its last section (its size when it has none)."""
+        segment = self.segment(name)
+        ends = [s['va'] + s['size'] - segment['va'] for s in getattr(self.native, 'sections', [])
+                if s.get('segment') == name and s['size']]
+        return max(ends) if ends else segment['size']
+
+    def room(self, root_name, address):
+        """Free bytes from address to the next retained segment, or to the root's end."""
+        root = self.roots[root_name]
+        limit = root['va'] + root['size']
+        return min([limit] + [begin for begin, end in self.occupied if begin >= address]) - address
+
     def end(self, name):
-        return self.placements[name] + self.segment(name)['size']
+        return self.placements[name] + self.span(name)
 
     def hole(self, root_name, size):
         root = self.roots[root_name]
         cursor, limit = root['va'], root['va'] + root['size']
+        largest = 0
         for begin, end in sorted(self.occupied):
             if end <= cursor or begin >= limit:
                 continue
             if align(cursor) + size <= begin:
                 return align(cursor)
+            largest = max(largest, begin - align(cursor))
             cursor = max(cursor, end)
         if align(cursor) + size <= limit:
             return align(cursor)
-        raise ValueError(f'No room for {size:#x} bytes in {root_name}')
+        largest = max(largest, limit - align(cursor))
+        raise ValueError(f'No room for {size:#x} bytes in {root_name}: the largest free run is {largest:#x} bytes')
 
     def translate(self, address):
         matches = [s for s in self.native.segments if s['va'] <= address < s['va'] + s['size']]
@@ -231,7 +259,7 @@ class Layout:
 
     def describe(self):
         return {s['name']: {'old': hex(s['va']), 'new': hex(self.placements[s['name']]),
-                            'size': hex(s['size'])} for s in self.native.segments}
+                            'size': hex(self.span(s['name']))} for s in self.native.segments}
 
 
 def relocate_original_stubs(data, layout):

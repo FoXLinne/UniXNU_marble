@@ -5,66 +5,68 @@ fn writes(operations: u32, primitive_types: u8) -> CommandWrites {
     CommandWrites {
         operations,
         primitive_types,
+        kinds: CommandWrites::RENDER_COMMANDS,
     }
 }
 
-/// A draw replay takes draws of one primitive type under the inherited state with the commands'
-/// own buffers, whose records hold draws, buffers, resets and cleared barriers alone; each other
-/// buffer or record breaks the first rule it meets, which names it.
+/// A draw replay takes draws and indexed draws of one primitive type under the inherited state,
+/// whose records hold draws, buffers, resets and cleared barriers alone, whether the buffer
+/// inherits the encoder's buffers or not (its preprocess reads the parent's then); each other
+/// buffer or record breaks the first rule it meets, which names it. Indexed draws among the writes
+/// are a replay's indexed draws.
 #[test]
-fn a_draw_replay_takes_draws_of_one_primitive_type_with_their_own_buffers() {
+fn a_draw_replay_takes_draws_of_one_primitive_type_under_the_inherited_state() {
     let draws = IndirectCommandType::DRAW;
     let triangles = writes(CommandWrites::DRAW | CommandWrites::BUFFER, 1 << 3);
     assert_eq!(
-        draw_replay_primitive_type(draws, (true, false), triangles),
+        draw_replay_primitive_type(draws, true, triangles),
         Ok(PrimitiveType::Triangle)
     );
     let all = writes(DRAW_REPLAY_WRITES, 1 << 1);
     assert_eq!(
-        draw_replay_primitive_type(draws, (true, false), all),
+        draw_replay_primitive_type(draws, true, all),
         Ok(PrimitiveType::Line)
     );
     let indexed = IndirectCommandType::DRAW | IndirectCommandType::DRAW_INDEXED;
+    let indexed_triangles = writes(CommandWrites::DRAW_INDEXED | CommandWrites::BUFFER, 1 << 3);
+    for types in [indexed, IndirectCommandType::DRAW_INDEXED] {
+        assert_eq!(
+            draw_replay_primitive_type(types, true, indexed_triangles),
+            Ok(PrimitiveType::Triangle)
+        );
+    }
+    assert!(draw_replay_indexed(indexed_triangles) && !draw_replay_indexed(triangles));
+    let patches = IndirectCommandType::DRAW | IndirectCommandType::DRAW_PATCHES;
     let cases = [
+        (patches, true, triangles, DrawReplayRule::CommandTypes),
         (
-            indexed,
-            (true, false),
+            IndirectCommandType::empty(),
+            true,
             triangles,
             DrawReplayRule::CommandTypes,
         ),
+        (draws, false, triangles, DrawReplayRule::OwnPipelineStates),
         (
             draws,
-            (false, false),
-            triangles,
-            DrawReplayRule::OwnPipelineStates,
-        ),
-        (
-            draws,
-            (true, true),
-            triangles,
-            DrawReplayRule::InheritedBuffers,
-        ),
-        (
-            draws,
-            (true, false),
+            true,
             writes(CommandWrites::DRAW | CommandWrites::BARRIER, 1 << 3),
             DrawReplayRule::Operations(CommandWrites::BARRIER),
         ),
         (
             draws,
-            (true, false),
+            true,
             writes(CommandWrites::BUFFER | CommandWrites::RESET, 0),
             DrawReplayRule::NoDraws,
         ),
         (
             draws,
-            (true, false),
+            true,
             writes(CommandWrites::DRAW, 0b1001),
             DrawReplayRule::PrimitiveTypes(0b1001),
         ),
         (
             draws,
-            (true, false),
+            true,
             writes(CommandWrites::DRAW, CommandWrites::ALL_PRIMITIVE_TYPES),
             DrawReplayRule::PrimitiveTypes(CommandWrites::ALL_PRIMITIVE_TYPES),
         ),
@@ -122,4 +124,60 @@ fn a_record_states_its_action_and_barrier() {
         )
     );
     assert_eq!(CommandRecord::default().writes(), CommandWrites::NONE);
+}
+
+/// A draw replay pulls every fixed-function layout of its state's vertex input, static strides
+/// and pulled attributes as they are; a layout whose stride is set per bind (a fixed-function
+/// binding's, or a pulled attribute's that steps) keeps it from the replay, and a constant step's,
+/// which reads no stride, does not.
+#[test]
+fn a_draw_replay_pulls_every_fixed_function_layout_of_a_static_stride() {
+    use crate::metal::{VertexFormat, VertexStepFunction};
+    use crate::pipeline::{PulledAttribute, VertexBinding, VertexInputState, VertexStride};
+    let binding = |buffer_index, stride| VertexBinding {
+        binding: buffer_index,
+        buffer_index,
+        input_rate: vk::VertexInputRate::VERTEX,
+        divisor: 1,
+        stride,
+    };
+    let pulled = |buffer_index, step_function, stride| PulledAttribute {
+        attribute: 7,
+        buffer_index,
+        format: VertexFormat::Float2,
+        offset: 1,
+        step_function,
+        step_rate: 1,
+        stride,
+    };
+    let mut input = VertexInputState::default();
+    assert_eq!(draw_replay_vertex_layouts(&input), Ok(BTreeSet::new()));
+    input.bindings = vec![
+        binding(0, VertexStride::Static(8)),
+        binding(3, VertexStride::Static(0)),
+    ];
+    input.pulled = vec![
+        pulled(1, VertexStepFunction::PerVertex, VertexStride::Static(10)),
+        pulled(2, VertexStepFunction::Constant, VertexStride::PerBind),
+    ];
+    assert_eq!(
+        draw_replay_vertex_layouts(&input),
+        Ok(BTreeSet::from([0, 3]))
+    );
+    let mut per_bind = input.clone();
+    per_bind.bindings[1].stride = VertexStride::PerBind;
+    assert_eq!(
+        draw_replay_vertex_layouts(&per_bind),
+        Err(DrawReplayRule::VertexAttributes)
+    );
+    let mut stepped = input;
+    stepped.pulled[1].step_function = VertexStepFunction::PerInstance;
+    assert_eq!(
+        draw_replay_vertex_layouts(&stepped),
+        Err(DrawReplayRule::VertexAttributes)
+    );
+    assert_eq!(
+        DrawReplayRule::VertexAttributes.to_string(),
+        "the inherited state's vertex function fetches attributes at a stride set per bind"
+    );
 }

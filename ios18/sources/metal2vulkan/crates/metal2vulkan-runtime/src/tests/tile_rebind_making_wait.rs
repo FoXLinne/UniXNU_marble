@@ -7,8 +7,8 @@
 //! Metal makes a tile state's pipeline at `newRenderPipelineStateWithTileDescriptor`, so no Metal
 //! call of the program's blocks on a shader compile afterwards: a tile dispatch waits for none
 //! (`tile_pending.rs`), and neither does a replace of a buffer's bytes. The runtime makes a
-//! region's `VkPipeline` on demand instead, in the device's pool, and keeps at most 32 of a
-//! variant's (`pipeline::PIPELINES`): a rebind's encoding again of a dispatch whose region key
+//! region's `VkPipeline` on demand instead, in the device's pool, and keeps at most 32 of a tile
+//! function's variant's (`pipeline::PIPELINES`): a rebind's encoding again of a dispatch whose region key
 //! the memo let go of must answer as the first encoding did -- hand the making to the pool and
 //! leave the pass to record later -- and never make the pipeline on the program's thread, nor
 //! wait for a making another encoder began.
@@ -499,9 +499,8 @@ fn a_rebind_does_not_wait_for_a_tile_making_another_encoder_began() {
 /// write into pages the program handed back, with no fault and nothing said. That is the class of
 /// bug this guard exists for, so it is watched by the layer and not by a page's contents alone.
 ///
-/// The encoding again is made impossible as `pending_rebind.rs` makes it: the render encoder is
-/// opened while the device has no buffer over host pages, so it logs no call (`Unlogged::NoCalls`)
-/// and no rebind can replay it. The device's pool is held, so only a host step records the pass,
+/// The encoding again is made impossible: the render encoder is opened while the device has no
+/// buffer over host pages, so it logs no call (`Unlogged::NoCalls`) and no rebind can replay it. The device's pool is held, so only a host step records the pass,
 /// and only once the hold is gone -- after the rebind, in every run.
 ///
 /// Without `DeferredPass::record_forms`' `encoder_rebound` guard the host step records the pass and

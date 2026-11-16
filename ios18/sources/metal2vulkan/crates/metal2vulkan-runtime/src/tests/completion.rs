@@ -86,6 +86,7 @@
 //! Device tests: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
 //! `m2v_cpu_icd`), on the kind of device the cfg selects.
 
+use super::plan_room::device_with_room;
 use crate::{
     host_time, CommandBuffer, CommandBufferStatus, Device, DeviceKind, DeviceOptions,
     ResourceOptions, ShaderCacheOptions,
@@ -157,9 +158,12 @@ fn device(cache: &Path) -> Device {
             directory: Some(cache.to_owned()),
             ..ShaderCacheOptions::default()
         },
+        // Each test here keeps more than two command queues live at once: the queue plan, not
+        // the runtime tests' default queue limits (`device/create.rs`).
+        queue_limits: None,
         ..DeviceOptions::default()
     };
-    Device::system_default_with(&options).unwrap()
+    device_with_room(&options).unwrap()
 }
 
 /// Whether `device`'s GPU end times are when the GPU ended the work: its timestamps, placed on

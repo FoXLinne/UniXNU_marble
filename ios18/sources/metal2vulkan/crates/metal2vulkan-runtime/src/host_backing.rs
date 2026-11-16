@@ -26,7 +26,8 @@ pub enum HostBacking {
     ImportedByPointer,
     /// In place: the device imported dma-bufs of the pages that the caller's source made
     /// ([`HostMemory::with_dma_buf`](crate::HostMemory::with_dma_buf)), where it refused their
-    /// pointer. Released while idle and imported again as an import by pointer may be.
+    /// pointer or imports none (it enables no `VK_EXT_external_memory_host`). Released while idle
+    /// and imported again as an import by pointer may be.
     ImportedAsDmaBuf,
     /// In place: bound in the device's import of a chunk of a guest RAM it uses
     /// ([`Device::use_host_ram`](crate::Device::use_host_ram),
@@ -45,6 +46,12 @@ pub enum HostBacking {
     Copied,
     /// In no pages: detached ([`Buffer::detach_backing`]) until a rebind gives it some.
     Detached,
+    /// Two copies, as Metal keeps a `Managed` resource on a Mac with a discrete GPU: the caller's
+    /// pages, which `contents` maps, and the GPU's own in device-local memory, which every command
+    /// uses. `did_modify_range` copies the pages in, and a blit encoder's `synchronize_resource`
+    /// copies the GPU's copy out to them. A `Managed` no-copy buffer on a device without unified
+    /// memory, where device-local memory had room for its copy.
+    DeviceCopy,
 }
 
 impl Buffer {
@@ -56,12 +63,21 @@ impl Buffer {
     /// instead, announced as the
     /// [`copied-host-pages`](crate::Degradation::CopiedHostPages) degradation.
     ///
+    /// A `Managed` no-copy buffer on a device without unified memory answers
+    /// [`HostBacking::DeviceCopy`] (or `Detached` while its pages are detached).
+    ///
     /// The answer changes only where the buffer's pages do: at its
     /// [`rebind_bytes_no_copy`](Buffer::rebind_bytes_no_copy), which may move it between an import
     /// and a copy, and its [`detach_backing`](Buffer::detach_backing) (for a heap's buffer, its
     /// heap's); between them it stays. A query alone: it reads no page and keeps no import
     /// imported, unlike [`gpu_address`](Buffer::gpu_address).
     pub fn host_backing(&self) -> Option<HostBacking> {
+        if let Some(caller) = self.caller_copy() {
+            return Some(match caller.mapped_contents() {
+                Some(_) => HostBacking::DeviceCopy,
+                None => HostBacking::Detached,
+            });
+        }
         let pages = match self.pages_cell()?.lying() {
             Lying::In(pages) => pages,
             Lying::Detached(_) => return Some(HostBacking::Detached),

@@ -49,6 +49,7 @@
 
 pub mod band;
 pub mod contract;
+pub mod fan_out;
 pub mod fetch;
 pub mod geometry;
 pub mod graphics;
@@ -158,8 +159,10 @@ impl LinkInputs {
     ) -> LinkInputs {
         let mut r = RenderLinkInputs::from(desc);
         r.pulled_vertex_buffers = variant.pulled_vertex_buffers.clone();
+        r.pull_every = variant.primitive_id_indices.is_some() || variant.private_list;
         r.color_group = group;
         r.line_band = variant.line_band;
+        r.region_fan_out = variant.region_fan_out;
         LinkInputs::Render(Box::new(r))
     }
 
@@ -186,6 +189,10 @@ pub struct RenderLinkInputs {
     /// The layouts a pulled-vertex-buffer variant pulls (`VariantKey::pulled_vertex_buffers`);
     /// empty on the common path.
     pub pulled_vertex_buffers: BTreeSet<u32>,
+    /// The variant pulls every attribute (`vertex::vertex_fetch_projection_for`'s `pull_every`):
+    /// the de-indexed and private list forms (`VariantKey::primitive_id_indices`,
+    /// `VariantKey::private_list`), whose vertex stage is compiled so.
+    pub pull_every: bool,
     /// `maxVertexAmplificationCount`.
     pub max_vertex_amplification_count: u32,
     /// The descriptor's tessellation state: read when the vertex stage is a post-tessellation
@@ -201,6 +208,10 @@ pub struct RenderLinkInputs {
     /// tessellation stages (`VariantKey::line_band`, [`band`]), each patch one primitive of this
     /// kind; `None` for every other variant.
     pub line_band: Option<crate::pipeline::BandPrimitive>,
+    /// The variant draws a rate-mapped pass's triangles once, its triangle class's geometry stage
+    /// fanning each out to its regions (`VariantKey::region_fan_out`, [`fan_out`]); `None` for
+    /// every other variant.
+    pub region_fan_out: Option<crate::pipeline::RegionFanOut>,
 }
 
 impl RenderLinkInputs {
@@ -217,11 +228,13 @@ impl RenderLinkInputs {
             rasterization_enabled: true,
             input_primitive_topology: metal::PrimitiveTopologyClass::Unspecified,
             pulled_vertex_buffers: BTreeSet::new(),
+            pull_every: false,
             max_vertex_amplification_count: 1,
             tessellation: None,
             texture_write_rounding_mode: metal::TextureWriteRoundingMode::TowardZero,
             color_group: None,
             line_band: None,
+            region_fan_out: None,
         }
     }
 }
@@ -245,11 +258,13 @@ impl From<&RenderPipelineDescriptor> for RenderLinkInputs {
             rasterization_enabled: d.rasterization_enabled,
             input_primitive_topology: d.input_primitive_topology,
             pulled_vertex_buffers: BTreeSet::new(),
+            pull_every: false,
             max_vertex_amplification_count: d.max_vertex_amplification_count,
             tessellation: d.tessellation,
             texture_write_rounding_mode: d.texture_write_rounding_mode,
             color_group: None,
             line_band: None,
+            region_fan_out: None,
         }
     }
 }
@@ -363,6 +378,7 @@ pub fn link(
             r.input_primitive_topology,
             r.max_vertex_amplification_count,
             false,
+            r.region_fan_out,
             p,
         )?,
         LinkInputs::Mesh(r) => geometry::plan(
@@ -370,6 +386,7 @@ pub fn link(
             r.input_primitive_topology,
             r.max_vertex_amplification_count,
             true,
+            r.region_fan_out,
             p,
         )?,
         LinkInputs::Standalone | LinkInputs::Compute => None,
@@ -410,6 +427,14 @@ pub fn link(
         synthesized.push((mesh::RECORDS_SLOT, vk::ShaderStageFlags::VERTEX));
         synthesized.push((mesh::WORK_SLOT, vk::ShaderStageFlags::VERTEX));
     }
+    // A fan-out variant's triangle stage reads the region table, and a probe's writes its flags.
+    if let Some(fan) = geometry.as_ref().and_then(|g| g.fan_out) {
+        let stage = vk::ShaderStageFlags::GEOMETRY;
+        synthesized.push((fan_out::REGIONS_SLOT, stage));
+        if fan.mode == crate::pipeline::RegionFanOut::Probe {
+            synthesized.push((fan_out::FLAGS_SLOT, stage));
+        }
+    }
     let mut layout = layout(&ifaces, &synthesized, &mut table, p)?;
     count_variables(&mut layout, stages, &table);
     let control = match plan {
@@ -446,9 +471,27 @@ pub fn link(
         }
         None => None,
     };
+    // A fan-out probe's stage pushes the index of its flag.
+    let mut geometry = geometry;
+    if let Some(fan) = geometry.as_mut().and_then(|g| g.fan_out.as_mut()) {
+        if fan.mode == crate::pipeline::RegionFanOut::Probe {
+            let offset = tessellation::push_offset(
+                &layout.push_constants,
+                (fan_out::PUSH_BYTES, 4),
+                Feature::RasterizationRateMap,
+                p,
+            )?;
+            layout.push_constants.push(PushConstantRange {
+                stages: vk::ShaderStageFlags::GEOMETRY,
+                offset,
+                size: fan_out::PUSH_BYTES,
+            });
+            fan.push_offset = offset;
+        }
+    }
     let specialization = specialize(&ifaces, &mut table)?;
     table.locations = varyings::assign(stages, p)?;
-    if let Some(g) = &geometry {
+    if let Some(g) = &mut geometry {
         g.check_limits(&table.locations, p)?;
     }
     let interface = pipeline_interface(&ifaces);
@@ -464,7 +507,7 @@ pub fn link(
                     let vi = vertex::vertex_input_state(
                         vs,
                         r.vertex_descriptor.as_ref(),
-                        &r.pulled_vertex_buffers,
+                        (&r.pulled_vertex_buffers, r.pull_every),
                         &table.locations,
                         p,
                     )?;
@@ -501,6 +544,22 @@ pub fn link(
                 gs.line_band = Some(crate::pipeline::graphics::LineBandState {
                     push_offset: b.push_offset,
                     primitive: b.primitive,
+                });
+            }
+            if let Some(fan) = geometry.as_ref().and_then(|g| g.fan_out) {
+                gs.region_fan_out = Some(crate::pipeline::graphics::FanOutState {
+                    mode: fan.mode,
+                    copies: fan.copies,
+                    push_offset: fan.push_offset,
+                });
+            }
+            // A region-copy variant draws no geometry stage: its vertex function draws its region's
+            // copy, the first region of a recording pushed at its `RegionFirst` field.
+            if r.region_fan_out == Some(crate::pipeline::RegionFanOut::RegionCopies) {
+                gs.region_fan_out = Some(crate::pipeline::graphics::FanOutState {
+                    mode: crate::pipeline::RegionFanOut::RegionCopies,
+                    copies: 0,
+                    push_offset: region_first(vs)?,
                 });
             }
             (vi, Some(gs))
@@ -561,6 +620,22 @@ pub fn link(
 
 /// The graphics state of a render or mesh render pipeline whose geometry stage (its vertex or
 /// mesh stage) is `geometry`, with its fragment stage's.
+/// The byte offset of the push-constant block a region-copy variant's vertex function `vs` reads
+/// its recording's first region at (`PushField::RegionFirst`): each recording pushes its own, so
+/// a function that holds it in its `ArgumentTable`, or reads none, is
+/// `NotImplemented(RasterizationRateMap)`.
+fn region_first(vs: &StageInterface) -> Result<u32, Error> {
+    let at = vs
+        .push
+        .fields
+        .iter()
+        .find(|f| f.field == crate::pipeline::sym::PushField::RegionFirst);
+    match at.map(|f| f.loc) {
+        Some(crate::pipeline::interface::PushLoc::Push { offset }) => Ok(offset),
+        _ => Err(Unsupported::not_implemented(Feature::RasterizationRateMap).into()),
+    }
+}
+
 fn render_state(
     r: &RenderLinkInputs,
     geometry: &StageInterface,
@@ -777,7 +852,52 @@ fn binding_source(slot: ResourceSlot) -> BindingSource {
         ResourceKind::ExtendedShadow(color) => BindingSource::ExtendedShadow(color),
         ResourceKind::SnapshotTexels(texture) => BindingSource::SnapshotTexels(texture),
         ResourceKind::YCbCrPlanes(_) => BindingSource::YCbCrPlanes(metal(SlotClass::Texture)),
+        ResourceKind::SamplerArray { compare, integer } => BindingSource::SamplerArray {
+            stage: slot.stage,
+            compare,
+            integer,
+        },
     }
+}
+
+/// The immutable samplers of constexpr sampler array `slot` (`ResourceKind::SamplerArray`),
+/// whose binding holds `count` of them: each element's constexpr sampler, as its stage's interface
+/// lists them, made for the kind's use. Empty for every other binding.
+fn immutable_samplers(
+    slot: ResourceSlot,
+    count: u32,
+    ifaces: &[&StageInterface],
+    p: &DeviceProfile,
+) -> Result<Vec<vk::SamplerDesc>, Error> {
+    let ResourceKind::SamplerArray { compare, integer } = slot.kind else {
+        return Ok(Vec::new());
+    };
+    let invariant = |detail: &str| {
+        Error::Internal(InternalError::new(
+            InternalKind::Invariant,
+            format!("sampler array {slot:?}: {detail}"),
+        ))
+    };
+    let array = ifaces
+        .iter()
+        .filter(|i| i.stage == slot.stage)
+        .flat_map(|i| &i.sampler_arrays)
+        .find(|a| a.slot == slot)
+        .ok_or_else(|| invariant("not in its stage's interface"))?;
+    if u32::try_from(array.samplers.len()).ok() != Some(count) {
+        return Err(invariant("its samplers do not fill its count"));
+    }
+    let use_ = crate::metal::sampler::SamplerUse::new(compare, integer);
+    array
+        .samplers
+        .iter()
+        .map(|s| match *s {
+            crate::pipeline::sym::SamplerRef::Constexpr(words) => {
+                crate::lower::sampler::constexpr_desc(words, use_, p)
+            }
+            crate::pipeline::sym::SamplerRef::Slot(_) => Err(invariant("a runtime sampler")),
+        })
+        .collect()
 }
 
 /// The immutable sampler of binding `slot`: a combined image sampler's, heap sampler's, or
@@ -975,6 +1095,7 @@ fn layout(
             immutable_sampler: immutable_sampler(slot, p)?,
             flags: vk::DescriptorBindingFlags::empty(),
             variables: 0,
+            immutable_samplers: immutable_samplers(slot, d.count, ifaces, p)?,
         });
     }
     check_set_limits(&bindings, p)?;
@@ -1104,6 +1225,7 @@ fn heap_set(
             immutable_sampler: None,
             flags,
             variables: 0,
+            immutable_samplers: Vec::new(),
         });
     }
     Ok(Some(DescriptorSetLayout {

@@ -37,7 +37,7 @@ use metal2vulkan::pipeline::{
     ColorAttachmentDescriptor, ComputePipelineDescriptor, RenderPipelineDescriptor, StageSource,
 };
 use std::any::Any;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -178,9 +178,13 @@ pub(super) fn words_of(buffer: &Buffer) -> Vec<u32> {
         .collect()
 }
 
-/// The library of the fixture at `path` under `validation/fixtures/public/`.
+/// The library of the fixture at `path` under `validation/fixtures/public/`, beside the manifest
+/// directory the test runner names as the test runs (a run of an archive on another machine names
+/// its own), else the one the build named.
 pub(super) fn library(device: &Device, path: &str) -> Library {
-    let ll = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let manifest = std::env::var_os("CARGO_MANIFEST_DIR")
+        .map_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")), PathBuf::from);
+    let ll = manifest
         .join("../metal2vulkan-validation/fixtures/public")
         .join(path);
     let bitcode = metal2vulkan_devtools::llvm_assemble(&ll).unwrap();
@@ -331,8 +335,9 @@ fn draw(
             host.set(COLORS_AT as usize / 4, &bits(&COLOR.repeat(3)));
             if leg == Leg::VertexBuffersRebound {
                 // The same triangle from another buffer first, then the no-copy buffer's at the
-                // same indices, then again: the second draw's retain takes the no-copy buffer,
-                // and the third's looks at nothing, the encoder holding it as it was bound.
+                // same indices, then the no-copy buffer bound again at another index: the second
+                // draw's retain takes the no-copy buffer, and the third's looks at nothing, the
+                // encoder holding it as it was bound.
                 let mut words = vec![0; (COLORS_AT / 4) as usize];
                 words[..triangle.len()].copy_from_slice(&triangle);
                 words.extend(bits(&COLOR.repeat(3)));
@@ -356,7 +361,9 @@ fn draw(
                 .draw_primitives(PrimitiveType::Triangle, 0, 3, 1, 0)
                 .unwrap();
             if leg == Leg::VertexBuffersRebound {
-                encoder.set_vertex_buffer(Some(no_copy), 0, 0).unwrap();
+                // At an index the function does not read: bound at the same index and offset, it
+                // would change nothing, and the draw would draw again, retaining nothing.
+                encoder.set_vertex_buffer(Some(no_copy), 0, 2).unwrap();
                 encoder
                     .draw_primitives(PrimitiveType::Triangle, 0, 3, 1, 0)
                     .unwrap();

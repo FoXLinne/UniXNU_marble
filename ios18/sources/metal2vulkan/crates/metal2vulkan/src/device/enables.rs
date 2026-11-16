@@ -288,6 +288,7 @@ exposures! {
     Extension(DERIVATIVES) => [ComputeDerivativeGroupQuads, ComputeDerivativeGroupLinear];
     Extension(&[E::KhrMaintenance8]) => [Maintenance8];
     Extension(&[E::KhrShaderFma]) => [ShaderFmaFloat16, ShaderFmaFloat32];
+    Extension(&[E::ExtShaderFloat8]) => [ShaderFloat8];
     Extension(BORDER_SWIZZLE) => [BorderColorSwizzle, BorderColorSwizzleFromImage];
     Extension(&[E::ExtDepthBiasControl]) => [DepthBiasControl, FloatRepresentation, DepthBiasExact];
     Extension(&[E::ExtDepthClipEnable]) => [DepthClipEnable];
@@ -297,13 +298,14 @@ exposures! {
     ];
     Extension(&[E::ExtProvokingVertex]) => [ProvokingVertexLast];
     Extension(&[E::ExtLineRasterization]) => [BresenhamLines];
+    Extension(&[E::ExtMultiDraw]) => [MultiDraw];
     Extension(&[E::KhrRayQuery]) => [RayQuery];
     Extension(&[E::ExtMeshShader]) => [TaskShader, MeshShader];
     Extension(&[E::KhrAccelerationStructure]) => [AccelerationStructure];
     Extension(&[E::KhrPortabilitySubset]) => [
         ConstantAlphaColorBlendFactors, VertexAttributeAccessBeyondStride, SamplerMipLodBias,
         MutableComparisonSamplers, ShaderSampleRateInterpolationFunctions, MultisampleArrayImage,
-        ImageView2DOn3DImage, SeparateStencilMaskRef, ImageViewFormatSwizzle,
+        ImageView2DOn3DImage, SeparateStencilMaskRef, ImageViewFormatSwizzle, PointPolygons,
     ];
 }
 
@@ -354,6 +356,7 @@ fn facts(ext: VkExtension) -> ExtensionFacts {
         | E::ExtPrimitiveTopologyListRestart
         | E::ExtProvokingVertex
         | E::ExtLineRasterization
+        | E::ExtMultiDraw
         | E::ExtAttachmentFeedbackLoopLayout
         | E::ExtExtendedDynamicState3
         | E::ExtPostDepthCoverage
@@ -378,6 +381,9 @@ fn facts(ext: VkExtension) -> ExtensionFacts {
         // The core reads it directly: a storage access without a format by the format's own bits
         // (`DeviceProfile::without_format_by_format_bits`).
         E::KhrFormatFeatureFlags2 => fact(true, Some(3), &[]),
+        // The core reads it directly: a `matmul2d` of 8-bit floats is refused where it is enabled
+        // (`lower::select`), the device's own conversion being the only form there.
+        E::ExtShaderFloat8 => fact(true, None, &[]),
         E::KhrDynamicRenderingLocalRead | E::KhrMaintenance5 => {
             fact(true, Some(4), DYNAMIC_RENDERING_BELOW_1_3)
         }
@@ -550,8 +556,9 @@ fn co_enable_violation(
 /// `features` less what the co-enable rules forbid with the rest, on a device whose
 /// `robustBufferAccessUpdateAfterBind` is `rba_update_after_bind`. Where `robustBufferAccess`
 /// meets [`BUFFER_UPDATE_AFTER_BIND`] on a device without that property, the update-after-bind
-/// features go: the core reads `robustBufferAccess` to choose the containment encoding and reads
-/// none of them, since the only update-after-bind set it lays out holds image and sampler classes.
+/// features go: the core reads `robustBufferAccess` to choose the containment encoding, and the
+/// set-1 arrays that need them (the function tables', the texel-buffer classes') are refused there,
+/// naming the feature.
 /// Then each feature whose [`FEATURE_NEEDS`] companion is missing goes; no companion is itself
 /// dropped, so one pass keeps every rule.
 fn co_enabled(

@@ -109,5 +109,49 @@ class SplitSegmentTests(unittest.TestCase):
             relocate_native(output, layout)
 
 
+
+class TextPlacementTests(unittest.TestCase):
+    """Native __TEXT is placed by its sections and mapped as whole 4 KiB pages below the next retained segment."""
+    def layout(self, section_end, next_kext):
+        layout = object.__new__(Layout)
+        layout.native = SimpleNamespace(
+            segments=[{'name': '__TEXT', 'va': 0x7004000, 'size': 0x1dc000, 'fileoff': 0, 'filesize': 0x1dc000},
+                      {'name': '__DATA', 'va': 0x9000000, 'size': 0x8000, 'fileoff': 0x200000, 'filesize': 0x8000}],
+            sections=[{'segment': '__TEXT', 'name': '__const', 'va': 0x7005a40, 'size': 0x100},
+                      {'segment': '__TEXT', 'name': '__eh_frame', 'va': 0x7004000 + section_end - 0x10, 'size': 0x10},
+                      {'segment': '__DATA', 'name': '__data', 'va': 0x9000000, 'size': 0x10}])
+        layout.roots = {'__PRELINK_TEXT': {'va': 0x100000, 'size': 0x400000}}
+        layout.occupied = [(0x100000, 0x104000), (0x104000 + next_kext, 0x300000)]
+        layout.placements, layout.mapped = {}, {}
+        return layout
+
+    def place(self, layout):
+        used = layout.used('__TEXT')
+        layout.reserve('__TEXT', layout.hole('__PRELINK_TEXT', used))
+        room = layout.room('__PRELINK_TEXT', layout.placements['__TEXT'])
+        layout.mapped = {'__TEXT': min(layout.segment('__TEXT')['size'], room // 0x1000 * 0x1000)}
+        return used, room
+
+    def test_sections_fit_where_the_padded_segment_does_not(self):
+        layout = self.layout(section_end=0x1d80a8, next_kext=0x1db750)
+        used, room = self.place(layout)
+        self.assertEqual((used, room), (0x1d80a8, 0x1db750))
+        self.assertEqual(layout.placements['__TEXT'], 0x104000)
+        self.assertEqual(layout.span('__TEXT'), 0x1db000)          # whole pages, below the kext
+        self.assertEqual(layout.end('__TEXT'), 0x104000 + 0x1db000)
+        self.assertEqual(layout.span('__DATA'), 0x8000)            # other segments keep their size
+        self.assertEqual(layout.used('__DATA'), 0x10)
+
+    def test_a_segment_with_room_keeps_its_linked_size(self):
+        layout = self.layout(section_end=0x1d80a8, next_kext=0x1e0000)
+        self.place(layout)
+        self.assertEqual(layout.span('__TEXT'), 0x1dc000)
+
+    def test_sections_past_the_free_run_are_refused(self):
+        layout = self.layout(section_end=0x1db800, next_kext=0x1db750)
+        layout.roots['__PRELINK_TEXT']['size'] = 0x200000   # nothing free after the retained kext
+        with self.assertRaisesRegex(ValueError, 'No room'):
+            layout.hole('__PRELINK_TEXT', layout.used('__TEXT'))
+
 if __name__ == '__main__':
     unittest.main()

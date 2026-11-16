@@ -886,6 +886,21 @@ pub fn param(cx: &mut SelectCx<'_>, b: &ParamBinding) -> Result<(), Error> {
                 form: f,
             }
         }
+        // Drawn a rate-mapped pass's regions at a time, the vertex function's `ViewportIndex` holds
+        // its region's draw index, where Metal's, which writes no index, renders through viewport
+        // 0: a fragment function reads 0, which Metal's reads there.
+        (ParamRole::Builtin(Builtin::ViewportArrayIndex), Stage::Fragment)
+            if cx.inputs.region_viewports =>
+        {
+            refuse_int64_interface(cx.entry, ty)?;
+            let f = form_on(cx.entry, cx.profile, ty)?;
+            int_scalar(f)?;
+            cx.families.stage_io.params.push(PlannedParam {
+                param: b.param,
+                source: Source::Absent(f),
+            });
+            return Ok(());
+        }
         // Drawn one amplification at a time beside a vertex function that writes no such index, a
         // fragment function reads the amplification's offset as the index, as Metal adds it to the
         // index the vertex function writes, 0 (a Metal probe on the M3 Max and an M4).
@@ -1216,6 +1231,76 @@ fn amplified_output(cx: &mut SelectCx<'_>, index: AmplifiedIndex) -> Result<(), 
         },
         offset,
         below,
+    });
+    Ok(())
+}
+
+/// Plan the `ViewportIndex` of a vertex function with outputs `outputs`, returning `returned`,
+/// compiled under `LoweringInputs::region_viewports`: its `DrawIndex`, "the zero-based index of
+/// the draw" of a `vkCmdDrawMultiEXT` or `vkCmdDrawMultiIndexedEXT` (the specification's
+/// `DrawIndex`), and so its region's among the command's ([`super::RegionViewport`]). `DrawIndex`
+/// is dynamically uniform, so every vertex of a primitive stores the same index, as Vulkan's
+/// `ViewportIndex` asks. A function that writes its own viewport or slice index, and one under
+/// another field that moves its indices or position (`amplification_draws`,
+/// `viewport_compensation`), reads its draw from a replay (`replay_bindings`, `merged_draws`) or
+/// runs behind the tessellator, is `NotImplemented(RasterizationRateMap)`: the runtime draws
+/// those region by region. A device that cannot store `ViewportIndex` from a vertex function,
+/// read `DrawIndex` or take several viewports refuses it, naming the three features. A function
+/// without outputs rasterizes nothing and stores no index.
+fn region_viewport(
+    cx: &mut SelectCx<'_>,
+    outputs: &[OutputBinding],
+    returned: Returned,
+) -> Result<(), Error> {
+    let i = &cx.inputs;
+    let indexed = outputs.iter().any(|o| {
+        matches!(
+            o.role,
+            OutputRole::ViewportArrayIndex | OutputRole::RenderTargetArrayIndex
+        )
+    });
+    let tessellated = matches!(cx.entry.ep.stage, AirStage::Vertex { patch: Some(_) });
+    if indexed
+        || tessellated
+        || i.amplification_draws.is_some()
+        || i.viewport_compensation.is_some()
+        || i.replay_bindings
+        || i.merged_draws
+    {
+        return Err(Unsupported::not_implemented(Feature::RasterizationRateMap).into());
+    }
+    let f = cx.profile.fields();
+    let multi_viewport = f.enabled.features.contains(&VkFeature::MultiViewport);
+    if !(f.fragment.output_viewport_index && f.draw_parameters && multi_viewport) {
+        return Err(Unsupported::needs_any_of(
+            Feature::RasterizationRateMap,
+            vec![vec![
+                Capability::Feature(VkFeature::ShaderOutputViewportIndex),
+                Capability::Feature(VkFeature::ShaderDrawParameters),
+                Capability::Feature(VkFeature::MultiViewport),
+            ]],
+        )
+        .into());
+    }
+    cx.facts.insert(RuntimeFact::RegionViewports);
+    if returned == Returned::Void {
+        return Ok(());
+    }
+    let sp = &mut cx.families.stage_io;
+    let draw_index = builtin(
+        sp,
+        B::DrawIndex,
+        IoDir::Input,
+        Shape::U32,
+        StageBuiltin::DrawIndex,
+    );
+    // Not the contract's `ViewportIndex`: the function selects no viewport of the encoder's
+    // (`GraphicsState::writes_viewport_index` stays unset), its draw's index selecting its
+    // region's.
+    let viewport = builtin_object(sp, B::ViewportIndex, IoDir::Output, Shape::U32);
+    sp.region_viewport = Some(super::RegionViewport {
+        draw_index,
+        viewport,
     });
     Ok(())
 }
@@ -2629,6 +2714,12 @@ pub fn entry(cx: &mut SelectCx<'_>) -> Result<(), Error> {
             amplified_output(cx, AmplifiedIndex::Viewport)?;
         }
     }
+    if cx.inputs.region_viewports && cx.stage == Stage::Vertex {
+        region_viewport(cx, &outputs, returned)?;
+    }
+    if cx.inputs.region_copies && cx.stage == Stage::Vertex {
+        region_copy(cx, &outputs, returned)?;
+    }
     // A viewport Vulkan's cannot be: the position compensated for it.
     if let Some(c) = cx
         .inputs
@@ -2855,7 +2946,17 @@ fn merged(cx: &mut SelectCx<'_>) -> Result<(), Error> {
         Shape::U32,
         StageBuiltin::InstanceIndex,
     );
-    sp.merged = Some(MergedRead { vertex, instance });
+    let command = flat_uint(
+        sp,
+        VaryingKey::merged_command(),
+        IoRole::MergedCommand,
+        IoDir::Output,
+    )?;
+    sp.merged = Some(MergedRead {
+        vertex,
+        instance,
+        command,
+    });
     sp.words = sp.words.saturating_add(super::MERGED_WORDS);
     cx.push.insert(PushField::MergedDrawAddress);
     cx.facts.insert(RuntimeFact::MergedDraws);
@@ -2882,9 +2983,10 @@ fn merged_param(
 
 /// The push fields of a function compiled under `LoweringInputs::merged_draws`, once every family
 /// planned its own: a vertex function reads its command's slot table from the header
-/// ([`MergedRead`]), so `RootTableAddress` is no push field of it; a fragment function reads no
-/// command's buffer, which a merged draw does not keep per command, and one that does is
-/// `Unsupported{GpuEncodedIndirectCommands, NotImplemented}`.
+/// ([`MergedRead`]), and a fragment function that reads a command's buffers its command's
+/// fragment slot table, at its flat `IoRole::MergedCommand` input (`StageIoPlan::merged_fragment`),
+/// so `RootTableAddress` is no push field of either; the fragment function's is the header's
+/// address, `PushField::MergedDrawAddress`.
 pub(crate) fn finish_merged(cx: &mut SelectCx<'_>) -> Result<(), Error> {
     if !cx.inputs.merged_draws {
         return Ok(());
@@ -2893,8 +2995,17 @@ pub(crate) fn finish_merged(cx: &mut SelectCx<'_>) -> Result<(), Error> {
         Stage::Vertex => {
             cx.push.remove(&PushField::RootTableAddress);
         }
-        Stage::Fragment if cx.push.contains(&PushField::RootTableAddress) => {
-            return Err(Unsupported::not_implemented(Feature::GpuEncodedIndirectCommands).into());
+        Stage::Fragment if cx.push.remove(&PushField::RootTableAddress) => {
+            cx.push.insert(PushField::MergedDrawAddress);
+            let sp = &mut cx.families.stage_io;
+            let object = flat_uint(
+                sp,
+                VaryingKey::merged_command(),
+                IoRole::MergedCommand,
+                IoDir::Input,
+            )?;
+            sp.merged_fragment = Some(object);
+            sp.words = sp.words.saturating_add(super::MERGED_FRAGMENT_WORDS);
         }
         _ => {}
     }
@@ -2937,55 +3048,7 @@ fn compensate(cx: &mut SelectCx<'_>, c: ViewportCompensation) -> Result<(), Erro
     let added = 2 * u32::from(c.depth) + 4 * u32::from(c.point_guard);
     let clips = match added {
         0 => None,
-        _ => {
-            if !cx.profile.fields().fragment.clip_distance {
-                return Err(needs(Feature::ClipDistance, VkFeature::ShaderClipDistance));
-            }
-            let limits = cx.profile.fields().limits;
-            let sp = &mut cx.families.stage_io;
-            let own = sp.objects.iter().position(|o| is(o, B::ClipDistance));
-            let first = match own.and_then(|i| sp.objects.get(i)) {
-                Some(IoObject::Builtin {
-                    shape: Shape::F32Array(n),
-                    ..
-                }) => *n,
-                Some(_) => return Err(not_lowered()),
-                None => 0,
-            };
-            let count = first + added;
-            for (lim, max) in [
-                (VkLimit::MaxClipDistances, limits.max_clip_distances),
-                (
-                    VkLimit::MaxCombinedClipAndCullDistances,
-                    limits.max_combined_clip_and_cull_distances,
-                ),
-            ] {
-                if count > max {
-                    return Err(limit(Feature::ClipDistance, lim, u64::from(count), max));
-                }
-            }
-            let object = match own {
-                // The function's own clip distances, two elements longer.
-                Some(i) => {
-                    if let Some(IoObject::Builtin { shape, .. }) = sp.objects.get_mut(i) {
-                        *shape = Shape::F32Array(count);
-                    }
-                    let builtins = &mut sp.interface.builtins;
-                    builtins.retain(|b| !matches!(b, StageBuiltin::ClipDistance { .. }));
-                    builtins.push(StageBuiltin::ClipDistance { count });
-                    builtins.sort();
-                    i
-                }
-                None => builtin(
-                    sp,
-                    B::ClipDistance,
-                    IoDir::Output,
-                    Shape::F32Array(count),
-                    StageBuiltin::ClipDistance { count },
-                ),
-            };
-            Some((object, first))
-        }
+        _ => Some(added_clip_distances(cx, added, Feature::ClipDistance)?),
     };
     let clip = clips.filter(|_| c.depth);
     let guard = clips
@@ -2997,6 +3060,161 @@ fn compensate(cx: &mut SelectCx<'_>, c: ViewportCompensation) -> Result<(), Erro
         guard,
         mirrors: c.mirrors,
         vertex_clamp: c.vertex_clamp && c.depth,
+    });
+    Ok(())
+}
+
+/// Add `added` clip distances past a vertex function's own, for `feature`: its `ClipDistance`
+/// object, `added` elements longer, or a new one, and the first of the added elements. Refused as
+/// `feature` where the device writes no clip distances or the count passes its limits.
+fn added_clip_distances(
+    cx: &mut SelectCx<'_>,
+    added: u32,
+    feature: Feature,
+) -> Result<(usize, u32), Error> {
+    if !cx.profile.fields().fragment.clip_distance {
+        return Err(needs(feature, VkFeature::ShaderClipDistance));
+    }
+    let is = |o: &IoObject| {
+        matches!(
+            o,
+            IoObject::Builtin {
+                builtin: B::ClipDistance,
+                dir: IoDir::Output,
+                ..
+            }
+        )
+    };
+    let limits = cx.profile.fields().limits;
+    let sp = &mut cx.families.stage_io;
+    let own = sp.objects.iter().position(is);
+    let first = match own.and_then(|i| sp.objects.get(i)) {
+        Some(IoObject::Builtin {
+            shape: Shape::F32Array(n),
+            ..
+        }) => *n,
+        Some(_) => return Err(not_lowered()),
+        None => 0,
+    };
+    let count = first + added;
+    for (lim, max) in [
+        (VkLimit::MaxClipDistances, limits.max_clip_distances),
+        (
+            VkLimit::MaxCombinedClipAndCullDistances,
+            limits.max_combined_clip_and_cull_distances,
+        ),
+    ] {
+        if count > max {
+            return Err(limit(feature, lim, u64::from(count), max));
+        }
+    }
+    let object = match own {
+        // The function's own clip distances, `added` elements longer.
+        Some(i) => {
+            if let Some(IoObject::Builtin { shape, .. }) = sp.objects.get_mut(i) {
+                *shape = Shape::F32Array(count);
+            }
+            let builtins = &mut sp.interface.builtins;
+            builtins.retain(|b| !matches!(b, StageBuiltin::ClipDistance { .. }));
+            builtins.push(StageBuiltin::ClipDistance { count });
+            builtins.sort();
+            i
+        }
+        None => builtin(
+            sp,
+            B::ClipDistance,
+            IoDir::Output,
+            Shape::F32Array(count),
+            StageBuiltin::ClipDistance { count },
+        ),
+    };
+    Ok((object, first))
+}
+
+/// Plan the region's copy a vertex function with outputs `outputs`, returning `returned`,
+/// compiled under `LoweringInputs::region_copies`, stores at every return: region `first +
+/// DrawIndex` of the region table (`PushField::RegionFirst`, the specification's `DrawIndex`,
+/// 0 for a draw that is no multi-draw's), its position moved by the region's line and four clip
+/// distances past its own keeping the region's pixels ([`super::RegionCopy`],
+/// `pipeline::link::fan_out::region_copy`), and `DrawIndex` as `ViewportIndex`, which selects
+/// the region's scissor among a multi-draw's. A function that writes its own viewport or slice
+/// index, one under another field that moves its indices or position (`amplification_draws`,
+/// `viewport_compensation`), reads its draw from a replay (`replay_bindings`, `merged_draws`),
+/// runs behind the tessellator or returns no outputs is `NotImplemented(RasterizationRateMap)`:
+/// the runtime draws those through each region's viewport. A device that cannot store
+/// `ViewportIndex` from a vertex function, read `DrawIndex`, take several viewports or write four
+/// more clip distances refuses it.
+fn region_copy(
+    cx: &mut SelectCx<'_>,
+    outputs: &[OutputBinding],
+    returned: Returned,
+) -> Result<(), Error> {
+    let i = &cx.inputs;
+    let indexed = outputs.iter().any(|o| {
+        matches!(
+            o.role,
+            OutputRole::ViewportArrayIndex | OutputRole::RenderTargetArrayIndex
+        )
+    });
+    let tessellated = matches!(cx.entry.ep.stage, AirStage::Vertex { patch: Some(_) });
+    let sp = &cx.families.stage_io;
+    let position = sp.objects.iter().position(|o| {
+        matches!(
+            o,
+            IoObject::Builtin {
+                builtin: B::Position,
+                dir: IoDir::Output,
+                ..
+            }
+        )
+    });
+    let position = match position {
+        Some(p) if returned != Returned::Void => p,
+        _ => return Err(Unsupported::not_implemented(Feature::RasterizationRateMap).into()),
+    };
+    if indexed
+        || tessellated
+        || i.amplification_draws.is_some()
+        || i.viewport_compensation.is_some()
+        || i.region_viewports
+        || i.replay_bindings
+        || i.merged_draws
+    {
+        return Err(Unsupported::not_implemented(Feature::RasterizationRateMap).into());
+    }
+    let f = cx.profile.fields();
+    let multi_viewport = f.enabled.features.contains(&VkFeature::MultiViewport);
+    if !(f.fragment.output_viewport_index && f.draw_parameters && multi_viewport) {
+        return Err(Unsupported::needs_any_of(
+            Feature::RasterizationRateMap,
+            vec![vec![
+                Capability::Feature(VkFeature::ShaderOutputViewportIndex),
+                Capability::Feature(VkFeature::ShaderDrawParameters),
+                Capability::Feature(VkFeature::MultiViewport),
+            ]],
+        )
+        .into());
+    }
+    let clip = added_clip_distances(cx, 4, Feature::RasterizationRateMap)?;
+    cx.push.insert(PushField::RegionFirst);
+    // The region table, one more storage buffer of the stage.
+    let d = &mut cx.descriptors;
+    d.storage_buffers = d.storage_buffers.saturating_add(1);
+    let sp = &mut cx.families.stage_io;
+    let draw_index = builtin(
+        sp,
+        B::DrawIndex,
+        IoDir::Input,
+        Shape::U32,
+        StageBuiltin::DrawIndex,
+    );
+    // Not the contract's `ViewportIndex`, as a region viewport's is not (`region_viewport`).
+    let viewport = builtin_object(sp, B::ViewportIndex, IoDir::Output, Shape::U32);
+    sp.region_copy = Some(super::RegionCopy {
+        position,
+        draw_index,
+        viewport,
+        clip,
     });
     Ok(())
 }
@@ -3400,6 +3618,12 @@ pub fn finish(cx: &mut SelectCx<'_>) -> Result<(), Error> {
         }
         cx.families.stage_io.interface.alpha_test = Some(function);
     }
+    // The render pipeline's private logic operation, which the function's writes compute
+    // (`lower::fragment`'s `logic`): recorded for link, whether or not the function writes an
+    // attachment the operation serves.
+    if cx.stage == Stage::Fragment {
+        cx.families.stage_io.interface.logic_operation = cx.inputs.logic_operation;
+    }
     // The render pipeline's private masks a fragment function applies itself: its `SampleMask`
     // output, the function's own where it writes one, which each return ANDs the pixel's mask
     // into or stores it as; and the `FragCoord` input whose pixel picks the mask, where the masks
@@ -3424,7 +3648,8 @@ pub fn finish(cx: &mut SelectCx<'_>) -> Result<(), Error> {
     }
     // Size: every object, the parameters' words, and a store per output element; a count's
     // compare and select (and its constant 0) are a store's words more, and so is an
-    // amplification's offset added; an amplified output is a store, an add and a count's.
+    // amplification's offset added; an amplified output is a store, an add and a count's, and a
+    // region's viewport a load and a store.
     let params = param_words(cx);
     let sp = &mut cx.families.stage_io;
     let stores: u64 = sp
@@ -3449,6 +3674,8 @@ pub fn finish(cx: &mut SelectCx<'_>) -> Result<(), Error> {
         // A rotation's second output: its field, two shuffles and a store.
         + 4 * sp.rotated_seconds.len() as u64
         + 3 * sp.amplified.len() as u64
+        // The region's draw index loaded and stored.
+        + 2 * u64::from(sp.region_viewport.is_some())
         + u64::from(sp.point_size_default.is_some())
         // The private sample mask's AND and store.
         + 2 * u64::from(sp.private_mask.is_some())

@@ -237,12 +237,13 @@ pub enum Side {
     Null,
 }
 
-/// SPIR-V words of the module's resident-set search ([`roots::resolve`], once per module): per
-/// step the halving, the entry's access chain and load, a compare, and a select, about 40 words,
-/// plus the table's and the set's conversions, the hit test, and a function's frame; and the
-/// loop that ends a set past the unrolled steps: one more step, its two variables' stores and
-/// loads, and the loop's and its exit's blocks.
-pub const SEARCH_WORDS: u32 = 44 * (roots::SEARCH_STEPS + 1) + 216 + 96;
+/// SPIR-V words of the module's resident-set search ([`roots::resolve`], once per module): the
+/// table's and the set's conversions, the hit test, and a function's frame (216); its two loops,
+/// each with its two variables' stores and loads and the loop's and its exit's blocks (96 each);
+/// three steps (the halving, the entry's access chain and load, a compare, and a select, about 40
+/// words each: one in the 64-bit narrowing, two in the 32-bit loop); and the window between them,
+/// its two conversions and the root's second addition (48).
+pub const SEARCH_WORDS: u32 = 3 * 44 + 216 + 2 * 96 + 48;
 /// SPIR-V words of one use of the search: the root table's address and the call.
 const CALL_WORDS: u32 = 24;
 /// SPIR-V words of one wide access before its leaf: the pointer's fields, the check, the sink
@@ -498,9 +499,11 @@ pub fn param_value(
     Ok(Some(fat(fb, [root, at, host, size])?))
 }
 
-/// The work before the body (the entry hook): in the function's first block, which dominates
-/// every block, read the sink's address and each wide buffer parameter's root entry once, so no
-/// access reads the root table again. The table is read-only to the dispatch: the binder writes
+/// The work before the body (the entry hook): at entry, in a block that dominates every block of
+/// the body (the function's first, or the merge of a merged vertex's search, which
+/// `stage_io::emit_draw_entry` emits before it, as the slot table it reads is its command's), read
+/// the sink's address and each wide buffer parameter's root entry once, so no access reads the
+/// root table again. The table is read-only to the dispatch: the binder writes
 /// it before submission and no lowering stores to it.
 pub fn emit_entry(cx: &mut EmitCx<'_>, fb: &mut FunctionBuilder<'_>) -> BResult<()> {
     let dynamic = &cx.plan.families.access.dynamic;
@@ -768,6 +771,7 @@ pub fn select(
                 &cx.memory.layouts,
                 inst.ty,
                 align_of(*align),
+                cx.memory.proven_align(cx.entry, *ptr),
             )?;
             DynStrategy::Load(WideAccess {
                 ptr: plan_deref(cx, *ptr)?,
@@ -796,6 +800,7 @@ pub fn select(
                 &cx.memory.layouts,
                 ty,
                 align_of(*align),
+                cx.memory.proven_align(cx.entry, *ptr),
             )?;
             let value = stored_value(cx, *val)?;
             DynStrategy::Store(WideAccess {
@@ -856,7 +861,8 @@ fn coherent(
     };
     // The intrinsic states no alignment: the value's natural (ABI) one.
     let align = cx.memory.layouts.abi_align(ty).unwrap_or(1);
-    let leaf = leaf::leaf_of(cx.entry, cx.profile, &cx.memory.layouts, ty, align)?;
+    let proven = cx.memory.proven_align(cx.entry, ptr);
+    let leaf = leaf::leaf_of(cx.entry, cx.profile, &cx.memory.layouts, ty, align, proven)?;
     let value = match value {
         Some(v) => Some(stored_value(cx, v)?),
         None => None,

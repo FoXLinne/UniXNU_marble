@@ -58,8 +58,10 @@
 //!   each fetch after the earlier fragments of the draw that cover the pixel; Vulkan does only
 //!   under rasterization-order attachment access, so a pipeline with input attachments on a profile
 //!   with `rasterizationOrderColorAttachmentAccess` states `rasterization_order_attachment_access`
-//!   (and the compiled pipeline requires the feature). Without the feature no fragment stage reads
-//!   an input attachment (`lower::fragment::color` refuses it). In a multisampled pipeline
+//!   (and the compiled pipeline requires the feature). Without the feature a fragment stage reads
+//!   an input attachment only on a device without the pixel interlock either
+//!   (`lower::fragment::color`), whose consumer orders the draws by barriers alone. In a
+//!   multisampled pipeline
 //!   (`rasterSampleCount` above 1) Metal runs a function that reads a color attachment once per
 //!   covered sample, each invocation reading its own sample (measured), so the stage, compiled for
 //!   the pipeline (`LoweringInputs::multisampled`), reads a multisampled `SubpassData` image (or,
@@ -469,6 +471,15 @@ pub fn graphics_state(
                         && !replaced
                         && input_blend.is_none()
                         && !unwritten_extended;
+                    // A blend into a two-plane YCbCr `_sRGB` twin a pass renders is not measured
+                    // (`metal::format::ycbcr_renders`): whether Metal's tile blends the texels'
+                    // linear values or their encoding.
+                    let srgb_twin = metal::format::ycbcr_renders(a.pixel_format)
+                        && metal::format::ycbcr_format(a.pixel_format)
+                            .is_some_and(|f| f.reads == metal::format::YCbCrReads::Srgb);
+                    if blended && srgb_twin {
+                        return Err(Unsupported::not_implemented(Feature::Format).into());
+                    }
                     let mut usages = BTreeSet::from([FormatUsage::ColorAttachment]);
                     if blended {
                         usages.insert(FormatUsage::ColorAttachmentBlend);
@@ -765,6 +776,8 @@ pub fn graphics_state(
         emulated_tessellation: None,
         // A band variant's pipeline states its band (`link`).
         line_band: None,
+        // A fan-out variant's pipeline states its fan-out (`link`).
+        region_fan_out: None,
         writes_point_size: vs.writes_point_size(),
         flat_fragment_inputs: fs.is_some_and(|fs| reads_flat_inputs(&fs.io)),
         clip_distances: vs
@@ -841,6 +854,7 @@ fn reads_flat_inputs(io: &StageIo) -> bool {
             } | IoRole::ViewportIndex
                 | IoRole::RenderTargetArrayIndex
                 | IoRole::PrimitiveId
+                | IoRole::MergedCommand
         )
     });
     flat || io

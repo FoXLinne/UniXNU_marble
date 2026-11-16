@@ -407,6 +407,301 @@ pub struct StageInterface {
     /// `PrecisionNote::FunctionStorageAssumed`'s announcement names.
     #[cfg_attr(feature = "serde", serde(default))]
     pub private_bytes: u64,
+    /// The samplers of each constexpr sampler array the module declares
+    /// (`ResourceKind::SamplerArray`), which link bakes into its binding as the immutable samplers
+    /// (`DescriptorBinding::immutable_samplers`).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub sampler_arrays: Vec<SamplerArray>,
+}
+
+/// One constexpr sampler array of a stage (`ResourceKind::SamplerArray`): the binding a heap
+/// sampling indexes by its sampler handle's distance from the first candidate's, Metal's
+/// `constexpr sampler`s it chooses among.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SamplerArray {
+    /// The array's binding symbol, whose kind states the use its samplers are made for.
+    pub slot: ResourceSlot,
+    /// Each element's constexpr sampler, in element order.
+    pub samplers: Vec<crate::pipeline::sym::SamplerRef>,
+}
+
+/// What leaves an own-pixel texture slot of a fragment function out of the slots a draw can read
+/// through a snapshot an earlier draw of the same primitives took
+/// (`StageInterface::snapshot_refusals`, `StageModule::snapshot_refusals`). A helper invocation
+/// reads a constant from the snapshot, so the slot is left out where a helper's value of it could
+/// reach another invocation's result, give it undefined behavior, or where the snapshot cannot be
+/// made beside the function. The first eight say where a value that a fetch of the slot reaches,
+/// through any instruction, phi, call, or `Function`, `Private` or `Output` variable, is used.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SnapshotRefusal {
+    /// It decides a conditional branch or a switch, but for a branch that only decides whether
+    /// the invocation demotes itself.
+    Branch,
+    /// It is an operand of a derivative.
+    Derivative,
+    /// It is an operand of a sample, a gather or a level-of-detail query of any image.
+    Sample,
+    /// It is an operand of a subgroup or quad operation.
+    GroupOperation,
+    /// It is stored to a storage class other than `Function`, `Private` or `Output`, or through
+    /// a function parameter's pointer.
+    Store,
+    /// It is an operand of an atomic.
+    Atomic,
+    /// It is an operand of an image write or a texel pointer.
+    ImageWrite,
+    /// It is an operand an instruction's behavior is undefined for at some value: an integer
+    /// divisor, the dividend of a signed division or remainder whose divisor may be `-1`, or a
+    /// dynamic vector component index.
+    UndefinedOperand,
+    /// The function writes memory (`StageInterface::writes_memory`).
+    WritesMemory,
+    /// The module holds a fragment interlock critical section.
+    Interlock,
+    /// The module has a `Coherent` resource or uses the Vulkan memory model.
+    Coherent,
+    /// Anything else: the slot's index is 128 or more, its values take more than 16 passes over
+    /// the module to settle, or one is an operand of a ray query, a mesh output count or a call
+    /// whose callee's parameters it does not match, or the entry's returned value.
+    Other,
+}
+
+/// The levels of its bound view that a texture slot's reads reach, each counted from the view's
+/// first level (`StageInterface::level_reads`, `StageModule::level_reads`), as the module's
+/// instructions decide them (`spirv::requirements::level_reads`, structural). A sample's level is
+/// its sampler's to bound, so the fact lists each sampler the slot is sampled through apart, and a
+/// runtime asks [`LevelReads::highest_level`] and [`LevelReads::lowest_level`] with the samplers
+/// it binds. Vulkan's rules decide
+/// the levels (Image Level(s) Selection): a sample reads `clamp(λ, 0, q)` past the view's first
+/// level, `λ` its level of detail clamped into the sampler's `[minLod, maxLod]`; a gather reads
+/// the first level; a fetch and a size query read the level they name.
+#[non_exhaustive]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LevelReads {
+    /// The texture slot.
+    pub slot: u32,
+    /// Some use of the slot may reach any level of its view, or answers by the view's level
+    /// count: a fetch or size query at a level the module computes, a level-count query beyond the
+    /// containment of a constant level (`UMin(c, levels - 1)` and `c < levels`), a level-of-detail
+    /// query, a sample with a minimum level of detail operand, a storage access, or any use the
+    /// walk does not follow (a call, a store, a phi or select of the image).
+    pub any: bool,
+    /// The highest level a fetch, a size query or a gather reads, each a constant (a gather reads
+    /// level 0), or the highest constant a level-count containment compares; `None` where none
+    /// does.
+    pub named: Option<u32>,
+    /// The lowest level whose texels a fetch or a gather reads, each a constant (a gather reads
+    /// level 0); `None` where none does. A size query reads no texel, nor does a level-count
+    /// containment's comparison: each raises `named` alone.
+    pub lowest_read: Option<u32>,
+    /// The slot's samples, by the sampler each reads through, sorted by sampler.
+    pub sampled: Vec<SampledLevels>,
+}
+
+/// The samples of a texture slot through one sampler ([`LevelReads::sampled`]).
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SampledLevels {
+    /// The sampler: a runtime sampler's slot, or a constexpr sampler.
+    pub sampler: crate::pipeline::sym::SamplerRef,
+    /// The bits of the highest explicit level of detail among its samples that is a constant
+    /// `f32` (a NaN where one is); `None` where none is.
+    pub highest_lod_bits: Option<u32>,
+    /// The bits of the lowest explicit level of detail among its samples that is a constant `f32`
+    /// (a NaN where one is); `None` where none is.
+    pub lowest_lod_bits: Option<u32>,
+    /// Some sample's level of detail is the module's to compute: implicit, biased, from
+    /// gradients, or an explicit level that is no constant. The sampler's `maxLod` bounds it.
+    pub computed: bool,
+}
+
+/// A sampler's level selection as a runtime binds it ([`SampledLevels::level`]): its
+/// `minLod`, `maxLod` and `mipLodBias`, whether its mipmap mode is `LINEAR`, and whether every
+/// texel of the view is finite ([`SamplerLevels::finite_texels`]), where a linear blend of a level
+/// with weight 0 reads that level's texel to no effect.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SamplerLevels {
+    pub min_lod: f32,
+    pub max_lod: f32,
+    pub bias: f32,
+    pub linear: bool,
+    pub finite_texels: bool,
+}
+
+impl SamplerLevels {
+    /// The levels of Vulkan sampler `desc` over a view whose texels `finite_texels` says are
+    /// finite.
+    pub fn of(desc: &vk::SamplerDesc, finite_texels: bool) -> SamplerLevels {
+        SamplerLevels {
+            min_lod: desc.min_lod,
+            max_lod: desc.max_lod,
+            bias: desc.mip_lod_bias,
+            linear: desc.mipmap_mode == vk::SamplerMipmapMode::LINEAR,
+            finite_texels,
+        }
+    }
+
+    /// Whether every texel a view of `format` holds reads as a finite number: an 8-, 10- or
+    /// 16-bit normalized or sRGB color format, or an integer one. `false` for every other format,
+    /// a float one among them, whose texels may be infinities or NaNs.
+    pub fn finite_texels(format: vk::Format) -> bool {
+        use vk::Format as F;
+        matches!(
+            format,
+            F::R8_UNORM
+                | F::R8_SNORM
+                | F::R8G8_UNORM
+                | F::R8G8_SNORM
+                | F::R8G8B8A8_UNORM
+                | F::R8G8B8A8_SNORM
+                | F::R8G8B8A8_SRGB
+                | F::B8G8R8A8_UNORM
+                | F::B8G8R8A8_SRGB
+                | F::A2B10G10R10_UNORM_PACK32
+                | F::A2R10G10B10_UNORM_PACK32
+                | F::R16_UNORM
+                | F::R16_SNORM
+                | F::R16G16_UNORM
+                | F::R16G16_SNORM
+                | F::R16G16B16A16_UNORM
+                | F::R16G16B16A16_SNORM
+                | F::R5G6B5_UNORM_PACK16
+                | F::B5G6R5_UNORM_PACK16
+                | F::R8_UINT
+                | F::R8_SINT
+                | F::R8G8_UINT
+                | F::R8G8_SINT
+                | F::R8G8B8A8_UINT
+                | F::R8G8B8A8_SINT
+                | F::R16_UINT
+                | F::R16_SINT
+                | F::R16G16_UINT
+                | F::R16G16_SINT
+                | F::R16G16B16A16_UINT
+                | F::R16G16B16A16_SINT
+                | F::R32_UINT
+                | F::R32_SINT
+                | F::R32G32_UINT
+                | F::R32G32_SINT
+                | F::R32G32B32A32_UINT
+                | F::R32G32B32A32_SINT
+        )
+    }
+}
+
+impl SampledLevels {
+    /// The highest explicit constant level of detail among the samples.
+    pub fn highest_lod(&self) -> Option<f32> {
+        self.highest_lod_bits.map(f32::from_bits)
+    }
+
+    /// The highest level, counted from the view's first, these samples reach through a sampler
+    /// of levels `s`; `None` where they may reach any.
+    ///
+    /// A sample's level of detail is at most `L`: `maxLod`, or for a constant explicit `c` with
+    /// nothing computed, `c` plus the sampler's bias where it is positive (Vulkan adds the
+    /// sampler's bias to an explicit level of detail too), clamped into `[minLod, maxLod]`; at
+    /// least 0. The nearest mipmap mode reads level `floor(L + 0.5)` at most (both of Vulkan's
+    /// roundings); the linear one reads `floor(L) + 1` with the weight `L - floor(L)`, so where
+    /// `L` is a whole level and the texels are finite it reads level `L` to effect alone. A
+    /// sampler whose `minLod` exceeds its `maxLod`, or whose bounds are no finite numbers,
+    /// reaches any level.
+    pub fn level(&self, s: SamplerLevels) -> Option<u32> {
+        // A last level past every texture's: Metal's largest has 15 levels.
+        const PAST: f32 = 64.0;
+        if !(s.min_lod.is_finite() && s.max_lod.is_finite()) || s.min_lod > s.max_lod {
+            return None;
+        }
+        let computed = self.computed.then_some(s.max_lod);
+        // A negative bias is not counted on to lower the level.
+        let explicit = (self.highest_lod()).map(|c| match c.is_nan() {
+            true => s.max_lod,
+            false => (c + s.bias.max(0.0)).clamp(s.min_lod, s.max_lod),
+        });
+        let top = (computed.into_iter().chain(explicit)).fold(0.0_f32, |top, l| top.max(l));
+        if top >= PAST {
+            return None;
+        }
+        let level = match s.linear {
+            true if s.finite_texels && top.fract() == 0.0 => top,
+            true => top.floor() + 1.0,
+            false => (top + 0.5).floor(),
+        };
+        Some(level as u32)
+    }
+
+    /// The lowest explicit constant level of detail among the samples.
+    pub fn lowest_lod(&self) -> Option<f32> {
+        self.lowest_lod_bits.map(f32::from_bits)
+    }
+
+    /// The lowest level, counted from the view's first, these samples may read through a sampler
+    /// of levels `s`, over a view of more levels than it (a view whose last level is lower reads
+    /// that one in its place: the LOD Operation clamps into `[0, q]`).
+    ///
+    /// A sample's level of detail is at least `L`: `minLod` where one is computed (the LOD
+    /// Operation clamps it into `[minLod, maxLod]` after any bias), and for the lowest constant
+    /// explicit `c`, `c` plus the sampler's bias where it is negative, clamped so; at least 0.
+    /// Either mipmap mode reads level `floor(L)` or a higher one: the nearest one
+    /// `ceil(L + 0.5) - 1` or `floor(L + 0.5)`, the linear one `floor(L)` and the next. A NaN
+    /// constant, a sampler whose `minLod` exceeds its `maxLod` (the level of detail is undefined),
+    /// or one whose bounds are no finite numbers, reaches the first level.
+    pub fn lowest(&self, s: SamplerLevels) -> u32 {
+        if !(s.min_lod.is_finite() && s.max_lod.is_finite()) || s.min_lod > s.max_lod {
+            return 0;
+        }
+        let computed = self.computed.then_some(s.min_lod);
+        let explicit = match self.lowest_lod() {
+            Some(c) if c.is_nan() => return 0,
+            // A positive bias is not counted on to raise the level, and a NaN one is none, as a
+            // device's sampler takes it (`metal::sampler::device_lod_bias`).
+            Some(c) => Some((c + s.bias.min(0.0)).clamp(s.min_lod, s.max_lod)),
+            None => None,
+        };
+        let low = (computed.into_iter().chain(explicit)).reduce(f32::min);
+        low.map_or(0, |low| low.max(0.0).floor() as u32)
+    }
+}
+
+impl LevelReads {
+    /// The highest level, counted from the view's first, that the slot's reads reach, where
+    /// `sampled` answers for each of its samplers' samples the highest level they reach through
+    /// the sampler the runtime binds ([`SampledLevels::level`]); `None` where a read may reach
+    /// any level ([`LevelReads::any`]) or `sampled` answers `None`. A view of the same first level
+    /// and more levels than this answers every read of the slot as the whole view does: each
+    /// reads the same level and texels (Image Level(s) Selection, at a level of detail that does
+    /// not depend on the level count).
+    pub fn highest_level(&self, sampled: impl Fn(&SampledLevels) -> Option<u32>) -> Option<u32> {
+        if self.any {
+            return None;
+        }
+        let mut highest = self.named.unwrap_or(0);
+        for samples in &self.sampled {
+            highest = highest.max(sampled(samples)?);
+        }
+        Some(highest)
+    }
+
+    /// The lowest level, counted from the view's first, that the slot's reads may reach, where
+    /// `sampled` answers for each of its samplers' samples the lowest level they may reach
+    /// through the sampler the runtime binds ([`SampledLevels::lowest`]): 0 where a read may reach
+    /// any level ([`LevelReads::any`]); `None` where no read reaches a level's texels (a size
+    /// query, a level-count containment's comparison). Over a view of the same first level whose
+    /// last level is lower, a read reaches that last level in its place.
+    pub fn lowest_level(&self, sampled: impl Fn(&SampledLevels) -> u32) -> Option<u32> {
+        if self.any {
+            return Some(0);
+        }
+        let samples = self.sampled.iter().map(sampled);
+        self.lowest_read.into_iter().chain(samples).min()
+    }
 }
 
 /// What leaves an own-pixel texture slot of a fragment function out of the slots a draw can read

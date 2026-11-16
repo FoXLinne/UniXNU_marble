@@ -395,8 +395,8 @@ pub const WITHOUT_COMPRESSION: &str = "a-device-answers-as-the-class-of-mac-it-p
 /// texture's fixed pattern, and a GPU blit through a compressed texture writes some formats'
 /// canonical encoding. A device that presents a Mac keeping none
 /// (`DeviceProperties::lossless_compression` false), as a Mac with an Intel or AMD GPU is, answers
-/// as that Mac: the new texture holds what its memory held, zero or a released texture's texels,
-/// and nothing writes it (`WorkCounts::private_textures_unfilled`), and the blit keeps the bytes.
+/// as that Mac: the new texture reads zero (`WorkCounts::private_textures_zero_filled`), what such
+/// a Mac's reads where its memory held nothing, and the blit keeps the bytes.
 ///
 /// **Why it is the venue's and not ours**, as [`shared_memory_notice`] is: no recording holds what
 /// a Mac without the compression reads, and its answer for a new texture is not one value but
@@ -478,6 +478,12 @@ pub fn set_past_layout_notice() -> crate::allowance::Allowance {
 ///   attachment, whose raw codes no blend unit reads (`extended-range-blend-source`,
 ///   `extended-range-float-blend-source`: `S·Fs op D·Fd` in `float`, where Metal's compiler rounds
 ///   each step to `half`);
+/// - **8-bit floats**: the device's own 8-bit float widening a tensor's 8-bit float element
+///   (`native-float8`, where Metal reads an e4m3 `0x7F` as 480 and the device's OCP encoding reads
+///   a NaN);
+/// - **logic operations**: the device's `logicOp` on a 10-bit or signed normalized format's own
+///   codes (`native-logic-operation`, where Metal operates on 10-bit codes widened to 16 bits, and
+///   reads and stores a signed lowest code as the code above it);
 /// - **resolves**: `device-rounded-resolve`;
 /// - **coverage**: the device's own conversion of a fragment's alpha to its coverage under
 ///   alpha-to-coverage (`device-alpha-coverage`), its choice of the pixel a width-1 line covers
@@ -533,6 +539,8 @@ pub const NATIVE_NOTES: &[metal2vulkan_runtime::Degradation] = {
         D::YCbCrFilterNotExact,
         D::ExtendedRangeBlendSource,
         D::ExtendedRangeFloatBlendSource,
+        D::NativeFloat8,
+        D::NativeLogicOperation,
         D::DeviceRoundedResolve,
         D::DeviceAlphaCoverage,
         D::DeviceLineTies,

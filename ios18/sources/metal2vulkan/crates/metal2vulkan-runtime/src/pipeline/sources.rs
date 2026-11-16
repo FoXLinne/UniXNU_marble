@@ -1,7 +1,9 @@
 //! Where a pipeline state's compiles look before compiling: the device's memo, then the creation's
 //! binary archives in order, then the device's shader cache on disk. What a compile makes is kept
-//! in the memo and on disk; what an archive or the disk gives, in the memo. A creation for a binary
-//! archive's add also notes every artifact it used.
+//! in the memo and on disk; what an archive or the disk gives, in the memo. A compute pipeline is
+//! linked from its function where neither the memo nor an archive holds it, and kept in the memo
+//! alone ([`Sources::kernel`]). A creation for a binary archive's add also notes every artifact it
+//! used.
 
 use super::memo::Remembered;
 use super::render::RenderVariant;
@@ -15,6 +17,11 @@ use metal2vulkan::pipeline::{
 };
 use metal2vulkan::Budget;
 use std::sync::Arc;
+
+/// The translator's census name of a kernel emulated in place of the pin of its device's widest
+/// mode (`WorkCounts::widest_pin_kernels_emulated`, and the pipeline creation log's compute lines,
+/// `creation_log::compute_kernel`).
+pub(super) const WIDEST_PIN_STRATEGY: &str = "simd.emulated.widest-pin";
 
 /// The render pipeline artifacts this process encoded for the directory, which
 /// `tests::render_stage_digests`' count reads: a sweep whose stage functions the directory holds
@@ -123,6 +130,13 @@ impl<'a> Sources<'a> {
                     None => compile.compile_function(function, inputs, budget)?,
                 };
                 shared.counts.function_translated();
+                if compiled
+                    .strategies()
+                    .entries
+                    .contains_key(WIDEST_PIN_STRATEGY)
+                {
+                    shared.counts.widest_pin_kernel_emulated();
+                }
                 let bytes = cache.store_function(compile, &compiled);
                 cache.memo.keep_function(&compiled, bytes);
                 self.note(Artifact::Function(compiled.clone()));
@@ -158,9 +172,22 @@ impl<'a> Sources<'a> {
     }
 
     /// The compute pipeline of `descriptor`, a compute or tile descriptor whose kernel or tile
-    /// function is compiled: the variant of it the memo knows live, or the pipeline found or
-    /// linked now under `budget` (`compile_compute_pipeline` or `compile_tile_pipeline`, each
-    /// under its own key). A refusal is the compile layer's.
+    /// function is compiled: the variant of it the memo knows live, or the pipeline one of the
+    /// creation's archives holds, else the pipeline linked now from that function under `budget`
+    /// (`compile_compute_pipeline` or `compile_tile_pipeline`, each under its own key). A refusal
+    /// is the compile layer's.
+    ///
+    /// **Linked, never read from the directory.** A compute pipeline is its one function
+    /// relocated, with the layout and interface its link derives from that function: a link from
+    /// the function in hand translates nothing. So the directory keeps no compute pipeline, and
+    /// a creation that found its function links its pipeline rather than reading, checking and
+    /// decoding the pipeline's own artifact, which cost more than the link (measured by
+    /// `tests::compute_create_bench`'s parts: on lavapipe, a 16,348-word kernel's artifact read
+    /// and decoded in about 25 us, the link 6 us), and a creation that translated writes one
+    /// artifact, its function's, not two. The link relocates against the function's relocation
+    /// slot, so a sweep of states over one function relocates its module once. The memo keeps a
+    /// linked pipeline weighed by what it retains ([`ComputePipeline::footprint`]), an archive's
+    /// at its encoded length.
     pub(crate) fn kernel(
         &self,
         descriptor: &Kernel,
@@ -178,25 +205,23 @@ impl<'a> Sources<'a> {
                 let found = self
                     .archives()
                     .iter()
-                    .find_map(|archive| archive.compute_pipeline(compile, &key))
-                    .or_else(|| cache.load_compute_pipeline(compile, &key));
-                let (pipeline, bytes) = match found {
-                    Some(found) => found,
+                    .find_map(|archive| archive.compute_pipeline(compile, &key));
+                let (pipeline, weight) = match found {
+                    Some((pipeline, bytes)) => (Arc::new(pipeline), bytes),
                     None => {
-                        let pipeline = match descriptor {
+                        let pipeline = Arc::new(match descriptor {
                             Kernel::Compute(descriptor) => {
                                 compile.compile_compute_pipeline(descriptor, budget)?
                             }
                             Kernel::Tile(descriptor) => {
                                 compile.compile_tile_pipeline(descriptor, budget)?
                             }
-                        };
-                        let bytes = cache.store_compute_pipeline(compile, &pipeline);
-                        (pipeline, bytes)
+                        });
+                        let weight = pipeline.footprint();
+                        (pipeline, weight)
                     }
                 };
-                let pipeline = Arc::new(pipeline);
-                cache.memo.keep_compute(&pipeline, bytes);
+                cache.memo.keep_compute(&pipeline, weight);
                 Remembered::Compiled(pipeline)
             }
         };
@@ -272,12 +297,17 @@ impl<'a> Sources<'a> {
             && stage_keys
                 .iter()
                 .all(|key| cache.holds_function(compile, key));
-        let weight = match functions_held {
-            true => pipeline.footprint(),
-            false => {
+        let encoded = match functions_held {
+            true => None,
+            false => cache.store_render_pipeline(compile, &pipeline),
+        };
+        // Weighed at its encoding's length where the directory took it, else at what it retains.
+        let weight = match encoded {
+            Some(length) => {
                 note_render_artifact_encoded();
-                cache.store_render_pipeline(compile, &pipeline)
+                length
             }
+            None => pipeline.footprint(),
         };
         cache.memo.keep_render(&pipeline, weight);
         self.note(Artifact::Render(Arc::clone(&pipeline)));

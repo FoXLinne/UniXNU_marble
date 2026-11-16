@@ -181,13 +181,20 @@ pub struct BufferRange {
 /// `WriteSource::InlineBytes`, from the start of the consumer's upload of the bytes, which the
 /// consumer places at an offset aligned to the descriptor type's `min*BufferOffsetAlignment`.
 /// The consumer binds exactly this range, never more. It is at least 16 bytes, inside the
-/// allocation padded to 16 bytes, and its offset is a multiple of the alignment.
+/// allocation padded to 16 bytes, and its offset is a multiple of the alignment. For a
+/// `WriteSource::TexelBuffer`, the bytes the texel buffer view of the binding's array element
+/// `element` views in the bound texture buffer's `VkBuffer` (`texel_ranges`): element 0 for one
+/// view, and element `k` for part `k` of a texture buffer bound through its parts
+/// (`bind::texel_parts`).
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DescriptorRange {
     pub set: u32,
     pub binding: u32,
+    /// The binding's array element the range is bound at: 0 but for a texture buffer's parts.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub element: u32,
     pub range: BufferRange,
 }
 
@@ -325,21 +332,59 @@ pub struct ResidentSet {
     entries: Vec<RootEntry>,
 }
 
+/// A part of a resident set's ranges, sorted and coalesced once, for a consumer whose ranges change
+/// a few at a time: it keeps its ranges in parts, makes again only the parts that changed, and
+/// joins them ([`ResidentSet::of_parts`]) into the set [`ResidentSet::new`] makes of every part's
+/// ranges, without sorting or coalescing the unchanged parts again.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResidentPart {
+    /// Its ranges' entries as a set takes them: sorted, the empty ones dropped.
+    sorted: Vec<RootEntry>,
+    /// Their resident set.
+    set: Vec<RootEntry>,
+}
+
+impl ResidentPart {
+    /// The part of `ranges`, of any count.
+    pub fn new(ranges: impl IntoIterator<Item = ResidentRange>) -> ResidentPart {
+        let sorted = crate::bind::resident::sorted(entries(ranges));
+        let set = crate::bind::resident::coalesced_of_sorted(&sorted);
+        ResidentPart { sorted, set }
+    }
+}
+
+/// `ranges` as a set's entries, at their padded sizes.
+fn entries(ranges: impl IntoIterator<Item = ResidentRange>) -> Vec<RootEntry> {
+    ranges
+        .into_iter()
+        .map(|range| RootEntry {
+            host: range.host,
+            guest: range.guest,
+            size: padded(range.length),
+            bind_offset: 0,
+        })
+        .collect()
+}
+
 impl ResidentSet {
     /// The coalesced set of `ranges`, of any count (Refused with `BindError::ResidentSetTooLarge`
     /// past 2^16 entries before).
     pub fn new(ranges: impl IntoIterator<Item = ResidentRange>) -> ResidentSet {
-        let all = ranges
-            .into_iter()
-            .map(|range| RootEntry {
-                host: range.host,
-                guest: range.guest,
-                size: padded(range.length),
-                bind_offset: 0,
-            })
-            .collect();
         ResidentSet {
-            entries: crate::bind::resident::resident_set(all),
+            entries: crate::bind::resident::resident_set(entries(ranges)),
+        }
+    }
+
+    /// The set of every range of `parts`, in their order: equal to [`ResidentSet::new`] of their
+    /// ranges in that order. Each part's set is joined as it is, coalesced with the parts before
+    /// it only at its head; parts whose ranges interleave by Metal address (one starting below
+    /// another of a part ahead of it) are sorted and coalesced together again.
+    pub fn of_parts<'a>(parts: impl IntoIterator<Item = &'a ResidentPart>) -> ResidentSet {
+        let parts = parts
+            .into_iter()
+            .map(|part| (&part.sorted[..], &part.set[..]));
+        ResidentSet {
+            entries: crate::bind::resident::joined(parts),
         }
     }
 
@@ -492,29 +537,107 @@ pub(crate) fn descriptor_range(
     ))
 }
 
+/// The descriptor range and the `SlotBindOffset` residual of a slot of `window` read at its
+/// residual, bound at `bind_offset` of an allocation of `length` bytes (padded to 16), for the
+/// descriptor base alignment `alignment` (at least 4 used) and the view's maximum range
+/// `max_range`: a range that a run of bind offsets of the allocation shares, so a draw or dispatch
+/// that moves only the slot's offset binds the same descriptor (and keeps its set 0) and moves
+/// only its residual. For a `Bounded` window, `M` the smaller of `max_range` and `2^32` (a `u32`
+/// residual and offset reach no further): the padded allocation whole where it fits `M`, from 0,
+/// its residual the bind offset; else the block of `h` bytes the window's first byte lies in (`h`
+/// the largest power of two at most half of `M`, a multiple of the alignment), to `M` past the
+/// block's start or the padded end. A window of at most `M - h` bytes (at least half of `M`) that
+/// starts in a block ends before `M` past the block's start, so it never straddles its block's
+/// range; a longer one takes no block. Like [`descriptor_range`]'s, the range starts at a multiple of the
+/// alignment, holds at least 16 bytes inside the padded allocation, and holds each byte `m` of
+/// the window inside the allocation at `residual + m` (modulo `2^32`). `None` where no such range
+/// holds the window (a `Whole` one, one at or past the padded end, one longer than its block
+/// allows): the caller takes [`descriptor_range`]'s.
+pub(crate) fn shared_range(
+    bind_offset: u64,
+    length: u64,
+    window: Window,
+    alignment: u64,
+    max_range: u64,
+) -> Option<(BufferRange, u32)> {
+    let Window::Bounded { start, len } = window else {
+        return None;
+    };
+    let end = i128::from(padded(length));
+    let b = i128::from(bind_offset);
+    if b >= end {
+        return None;
+    }
+    let first = (b + i128::from(start)).max(0);
+    let last = (b + i128::from(start) + i128::from(len)).min(end);
+    // No range past `2^32` bytes: a `u32` residual and offset reach no further.
+    let max_range = max_range.min(1 << 32);
+    let (lo, hi) = if end <= i128::from(max_range) {
+        (0, end)
+    } else {
+        let a = alignment.max(4);
+        let block = 1u64 << (max_range / 2).checked_ilog2()?;
+        // The window's size limit: starting in the block, it ends inside the block's range.
+        if block < a || !block.is_multiple_of(a) || len > max_range - block {
+            return None;
+        }
+        let block = i128::from(block);
+        let lo = first - first.rem_euclid(block);
+        (lo, (lo + i128::from(max_range)).min(end))
+    };
+    debug_assert!(last <= hi, "a window past its shared range");
+    let residual = b - lo;
+    if first >= hi || hi - lo < 16 || residual.abs() >= 1 << 32 {
+        return None;
+    }
+    // `0 <= lo < hi <= end <= 2^64`: both fit `u64`.
+    let range = BufferRange {
+        offset: lo as u64,
+        range: (hi - lo) as u64,
+    };
+    Some((range, residual.rem_euclid(1 << 32) as u32))
+}
+
 /// The descriptor range and the `SlotBindOffset` residual of planned buffer slot `pb` bound at
-/// `bind_offset` of an allocation of `length` bytes: a storage view of a `Whole` window takes its
-/// range from the start of the bound buffer's space (offset 0) to the padded end, its residual the
-/// bind offset, so every bind offset of one buffer binds one descriptor and a draw or dispatch that
-/// moves only the offset keeps its set 0 (a dynamic one's offset moves with the space alone).
-/// Its function reads byte `residual + m` of the range for the Metal offset `m`, the byte it read
-/// of the range from the bind offset; the bytes before the bind offset, which the window does not
-/// state, are reachable as Metal's own memory is. Every other slot, and one whose range from 0
-/// would exceed the view's `max_range` or reach past `2^32` (a `u32` residual and offset), or whose
-/// bind offset lies at or past the padded end, takes [`descriptor_range`]'s range.
+/// `bind_offset` of an allocation of `length` bytes, where `views_at_residual` says the consumer
+/// reads every uniform view at its residual (`BindState::uniform_views_at_residual`). Its function
+/// reads byte `residual + m` of the range for the Metal offset `m`, the byte it read of the range
+/// from the bind offset, so a slot read at its residual binds a range its bind offsets share:
+///
+/// - a storage view of a `Whole` window takes its range from the start of the bound buffer's
+///   space (offset 0) to the padded end, its residual the bind offset, so every bind offset of one
+///   buffer binds one descriptor and a draw or dispatch that moves only the offset keeps its set 0
+///   (a dynamic one's offset moves with the space alone); the bytes before the bind offset, which
+///   the window does not state, are reachable as Metal's own memory is. Where that range would
+///   exceed the view's `max_range` or reach past `2^32` (a `u32` residual and offset), or the bind
+///   offset lies at or past the padded end, it takes [`descriptor_range`]'s range;
+/// - a storage view of a `Bounded` window, which every function reads at its residual, and a
+///   uniform view of one where `views_at_residual` (no function reads it at its bind offset
+///   alone, `SpecKey::RangeAtBindOffset`), take [`shared_range`]'s, where it holds the window;
+/// - every other slot takes [`descriptor_range`]'s, which starts at the bind offset aligned down
+///   to the descriptor base alignment: a uniform view's key may read it at its bind offset alone,
+///   where its residual is 0.
 pub(crate) fn planned_range(
     pb: &PlannedBuffer,
     bind_offset: u64,
     length: u64,
+    views_at_residual: bool,
 ) -> Result<(BufferRange, u32), RangeError> {
     let end = padded(length);
+    let storage = pb.form == BufferForm::Descriptor(DescriptorView::Storage);
     let from_start = pb.window == Window::Whole
-        && pb.form == BufferForm::Descriptor(DescriptorView::Storage)
+        && storage
         && bind_offset < end
         && end <= pb.max_range
         && end <= 1 << 32;
     if !from_start {
-        return descriptor_range(bind_offset, length, pb.window, pb.alignment, pb.max_range);
+        let shared = (storage || (views_at_residual && pb.form.uniform_view()))
+            .then(|| shared_range(bind_offset, length, pb.window, pb.alignment, pb.max_range))
+            .flatten();
+        return match shared {
+            Some(shared) => Ok(shared),
+            None => descriptor_range(bind_offset, length, pb.window, pb.alignment, pb.max_range),
+        };
     }
     // `bind_offset < end <= 2^32`: the residual is the bind offset.
     let range = BufferRange {
@@ -670,8 +793,9 @@ pub(crate) fn bind_buffers(
         };
         match (pb.form, pb.binding) {
             (BufferForm::Descriptor(_), Some((set, binding))) => {
+                let views = state.uniform_views_at_residual;
                 let (range, residual) =
-                    planned_range(pb, bind_offset, length).map_err(|e| match e {
+                    planned_range(pb, bind_offset, length, views).map_err(|e| match e {
                         RangeError::TooLarge { needed } => BindError::DescriptorRangeExceeded {
                             slot: pb.slot,
                             needed,
@@ -684,6 +808,7 @@ pub(crate) fn bind_buffers(
                 descriptor_ranges.push(DescriptorRange {
                     set,
                     binding,
+                    element: 0,
                     range,
                 });
                 out.residuals.push(pb.slot, residual);
@@ -825,6 +950,25 @@ pub(crate) fn slot_field(
             }
             Some(FieldBytes::of(&bytes))
         }
+        // The rows of the texture bound at the slot in its texel buffer view, zeros where none
+        // is (the plan names the slot's variant only where one is).
+        PushField::TexelRows(slot) => {
+            let words = match state
+                .stages
+                .get(&slot.stage)
+                .and_then(|t| t.textures.get(&slot.index))
+            {
+                Some(BoundTexture::Texture { facts, .. }) => facts
+                    .texel_rows
+                    .map_or([0; crate::bind::TexelRows::WORDS], |r| r.words()),
+                _ => [0; crate::bind::TexelRows::WORDS],
+            };
+            let mut bytes = [0u8; 4 * crate::bind::TexelRows::WORDS];
+            for (chunk, word) in bytes.as_chunks_mut::<4>().0.iter_mut().zip(words) {
+                chunk.copy_from_slice(&word.to_le_bytes());
+            }
+            Some(FieldBytes::of(&bytes))
+        }
         // The level count the plan bound.
         PushField::TextureLevels(slot) => resources
             .texture_levels
@@ -894,7 +1038,7 @@ pub(crate) fn put(
     Ok(())
 }
 
-/// The texel-buffer view range of every bound texture buffer the plan writes: the view starts at
+/// The texel-buffer view ranges of every bound texture buffer the plan writes: the view starts at
 /// the texture buffer's offset, which must be a multiple of `minTexelBufferOffsetAlignment` (the
 /// shader indexes from element 0 of the view; an unaligned offset is `Unsupported{TexelBuffer,
 /// NotRepresentable}`), and spans the whole texel blocks of its length
@@ -902,7 +1046,10 @@ pub(crate) fn put(
 /// past the last whole block hold no texel). Its element count, `⌊length / block size⌋ × texels per
 /// block`, must be at most `maxTexelBufferElements` (`VUID-VkBufferViewCreateInfo-range-00930`),
 /// else `TexelBufferTooLarge`; a view without a whole block is `Unsupported{TexelBuffer,
-/// NotRepresentable}`.
+/// NotRepresentable}`. A texture buffer the plan binds through its parts (`PlannedTexel::parts`,
+/// `bind::texel_parts`) takes one range per part, at its array element: part `k` from the
+/// offset plus `k · P` texels, `P` texels long but the last, which holds the rest; one of a
+/// format of blocks of several texels is `TexelBufferTooLarge` too.
 pub(crate) fn texel_ranges(
     t: &ResourceTemplate,
     state: &BindState,
@@ -924,28 +1071,49 @@ pub(crate) fn texel_ranges(
                 Feature::TexelBuffer,
             )));
         }
-        let blocks = length / pt.block_size.max(1);
+        let block = pt.block_size.max(1);
+        let blocks = length / block;
         if blocks == 0 {
             return Err(BindError::Unsupported(Unsupported::not_representable(
                 Feature::TexelBuffer,
             )));
         }
         let elements = blocks.saturating_mul(pt.texels_per_block);
-        if elements > pt.max_elements {
-            return Err(BindError::TexelBufferTooLarge {
-                slot: pt.slot,
-                elements,
-                limit: pt.max_elements,
-            });
-        }
-        out.push(DescriptorRange {
+        let too_large = BindError::TexelBufferTooLarge {
+            slot: pt.slot,
+            elements,
+            limit: pt.max_elements,
+        };
+        let range = |element: u32, offset: u64, range: u64| DescriptorRange {
             set: pt.set,
             binding: pt.binding,
-            range: BufferRange {
-                offset,
-                range: blocks * pt.block_size.max(1),
-            },
-        });
+            element,
+            range: BufferRange { offset, range },
+        };
+        if pt.parts <= 1 {
+            if elements > pt.max_elements {
+                return Err(too_large);
+            }
+            out.push(range(0, offset, blocks * block));
+            continue;
+        }
+        // Parts of `P` texels of one block each: every part but the last full, the last holding
+        // at least one texel.
+        let (part, parts) = (pt.part_texels, u64::from(pt.parts));
+        if pt.texels_per_block != 1 || part == 0 {
+            return Err(too_large);
+        }
+        if elements > part.saturating_mul(parts) || elements <= part.saturating_mul(parts - 1) {
+            return Err(internal(format!(
+                "{elements} texels of a texture buffer at {:?} in {parts} parts of {part}",
+                pt.slot
+            )));
+        }
+        for k in 0..pt.parts {
+            let first = part * u64::from(k);
+            let texels = part.min(elements - first);
+            out.push(range(k, offset + first * block, texels * block));
+        }
     }
     Ok(out)
 }

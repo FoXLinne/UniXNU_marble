@@ -1,8 +1,9 @@
 //! The draw replay's preprocess, on the CPU interpreter: valid where device addresses are and
 //! refused by name elsewhere; each command's draw lands in the argument slot of its primitive type
 //! with Metal's vertex start and base instance as Vulkan's first vertex and first instance; its
-//! vertex and fragment slot tables hold its buffers' resident allocations (or the encoder's,
-//! where the commands inherit buffers); an address no allocation holds leaves the slot unbound and
+//! vertex and fragment slot tables hold its buffers' resident allocations (or the encoder's entries
+//! the host wrote, where the commands inherit buffers); an address no allocation holds leaves the
+//! slot unbound and
 //! counts a resident miss while the command still draws; a command the replay cannot run draws
 //! nothing and says why beside clean commands that draw; the host side refuses what it cannot set
 //! up.
@@ -11,10 +12,12 @@ use std::num::NonZeroU64;
 use std::path::PathBuf;
 
 use super::*;
-use crate::bind::state::{ResourceClass, UsedResource};
+use crate::bind::state::{ResourceClass, StageTable, UsedResource};
 use crate::bind::status::{ExecutionStatus, StatusReport};
 use crate::device::{DeviceDescription, DevicePolicy};
-use crate::indirect_commands::{Action, BufferBinding, INHERIT_PIPELINE, RENDER};
+use crate::indirect_commands::{
+    Action, BufferBinding, CommandRecord, COMMAND_BYTES, DRAW, INHERIT_PIPELINE, RENDER,
+};
 use crate::spirv::interp::{run, Buffer, Config, Order, Resources};
 use crate::spirv::testing::assert_valid;
 
@@ -28,6 +31,10 @@ const A: (u64, u64, u64) = (0x0000_0001_0000_1000, 0x0000_0020_0000_0000, 256);
 const B: (u64, u64, u64) = (0x0000_0001_0000_8000, 0x0000_0021_0000_0000, 60);
 /// An address in no resident allocation.
 const AWAY: u64 = 0x0000_0001_0004_0000;
+/// An allocation `(guest, host, length)` outside the resident set, which only an encoder binds.
+const C: (u64, u64, u64) = (0x0000_0001_0002_0000, 0x0000_0022_0000_0000, 100);
+/// The device address of the consumer's upload of inline bytes the encoder bound.
+const BYTES: u64 = 0x0000_0023_0000_0040;
 
 /// Every committed profile as a device, by stem.
 fn devices() -> Vec<(String, Device)> {
@@ -123,12 +130,14 @@ fn word(bytes: &[u8], at: usize) -> u32 {
 }
 
 /// The storage header: `capacity`, the fault word, the policy bits of a render descriptor of
-/// draws whose commands inherit the pipeline (and the buffers where `inherit_buffers`), and 4
-/// vertex buffers and 2 fragment buffers.
+/// draws whose commands inherit the pipeline (and the buffers where `inherit_buffers`), and the
+/// packed binding counts `counts` (`layout::COUNTS`; [`clean`]'s: 4 vertex buffers and 2
+/// fragment buffers).
 struct Header {
     capacity: u32,
     fault: u32,
     inherit_buffers: bool,
+    counts: u32,
 }
 
 /// What one preprocess left.
@@ -168,19 +177,56 @@ impl Ran {
 
 /// Run the preprocess of `replay` against `records` under `header`, in both scheduling orders.
 fn preprocess(replay: &DrawReplay, records: &[CommandRecord], header: Header) -> Ran {
+    preprocess_over(replay, records, header, None)
+}
+
+/// [`preprocess`], with `range` (`location`, `length`) in the parameters where a replay that
+/// reads its range takes it, as the consumer copies it there.
+fn preprocess_over(
+    replay: &DrawReplay,
+    records: &[CommandRecord],
+    header: Header,
+    range: Option<[u32; 2]>,
+) -> Ran {
+    preprocess_in(&state(), replay, records, header, range)
+}
+
+/// [`preprocess_over`] for the bind state `state`, the consumer writing [`BYTES`] where the
+/// encoder's inline bytes take their upload's address.
+fn preprocess_in(
+    state: &BindState,
+    replay: &DrawReplay,
+    records: &[CommandRecord],
+    header: Header,
+    range: Option<[u32; 2]>,
+) -> Ran {
+    let records: Vec<Vec<u8>> = records.iter().map(bytes).collect();
+    preprocess_raw(state, replay, &records, header, range)
+}
+
+/// [`preprocess_in`] over records' bytes as given.
+fn preprocess_raw(
+    state: &BindState,
+    replay: &DrawReplay,
+    records: &[Vec<u8>],
+    header: Header,
+    range: Option<[u32; 2]>,
+) -> Ran {
     let dev = device();
-    let pre = draw_replay_preprocess(&dev, &state(), replay).expect("preprocess");
+    let pre = draw_replay_preprocess(&dev, state, replay).expect("preprocess");
     let mut policy = RENDER | DRAW | INHERIT_PIPELINE;
+    if replay.indexed {
+        policy |= crate::indirect_commands::DRAW_INDEXED;
+    }
     if header.inherit_buffers {
         policy |= crate::indirect_commands::INHERIT_BUFFERS;
     }
-    let counts: u32 = (4 << 8) | (2 << 16);
     let mut storage = Vec::new();
-    for w in [header.capacity, header.fault, policy, counts] {
+    for w in [header.capacity, header.fault, policy, header.counts] {
         storage.extend_from_slice(&w.to_le_bytes());
     }
     for r in records {
-        storage.extend_from_slice(&bytes(r));
+        storage.extend_from_slice(r);
     }
     let l = pre.layout;
     let mut scratch = vec![0xEE; l.bytes as usize];
@@ -194,6 +240,13 @@ fn preprocess(replay: &DrawReplay, records: &[CommandRecord], header: Header) ->
     put(l.resident_offset, &resident);
     put(l.extents_offset, &pre.extents);
     put(l.parent_offset, &pre.parent);
+    for bytes in &pre.inherited_bytes {
+        put(bytes.offset, &BYTES.to_le_bytes());
+    }
+    if let Some([location, length]) = range {
+        put(l.range_offset(), &location.to_le_bytes());
+        put(l.range_offset() + 4, &length.to_le_bytes());
+    }
     let mut push = pre.push_constants.clone();
     for hole in &pre.push_holes {
         let (offset, address) = match *hole {
@@ -251,6 +304,7 @@ fn clean(capacity: u32) -> Header {
         capacity,
         fault: 0,
         inherit_buffers: false,
+        counts: (4 << 8) | (2 << 16),
     }
 }
 
@@ -357,10 +411,7 @@ fn a_command_the_replay_cannot_run_draws_nothing_and_says_why() {
         ),
         (barrier, ReplayFaults::BARRIER),
         (piped, ReplayFaults::PIPELINE),
-        (
-            record(draw(3, 0, 3, [1, 0]), &[(4, A.0)], &[]),
-            ReplayFaults::RECORD,
-        ),
+        (dynamic_fragment(1), ReplayFaults::RECORD),
     ];
     for (bad, why) in cases {
         let records = [
@@ -377,6 +428,67 @@ fn a_command_the_replay_cannot_run_draws_nothing_and_says_why() {
         assert_eq!(ran.args(1, 0), [0; 4], "{why:?}");
         assert_eq!(ran.args(2, 0), [3, 1, 3, 0], "{why:?}");
     }
+}
+
+/// A draw whose fragment buffer `slot` is bound with a dynamic stride, which a fragment stage
+/// takes none of: a record the host's validation refuses.
+fn dynamic_fragment(slot: usize) -> CommandRecord {
+    let mut r = record(draw(3, 0, 3, [1, 0]), &[], &[]);
+    r.bindings.buffers_mut(BufferStage::Fragment)[slot] = Some(BufferBinding {
+        address: A.0,
+        attribute_stride: Some(7),
+    });
+    r
+}
+
+/// Write into `bytes`, a record's, at binding `slot` of `stage`, what no write of the record's
+/// writers puts there: an address no resident allocation holds and a dynamic stride, which no
+/// stage of these descriptors takes.
+fn garbage(bytes: &mut [u8], stage: BufferStage, slot: usize) {
+    let at = (layout::buffers(stage) + slot as u64 * layout::BINDING) as usize;
+    bytes[at..at + 8].copy_from_slice(&0xABAB_ABAB_ABAB_ABABu64.to_le_bytes());
+    bytes[at + 8..at + 16].copy_from_slice(&7u64.to_le_bytes());
+}
+
+/// A command reads the bindings below each stage's count in the header alone: of a descriptor of
+/// 2 vertex and 2 fragment buffers, 4 of the record's 128. A binding past its count is zero in
+/// every record (the storage is made zero, an encoder's write there faults and writes nothing,
+/// the CPU's setter refuses one, a copy takes a source of the same descriptor), so a record with
+/// garbage in every such binding draws as one without, its slots null and no miss counted: those
+/// bytes are not read. The negative control: the same garbage in a counted binding is a record the
+/// host's validation refuses, and the command draws nothing.
+#[test]
+fn a_command_reads_only_the_bindings_its_descriptor_counts() {
+    let replay = DrawReplay::new(1, 0, 1, vec![3]);
+    let header = || Header {
+        counts: (2 << 8) | (2 << 16),
+        ..clean(1)
+    };
+    let drawn = bytes(&record(draw(3, 0, 3, [1, 0]), &[(0, A.0)], &[(1, A.0)]));
+    let mut past = drawn.clone();
+    for slot in 0..BINDING_COUNT {
+        garbage(&mut past, BufferStage::Mesh, slot);
+        garbage(&mut past, BufferStage::Object, slot);
+    }
+    for slot in 2..BINDING_COUNT {
+        garbage(&mut past, BufferStage::Vertex, slot);
+        garbage(&mut past, BufferStage::Fragment, slot);
+    }
+    let ran = preprocess_raw(&state(), &replay, &[past], header(), None);
+    assert!(!ran.status.replay_fault, "{:?}", ran.status.replay_faults);
+    assert!(!ran.status.resident_miss);
+    assert_eq!(ran.args(0, 0), [3, 1, 0, 0]);
+    assert_eq!(ran.vertex(0, 0), [A.1, A.0, padded(A.2), 0]);
+    assert_eq!(ran.fragment(0, 1), [A.1, A.0, padded(A.2), 0]);
+    for slot in 2..BINDING_COUNT as u64 {
+        assert_eq!(ran.vertex(0, slot), [0; 4], "vertex {slot}");
+        assert_eq!(ran.fragment(0, slot), [0; 4], "fragment {slot}");
+    }
+    let mut counted = drawn;
+    garbage(&mut counted, BufferStage::Fragment, 1);
+    let ran = preprocess_raw(&state(), &replay, &[counted], header(), None);
+    assert_eq!(ran.status.replay_faults, ReplayFaults::RECORD);
+    assert_eq!(ran.args(0, 0), [0; 4]);
 }
 
 /// An address no resident allocation holds leaves its slot unbound and counts one resident miss
@@ -425,28 +537,74 @@ fn a_buffer_past_the_slots_read_counts_its_miss() {
     assert_eq!(ran.args(1, 0), [0; 4]);
 }
 
-/// Where the commands inherit buffers, every command's tables hold the encoder's, and a command
-/// that sets one of its own draws nothing (`BUFFERS`).
+/// Where the commands inherit buffers, every command's tables hold the encoder's entries, which
+/// the host wrote from the bind state's stage tables and the preprocess copies, resolving nothing:
+/// a buffer at its bind offset, one outside the resident set too (no miss), inline bytes at the
+/// address the consumer wrote (Metal address and bind offset 0), an unbound slot null. A command
+/// that sets a buffer of its own draws nothing (`BUFFERS`), its tables null.
 #[test]
 fn inherited_buffers_are_the_encoder_s() {
-    let mut replay = DrawReplay::new(2, 0, 2, vec![3]);
+    let mut replay = DrawReplay::new(3, 0, 3, vec![3]);
     replay.inheritance.buffers = StateSource::Parent;
-    replay.parent.buffers_mut(BufferStage::Vertex)[0] = bind(B.0 + 8);
-    replay.parent.buffers_mut(BufferStage::Fragment)[1] = bind(A.0);
+    replay.vertex_slots = 3;
+    replay.fragment_slots = 3;
+    let buffer = |(guest, host, length): (u64, u64, u64), offset: u64| BoundBuffer::Buffer {
+        length,
+        offset,
+        gpu_address: guest,
+        device_address: Some(host),
+        attribute_stride: None,
+    };
+    let mut bound = state();
+    let mut vertex = StageTable::default();
+    vertex.buffers.insert(0, buffer(B, 8));
+    vertex.buffers.insert(2, buffer(C, 48));
+    let mut fragment = StageTable::default();
+    fragment.buffers.insert(1, buffer(A, 0));
+    fragment.buffers.insert(
+        2,
+        BoundBuffer::Bytes {
+            len: 20,
+            attribute_stride: None,
+        },
+    );
+    // Past the slots the fragment function reads: no entry.
+    fragment.buffers.insert(3, buffer(A, 16));
+    bound.stages.insert(Stage::Vertex, vertex);
+    bound.stages.insert(Stage::Fragment, fragment);
     let records = [
         record(draw(3, 0, 3, [1, 0]), &[], &[]),
         record(draw(3, 0, 3, [1, 0]), &[(0, A.0)], &[]),
+        record(draw(3, 3, 3, [2, 1]), &[], &[]),
     ];
     let header = Header {
         inherit_buffers: true,
-        ..clean(2)
+        ..clean(3)
     };
-    let ran = preprocess(&replay, &records, header);
+    let ran = preprocess_in(&bound, &replay, &records, header, None);
+    assert_eq!(
+        ran.pre.inherited_bytes,
+        [InheritedBytes {
+            stage: Stage::Fragment,
+            index: 2,
+            offset: ran.pre.layout.parent_offset + 5 * roots::ENTRY_BYTES + roots::HOST,
+        }]
+    );
     assert_eq!(ran.status.replay_faults, ReplayFaults::BUFFERS);
+    assert_eq!(ran.status.resident_misses, 0);
     assert_eq!(ran.args(0, 0), [3, 1, 0, 0]);
     assert_eq!(ran.args(1, 0), [0; 4]);
-    assert_eq!(ran.vertex(0, 0), [B.1, B.0, padded(B.2), 8]);
-    assert_eq!(ran.fragment(0, 1), [A.1, A.0, padded(A.2), 0]);
+    assert_eq!(ran.args(2, 0), [3, 2, 3, 1]);
+    for command in [0, 2] {
+        assert_eq!(ran.vertex(command, 0), [B.1, B.0, padded(B.2), 8]);
+        assert_eq!(ran.vertex(command, 1), [0; 4]);
+        assert_eq!(ran.vertex(command, 2), [C.1, C.0, padded(C.2), 48]);
+        assert_eq!(ran.fragment(command, 0), [0; 4]);
+        assert_eq!(ran.fragment(command, 1), [A.1, A.0, padded(A.2), 0]);
+        assert_eq!(ran.fragment(command, 2), [BYTES, 0, 32, 0]);
+    }
+    assert_eq!(ran.vertex(1, 0), [0; 4]);
+    assert_eq!(ran.fragment(1, 1), [0; 4]);
 }
 
 /// The producers' sticky encoding fault refuses every command; a command at or past the
@@ -530,9 +688,9 @@ use crate::bind::{draw_merge_module, DrawMergeModule, MERGED_REST_FIRST};
 
 const OUT: u64 = 0x0000_0040_0000_0000;
 const REST_OUT: u64 = 0x0000_0041_0000_0000;
-/// Bytes of one decoded corner: Metal's vertex, instance, base vertex and base instance, and the
-/// slot table's address.
-const DECODED: usize = 24;
+/// Bytes of one decoded corner: Metal's vertex, instance, base vertex and base instance, the
+/// slot table's address, and the command's index (then padding).
+const DECODED: usize = 32;
 
 /// `ran`'s scratch after the merged replay's header (its chunk replaced by `chunk`) and both
 /// merge passes, in both scheduling orders, and the status the passes left.
@@ -648,6 +806,8 @@ fn decoding_module(chunk: u32) -> TypedModule {
     }
     let a = at(fb, at_slot, 16).expect("at");
     store64(fb, t, a, v.table).expect("store");
+    let a = at(fb, at_slot, 24).expect("at");
+    store32(fb, t, a, v.command).expect("store");
     fb.ret(None).expect("ret");
     let id = f.finish().expect("finish");
     b.entry(ExecModel::Vertex, id, Vec::new()).expect("entry");
@@ -655,12 +815,23 @@ fn decoding_module(chunk: u32) -> TypedModule {
 }
 
 /// What one corner of a merged draw runs: Metal's vertex, instance, base vertex and base
-/// instance, and the command's vertex slot table's address.
-type Corner = (u32, u32, u32, u32, u64);
+/// instance, the command's vertex slot table's address, and the command's index.
+type Corner = (u32, u32, u32, u32, u64, u32);
 
 /// Every corner the merged draws of `scratch` run (both draws, in their order), decoded by
 /// `merged_vertex` with chunks of `chunk` vertices.
 fn decoded(ran: &Ran, scratch: &[u8], chunk: u32) -> Vec<Corner> {
+    decoded_over(ran, scratch, chunk, None)
+}
+
+/// [`decoded`], with `memory` (`(address, bytes)`: the indices the commands' index entries name)
+/// beside the scratch.
+fn decoded_over(
+    ran: &Ran,
+    scratch: &[u8],
+    chunk: u32,
+    memory: Option<(u64, &[u8])>,
+) -> Vec<Corner> {
     let m = ran.pre.layout.merged.expect("merged");
     let draw = |i: u32| -> [u32; 4] {
         let at = m.draw_offset(i) as usize;
@@ -668,7 +839,11 @@ fn decoded(ran: &Ran, scratch: &[u8], chunk: u32) -> Vec<Corner> {
     };
     let [first_vertices, chunks, first_first, first_base] = draw(0);
     let [rest, rest_instances, rest_first, rest_base] = draw(1);
-    assert_eq!((first_vertices, first_first, first_base), (chunk, 0, 0));
+    let first_chunk = if chunks == 0 { 0 } else { chunk };
+    assert_eq!(
+        (first_vertices, first_first, first_base),
+        (first_chunk, 0, 0)
+    );
     assert_eq!(
         (rest_instances, rest_first, rest_base),
         (1, MERGED_REST_FIRST, 0)
@@ -694,19 +869,27 @@ fn decoded(ran: &Ran, scratch: &[u8], chunk: u32) -> Vec<Corner> {
         if count == 0 {
             continue;
         }
+        let mut buffers = vec![
+            Buffer {
+                slot: None,
+                address: Some(SCRATCH),
+                bytes: scratch.to_vec(),
+            },
+            Buffer {
+                slot: None,
+                address: Some(out),
+                bytes: vec![0; count * DECODED],
+            },
+        ];
+        if let Some((address, bytes)) = memory {
+            buffers.push(Buffer {
+                slot: None,
+                address: Some(address),
+                bytes: bytes.to_vec(),
+            });
+        }
         let res = Resources {
-            buffers: vec![
-                Buffer {
-                    slot: None,
-                    address: Some(SCRATCH),
-                    bytes: scratch.to_vec(),
-                },
-                Buffer {
-                    slot: None,
-                    address: Some(out),
-                    bytes: vec![0; count * DECODED],
-                },
-            ],
+            buffers,
             push: push.clone(),
             spec: Default::default(),
         };
@@ -724,6 +907,7 @@ fn decoded(ran: &Ran, scratch: &[u8], chunk: u32) -> Vec<Corner> {
                 word(c, 8),
                 word(c, 12),
                 u64::from_le_bytes(c[16..24].try_into().expect("u64")),
+                word(c, 24),
             ));
         }
     }
@@ -742,7 +926,7 @@ fn metal_corners(ran: &Ran, draws: &[Option<[u32; 4]>], per: u32) -> Vec<Corner>
         let table = SCRATCH + ran.pre.layout.vertex_table_offset(c as u32);
         for i in 0..instances {
             for v in 0..count - count % per {
-                out.push((start + v, base + i, start, base, table));
+                out.push((start + v, base + i, start, base, table, c as u32));
             }
         }
     }
@@ -799,6 +983,187 @@ fn a_merged_replay_runs_each_command_s_whole_primitives_in_order() {
     let at = m.draw_offset(1) as usize;
     assert_eq!(word(&scratch, at), 21);
     assert_eq!(word(&scratch, m.draw_offset(0) as usize + 4), 0);
+}
+
+/// A replay that reads its range draws the commands inside it as the host's step takes the
+/// range: from `location` to `location + length`, clamped at the size; none, and `RANGE` once,
+/// for a location past the size or an end past `2^32 - 1`. Merged, the commands inside it draw
+/// their corners in order.
+#[test]
+fn a_replay_that_reads_its_range_draws_the_commands_inside_it() {
+    let mut replay = DrawReplay::new(4, 0, 4, vec![3]);
+    replay.merged = true;
+    replay.range_read = true;
+    replay.vertex_slots = 0;
+    replay.fragment_slots = 0;
+    let draws = [[0, 3, 1, 0], [3, 6, 2, 1], [9, 3, 1, 4], [1, 3, 3, 0]];
+    let records: Vec<CommandRecord> = draws
+        .iter()
+        .map(|[s, n, k, b]| record(draw(3, *s, *n, [*k, *b]), &[], &[]))
+        .collect();
+    let cases = [
+        ([1, 2], 1..3, false),
+        ([2, 5], 2..4, false),
+        ([0, u32::MAX], 0..4, false),
+        ([0, 0], 0..0, false),
+        ([4, 1], 0..0, false),
+        ([5, 0], 0..0, true),
+        ([1, u32::MAX], 0..0, true),
+    ];
+    for (range, inside, faults) in cases {
+        let ran = preprocess_over(&replay, &records, clean(4), Some(range));
+        let why = match faults {
+            true => ReplayFaults::RANGE,
+            false => ReplayFaults::default(),
+        };
+        assert_eq!(ran.status.replay_faults, why, "{range:?}");
+        let mut drawn = [None; 4];
+        for (command, [s, n, k, b]) in (0..4).zip(draws) {
+            let expected = match inside.contains(&command) {
+                true => [n, k, s, b],
+                false => [0; 4],
+            };
+            assert_eq!(ran.args(command, 0), expected, "{range:?} {command}");
+            drawn[command as usize] = inside.contains(&command).then_some([s, n, k, b]);
+        }
+        let (scratch, status) = merge(&ran, 6);
+        assert!(!status.replay_fault, "{range:?}: {status:?}");
+        let expected = metal_corners(&ran, &drawn, 3);
+        assert_eq!(decoded(&ran, &scratch, 6), expected, "{range:?}");
+    }
+    // A replay that reads its range runs merged over the whole buffer alone.
+    let dev = device();
+    let refused = Err(BindError::InvalidReplay {
+        reason: ReplayRefusal::RangeRead,
+    });
+    let pre = |r: &DrawReplay| draw_replay_preprocess(&dev, &state(), r);
+    let mut apart = replay.clone();
+    apart.merged = false;
+    assert_eq!(pre(&apart), refused);
+    let mut part = DrawReplay::new(4, 1, 3, vec![3]);
+    part.merged = true;
+    part.range_read = true;
+    part.fragment_slots = 0;
+    assert_eq!(pre(&part), refused);
+    assert!(pre(&replay).is_ok());
+}
+
+/// An indexed draw's record: `count` indices of `index_type` (0 `u16`, 1 `u32`) at `indices`, in
+/// `instances[0]` instances from base instance `instances[1]`, from base vertex `base_vertex`.
+fn indexed(
+    index_type: u32,
+    indices: u64,
+    count: u32,
+    instances: [u32; 2],
+    base_vertex: i32,
+) -> Action {
+    Action::DrawIndexedPrimitives {
+        primitive_type: 3,
+        index_count: count,
+        index_type,
+        index_buffer: indices,
+        instance_count: instances[0],
+        base_vertex,
+        base_instance: instances[1],
+    }
+}
+
+/// A merged replay of indexed commands beside a draw of primitives draws each command's whole
+/// triangles in order, an indexed command's vertices its indices plus its base vertex (wrapping),
+/// from its index buffer's offset rounded down to a multiple of the index size, a position past
+/// the buffer's whole indices reading index 0, as the host's step and the encoder's draw read
+/// them. An index buffer no resident allocation holds draws nothing and counts as a resident
+/// miss; an index type Metal has no value for, or no index buffer, is a refused record. Each
+/// corner carries its command's index, which the vertex variant writes for the fragment variant.
+#[test]
+fn a_merged_replay_draws_indexed_commands_from_their_indices() {
+    // `A`'s bytes: the `u16` at byte `2k` is `100 + k`.
+    let memory: Vec<u8> = (0..A.2 / 2)
+        .flat_map(|k| (100 + k as u16).to_le_bytes())
+        .collect();
+    let u16_at = |byte: u64| {
+        u32::from(u16::from_le_bytes([
+            memory[byte as usize],
+            memory[byte as usize + 1],
+        ]))
+    };
+    let u32_at = |byte: u64| {
+        u32::from_le_bytes(
+            memory[byte as usize..byte as usize + 4]
+                .try_into()
+                .expect("u32"),
+        )
+    };
+    let records = [
+        record(indexed(0, A.0 + 3, 3, [1, 0], 10), &[], &[]),
+        record(draw(3, 4, 3, [1, 2]), &[], &[]),
+        record(indexed(1, A.0 + 65, 6, [2, 5], -1), &[], &[]),
+        record(indexed(1, A.0 + 248, 3, [1, 0], 0), &[], &[]),
+        record(indexed(0, AWAY, 3, [1, 0], 0), &[], &[]),
+        record(indexed(2, A.0, 3, [1, 0], 0), &[], &[]),
+        record(indexed(0, 0, 3, [1, 0], 0), &[], &[]),
+    ];
+    let mut replay = DrawReplay::new(7, 0, 7, vec![3]);
+    replay.merged = true;
+    replay.indexed = true;
+    replay.vertex_slots = 0;
+    replay.fragment_slots = 0;
+    let ran = preprocess(&replay, &records, clean(7));
+    assert_eq!(ran.status.replay_faults, ReplayFaults::RECORD);
+    assert_eq!(ran.status.resident_misses, 1, "the missing index buffer");
+    let m = ran.pre.layout.merged.expect("merged");
+    let entry = |c: u64| {
+        let at = (m.indices_offset + 16 * c) as usize;
+        let address = u64::from_le_bytes(ran.scratch[at..at + 8].try_into().expect("u64"));
+        (
+            address,
+            word(&ran.scratch, at + 8),
+            word(&ran.scratch, at + 12),
+        )
+    };
+    assert_eq!(
+        entry(0),
+        (A.1 + 2, 127, 2),
+        "rounded down to a multiple of 2"
+    );
+    assert_eq!(entry(1), (0, 0, 0), "a draw of primitives");
+    assert_eq!(
+        entry(2),
+        (A.1 + 64, 48, 4),
+        "rounded down to a multiple of 4"
+    );
+    assert_eq!(entry(3), (A.1 + 248, 2, 4), "two whole indices left");
+    for c in 4..7 {
+        assert_eq!(entry(c), (0, 0, 0), "command {c} draws nothing");
+    }
+    assert_eq!(ran.args(0, 0), [3, 1, 10, 0]);
+    assert_eq!(ran.args(1, 0), [3, 1, 4, 2]);
+    assert_eq!(ran.args(2, 0), [6, 2, u32::MAX, 5]);
+    for c in 4..7 {
+        assert_eq!(ran.args(c, 0), [0; 4], "command {c} draws nothing");
+    }
+    let (scratch, status) = merge(&ran, 6);
+    assert!(!status.replay_fault, "{status:?}");
+    let table = |c: u32| SCRATCH + ran.pre.layout.vertex_table_offset(c);
+    let mut expected = Vec::new();
+    for v in 0..3 {
+        expected.push((u16_at(2 + 2 * v) + 10, 0, 10, 0, table(0), 0));
+    }
+    for v in 0..3 {
+        expected.push((4 + v, 2, 4, 2, table(1), 1));
+    }
+    for i in 0..2 {
+        for v in 0..6u64 {
+            let raw = u32_at(64 + 4 * v);
+            expected.push((raw.wrapping_sub(1), 5 + i, u32::MAX, 5, table(2), 2));
+        }
+    }
+    for v in 0..3u64 {
+        let raw = if v < 2 { u32_at(248 + 4 * v) } else { 0 };
+        expected.push((raw, 0, 0, 0, table(3), 3));
+    }
+    let corners = decoded_over(&ran, &scratch, 6, Some((A.1, &memory)));
+    assert_eq!(corners, expected);
 }
 
 /// Points and lines merge as triangles do, a corner per point and two per line.
@@ -883,30 +1248,66 @@ fn a_merged_replay_of_the_most_chunks_its_first_draw_holds_draws_them() {
     }
 }
 
-/// The merge passes divide no `u64`: the last pass divides the total by a chunk in `u32` words
-/// (`merged::divide_words`), where NVIDIA's compiler (615.71.09) ran its `u64` division wrong.
+/// The merge passes compute no `u64` but addresses: every count they hold is two `u32` words
+/// (`merged::Count`, `merged::divide_words`), and a `u64` value is built only by `OpIAdd`,
+/// `OpIMul`, `OpUConvert` of a `u32`, a constant or a load of the push constants, and used only
+/// to build another or as a pointer (`OpConvertUToPtr`). NVIDIA's compilers ran the passes' `u64`
+/// arithmetic on counts wrong (the module docs).
 #[test]
-fn the_merge_passes_divide_no_u64() {
-    const TYPE_INT: u32 = 21;
-    const UDIV: u32 = 134;
-    const UMOD: u32 = 137;
+fn the_merge_passes_compute_no_u64_but_addresses() {
+    use crate::spirv_binary::{parse_bytes, Operand};
+    use crate::spv::Op;
+    use std::collections::{BTreeMap, BTreeSet};
+    const PUSH_CONSTANT: u32 = 9;
     let dev = device();
     for phase in [MergePhase::Blocks, MergePhase::Starts] {
         let words = draw_merge_module(&dev, phase).expect("module").spirv;
-        let mut wide = std::collections::BTreeSet::new();
-        let mut divided = 0;
-        let mut i = 5;
-        while let Some(&w) = words.get(i) {
-            let (len, op) = ((w >> 16) as usize, w & 0xFFFF);
-            if op == TYPE_INT && words[i + 2] == 64 {
-                wide.insert(words[i + 1]);
+        let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
+        let module = parse_bytes(&bytes).expect("parse");
+        let (mut wide, mut pushed) = (BTreeSet::new(), BTreeSet::new());
+        let mut type_of = BTreeMap::new();
+        for inst in &module.instructions {
+            match (inst.opcode, inst.result_id, &inst.operands[..]) {
+                (Op::TypeInt, Some(id), [Operand::Word(64), ..]) => {
+                    wide.insert(id);
+                }
+                (
+                    Op::TypePointer,
+                    Some(id),
+                    [Operand::Word(PUSH_CONSTANT), Operand::IdRef(pointee)],
+                ) if wide.contains(pointee) => {
+                    pushed.insert(id);
+                }
+                _ => {}
             }
-            if (op == UDIV || op == UMOD) && wide.contains(&words[i + 1]) {
-                divided += 1;
+            if let (Some(id), Some(ty)) = (inst.result_id, inst.result_type) {
+                type_of.insert(id, ty);
             }
-            i += len.max(1);
         }
-        assert_eq!(divided, 0, "{phase:?}: u64 divisions");
+        let is_wide = |id: &u32| type_of.get(id).is_some_and(|ty| wide.contains(ty));
+        let mut computed = BTreeSet::new();
+        for inst in &module.instructions {
+            let built = match inst.opcode {
+                Op::IAdd | Op::IMul | Op::UConvert | Op::Constant => true,
+                Op::Load => matches!(
+                    inst.operands.first(),
+                    Some(Operand::IdRef(p)) if type_of.get(p).is_some_and(|ty| pushed.contains(ty))
+                ),
+                _ => false,
+            };
+            if inst.result_type.is_some_and(|ty| wide.contains(&ty)) && !built {
+                computed.insert(format!("{:?} makes a u64", inst.opcode));
+            }
+            let takes = matches!(inst.opcode, Op::IAdd | Op::IMul | Op::ConvertUToPtr);
+            let wide_operand = inst
+                .operands
+                .iter()
+                .any(|o| matches!(o, Operand::IdRef(id) if is_wide(id)));
+            if wide_operand && !takes {
+                computed.insert(format!("{:?} takes a u64", inst.opcode));
+            }
+        }
+        assert!(computed.is_empty(), "{phase:?}: {computed:?}");
     }
 }
 
@@ -937,12 +1338,38 @@ fn merged_replays_are_set_up_for_one_list_type_or_points() {
     let refused = Err(BindError::InvalidReplay {
         reason: ReplayRefusal::DrawPrimitiveTypes,
     });
-    for (types, fragment_slots) in [(vec![2], 0), (vec![4], 0), (vec![3, 4], 0), (vec![3], 1)] {
+    for types in [vec![2], vec![4], vec![3, 4]] {
         let mut r = DrawReplay::new(4, 0, 4, types.clone());
         r.merged = true;
-        r.fragment_slots = fragment_slots;
-        assert_eq!(pre(&r), refused, "{types:?} {fragment_slots}");
+        r.fragment_slots = 0;
+        assert_eq!(pre(&r), refused, "{types:?}");
     }
+    // A merged replay's fragment variant reads its command's fragment table, which the header
+    // places past the vertex table.
+    let mut r = DrawReplay::new(4, 0, 4, vec![3]);
+    r.merged = true;
+    r.vertex_slots = 2;
+    r.fragment_slots = 1;
+    let p = pre(&r).expect("fragment slots");
+    let m = p.layout.merged.expect("layout");
+    let header_word = |at: usize| word(&p.header, at);
+    assert_eq!(
+        u64::from(header_word(52)),
+        p.layout.fragment_table_offset(0) - p.layout.vertex_table_offset(0)
+    );
+    assert_eq!(
+        u64::from(header_word(48)),
+        m.indices_offset - m.header_offset
+    );
+    // An indexed replay is merged alone.
+    let mut r = DrawReplay::new(4, 0, 4, vec![3]);
+    r.indexed = true;
+    assert_eq!(
+        pre(&r),
+        Err(BindError::InvalidReplay {
+            reason: ReplayRefusal::IndexedApart,
+        })
+    );
     let mut r = DrawReplay::new(10, 0, 10, vec![1]);
     r.merged = true;
     r.fragment_slots = 0;

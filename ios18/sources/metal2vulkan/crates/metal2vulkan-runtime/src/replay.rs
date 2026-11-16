@@ -15,10 +15,13 @@
 //!   ([`CallLog::refuse`]: the encoder's `logged`, a render encoder's call made at once): encoded
 //!   again, it is refused again and the calls after it run, as they ran after its refusal. A call
 //!   that answers otherwise than at its first encoding leaves the encoder as it was encoded first
-//!   ([`Replay::run`] fails, and the encoder is not encoded again). The log starts at the
-//!   encoder's open where the device has a buffer over host pages (`Rebinds::any`); else nothing
-//!   is logged. It costs one push per call; a slice of buffers, offsets, textures or bytes goes
-//!   into one of the log's arenas, so the common calls allocate nothing of their own.
+//!   ([`Replay::run`] fails, and the encoder is not encoded again). A render encoder's log
+//!   starts at its open where the device has a buffer over host pages (`Rebinds::any`), else it
+//!   logs nothing; a compute or blit encoder always logs, as a commit whose failure splits the
+//!   group of encoders it recorded with encodes it again (`encoder_fold.rs`), which a render
+//!   encoder takes only with a log. It costs one push
+//!   per call; a slice of buffers, offsets, textures or bytes goes into one of the log's arenas,
+//!   so the common calls allocate nothing of their own.
 //! - **What is kept.** The command buffer keeps an ended encoder's log only where a command of
 //!   it named a buffer over host pages and the encoder can be encoded again: it left no segment
 //!   for later (an indirect stage-in region) but an indirect command buffer's execution, which
@@ -46,8 +49,9 @@
 //!   27.0.1, probe `dealloc-probe`). And no other thread may hold such a handle past the
 //!   completion: a no-copy buffer's deallocator would run where it went, on the scheduler's thread
 //!   for one, whose own hold of the command buffer keeps the deallocator's wait for it from
-//!   returning (`scheduler::Spent`). A log let go of in the release, or at its encoder's end
-//!   where it is not kept, is cleared (its calls and handles go then) and its room kept for the
+//!   returning (`scheduler::Spent`). A log let go of in the release (a group of
+//!   encoders' held for the commit among them, `encoder_fold.rs`), or at its encoder's end where
+//!   it is not kept, is cleared (its calls and handles go then) and its room kept for the
 //!   device's next encoders ([`SpareLogs`]), so the encoding thread's logs reuse their memory
 //!   rather than allocate what another thread frees.
 //! - **Notices.** A call encoded again announces no kind its first encoding announced: each kind
@@ -477,9 +481,19 @@ impl<C> CallLog<C> {
     }
 
     /// The log emptied for another encoder, its calls and handles let go of and its lists' room
-    /// kept: `None` where that room is more than [`SPARE_LOG_BYTES`].
-    pub(super) fn cleared(mut self) -> Option<CallLog<C>> {
-        let room = self.calls.capacity() * std::mem::size_of::<C>()
+    /// kept, with that room in bytes: `None` where it is more than [`SPARE_LOG_BYTES`].
+    pub(super) fn cleared(mut self) -> Option<(CallLog<C>, usize)> {
+        let room = self.room();
+        if room > SPARE_LOG_BYTES {
+            return None;
+        }
+        self.clear();
+        Some((self, room))
+    }
+
+    /// The room of its lists, in bytes.
+    fn room(&self) -> usize {
+        self.calls.capacity() * std::mem::size_of::<C>()
             + self.bytes.capacity()
             + self.buffers.capacity() * std::mem::size_of::<Option<Buffer>>()
             + self.words.capacity() * std::mem::size_of::<u64>()
@@ -489,24 +503,25 @@ impl<C> CallLog<C> {
             + self.held_samplers.room()
             + self.held_render_states.room()
             + self.held_depth_stencils.room()
-            + self.refused.capacity() * std::mem::size_of::<u32>();
-        if room > SPARE_LOG_BYTES {
-            return None;
-        }
-        self.clear();
-        Some(self)
+            + self.refused.capacity() * std::mem::size_of::<u32>()
     }
 }
 
-/// How many cleared logs of each kind of encoder the device keeps ([`SpareLogs`]).
+/// How many cleared logs of each kind of encoder the device keeps, at least ([`SpareLogs`]).
 const SPARE_LOGS: usize = 16;
 
 /// The most room a cleared log keeps for a next encoder, in bytes; a log with more goes.
 pub(super) const SPARE_LOG_BYTES: usize = 64 * 1024;
 
-/// Cleared logs the device keeps for its next encoders (the module docs): at most [`SPARE_LOGS`]
-/// of each kind, each with at most [`SPARE_LOG_BYTES`] of room, and no call or handle. An
-/// encoder that logs takes one, or a new log where none is kept; its log comes back as its
+/// The most room the cleared logs of one kind the device keeps take together, in bytes: what
+/// [`SPARE_LOGS`] logs of [`SPARE_LOG_BYTES`] each take.
+const SPARE_ROOM_BYTES: usize = SPARE_LOGS * SPARE_LOG_BYTES;
+
+/// Cleared logs the device keeps for its next encoders (the module docs): of each kind,
+/// [`SPARE_LOGS`], or for compute encoders as many as the last command buffer that held logs
+/// for its commit gave back ([`give_held`](Self::give_held)) where that is more; each with at most [`SPARE_LOG_BYTES`] of
+/// room, all of a kind together with at most [`SPARE_ROOM_BYTES`] (1 MiB), and no call or handle.
+/// An encoder that logs takes one, or a new log where none is kept; its log comes back as its
 /// encoder ends where its command buffer does not keep it, and else in the command buffer's
 /// release, on its queue's handler thread.
 #[derive(Default)]
@@ -517,25 +532,67 @@ pub(crate) struct SpareLogs {
 }
 
 /// One kind's [`SpareLogs`].
-struct Spares<T>(Mutex<Vec<T>>);
+struct Spares<T>(Mutex<Kept<T>>);
+
+/// The logs one kind's [`Spares`] keeps.
+struct Kept<T> {
+    /// Each log with its room, in bytes.
+    logs: Vec<(T, usize)>,
+    /// Their room together, in bytes.
+    room: usize,
+    /// How many it keeps at most: [`SPARE_LOGS`], or what the last command buffer that held logs
+    /// for its commit gave back where that is more.
+    most: usize,
+}
 
 impl<T> Default for Spares<T> {
     fn default() -> Spares<T> {
-        Spares(Mutex::new(Vec::new()))
+        Spares(Mutex::new(Kept {
+            logs: Vec::new(),
+            room: 0,
+            most: SPARE_LOGS,
+        }))
+    }
+}
+
+impl<T> Kept<T> {
+    /// Keep `spare`, of `room` bytes, where it keeps fewer than it may and their room stays within
+    /// [`SPARE_ROOM_BYTES`]; else hand it back.
+    fn keep(&mut self, spare: T, room: usize) -> Option<T> {
+        if self.logs.len() >= self.most || self.room + room > SPARE_ROOM_BYTES {
+            return Some(spare);
+        }
+        self.room += room;
+        self.logs.push((spare, room));
+        None
     }
 }
 
 impl<T> Spares<T> {
     fn take(&self) -> Option<T> {
-        lock(&self.0).pop()
+        let mut kept = lock(&self.0);
+        let (spare, room) = kept.logs.pop()?;
+        kept.room -= room;
+        Some(spare)
     }
 
-    /// Keep `spare` where fewer than [`SPARE_LOGS`] are kept; else it goes, after the lock.
-    fn give(&self, spare: T) {
-        let mut spares = lock(&self.0);
-        if spares.len() < SPARE_LOGS {
-            spares.push(spare);
+    /// Keep `spare`, of `room` bytes, where it may ([`Kept::keep`]); else it goes, after the lock.
+    fn give(&self, spare: T, room: usize) {
+        let gone = lock(&self.0).keep(spare, room);
+        drop(gone);
+    }
+
+    /// Keep `spares`, each with its room, under one lock, keeping as many as they are where that
+    /// is more than [`SPARE_LOGS`] ([`Kept::keep`]); those it does not keep go after the lock.
+    fn give_all(&self, spares: Vec<(T, usize)>) {
+        let mut gone = Vec::new();
+        let mut kept = lock(&self.0);
+        kept.most = spares.len().max(SPARE_LOGS);
+        for (spare, room) in spares {
+            gone.extend(kept.keep(spare, room));
         }
+        drop(kept);
+        drop(gone);
     }
 }
 
@@ -543,6 +600,25 @@ impl SpareLogs {
     /// A compute encoder's log: a kept one, or a new one.
     pub(super) fn compute(&self) -> CallLog<ComputeCall> {
         self.compute.take().unwrap_or_else(CallLog::new)
+    }
+
+    /// Clear `held`, the logs a command buffer held for its commit for its groups of compute
+    /// encoders and no split took (`command_buffer/fold.rs`), in its release, and keep them for
+    /// next encoders under one lock: as many as they are, within [`SPARE_ROOM_BYTES`], so a next
+    /// command buffer's encoders as many reuse their room rather than allocate. Their calls and
+    /// handles go now.
+    pub(super) fn give_held(&self, held: Vec<Replay>) {
+        if held.is_empty() {
+            return;
+        }
+        let mut compute = Vec::with_capacity(held.len());
+        for replay in held {
+            match replay {
+                Replay::Compute { log, .. } => compute.extend(log.cleared()),
+                other => self.give(other),
+            }
+        }
+        self.compute.give_all(compute);
     }
 
     /// A blit encoder's log: a kept one, or a new one.
@@ -566,18 +642,18 @@ impl SpareLogs {
     pub(super) fn give(&self, replay: Replay) {
         match replay {
             Replay::Compute { log, .. } => {
-                if let Some(log) = log.cleared() {
-                    self.compute.give(log);
+                if let Some((log, room)) = log.cleared() {
+                    self.compute.give(log, room);
                 }
             }
             Replay::Blit(log) => {
-                if let Some(log) = log.cleared() {
-                    self.blit.give(log);
+                if let Some((log, room)) = log.cleared() {
+                    self.blit.give(log, room);
                 }
             }
             Replay::Render(log) => {
-                if let Some(room) = log.cleared() {
-                    self.render.give(room);
+                if let Some((log, room)) = log.cleared() {
+                    self.render.give(log, room);
                 }
             }
         }
@@ -710,6 +786,45 @@ pub(super) enum BlitCall {
 }
 
 impl BlitCall {
+    /// Whether a queue made for copies takes it (`Device::new_command_queue_for_copies`): a copy
+    /// between buffers, a fill of one, a fence's update or wait, whose commands its copy engine's
+    /// family of transfers alone records; else the call's name, which that queue refuses
+    /// (`CopyQueueProblem::Command`).
+    pub(super) fn on_copy_engine(&self) -> Result<(), &'static str> {
+        let name = match self {
+            BlitCall::CopyBufferToBuffer(..)
+            | BlitCall::FillBuffer(..)
+            | BlitCall::UpdateFence(_)
+            | BlitCall::WaitForFence(_) => return Ok(()),
+            BlitCall::FillBufferPattern4(..) => "fill_buffer_pattern4",
+            BlitCall::SynchronizeResource(_) => "synchronize_resource",
+            BlitCall::FillTexture(..) => "fill_texture",
+            BlitCall::FillTextureColor(_) => "fill_texture_color",
+            BlitCall::CopyBufferToTexture(_) => "copy_from_buffer_to_texture",
+            BlitCall::CopyTextureToBuffer(_) => "copy_from_texture_to_buffer",
+            BlitCall::CopyTextureToTexture(_) => "copy_from_texture_to_texture",
+            BlitCall::CopyTextureSlices(_) => "copy_texture_slices",
+            BlitCall::CopyTexture(..) => "copy_texture",
+            BlitCall::GenerateMipmaps(_) => "generate_mipmaps",
+            BlitCall::SynchronizeTexture(..) => "synchronize_texture",
+            BlitCall::OptimizeForGpu(_) => "optimize_contents_for_gpu_access",
+            BlitCall::OptimizeForGpuSliceLevel(..) => {
+                "optimize_contents_for_gpu_access_slice_level"
+            }
+            BlitCall::OptimizeForCpu(_) => "optimize_contents_for_cpu_access",
+            BlitCall::OptimizeForCpuSliceLevel(..) => {
+                "optimize_contents_for_cpu_access_slice_level"
+            }
+            BlitCall::CopyIndirectCommandBuffer(_) => "copy_indirect_command_buffer",
+            BlitCall::ResetCommandsInBuffer(..) => "reset_commands_in_buffer",
+            BlitCall::OptimizeIndirectCommandBuffer(..) => "optimize_indirect_command_buffer",
+            BlitCall::InvalidateCompressedTexture(_) => "invalidate_compressed_texture",
+            BlitCall::InvalidateCompressedTextureSlice(..) => "invalidate_compressed_texture_slice",
+            BlitCall::HostRamCopy(_) => "copy_from_host_ram",
+        };
+        Err(name)
+    }
+
     /// The bytes it holds in boxes of its own, besides its size.
     pub(super) fn extra(&self) -> usize {
         match self {

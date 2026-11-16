@@ -92,6 +92,8 @@ pub struct ModuleBuilder {
     coherent_images: BTreeSet<GlobalId>,
     /// Storage-image resources decorated `Volatile` (`ModuleBuilder::volatile`).
     volatile: BTreeSet<GlobalId>,
+    /// Buffer bindings whose memory nothing in the module writes (`ModuleBuilder::unwritten_buffer`).
+    unwritten_buffers: BTreeSet<ResourceSlot>,
     /// The enabling capability lowering chose for a builtin whose registry offers alternatives
     /// (`requirements::builtin_enablers`).
     enabling: BTreeMap<GlobalId, crate::spv::Capability>,
@@ -178,11 +180,15 @@ pub struct ModuleBuilder {
     /// Whether a `half`'s NaN bits are the device's conversion's under the float controls
     /// ([`ModuleBuilder::native_half_nans`]).
     native_half_nans: bool,
+    /// Whether the module computes `half` under the 16-bit float controls
+    /// ([`ModuleBuilder::half_controls`]).
+    half_controls: bool,
 }
 
 /// How a float multiply the device must round on its own and never fuse is emitted
-/// ([`FunctionBuilder::binary_no_contraction`]). Lowering takes it from the profile's `float`
-/// functions fact (`ArithPlan::product`).
+/// ([`FunctionBuilder::binary_no_contraction`]), and an `f32` product by a constant with a `-0.0`
+/// component. Lowering takes it from the profile's `float` functions fact and its driver
+/// workarounds (`ArithPlan::product`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ProductForm {
     /// `OpFMul` decorated `NoContraction`, for a device whose driver compiles the SPIR-V itself:
@@ -198,6 +204,15 @@ pub enum ProductForm {
     /// as Metal treats its own multiply. `a · b + (-0.0)` is `a · b` exactly whether the device
     /// fuses it or not.
     NegativeZeroFma,
+    /// [`ProductForm::Multiply`], but every `f32` product (`OpFMul`, `OpVectorTimesScalar`, with
+    /// or without contraction) by a constant with a `-0.0` component multiplies by `+0.0` there
+    /// and negates that component of the product: `OpFNegate`, and an `OpVectorShuffle` of the
+    /// product and its negation where only some components are `-0.0`. For a driver whose
+    /// compiler keeps one multiply for products of one value by zeros of opposite sign
+    /// (`DriverWorkaround::OppositeZeroProductsMerged`), so no product it compiles has a `-0.0`
+    /// factor beside a `+0.0` one. `-(a · +0)` is `a · (−0)` for every `a`; a NaN's sign is the
+    /// device's either way.
+    PositiveZeroFactors,
 }
 
 /// How the lowering clears the bits above a narrow integer's width `N` in a 32-bit container
@@ -280,9 +295,10 @@ impl ModuleBuilder {
         ModuleBuilder::default()
     }
 
-    /// Emit every float multiply the device must round on its own in `form`. Emission sets it
-    /// before any instruction, from the profile's `float` functions fact; a builder that never sets
-    /// it emits [`ProductForm::Multiply`].
+    /// Emit every float multiply the device must round on its own, and every `f32` product by a
+    /// constant with a `-0.0` component, in `form`. Emission sets it before any instruction, from
+    /// the profile's `float` functions fact and driver workarounds; a builder that never sets it
+    /// emits [`ProductForm::Multiply`].
     pub fn product_form(&mut self, form: ProductForm) {
         self.product_form = form;
     }
@@ -351,6 +367,21 @@ impl ModuleBuilder {
         self.native_half_nans
     }
 
+    /// Set whether the module computes `half` under the 16-bit float controls
+    /// (`lower::arith::narrow::half_controls`): a `half` `/` and `sqrt` are then the device's
+    /// 16-bit instructions. Emission sets it from the profile; a builder that never sets it
+    /// computes them in `f32`.
+    pub fn set_half_controls(&mut self, controls: bool) {
+        self.half_controls = controls;
+    }
+
+    /// Whether the module computes `half` under the 16-bit float controls
+    /// ([`ModuleBuilder::set_half_controls`]), whatever its [`QuantizeForm`]: a driver may fold
+    /// the conversion's round trip yet keep its 16-bit instructions' rounding.
+    pub fn half_controls(&self) -> bool {
+        self.half_controls
+    }
+
     /// The heap bytes the builder holds, for the byte ledger: every input-scaled container's
     /// capacity, with the blocks' contents counted as they grow. The emitters charge its growth at
     /// their poll points ([`crate::budget::Growth`]). Constant time in the size of the module (one
@@ -387,6 +418,10 @@ impl ModuleBuilder {
             + vec_bytes(&self.decls)
             + tree_bytes(self.invariant.len(), std::mem::size_of::<GlobalId>())
             + tree_bytes(self.volatile.len(), std::mem::size_of::<GlobalId>())
+            + tree_bytes(
+                self.unwritten_buffers.len(),
+                std::mem::size_of::<ResourceSlot>(),
+            )
             + tree_bytes(
                 self.enabling.len(),
                 std::mem::size_of::<(GlobalId, crate::spv::Capability)>(),
@@ -634,6 +669,13 @@ impl ModuleBuilder {
                     }) if !matches!(dim, Dim::Buffer | Dim::SubpassData)
                 ),
                 ResourceKind::SeparateSampler(_) => matches!(self.types.get(ty)?, Type::Sampler),
+                // A constexpr sampler array is exactly a sized array of samplers.
+                ResourceKind::SamplerArray { .. } => match self.types.get(ty)? {
+                    Type::Array {
+                        elem, stride: None, ..
+                    } => matches!(self.types.get(*elem)?, Type::Sampler),
+                    _ => false,
+                },
                 _ => true,
             };
         if !ok {
@@ -860,14 +902,16 @@ impl ModuleBuilder {
 
     /// Decorate builtin output `g` `Invariant`: SPIR-V's "expressions computing its value be
     /// computed invariantly with respect to other shaders computing the same expressions". Only
-    /// the `Position` output (Metal's `[[invariant]]` position) and a fragment's per-fragment
-    /// outputs, `FragDepth`, `SampleMask` and `FragStencilRefEXT` (the variants of one render
-    /// pipeline's color groups, `LoweringInputs::color_group`), can be invariant.
+    /// the `Position` output (Metal's `[[invariant]]` position), the `ClipDistance` output (a
+    /// rate-mapped pass's copies of its triangles, `pipeline::link::fan_out`) and a fragment's
+    /// per-fragment outputs, `FragDepth`, `SampleMask` and `FragStencilRefEXT` (the variants of
+    /// one render pipeline's color groups, `LoweringInputs::color_group`), can be invariant.
     pub fn invariant(&mut self, g: GlobalId) -> BResult<()> {
         use crate::spv::BuiltIn as B;
         match self.global(g)?.kind {
             GlobalKind::BuiltIn {
-                builtin: B::Position | B::FragDepth | B::SampleMask | B::FragStencilRefEXT,
+                builtin:
+                    B::Position | B::ClipDistance | B::FragDepth | B::SampleMask | B::FragStencilRefEXT,
                 dir: IoDir::Output,
             } => {
                 self.invariant.insert(g);
@@ -897,6 +941,14 @@ impl ModuleBuilder {
             }
             _ => Err(BuildError::Global(GlobalRule::PerPrimitiveTarget)),
         }
+    }
+
+    /// State that nothing in the module writes the memory bound at buffer binding `sym`: no other
+    /// binding or address reaches it (its Metal argument is unaliased), and no store or atomic of
+    /// the module reaches it through its own views. The serializer decorates its storage views
+    /// `NonWritable` where its own walk of the module agrees (`spirv::serialize`).
+    pub fn unwritten_buffer(&mut self, sym: ResourceSlot) {
+        self.unwritten_buffers.insert(sym);
     }
 
     /// Decorate every storage buffer and storage image resource of the module `Coherent`, those
@@ -1398,6 +1450,7 @@ impl ModuleBuilder {
             offsets_from_seven_sixteenths: self.offsets_from_seven_sixteenths,
             coherent,
             volatile: self.volatile,
+            unwritten_buffers: self.unwritten_buffers,
             enabling: self.enabling,
             non_uniform: self.non_uniform,
             measured_roundings: self.measured_roundings,

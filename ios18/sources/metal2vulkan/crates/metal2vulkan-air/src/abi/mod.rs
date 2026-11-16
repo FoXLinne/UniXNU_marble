@@ -11,6 +11,9 @@
 //!   [`AbiError`] (`UnknownKey`, `BadValue`, `MissingKey`). An argument-buffer member's
 //!   `air.indirect_argument` belongs to an `air.indirect_buffer`'s layout, so an `air.buffer`
 //!   (a parameter or a member) whose layout holds one at any depth is `UnknownKey`.
+//! - An `UnknownKey` names what it read: the key the ABI defines but the place does not accept,
+//!   as its location's key, or, where it read a string the ABI does not define or an operand left
+//!   over, that string or the operand's shape ([`InputError`]'s Display: `saw "air.no_such_key"`).
 //! - Names (`air.arg_name`, `air.arg_type_name`, struct member and type names, constant names)
 //!   are kept as [`DiagName`]s for diagnostics and never decide anything. The varying user key
 //!   (`generated(..)`, `user(..)`) is the Metal interface-matching ABI and is compared for
@@ -18,15 +21,18 @@
 //!
 //! Decoding also cross-checks the metadata against the IR: every entry parameter has exactly one
 //! binding, each role agrees with its parameter's type and address space (a buffer, texture, or
-//! sampler table passed as an `array_ref` is a thread-space pointer), and the outputs agree with
+//! sampler table passed as an `array_ref` is a thread-space pointer, and a read-only `device`
+//! buffer may be a constant-space pointer), and the outputs agree with
 //! the return type; likewise each `!air.visible` function binds every parameter once and has an
 //! output exactly when it returns a value, and each `!air.ci` Core Image kernel also binds every
 //! parameter once, with a role that agrees with the parameter's type, and has a scalar or vector
-//! output exactly when it returns a value. For typed-pointer bitcode, a buffer's (or Core Image
-//! pointer's) `air.arg_type_size` equals the allocation size of its pointee under the DataLayout, a
-//! buffer's `air.buffer_size` is a multiple of it (a reference to an array), and every
-//! `air.struct_type_info` member starts inside its container, with arrays and nested structs wholly
-//! inside. `air.arg_type_align_size` is Metal's alignment, which the LLVM type does not carry
+//! output exactly when it returns a value. For typed-pointer bitcode, the `air.arg_type_size` of an
+//! argument buffer, a threadgroup argument, a buffer with a struct layout or a Core Image pointer
+//! equals the allocation size of its pointee under the DataLayout; a plain buffer's states its
+//! declared type, which may differ from the pointee (Apple's OpenGL front end declares byte buffers
+//! behind typed pointers). A buffer's `air.buffer_size` is a multiple of its declared type's size
+//! (a reference to an array), and every `air.struct_type_info` member starts inside its container,
+//! with arrays and nested structs wholly inside. `air.arg_type_align_size` is Metal's alignment, which the LLVM type does not carry
 //! (clang lowers many structs packed), so it is only required to be a power of two. A metallib
 //! function's container metadata is cross-checked by [`AirAbi::check_container`].
 //!
@@ -39,6 +45,7 @@
 //! [`ImageShape`]: crate::intrinsics::ImageShape
 //! [`AbiError`]: crate::error::AbiError
 //! [`AbiError::UnknownKey`]: crate::error::AbiError::UnknownKey
+//! [`InputError`]: crate::error::InputError
 
 mod args;
 mod check;

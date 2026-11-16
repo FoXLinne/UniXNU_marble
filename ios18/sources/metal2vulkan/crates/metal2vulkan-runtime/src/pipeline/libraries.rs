@@ -18,7 +18,10 @@
 //!
 //! - **Same pipeline.** The libraries are made from the very create infos the whole pipeline's
 //!   making takes, split by part; linking them is the driver's, so a linked pipeline is the
-//!   whole pipeline the same state describes. Nothing an answer depends on changes.
+//!   whole pipeline the same state describes. Nothing an answer depends on changes. Not on a
+//!   driver whose fast link leaves a fragment shader's interlock unordered
+//!   (`RuntimeDriverDefect::FastLinkedInterlocksUnordered`, RADV): a variant whose fragment stage
+//!   interlocks is made whole there (`graphics.rs`'s `GraphicsContent::links`).
 //! - **The device's, by content** (`content_keyed.rs`). A program's call (a draw, a state's
 //!   creation) claims each part's library, inserting it where the device has none; a pool piece
 //!   only looks up, and on a miss makes one of its own that no lookup finds. A claimed library is
@@ -40,9 +43,13 @@
 //!   library only after every pipeline it linked, at a program's settle or the device's teardown,
 //!   so no variant destroys one another variant draws with.
 //! - **Cached across processes.** Each library of shaders (pre-rasterization, fragment shader) is
-//!   made through the device's shader cache under a record named by its part
-//!   (`shader_cache/driver.rs`), as a whole pipeline is; the vertex input and fragment output
-//!   libraries hold no shader and keep no record.
+//!   made through the device's shader cache under its part's record (`shader_cache/driver.rs`),
+//!   as a whole pipeline is: its part's name but for what reaches no stage's conversion, the
+//!   pass's attachment formats and the depth bias (`GraphicsContent::record_parts`). So a part's
+//!   libraries made against passes that differ only in an attachment's format, each a library of
+//!   its own, share one record and one `VkPipelineCache`, where the driver finds the stages the
+//!   first compiled. The vertex input and fragment output libraries hold no shader and keep no
+//!   record.
 
 use super::budget;
 use super::content_keyed::{program_call, ContentKeyed, Owned};
@@ -83,7 +90,7 @@ impl Part {
     }
 
     /// Whether its library compiles shaders: the pre-rasterization and fragment shader parts.
-    /// Only those are made through the device's shader cache, each under a record of its own
+    /// Only those are made through the device's shader cache, each under its part's record
     /// (`shader_cache/driver.rs`); the vertex input and fragment output libraries hold no shader,
     /// and are made without a pipeline cache.
     pub(crate) fn holds_shaders(self) -> bool {

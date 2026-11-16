@@ -79,18 +79,16 @@ static void
 tu_physical_device_compiler_options_init(struct tu_physical_device *device,
                                          struct tu_instance *instance)
 {
-   /* D3D12 texel buffer range emulation requires the resbase instruction, which appeared in 7xx. */
-   if (fd_dev_gen(&device->dev_id) >= 7) {
-      if (device->info->props.max_texel_buffer_range_elements < TU_D3D12_MAX_TEXEL_BUFFER_ELEMENTS) {
-         assert(fd_dev_gen(&device->dev_id) == 7);
-         device->compiler_options.enable_texel_buffer_emulation =
-            instance->drirc.misc.enable_texel_buffer_emulation;
-      }
-      if (device->info->props.max_storage_buffer_range_bytes < TU_D3D12_MAX_STORAGE_BUFFER_RANGE_BYTES) {
-         assert(fd_dev_gen(&device->dev_id) == 7);
-         device->compiler_options.enable_ssbo_emulation =
-            instance->drirc.misc.enable_ssbo_emulation;
-      }
+   /* D3D12 texel buffer and SSBO range emulation. Without resbase the
+    * buffer size is read from the descriptor set memory.
+    */
+   if (device->info->props.max_texel_buffer_range_elements < TU_D3D12_MAX_TEXEL_BUFFER_ELEMENTS) {
+      assert(fd_dev_gen(&device->dev_id) <= 7);
+      device->compiler_options.enable_texel_buffer_emulation = instance->drirc.misc.enable_texel_buffer_emulation;
+   }
+   if (device->info->props.max_storage_buffer_range_bytes < TU_D3D12_MAX_STORAGE_BUFFER_RANGE_BYTES) {
+      assert(fd_dev_gen(&device->dev_id) <= 7);
+      device->compiler_options.enable_ssbo_emulation = instance->drirc.misc.enable_ssbo_emulation;
    }
 
    device->compiler_options.allow_oob_indirect_ubo_loads =
@@ -215,6 +213,7 @@ get_device_extensions(const struct tu_physical_device *device,
    bool has_raytracing =
       device->info->props.has_ray_intersection &&
       (!device->info->props.has_sw_fuse || device->has_raytracing);
+   bool has_calibrated_timestamps = device->info->props.has_persistent_counter && device->has_gpu_timestamp;
 
    *ext = (struct vk_device_extension_table) { .table = {
       .KHR_8bit_storage = device->info->props.storage_8bit,
@@ -222,7 +221,7 @@ get_device_extensions(const struct tu_physical_device *device,
       .KHR_acceleration_structure = has_raytracing,
       .KHR_bind_memory2 = true,
       .KHR_buffer_device_address = true,
-      .KHR_calibrated_timestamps = device->info->props.has_persistent_counter,
+      .KHR_calibrated_timestamps = has_calibrated_timestamps,
       .KHR_compute_shader_derivatives = true,
       .KHR_copy_commands2 = true,
       .KHR_create_renderpass2 = true,
@@ -320,7 +319,7 @@ get_device_extensions(const struct tu_physical_device *device,
       .EXT_attachment_feedback_loop_dynamic_state = true,
       .EXT_attachment_feedback_loop_layout = true,
       .EXT_border_color_swizzle = true,
-      .EXT_calibrated_timestamps = device->info->props.has_persistent_counter,
+      .EXT_calibrated_timestamps = has_calibrated_timestamps,
       .EXT_color_write_enable = true,
       .EXT_conditional_rendering = true,
       .EXT_conservative_rasterization = device->info->chip >= 7,
@@ -378,7 +377,7 @@ get_device_extensions(const struct tu_physical_device *device,
       .EXT_pipeline_creation_cache_control = true,
       .EXT_pipeline_creation_feedback = true,
 #ifdef TU_USE_WSI_PLATFORM
-      .EXT_present_timing = device->info->props.has_persistent_counter,
+      .EXT_present_timing = has_calibrated_timestamps,
 #endif
       .EXT_primitive_restart_index = true,
       .EXT_primitive_topology_list_restart = true,
@@ -2449,8 +2448,8 @@ tu_create_copy_timestamp_cs(struct tu_u_trace_submission_data *submission_data,
             &device->vk.alloc, sizeof(struct tu_copy_timestamp_data), 8,
             VK_SYSTEM_ALLOCATION_SCOPE_DEVICE));
 
-      tu_cs_init(&submission_data->timestamp_copy_data->cs, device,
-                 TU_CS_MODE_GROW, cs_size, "trace copy timestamp cs");
+      tu_cs_init_ib1(&submission_data->timestamp_copy_data->cs, device,
+                     TU_CS_MODE_GROW, cs_size, "trace copy timestamp cs");
       u_trace_init(&submission_data->timestamp_copy_data->trace,
                    &device->trace_context);
    }
@@ -2802,6 +2801,24 @@ tu_device_get_timestamp(struct vk_device *vk_device, uint64_t *timestamp)
    return ret == 0 ? VK_SUCCESS : VK_ERROR_UNKNOWN;
 }
 
+VKAPI_ATTR VkResult VKAPI_CALL
+tu_GetCalibratedTimestampsKHR(VkDevice _device,
+                              uint32_t timestampCount,
+                              const VkCalibratedTimestampInfoKHR *pTimestampInfos,
+                              uint64_t *pTimestamps,
+                              uint64_t *pMaxDeviation)
+{
+   VK_FROM_HANDLE(tu_device, dev, _device);
+
+   VkResult result =
+      tu_device_get_calibrated_timestamps(dev, timestampCount, pTimestampInfos, pTimestamps, pMaxDeviation);
+   if (result == VK_ERROR_FEATURE_NOT_PRESENT) {
+      return vk_common_GetCalibratedTimestampsKHR(_device, timestampCount, pTimestampInfos, pTimestamps, pMaxDeviation);
+   }
+
+   return result;
+}
+
 static void
 tu_device_destroy_mutexes(struct tu_device *device)
 {
@@ -3075,8 +3092,7 @@ tu_CreateDevice(VkPhysicalDevice physicalDevice,
       &device->pipeline_suballoc, device, 128 * 1024,
       static_cast<enum tu_bo_alloc_flags>(TU_BO_ALLOC_GPU_READ_ONLY |
                                           TU_BO_ALLOC_ALLOW_DUMP |
-                                          TU_BO_ALLOC_INTERNAL_RESOURCE |
-                                          tu_bo_ib_flags(device)),
+                                          TU_BO_ALLOC_INTERNAL_RESOURCE),
       "pipeline_suballoc");
    if (is_kgsl(physical_device->instance)) {
       tu_bo_suballocator_init(&device->kgsl_profiling_suballoc, device,
@@ -3092,7 +3108,8 @@ tu_CreateDevice(VkPhysicalDevice physicalDevice,
       &device->vis_stream_suballocator, device,
       getpagesize(),
       static_cast<enum tu_bo_alloc_flags>(TU_BO_ALLOC_INTERNAL_RESOURCE |
-                                          TU_BO_ALLOC_ALLOW_DUMP),
+                                          TU_BO_ALLOC_ALLOW_DUMP |
+                                          tu_bo_ib1_flags(device)),
       "vis_stream_suballoc");
 
    result = tu_bo_init_new(
@@ -3175,6 +3192,8 @@ tu_CreateDevice(VkPhysicalDevice physicalDevice,
        * from 0 to 31. One of these will be picked up at cmd submit time
        * when the perf query is executed.
        */
+      tu_cs_init_ib1(&device->perfcntrs_pass_cs, device,
+                     TU_CS_MODE_SUB_STREAM, 32 * 3, "perfcntrs pass cs");
 
       device->perfcntrs_pass_cs_entries =
          static_cast<struct tu_cs_entry *>(calloc(32, sizeof(struct tu_cs_entry)));
@@ -3187,7 +3206,8 @@ tu_CreateDevice(VkPhysicalDevice physicalDevice,
       for (unsigned i = 0; i < 32; i++) {
          struct tu_cs sub_cs;
 
-         result = tu_cs_begin_sub_stream(&device->sub_cs, 3, &sub_cs);
+         result = tu_cs_begin_sub_stream(&device->perfcntrs_pass_cs, 3,
+                                         &sub_cs);
          if (result != VK_SUCCESS) {
             vk_startup_errorf(device->instance, result,
                   "failed to allocate commands streams");
@@ -3198,7 +3218,7 @@ tu_CreateDevice(VkPhysicalDevice physicalDevice,
          tu_cs_emit_pkt7(&sub_cs, CP_WAIT_FOR_ME, 0);
 
          device->perfcntrs_pass_cs_entries[i] =
-            tu_cs_end_sub_stream(&device->sub_cs, &sub_cs);
+            tu_cs_end_sub_stream(&device->perfcntrs_pass_cs, &sub_cs);
       }
    }
 
@@ -3320,6 +3340,7 @@ fail_autotune:
 fail_prepare_perfcntrs_pass_cs:
    free(device->perfcntrs_pass_cs_entries);
 fail_perfcntrs_pass_entries_alloc:
+   tu_cs_finish(&device->perfcntrs_pass_cs);
    tu_cs_finish(&device->sub_cs);
    vk_pipeline_cache_destroy(device->mem_cache, &device->vk.alloc);
 fail_pipeline_cache:
@@ -3407,6 +3428,7 @@ tu_DestroyDevice(VkDevice _device, const VkAllocationCallbacks *pAllocator)
 
    tu_cs_finish(&device->sub_cs);
 
+   tu_cs_finish(&device->perfcntrs_pass_cs);
    free(device->perfcntrs_pass_cs_entries);
 
    if (device->dbg_cmdbuf_stomp_cs) {

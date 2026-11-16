@@ -20,7 +20,6 @@ use crate::{
 };
 use metal2vulkan::metal::{PixelFormat, TextureUsage};
 use metal2vulkan::pipeline::{StageSource, TileRenderPipelineDescriptor};
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 /// How long a command buffer that waits for a making is watched not to complete.
@@ -41,8 +40,7 @@ const RECORDS: u64 = 512 * 12 * 4;
 
 /// A state of the fixture's tile function.
 pub(super) fn tile_state(device: &Device) -> RenderPipelineState {
-    let ll = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../metal2vulkan-validation/fixtures/public/engine/k10ts_tile_grid.ll");
+    let ll = metal2vulkan_devtools::engine_dir().join("k10ts_tile_grid.ll");
     let bitcode = metal2vulkan_devtools::llvm_assemble(&ll).unwrap();
     let library = metal2vulkan::library::Library::from_air(&bitcode).unwrap();
     let library = device.new_library_with_compile_library(library);
@@ -58,9 +56,9 @@ pub(super) fn tile_state(device: &Device) -> RenderPipelineState {
 }
 
 /// The pass's attachments and the fixture's records.
-struct Targets {
-    colors: [Texture; 3],
-    out: Buffer,
+pub(super) struct Targets {
+    pub(super) colors: [Texture; 3],
+    pub(super) out: Buffer,
 }
 
 /// The value of attachment 0 and attachment 1 at pixel (`x`, `y`) before the pass.
@@ -73,7 +71,7 @@ fn v(x: u64, y: u64) -> u32 {
 }
 
 impl Targets {
-    fn new(device: &Device) -> Targets {
+    pub(super) fn new(device: &Device) -> Targets {
         let attachment = |format, texel: &dyn Fn(u64, u64) -> u32| {
             let [width, height] = AREA;
             let mut descriptor = TextureDescriptor::texture_2d(format, width, height, false);
@@ -103,7 +101,7 @@ impl Targets {
 
     /// Whether every pixel holds what the fixture's dispatch over every tile stores, as Metal's
     /// does: `f * 2 + 1`, `v * 3 + k` and its tile's and cell's tag.
-    fn stored(&self) -> bool {
+    pub(super) fn stored(&self) -> bool {
         let words = |texture: &Texture| {
             let [width, height] = AREA;
             let mut bytes = vec![0u8; (width * height * 4) as usize];

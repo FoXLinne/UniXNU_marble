@@ -28,19 +28,26 @@
 //! two objects, two constant words, words further apart than a simdgroup spans, words a loop
 //! counter's bounds keep apart, each thread's own word of whichever row an iteration picks, a
 //! counter stepping by more than its threads' starts differ, a tree reduction's halves under
-//! its guard) take nothing, and so do stores of one value every thread stores alike and accesses
-//! one thread of a simdgroup at most runs (`if (t == 0)`). No GPU is used; `llvm-as` assembles the
-//! kernels and a missing tool skips visibly.
+//! its guard (also where the guard tests the index widened once), a guarded word below the bytes the others touch, a tile's rows further apart than
+//! its columns span and its blocks further apart than its rows) take nothing, and so do stores
+//! of one value every thread stores alike and accesses one thread of a simdgroup at most runs
+//! (`if (t == 0)`). No GPU is used; `llvm-as` assembles the kernels and a missing tool skips
+//! visibly.
 
 use std::collections::BTreeMap;
 
+use crate::budget::{Budget, Meter, SPIRV_WORDS};
 use crate::device::requirements::VkProperty;
-use crate::device::subgroup::Tier;
+use crate::device::subgroup::{OpBits, SimdClass, SubgroupRequirement, Tier};
 use crate::device::DevicePolicy;
-use crate::lower::select::Plan;
+use crate::error::Error;
+use crate::library::FunctionConstantValues;
+use crate::lower::select::{LowerInputs, Plan};
+use crate::pipeline::compile::{compile_bitcode, EntryRef};
+use crate::pipeline::facts::RuntimeFact;
 use crate::pipeline::sym::{Axis, ResourceKind, ResourceSlot, SpecKey, Stage};
 use crate::pipeline::testing::{
-    compile, llvm_assemble, profile, typed_module, AssembleError, Scratch,
+    compile, llvm_assemble, profile, typed_module, typed_module_with, AssembleError, Scratch,
 };
 use crate::spirv::interp::{run, Buffer, Config, Order, Resources, SubgroupSize};
 use crate::spirv::ir::TypedModule;
@@ -53,6 +60,7 @@ target triple = "air64_v28-apple-macosx26.0.0"
 @src = internal unnamed_addr addrspace(3) global [64 x i32] undef, align 4
 @wide = internal unnamed_addr addrspace(3) global [128 x i32] undef, align 4
 @tile = internal unnamed_addr addrspace(3) global [4 x [32 x i32]] undef, align 4
+@grid = internal unnamed_addr addrspace(3) global [512 x i32] undef, align 4
 "#;
 
 /// The metadata of kernel `name(device uint *out [[buffer(0)]], uint t
@@ -604,6 +612,161 @@ done:
 }
 "#;
 
+/// In simdgroup 0, threads below 4 (`t < 4`) store two 16-byte words each into the first 128
+/// bytes of `@wide` (vector words `2t` and `2t | 1`); then every thread of the simdgroup stores
+/// its own word at byte `128 + 4 lane` and again 128 bytes on, in the same barrier interval and
+/// through other address shapes. Only the guard keeps the vector words below byte 128, so the
+/// pairs are apart by the bytes each access may touch where it runs; and `2t | 1` sets a bit
+/// `2t` has clear, so two threads' vector words never meet either. After a barrier thread `t`
+/// adds word `t` (its group of eight's `100 + t / 8`) to word `32 + t` (`t`): `out[t] = 100 +
+/// t / 8 + t`.
+const GUARDED_TILE: &str = r#"
+define void @guarded_tile(ptr addrspace(1) %0, i32 %1, i32 %sg) #0 {
+  %3 = zext i32 %1 to i64
+  %first = icmp eq i32 %sg, 0
+  br i1 %first, label %work, label %done
+
+work:
+  %low = icmp ult i32 %1, 4
+  br i1 %low, label %head, label %tile
+
+head:
+  %h0 = shl nuw nsw i32 %1, 1
+  %h1 = or i32 %h0, 1
+  %i0 = zext i32 %h0 to i64
+  %i1 = zext i32 %h1 to i64
+  %p0 = getelementptr inbounds <4 x i32>, ptr addrspace(3) @wide, i64 %i0
+  %p1 = getelementptr inbounds <4 x i32>, ptr addrspace(3) @wide, i64 %i1
+  %v = add i32 %1, 100
+  %one = insertelement <4 x i32> poison, i32 %v, i64 0
+  %all = shufflevector <4 x i32> %one, <4 x i32> poison, <4 x i32> zeroinitializer
+  store <4 x i32> %all, ptr addrspace(3) %p0, align 4
+  store <4 x i32> %all, ptr addrspace(3) %p1, align 4
+  br label %tile
+
+tile:
+  %base = getelementptr inbounds i32, ptr addrspace(3) @wide, i64 32
+  %lane = and i32 %1, 31
+  %l = zext i32 %lane to i64
+  %q = getelementptr inbounds i32, ptr addrspace(3) %base, i64 %l
+  store i32 %lane, ptr addrspace(3) %q, align 4
+  %r = getelementptr inbounds i32, ptr addrspace(3) %q, i64 32
+  store i32 %lane, ptr addrspace(3) %r, align 4
+  br label %done
+
+done:
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %4 = getelementptr inbounds [128 x i32], ptr addrspace(3) @wide, i64 0, i64 %3
+  %5 = load i32, ptr addrspace(3) %4, align 4
+  %6 = add nuw nsw i64 %3, 32
+  %7 = getelementptr inbounds [128 x i32], ptr addrspace(3) @wide, i64 0, i64 %6
+  %8 = load i32, ptr addrspace(3) %7, align 4
+  %9 = add i32 %5, %8
+  %10 = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %3
+  store i32 %9, ptr addrspace(1) %10, align 4
+  ret void
+}
+"#;
+
+/// A tile of four rows per simdgroup, in a block the simdgroups' threads all run but no barrier
+/// may stand in (`sg < 2`, which the 64 threads all pass): thread `t` stores `t + 100 k` into row
+/// `k` at its column, word `(t & 31) + 32 k` of its simdgroup's block of `@grid`, the block's
+/// first word `(t & -32) << 3` (a 16-bit position's low and high bits, through two GEPs, as a
+/// compiler spells a tile's address). After a barrier thread `t` sums the column of thread
+/// `t ^ 1`: `out[t] = 4 (t ^ 1) + 600`.
+const LATTICE_TILE: &str = r#"
+define void @lattice_tile(ptr addrspace(1) %0, i32 %1, i32 %sg) #0 {
+  %3 = zext i32 %1 to i64
+  %x = trunc i32 %1 to i16
+  %lane = and i16 %x, 31
+  %high = and i16 %x, -32
+  %l = zext i16 %lane to i64
+  %hw = zext i16 %high to i32
+  %h8 = shl nuw nsw i32 %hw, 3
+  %h = zext i32 %h8 to i64
+  %col = getelementptr inbounds i32, ptr addrspace(3) @grid, i64 %l
+  %at = getelementptr inbounds i32, ptr addrspace(3) %col, i64 %h
+  %run = icmp ult i32 %sg, 2
+  br i1 %run, label %fill, label %done
+
+fill:
+  store i32 %1, ptr addrspace(3) %at, align 4
+  %r1 = getelementptr inbounds i32, ptr addrspace(3) %at, i64 32
+  %v1 = add i32 %1, 100
+  store i32 %v1, ptr addrspace(3) %r1, align 4
+  %r2 = getelementptr inbounds i32, ptr addrspace(3) %at, i64 64
+  %v2 = add i32 %1, 200
+  store i32 %v2, ptr addrspace(3) %r2, align 4
+  %r3 = getelementptr inbounds i32, ptr addrspace(3) %at, i64 96
+  %v3 = add i32 %1, 300
+  store i32 %v3, ptr addrspace(3) %r3, align 4
+  br label %done
+
+done:
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %o = xor i16 %lane, 1
+  %ol = zext i16 %o to i64
+  %ocol = getelementptr inbounds i32, ptr addrspace(3) @grid, i64 %ol
+  %oat = getelementptr inbounds i32, ptr addrspace(3) %ocol, i64 %h
+  %w0 = load i32, ptr addrspace(3) %oat, align 4
+  %o1 = getelementptr inbounds i32, ptr addrspace(3) %oat, i64 32
+  %w1 = load i32, ptr addrspace(3) %o1, align 4
+  %o2 = getelementptr inbounds i32, ptr addrspace(3) %oat, i64 64
+  %w2 = load i32, ptr addrspace(3) %o2, align 4
+  %o3 = getelementptr inbounds i32, ptr addrspace(3) %oat, i64 96
+  %w3 = load i32, ptr addrspace(3) %o3, align 4
+  %s1 = add i32 %w0, %w1
+  %s2 = add i32 %s1, %w2
+  %s3 = add i32 %s2, %w3
+  %4 = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %3
+  store i32 %s3, ptr addrspace(1) %4, align 4
+  ret void
+}
+"#;
+
+/// [`LATTICE_TILE`]'s tile with rows 16 words apart: lane `l + 16` stores row `k` at the word
+/// lane `l` stores row `k + 1` at, one instruction later. After a barrier thread `t` reads word
+/// `(t & 31) + 16` of its simdgroup's block, which lockstep leaves holding the later row's
+/// value: lane `t & 31`'s row 1 below lane 16 (`t + 100`), lane `(t & 31) - 16`'s row 2 from it
+/// (`t + 184`).
+const LATTICE_NEAR: &str = r#"
+define void @lattice_near(ptr addrspace(1) %0, i32 %1, i32 %sg) #0 {
+  %3 = zext i32 %1 to i64
+  %x = trunc i32 %1 to i16
+  %lane = and i16 %x, 31
+  %high = and i16 %x, -32
+  %l = zext i16 %lane to i64
+  %hw = zext i16 %high to i32
+  %h8 = shl nuw nsw i32 %hw, 3
+  %h = zext i32 %h8 to i64
+  %col = getelementptr inbounds i32, ptr addrspace(3) @grid, i64 %l
+  %at = getelementptr inbounds i32, ptr addrspace(3) %col, i64 %h
+  %run = icmp ult i32 %sg, 2
+  br i1 %run, label %fill, label %done
+
+fill:
+  store i32 %1, ptr addrspace(3) %at, align 4
+  %r1 = getelementptr inbounds i32, ptr addrspace(3) %at, i64 16
+  %v1 = add i32 %1, 100
+  store i32 %v1, ptr addrspace(3) %r1, align 4
+  %r2 = getelementptr inbounds i32, ptr addrspace(3) %at, i64 32
+  %v2 = add i32 %1, 200
+  store i32 %v2, ptr addrspace(3) %r2, align 4
+  %r3 = getelementptr inbounds i32, ptr addrspace(3) %at, i64 48
+  %v3 = add i32 %1, 300
+  store i32 %v3, ptr addrspace(3) %r3, align 4
+  br label %done
+
+done:
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %n = getelementptr inbounds i32, ptr addrspace(3) %at, i64 16
+  %w = load i32, ptr addrspace(3) %n, align 4
+  %4 = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %3
+  store i32 %w, ptr addrspace(1) %4, align 4
+  ret void
+}
+"#;
+
 /// A tree reduction with a barrier per step: under `h > t`, thread `t` adds word `t + h` into
 /// word `t`. The words written lie below `h` and the words read at or above it, so no pair
 /// within a step meets and nothing is inserted. `out[t] = 0 + 1 + ... + 31`.
@@ -906,6 +1069,41 @@ walk:
   br label %done
 
 done:
+  ret void
+}
+"#;
+
+/// `device_neighbor` with `out` reached through two thread slots that each hold it, written on two
+/// paths so each load keeps its slot: the store and the read go through pointers loaded from
+/// different slots, which name one buffer. Lockstep: `out[t] = t ^ 8`.
+const DEVICE_SLOTS: &str = r#"
+define void @device_slots(ptr addrspace(1) %0, i32 %1, i32 %sg) #0 {
+  %a = alloca ptr addrspace(1), align 8
+  %b = alloca ptr addrspace(1), align 8
+  store ptr addrspace(1) %0, ptr %a, align 8
+  store ptr addrspace(1) %0, ptr %b, align 8
+  %c = icmp eq i32 %sg, 7
+  br i1 %c, label %again, label %go
+
+again:
+  store ptr addrspace(1) %0, ptr %a, align 8
+  store ptr addrspace(1) %0, ptr %b, align 8
+  br label %go
+
+go:
+  %3 = zext i32 %1 to i64
+  %pa0 = load ptr addrspace(1), ptr %a, align 8
+  %4 = getelementptr inbounds i32, ptr addrspace(1) %pa0, i64 %3
+  store i32 %1, ptr addrspace(1) %4, align 4
+  tail call void @air.wg.barrier(i32 1, i32 1)
+  %5 = xor i32 %1, 8
+  %6 = zext i32 %5 to i64
+  %pb = load ptr addrspace(1), ptr %b, align 8
+  %7 = getelementptr inbounds i32, ptr addrspace(1) %pb, i64 %6
+  %8 = load i32, ptr addrspace(1) %7, align 4
+  %pa = load ptr addrspace(1), ptr %a, align 8
+  %9 = getelementptr inbounds i32, ptr addrspace(1) %pa, i64 %3
+  store i32 %8, ptr addrspace(1) %9, align 4
   ret void
 }
 "#;
@@ -1242,8 +1440,14 @@ define void @device_record_shared(ptr addrspace(1) %0, i32 %1, i32 %sg) #0 {
 /// The words of `out` after one workgroup of `threads` threads ran `m`, in both scheduling
 /// orders (which must agree) at subgroup width `lanes`.
 fn run_words(plan: &Plan, m: &TypedModule, threads: u32, lanes: SubgroupSize) -> Vec<u32> {
+    run_shape(plan, m, [threads, 1, 1], lanes)
+}
+
+/// [`run_words`] for one workgroup of local size `local`.
+fn run_shape(plan: &Plan, m: &TypedModule, local: [u32; 3], lanes: SubgroupSize) -> Vec<u32> {
+    let threads = local.iter().product::<u32>();
     let mut spec = BTreeMap::new();
-    for (a, v) in [Axis::X, Axis::Y, Axis::Z].into_iter().zip([threads, 1, 1]) {
+    for (a, v) in [Axis::X, Axis::Y, Axis::Z].into_iter().zip(local) {
         spec.insert(SpecKey::LocalSize(a), u64::from(v));
     }
     // The flattened tiers' Vulkan workgroup width.
@@ -1548,6 +1752,98 @@ fn bounded_rowed_strided_and_guarded_accesses_take_no_barrier() {
     }
 }
 
+/// A guarded store and the stores after it in its barrier interval, apart only by the bytes
+/// the guard leaves the guarded one ([`GUARDED_TILE`]): no barrier, so no cross-lane class and
+/// no pinned subgroup (the simdgroup index alone puts the kernel on the linear tier), on the
+/// Iris profile (whose tangle barriers would pin 32 lanes) and on lavapipe (whose simdgroups
+/// would be emulated).
+#[test]
+fn a_guarded_access_apart_by_its_bytes_takes_no_barrier() {
+    let expect = |t: u32| 100 + t / 8 + t;
+    for profile_name in ["intel-irisxe-rplp-anv", "lavapipe"] {
+        let Some(plan) = check(
+            "guarded_tile",
+            GUARDED_TILE,
+            profile_name,
+            32,
+            &CHUNKED,
+            expect,
+        ) else {
+            return;
+        };
+        let census = plan.census();
+        assert!(
+            !census.keys().any(|k| k.starts_with("barrier.lockstep")),
+            "{profile_name}: {census:?} {:?}",
+            plan.simd
+        );
+        assert_eq!(
+            plan.simd,
+            (SimdClass::LaneArithmetic, Tier::Linear),
+            "{profile_name}"
+        );
+    }
+}
+
+/// A tile's rows from the threads' columns ([`LATTICE_TILE`]): each thread's column, its lane,
+/// spans 124 bytes of a row, the rows are 128 bytes apart, and each simdgroup's block of rows
+/// starts 1024 bytes after the last one's, so two threads' stores to different rows never meet.
+/// No barrier, so no cross-lane class and no pinned subgroup, on the Iris profile (whose tangle
+/// barriers would pin 32 lanes) and on lavapipe (whose simdgroups would be emulated). The same
+/// tile with rows 64 bytes apart ([`LATTICE_NEAR`]), where lane `l + 16` of one row stores the
+/// word lane `l` stores in the next, keeps its simdgroup barriers, its cross-lane class and its
+/// pinned or emulated simdgroups, and reads the word lockstep leaves: the next row's.
+#[test]
+fn tile_rows_apart_by_more_than_their_columns_take_no_barrier() {
+    let expect = |t: u32| 4 * (t ^ 1) + 600;
+    for profile_name in ["intel-irisxe-rplp-anv", "lavapipe"] {
+        let Some(plan) = check(
+            "lattice_tile",
+            LATTICE_TILE,
+            profile_name,
+            64,
+            &CHUNKED,
+            expect,
+        ) else {
+            return;
+        };
+        let census = plan.census();
+        assert!(
+            !census.keys().any(|k| k.starts_with("barrier.lockstep")),
+            "{profile_name}: {census:?} {:?}",
+            plan.simd
+        );
+        assert_eq!(
+            plan.simd,
+            (SimdClass::LaneArithmetic, Tier::Linear),
+            "{profile_name}"
+        );
+    }
+    let near = |t: u32| if t & 31 < 16 { t + 100 } else { t + 184 };
+    for (profile_name, lanes, tier) in [
+        (
+            "intel-irisxe-rplp-anv",
+            &[SubgroupSize::W32][..],
+            Tier::Direct,
+        ),
+        ("lavapipe", &CHUNKED[..], Tier::Emulated),
+    ] {
+        let Some(plan) = check("lattice_near", LATTICE_NEAR, profile_name, 64, lanes, near) else {
+            return;
+        };
+        assert_eq!(
+            uses(&plan, "barrier.lockstep.simdgroup"),
+            3,
+            "{profile_name}"
+        );
+        assert_eq!(
+            plan.simd,
+            (SimdClass::CrossLane(OpBits::BASIC), tier),
+            "{profile_name}"
+        );
+    }
+}
+
 /// Pairs whose indices look apart but whose addresses meet: a tree reduction's guard from a base
 /// that differs between threads, a row from such a base, two rows of one size and different
 /// strides, and a simdgroup sum read after a loop its lanes leave at different iterations. Each
@@ -1841,6 +2137,31 @@ fn a_device_memory_conflict_takes_the_barrier_lockstep_stood_for() {
     assert_eq!(plan.simd.1, Tier::Direct);
 }
 
+/// A buffer reached through pointers loaded from two thread slots is one object to the device
+/// pass: the read of the neighbour's word and the overwrite of its own take the threadgroup barrier
+/// lockstep stood for, as through the parameter itself. Without it the chunked schedule reads a
+/// word another chunk already overwrote.
+#[test]
+fn a_buffer_through_two_thread_slots_is_one_object() {
+    for profile_name in ["lavapipe", "moltenvk-m3", "vk12-floor"] {
+        let Some(plan) = check(
+            "device_slots",
+            DEVICE_SLOTS,
+            profile_name,
+            32,
+            &CHUNKED,
+            |t| t ^ 8,
+        ) else {
+            return;
+        };
+        assert_eq!(
+            uses(&plan, "barrier.lockstep.threadgroup"),
+            1,
+            "{profile_name}"
+        );
+    }
+}
+
 /// Each thread's own device word takes no barrier.
 #[test]
 fn a_threads_own_device_word_takes_no_barrier() {
@@ -1884,8 +2205,9 @@ fn a_branchs_two_arms_take_no_device_barrier() {
 }
 
 /// The lockstep census names of the inserted barriers.
-const LOCKSTEP_NAMES: [&str; 4] = [
+const LOCKSTEP_NAMES: [&str; 5] = [
     "barrier.lockstep.threadgroup",
+    "barrier.lockstep.threadgroup.rows",
     "barrier.lockstep.simdgroup",
     "barrier.lockstep.emulated.simdgroup",
     "barrier.lockstep.device",
@@ -1928,6 +2250,353 @@ fn a_divergent_device_pair_takes_a_tangle_barrier_where_the_entry_reconverges_ma
         return;
     };
     assert_eq!(uses(&plan, "barrier.lockstep.device"), 1);
+}
+
+/// How [`device_half_padded`] computes `DEVICE_HALF`'s first stored value, `t`.
+#[derive(Clone, Copy)]
+enum Padding {
+    /// `n` additions in a chain, then `n` taken off: `n + 1` instructions, two words live.
+    Chain(usize),
+    /// `k` values `t + j` live at once, summed, the sum's constant part taken off and the rest
+    /// divided by `k`: about `2k` instructions, `k` words live.
+    Fan(usize),
+}
+
+/// `DEVICE_HALF` with its first stored value computed as `padding` says; with `arena`, that value
+/// also goes through its own word of a threadgroup array of `arena` bytes first.
+fn device_half_padded(padding: Padding, arena: Option<u32>) -> String {
+    let mut text = String::new();
+    if let Some(bytes) = arena {
+        text.push_str(&format!(
+            "@big = internal unnamed_addr addrspace(3) global [{} x i32] undef, align 4\n",
+            bytes / 4
+        ));
+    }
+    let mut chain = String::new();
+    match padding {
+        Padding::Chain(n) => {
+            chain.push_str("  %p0 = add i32 %1, 1\n");
+            for i in 1..n {
+                chain.push_str(&format!("  %p{i} = add i32 %p{}, 1\n", i - 1));
+            }
+            chain.push_str(&format!("  %q = sub i32 %p{}, {n}\n", n - 1));
+        }
+        Padding::Fan(k) => {
+            for j in 0..k {
+                chain.push_str(&format!("  %f{j} = add i32 %1, {j}\n"));
+            }
+            chain.push_str("  %s0 = add i32 %f0, 0\n");
+            for j in 1..k {
+                chain.push_str(&format!("  %s{j} = add i32 %s{}, %f{j}\n", j - 1));
+            }
+            chain.push_str(&format!(
+                "  %r = sub i32 %s{}, {}\n  %q = udiv i32 %r, {k}\n",
+                k - 1,
+                k * (k - 1) / 2
+            ));
+        }
+    }
+    let stored = match arena {
+        Some(_) => {
+            chain.push_str(
+                "  %bp = getelementptr inbounds i32, ptr addrspace(3) @big, i64 %3\n\
+                 store i32 %q, ptr addrspace(3) %bp, align 4\n\
+                 %b = load i32, ptr addrspace(3) %bp, align 4\n",
+            );
+            "%b"
+        }
+        None => "%q",
+    };
+    let body = DEVICE_HALF.replacen(
+        "  store i32 %1, ptr addrspace(1) %4, align 4\n  tail call void @air.wg.barrier",
+        &format!("{chain}  store i32 {stored}, ptr addrspace(1) %4, align 4\n  tail call void @air.wg.barrier"),
+        1,
+    );
+    assert!(
+        body.contains("%q = "),
+        "the padding replaced the first store"
+    );
+    text.push_str(&body);
+    text
+}
+
+/// A kernel whose `Direct` tier pins 32 lanes takes the `Emulated` tier instead where that pin is
+/// the device's widest mode (ANV's 8 to 32: `intel-irisxe-rplp-anv`), its entry holds more than
+/// `simd::WIDEST_PIN_FLOOR` instructions and their values are estimated to hold more than
+/// `simd::WIDEST_PIN_WORDS` words at once (`lower::simd`, "The widest mode"): the divergent device
+/// pair of `DEVICE_HALF`, its first stored value computed from that many values live at once,
+/// runs predicated on emulated simdgroups, exact at every width, pins no size and is counted once
+/// as `simd::WIDEST_PIN`. It keeps the `Direct` tier and its tangle barrier as it is, with as many
+/// values live but too few instructions, with many instructions but two words live, on a device
+/// whose 32 lanes are its only width (the RTX 5080) or its narrow one (RDNA3's 32 to 64), and
+/// where the `Emulated` tier refuses it, its threadgroup memory leaving no room for one
+/// simdgroup's scratch.
+#[test]
+fn a_pressured_kernel_takes_the_emulated_tier_in_place_of_the_widest_mode() {
+    use crate::lower::simd::{WIDEST_PIN, WIDEST_PIN_FLOOR, WIDEST_PIN_WORDS};
+    let half = |t: u32| if t & 31 < 16 { t ^ 1 } else { t };
+    let words = WIDEST_PIN_WORDS as usize;
+    let fan = Padding::Fan((WIDEST_PIN_FLOOR / 2 + 16).max(words + 8));
+    let iris = "intel-irisxe-rplp-anv";
+    let direct = |what: &str, text: &str, profile_name: &str| {
+        let Some(plan) = check(
+            "device_half",
+            text,
+            profile_name,
+            64,
+            &[SubgroupSize::W32],
+            half,
+        ) else {
+            return false;
+        };
+        assert_eq!(plan.simd.1, Tier::Direct, "{what} on {profile_name}");
+        assert_eq!(uses(&plan, WIDEST_PIN), 0, "{what} on {profile_name}");
+        assert_eq!(plan.subgroup.size, Some(32), "{what} on {profile_name}");
+        true
+    };
+    if !direct("as it is", DEVICE_HALF, iris) {
+        return;
+    }
+    direct(
+        "below the floor",
+        &device_half_padded(Padding::Fan(words + 8), None),
+        iris,
+    );
+    direct(
+        "two words live",
+        &device_half_padded(Padding::Chain(2 * WIDEST_PIN_FLOOR), None),
+        iris,
+    );
+    let pressured = device_half_padded(fan, None);
+    let Some(plan) = check("device_half", &pressured, iris, 64, &CHUNKED, half) else {
+        return;
+    };
+    assert_eq!(plan.simd.1, Tier::Emulated, "pressured");
+    assert_eq!(uses(&plan, WIDEST_PIN), 1, "pressured");
+    assert_eq!(plan.subgroup.size, None, "pressured");
+    assert!(!plan.subgroup.full_subgroups, "pressured");
+    assert!(plan.families.simd.predication.is_some(), "pressured");
+    for other in ["nvidia-rtx5080-laptop", "amd-rdna3-radv"] {
+        direct("pressured", &pressured, other);
+    }
+    // 48 KiB, the profile's `maxComputeSharedMemorySize`: no room for a simdgroup's 128 bytes.
+    direct(
+        "a refused emulation",
+        &device_half_padded(fan, Some(49152)),
+        iris,
+    );
+}
+
+/// On a driver with a stage bound's defect (`DriverWorkaround::SerializedStageWrapsLargeModules`,
+/// a stage corrupted past the size it compiles intact, and
+/// `DriverWorkaround::CompilerMemoryGrowsWithStageSize`, a compile past the size measured within
+/// host-sized memory; ANV: the Iris Xe of RPL-P), a module whose entry weighs more than either
+/// bound (`pipeline::compile`'s `stage_bound`, here bounds the test sets) is never emitted: the
+/// pressured kernel of `a_pressured_kernel_takes_the_emulated_tier_in_place_of_the_widest_mode`,
+/// whose emulated module passes a bound, is planned again keeping the `Direct` tier's pin to 32
+/// lanes, its answers Metal's; under a bound its `Direct` module passes too, it is refused
+/// (`Feature::StageSize`, that bound's defect named, and as its symbol, which its Display prints,
+/// the module's entry weight and the bound it passed), and past both, the serialized stage's
+/// defect, which faults the driver, is named. The same description under another driver, which
+/// has neither defect, emits the emulated module under every bound.
+#[test]
+fn a_kernel_past_the_stage_bound_keeps_the_widest_pin_or_is_refused() {
+    use crate::device::profile::DriverWorkaround;
+    use crate::device::Device;
+    use crate::error::{DiagName, Feature, Needs};
+    use crate::lower::simd::{WIDEST_PIN, WIDEST_PIN_FLOOR, WIDEST_PIN_WORDS};
+    use crate::pipeline::compile::{compile_bitcode_bounded, StageBounds};
+    use crate::pipeline::testing::meter;
+    use crate::spirv::roll::entry_weight;
+    let half = |t: u32| if t & 31 < 16 { t ^ 1 } else { t };
+    let fan = Padding::Fan((WIDEST_PIN_FLOOR / 2 + 16).max(WIDEST_PIN_WORDS as usize + 8));
+    let Some(bc) = assemble("device_half", &device_half_padded(fan, None)) else {
+        return;
+    };
+    let entry = EntryRef::Name("device_half");
+    let weight = |module: &TypedModule| entry_weight(module, &mut meter()).expect("weight");
+    let serialized = DriverWorkaround::SerializedStageWrapsLargeModules;
+    let memory = DriverWorkaround::CompilerMemoryGrowsWithStageSize;
+    let iris_desc = crate::pipeline::testing::description("intel-irisxe-rplp-anv").unwrap();
+    let iris = Device::new(iris_desc.clone(), DevicePolicy::default()).unwrap();
+    let iris = iris.profile();
+    assert!(iris.workarounds().contains(&serialized));
+    assert!(iris.workarounds().contains(&memory));
+    let mut other_desc = iris_desc;
+    other_desc.driver_id = Some(crate::vk::DriverId::MESA_RADV);
+    let other = Device::new(other_desc, DevicePolicy::default()).unwrap();
+    let other = other.profile();
+    assert!(!other.workarounds().contains(&serialized));
+    assert!(!other.workarounds().contains(&memory));
+    // One defect's bound at `cap`, the other's past every module.
+    let at = |defect, cap| match defect == serialized {
+        true => StageBounds {
+            serialized: cap,
+            compiled: u64::MAX,
+        },
+        false => StageBounds {
+            serialized: u64::MAX,
+            compiled: cap,
+        },
+    };
+    // The defect a refusal names, checking it names the module's entry weight `weight` and the
+    // bound `bound` it passed.
+    let refused_for = |refused: Error, weight: u64, bound: u64| match refused {
+        Error::Unsupported(u) if u.feature == Feature::StageSize => {
+            let named = format!("entry weight {weight}, past the bound {bound}");
+            assert_eq!(u.symbol, Some(DiagName::new(named.as_str())), "{u}");
+            assert!(u.to_string().contains(&named), "{u}");
+            match u.needs {
+                Needs::DriverDefect(defect) => defect,
+                needs => panic!("{needs:?}"),
+            }
+        }
+        refused => panic!("{refused:?}"),
+    };
+    // Unbounded, the kernel emulates its simdgroups in place of the widest mode on both.
+    let compile = |p, bounds| compile_bitcode_bounded(&bc, entry, p, &mut meter(), bounds);
+    let (_, plan, emulated) = compile(iris, at(serialized, u64::MAX)).expect("emulated");
+    assert_eq!((plan.simd.1, uses(&plan, WIDEST_PIN)), (Tier::Emulated, 1));
+    let emulated = weight(&emulated);
+    let want: Vec<u32> = (0..64).map(half).collect();
+    let mut pinned = 0;
+    for defect in [serialized, memory] {
+        // Under a bound the emulated module passes: planned again keeping the pin, exact at 32
+        // lanes.
+        let (_, plan, module) = compile(iris, at(defect, emulated - 1)).expect("planned again");
+        assert_eq!(plan.simd.1, Tier::Direct, "{defect:?}");
+        assert_eq!(uses(&plan, WIDEST_PIN), 0);
+        assert_eq!(plan.subgroup.size, Some(32));
+        pinned = weight(&module);
+        assert!(pinned < emulated, "pinned {pinned}, emulated {emulated}");
+        assert_eq!(run_words(&plan, &module, 64, SubgroupSize::W32), want);
+        // Under a bound the pinned module passes too: refused, the bound's defect named.
+        let refused = compile(iris, at(defect, pinned - 1)).expect_err("past the bound");
+        assert_eq!(refused_for(refused, pinned, pinned - 1), defect);
+        // Without the defect, the emulated module is emitted under either bound.
+        for cap in [emulated - 1, pinned - 1] {
+            let (_, plan, module) = compile(other, at(defect, cap)).expect("emitted");
+            assert_eq!((plan.simd.1, uses(&plan, WIDEST_PIN)), (Tier::Emulated, 1));
+            assert!(weight(&module) > cap, "{cap}");
+            for lanes in CHUNKED {
+                assert_eq!(run_words(&plan, &module, 64, lanes), want, "{lanes:?}");
+            }
+        }
+    }
+    // Past both bounds, the serialized stage's defect is named.
+    let both = StageBounds {
+        serialized: pinned - 1,
+        compiled: pinned - 1,
+    };
+    let refused = compile(iris, both).expect_err("past both bounds");
+    assert_eq!(refused_for(refused, pinned, pinned - 1), serialized);
+}
+
+/// One input, one answer, whichever path compiles it: on the Iris Xe, the pressured kernel of
+/// `a_kernel_past_the_stage_bound_keeps_the_widest_pin_or_is_refused`, past a bound its emulated
+/// module passes (planned again keeping the pin) and past one its pinned module passes too
+/// (refused, `Feature::StageSize`), is charged the same work units compiled alone
+/// (`Device::compile_function`) and compiled from a creation's entries
+/// (`Device::compile_function_from_entries`), whether the entry there was made or found. So at
+/// exactly that many work units both paths give the bound's answer, and at one fewer both are
+/// refused at the work cap. The plan made again selects from the entry's one analysis: a meter
+/// that is also charged one more plan of the entry, as the plan made again once charged, is
+/// refused at the cap where the compile alone answers.
+#[test]
+fn a_kernel_past_the_stage_bound_gets_one_answer_through_either_path() {
+    use crate::device::Device;
+    use crate::error::{Feature, Limit, Unsupported};
+    use crate::library::Library;
+    use crate::lower::simd::{WIDEST_PIN_FLOOR, WIDEST_PIN_WORDS};
+    use crate::pipeline::compile::{
+        compile_bitcode_bounded, compile_stage_bounded, plan_bitcode, StageBounds, StageEntries,
+    };
+    use crate::pipeline::testing::meter;
+    use crate::pipeline::FunctionDescriptor;
+    use crate::spirv::roll::entry_weight;
+    let fan = Padding::Fan((WIDEST_PIN_FLOOR / 2 + 16).max(WIDEST_PIN_WORDS as usize + 8));
+    let Some(bc) = assemble("device_half", &device_half_padded(fan, None)) else {
+        return;
+    };
+    let iris_desc = crate::pipeline::testing::description("intel-irisxe-rplp-anv").unwrap();
+    let iris = Device::new(iris_desc, DevicePolicy::default()).unwrap();
+    let iris = iris.profile();
+    let library = Library::from_air(&bc).expect("library");
+    let fd = FunctionDescriptor::new(library.function("device_half").expect("the kernel"));
+    // The serialized stage's bound at `cap`; the compiled one past every module.
+    let at = |cap| StageBounds {
+        serialized: cap,
+        compiled: u64::MAX,
+    };
+    let weight = |cap| {
+        let compiled = compile_bitcode_bounded(
+            &bc,
+            EntryRef::Name("device_half"),
+            iris,
+            &mut meter(),
+            at(cap),
+        );
+        let (_, _, module) = compiled.expect("compiled");
+        entry_weight(&module, &mut meter()).expect("weight")
+    };
+    let emulated = weight(u64::MAX);
+    let pinned = weight(emulated - 1);
+    assert!(pinned < emulated, "pinned {pinned}, emulated {emulated}");
+    // Its answer, as a planned-again `Direct` module's word count or the refusal's feature.
+    let answer = |compiled: Result<crate::library::CompiledFunction, Error>| match compiled {
+        Ok(c) => Ok(c.artifact().module.words.len()),
+        Err(Error::Unsupported(Unsupported { feature, .. })) => Err(Ok(feature)),
+        Err(Error::LimitExceeded(limit)) => Err(Err(limit)),
+        Err(e) => panic!("{e:?}"),
+    };
+    let capped = |work| Meter::with_caps(&Budget::default(), work, crate::budget::LEDGER_BYTES);
+    for (cap, planned_again) in [(emulated - 1, true), (pinned - 1, false)] {
+        // The work units each path is charged: alone, from entries that make the entry, and from
+        // the same entries again, which find it.
+        let entries = StageEntries::new();
+        let work = |entries: Option<&StageEntries>| {
+            let mut m = meter();
+            let got = answer(compile_stage_bounded(&fd, iris, entries, &mut m, at(cap)));
+            (got, m.work())
+        };
+        let (alone, made, found) = (work(None), work(Some(&entries)), work(Some(&entries)));
+        assert_eq!(entries.counts(), (1, 1), "made once, then found");
+        let (want, w) = alone.clone();
+        match &want {
+            Ok(_) => assert!(planned_again, "{want:?}"),
+            Err(refused) => assert_eq!(*refused, Ok(Feature::StageSize)),
+        }
+        assert_eq!(
+            (made, found),
+            ((want.clone(), w), (want.clone(), w)),
+            "bound {cap}"
+        );
+        // At exactly that many work units, the bound's answer through both paths; at one fewer,
+        // the work cap's through both.
+        for (budget, expected) in [(w, want.clone()), (w - 1, Err(Err(Limit::WorkUnits)))] {
+            for via in [None, Some(&entries)] {
+                let mut m = capped(budget);
+                let got = answer(compile_stage_bounded(&fd, iris, via, &mut m, at(cap)));
+                let shared = via.is_some();
+                assert_eq!(
+                    got, expected,
+                    "bound {cap}, {budget} work units, shared {shared}"
+                );
+            }
+        }
+        // The negative control: one more plan of the entry charged first, as the plan made again
+        // once charged it, is past the cap the compile alone answers within.
+        let mut m = capped(w);
+        let consts = FunctionConstantValues::defaults();
+        let entry = EntryRef::Name("device_half");
+        plan_bitcode(&bc, entry, &consts, iris, &LowerInputs::new(), &mut m).expect("planned");
+        let got = answer(compile_stage_bounded(&fd, iris, None, &mut m, at(cap)));
+        assert_eq!(
+            got,
+            Err(Err(Limit::WorkUnits)),
+            "bound {cap}, charged twice"
+        );
+    }
 }
 
 /// Texture calls take no device barrier: their pointer is the texture's handle.
@@ -2130,4 +2799,628 @@ fn grid_position_records_take_no_barrier_unless_two_stores_share_a_word() {
             "device_record_shared on {profile_name}: no lockstep barrier"
         );
     }
+}
+
+/// Kernel `grow(device float *data [[buffer(0)]], device ulong *args [[buffer(1)]], device uint
+/// *idx [[buffer(2)]], uint t [[thread_position_in_grid]])`, a module of its own: `steps` steps,
+/// each a branch on one of `accs` live accumulators whose arm stores a device word and loads the
+/// next (a lockstep pair in divergent flow, in no loop and behind no barrier), through a pointer
+/// the arm loads from `args` where `pointers`, then every accumulator updated. Three blocks a
+/// step, every one reaching every later one on barrier-free paths.
+fn barrier_free_steps(steps: usize, accs: usize, pointers: bool) -> String {
+    let hex = |x: f32| format!("0x{:016X}", f64::from(x).to_bits());
+    let (half, quarter) = (hex(0.5), hex(0.25));
+    let mut b = String::new();
+    let mut line = |s: String| {
+        b.push_str(&s);
+        b.push('\n');
+    };
+    line("define void @grow(ptr addrspace(1) noundef %data, ptr addrspace(1) noundef %args, ptr addrspace(1) noundef %idx, i32 %t) {\nentry:".into());
+    line("  %ip = getelementptr inbounds i32, ptr addrspace(1) %idx, i32 %t".into());
+    line("  %si = load i32, ptr addrspace(1) %ip, align 4".into());
+    line("  %s = zext i32 %si to i64".into());
+    line("  %xp = getelementptr inbounds float, ptr addrspace(1) %data, i64 %s".into());
+    line("  %x = load float, ptr addrspace(1) %xp, align 4".into());
+    for k in 0..accs {
+        let c = hex((k as f32 + 1.0) / accs as f32);
+        line(format!("  %a{k}_0 = fmul float %x, {c}"));
+    }
+    line("  br label %step0".into());
+    for j in 0..steps {
+        let c = j % accs;
+        line(format!(
+            "step{j}:\n  %c{j} = fcmp ogt float %a{c}_{j}, {half}"
+        ));
+        line(format!(
+            "  br i1 %c{j}, label %then{j}, label %join{j}\nthen{j}:"
+        ));
+        let base = if pointers {
+            line(format!(
+                "  %pp{j} = getelementptr inbounds i8, ptr addrspace(1) %args, i64 {}",
+                8 * (j % 8)
+            ));
+            line(format!(
+                "  %d{j} = load ptr addrspace(1), ptr addrspace(1) %pp{j}, align 8"
+            ));
+            format!("%d{j}")
+        } else {
+            "%data".to_owned()
+        };
+        let off = (j + 1) * 2 * 12288;
+        line(format!("  %o{j} = add i64 %s, {off}"));
+        line(format!(
+            "  %q{j} = getelementptr inbounds float, ptr addrspace(1) {base}, i64 %o{j}"
+        ));
+        line(format!(
+            "  store float %a{c}_{j}, ptr addrspace(1) %q{j}, align 4"
+        ));
+        line(format!("  %e{j} = add i64 %o{j}, 1"));
+        line(format!(
+            "  %r{j} = getelementptr inbounds float, ptr addrspace(1) {base}, i64 %e{j}"
+        ));
+        line(format!(
+            "  %v{j} = load float, ptr addrspace(1) %r{j}, align 4"
+        ));
+        line(format!("  br label %join{j}\njoin{j}:"));
+        line(format!(
+            "  %w{j} = phi float [ %v{j}, %then{j} ], [ {quarter}, %step{j} ]"
+        ));
+        for k in 0..accs {
+            let next = (k + 1) % accs;
+            line(format!("  %m{k}_{j} = fmul float %a{k}_{j}, %w{j}"));
+            line(format!("  %n{k}_{j} = fadd float %m{k}_{j}, %a{next}_{j}"));
+            line(format!("  %a{k}_{} = fmul float %n{k}_{j}, {half}", j + 1));
+        }
+        line(format!("  br label %step{}", j + 1));
+    }
+    line(format!("step{steps}:"));
+    let mut sum = format!("%a0_{steps}");
+    for k in 1..accs {
+        line(format!("  %z{k} = fadd float {sum}, %a{k}_{steps}"));
+        sum = format!("%z{k}");
+    }
+    line("  %op = getelementptr inbounds float, ptr addrspace(1) %data, i64 %s".into());
+    line(format!(
+        "  store float {sum}, ptr addrspace(1) %op, align 4\n  ret void\n}}"
+    ));
+    format!(
+        r#"target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024-n8:16:32"
+target triple = "air64_v28-apple-macosx26.0.0"
+
+{b}
+!air.kernel = !{{!2}}
+!air.version = !{{!8}}
+!air.language_version = !{{!9}}
+!2 = !{{ptr @grow, !3, !4}}
+!3 = !{{}}
+!4 = !{{!5, !6, !7, !10}}
+!5 = !{{i32 0, !"air.buffer", !"air.location_index", i32 0, i32 1, !"air.read_write", !"air.address_space", i32 1, !"air.arg_type_size", i32 4, !"air.arg_type_align_size", i32 4, !"air.arg_type_name", !"float", !"air.arg_name", !"data"}}
+!6 = !{{i32 1, !"air.buffer", !"air.location_index", i32 1, i32 1, !"air.read_write", !"air.address_space", i32 1, !"air.arg_type_size", i32 8, !"air.arg_type_align_size", i32 8, !"air.arg_type_name", !"ulong", !"air.arg_name", !"args"}}
+!7 = !{{i32 2, !"air.buffer", !"air.location_index", i32 2, i32 1, !"air.read_write", !"air.address_space", i32 1, !"air.arg_type_size", i32 4, !"air.arg_type_align_size", i32 4, !"air.arg_type_name", !"uint", !"air.arg_name", !"idx"}}
+!10 = !{{i32 3, !"air.thread_position_in_grid", !"air.arg_type_name", !"uint", !"air.arg_name", !"t"}}
+!8 = !{{i32 2, i32 8, i32 0}}
+!9 = !{{!"Metal", i32 4, i32 0, i32 0}}
+"#
+    )
+}
+
+/// What compiling `grow` of [`barrier_free_steps`] for the RTX 5080 laptop profile spent under
+/// the standard budget: its work units and ledger peak, and whether it compiled. `None` where
+/// `llvm-as` is missing.
+fn steps_cost(steps: usize, accs: usize, pointers: bool) -> Option<(u64, u64, Result<(), Error>)> {
+    let bc = assemble_text("grow", &barrier_free_steps(steps, accs, pointers))?;
+    let p = profile("nvidia-rtx5080-laptop", DevicePolicy::default()).expect("profile");
+    let mut m = Meter::new(&Budget::standard());
+    let compiled = compile_bitcode(
+        &bc,
+        EntryRef::Name("grow"),
+        &FunctionConstantValues::defaults(),
+        &p,
+        &LowerInputs::new(),
+        &mut m,
+        SPIRV_WORDS,
+    )
+    .map(|_| ());
+    Some((m.work(), m.ledger_peak(), compiled))
+}
+
+/// A long barrier-free kernel's lockstep tables grow with its blocks, not with their square: the
+/// pair search keeps no block's reachable blocks beyond its walk. Four times the steps (and
+/// blocks) takes at most five times the ledger peak; the search that kept every block's list took
+/// sixteen times its share.
+#[test]
+fn a_long_barrier_free_kernel_s_ledger_grows_with_its_blocks() {
+    let Some((_, short, compiled)) = steps_cost(256, 1, false) else {
+        return;
+    };
+    compiled.expect("256 steps");
+    let Some((_, long, compiled)) = steps_cost(1024, 1, false) else {
+        return;
+    };
+    compiled.expect("1024 steps");
+    eprintln!("BARRIER-FREE-STEPS: ledger peak {short} at 256 steps, {long} at 1024");
+    assert!(
+        long <= 5 * short,
+        "the ledger peak grew {long} / {short} for four times the blocks"
+    );
+}
+
+/// A long barrier-free kernel's lockstep work grows with its blocks, not with their square: a
+/// pair whose barrier is already wanted is not tried, and a walk stops where every pair beyond it
+/// has its barrier. Each written block of `grow` conflicts with every later one, so trying each
+/// reached pair took about fourteen times the whole compilation's work for four times the steps,
+/// and refused 4,096 steps past the work cap; the search takes at most six times.
+#[test]
+fn a_long_barrier_free_kernel_s_work_grows_with_its_blocks() {
+    let Some((short, _, compiled)) = steps_cost(1024, 1, false) else {
+        return;
+    };
+    compiled.expect("1024 steps");
+    let Some((long, _, compiled)) = steps_cost(4096, 1, false) else {
+        return;
+    };
+    compiled.expect("4096 steps inside the standard budget");
+    eprintln!("BARRIER-FREE-STEPS: work {short} at 1024 steps, {long} at 4096");
+    assert!(
+        long <= 6 * short,
+        "the work grew {long} / {short} for four times the blocks"
+    );
+}
+
+/// The authored kernel of 4,096 steps through loaded pointers, 16 accumulators (about 258,000
+/// instructions and 12,000 blocks), compiles inside the standard budget's work and ledger bounds,
+/// which stand for the 20 s and 500 MiB ceilings. The search that tried every reached pair
+/// refused it past the work cap, and the one before refused 2,048 steps past the ledger's bound.
+#[test]
+fn the_authored_4096_step_kernel_compiles_inside_the_budget() {
+    let Some((work, peak, compiled)) = steps_cost(4096, 16, true) else {
+        return;
+    };
+    eprintln!("BARRIER-FREE-STEPS: 4096 steps: {work} work units, ledger peak {peak}");
+    compiled.expect("4096 steps inside the standard budget");
+}
+
+/// The metadata of kernel `name(device uint *out [[buffer(0)]], uint3 pos
+/// [[thread_position_in_threadgroup]], uint t [[thread_index_in_threadgroup]])`.
+fn footer_pos(name: &str) -> String {
+    format!(
+        r#"
+declare void @air.wg.barrier(i32, i32) #1
+
+attributes #0 = {{ convergent mustprogress nounwind willreturn }}
+attributes #1 = {{ convergent mustprogress nounwind willreturn }}
+
+!air.kernel = !{{!9}}
+!air.version = !{{!18}}
+!air.language_version = !{{!19}}
+
+!9 = !{{ptr @{name}, !10, !11}}
+!10 = !{{}}
+!11 = !{{!12, !13, !14}}
+!12 = !{{i32 0, !"air.buffer", !"air.location_index", i32 0, i32 1, !"air.read_write", !"air.address_space", i32 1, !"air.arg_type_size", i32 4, !"air.arg_type_align_size", i32 4, !"air.arg_type_name", !"uint", !"air.arg_name", !"out"}}
+!13 = !{{i32 1, !"air.thread_position_in_threadgroup", !"air.arg_type_name", !"uint3", !"air.arg_name", !"pos"}}
+!14 = !{{i32 2, !"air.thread_index_in_threadgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"t"}}
+!18 = !{{i32 2, i32 8, i32 0}}
+!19 = !{{!"Metal", i32 4, i32 0, i32 0}}
+"#
+    )
+}
+
+/// Kernel `name` (of [`footer_pos`]'s parameters) planned on `profile_name`, run in one workgroup
+/// of each local size of `shapes` at each width of `lanes`, read as lockstep reads (`expect` of
+/// the thread's `x` and index). Returns the plan.
+fn check_shapes(
+    name: &str,
+    body: &str,
+    profile_name: &str,
+    shapes: &[[u32; 3]],
+    lanes: &[SubgroupSize],
+    expect: impl Fn(u32, u32) -> u32,
+) -> Option<Plan> {
+    let bc = assemble_text(name, &format!("{HEADER}\n{body}\n{}", footer_pos(name)))?;
+    let p = profile(profile_name, DevicePolicy::default()).expect("profile");
+    let (plan, m) = typed_module(&bc, name, &p).unwrap_or_else(|e| panic!("{name}: {e}"));
+    for &local in shapes {
+        let threads = local.iter().product::<u32>();
+        let want: Vec<u32> = (0..threads).map(|t| expect(t % local[0], t)).collect();
+        for &w in lanes {
+            assert_eq!(
+                run_shape(&plan, &m, local, w),
+                want,
+                "{name} on {profile_name} at {local:?} {w:?}"
+            );
+        }
+    }
+    Some(plan)
+}
+
+/// Each thread stores at words `a = (x >> 3) + 36 (x & 7)` and `a + 16` of `@grid`, then at
+/// words `288 + (x & 31) + (x & -32)` and that plus 96, and after a barrier reads back word
+/// `a` (the stores of an 8-by-8 tile and its weights). The row index and the third address each
+/// pass through a phi of one value, as branches a constant decided leave them. Where each
+/// simdgroup lies within one row, its threads' `x`s are 32 places from a multiple of 32, and no
+/// two of them meet: `a` and `a + 16` meet only for `x`s 128 apart, the last two for `x`s 96
+/// apart. A threadgroup whose simdgroups may span two rows has pairs that do, so each of the
+/// three barriers between the stores runs only there.
+const STRIDE_144: &str = r#"
+define void @stride_144(ptr addrspace(1) %0, <3 x i32> %pos, i32 %t) #0 {
+entry:
+  %x = extractelement <3 x i32> %pos, i64 0
+  %hi0 = lshr i32 %x, 3
+  br label %tile
+tile:
+  %hi = phi i32 [ %hi0, %entry ]
+  %lo = and i32 %x, 7
+  %lo36 = mul nuw nsw i32 %lo, 36
+  %a = add nuw nsw i32 %hi, %lo36
+  %aw = zext i32 %a to i64
+  %pa = getelementptr inbounds [512 x i32], ptr addrspace(3) @grid, i64 0, i64 %aw
+  store i32 %x, ptr addrspace(3) %pa, align 4
+  %pb = getelementptr inbounds i32, ptr addrspace(3) %pa, i64 16
+  %xb = add i32 %x, 1000
+  store i32 %xb, ptr addrspace(3) %pb, align 4
+  %lane = and i32 %x, 31
+  %first = and i32 %x, -32
+  %c = add nuw nsw i32 %lane, %first
+  %cw = zext i32 %c to i64
+  %pc0 = getelementptr inbounds [512 x i32], ptr addrspace(3) @grid, i64 0, i64 288
+  %pc1 = getelementptr inbounds i32, ptr addrspace(3) %pc0, i64 %cw
+  br label %weights
+weights:
+  %pc = phi ptr addrspace(3) [ %pc1, %tile ]
+  store i32 %t, ptr addrspace(3) %pc, align 4
+  %pd = getelementptr inbounds i32, ptr addrspace(3) %pc, i64 96
+  store i32 %t, ptr addrspace(3) %pd, align 4
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %v = load i32, ptr addrspace(3) %pa, align 4
+  %tw = zext i32 %t to i64
+  %po = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %tw
+  store i32 %v, ptr addrspace(1) %po, align 4
+  ret void
+}
+"#;
+
+/// Each thread stores its index at word `3 t` of `@wide` and its index plus 100 at word
+/// `3 t + 9`, the first word of thread `t + 3`, which reads its word after a barrier. A 12-byte
+/// stride is no power of two, and lanes 3 apart meet: the pair keeps its barrier, and lockstep's
+/// later store wins.
+const STRIDE_12: &str = r#"
+define void @stride_12(ptr addrspace(1) %0, i32 %1, i32 %sg) #0 {
+  %a = mul nuw nsw i32 %1, 3
+  %aw = zext i32 %a to i64
+  %pa = getelementptr inbounds [128 x i32], ptr addrspace(3) @wide, i64 0, i64 %aw
+  store i32 %1, ptr addrspace(3) %pa, align 4
+  %pb = getelementptr inbounds i32, ptr addrspace(3) %pa, i64 9
+  %v100 = add i32 %1, 100
+  store i32 %v100, ptr addrspace(3) %pb, align 4
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %v = load i32, ptr addrspace(3) %pa, align 4
+  %tw = zext i32 %1 to i64
+  %po = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %tw
+  store i32 %v, ptr addrspace(1) %po, align 4
+  ret void
+}
+"#;
+
+/// Each thread stores `x + 100` at word `x` of `@tg`, alike in every row, then after a barrier
+/// loads word `x` and stores one more there. Lockstep loads every word before any is stored
+/// again. Two threads of a simdgroup share an `x` only where it spans two rows, so the barrier
+/// between the load and the store runs only there.
+const ROW_WORD: &str = r#"
+define void @row_word(ptr addrspace(1) %0, <3 x i32> %pos, i32 %t) #0 {
+  %x = extractelement <3 x i32> %pos, i64 0
+  %xw = zext i32 %x to i64
+  %p = getelementptr inbounds [64 x i32], ptr addrspace(3) @tg, i64 0, i64 %xw
+  %init = add i32 %x, 100
+  store i32 %init, ptr addrspace(3) %p, align 4
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %v = load i32, ptr addrspace(3) %p, align 4
+  %next = add i32 %v, 1
+  store i32 %next, ptr addrspace(3) %p, align 4
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %tw = zext i32 %t to i64
+  %po = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %tw
+  store i32 %v, ptr addrspace(1) %po, align 4
+  ret void
+}
+"#;
+
+/// Stores whose bytes meet only for `x`s 96 or 128 apart ([`STRIDE_144`]) take barriers that run only
+/// where a simdgroup may span two rows, and read back their own word in one row; stores 12 bytes
+/// apart a thread, three threads from meeting ([`STRIDE_12`]), keep an unconditional barrier and
+/// read lockstep's answer at every width.
+#[test]
+fn a_stride_no_lanes_of_a_simdgroup_share_takes_no_barrier_one_they_share_keeps_it() {
+    for profile_name in ["lavapipe", "nvidia-rtx5080-laptop", "moltenvk-m3"] {
+        let Some(plan) = check_shapes(
+            "stride_144",
+            STRIDE_144,
+            profile_name,
+            &[[128, 1, 1], [64, 2, 1]],
+            &CHUNKED,
+            |x, _| x,
+        ) else {
+            return;
+        };
+        assert_eq!(
+            uses(&plan, "barrier.lockstep.threadgroup.rows"),
+            3,
+            "{profile_name}"
+        );
+        assert_eq!(
+            uses(&plan, "barrier.lockstep.threadgroup"),
+            0,
+            "{profile_name}"
+        );
+        let keep = |t: u32| if t < 3 { t } else { t + 97 };
+        let Some(plan) = check("stride_12", STRIDE_12, profile_name, 32, &CHUNKED, keep) else {
+            return;
+        };
+        assert_eq!(
+            uses(&plan, "barrier.lockstep.threadgroup"),
+            1,
+            "{profile_name}"
+        );
+        assert_eq!(
+            uses(&plan, "barrier.lockstep.threadgroup.rows"),
+            0,
+            "{profile_name}"
+        );
+    }
+}
+
+/// A barrier of pairs that meet only across rows ([`ROW_WORD`]) runs in a simdgroup of four rows
+/// of 8 and of two rows of 16, where every thread reads the word before any thread stores it
+/// again, and in rows of 32 it stands down with the same answers.
+#[test]
+fn a_barrier_of_pairs_meeting_across_rows_runs_where_a_simdgroup_spans_them() {
+    for profile_name in ["lavapipe", "nvidia-rtx5080-laptop"] {
+        let Some(plan) = check_shapes(
+            "row_word",
+            ROW_WORD,
+            profile_name,
+            &[[8, 4, 1], [16, 2, 1], [32, 1, 1]],
+            &CHUNKED,
+            |x, _| x + 100,
+        ) else {
+            return;
+        };
+        assert_eq!(
+            uses(&plan, "barrier.lockstep.threadgroup.rows"),
+            1,
+            "{profile_name}"
+        );
+        assert_eq!(
+            uses(&plan, "barrier.lockstep.threadgroup"),
+            0,
+            "{profile_name}"
+        );
+    }
+}
+
+/// The metadata of kernel `name(device uint *out [[buffer(0)]], ushort x
+/// [[thread_position_in_threadgroup]], uint t [[thread_index_in_threadgroup]])`.
+fn footer_ushort(name: &str) -> String {
+    format!(
+        r#"
+declare void @air.wg.barrier(i32, i32) #1
+
+attributes #0 = {{ convergent mustprogress nounwind willreturn }}
+attributes #1 = {{ convergent mustprogress nounwind willreturn }}
+
+!air.kernel = !{{!9}}
+!air.version = !{{!18}}
+!air.language_version = !{{!19}}
+
+!9 = !{{ptr @{name}, !10, !11}}
+!10 = !{{}}
+!11 = !{{!12, !13, !14}}
+!12 = !{{i32 0, !"air.buffer", !"air.location_index", i32 0, i32 1, !"air.read_write", !"air.address_space", i32 1, !"air.arg_type_size", i32 4, !"air.arg_type_align_size", i32 4, !"air.arg_type_name", !"uint", !"air.arg_name", !"out"}}
+!13 = !{{i32 1, !"air.thread_position_in_threadgroup", !"air.arg_type_name", !"ushort", !"air.arg_name", !"x"}}
+!14 = !{{i32 2, !"air.thread_index_in_threadgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"t"}}
+!18 = !{{i32 2, i32 8, i32 0}}
+!19 = !{{!"Metal", i32 4, i32 0, i32 0}}
+"#
+    )
+}
+
+/// A tree reduction over a `ushort` position, as `threadgroup uint tg[64]; tg[x] = x; for (uint
+/// h = 8; h > 0; h >>= 1) { if (x < h) tg[x] += tg[x + h]; }` compiles, a barrier per step:
+/// the address of `tg[x]` widens `x` straight to 64 bits, while the test `x < h` and the sum
+/// `x + h` widen it to 32 first. Under `x < h` the words written lie below `h` and the words
+/// read at or above it. Threads of two rows share an `x`, and so word `x`. Every thread stores
+/// `tg[0] = 0 + 1 + ... + 15`.
+const ZEXT_GUARD: &str = r#"
+define void @zext_guard(ptr addrspace(1) %0, i16 %x, i32 %t) #0 {
+entry:
+  %xw = zext i16 %x to i32
+  %xi = zext i16 %x to i64
+  %px = getelementptr inbounds [64 x i32], ptr addrspace(3) @tg, i64 0, i64 %xi
+  store i32 %xw, ptr addrspace(3) %px, align 4
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  br label %loop
+
+loop:
+  %s = phi i32 [ 16, %entry ], [ %h, %latch ]
+  %h = lshr i32 %s, 1
+  %g = icmp ult i32 %xw, %h
+  br i1 %g, label %arm, label %latch
+
+arm:
+  %a = load i32, ptr addrspace(3) %px, align 4
+  %k = add nuw nsw i32 %h, %xw
+  %ki = zext i32 %k to i64
+  %pk = getelementptr inbounds [64 x i32], ptr addrspace(3) @tg, i64 0, i64 %ki
+  %b = load i32, ptr addrspace(3) %pk, align 4
+  %sum = add i32 %a, %b
+  store i32 %sum, ptr addrspace(3) %px, align 4
+  br label %latch
+
+latch:
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %more = icmp ugt i32 %s, 3
+  br i1 %more, label %loop, label %done
+
+done:
+  %r = load i32, ptr addrspace(3) getelementptr inbounds ([64 x i32], ptr addrspace(3) @tg, i64 0, i64 0), align 4
+  %tz = zext i32 %t to i64
+  %po = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %tz
+  store i32 %r, ptr addrspace(1) %po, align 4
+  ret void
+}
+"#;
+
+/// [`ZEXT_GUARD`] over a `short` index, as `short x = short(position); threadgroup int tg[64];
+/// for (int h = 8; h > 0; h /= 2) { if (x < h) tg[x] += tg[x + h]; }` compiles: the address
+/// sign-extends `x` straight to 64 bits, the signed test and the sum `x + h` (without signed
+/// wrap) sign-extend it to 32 first. The position is not negative, so `x + h` is at least `h`.
+const SEXT_GUARD: &str = r#"
+define void @sext_guard(ptr addrspace(1) %0, i16 %x, i32 %t) #0 {
+entry:
+  %xw = sext i16 %x to i32
+  %xi = sext i16 %x to i64
+  %px = getelementptr inbounds [64 x i32], ptr addrspace(3) @tg, i64 0, i64 %xi
+  store i32 %xw, ptr addrspace(3) %px, align 4
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  br label %loop
+
+loop:
+  %s = phi i32 [ 16, %entry ], [ %h, %latch ]
+  %h = sdiv i32 %s, 2
+  %g = icmp slt i32 %xw, %h
+  br i1 %g, label %arm, label %latch
+
+arm:
+  %a = load i32, ptr addrspace(3) %px, align 4
+  %k = add nsw i32 %h, %xw
+  %ki = sext i32 %k to i64
+  %pk = getelementptr inbounds [64 x i32], ptr addrspace(3) @tg, i64 0, i64 %ki
+  %b = load i32, ptr addrspace(3) %pk, align 4
+  %sum = add i32 %a, %b
+  store i32 %sum, ptr addrspace(3) %px, align 4
+  br label %latch
+
+latch:
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %more = icmp sgt i32 %s, 3
+  br i1 %more, label %loop, label %done
+
+done:
+  %r = load i32, ptr addrspace(3) getelementptr inbounds ([64 x i32], ptr addrspace(3) @tg, i64 0, i64 0), align 4
+  %tz = zext i32 %t to i64
+  %po = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %tz
+  store i32 %r, ptr addrspace(1) %po, align 4
+  ret void
+}
+"#;
+
+/// [`ZEXT_GUARD`] with the test signed, as `if (int(x) < int(h))` compiles: the addresses
+/// zero-extend their indices, so the cores compare unsigned, while the fact `zext(x) < h` holds
+/// in the signed order, where a zero-extended value is not its operand's value. The pair is not
+/// cleared.
+const MIXED_GUARD: &str = r#"
+define void @mixed_guard(ptr addrspace(1) %0, i16 %x, i32 %t) #0 {
+entry:
+  %xw = zext i16 %x to i32
+  %xi = zext i16 %x to i64
+  %px = getelementptr inbounds [64 x i32], ptr addrspace(3) @tg, i64 0, i64 %xi
+  store i32 %xw, ptr addrspace(3) %px, align 4
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  br label %loop
+
+loop:
+  %s = phi i32 [ 16, %entry ], [ %h, %latch ]
+  %h = lshr i32 %s, 1
+  %g = icmp slt i32 %xw, %h
+  br i1 %g, label %arm, label %latch
+
+arm:
+  %a = load i32, ptr addrspace(3) %px, align 4
+  %k = add nuw nsw i32 %h, %xw
+  %ki = zext i32 %k to i64
+  %pk = getelementptr inbounds [64 x i32], ptr addrspace(3) @tg, i64 0, i64 %ki
+  %b = load i32, ptr addrspace(3) %pk, align 4
+  %sum = add i32 %a, %b
+  store i32 %sum, ptr addrspace(3) %px, align 4
+  br label %latch
+
+latch:
+  tail call void @air.wg.barrier(i32 2, i32 1)
+  %more = icmp ugt i32 %s, 3
+  br i1 %more, label %loop, label %done
+
+done:
+  %r = load i32, ptr addrspace(3) getelementptr inbounds ([64 x i32], ptr addrspace(3) @tg, i64 0, i64 0), align 4
+  %tz = zext i32 %t to i64
+  %po = getelementptr inbounds i32, ptr addrspace(1) %0, i64 %tz
+  store i32 %r, ptr addrspace(1) %po, align 4
+  ret void
+}
+"#;
+
+/// A tree reduction whose guard tests its `ushort` index widened to 32 bits ([`ZEXT_GUARD`]),
+/// or its `short` index sign-extended so ([`SEXT_GUARD`]), on the 780M (whose maximal
+/// reconvergence on 32-lane subgroups makes a lockstep simdgroup barrier a tangle barrier). Its
+/// own pipeline keeps the pair of `tg[x]`'s load and store, which threads of two rows meet in:
+/// `Direct`, 32 lanes pinned, `RowLockstep`, and lockstep's words in a simdgroup of two rows. Its
+/// one-row variant takes no simdgroup barrier, no simd class and no pinned subgroup, and leaves
+/// the sum at every width. A signed test of zero-extended indices ([`MIXED_GUARD`]) clears
+/// nothing: its one-row variant keeps the barrier and the pin.
+#[test]
+fn a_guard_on_its_index_widened_once_clears_a_tree_reduction_in_one_row() {
+    let p = profile("amd-780m-radv", DevicePolicy::default()).expect("profile");
+    let mut one_row = LowerInputs::new();
+    one_row.one_row = true;
+    let sum: u32 = (0..16).sum();
+    for (name, body) in [("zext_guard", ZEXT_GUARD), ("sext_guard", SEXT_GUARD)] {
+        let Some(bc) = assemble_text(name, &format!("{HEADER}\n{body}\n{}", footer_ushort(name)))
+        else {
+            return;
+        };
+        let (row, rm) =
+            typed_module_with(&bc, name, &p, &one_row).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(
+            uses(&row, "barrier.lockstep.simdgroup"),
+            0,
+            "{name}: {:?}",
+            row.census()
+        );
+        assert_eq!(row.simd, (SimdClass::None, Tier::NoSubgroup), "{name}");
+        assert_eq!(row.subgroup, SubgroupRequirement::NONE, "{name}");
+        for local in [[16, 1, 1], [32, 1, 1]] {
+            let threads = local.iter().product::<u32>() as usize;
+            for lanes in CHUNKED {
+                assert_eq!(
+                    run_shape(&row, &rm, local, lanes),
+                    vec![sum; threads],
+                    "{name} at {local:?} {lanes:?}"
+                );
+            }
+        }
+        let (own, m) = typed_module(&bc, name, &p).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(own.simd.1, Tier::Direct, "{name}: {:?}", own.census());
+        assert_eq!(own.subgroup.size, Some(32), "{name}");
+        assert!(own.facts.contains(&RuntimeFact::RowLockstep), "{name}");
+        assert_eq!(
+            run_shape(&own, &m, [16, 2, 1], SubgroupSize::W32),
+            vec![sum; 32],
+            "{name}"
+        );
+    }
+    let name = "mixed_guard";
+    let Some(bc) = assemble_text(
+        name,
+        &format!("{HEADER}\n{MIXED_GUARD}\n{}", footer_ushort(name)),
+    ) else {
+        return;
+    };
+    let (row, _) =
+        typed_module_with(&bc, name, &p, &one_row).unwrap_or_else(|e| panic!("{name}: {e}"));
+    assert!(
+        uses(&row, "barrier.lockstep.simdgroup") > 0,
+        "{:?}",
+        row.census()
+    );
+    assert_eq!(row.simd.1, Tier::Direct);
+    assert_eq!(row.subgroup.size, Some(32));
 }

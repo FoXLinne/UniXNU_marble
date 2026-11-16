@@ -476,7 +476,8 @@ impl EncoderState {
         self.alpha_test_reference = Some(value);
     }
 
-    /// `setTriangleFillMode:`: `Lines` needs `fillModeNonSolid`.
+    /// `setTriangleFillMode:`: `Lines` needs `fillModeNonSolid`, `Points` that and, on a
+    /// portability-subset device, `pointPolygons` (`metal::state::polygon_mode`).
     pub(super) fn set_fill_mode(
         &mut self,
         mode: TriangleFillMode,
@@ -1436,7 +1437,9 @@ impl VertexClamp {
             device.degrade(Degradation::SampleDepthClamp, || {
                 (
                     described(state, v),
-                    "Metal adds the depth bias to each vertex's depth clamped to [0, 1], where                      the device adds it before its clamp of each sample, so a primitive past                      Metal's near or far plane stores otherwise"
+                    "Metal adds the depth bias to each vertex's depth clamped to [0, 1], where \
+                     the device adds it before its clamp of each sample, so a primitive past \
+                     Metal's near or far plane stores otherwise"
                         .to_owned(),
                 )
             });
@@ -2599,10 +2602,7 @@ mod tests {
         use metal2vulkan::vk::PrimitiveTopology as T;
         use DepthBiasEffect::{Factors, Offset, Saturated};
         // The repository's profile: this test runs only from the workspace checkout.
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../metal2vulkan-validation/profiles/moltenvk-m3.json"
-        );
+        let path = metal2vulkan_devtools::validation_dir().join("profiles/moltenvk-m3.json");
         let text = std::fs::read_to_string(path).unwrap();
         let description =
             metal2vulkan::device::DeviceDescription::from_khronos_json(&text, None).unwrap();
@@ -3244,10 +3244,7 @@ mod tests {
     fn biased_depths_move_the_draw_s_viewports() {
         use metal2vulkan::vk::PrimitiveTopology as T;
         // The repository's profile: this test runs only from the workspace checkout.
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../metal2vulkan-validation/profiles/moltenvk-m3.json"
-        );
+        let path = metal2vulkan_devtools::validation_dir().join("profiles/moltenvk-m3.json");
         let text = std::fs::read_to_string(path).unwrap();
         let description =
             metal2vulkan::device::DeviceDescription::from_khronos_json(&text, None).unwrap();
@@ -3329,10 +3326,8 @@ mod tests {
     fn a_returned_depth_keeps_its_range_under_the_written_clamp_s_compensation() {
         use metal2vulkan::vk::PrimitiveTopology as T;
         // The repository's profile: this test runs only from the workspace checkout.
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../metal2vulkan-validation/profiles/intel-irisxe-rplp-anv.json"
-        );
+        let path =
+            metal2vulkan_devtools::validation_dir().join("profiles/intel-irisxe-rplp-anv.json");
         let text = std::fs::read_to_string(path).unwrap();
         let description =
             metal2vulkan::device::DeviceDescription::from_khronos_json(&text, None).unwrap();

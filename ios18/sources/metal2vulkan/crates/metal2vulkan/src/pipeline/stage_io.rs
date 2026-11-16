@@ -36,12 +36,16 @@
 //!   vertex provokes, and behind a post-tessellation vertex function emulated on a device without
 //!   `tessellationShader`, which writes its patch's position in the draw. A flat `uint` varying
 //!   for link, one key ([`VaryingKey::primitive_id`]) on both sides.
+//! - [`IoRole::MergedCommand`]: the command a merged draw's vertex runs, carried to its fragment
+//!   function, which reads that command's slot table. A flat `uint` varying for link, one key
+//!   ([`VaryingKey::merged_command`]) on both sides.
 //!
 //! The roles live in disjoint key namespaces ([`VaryingKey::user`], [`VaryingKey::attribute`],
 //! [`VaryingKey::color`], [`VaryingKey::viewport_index`],
 //! [`VaryingKey::render_target_array_index`], [`VaryingKey::window_depth`],
 //! [`VaryingKey::barycentric`], [`VaryingKey::selected_layer`],
-//! [`VaryingKey::selected_viewport`], [`VaryingKey::primitive_id`]): the key bytes start with a
+//! [`VaryingKey::selected_viewport`], [`VaryingKey::primitive_id`],
+//! [`VaryingKey::merged_command`]): the key bytes start with a
 //! namespace tag, so no AIR user key can collide with another role's key. Keys stay opaque to
 //! link; it reads the role here, never the bytes.
 //!
@@ -78,6 +82,7 @@ const BARYCENTRIC: u8 = 6;
 const SELECTED_LAYER: u8 = 7;
 const SELECTED_VIEWPORT: u8 = 8;
 const PRIMITIVE_ID: u8 = 9;
+const MERGED_COMMAND: u8 = 10;
 
 impl VaryingKey {
     /// The key of the user varying with AIR user key `k` (vertex output and fragment input).
@@ -144,6 +149,12 @@ impl VaryingKey {
     /// `[[primitive_id]]` (`IoRole::PrimitiveId`).
     pub fn primitive_id() -> VaryingKey {
         VaryingKey(AirUserKey(vec![PRIMITIVE_ID].into()))
+    }
+
+    /// The key of the command a merged draw's vertex function writes and its fragment function
+    /// reads its command's slot table at (`IoRole::MergedCommand`).
+    pub fn merged_command() -> VaryingKey {
+        VaryingKey(AirUserKey(vec![MERGED_COMMAND].into()))
     }
 }
 
@@ -289,6 +300,13 @@ pub struct StageIo {
     /// the comparison against `PushField::AlphaTestReference`. `None` for every other function.
     #[cfg_attr(feature = "serde", serde(default))]
     pub alpha_test: Option<crate::metal::CompareFunction>,
+    /// The render pipeline's private logic operation the fragment function computes itself
+    /// (`LoweringInputs::logic_operation`): its first output's writes to the attachments the
+    /// operation serves store the operation of their codes over the texels they read. Link
+    /// refuses the function in a pipeline that draws another operation, or none
+    /// (`NeedsInput(LogicOperation)`). `None` for every other function.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub logic_operation: Option<crate::vk::LogicOp>,
     /// The samplers a fragment function makes depth comparisons through, and those whose
     /// references it clamps (`LoweringInputs::depth_compare_clamp_mask`). Link refuses a function
     /// whose clamped samplers are not the pipeline's mask over its samplers
@@ -779,13 +797,19 @@ pub enum IoRole {
     /// (`GraphicsState::emulated_tessellation`) writes at every vertex of a patch the patch's
     /// position in its draw (`patchStart + i`), Metal's `[[primitive_id]]` behind the tessellator.
     PrimitiveId,
+    /// The index of the command a merged draw replay's vertex runs (`bind::DrawReplay::merged`):
+    /// the flat `uint` output of a vertex function compiled under `LoweringInputs::merged_draws`,
+    /// the same at every vertex of a primitive (each primitive is one command's), and the input of
+    /// a fragment function compiled under that field that reads a command's buffers, which finds
+    /// the command's fragment slot table at it.
+    MergedCommand,
 }
 
 impl IoRole {
     /// Whether the role is a varying: a user varying, a raw index a vertex function writes for
     /// its fragment function, its window depth, the barycentric weights a synthesized geometry
-    /// stage writes, a selected index the geometry stage reads, or the primitive ID. Link numbers
-    /// these, and packs those a vertex function writes.
+    /// stage writes, a selected index the geometry stage reads, the primitive ID, or a merged
+    /// draw's command. Link numbers these, and packs those a vertex function writes.
     pub(crate) fn is_varying(&self) -> bool {
         matches!(
             self,
@@ -797,6 +821,7 @@ impl IoRole {
                 | IoRole::SelectedLayer
                 | IoRole::SelectedViewport
                 | IoRole::PrimitiveId
+                | IoRole::MergedCommand
         )
     }
 }
@@ -935,6 +960,9 @@ pub enum StageBuiltin {
     /// `BaseVertex` (`shaderDrawParameters`): a vertex function's `[[base_vertex]]`, the draw's
     /// first vertex without an index buffer and its vertex offset with one.
     BaseVertex,
+    /// `DrawIndex` (`shaderDrawParameters`): the draw's index among a multi-draw's, which a vertex
+    /// function compiled under `LoweringInputs::region_viewports` stores as its `ViewportIndex`.
+    DrawIndex,
 }
 
 /// How a fragment function replaces depth.

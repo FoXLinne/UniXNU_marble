@@ -14,6 +14,7 @@
 //! `validation/fixtures/public/examples/runtime_examples.ll` (`llvm-as`).
 
 use super::blit_holds::{Scratch, WAIT};
+use super::plan_room::device_with_room;
 use crate::{
     Buffer, CommandBufferStatus, CommandQueue, ComputePipelineState, Device, DeviceKind,
     DeviceOptions, ExtraQueue, HostBacking, HostMemory, Library, MessageSink, PipelineOptions,
@@ -63,6 +64,8 @@ pub(super) fn device(cache: &Path, messages: &Arc<Mutex<Vec<String>>>) -> Device
             ..ShaderCacheOptions::default()
         },
         extra_queues: vec![vk::QueueFlags::COMPUTE, vk::QueueFlags::VIDEO_DECODE_KHR],
+        // The plan, whose extra queues these are.
+        queue_limits: None,
         optional_device_extensions: VIDEO_EXTENSIONS
             .iter()
             .map(|&name| CString::from(name))
@@ -72,7 +75,7 @@ pub(super) fn device(cache: &Path, messages: &Arc<Mutex<Vec<String>>>) -> Device
         })),
         ..DeviceOptions::default()
     };
-    Device::system_default_with(&options).unwrap()
+    device_with_room(&options).unwrap()
 }
 
 /// The families of the device's queue family properties.
@@ -555,9 +558,7 @@ fn a_raw_submission_is_ordered_by_a_shared_event_s_semaphore() {
 
 /// The library of the fixture at `path` under `validation/fixtures/public/`.
 fn library(device: &Device, path: &str) -> Library {
-    let ll = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../metal2vulkan-validation/fixtures/public")
-        .join(path);
+    let ll = metal2vulkan_devtools::fixtures_dir().join(path);
     let bitcode = metal2vulkan_devtools::llvm_assemble(&ll).unwrap();
     let library = metal2vulkan::library::Library::from_air(&bitcode).unwrap();
     device.new_library_with_compile_library(library)

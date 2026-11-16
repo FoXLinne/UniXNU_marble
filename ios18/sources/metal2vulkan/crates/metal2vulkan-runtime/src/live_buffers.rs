@@ -28,7 +28,8 @@
 //! - **The table** (`LiveTable`). One resident set of every listed buffer, coalesced as a root
 //!   table's (`bind::ResidentSet`), uploaded to a buffer of the runtime's own at a 32-byte-aligned
 //!   device address. It is made at the first commit that needs it after a change of the list (a
-//!   buffer made or gone, a rebind), kept by the device until the next change, and shared by
+//!   buffer made or gone, a rebind), kept by the device until the next change (or, on a
+//!   generation a recovery left, its rest: `LiveBuffers::close`), and shared by
 //!   every command buffer committed meanwhile. A command buffer holds it weakly from its commit
 //!   to its first submission, which takes the table of the list then, the same one where the
 //!   list is unchanged, and holds it, and with it each listed buffer's pages, until it completes
@@ -51,10 +52,17 @@
 //! - **Kept as the list changes**. The device keeps the list sorted, each buffer with its range and
 //!   a hold on its pages from its listing on, in chunks the tables share (`sorted_chunks.rs`): a
 //!   buffer made or gone changes one chunk, and the next table copies none of the others, upgrades
-//!   no buffer and asks no buffer for its pages again. Its set is written into the buffer of the
-//!   table it replaces where no command buffer held that table and the set fits, else into a new
-//!   one. Before, each table made after a change upgraded, sorted and held every listed buffer
-//!   again, and uploaded its set to a new buffer.
+//!   no buffer and asks no buffer for its pages again. Each chunk keeps its part of the set (its
+//!   buffers' ranges sorted and coalesced, `ResidentPart`), made once for the chunk as it stands,
+//!   and the table's set is joined of the parts (`ResidentSet::of_parts`, equal to the set of
+//!   every range made at once): a change sorts and coalesces its chunk's ranges again, not the
+//!   list's. A table whose parts are the last table's, each the same or equal (a buffer gone and
+//!   another made at its range and pages, as a heap's first fit places a command buffer's scratch
+//!   again), shares that table's set and its upload, writing nothing; else its set is written into
+//!   the buffer of the last table where no command buffer holds that table any longer and the set
+//!   fits, else into a new one. Before, each table made after a change sorted and coalesced every
+//!   listed buffer's range and uploaded its set (and before that upgraded, sorted and held every
+//!   listed buffer again, and uploaded to a new buffer).
 //!   A command buffer's root tables point at it, or at a set of it and what the command buffer's
 //!   encoders bound and made resident beyond it (`command_buffer`).
 //! - **On the host.** An indirect command's buffer address that no resource the command
@@ -72,7 +80,7 @@ use super::resource::ObjectId;
 use super::sorted_chunks::SortedChunks;
 use super::used_resources::UsedResources;
 use super::Device;
-use metal2vulkan::bind::{ResidentRange, ResidentSet, RootTable};
+use metal2vulkan::bind::{ResidentPart, ResidentRange, ResidentSet, RootTable};
 use std::sync::{Arc, Mutex};
 
 /// The program's live buffers on a device that a command reaches without naming them (the
@@ -86,6 +94,10 @@ pub(super) struct LiveBuffers {
 /// an address).
 type Key = (u64, ObjectId);
 
+/// The listed buffers by their keys, in the chunks the tables share (`sorted_chunks.rs`), each
+/// chunk with its part of the resident set ([`part_of`]).
+type List = SortedChunks<Key, Listed, Arc<ResidentPart>>;
+
 /// A listed buffer (kept from its listing on, not asked again for each table).
 #[derive(Clone)]
 struct Listed {
@@ -97,8 +109,8 @@ struct Listed {
 
 #[derive(Default)]
 struct Inner {
-    /// Each listed buffer by its key, in the chunks the tables share (`sorted_chunks.rs`).
-    listed: SortedChunks<Key, Listed>,
+    /// Each listed buffer by its key, in the chunks the tables share.
+    listed: List,
     /// Bumped by each change of what the table lists.
     generation: u64,
     /// Bumped by each rebind or detach ([`LiveBuffers::rebound`]): a listing whose pages were
@@ -106,37 +118,51 @@ struct Inner {
     rebinds: u64,
     /// The table of the current generation, once made: dropped at the next change, so a gone
     /// buffer's pages go with the last command buffer that holds an older table. It holds the
-    /// device only while a listed buffer lives, which holds it too.
+    /// device only while a listed buffer lives, which holds it too; on a generation a recovery
+    /// left, whose listed buffers it carried on, until that generation's rest
+    /// ([`close`](LiveBuffers::close)).
     current: Option<Arc<LiveTable>>,
-    /// The buffer of a table that no command buffer held when a change replaced it, which the
-    /// next table's set is written into where it fits; kept only while a buffer is listed, so it
-    /// holds the device only while a listed buffer does.
-    spare: Option<Buffer>,
+    /// The set of the last table made, with its upload, kept only while a buffer is listed, so
+    /// its buffer holds the device only while a listed buffer does, and as
+    /// [`current`](Self::current) on a generation a recovery left: the next table shares it where
+    /// it lists the same set, else writes its own set into its buffer where no table holds it any
+    /// longer and it fits.
+    last: Option<Arc<LiveSet>>,
 }
 
-/// The resident set of the live buffers at one generation (the module docs).
-pub(super) struct LiveTable {
+/// A table's resident set, the parts it was joined of, and the buffer it is uploaded to: shared by
+/// the tables after it while they list the same set.
+struct LiveSet {
+    /// The parts, one a chunk of the list, in its order.
+    parts: Vec<Arc<ResidentPart>>,
     /// The set.
     set: ResidentSet,
     /// The buffer the set is uploaded to and the device address of its first entry; `None`
     /// for an empty set.
     upload: Option<(Buffer, u64)>,
+}
+
+/// The resident set of the live buffers at one generation (the module docs).
+pub(super) struct LiveTable {
+    /// The set and its upload (shared with the tables before and after it that list the same
+    /// set).
+    live: Arc<LiveSet>,
     /// The listed buffers as the table was made, each with its range and the hold on its pages
     /// that keeps them while the table lives (shared with the tables before and after it).
-    listed: SortedChunks<Key, Listed>,
+    listed: List,
     /// The generation of the list it was made of: a command buffer waiting for its first
     /// submission holds the table weakly and asks whether the list changed since.
     generation: u64,
 }
 
 /// What a change of the list let go of, for the caller to drop with no lock held (a last hold's
-/// drop forgets a buffer or frees pages): the table made before it, and buffers no longer
-/// listed.
+/// drop forgets a buffer or frees pages): the table made before it, buffers no longer listed, and
+/// the last set once none is.
 #[must_use = "dropped with no lock held"]
 struct Stale {
-    table: Option<Arc<LiveTable>>,
+    _table: Option<Arc<LiveTable>>,
     listed: Vec<Listed>,
-    spare: Option<Buffer>,
+    _last: Option<Arc<LiveSet>>,
 }
 
 impl LiveBuffers {
@@ -155,7 +181,9 @@ impl LiveBuffers {
     /// at its own range (The heap's whole buffer, which the runtime once listed, let an
     /// access past a placed buffer reach the heap's other bytes, where a bound one's is contained).
     /// Listed from this commit on, for its own commands too; a buffer placed in such a heap later,
-    /// from its placing ([`placed`](Self::placed)).
+    /// from its placing ([`placed`](Self::placed)). A heap's buffers are listed at its first use
+    /// since its making or the last replacement of its pages ([`rebound`](Self::rebound)), and a
+    /// later use walks none of them (`Heap::reached`): each placed since is listed already.
     pub(super) fn reach(&self, used: &UsedResources) {
         let no_copy = used
             .buffers
@@ -199,14 +227,15 @@ impl LiveBuffers {
             };
             let mut inner = lock(&self.inner);
             if inner.rebinds != rebinds {
-                // Dropped with no lock held, as `let_go` drops: it may hold the old pages last.
+                // Dropped with no lock held, as a change's `Stale`: it may hold the old pages last.
                 drop(inner);
                 drop(listed);
                 continue;
             }
             let stale = inner.listed.insert(key, listed).then(|| inner.change());
             drop(inner);
-            self.let_go(stale);
+            // Dropped with no lock held: a last hold's drop frees pages or forgets a buffer.
+            drop(stale);
             return;
         }
     }
@@ -235,7 +264,8 @@ impl LiveBuffers {
                 None => None,
             }
         };
-        self.let_go(stale);
+        // Dropped with no lock held: a last hold's drop frees pages or forgets a buffer.
+        drop(stale);
     }
 
     /// `buffer`'s pages were replaced (`rebind.rs`), or where `heap` is given those of the heap
@@ -262,37 +292,16 @@ impl LiveBuffers {
             stale.listed = listed;
             stale
         };
-        self.let_go(Some(stale));
+        // Dropped with no lock held: a last hold's drop frees pages or forgets a buffer.
+        drop(stale);
         drop(gone);
     }
 
-    /// Let go of what a change made stale, with no lock held: a table no command buffer held
-    /// gives its buffer back as the spare, while a buffer is listed (`Inner::spare`).
-    fn let_go(&self, stale: Option<Stale>) {
-        let Some(Stale {
-            table,
-            listed,
-            spare,
-        }) = stale
-        else {
-            return;
-        };
-        let freed = table
-            .and_then(|table| Arc::try_unwrap(table).ok())
-            .and_then(|table| table.upload)
-            .map(|(buffer, _)| buffer);
-        let refused = freed.and_then(|buffer| {
-            let mut inner = lock(&self.inner);
-            if inner.listed.is_empty() || inner.spare.is_some() {
-                return Some(buffer);
-            }
-            inner.spare = Some(buffer);
-            None
-        });
-        // Dropped with no lock held: a last hold's drop frees pages or forgets a buffer.
-        drop(refused);
-        drop(listed);
-        drop(spare);
+    /// Whether the buffer `id` at Metal address `address` is listed: for a test of what a change
+    /// lists.
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    pub(super) fn lists(&self, address: u64, id: ObjectId) -> bool {
+        lock(&self.inner).listed.contains(&(address, id))
     }
 
     /// The generation of the list now: bumped by each change of what the table lists.
@@ -300,76 +309,132 @@ impl LiveBuffers {
         lock(&self.inner).generation
     }
 
+    /// The device, a generation a recovery left, came to rest (`device/carry.rs`): none of its
+    /// command buffers records, nor is one made there again, so none takes or holds a table of
+    /// it. Its table and last set, buffers of the runtime's own there, go: they held the device
+    /// while a listed buffer lived, which held it too, but the recovery carried the listed
+    /// buffers on, and they hold it no longer, so the lost `VkDevice` would live while they do,
+    /// and past them (the table lives until the next change, which no command buffer makes
+    /// there).
+    pub(super) fn close(&self) {
+        let (table, last) = {
+            let mut inner = lock(&self.inner);
+            (inner.current.take(), inner.last.take())
+        };
+        // Dropped with no lock held: a last hold's drop frees pages.
+        drop(table);
+        drop(last);
+    }
+
     /// The table of the live buffers now: the one made since the last change of the list, else a
     /// new one, which the device keeps until the next change. Refused as `device` refuses its upload.
     pub(super) fn table(&self, device: &Device) -> Result<Arc<LiveTable>, Error> {
-        let (generation, listed, spare) = {
+        let (generation, listed, last) = {
             let mut inner = lock(&self.inner);
             if let Some(table) = &inner.current {
                 return Ok(Arc::clone(table));
             }
-            (inner.generation, inner.listed.clone(), inner.spare.take())
+            (inner.generation, inner.listed.clone(), inner.last.take())
         };
-        self.make(device, generation, listed, spare)
+        self.make(device, generation, listed, last)
     }
 
-    /// The table of `listed`, the buffers listed at `generation`, its set written into `spare`
-    /// where it fits: kept as the current one where the list
-    /// is still at `generation`.
+    /// The table of `listed`, the buffers listed at `generation`, of the set joined of its chunks'
+    /// parts, each made once for the chunk as it stands: `last`, the set of the table made before,
+    /// where it was joined of the same parts, else a set written into `last`'s buffer where no
+    /// table holds it any longer and it fits. Kept as the current one, and its set as the last,
+    /// where the list is still at `generation`.
     fn make(
         &self,
         device: &Device,
         generation: u64,
-        listed: SortedChunks<Key, Listed>,
-        spare: Option<Buffer>,
+        listed: List,
+        last: Option<Arc<LiveSet>>,
     ) -> Result<Arc<LiveTable>, Error> {
-        let ranges = listed
-            .iter()
-            .filter_map(|(_, listed)| listed.resident.as_ref().map(|(range, _)| *range));
-        let set = ResidentSet::new(ranges);
-        let (upload, spare) = match set.is_empty() {
-            false => (Some(upload(device, &set, listed.len(), spare)?), None),
-            true => (None, spare),
+        let same = (last.as_ref()).is_some_and(|last| last.joins(listed.derived(part_of)));
+        let live = match last {
+            Some(last) if same => last,
+            last => {
+                let parts = listed.derived(part_of).cloned().collect();
+                Arc::new(LiveSet::new(device, parts, listed.len(), last)?)
+            }
         };
         let table = Arc::new(LiveTable {
-            set,
-            upload,
+            live: Arc::clone(&live),
             listed,
             generation,
         });
-        let (replaced, spare) = {
+        let (replaced, unkept) = {
             let mut inner = lock(&self.inner);
+            let keep = !inner.listed.is_empty();
             match inner.generation == generation {
-                true => {
-                    let replaced = inner.current.replace(Arc::clone(&table));
-                    match (inner.spare.is_none() && !inner.listed.is_empty(), spare) {
-                        (true, Some(spare)) => {
-                            inner.spare = Some(spare);
-                            (replaced, None)
-                        }
-                        (_, spare) => (replaced, spare),
-                    }
-                }
-                false => (None, spare),
+                true => (
+                    inner.current.replace(Arc::clone(&table)),
+                    match keep {
+                        true => inner.last.replace(live),
+                        false => Some(live),
+                    },
+                ),
+                false if keep && inner.last.is_none() => (None, inner.last.replace(live)),
+                false => (None, Some(live)),
             }
         };
         // Dropped with no lock held: a last hold's drop forgets a buffer.
         drop(replaced);
-        drop(spare);
+        drop(unkept);
         Ok(table)
     }
 }
 
 impl Inner {
-    /// A change of what the table lists: the table made before it, and the spare once no buffer
-    /// is listed, which the caller drops with no lock held.
+    /// A change of what the table lists: the table made before it, and the last set once no
+    /// buffer is listed, which the caller drops with no lock held.
     fn change(&mut self) -> Stale {
         self.generation += 1;
         Stale {
-            table: self.current.take(),
+            _table: self.current.take(),
             listed: Vec::new(),
-            spare: self.listed.is_empty().then(|| self.spare.take()).flatten(),
+            _last: self.listed.is_empty().then(|| self.last.take()).flatten(),
         }
+    }
+}
+
+/// A chunk's part of the resident set: its listed buffers' ranges, sorted and coalesced.
+fn part_of(chunk: &[(Key, Listed)]) -> Arc<ResidentPart> {
+    let ranges = chunk
+        .iter()
+        .filter_map(|(_, listed)| listed.resident.as_ref().map(|(range, _)| *range));
+    Arc::new(ResidentPart::new(ranges))
+}
+
+impl LiveSet {
+    /// The set joined of `parts`, of a table of `listed` buffers, uploaded into `last`'s buffer
+    /// where no table holds it any longer and it fits, else into a new one ([`upload`]).
+    fn new(
+        device: &Device,
+        parts: Vec<Arc<ResidentPart>>,
+        listed: usize,
+        last: Option<Arc<LiveSet>>,
+    ) -> Result<LiveSet, Error> {
+        let set = ResidentSet::of_parts(parts.iter().map(|part| &**part));
+        let spare = last
+            .and_then(Arc::into_inner)
+            .and_then(|last| last.upload)
+            .map(|(buffer, _)| buffer);
+        let upload = match set.is_empty() {
+            false => Some(upload(device, &set, listed, spare)?),
+            true => None,
+        };
+        Ok(LiveSet { parts, set, upload })
+    }
+
+    /// Whether it was joined of `parts`: each the same part, or one equal to it (a chunk changed
+    /// and back, or copied to change), compared only where it is not the same. Read in place: a
+    /// table that shares the set holds no part of its own.
+    fn joins<'a>(&self, parts: impl ExactSizeIterator<Item = &'a Arc<ResidentPart>>) -> bool {
+        self.parts.len() == parts.len()
+            && (self.parts.iter().zip(parts))
+                .all(|(own, part)| Arc::ptr_eq(own, part) || own == part)
     }
 }
 
@@ -381,7 +446,14 @@ impl LiveTable {
 
     /// The set.
     pub(super) fn set(&self) -> &ResidentSet {
-        &self.set
+        &self.live.set
+    }
+
+    /// Whether it shares its set and the set's upload with `other`: for a test of a table made of
+    /// the same set as the one before it.
+    #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+    pub(super) fn shares_set(&self, other: &LiveTable) -> bool {
+        Arc::ptr_eq(&self.live, &other.live)
     }
 
     /// Each listed buffer's range at its own length, before the set coalesced them, in the
@@ -395,7 +467,7 @@ impl LiveTable {
 
     /// The device address of the set's first entry; `None` for an empty set.
     pub(super) fn address(&self) -> Option<u64> {
-        self.upload.as_ref().map(|&(_, address)| address)
+        self.live.upload.as_ref().map(|&(_, address)| address)
     }
 
     /// The listed buffer that Metal address `address` lies in, and its offset there, as
@@ -439,7 +511,7 @@ fn upload(
         .device_address()
         .ok_or_else(|| internal("a resident set on a device without device addresses"))?;
     let skip = start.next_multiple_of(alignment) - start;
-    let Some(mapped) = buffer.contents() else {
+    let Some(mapped) = buffer.mapped_contents() else {
         return Err(internal("a resident set's buffer without host bytes"));
     };
     // SAFETY: the buffer is `Shared`, mapped, and `skip + bytes.len()` bytes long at least; no

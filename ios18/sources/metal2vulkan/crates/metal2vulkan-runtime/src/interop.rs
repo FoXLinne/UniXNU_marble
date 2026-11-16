@@ -196,9 +196,13 @@ impl Texture {
     /// ([`VkImageLayouts`](super::VkImageLayouts)).
     ///
     /// The texture keeps the image for good: a fetched render target whose image takes
-    /// `STORAGE` later no longer does once its image was handed out.
+    /// `STORAGE` later no longer does once its image was handed out. Once its device's recovery
+    /// carried the texture to a new `VkDevice` (`Degradation::DeviceRecovered`), an image answered
+    /// before stays the lost device's, kept with that device until the texture goes, and a later
+    /// call answers the new one's.
     pub unsafe fn vk_image(&self) -> Option<vk::Image> {
-        if self.shadow().is_some() {
+        let _held = self.hold();
+        if self.shadows_bytes() {
             return None;
         }
         self.exported_image().ok()
@@ -439,6 +443,14 @@ impl Event {
     /// would, not a Metal host set, which a plain event has none of. The semaphore's other
     /// contract is [`vk_semaphore`](Self::vk_semaphore)'s; the runtime holds the event until the
     /// signal landed.
+    ///
+    /// A command buffer's completion sync file
+    /// ([`CommandBuffer::export_completion_sync_file`](crate::CommandBuffer::export_completion_sync_file))
+    /// is exported only after the caller submitted every such signal its work may wait for: the
+    /// signal of a value it, or a command buffer committed before it on its `VkQueue`, waits for.
+    /// Vulkan exports a sync file only once every signal operation its signal depends on was
+    /// submitted (`VUID-VkSemaphoreGetFdInfoKHR-handleType-03254`), and these waits go to the
+    /// `VkQueue` before their signal.
     pub unsafe fn reserve_vk_signal(&self, value: u64) -> Result<VkEventSignal, Error> {
         reserve_vk_signal(self.into(), value)
     }

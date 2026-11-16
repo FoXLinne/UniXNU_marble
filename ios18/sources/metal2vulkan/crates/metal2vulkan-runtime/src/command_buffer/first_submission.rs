@@ -66,7 +66,6 @@
 //!   though the command buffer failed already and keeps that first code (move14: the consumer's
 //!   review; Metal runs it over the new pages).
 
-use super::checks::metal_submissions;
 use super::rebound_use::{ReboundAt, ReboundUse, Recording};
 use super::{write_fields, CommandBufferShared, Resident, State};
 use crate::error::{internal, CommandBufferError, Error};
@@ -424,14 +423,7 @@ impl State {
         if verdicts.is_empty() {
             return Vec::new();
         }
-        let encoders = self.ended.iter().map(|record| {
-            (
-                record.kind,
-                record.event_waits_before,
-                record.event_signals_before,
-            )
-        });
-        metal_submissions(encoders)
+        self.metal_submissions()
             .into_iter()
             .filter_map(|(_, encoders)| {
                 let mut failure = None;
@@ -579,14 +571,17 @@ impl State {
         }
         due.sort_by_key(|(encoders, _)| encoders.start);
         let State {
-            recorded, retained, ..
+            recorded,
+            retained,
+            ended,
+            ..
         } = self;
         let failing = |encoder: &usize| due.iter().any(|(encoders, _)| encoders.contains(encoder));
         for part in recorded[range.start..]
             .iter_mut()
             .filter(|part| failing(&part.encoder))
         {
-            State::fail_part(part, retained);
+            State::fail_part(part, ended, retained);
         }
         self.unrunnable
             .extend(due.iter().flat_map(|(encoders, _)| encoders.clone()));

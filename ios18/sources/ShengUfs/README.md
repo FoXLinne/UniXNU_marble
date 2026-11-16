@@ -2,6 +2,10 @@
 
 SM8550 UFS transport and sheng persistent storage.
 
+Verified userdata windows identify themselves as internal virtual storage. This
+keeps macOS Disk Arbitration from deferring their mounts until login or
+unmounting the App cryptex while the desktop session starts.
+
 The historical native UFS root qualification applies to the iOS 17 path.
 
 Build and interface details: [documentation](https://unixnu.com/drivers/sheng-ufs). Component sources and dependencies: [catalog](https://unixnu.com/reference/components).

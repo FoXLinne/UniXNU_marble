@@ -70,7 +70,7 @@
 
 #[cfg(unix)]
 use super::buffer::Imported;
-use super::buffer::{Buffer, Detached, HostCell, HostPages, Lying, WeakBuffer};
+use super::buffer::{Buffer, Detached, HostCell, HostPages, LeftTwins, Lying, WeakBuffer};
 use super::command_buffer::CommandBufferShared;
 use super::device::lock;
 use super::error::{invalid, Error, Problem};
@@ -398,15 +398,16 @@ impl Rebinds {
     }
 
     /// Detach the buffer of `key`, whose hold on its pages is `cell`, to `detached`, unless
-    /// submitted work holds it (`SubmittedHolds`): where it lay, and
-    /// whether a submitted command buffer made those pages resident, or `None` where such a command
-    /// buffer refuses it. Already detached, it stays so.
+    /// submitted work holds it (`SubmittedHolds`): where it lay, the read twins it let go of,
+    /// which the caller drops without this lock ([`LeftTwins`]), and whether a submitted command
+    /// buffer made those pages resident, or `None` where such a command buffer refuses it.
+    /// Already detached, it stays so.
     pub(super) fn detach(
         &self,
         key: ResourceKey,
         cell: &HostCell,
         detached: Arc<Detached>,
-    ) -> Option<(Lying, bool)> {
+    ) -> Option<(Lying, LeftTwins, bool)> {
         let mut buffers = lock(&self.buffers);
         let entry = buffers.get_mut(&key)?;
         if entry.submitted > 0 {
@@ -418,7 +419,8 @@ impl Rebinds {
         }
         let resident = entry.resident;
         entry.resident = false;
-        Some((cell.replace(Lying::Detached(detached)), resident))
+        let (lying, twins) = cell.replace(Lying::Detached(detached));
+        Some((lying, twins, resident))
     }
 
     /// Wait until no submitted work holds the buffer of `key` any longer (`SubmittedHolds`), with
@@ -490,7 +492,8 @@ impl Rebinds {
     }
 
     /// Give the buffer of `key`, whose hold on its pages is `cell`, `pages` from now on, unless
-    /// a hold refuses it: where it lay (a detached one is attached again), and the command
+    /// a hold refuses it: where it lay (a detached one is attached again), the read twins it let
+    /// go of, which the caller drops without this lock ([`LeftTwins`]), and the command
     /// buffers waiting for the submission of an event group whose replayable encoders or work on
     /// the GPU alone named it ([`Rebinds::wait_for_replay`]), each marked under this lock to
     /// encode or record them again before that submission (`CommandBufferShared::reencode`), which
@@ -500,10 +503,11 @@ impl Rebinds {
         key: ResourceKey,
         cell: &HostCell,
         pages: Arc<HostPages>,
-    ) -> Result<(Lying, Vec<Arc<CommandBufferShared>>), Arc<HostPages>> {
+    ) -> Result<(Lying, LeftTwins, Vec<Arc<CommandBufferShared>>), Arc<HostPages>> {
         let mut buffers = lock(&self.buffers);
         let Some(entry) = buffers.get_mut(&key) else {
-            return Ok((cell.replace(Lying::In(pages)), Vec::new()));
+            let (lying, twins) = cell.replace(Lying::In(pages));
+            return Ok((lying, twins, Vec::new()));
         };
         if entry.pending > 0 {
             return Err(pages);
@@ -514,7 +518,7 @@ impl Rebinds {
         }
         // No command buffer made the new pages resident yet.
         entry.resident = false;
-        let lying = cell.replace(Lying::In(pages));
+        let (lying, twins) = cell.replace(Lying::In(pages));
         // Marked before this lock goes, so a group's submission either came before the rebind
         // (and keeps the old pages) or waits for the encoders encoded again.
         // Each upgraded one goes to the caller, which lets go of it without this lock.
@@ -533,7 +537,7 @@ impl Rebinds {
             buffer.mark_reencode();
             again.push(buffer);
         }
-        Ok((lying, again))
+        Ok((lying, twins, again))
     }
 }
 
@@ -806,11 +810,36 @@ impl ImportHold {
     fn retained(self) -> Option<Box<dyn Any + Send + Sync>> {
         match self {
             #[cfg(unix)]
-            ImportHold::Held(held) => Some(Box::new(held)),
+            ImportHold::Held(held) => Some(Box::new(Retained::new(held))),
             #[cfg(unix)]
             ImportHold::Waiting(held) => held
                 .upgrade()
-                .map(|held| Box::new(held) as Box<dyn Any + Send + Sync>),
+                .map(|held| Box::new(Retained::new(held)) as Box<dyn Any + Send + Sync>),
+        }
+    }
+}
+
+/// A command buffer's hold of a releasable import's objects until it completes
+/// ([`ImportHold::retained`]): where its completion's release lets go of them last, the import
+/// gone and a deallocator or a keep-alive waiting for their free, the free goes to the device's
+/// free thread (`free_thread.rs`, `Imported::let_go_at_completion`).
+#[cfg(unix)]
+struct Retained(std::mem::ManuallyDrop<Arc<Imported>>);
+
+#[cfg(unix)]
+impl Retained {
+    fn new(held: Arc<Imported>) -> Retained {
+        Retained(std::mem::ManuallyDrop::new(held))
+    }
+}
+
+#[cfg(unix)]
+impl Drop for Retained {
+    fn drop(&mut self) {
+        // SAFETY: taken once, here, as the hold goes, and never read again.
+        let held = unsafe { std::mem::ManuallyDrop::take(&mut self.0) };
+        if let Some(imported) = Arc::into_inner(held) {
+            Imported::let_go_at_completion(imported);
         }
     }
 }
@@ -978,6 +1007,17 @@ impl Buffer {
     /// over the buffer lives, is given such a copy laid out at the old offset, the gate unasked.
     /// Metal rebinds over any memory; the copy is the difference.
     ///
+    /// A `Managed` no-copy buffer on a device without unified memory is two copies
+    /// ([`HostBacking::DeviceCopy`](crate::HostBacking::DeviceCopy)): the call gives its host copy
+    /// the new memory, imported as at the making but never a copy of it (where the import is not
+    /// made, the pages are reached through staging buffers), and copies the new pages into the
+    /// GPU's copy by the device's next submission, before any of its commands, so every command
+    /// buffer committed after the call reads them; nothing is refused for uses encoded before it.
+    /// The old memory's deallocator runs once nothing holds its host copy (in the call, where
+    /// nothing does). Over pages the process maps read-only, the GPU's writes are dropped:
+    /// `synchronize_resource` copies nothing out to them, and they are copied in again at the
+    /// completion of each command buffer that used the buffer.
+    ///
     /// Refused: a buffer that is not a no-copy buffer of its own (`Invalid`,
     /// [`RebindProblem::NotHostMemory`]); a command buffer not yet committed whose commands used
     /// the buffer, or an open encoder that did (a render encoder with an attachment over it, from
@@ -1007,11 +1047,17 @@ impl Buffer {
             return Err(invalid(CALL, Problem::Rebind(RebindProblem::Refused)));
         }
         let Some(cell) = self.host_cell() else {
+            // A two-copy buffer's host copy takes the new pages, copied in whole
+            // (`managed_copy.rs`).
+            if let Some(caller) = self.caller_copy() {
+                // SAFETY: the caller's contract.
+                return unsafe { caller.rebind(self, memory, deallocator, keep_alive) };
+            }
             return Err(invalid(CALL, Problem::Rebind(RebindProblem::NotHostMemory)));
         };
         // SAFETY: the caller's contract.
         let rebound = unsafe {
-            self.device().rebind_host_pages(
+            self.generation().rebind_host_pages(
                 CALL,
                 self,
                 cell,
@@ -1072,7 +1118,7 @@ impl Heap {
         };
         // SAFETY: the caller's contract.
         let rebound = unsafe {
-            self.device().rebind_host_pages(
+            self.generation().rebind_host_pages(
                 CALL,
                 own,
                 cell,

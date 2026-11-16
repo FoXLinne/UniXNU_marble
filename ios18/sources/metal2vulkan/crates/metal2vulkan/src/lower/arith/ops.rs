@@ -1,9 +1,10 @@
 //! The emission core of the LLVM instruction set on held values: integer, boolean, and float
 //! operators, comparisons, and casts. Every function takes and returns SPIR-V values in their
-//! lowered representation ([`Form`]) and keeps the zero-extension invariant, so the functions are
-//! testable on the CPU interpreter without an AIR module (`tests`).
+//! lowered representation ([`Form`]) and keeps the zero-extension invariant (a value that is not
+//! poison has no bit above its width, `legal`), so the functions are testable on the CPU
+//! interpreter without an AIR module (`tests`).
 
-use crate::air::ir::{BinOp as AirBin, FloatPredicate, IntPredicate};
+use crate::air::ir::{BinOp as AirBin, FloatPredicate, IntFlags, IntPredicate};
 use crate::lower::arith::legal::{FloatFmt, Form, Held};
 use crate::lower::arith::narrow;
 use crate::spirv::builder::{FunctionBuilder, MaskForm};
@@ -159,31 +160,42 @@ pub fn sext(fb: &mut FunctionBuilder<'_>, f: Form, x: Value) -> BResult<Value> {
     fb.binary(BinOp::ShiftRightArithmetic, up, sh)
 }
 
-/// An integer binary operator on two held integers of form `f`.
+/// An integer binary operator with the AIR instruction's `flags` on two held integers of form
+/// `f`. An add, sub, mul or shl marked `nuw` is not masked: a result that would carry above the
+/// width is poison, so every other result already fits it. (`nsw` alone says nothing of the
+/// zero-extended bits: `-1 + 1` carries out of them.)
 pub fn int_binary(
     fb: &mut FunctionBuilder<'_>,
     op: AirBin,
+    flags: IntFlags,
     f: Form,
     a: Value,
     b: Value,
 ) -> BResult<Value> {
     let bin = |fb: &mut FunctionBuilder<'_>, o, x, y| fb.binary(o, x, y);
+    let wrap = |fb: &mut FunctionBuilder<'_>, r| {
+        if flags.contains(IntFlags::NUW) {
+            Ok(r)
+        } else {
+            mask(fb, f, r)
+        }
+    };
     match op {
         AirBin::Add => {
             let r = bin(fb, BinOp::IAdd, a, b)?;
-            mask(fb, f, r)
+            wrap(fb, r)
         }
         AirBin::Sub => {
             let r = bin(fb, BinOp::ISub, a, b)?;
-            mask(fb, f, r)
+            wrap(fb, r)
         }
         AirBin::Mul => {
             let r = bin(fb, BinOp::IMul, a, b)?;
-            mask(fb, f, r)
+            wrap(fb, r)
         }
         AirBin::Shl => {
             let r = bin(fb, BinOp::ShiftLeftLogical, a, b)?;
-            mask(fb, f, r)
+            wrap(fb, r)
         }
         AirBin::UDiv => bin(fb, BinOp::UDiv, a, b),
         AirBin::URem => bin(fb, BinOp::UMod, a, b),
@@ -285,53 +297,69 @@ pub fn f16_binary_words(f: Form) -> u32 {
 /// (the double rounding is innocuous). A NaN's bits are the device's, as the controlled rounding's
 /// are.
 ///
-/// The instruction is always kept apart, whatever the AIR's flags allow: a sum or difference
-/// decorated `NoContraction` (SPIRV-Cross writes its `[[clang::optnone]]` `spvFAdd` or `spvFSub`),
-/// a product as `Fma(a, b, -0.0)` decorated `NoContraction`, the product's value whether the
-/// device fuses it or not. Undecorated, Metal's fast and relaxed compiles fold the narrowings and
-/// the widening away and answer the `float` sum, difference or product of the widened operands; a
-/// `NoContraction` `OpFMul`, which SPIRV-Cross writes as `fma(l, r, 0)`, answers `+0` for a `-0`
-/// product. Keeping each operation apart is one of the values the flags allow, the one the widened
-/// lowering gives.
+/// The instruction takes the AIR's own contraction, as `float` arithmetic does
+/// ([`float_binary`]): one whose flags carry both `contract` and `reassoc`
+/// (`Contraction::Allowed`) is undecorated, a product a plain `OpFMul`, and the device's compiler
+/// groups and fuses it with its neighbours as it chooses. On MoltenVK, Metal's fast and relaxed
+/// compiles fold such an operation's narrowings and widening away and answer the `float` sum,
+/// difference or product of the widened operands, unrounded (measured with
+/// `DriverDeviation::MetalHalfArithmetic`), which selection records as
+/// `PrecisionNote::FastMathRewrites`. Any other (`Contraction::Forbidden`) is kept apart: a sum or
+/// difference decorated `NoContraction` (SPIRV-Cross writes its `[[clang::optnone]]` `spvFAdd` or
+/// `spvFSub`), a product as `Fma(a, b, -0.0)` decorated `NoContraction`, the product's value
+/// whether the device fuses it or not; a `NoContraction` `OpFMul`, which SPIRV-Cross writes as
+/// `fma(l, r, 0)`, answers `+0` for a `-0` product.
 pub fn f16_binary(
     fb: &mut FunctionBuilder<'_>,
     op: AirBin,
     lanes: u8,
+    contract: Contraction,
     a: Value,
     b: Value,
 ) -> BResult<Value> {
-    let float_ty = |fb: &mut FunctionBuilder<'_>, width: u8| -> BResult<TypeId> {
-        let e = fb.module().ty(Type::Float { width })?;
-        match lanes {
-            1 => Ok(e),
-            len => fb.module().ty(Type::Vector { elem: e, len }),
-        }
-    };
-    let (h, w) = (float_ty(fb, 16)?, float_ty(fb, 32)?);
+    let (h, w) = (float_ty(fb, lanes, 16)?, float_ty(fb, lanes, 32)?);
     let x = fb.convert(ConvOp::FConvert, a, h)?;
     let y = fb.convert(ConvOp::FConvert, b, h)?;
-    let r = match op {
-        AirBin::FAdd => fb.binary_no_contraction(BinOp::FAdd, x, y)?,
-        AirBin::FSub => fb.binary_no_contraction(BinOp::FSub, x, y)?,
-        AirBin::FMul => {
-            let e = fb.module().ty(Type::Float { width: 16 })?;
-            let s = fb.module().constant(Constant::Scalar {
-                ty: e,
-                bits: ConstBits(0x8000),
-            })?;
-            let z = match lanes {
-                1 => s,
-                n => fb.module().constant(Constant::Composite {
-                    ty: h,
-                    parts: vec![s; usize::from(n)].into(),
-                })?,
-            };
-            let z = fb.module().const_value(z)?;
+    let r = match (op, contract) {
+        (AirBin::FAdd, _) => fb.binary_with(BinOp::FAdd, x, y, contract)?,
+        (AirBin::FSub, _) => fb.binary_with(BinOp::FSub, x, y, contract)?,
+        (AirBin::FMul, Contraction::Allowed) => fb.binary(BinOp::FMul, x, y)?,
+        (AirBin::FMul, Contraction::Forbidden) => {
+            let z = f16_splat(fb, lanes, 0x8000)?;
             fb.glsl_with(GlslOp::Fma, &[x, y, z], Contraction::Forbidden)?
         }
         _ => return Err(BuildError::Type(TypeRule::ScalarWidth)),
     };
     fb.convert(ConvOp::FConvert, r, w)
+}
+
+/// The float type of `width` bits on `lanes` lanes: the scalar for one lane, its vector otherwise.
+pub fn float_ty(fb: &mut FunctionBuilder<'_>, lanes: u8, width: u8) -> BResult<TypeId> {
+    let e = fb.module().ty(Type::Float { width })?;
+    match lanes {
+        1 => Ok(e),
+        len => fb.module().ty(Type::Vector { elem: e, len }),
+    }
+}
+
+/// The 16-bit float of bits `bits` on each of `lanes` lanes, a constant.
+pub fn f16_splat(fb: &mut FunctionBuilder<'_>, lanes: u8, bits: u16) -> BResult<Value> {
+    let e = fb.module().ty(Type::Float { width: 16 })?;
+    let s = fb.module().constant(Constant::Scalar {
+        ty: e,
+        bits: ConstBits(u64::from(bits)),
+    })?;
+    let k = match lanes {
+        1 => s,
+        n => {
+            let ty = float_ty(fb, n, 16)?;
+            fb.module().constant(Constant::Composite {
+                ty,
+                parts: vec![s; usize::from(n)].into(),
+            })?
+        }
+    };
+    fb.module().const_value(k)
 }
 
 /// `icmp` on held integers of form `f`.
@@ -759,7 +787,8 @@ fn lane(fb: &mut FunctionBuilder<'_>, f: Form, x: Value, i: u8) -> BResult<Value
 
 /// A lane of form `lane` as its AIR bits in an unsigned integer of its container's width
 /// (a narrow float through its format bits, a `half`'s by the device's narrowing,
-/// `narrow::to_bits`).
+/// `narrow::to_bits`; an integer masked to its width, which a poison lane of a `nuw` operation
+/// may exceed, [`int_binary`], so it never reaches a neighbouring lane's bits).
 fn lane_bits(fb: &mut FunctionBuilder<'_>, lane: Form, v: Value) -> BResult<Value> {
     if lane.is_narrow() {
         narrow::to_bits(fb, lane, v)
@@ -767,7 +796,7 @@ fn lane_bits(fb: &mut FunctionBuilder<'_>, lane: Form, v: Value) -> BResult<Valu
         let it = ty(fb, lane.int_of())?;
         fb.convert(ConvOp::Bitcast, v, it)
     } else {
-        Ok(v)
+        mask(fb, lane, v)
     }
 }
 

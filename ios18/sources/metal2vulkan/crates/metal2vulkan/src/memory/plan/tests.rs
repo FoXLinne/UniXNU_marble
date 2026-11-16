@@ -619,6 +619,185 @@ fn typed_allocas_and_the_private_arena() {
         .collect();
     assert_eq!(offsets, vec![(0, 4), (8, 8), (16, 4)]);
     assert_eq!(plan.priv_arena.static_size, 20);
+    assert!(!plan.priv_arena.null_word);
+}
+
+/// A private pointer that may be null (a select of an alloca's address and null) puts its alloca
+/// in the private arena, and the arena keeps its first word for null: the alloca lies past it.
+#[test]
+fn a_private_pointer_that_may_be_null_keeps_the_arena_s_first_word() {
+    let mut k = Kernel::new();
+    k.param(AddrSpace::Device, buffer(0, AddrSpace::Device, None));
+    let mut ptrs = Vec::new();
+    let e = k.build(|fb| {
+        let i1 = fb.module().int(1);
+        let i32t = fb.module().int(32);
+        let i64t = fb.module().int(64);
+        let p0 = fb.module().ptr(AddrSpace::Thread);
+        let one = fb.module().const_int(i32t, 1);
+        let a = fb.push(
+            p0,
+            InstKind::Alloca {
+                ty: i64t,
+                count: one,
+                align: align(8),
+            },
+        );
+        let null = fb.module().constant(p0, Const::Null);
+        let c = fb.module().const_int(i1, 0);
+        let s = fb.push(
+            p0,
+            InstKind::Select {
+                c,
+                t: a,
+                f: Value::Const(null),
+                fmf: FastMath::NONE,
+            },
+        );
+        let _ = load(fb, i32t, s);
+        ptrs.extend([a, s]);
+        fb.ret(None);
+    });
+    let plan = ok(&e);
+    let [a, s] = ptrs[..] else { unreachable!() };
+    assert!(plan.typed_allocas.is_empty());
+    for v in [a, s] {
+        assert_eq!(plan.repr(v), Some(Repr::PrivPtr(PrivForm::Arena)));
+    }
+    assert!(plan.priv_arena.null_word);
+    let offsets: Vec<(u64, u64)> = plan
+        .priv_arena
+        .entries
+        .iter()
+        .map(|e| (e.offset, e.size))
+        .collect();
+    assert_eq!(offsets, vec![(NULL_WORD.next_multiple_of(8), 8)]);
+    assert_eq!(plan.priv_arena.static_size, 16);
+}
+
+/// The owned fixture `pooled_cells`' kernel `stem`, specialized; `None` without `llvm-as`.
+fn pooled_cells(stem: &str) -> Option<Entry> {
+    use crate::pipeline::testing::{engine_dir, llvm_assemble, AssembleError};
+    let bitcode = match llvm_assemble(&engine_dir().join("pooled_cells.ll")) {
+        Ok(b) => b,
+        Err(AssembleError::Missing(why)) => {
+            eprintln!("SKIPPED: {why}");
+            return None;
+        }
+        Err(e) => panic!("pooled_cells: {e:?}"),
+    };
+    let d = crate::air::decode(&bitcode, &mut meter()).expect("decode");
+    let req = crate::air::SpecRequest {
+        call_stack_depth: 1,
+        open_cl_mode: false,
+        entry: stem.to_owned(),
+        constants: Default::default(),
+    };
+    Some(crate::air::specialize(d, &req, &mut meter()).expect("specialize"))
+}
+
+/// The loads of `ty`-typed pointers in `e`'s body (`space` their address space).
+fn pointer_loads(e: &Entry, space: AddrSpace) -> Vec<InstId> {
+    let body = e
+        .module
+        .func(e.func)
+        .and_then(|f| f.body.as_ref())
+        .expect("body");
+    body.insts
+        .iter()
+        .filter(|(_, i)| {
+            matches!(i.kind, InstKind::Load { .. })
+                && e.module.types().get(i.ty) == Some(&Type::Ptr { space })
+        })
+        .map(|(id, _)| id)
+        .collect()
+}
+
+/// A thread's array of structs that holds thread pointers into itself at indices only the run
+/// knows, among its data, is a pool: its pointer loads read its pointers (or null), not
+/// `Dynamic` ones, on a profile with device addresses and on one without.
+#[test]
+fn an_array_of_structs_holding_thread_pointers_is_a_pool() {
+    let Some(e) = pooled_cells("pooled_closures") else {
+        return;
+    };
+    for p in [addressed(), floor()] {
+        let plan = plan(&e, &p).expect("pooled_closures");
+        assert_eq!(plan.cells.pooled.len(), 1, "{:?}", plan.cells);
+        let loads = pointer_loads(&e, AddrSpace::Thread);
+        assert!(!loads.is_empty());
+        for l in loads {
+            assert_eq!(
+                plan.repr(Value::Inst(l)),
+                Some(Repr::PrivPtr(PrivForm::Arena))
+            );
+            let roots = plan.roots_of(Value::Inst(l)).expect("roots");
+            assert!(roots.contains(&Root::Null), "{roots:?}");
+            assert!(!roots.contains(&Root::Dynamic), "{roots:?}");
+        }
+    }
+}
+
+/// A thread pointer copied into a pool as data (bytes, in a byte loop over a length the run reads
+/// from the struct that holds it; an integer of its bits, through device memory) leaks: the pool's
+/// loads read the copied pointer's object (`vals`) among their roots.
+#[test]
+fn a_pointer_copied_into_a_pool_as_data_is_among_its_loads() {
+    for stem in ["pooled_bytes", "pooled_spill"] {
+        let Some(e) = pooled_cells(stem) else {
+            return;
+        };
+        let body = e
+            .module
+            .func(e.func)
+            .and_then(|f| f.body.as_ref())
+            .expect("body");
+        let floats4 = |ty: TypeId| match e.module.types().get(ty) {
+            Some(Type::Array { len: 4, elem }) => {
+                e.module.types().get(*elem).is_some_and(|t| t.is_float())
+            }
+            _ => false,
+        };
+        let vals: Vec<InstId> = body
+            .insts
+            .iter()
+            .filter(|(_, i)| matches!(i.kind, InstKind::Alloca { ty, .. } if floats4(ty)))
+            .map(|(id, _)| id)
+            .collect();
+        let [vals] = vals[..] else {
+            panic!("{stem}: one float[4] alloca, found {vals:?}");
+        };
+        for p in [addressed(), floor()] {
+            let plan = plan(&e, &p).expect(stem);
+            assert!(!plan.cells.pooled.is_empty(), "{stem}");
+            let loads = pointer_loads(&e, AddrSpace::Thread);
+            assert!(!loads.is_empty(), "{stem}");
+            for l in loads {
+                let roots = plan.roots_of(Value::Inst(l)).expect("roots");
+                assert!(roots.contains(&Root::Alloca(vals)), "{stem}: {roots:?}");
+                assert!(!roots.contains(&Root::Dynamic), "{stem}: {roots:?}");
+            }
+        }
+    }
+}
+
+/// A renderer's context struct holding a constant pointer to an argument buffer of textures, beside
+/// a pool: the context's field is written once, ahead of its read, so the argument buffer pointer
+/// read from it is the parameter itself (`canon::forward`) and no constant-space pointer is loaded;
+/// the pool stays. Without device addresses the kernel is refused where it follows the pointer the
+/// argument buffer holds, a pointer loaded from a buffer.
+#[test]
+fn a_pool_leaves_a_context_s_argument_buffer_pointer_resolved() {
+    let Some(e) = pooled_cells("pooled_context") else {
+        return;
+    };
+    assert_eq!(
+        refused_feature(plan(&e, &floor())),
+        Feature::DereferenceLoadedPointer
+    );
+    let plan = plan(&e, &addressed()).expect("pooled_context");
+    assert!(!plan.cells.pooled.is_empty());
+    assert_eq!(pointer_loads(&e, AddrSpace::Constant), []);
 }
 
 // ---- Threadgroup arena ----

@@ -5,6 +5,7 @@
 #include <IOKit/IOPlatformExpert.h>
 #include <IOKit/storage/IOBlockStorageDevice.h>
 #include <IOKit/storage/IOStorageDeviceCharacteristics.h>
+#include <IOKit/storage/IOStorageProtocolCharacteristics.h>
 #include <libkern/crypto/sha2.h>
 #include <vm/vm_kern.h>
 #include <vm/vm_map.h>
@@ -2406,6 +2407,19 @@ bool NativeUfsBlock::start (IOService *provider)
   if (!bounceFree || !windowLock || !IOBlockStorageDevice::start (provider)) {
     return false;
   }
+  // These windows belong to internal UFS. Disk Arbitration otherwise defers
+  // their mounts until login and can unmount the App cryptex during boot.
+  OSDictionary *protocol = OSDictionary::withCapacity (2);
+  OSString *location = OSString::withCString (kIOPropertyInternalKey);
+  OSString *interconnect = OSString::withCString (kIOPropertyPhysicalInterconnectTypeVirtual);
+  const bool identified = protocol && location && interconnect &&
+      protocol->setObject (kIOPropertyPhysicalInterconnectLocationKey, location) &&
+      protocol->setObject (kIOPropertyPhysicalInterconnectTypeKey, interconnect) &&
+      setProperty (kIOPropertyProtocolCharacteristicsKey, protocol);
+  OSSafeReleaseNULL (interconnect);
+  OSSafeReleaseNULL (location);
+  OSSafeReleaseNULL (protocol);
+  if (!identified) return false;
   // The medium is flash. IOMediaBSDClient answers DKIOCISSOLIDSTATE from this dictionary, found from any media above this device;
   // without it XNU treats the disk as rotating (throttle periods, read-ahead and page-in cluster sizes, the mount's MNTK_SSD).
   OSDictionary *characteristics = OSDictionary::withCapacity (1);

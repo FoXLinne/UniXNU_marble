@@ -61,7 +61,8 @@ use crate::device::profile::BufferAccess;
 use crate::device::{Device, DeviceDescription, DevicePolicy, GeneratedCommandsProperties};
 use crate::error::{BindError, Error, Feature, Needs};
 use crate::indirect_commands::{
-    Action, BufferBinding, BufferStage, CommandRecord, COMMAND_BUFFER_HEADER_BYTES, COMMAND_BYTES,
+    layout, Action, BufferBinding, BufferStage, CommandRecord, BINDING_COUNT,
+    COMMAND_BUFFER_HEADER_BYTES, COMMAND_BYTES,
 };
 use crate::library::Library;
 use crate::pipeline::facts::RuntimeFact;
@@ -398,8 +399,13 @@ fn replay_variants_run(
         instantiated.push(cmds);
     }
 
+    // The header as the runtime writes it (`CommandDescriptor::encode_header`): the capacity, and
+    // the packed binding counts, which the replay reads the kernel bindings below
+    // (`layout::COUNTS`), here every kernel binding.
     let mut records = vec![0u8; COMMAND_BUFFER_HEADER_BYTES];
     records[..4].copy_from_slice(&execution.capacity.to_le_bytes());
+    let counts = layout::COUNTS as usize;
+    records[counts..counts + 4].copy_from_slice(&(BINDING_COUNT as u32).to_le_bytes());
     for c in commands {
         let mut bytes = vec![0u8; COMMAND_BYTES];
         c.encode_into(&mut bytes).expect("record");
@@ -2205,6 +2211,146 @@ fn a_flat_read_modify_write_of_its_grid_index_has_no_flat_variant() {
         }
     }
     assert!(ran > 0, "no profile with device addresses");
+}
+
+/// `lanes(b0, p, l)`: each thread stores its index in its simdgroup (`thread_index_in_simdgroup`)
+/// at `b0[p]`, `p` its position in the grid: it observes its threadgroup partition through its
+/// simdgroups alone, with no subgroup operation (its lanes are counted from its thread's index).
+const LANES: &str = r#"define void @lanes(ptr addrspace(1) noundef "air-buffer-no-alias" %b0, i32 noundef %p, i32 noundef %l) {
+entry:
+  %i = zext i32 %p to i64
+  %o = getelementptr inbounds i32, ptr addrspace(1) %b0, i64 %i
+  store i32 %l, ptr addrspace(1) %o, align 4
+  ret void
+}
+
+!air.kernel = !{!0}
+!air.version = !{!20}
+!air.language_version = !{!21}
+!0 = !{ptr @lanes, !1, !2}
+!1 = !{}
+!2 = !{!3, !4, !5}
+!3 = !{i32 0, !"air.buffer", !"air.location_index", i32 0, i32 1, !"air.read_write", !"air.address_space", i32 1, !"air.arg_type_size", i32 4, !"air.arg_type_align_size", i32 4, !"air.arg_type_name", !"uint", !"air.arg_name", !"b0"}
+!4 = !{i32 1, !"air.thread_position_in_grid", !"air.arg_type_name", !"uint", !"air.arg_name", !"p"}
+!5 = !{i32 2, !"air.thread_index_in_simdgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"l"}
+!20 = !{i32 2, i32 8, i32 0}
+!21 = !{!"Metal", i32 4, i32 0, i32 0}
+"#;
+
+/// [`LANES`] with a threadgroup barrier before its store: it observes its partition otherwise.
+fn lanes_barrier() -> String {
+    LANES
+        .replace(
+            "  store i32 %l,",
+            "  call void @air.wg.barrier(i32 1, i32 1)\n  store i32 %l,",
+        )
+        .replace(
+            "\n!air.kernel",
+            "\ndeclare void @air.wg.barrier(i32, i32)\n\n!air.kernel",
+        )
+}
+
+/// [`LANES`] storing the sum of its simdgroup's lanes (`simd_sum`) after a simdgroup barrier: it
+/// observes its partition through its simdgroups alone, by subgroup operations.
+fn lanes_sum() -> String {
+    LANES
+        .replace(
+            "  store i32 %l,",
+            "  call void @air.simdgroup.barrier(i32 1, i32 4)\n  %s = call i32 \
+             @air.simd_sum.u.i32(i32 %l)\n  store i32 %s,",
+        )
+        .replace(
+            "\n!air.kernel",
+            "\ndeclare void @air.simdgroup.barrier(i32, i32)\ndeclare i32 \
+             @air.simd_sum.u.i32(i32)\n\n!air.kernel",
+        )
+}
+
+/// A kernel that observes its threadgroup partition through its simdgroups alone has no flat
+/// variant of any threadgroups, and has one of the call's (`VariantKey::call_threadgroups`): a
+/// lane's index in its simdgroup ([`LANES`]) on every profile with device addresses, and a
+/// simdgroup barrier and reduction ([`lanes_sum`]) at least where the kernel's simdgroups are its
+/// subgroups (full subgroups: `Direct`, `Cluster32`); elsewhere that barrier would be a workgroup
+/// barrier or an emulated simdgroup's, and the variant is refused. The variant states
+/// `RuntimeFact::FlatGrid` and `RuntimeFact::CallThreadgroups`. A kernel with a threadgroup
+/// barrier has neither variant, and the input is refused without the flat grid and with the
+/// replay's bindings.
+#[test]
+fn a_flat_grid_of_the_call_s_threadgroups_admits_a_kernel_of_simdgroups() {
+    let (Some(lanes), Some(barrier), Some(sum)) = (
+        assemble("lanes", LANES),
+        assemble("lanes_barrier", &lanes_barrier()),
+        assemble("lanes_sum", &lanes_sum()),
+    ) else {
+        return;
+    };
+    let mut key = VariantKey::new();
+    key.flat_grid = true;
+    let any = key.lowering_inputs(Stage::Kernel);
+    key.call_threadgroups = true;
+    let call = key.lowering_inputs(Stage::Kernel);
+    let mut alone = LoweringInputs::new();
+    alone.call_threadgroups = true;
+    let mut replayed = call.clone();
+    replayed.replay_bindings = true;
+    let stated = |pipe: &ComputePipeline| {
+        [RuntimeFact::FlatGrid, RuntimeFact::CallThreadgroups]
+            .map(|fact| pipe.dependencies.iter().any(|d| d.fact == fact))
+    };
+    let (mut ran, mut sums) = (0, 0);
+    for (stem, dev) in devices() {
+        if dev.profile().fields().buffer_access != BufferAccess::Addressed {
+            continue;
+        }
+        ran += 1;
+        let refused = |r: Result<ComputePipeline, Error>, needs: Needs, what: &str| match r {
+            Err(Error::Unsupported(u)) => {
+                assert_eq!(
+                    u.feature,
+                    Feature::GpuEncodedIndirectCommands,
+                    "{stem} {what}"
+                );
+                assert_eq!(u.needs, needs, "{stem} {what}");
+            }
+            other => panic!("{stem} {what}: {:?}", other.map(|_| ())),
+        };
+        for (bc, what) in [(&lanes, "lanes"), (&sum, "sum")] {
+            refused(
+                pipeline(&dev, bc, "lanes", &any),
+                Needs::NotRepresentable,
+                what,
+            );
+            refused(
+                pipeline(&dev, bc, "lanes", &alone),
+                Needs::NotImplemented,
+                what,
+            );
+            refused(
+                pipeline(&dev, bc, "lanes", &replayed),
+                Needs::NotImplemented,
+                what,
+            );
+        }
+        let observed = pipeline(&dev, &barrier, "lanes", &call);
+        refused(observed, Needs::NotRepresentable, "barrier");
+        let pipe = pipeline(&dev, &lanes, "lanes", &call).unwrap_or_else(|e| panic!("{stem}: {e}"));
+        assert_eq!(stated(&pipe), [true, true], "{stem}");
+        let lib = Library::from_air(&sum).expect("library");
+        let f = FunctionDescriptor::new(lib.function("lanes").expect("function"));
+        let base = dev
+            .compile_function(&f, &LoweringInputs::new(), &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: {e}"));
+        match pipeline(&dev, &sum, "lanes", &call) {
+            Ok(pipe) => {
+                assert_eq!(stated(&pipe), [true, true], "{stem}");
+                sums += 1;
+            }
+            Err(e) if base.requires_full_subgroups() => panic!("{stem}: {e}"),
+            refusal => refused(refusal, Needs::NotImplemented, "sum"),
+        }
+    }
+    assert!(ran > 0, "no profile with device addresses");
+    assert!(sums > 0, "no profile ran the simdgroup sum flat");
 }
 
 /// The folded group counts of a threadgroup `dispatch` on `dev`, and its region record: the product

@@ -55,10 +55,11 @@ fn stated_flags(json: &Value, member: &str) -> BTreeSet<String> {
         .collect()
 }
 
-/// The eight features ARTIFACT 180 adds, `imageViewFormatSwizzle` (ARTIFACT 203) and
-/// `provokingVertexLast`, each with its structure, its member, and the extension that exposes it
+/// The eight features ARTIFACT 180 adds, `imageViewFormatSwizzle` (ARTIFACT 203),
+/// `provokingVertexLast`, `multiDraw` and `pointPolygons`, each with its structure, its member,
+/// and the extension that exposes it
 /// (`None`: `VkPhysicalDeviceFeatures`, Vulkan 1.0).
-const FEATURES: [(&str, &str, VkFeature, Option<VkExtension>); 10] = [
+const FEATURES: [(&str, &str, VkFeature, Option<VkExtension>); 12] = [
     (
         "VkPhysicalDeviceFeatures",
         "fullDrawIndexUint32",
@@ -90,6 +91,12 @@ const FEATURES: [(&str, &str, VkFeature, Option<VkExtension>); 10] = [
         Some(VkExtension::KhrPortabilitySubset),
     ),
     (
+        "VkPhysicalDevicePortabilitySubsetFeaturesKHR",
+        "pointPolygons",
+        VkFeature::PointPolygons,
+        Some(VkExtension::KhrPortabilitySubset),
+    ),
+    (
         "VkPhysicalDeviceDepthClipEnableFeaturesEXT",
         "depthClipEnable",
         VkFeature::DepthClipEnable,
@@ -118,6 +125,12 @@ const FEATURES: [(&str, &str, VkFeature, Option<VkExtension>); 10] = [
         "provokingVertexLast",
         VkFeature::ProvokingVertexLast,
         Some(VkExtension::ExtProvokingVertex),
+    ),
+    (
+        "VkPhysicalDeviceMultiDrawFeaturesEXT",
+        "multiDraw",
+        VkFeature::MultiDraw,
+        Some(VkExtension::ExtMultiDraw),
     ),
 ];
 
@@ -160,6 +173,7 @@ fn render_features_follow_each_source() {
             VkExtension::ExtPrimitiveTopologyListRestart,
             VkExtension::ExtProvokingVertex,
             VkExtension::ExtSampleLocations,
+            VkExtension::ExtMultiDraw,
         ] {
             let has = desc.extensions.contains(&extension);
             assert_eq!(
@@ -172,13 +186,15 @@ fn render_features_follow_each_source() {
     }
     // RADV, ANV, NVIDIA and lavapipe list depth clipping and list restart; RADV, ANV and NVIDIA
     // the clamp control; every Linux venue and MoltenVK the sample locations; every native
-    // profile (RADV, ANV, NVIDIA, lavapipe, SwiftShader) the provoking vertex.
+    // profile (RADV, ANV, NVIDIA, lavapipe, SwiftShader) the provoking vertex; RADV, ANV, NVIDIA
+    // and lavapipe the multi-draw.
     for (extension, at_least) in [
         (VkExtension::ExtDepthClipEnable, 10),
         (VkExtension::ExtDepthClampControl, 5),
         (VkExtension::ExtPrimitiveTopologyListRestart, 10),
         (VkExtension::ExtProvokingVertex, 15),
         (VkExtension::ExtSampleLocations, 10),
+        (VkExtension::ExtMultiDraw, 10),
     ] {
         let count = listed.get(&extension).copied().unwrap_or(0);
         assert!(count >= at_least, "{count} profiles list {extension:?}");

@@ -23,6 +23,7 @@ use crate::error::{Capability, Error, Feature, LowerFamily, Needs};
 use crate::library::FunctionConstantValues;
 use crate::lower::emit::emit_module;
 use crate::lower::select::{select, LowerInputs};
+use crate::lower::simd::WidestPin;
 use crate::memory::static_root::analyze_memory;
 use crate::pipeline::artifact::PrecisionNote;
 use crate::pipeline::compile::{plan_bitcode, EntryRef};
@@ -66,16 +67,23 @@ fn of(name: &str, v: f32) -> String {
     )
 }
 
+/// `%name` = an `i32` with bits `b` that no pass folds: a volatile store of them to a private
+/// word and a volatile load back.
+fn word(name: &str, b: u32) -> String {
+    format!(
+        "  %{name}.p = alloca i32, align 4\n  store volatile i32 {}, ptr %{name}.p, align 4\n  \
+         %{name} = load volatile i32, ptr %{name}.p, align 4\n",
+        b as i32
+    )
+}
+
 /// `%name` = an opaque `i32` with bits `b`. A NaN or denormal pattern is not carried through
 /// `float` arithmetic, which answers Metal's canonical NaN and reads a denormal as the zero of its
-/// sign, but through `llvm.umin` with `-1`.
+/// sign, but through a volatile private word ([`word`]).
 fn oi(name: &str, b: u32) -> String {
     let f = f32::from_bits(b);
     if f.is_nan() || f.is_subnormal() {
-        return format!(
-            "  %{name} = call i32 @llvm.umin.i32(i32 {}, i32 -1)\n",
-            b as i32
-        );
+        return word(name, b);
     }
     format!(
         "{}  %{name} = bitcast float %{name}.f to i32\n",
@@ -943,6 +951,8 @@ declare i32 @air.convert.u.i32.f.f8e4m3(i8)
 declare i64 @air.convert.u.i64.f.f8e5m2(i8)
 declare i64 @air.convert.s.i64.f.f8e5m2(i8)
 declare float @air.convert.f.f32.f.f8e5m2(i8)
+declare float @air.convert.f.f32.f.f8e4m3fn(i8)
+declare <2 x float> @air.convert.f.v2f32.f.v2f8e5m2(<2 x i8>)
 declare <4 x float> @air.unpack.snorm.rgb10a2.v4f32(i32)
 declare i32 @air.pack.snorm.rgb10a2.v4f32(<4 x float>)
 ";
@@ -999,6 +1009,86 @@ fn has(p: &DeviceProfile, n: Need) -> bool {
     }
 }
 
+/// An 8-bit float's widening to `float` (`f8e4m3fn`, `f8e5m2`, a scalar and a two-lane vector)
+/// is the device's own conversion where the device has `shaderFloat8` (the RTX 50 profile: the
+/// module declares `Float8EXT`) and the integer decode elsewhere (lavapipe), the same value either
+/// way: `f8e4m3fn`'s largest and a subnormal, its NaN `0x7F`, an `f8e5m2` infinity and subnormal.
+/// Neither form records a note: Metal on Apple M3 does not compile these widenings, so no Metal
+/// answer differs from either.
+#[test]
+fn fp8_widenings_are_the_devices_own_where_it_has_8_bit_floats() {
+    let mut ks: Vec<Kernel> = [
+        ("fp8_e4m3fn_largest", "f8e4m3fn", 0x7Eu32, 448f32),
+        ("fp8_e4m3fn_subnormal", "f8e4m3fn", 0x81, -(2f32.powi(-9))),
+        ("fp8_e4m3fn_nan", "f8e4m3fn", 0x7F, f32::NAN),
+        ("fp8_e5m2_infinity", "f8e5m2", 0xFC, f32::NEG_INFINITY),
+        ("fp8_e5m2_subnormal", "f8e5m2", 0x01, 2f32.powi(-16)),
+    ]
+    .into_iter()
+    .map(|(name, format, bits, want)| Kernel {
+        name,
+        body: format!(
+            "{}  %r = call float @air.convert.f.f32.f.{format}(i8 %a)\n",
+            on("a", 8, bits)
+        ),
+        float: true,
+        want: Some(want.to_bits()),
+        needs: &[],
+        note: None,
+    })
+    .collect();
+    // 1.0 and -5.0, summed.
+    ks.push(Kernel {
+        name: "fp8_e5m2_pair",
+        body: format!(
+            "{}{}  %v0 = insertelement <2 x i8> undef, i8 %a, i32 0\n  \
+             %v = insertelement <2 x i8> %v0, i8 %b, i32 1\n  \
+             %w = call <2 x float> @air.convert.f.v2f32.f.v2f8e5m2(<2 x i8> %v)\n  \
+             %x = extractelement <2 x float> %w, i32 0\n  \
+             %y = extractelement <2 x float> %w, i32 1\n  %r = fadd float %x, %y\n",
+            on("a", 8, 0x3C),
+            on("b", 8, 0xC5)
+        ),
+        float: true,
+        want: Some((-4f32).to_bits()),
+        needs: &[],
+        note: None,
+    });
+    let Some(bitcode) = assemble("fp8-widenings", &module(&ks)) else {
+        return;
+    };
+    let float8 =
+        crate::device::requirements::SpirvCapability::of(crate::spv::Capability::Float8EXT);
+    for (stem, native) in [("nvidia-rtx50-linux", true), ("lavapipe", false)] {
+        let p = profile(stem, DevicePolicy::default()).expect("profile");
+        assert_eq!(p.fields().leaf.float8, native, "{stem}");
+        for kk in &ks {
+            let what = format!("{} on {stem}", kk.name);
+            let a = compile(&bitcode, kk.name, &p).unwrap_or_else(|e| panic!("{what}: {e:?}"));
+            link_and_validate(&a, &p).unwrap_or_else(|e| panic!("{what}: L3: {e}"));
+            assert_eq!(
+                a.requirements.spirv_capabilities.contains(&float8),
+                native,
+                "{what}: {:?}",
+                a.requirements.spirv_capabilities
+            );
+            assert!(
+                !a.precision.contains(&PrecisionNote::NativeFloat8),
+                "{what}: {:?}",
+                a.precision
+            );
+            let got = interpret(&bitcode, kk.name, &p);
+            let want = kk.want.expect("a stored word");
+            if f32::from_bits(want).is_nan() {
+                // A NaN's bits are the device's.
+                assert!(f32::from_bits(got).is_nan(), "{what}: {got:#x}");
+            } else {
+                assert_eq!(got, want, "{what}: {got:#x} != {want:#x}");
+            }
+        }
+    }
+}
+
 /// The typed module of `entry` on `p`, run on the interpreter: the stored word.
 fn interpret(bitcode: &[u8], entry: &str, p: &DeviceProfile) -> u32 {
     let mut m = meter();
@@ -1010,7 +1100,14 @@ fn interpret(bitcode: &[u8], entry: &str, p: &DeviceProfile) -> u32 {
     };
     let spec = air::specialize(decoded, &req, &mut m).expect("specialize");
     let memory = analyze_memory(&spec, p, &mut m).expect("memory");
-    let plan = select(&spec, &memory, p, &LowerInputs::new(), &mut m).expect("select");
+    let plan = select(
+        &spec,
+        &memory,
+        p,
+        (&LowerInputs::new(), WidestPin::Weighed),
+        &mut m,
+    )
+    .expect("select");
     let module = emit_module(&spec, &plan, &mut m).expect("emit").module;
     let res = Resources {
         buffers: vec![Buffer {
@@ -1688,7 +1785,10 @@ fn every_profile() -> Vec<String> {
 #[test]
 fn a_fast_division_leaves_its_nans_to_the_device() {
     let bits = |name: &str, b: u32| {
-        format!("  %{name}.i = call i32 @llvm.umin.i32(i32 {b}, i32 -1)\n  %{name} = bitcast i32 %{name}.i to float\n")
+        format!(
+            "{}  %{name} = bitcast i32 %{name}.i to float\n",
+            word(&format!("{name}.i"), b)
+        )
     };
     let kernel = |name: &'static str, x: u32, y: u32, want: Option<u32>| Kernel {
         name,
@@ -1926,12 +2026,13 @@ fn fast_sincos_is_the_devices_sine_and_cosine() {
 /// arithmetic on none; `fast::atan2`, whose quotient is the device's division, records it off the
 /// deviation.
 /// None records `DeviceNanEncoding`: the NaN is Metal's, the device's where the profile states it
-/// and selected elsewhere. The operands come from bits (`llvm.umin` of constants, bitcast), not
+/// and selected elsewhere. The operands come from bits (volatile private words, bitcast), not
 /// from `float` arithmetic.
 #[test]
 fn device_float_environment_notes_follow_the_operations() {
     // 0x3fc03c00: a float near 1.5 whose low half is half 1.0.
-    let w = "  %w = call i32 @llvm.umin.i32(i32 1069562880, i32 2147483647)\n  %x = bitcast i32 %w to float\n";
+    let w = format!("{}  %x = bitcast i32 %w to float\n", word("w", 1069562880));
+    let w = w.as_str();
     let x = f32::from_bits(0x3FC0_3C00);
     let none = &[][..];
     let ks = [
@@ -1999,8 +2100,9 @@ fn device_float_environment_notes_follow_the_operations() {
 /// (`arith.fmod.fast`), with no `OpFRem`.
 #[test]
 fn a_float_remainder_is_the_devices_without_every_flag() {
-    let one = "  %w = call i32 @llvm.umin.i32(i32 1065353216, i32 2147483647)\n  %x = bitcast i32 %w to float\n";
-    let tenth = "  %v = call i32 @llvm.umin.i32(i32 1036831949, i32 2147483647)\n  %y = bitcast i32 %v to float\n";
+    let one = format!("{}  %x = bitcast i32 %w to float\n", word("w", 1065353216));
+    let tenth = format!("{}  %y = bitcast i32 %v to float\n", word("v", 1036831949));
+    let (one, tenth) = (one.as_str(), tenth.as_str());
     let ks = [
         k(
             "frem_precise",
@@ -2376,8 +2478,9 @@ fn narrow_float_module_growth_is_bounded() {
 /// `shaderFloat16` whose float controls do not make the conversion Metal's (moltenvk-m3) rounds
 /// through the conversion of `x` itself and its widening, declaring no 16-bit float mode or
 /// `RoundingModeRTE`. A profile whose float controls make that conversion Metal's
-/// (amd-rdna3-radv) rounds through the conversion of `x` itself and its widening, each decorated
-/// `NoContraction`, in an entry declaring `RoundingModeRTE`, `DenormPreserve` and
+/// (amd-rdna3-radv) holds the chain at 16 bits (`spirv::half_hold`): the `float` sum it narrows
+/// is the 16-bit sum, each operation reads the previous one's 16-bit result, and the last is
+/// widened once, in an entry declaring `RoundingModeRTE`, `DenormPreserve` and
 /// `SignedZeroInfNanPreserve` for 16 bits and the modes its independence ties to them
 /// (`narrow::controlled_modes`). No other module declares a 16-bit float mode or
 /// `RoundingModeRTE` for it. A quantize records `NativeHalfQuantize` on every profile.
@@ -2453,10 +2556,14 @@ fn half_rounding_follows_the_operation() {
             // `%x0`, the conversion's rounding, which stays a pair (the first operation reads it
             // twice); the last result is widened once.
             let operations = if kept > 0 { kept + 2 } else { 0 };
-            // Without `shaderFloat16` each rounding is the device's quantize alone.
-            let want = match converted || controlled {
-                true => (0, c + 2 * (q - kept) + operations, 0),
-                false => (q, c, 0),
+            // Without `shaderFloat16` each rounding is the device's quantize alone. Under the
+            // 16-bit float controls the module holds its halves at 16 bits (`spirv::half_hold`):
+            // `%a`, a `float` sum of halves only narrowed, is the 16-bit sum, the chain reads its
+            // 16-bit results, and the last is widened once.
+            let want = match (controlled, converted) {
+                (true, _) => (0, 1, 0),
+                (false, true) => (0, c + 2 * (q - kept) + operations, 0),
+                (false, false) => (q, c, 0),
             };
             assert_eq!(
                 (quantize, fconvert, round_even),
@@ -2470,7 +2577,7 @@ fn half_rounding_follows_the_operation() {
             let own_barrier = usize::from(kk.name == "strict_chain");
             assert_eq!(
                 barred_roundings(&words),
-                if converted || controlled {
+                if converted && !controlled {
                     (q - kept, q - kept - own_barrier)
                 } else {
                     (0, 0)
@@ -3043,12 +3150,12 @@ fn a_fast_division_is_the_device_s_quotient() {
     }
 }
 
-/// `%x` = an opaque `float` with bits `b` (any pattern, NaNs included): `llvm.umin` of a constant
-/// and `-1`, bitcast.
+/// `%x` = an opaque `float` with bits `b` (any pattern, NaNs included): a volatile private word
+/// ([`word`]), bitcast.
 fn ob(name: &str, b: u32) -> String {
     format!(
-        "  %{name}.w = call i32 @llvm.umin.i32(i32 {}, i32 -1)\n  %{name} = bitcast i32 %{name}.w to float\n",
-        b as i32
+        "{}  %{name} = bitcast i32 %{name}.w to float\n",
+        word(&format!("{name}.w"), b)
     )
 }
 
@@ -3262,7 +3369,7 @@ fn a_float_nan_is_the_device_s_on_every_profile() {
 /// `MetalUnaryDenormals` (moltenvk-m3), which requires its property instead and reads them as the
 /// zero of their sign as Metal does. Flipping the fact changes the requirement and the note, never
 /// the module. The interpreter keeps denormals as
-/// lavapipe does. The operands are bits (`llvm.umin` of constants), so each kernel's float
+/// lavapipe does. The operands are bits (volatile private words), so each kernel's float
 /// operation is its only one.
 #[test]
 fn float_denormals_are_the_devices_and_noted_off_the_device_fact() {
@@ -3617,7 +3724,8 @@ fn a_nan_test_no_float_mode_folds() {
 /// `%name` = an opaque `half` with the bits `b`.
 fn oh(name: &str, b: u16) -> String {
     format!(
-        "  %{name}.w = call i32 @llvm.umin.i32(i32 {b}, i32 -1)\n  %{name}.t = trunc i32 %{name}.w to i16\n  %{name} = bitcast i16 %{name}.t to half\n"
+        "{}  %{name}.t = trunc i32 %{name}.w to i16\n  %{name} = bitcast i16 %{name}.t to half\n",
+        word(&format!("{name}.w"), u32::from(b))
     )
 }
 

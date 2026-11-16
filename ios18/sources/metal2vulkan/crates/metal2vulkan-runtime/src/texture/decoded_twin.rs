@@ -128,7 +128,7 @@ use super::super::astc;
 use super::super::blit::{BlitCommandEncoder, TRANSFER};
 use super::super::chroma_pairs;
 use super::super::copy_plan::ImageRegion;
-use super::super::degradation::Degradation;
+use super::super::degradation::{Degradation, Told};
 use super::super::device::{lock, DebugMessage, MessageKind, MessageSeverity};
 use super::super::error::{internal, Error};
 use super::super::etc;
@@ -1064,7 +1064,8 @@ impl Image {
     /// On the device's decode thread: decode `blocks` (`region`'s; `None`, the zero blocks) into
     /// the twin ([`write_decoded`](Self::write_decoded)) and count a write's decode;
     /// [`twin_decoded`](Self::twin_decoded) then lets the batches that wait for it go. A failure
-    /// is said on the device's message sink as an error (`metal2vulkan-twin-decode-failed`): the
+    /// is said on the device's message sink as an error (`metal2vulkan-twin-decode-failed`), the
+    /// device's first, and each later one counted (`WorkCounts::twin_decode_failed_withheld`): the
     /// call that queued it has returned.
     pub(super) fn finish_twin_decode(
         self: &Arc<Self>,
@@ -1079,28 +1080,10 @@ impl Image {
         match result {
             Ok(_) if blocks.is_some() => shared.counts.cpu_block_decode(),
             Ok(_) => {}
-            Err(error) => {
+            Err(error) => self.device.tell(Told::TwinDecodeFailed, || {
                 let plan = self.plan();
-                let message = DebugMessage {
-                    severity: MessageSeverity::Error,
-                    kind: MessageKind {
-                        general: true,
-                        ..MessageKind::default()
-                    },
-                    id_name: "metal2vulkan-twin-decode-failed".to_owned(),
-                    id: 0,
-                    text: format!(
-                        "metal2vulkan: the decoded twin of a {:?} texture of {:?} kept its \
-                         earlier texels: its CPU decode failed ({error})",
-                        plan.pixel_format, plan.extent
-                    ),
-                    degradation: None,
-                };
-                match shared.instance.sink() {
-                    Some(sink) => sink.deliver(&message),
-                    None => eprintln!("{}", message.text),
-                }
-            }
+                twin_decode_failed(plan.pixel_format, plan.extent, &error)
+            }),
         }
     }
 
@@ -1363,7 +1346,7 @@ impl Image {
         if !base.is_multiple_of(align) || !shapes_base.is_multiple_of(align) {
             return Err(internal("a block decode's scratch off its alignment"));
         }
-        let contents = (shapes.contents())
+        let contents = (shapes.mapped_contents())
             .ok_or_else(|| internal("a Shared block decode shapes' buffer without contents"))?;
         for (at, plan) in plans.iter().enumerate() {
             // SAFETY: the shapes' buffer holds `steps.len()` slots of `slot` bytes, each at least
@@ -1376,10 +1359,10 @@ impl Image {
         let (kernel, sets) = match &decoded.pairs {
             None => {
                 let kernel = device.owned_kernel(OwnedModule::TwinDecode(decode))?;
-                let ranges: Vec<Vec<(vk::Buffer, u64, u64)>> = (layouts.iter())
+                let ranges: Vec<[(vk::Buffer, u64, u64); 3]> = (layouts.iter())
                     .zip(0u64..)
                     .map(|(&(blocks, texels_at, texels), at)| {
-                        vec![
+                        [
                             (raw_shapes, shapes_base + at * slot, shape_bytes),
                             (raw_scratch, base, blocks),
                             (raw_scratch, base + texels_at, texels),
@@ -1583,10 +1566,34 @@ impl Image {
                     aspects: texture_aspects(self.plan()),
                     levels: region.level..region.level + 1,
                     layers,
+                    place: self.place(),
                 };
                 Use::writes(self.identity.key, self.identity.tracked, range, access)
             })
             .collect()
+    }
+}
+
+/// The error message of a decoded twin's failed CPU decode (`metal2vulkan-twin-decode-failed`),
+/// of a `pixel_format` texture of `extent`: the twin kept its earlier texels.
+pub(crate) fn twin_decode_failed(
+    pixel_format: PixelFormat,
+    extent: [u32; 3],
+    error: &Error,
+) -> DebugMessage {
+    DebugMessage {
+        severity: MessageSeverity::Error,
+        kind: MessageKind {
+            general: true,
+            ..MessageKind::default()
+        },
+        id_name: "metal2vulkan-twin-decode-failed".to_owned(),
+        id: 0,
+        text: format!(
+            "metal2vulkan: the decoded twin of a {pixel_format:?} texture of {extent:?} kept its \
+             earlier texels: its CPU decode failed ({error})"
+        ),
+        degradation: None,
     }
 }
 

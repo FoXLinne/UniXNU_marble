@@ -18,7 +18,7 @@
 //!   compiles nothing. Where the descriptor states `requiredThreadsPerThreadgroup`, that size is
 //!   the threadgroup every dispatch of the state must have, so the local size of a first
 //!   dispatch's region is part of the request itself. The creation then makes that
-//!   region's `VkPipeline` ([`Variant::make_at_creation`]): a `dispatchThreadgroups:` on the base
+//!   region's `VkPipeline` ([`Variant::make_predicted`]): a `dispatchThreadgroups:` on the base
 //!   variant, planned for nothing bound but Metal's default sampler at each runtime sampler slot
 //!   that does not compare (as a render state's prediction, `predicted.rs`), at that size
 //!   ([`predicted_threads`]). A dispatch whose region has that key takes the pipeline made; one
@@ -40,7 +40,10 @@
 //!   variant and the device past the program's last drop, which Metal's never does. Its
 //!   specialized notices wait for the first dispatch that takes it, which announces them naming
 //!   what it binds. A creation inside a host step, a tile function's state and a stand-in compile
-//!   make nothing here.
+//!   make nothing here, nor does the creation of a large kernel's state whose dispatches of whole
+//!   threadgroups run on its partial-threadgroups variant (`compute::partial_direct`), which the
+//!   creation does not compile: no dispatch would take the base's region, and its first dispatch
+//!   hands the variant's making to the pool.
 //! - **Where the request states no threadgroup, the creation predicts nothing**, because nothing
 //!   in the request answers what the dispatch will ask for. The local size is the dispatch's own
 //!   call, and a size guessed from the state instead -- Apple's guide to threadgroup sizes
@@ -74,7 +77,8 @@ use super::making::{Begun, Pending, Ticket};
 use super::objects::RawPipeline;
 use super::piece_holds::PieceHolds;
 use super::pool::Place;
-use super::{ComputePipelineState, RegionKey, Variant};
+use super::region_ledger;
+use super::{ComputePipelineState, Kernel, RegionKey, Variant};
 use crate::degradation::{BoundFormats, Occurrence};
 use crate::error::Error;
 use crate::Device;
@@ -98,6 +102,8 @@ pub(crate) enum RegionHeld {
     Making(Arc<Variant>, RegionKey, Box<Ticket<RegionKey, RawPipeline>>),
     /// What a making gives back once settled, held until let go of: its variant.
     Made { _variant: Arc<Variant> },
+    /// A unit-axes variant's translation (`unit_axes.rs`), and what it gives back.
+    Compile(Box<super::unit_axes::CompilePiece>),
 }
 
 impl RegionKey {
@@ -141,7 +147,9 @@ impl Variant {
         formats: BoundFormats<'_>,
     ) -> RegionPipeline {
         let key = RegionKey::of(region);
-        match self.pipelines.begin(&key) {
+        let begun = self.pipelines.begin(&key);
+        region_ledger::let_go(self.objects.device.shared());
+        match begun {
             Begun::Made(made) => {
                 self.first_use(&made, &key, formats);
                 RegionPipeline::Made(made)
@@ -232,21 +240,25 @@ impl Variant {
     /// variant, its base, is predicted to take (the module docs), where no caller made or began
     /// it: its notices wait for the first dispatch that takes it. Under
     /// `PipelineWaitPolicy::Bounded` handed to the device's pool, kept by `holds`, the state's,
-    /// and waited for the policy's `pipeline_creation_wait` at most; under `Exact` made on this
-    /// thread. A
-    /// descriptor that requires no threadgroup size predicts no region at all, and a prediction
-    /// the plan refuses or that runs on another variant makes nothing; a failed making is not
-    /// kept and refuses nothing, its dispatch meeting it as before.
-    pub(super) fn make_at_creation(
+    /// and, where `waited` (a creation's), waited for the policy's `pipeline_creation_wait` at
+    /// most (a recovery's making again of the state waits for none, `pipeline/carry.rs`); under
+    /// `Exact` made on this thread. A descriptor that requires no threadgroup size predicts no
+    /// region at all, and a prediction the plan refuses or that runs on another variant makes
+    /// nothing, the partial-threadgroups variant of a large kernel among them (`compiled`, the
+    /// creation's compile of the descriptor's kernel, says whether its kernel is such:
+    /// `ComputePipelineState::whole_on_partial`); a failed making is not kept and refuses
+    /// nothing, its dispatch meeting it as before.
+    pub(super) fn make_predicted(
         self: &Arc<Self>,
         device: &Device,
-        descriptor: &ComputePipelineDescriptor,
+        (descriptor, compiled): (&ComputePipelineDescriptor, &Kernel),
         holds: &Arc<PieceHolds<RegionHeld>>,
+        waited: bool,
     ) {
         if crate::exit_guard::in_host_step() {
             return;
         }
-        let Some(key) = self.predicted_region(device, descriptor) else {
+        let Some(key) = self.predicted_region(device, descriptor, compiled) else {
             return;
         };
         let Begun::Yours(ticket) = self.pipelines.begin(&key) else {
@@ -257,9 +269,10 @@ impl Variant {
             let pending = ticket.pending();
             pending.queued_at(self.pooled(holds, key, ticket, true));
             // A making still running at the bound goes on for the dispatches that take it.
-            if pending
-                .wait_until(Instant::now() + policy.pipeline_creation_wait)
-                .is_none()
+            if waited
+                && pending
+                    .wait_until(Instant::now() + policy.pipeline_creation_wait)
+                    .is_none()
             {
                 device.shared().counts.creation_left_making();
             }
@@ -282,15 +295,21 @@ impl Variant {
     /// (the module docs): one `dispatchThreadgroups:` threadgroup of [`predicted_threads`],
     /// planned for [`predicted_bindings`]. `None` where `descriptor` requires no threadgroup
     /// size, so the request names none to predict; and where it plans or instantiates no region,
-    /// or runs on another variant (a threadgroup the kernel's simd tier cannot run whole).
+    /// or runs on another variant (a threadgroup the kernel's simd tier cannot run whole, or a
+    /// large kernel's dispatch of whole threadgroups, on its partial-threadgroups variant).
     fn predicted_region(
         &self,
         device: &Device,
         descriptor: &ComputePipelineDescriptor,
+        compiled: &Kernel,
     ) -> Option<RegionKey> {
         // The threadgroup first, before anything is planned: where the request states none there
         // is no region to predict, and the plan below would be built for a key nobody makes.
         let threads_per_group = predicted_threads(descriptor.required_threads_per_threadgroup)?;
+        // One threadgroup, a grid of one row where it is one row.
+        if super::whole_on_partial(self, compiled, threads_per_group[1..] == [1, 1]) {
+            return None;
+        }
         let state = predicted_bindings(&self.pipeline);
         let plan = self.plan(device, &state.shape()).ok()?;
         let dispatch = Dispatch::Threadgroups {
@@ -363,7 +382,7 @@ impl ComputePipelineState {
         region: &DispatchRegion,
         formats: BoundFormats<'_>,
     ) -> RegionPipeline {
-        let holds = &self.0.program.pieces;
+        let holds = &self.0.program().pieces;
         variant.begin_region_pipeline(holds, (region, self.is_tile()), formats)
     }
 }
@@ -381,7 +400,7 @@ fn predicted_threads(required: Option<[u32; 3]>) -> Option<[u32; 3]> {
 /// What the predicted first dispatch of `pipeline`'s kernel binds (the module docs): Metal's
 /// default sampler (`MTLSamplerDescriptor`'s defaults) at each runtime sampler slot that does not
 /// compare, and nothing else.
-fn predicted_bindings(pipeline: &ComputePipeline) -> BindState {
+pub(super) fn predicted_bindings(pipeline: &ComputePipeline) -> BindState {
     let mut state = BindState::default();
     for (slot, used) in &pipeline.interface.slots {
         if let SlotInterface::Sampler(sampler) = used {

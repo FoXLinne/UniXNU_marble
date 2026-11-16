@@ -46,17 +46,23 @@
 //!   with; and by the device's profile fingerprint (`store::entry_name`). A program's pipeline is
 //!   described by its variant's stages (SPIR-V words, entry points, stage flags, required subgroup
 //!   sizes, specialization), its layout (its immutable samplers among it), and the state its
-//!   making adds. A render making adds the names of the two pipeline parts that hold shaders, its
-//!   pre-rasterization and fragment shader libraries (`GraphicsContent::record` in
-//!   `pipeline/graphics.rs`), its vertex input, and whether it rasterizes points; it adds no
-//!   blend state, no write mask, no fragment output interface and no topology besides the point
-//!   class, none of which reaches the driver's conversion of a stage, so a state's sweep over
-//!   them is one record and one cache. A compute making adds its specialization and flags, which
-//!   do reach it. A helper of the runtime's is named by its SPIR-V and its parameters.
+//!   making adds. A render making adds the records of the two pipeline parts that hold shaders,
+//!   its pre-rasterization and fragment shader parts (`GraphicsContent::record_parts` in
+//!   `pipeline/graphics.rs`: each part's state with the pass's attachments' presence in place of
+//!   their formats), its vertex input, and whether it rasterizes points; it adds no blend state,
+//!   no write mask, no fragment output interface, no attachment format and no topology besides
+//!   the point class, none of which reaches the driver's conversion of a stage, so a state's
+//!   sweep over them is one record and one cache. A library of either part is made under that
+//!   part's record alone, so its libraries made against passes that differ only in a format
+//!   share one too. A compute making adds its specialization and flags, which do reach it. A
+//!   helper of the runtime's is named by its SPIR-V and its parameters.
 //!   Records live in the content directory, which no build owns (`store.rs`): a new build of the
 //!   runtime or the translator that leaves a pipeline's SPIR-V and state as they were finds its
 //!   record. The driver keys each pipeline by everything its creation reads, so a description
-//!   that covers a making loosely costs a compile, never a wrong pipeline.
+//!   that covers a making loosely costs a compile, never a wrong pipeline. A record of 256 KiB
+//!   or more is kept as a manifest over content-defined chunks that every record shares where
+//!   their bytes do (`chunks.rs`: NVIDIA's data repeats one 1.85 MB section across families),
+//!   and read whole again; the frame below is what a read gives back.
 //! - **No figure of the driver's to meet.** A record holds one family's data (an Xgc pipeline's
 //!   1.7 MB on an RTX 3090), so how much of a large cache's initial data a
 //!   driver keeps does not decide which pipelines are kept. The shader cache's cap and its scans,
@@ -82,7 +88,7 @@
 //!   off (NVIDIA's `__GL_SHADER_DISK_CACHE=0`, Mesa's `MESA_SHADER_CACHE_DISABLE=true`).
 //!
 //! ```text
-//! magic        8 bytes   "M2VPPLC\0"
+//! magic        8 bytes   "M2VPPL4\0"
 //! identity     28 bytes  vendorID, deviceID, driverVersion (u32 each), pipelineCacheUUID
 //! data length  u64
 //! data         vkGetPipelineCacheData's bytes
@@ -109,12 +115,17 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
-const MAGIC: [u8; 8] = *b"M2VPPLC\0";
+const MAGIC: [u8; 8] = *b"M2VPPL4\0";
+/// The magics of the records of older versions, which no build of this one names: the store's
+/// cleanup removes them from the content directory (`chunks.rs`), so an upgrade does not keep
+/// them beside the records that replace them.
+pub(crate) const RETIRED: [[u8; 8]; 1] = [*b"M2VPPLC\0"];
 /// The version of what a record's name covers and how a record is framed: a change to either
-/// bumps it, so no build opens a record another build names or frames otherwise. A record of an
-/// older version is named otherwise, so it is never found and never read: a bump costs a family
-/// its records, never a misread.
-pub(crate) const VERSION: u32 = 2;
+/// bumps it, and the frame's magic with it ([`RETIRED`] takes the old one), so no build opens a
+/// record another build names or frames otherwise. A record of an older version is named
+/// otherwise, so it is never found and never read: a bump costs a family its records, never a
+/// misread. Version 4 keeps a large record's data as chunks (`chunks.rs`).
+pub(crate) const VERSION: u32 = 4;
 
 /// The most `VkPipelineCache`es a device keeps live, one per record name. Past it a making of a
 /// further name is handed a cache of its own, destroyed once the making returned, so a program
@@ -163,6 +174,11 @@ impl Identity {
         bytes[8..12].copy_from_slice(&driver.to_le_bytes());
         bytes[12..].copy_from_slice(&uuid);
         Identity(bytes)
+    }
+
+    /// Its bytes: vendor, device and driver version (little-endian), then `pipelineCacheUUID`.
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.0
     }
 
     /// Whether `data` begins with the `VkPipelineCacheHeaderVersionOne` of this identity, whole:
@@ -356,10 +372,11 @@ pub(crate) struct LiveCaches {
 }
 
 impl LiveCaches {
-    /// The device's cache of the record of `key`, and whether the device holds it (so a later
-    /// making of the name is handed this one and its caller destroys nothing). A cache is made
-    /// here, from the record where one loads, when the device holds none of that name; `None`
-    /// where the driver made none, when the making is handed a null cache.
+    /// The device's cache of the record of `key`, and how the making is handed it ([`Handed`]:
+    /// held by the device before it, or made now and kept, so a later making of the name is
+    /// handed this one and its caller destroys nothing, or made now for this making alone). A
+    /// cache is made here, from the record where one loads, when the device holds none of that
+    /// name; `None` where the driver made none, when the making is handed a null cache.
     ///
     /// The record is read and the cache made with no lock of the map held, so one making's load
     /// does not hold up another's: two makings of one name at once may each make a cache, and the
@@ -370,10 +387,10 @@ impl LiveCaches {
         records: &Records,
         raw: &ash::Device,
         key: &Hash256,
-    ) -> Option<(Arc<Live>, bool)> {
+    ) -> Option<(Arc<Live>, Handed)> {
         if let Some(live) = lock(&self.caches).get(key) {
             count(&store.counters.driver_caches_shared);
-            return Some((Arc::clone(live), true));
+            return Some((Arc::clone(live), Handed::Earlier));
         }
         let name = records.name(key);
         let made = Arc::new(make_live(store, &records.identity, raw, name)?);
@@ -384,13 +401,13 @@ impl LiveCaches {
             // SAFETY: nothing was ever handed this cache, and the device is live.
             unsafe { made.destroy(raw) };
             count(&store.counters.driver_caches_shared);
-            return Some((live, true));
+            return Some((live, Handed::Earlier));
         }
         if caches.len() >= LIVE {
-            return Some((made, false));
+            return Some((made, Handed::Own));
         }
         caches.insert(*key, Arc::clone(&made));
-        Some((made, true))
+        Some((made, Handed::Kept))
     }
 
     /// Destroy every cache: the device's teardown, with the device live and every pipeline of
@@ -405,6 +422,17 @@ impl LiveCaches {
             unsafe { live.destroy(raw) };
         }
     }
+}
+
+/// How a making is handed its record's cache ([`LiveCaches::of`]).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Handed {
+    /// The device held it before the making: an earlier making of the record made it.
+    Earlier,
+    /// Made for this making and kept by the device for later ones.
+    Kept,
+    /// Made for this making alone, past [`LIVE`]: destroyed once it returned.
+    Own,
 }
 
 /// The `VkPipelineCache` of the record `name` on the device of `raw`, made from that record's
@@ -490,12 +518,14 @@ pub(crate) fn make<T, E>(
         return create(vk::PipelineCache::null()).0;
     }
     let key = records.key(making);
-    let Some((held, shared)) = live.of(store, records, raw, &key) else {
+    let Some((held, handed)) = live.of(store, records, raw, &key) else {
         return create(vk::PipelineCache::null()).0;
     };
-    // The creation log's split names whether the cache the making was handed holds its record.
-    crate::pipeline::creation_log::record_loaded(held.loaded);
+    // The creation log's split names whether the cache the making was handed holds its record,
+    // whether an earlier making made it, and what the driver found in it.
+    crate::pipeline::creation_log::record_handed(held.loaded, handed == Handed::Earlier);
     let (made, found) = create(held.cache);
+    crate::pipeline::creation_log::driver_found(found);
     let exited = exiting();
     if made.is_ok() && !exited {
         match (held.loaded, found) {
@@ -503,7 +533,7 @@ pub(crate) fn make<T, E>(
             _ => keep(store, &records.identity, raw, &held),
         }
     }
-    if !shared && !exited {
+    if handed == Handed::Own && !exited {
         // SAFETY: the making returned, and no map holds this cache, so nothing else can be
         // handed it.
         unsafe { held.destroy(raw) };
@@ -524,6 +554,11 @@ pub(crate) fn make<T, E>(
 /// making from the same cache. The per-record lock below is held only over the comparison and the
 /// write, so two makings of one record never write the same bytes twice.
 fn keep(store: &Store, identity: &Identity, raw: &ash::Device, live: &Live) {
+    // A store with no directory keeps no record, so the data is not read (the module docs of
+    // `shader_cache/mod.rs`).
+    if !store.has_directory() {
+        return;
+    }
     let Some(busy) = exit_guard::enter() else {
         return;
     };

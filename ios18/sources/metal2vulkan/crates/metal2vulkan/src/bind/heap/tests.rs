@@ -35,6 +35,7 @@ fn shape(ty: TextureType, pf: PixelFormat, samples: u32, usage: TextureUsage) ->
         offset_base_axes: 0,
         ycbcr_in_place: false,
         ycbcr_planes_sampler: None,
+        texel_rows: false,
         texture_type: ty,
         pixel_format: pf,
         sample_count: samples,
@@ -622,6 +623,7 @@ fn a_storage_member_is_viewed_through_the_alias_a_heap_access_converts() {
             sampling: BTreeSet::new(),
             write_rounding: BTreeMap::new(),
             cross_neutral: BTreeMap::new(),
+            storage_reads: BTreeMap::new(),
             sampler_tables: Vec::new(),
             samplers: None,
             directories: Vec::new(),
@@ -1397,6 +1399,7 @@ fn a_form_a_heap_reads_is_held_raw_in_the_unsigned_class() {
         sampling,
         write_rounding: BTreeMap::new(),
         cross_neutral: BTreeMap::new(),
+        storage_reads: BTreeMap::new(),
         sampler_tables: Vec::new(),
         samplers: None,
         directories: Vec::new(),
@@ -1418,6 +1421,7 @@ fn a_form_a_heap_reads_is_held_raw_in_the_unsigned_class() {
         immutable_sampler: None,
         flags: vk::DescriptorBindingFlags::empty(),
         variables: 1,
+        immutable_samplers: Vec::new(),
     };
     let mut reads = planner(vec![f2d, u2d], BTreeSet::new());
     let float = reads.array(1, &binding(f2d)).expect("float array");
@@ -1469,6 +1473,7 @@ fn a_heap_member_a_mode_two_write_would_round_is_refused() {
         immutable_sampler: None,
         flags: vk::DescriptorBindingFlags::empty(),
         variables: 1,
+        immutable_samplers: Vec::new(),
     };
     let mut checked = 0;
     for (stem, p) in committed_profiles().expect("profiles") {
@@ -1505,6 +1510,7 @@ fn a_heap_member_a_mode_two_write_would_round_is_refused() {
                     sampling: BTreeSet::new(),
                     write_rounding: BTreeMap::from([(stage, halves)]),
                     cross_neutral: BTreeMap::new(),
+                    storage_reads: BTreeMap::new(),
                     sampler_tables: Vec::new(),
                     samplers: None,
                     directories: Vec::new(),

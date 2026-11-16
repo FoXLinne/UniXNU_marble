@@ -210,7 +210,10 @@ pub(crate) fn among<F: Copy + Ord>(
 /// order; elsewhere, the rasterizer packs the covered quads of several blocks and primitives into
 /// one simdgroup. The gate lane
 /// `runtime_lane::driver_deviations::fragment_simdgroup_lanes_are_metal_s` compares MoltenVK's
-/// subgroup lanes with Metal's lanes of the same draws on each chip. One row per GPU.
+/// subgroup lanes with Metal's lanes of the same draws on each chip. Its quads are Metal's too: in
+/// a function that discards, where the M3 Max shades some quads as several partial quads, the
+/// public `helper-threads-*` cases' MoltenVK rows answer Metal's ballots of the helper query word
+/// for word. One row per GPU.
 ///
 /// `MetalVertexSimdgroups` (the coordinator's reversal of the MoltenVK refusal, 2026-10-08):
 /// MoltenVK 1.4.1 leaves the vertex stage out of `subgroupSupportedStages`, but hands the vertex
@@ -489,7 +492,19 @@ pub(crate) fn among<F: Copy + Ord>(
 /// Metal's bytes in every texel, as the same writes do into `RGBA32Float`, `RG32Float` and
 /// `R32Float` (a `half` widened by Metal's own `float(half)`, `MetalNanMoves`). Into `R16Float`
 /// and `RGBA16Float` a `half` NaN's payload differs (the device stores `0x7e00`), which
-/// `MetalHalfTexelWrites` would state, so outside it. One row per GPU, as measured.
+/// `MetalHalfTexelWrites` would state, so outside it. One row per GPU, as measured. lavapipe
+/// (`MESA_LLVMPIPE`) packs a small float in its shader code, which writes every NaN as the
+/// field's quiet NaN with its sign dropped, Metal's: Mesa 26.2.4 on LLVM 23.1.1, x86_64 (an
+/// Ultra 9 275HX), through a kernel's `write`, `read_write`, texture buffer and argument buffer
+/// forms, stored Metal's field for each of 32,766 `float` NaNs (every pattern of the top 13
+/// payload bits, its 10 low bits clear and set, both signs) and each of the 2,046 `half` NaNs
+/// (the gate lanes
+/// `runtime_lane::half_storage_writes::every_nan_a_kernel_writes_to_a_small_float_texture_is_metal_s_where_measured`
+/// and
+/// `runtime_lane::half_write_nans::every_half_nan_written_to_a_small_float_texture_is_metal_s_where_measured`).
+/// One row, of the driver on every CPU. Measured to store another NaN, so not listed: RADV on the
+/// Radeon 780M (a `half` NaN's payload bits kept) and NVIDIA's 615.71.09 on the RTX 5080 Laptop
+/// GPU (every bit of each NaN field set).
 ///
 /// `MetalUnaryDenormals`: MoltenVK 1.4.2's `OpFNegate`, `FAbs`, `Floor` and `Ceil` on 32-bit
 /// floats, which SPIRV-Cross writes as Metal's `-x`, `fabs`, `floor` and `ceil`. On the M3 Max
@@ -704,6 +719,12 @@ pub(crate) const DEVIATIONS: &[Measured<DriverDeviation>] = &[
     Measured {
         device: Some(APPLE9),
         ..moltenvk_on_apple(DriverDeviation::MetalSmallFloatNans)
+    },
+    Measured {
+        fact: DriverDeviation::MetalSmallFloatNans,
+        driver: DriverId::MESA_LLVMPIPE,
+        vendor: None,
+        device: None,
     },
     Measured {
         device: Some(APPLE9),

@@ -37,7 +37,7 @@ use crate::spirv::ir::{
     BinOp, Block, ConstKind, Constant, Contraction, Decl, Dim, ExecMode, ExecModel, GlobalKind,
     GlslOp, GroupInst, GroupOperation, ImageOperands, ImageQuery, ImageUsage, Inst, Interpolation,
     IoDir, MemAccess, Merge, RayQueryInst, Sampling, SpecOp, StorageClass, Terminator, TexelMemory,
-    Type, TypedModule, UnOp, ValueOrigin,
+    Type, TypedModule, UnOp, Unrolling, ValueOrigin,
 };
 use crate::spirv::requirements::{
     spirv_extension_name, uses_physical_storage_buffer, uses_vulkan_memory_model,
@@ -49,6 +49,9 @@ mod tests;
 
 /// The SPIR-V version every profile emits: 1.5.
 pub const SPIRV_VERSION: u32 = 0x0001_0500;
+
+// A loop's `PartialCount` (`Unrolling::PartialCount`) is SPIR-V 1.4's.
+const _: () = assert!(SPIRV_VERSION >= 0x0001_0400);
 
 /// The entry point's name in every module (modules are compiled per function).
 pub const ENTRY_NAME: &str = "main";
@@ -229,19 +232,19 @@ fn write(m: TypedModule, options: Options) -> BResult<RelocatableModule> {
     // Header; the bound is patched below.
     w.words
         .extend_from_slice(&[crate::spv::MAGIC_NUMBER, SPIRV_VERSION, 0, 0, 0]);
-    let mut dont_unroll: Vec<BlockId> = m
+    let mut controls: Vec<(BlockId, Unrolling)> = m
         .loops
         .iter()
-        .filter(|l| l.dont_unroll)
-        .map(|l| l.header)
+        .filter(|l| l.unrolling != Unrolling::Driver)
+        .map(|l| (l.header, l.unrolling))
         .collect();
-    dont_unroll.sort_unstable();
+    controls.sort_unstable_by_key(|&(header, _)| header);
     let s = Ser {
         m: &m,
         ids: &ids,
         dont_inline: options.dont_inline,
         keeps_calls: options.keeps_calls,
-        dont_unroll,
+        controls,
     };
     s.preamble(&mut w)?;
     s.annotations(&mut w)?;
@@ -273,7 +276,8 @@ fn write(m: TypedModule, options: Options) -> BResult<RelocatableModule> {
 /// insert's composite, and each load, extract, or shuffle where it materializes loads). Where it
 /// materializes loads past atomics and calls: one byte per function (the storage classes it writes
 /// and those whose writes it holds unseen), and every load in the materialized values' map. One
-/// `BlockId` per loop that asks `DontUnroll` (the sorted headers the loop merges look up).
+/// `BlockId` and `Unrolling` per loop that asks something of the driver's unrolling (the sorted
+/// headers the loop merges look up).
 pub fn id_table_bytes(m: &TypedModule, p: &DeviceProfile) -> usize {
     let dense = m
         .types
@@ -345,9 +349,9 @@ pub fn id_table_bytes(m: &TypedModule, p: &DeviceProfile) -> usize {
         .saturating_add(
             m.loops
                 .iter()
-                .filter(|l| l.dont_unroll)
+                .filter(|l| l.unrolling != Unrolling::Driver)
                 .count()
-                .saturating_mul(std::mem::size_of::<BlockId>()),
+                .saturating_mul(std::mem::size_of::<(BlockId, Unrolling)>()),
         )
 }
 
@@ -1338,9 +1342,9 @@ struct Ser<'a> {
     dont_inline: bool,
     /// Each sampling routine is declared `DontInline` ([`Options::keeps_calls`]).
     keeps_calls: bool,
-    /// The headers of the loops whose `OpLoopMerge` asks `DontUnroll`, sorted
-    /// ([`crate::spirv::ir::LoopMeta::dont_unroll`]).
-    dont_unroll: Vec<BlockId>,
+    /// The headers of the loops whose `OpLoopMerge` asks something of the driver's unrolling,
+    /// with what they ask, sorted ([`crate::spirv::ir::LoopMeta::unrolling`]).
+    controls: Vec<(BlockId, Unrolling)>,
 }
 
 impl Ser<'_> {
@@ -1518,7 +1522,7 @@ impl Ser<'_> {
         // Explicitly laid-out `Workgroup` blocks share one allocation; when an entry declares
         // more than one, each must say it aliases the others.
         let mut workgroup_blocks = 0usize;
-        // Read-only storage resources of a graphics stage.
+        // Read-only storage resources of a graphics stage, unwritten buffers of a compute stage.
         let read_only = non_writable::read_only_resources(m)?;
         for g in &m.interface {
             let gv = m
@@ -1846,6 +1850,7 @@ impl Ser<'_> {
                 w.inst(Op::TypeInt, &[id, u32::from(*width), u32::from(*signed)])
             }
             Type::Float { width } => w.inst(Op::TypeFloat, &[id, u32::from(*width)]),
+            Type::Float8 { encoding } => w.inst(Op::TypeFloat, &[id, 8, *encoding as u32]),
             Type::Vector { elem, len } => {
                 w.inst(Op::TypeVector, &[id, self.ty(*elem)?, u32::from(*len)])
             }
@@ -2086,15 +2091,18 @@ impl Ser<'_> {
                 w.inst(Op::SelectionMerge, &[self.ids.block(merge)?, 0])?
             }
             Some(Merge::Loop { merge, cont }) => {
-                // `DontUnroll` (0x2) for a loop that compiles a repeated region once.
-                let control = match self.dont_unroll.binary_search(&id) {
-                    Ok(_) => 0x2,
-                    Err(_) => 0,
-                };
-                w.inst(
-                    Op::LoopMerge,
-                    &[self.ids.block(merge)?, self.ids.block(cont)?, control],
-                )?
+                // What the loop asks of the driver's unrolling (`Unrolling`).
+                let unrolling = self
+                    .controls
+                    .binary_search_by_key(&id, |&(h, _)| h)
+                    .ok()
+                    .and_then(|at| self.controls.get(at))
+                    .map_or(Unrolling::Driver, |&(_, u)| u);
+                let (merge, cont) = (self.ids.block(merge)?, self.ids.block(cont)?);
+                match unrolling.literal() {
+                    Some(n) => w.inst(Op::LoopMerge, &[merge, cont, unrolling.control(), n])?,
+                    None => w.inst(Op::LoopMerge, &[merge, cont, unrolling.control()])?,
+                }
             }
             None => {}
         }

@@ -285,6 +285,35 @@ impl Memfd {
         self.source_split(view, calls, false)
     }
 
+    /// A source that answers every request over `view`, a view of one run of the file from its
+    /// first byte, with a piece of one shared dma-buf of the whole run, made here
+    /// (`DmaBufRequest::shared_files`, as a consumer's group of views is): the device imports that
+    /// file once and binds each buffer at its piece. A request that allows no shared file, or
+    /// whose piece the request's alignment does not hold, is answered with an `Err`. `None` where
+    /// the run is not one piece from offset 0 or the host makes no udmabuf of it.
+    pub(super) fn shared_source(&self, view: &View) -> Option<DmaBufSource> {
+        let [(0, len)] = view.pieces[..] else {
+            return None;
+        };
+        let file = Arc::new(udmabuf(self.fd.as_fd(), &[(0, len as u64)]).ok()?);
+        let base = view.at.as_ptr() as usize;
+        Some(Arc::new(move |request: DmaBufRequest| {
+            let offset = (request.start.as_ptr() as usize)
+                .checked_sub(base)
+                .filter(|offset| offset + request.length as usize <= len)
+                .ok_or_else(|| std::io::Error::other("pages outside the shared file"))?
+                as u64;
+            if !request.shared_files || !offset.is_multiple_of(request.alignment) {
+                return Err(std::io::Error::other("no piece of a shared file fits"));
+            }
+            Ok(vec![DmaBufChunk {
+                file: Arc::clone(&file),
+                offset,
+                length: request.length,
+            }])
+        }))
+    }
+
     /// As [`Memfd::source`], but one chunk per granule wherever the request allows several.
     fn granules(&self, view: &View, calls: &Calls) -> DmaBufSource {
         self.source_split(view, calls, true)
@@ -314,7 +343,8 @@ impl Memfd {
                 plan.into_iter()
                     .map(|(items, length)| {
                         Ok(DmaBufChunk {
-                            fd: udmabuf(fd.as_fd(), &items)?,
+                            file: Arc::new(udmabuf(fd.as_fd(), &items)?),
+                            offset: 0,
                             length,
                         })
                     })
@@ -889,8 +919,14 @@ fn a_ycbcr_texture_over_a_buffer_of_chunks_reads_its_planes_in_place() {
 /// for their write permission before its import (`WorkCounts::host_mappings_queried`), refused or
 /// not. A second buffer over the same bytes, made while the first lives, lies in its import and
 /// asks about none, its source uncalled, and the GPU reads the CPU's bytes through it. A buffer
-/// over the first half of the bytes, not the same range, makes its own import and asks about its
-/// 32 mappings.
+/// over the first half of the bytes, not the same range, is bound inside the live import; or,
+/// where that import's memory is the first buffer's alone (a buffer's own dma-bufs), it imports
+/// its own dma-bufs beside them, asking about its own half of the mappings and calling its source
+/// (`host_aliases.rs`, "One page, one import": two dma-bufs of the same pages are two aliases
+/// of external memory), on a device whose barriers order blits through two imports of the same
+/// pages, else it is a copy of its pages. Inside the import or a copy, it asks about no mapping,
+/// the live import's making having asked about them all, and its source is uncalled. It never
+/// imports a page a live import of its pointer holds; the GPU reads the CPU's bytes through it.
 #[test]
 fn a_buffer_that_lies_in_a_live_import_asks_about_no_mapping() {
     const TEST: &str = "dma-buf joined import";
@@ -934,22 +970,51 @@ fn a_buffer_that_lies_in_a_live_import_asks_about_no_mapping() {
             gpu_read(&queue, &second, 0..length as u64) == expected,
             "{TEST}: the GPU's read through the second buffer"
         );
-        let before = queried();
-        let half = no_copy(
-            device,
-            &view,
-            0,
-            length / 2,
-            ram.source(&view, &Calls::default()),
-        );
+        let (before, counts) = (queried(), device.work_counts());
+        let halved = Calls::default();
+        let half = no_copy(device, &view, 0, length / 2, ram.source(&view, &halved)).unwrap();
+        let after = device.work_counts();
+        let inside = after.object_churn.buffers_bound_in_import
+            - counts.object_churn.buffers_bound_in_import;
+        let copied = after.copied_over_live_imports - counts.copied_over_live_imports;
+        let beside = after.object_churn.dma_buf_imports_beside_live
+            - counts.object_churn.dma_buf_imports_beside_live;
         assert_eq!(
-            queried() - before,
-            RUNS as u64 / 2,
-            "{TEST}: the half's mappings asked ({:?})",
-            half.as_ref().err()
+            inside + copied + beside,
+            1,
+            "{TEST}: the half inside the live import, beside it or a copy of its pages"
+        );
+        let asked = queried() - before;
+        let halved = halved.lock().unwrap().clone();
+        match beside {
+            1 => {
+                assert_eq!(
+                    asked,
+                    RUNS as u64 / 2,
+                    "{TEST}: the half's own mappings asked"
+                );
+                assert!(!halved.is_empty(), "{TEST}: the half's source uncalled");
+            }
+            _ => {
+                assert_eq!(
+                    asked, 0,
+                    "{TEST}: the half's mappings asked (inside {inside})"
+                );
+                assert!(halved.is_empty(), "{TEST}: the half's source: {halved:?}");
+            }
+        }
+        assert_eq!(
+            after.object_churn.imports_inside_live, counts.object_churn.imports_inside_live,
+            "{TEST}: no page imported again beside an import of its pointer"
+        );
+        assert!(
+            gpu_read(&queue, &half, 0..length as u64 / 2) == expected[..length / 2],
+            "{TEST}: the GPU's read through the half"
         );
         eprintln!(
-            "{TEST}: on {}: {RUNS} mappings asked for the first buffer, none for the second",
+            "{TEST}: on {}: {RUNS} mappings asked for the first buffer, none for the second, \
+             {asked} for the half (inside the import {inside}, beside it {beside}, a copy \
+             {copied})",
             device.name()
         );
         drop(half);
@@ -1217,7 +1282,8 @@ fn shared_memory_without_a_working_source_is_a_copy_and_misuse_refused() {
             let fd = Arc::new(ram.fd.try_clone().unwrap());
             let short: DmaBufSource = Arc::new(move |_| {
                 Ok(vec![DmaBufChunk {
-                    fd: udmabuf(fd.as_fd(), &[(page as u64, page as u64)])?,
+                    file: Arc::new(udmabuf(fd.as_fd(), &[(page as u64, page as u64)])?),
+                    offset: 0,
                     length: page as u64,
                 }])
             });
@@ -1228,7 +1294,8 @@ fn shared_memory_without_a_working_source_is_a_copy_and_misuse_refused() {
         let fd = Arc::new(ram.fd.try_clone().unwrap());
         let file: DmaBufSource = Arc::new(move |request| {
             Ok(vec![DmaBufChunk {
-                fd: fd.try_clone()?,
+                file: Arc::new(fd.try_clone()?),
+                offset: 0,
                 length: request.length,
             }])
         });

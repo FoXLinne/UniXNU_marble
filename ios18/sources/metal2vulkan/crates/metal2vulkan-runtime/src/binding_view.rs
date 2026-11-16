@@ -11,6 +11,7 @@
 //! image's other usages is valid.
 
 use super::image_plan::{block_family, compatible, ImagePlan};
+use super::pvrtc::holds_for_copies;
 use super::view_plan::{ViewProblem, ViewRecord, ViewRefusal};
 use ash::vk;
 use metal2vulkan::bind::{ImageViewDesc, TextureFacts};
@@ -110,14 +111,17 @@ impl VkView {
 /// (`Device::with_undeclared_usage`).
 ///
 /// Refusals: where the image lacks the usage, the texture's usage lacking it too
-/// (`NotImplemented(UndeclaredTextureUsage)`, the runtime's gap) or the device lacking the usage
-/// for the format (`Unsupported{Format}`); a view format the image cannot take
+/// (`NotImplemented(UndeclaredTextureUsage)`, the runtime's gap), the image being a carrier that
+/// serves copies alone (`NotImplemented(Format)` naming the texture's format: a PVRTC, ETC2, EAC
+/// or 4:2:2 texture without a decoded twin, `pvrtc.rs`) or the device lacking the usage for the
+/// format (`Unsupported{Format}`); a view format the image cannot take
 /// (`NotImplemented(TextureView)`); a swizzle on a storage image, whose view Vulkan cannot swizzle
 /// (`NotImplemented(TextureSwizzle)`), but where the binding plan's function applies it
 /// (`ImageViewDesc::shader_swizzle`: a swizzled texture or view at a storage slot, whose reads the
-/// function swizzles and whose writes it unswizzles; and the sampled view of a swizzled
-/// extended-range texture, whose decoded texels the function swizzles), which leaves a texture made
-/// resident for a function reading handles, or a `ulong` atomic's slot.
+/// function swizzles and whose writes it unswizzles, or one the function only queries, which no
+/// swizzle reaches; and the sampled view of a swizzled extended-range texture, whose decoded texels
+/// the function swizzles), which leaves a texture made resident for a function reading handles, or
+/// a `ulong` atomic's slot.
 pub(super) fn binding_view(
     image: &ImagePlan,
     record: &ViewRecord,
@@ -141,6 +145,13 @@ pub(super) fn binding_view(
         return Err(ViewRefusal::Unsupported(Unsupported::not_implemented(
             Feature::UndeclaredTextureUsage,
         )));
+    }
+    // A carrier serves copies alone (`pvrtc.rs`): a binding reaches it only where no decoded twin
+    // serves the texture's reads, which is the format's gap, not the view format's.
+    if !image.usage.contains(usage) && holds_for_copies(image) {
+        return Err(ViewRefusal::Unsupported(
+            Unsupported::not_implemented(Feature::Format).naming_format(record.pixel_format),
+        ));
     }
     if !image.usage.contains(usage) {
         return Err(ViewRefusal::Unsupported(Unsupported::needs(

@@ -241,6 +241,11 @@ pub struct GraphicsTemplate {
     /// push range, where its draws push `BindState::line_band` (`PushField::LineBand`).
     #[cfg_attr(feature = "serde", serde(default))]
     pub(crate) line_band: Option<u32>,
+    /// A fan-out probe variant's (`GraphicsState::region_fan_out`): the byte offset of its
+    /// geometry stage's push range, where its draws push the index of their flag
+    /// (`BindState::region_fan_out`, `PushField::RegionProbe`).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub(crate) region_probe: Option<u32>,
 }
 
 /// What a mesh draw of a mesh render pipeline instantiates: the pipeline's specialization layout
@@ -641,6 +646,15 @@ pub enum WriteSource {
     /// `GENERAL`. Only a slot under its planes-image variant binds it
     /// (`VariantKey::ycbcr_planes_sampled`, `BindingSource::YCbCrPlanes`).
     YCbCrPlanesImage { slot: SlotRef },
+    /// The rows of the 2D texture bound at `slot`, read and written in place
+    /// (`TextureFacts::texel_rows`, `bind::texel_rows`): a texel buffer in `format` over the
+    /// texture's bytes, from its first texel, or before it where the device's texel buffer offset
+    /// alignment asks, through its last row's last texel ([`TexelRows::elements`]); uniform where
+    /// the slot's function only reads the texture, storage where it writes it. Only a slot under
+    /// its rows variant binds it (`VariantKey::texel_rows`).
+    ///
+    /// [`TexelRows::elements`]: crate::bind::TexelRows::elements
+    TexelRows { slot: SlotRef, format: vk::Format },
     /// The texture buffer bound at `slot`, as a texel buffer view.
     TexelBuffer {
         slot: SlotRef,
@@ -686,6 +700,21 @@ pub enum WriteSource {
     /// The encoder's tessellation factor buffer (`BindState::tessellation_factors`), a
     /// read-only storage buffer of the control stage over the draw's `DescriptorRange`.
     TessellationFactors,
+    /// A rate-mapped pass's region table (`SyntheticBinding::RateMapRegions`) of a fan-out
+    /// variant's draw (`GraphicsState::region_fan_out`): a read-only storage buffer of
+    /// [`fan_out::TABLE_BYTES`](crate::bind::fan_out::TABLE_BYTES) bytes holding
+    /// [`fan_out::table`](crate::bind::fan_out::table) of the draw's one viewport over the
+    /// pass's regions, bound whole.
+    RateMapRegions,
+    /// A fan-out probe's flags (`SyntheticBinding::RateMapFlags`,
+    /// [`RegionFanOut::Probe`](crate::pipeline::RegionFanOut)): a storage buffer of `u32`s the
+    /// consumer keeps for its probes, `bind::fan_out::PROBE_DRAW_WORDS` zeros at each draw's index
+    /// (`BindState::region_fan_out`) before the draw, where the draw writes 1 into the first for
+    /// a triangle it cannot fan out, adds into the counts after it the copies it would emit of
+    /// the others, marks those after them for a triangle too wide for few copies, and for a
+    /// flagged triangle raises its first's and last's words, adds one into its flagged count and
+    /// sets its block's bit (`GraphicsState::region_fan_out`); bound whole.
+    RateMapFlags,
     /// The top-level structure of the acceleration structure bound at buffer slot `slot`
     /// (`setAccelerationStructure:atBufferIndex:`): the bound instance structure itself when
     /// `level` is `Instance`, and, when `level` is `Primitive`, the top-level structure of one
@@ -897,7 +926,9 @@ pub struct ImageViewDesc {
     /// `VariantKey::swizzled_storage`, which a Vulkan storage view could not swizzle, and
     /// for the sampled view of a swizzled extended-range texture at a slot of it, whose raw codes
     /// the view's swizzle would move before the function decodes them, and of a swizzled packed
-    /// normalized texture, whose codes the function converts by each channel's own scale. `false`
+    /// normalized texture, whose codes the function converts by each channel's own scale. Set too,
+    /// under no variant, for the storage view of a swizzled texture at a slot the function only
+    /// queries: it reads and writes no texel, and no swizzle reaches what a query answers. `false`
     /// for every other view, on which the consumer composes the texture's swizzle with
     /// `components` (and a swizzled storage view is the consumer's refusal).
     #[cfg_attr(feature = "serde", serde(default))]
@@ -1090,6 +1121,9 @@ pub enum AccessClass {
     /// (`WriteSource::YCbCrInPlace`) or the image of them the device's conversion samples
     /// (`WriteSource::YCbCrPlanesImage`): a read of the planes' bytes, not of the texture's image.
     YCbCrPlanes,
+    /// A 2D texture's rows, read or written in place through the slot's texel buffer
+    /// (`WriteSource::TexelRows`): a use of the rows' bytes, not of the texture's image.
+    TexelRows,
 }
 
 /// A byte range relative to the bound offset.

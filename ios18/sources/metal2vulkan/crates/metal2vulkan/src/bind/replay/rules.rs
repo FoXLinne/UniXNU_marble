@@ -6,12 +6,16 @@
 //! executor's device replay of an authored case's executions; a broken rule is a
 //! [`DrawReplayRule`], which a host-step notice names.
 
+use std::collections::BTreeSet;
 use std::fmt;
 
 use super::super::{BindingPlan, DrawCommands, PushHole, ViewSetup};
 use crate::cache::VariantKey;
-use crate::metal::{IndirectCommandType, PrimitiveType};
-use crate::pipeline::{CommandWrites, GraphicsState, PipelineInterface, SlotClass, Stage};
+use crate::metal::{IndirectCommandType, PrimitiveType, VertexStepFunction};
+use crate::pipeline::{
+    CommandWrites, GraphicsState, PipelineInterface, SlotClass, Stage, VertexInputState,
+    VertexStride,
+};
 use crate::vk;
 
 /// What the records of a draw replay may hold beside draws: buffers, resets and cleared barriers
@@ -25,12 +29,10 @@ pub const DRAW_REPLAY_WRITES: u32 = CommandWrites::DRAW
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DrawReplayRule {
-    /// The buffer's command types are not draws of primitives alone.
+    /// The buffer's command types are not draws of primitives and indexed draws alone.
     CommandTypes,
     /// The buffer's commands set their own pipeline states.
     OwnPipelineStates,
-    /// The buffer's commands inherit the encoder's buffers.
-    InheritedBuffers,
     /// The records may hold operations past [`DRAW_REPLAY_WRITES`]: those bits.
     Operations(u32),
     /// The records hold no draws.
@@ -58,7 +60,8 @@ pub enum DrawReplayRule {
     DispatchesFirst,
     /// The state's draw is amplified or draws views.
     Amplified,
-    /// The state's vertex function fetches attributes.
+    /// The state's vertex function fetches attributes of a layout whose stride is set per bind
+    /// (`MTLBufferLayoutStrideDynamic`), which each command binds at its own.
     VertexAttributes,
     /// The state's fragment function reads the primitive ID of an indexed draw.
     IndexedPrimitiveIds,
@@ -93,13 +96,10 @@ impl fmt::Display for DrawReplayRule {
                 )
             }
             DrawReplayRule::CommandTypes => {
-                "the buffer's command types are not draws of primitives alone"
+                "the buffer's command types are not draws of primitives and indexed draws alone"
             }
             DrawReplayRule::OwnPipelineStates => {
                 "the buffer's commands set their own pipeline states"
-            }
-            DrawReplayRule::InheritedBuffers => {
-                "the buffer's commands inherit the encoder's buffers"
             }
             DrawReplayRule::NoDraws => "the buffer's records hold no draws",
             DrawReplayRule::VertexWritesMemory => {
@@ -123,7 +123,7 @@ impl fmt::Display for DrawReplayRule {
             }
             DrawReplayRule::Amplified => "the inherited state's draw is amplified or draws views",
             DrawReplayRule::VertexAttributes => {
-                "the inherited state's vertex function fetches attributes"
+                "the inherited state's vertex function fetches attributes at a stride set per bind"
             }
             DrawReplayRule::IndexedPrimitiveIds => {
                 "the inherited state's fragment function reads the primitive ID of an indexed draw"
@@ -156,30 +156,29 @@ const OPERATIONS: [(u32, &str); 11] = [
 ];
 
 /// The primitive type every command draws of an execution of a buffer of `command_types` that
-/// inherits the encoder's pipeline state where `inherit_pipeline_state` and its buffers where
-/// `inherit_buffers`, whose records may hold `written` (what every route that writes them may
-/// write, its CPU's setters among them): a draw replay runs commands of draws of one primitive
-/// type alone, under the encoder's state, with their own buffers, whose records hold draws,
-/// buffers, resets and cleared barriers alone; else the first rule broken.
+/// inherits the encoder's pipeline state where `inherit_pipeline_state`, whose records may hold
+/// `written` (what every route that writes them may write, its CPU's setters among them): a draw
+/// replay runs commands of draws of one primitive type alone, under the encoder's state, with
+/// their own buffers or the encoder's where the buffer inherits them
+/// ([`DrawReplay::inheritance`](super::DrawReplay::inheritance)), whose records hold draws, buffers, resets
+/// and cleared barriers alone; else the first rule broken.
 pub fn draw_replay_primitive_type(
     command_types: IndirectCommandType,
-    (inherit_pipeline_state, inherit_buffers): (bool, bool),
+    inherit_pipeline_state: bool,
     written: CommandWrites,
 ) -> Result<PrimitiveType, DrawReplayRule> {
-    if command_types != IndirectCommandType::DRAW {
+    let draws = IndirectCommandType::DRAW | IndirectCommandType::DRAW_INDEXED;
+    if command_types.is_empty() || !draws.contains(command_types) {
         return Err(DrawReplayRule::CommandTypes);
     }
     if !inherit_pipeline_state {
         return Err(DrawReplayRule::OwnPipelineStates);
     }
-    if inherit_buffers {
-        return Err(DrawReplayRule::InheritedBuffers);
-    }
-    let past = written.operations & !DRAW_REPLAY_WRITES;
+    let past = written.operations & !(DRAW_REPLAY_WRITES | CommandWrites::DRAW_INDEXED);
     if past != 0 {
         return Err(DrawReplayRule::Operations(past));
     }
-    if !written.may(CommandWrites::DRAW) {
+    if !written.may(CommandWrites::DRAW) && !written.may(CommandWrites::DRAW_INDEXED) {
         return Err(DrawReplayRule::NoDraws);
     }
     let one = match written.primitive_types.count_ones() {
@@ -187,6 +186,12 @@ pub fn draw_replay_primitive_type(
         _ => None,
     };
     one.ok_or(DrawReplayRule::PrimitiveTypes(written.primitive_types))
+}
+
+/// Whether records that may hold `written` may hold indexed draws (`DrawReplay::indexed`), which
+/// a merged draw replay alone runs.
+pub fn draw_replay_indexed(written: CommandWrites) -> bool {
+    written.may(CommandWrites::DRAW_INDEXED)
 }
 
 /// Whether draws of `primitive_type` merge into one draw (`DrawReplay::merged`): a list type or
@@ -233,11 +238,31 @@ pub fn draw_replay_state(graphics: &GraphicsState, merged: bool) -> Result<(), D
     }
 }
 
+/// The layouts of a state of vertex input `input` (its base's) that a draw replay pulls
+/// (`BindState::far_vertex_buffers` of its draws, the pulled-vertex-buffer variant): every
+/// fixed-function binding's, whose attributes fixed-function input cannot fetch from a command's
+/// own buffers, where a pulled attribute reads its command's slot table; else
+/// [`DrawReplayRule::VertexAttributes`] where an attribute's layout has a stride set per bind (a
+/// fixed-function binding's, or a pulled attribute's whose step reads one), which the binder
+/// writes from the encoder's bind where each command binds its own.
+pub fn draw_replay_vertex_layouts(
+    input: &VertexInputState,
+) -> Result<BTreeSet<u32>, DrawReplayRule> {
+    let per_bind = (input.bindings.iter()).any(|b| b.stride == VertexStride::PerBind)
+        || (input.pulled.iter()).any(|a| {
+            a.stride == VertexStride::PerBind && a.step_function != VertexStepFunction::Constant
+        });
+    if per_bind {
+        return Err(DrawReplayRule::VertexAttributes);
+    }
+    Ok(input.bindings.iter().map(|b| b.buffer_index).collect())
+}
+
 /// The instantiated draw's rules for a draw replay, `merged` into one draw or not: `commands`,
 /// instantiated for one indirect draw by `plan`, the plan of the replay variant `key`, record as
 /// one indirect draw whose arguments the device reads, with no index bound, dispatch, amplification,
-/// view or fetched attribute, each slot table one function's (a merged draw's in its header alone,
-/// the vertex function's).
+/// view or attribute fixed-function input fetches ([`draw_replay_vertex_layouts`] pulls each),
+/// each slot table one function's (a merged draw's in its header alone, the vertex function's).
 pub fn draw_replay_draw(
     commands: &DrawCommands,
     (plan, key): (&BindingPlan, &VariantKey),
@@ -248,7 +273,9 @@ pub fn draw_replay_draw(
         PushHole::RootTableAddress { stages, .. } => {
             !merged && (stages == vertex || stages == fragment)
         }
-        PushHole::MergedDrawAddress { stages, .. } => merged && stages == vertex,
+        PushHole::MergedDrawAddress { stages, .. } => {
+            merged && !stages.is_empty() && (vertex | fragment).contains(stages)
+        }
         _ => true,
     });
     let header =

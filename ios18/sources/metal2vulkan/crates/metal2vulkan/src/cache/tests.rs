@@ -346,12 +346,11 @@ fn earlier_format_versions_are_stale() {
     const { assert!(ARTIFACT_FORMAT_VERSION >= 4) };
     for good in [compiled.to_bytes(), pipe.to_bytes()] {
         for version in 1..ARTIFACT_FORMAT_VERSION {
-            let end = good.len() - 32;
+            let end = good.len() - 8;
             let mut old = good[..end].to_vec();
             old[8..12].copy_from_slice(&version.to_le_bytes());
-            use sha2::Digest;
-            let checksum = sha2::Sha256::digest(&old);
-            old.extend_from_slice(&checksum);
+            let checksum = super::checksum::of(&old);
+            old.extend_from_slice(&checksum.to_le_bytes());
             assert_eq!(
                 CompiledFunction::from_bytes(&old, &dev).err(),
                 Some(ArtifactError::Stale),
@@ -903,6 +902,7 @@ fn the_merged_members_round_trip_in_one_render_pipeline() {
                 immutable_sampler: None,
                 flags: vk::DescriptorBindingFlags::empty(),
                 variables: 1,
+                immutable_samplers: Vec::new(),
             },
             DescriptorBinding {
                 binding: 1,
@@ -913,6 +913,7 @@ fn the_merged_members_round_trip_in_one_render_pipeline() {
                 immutable_sampler: None,
                 flags: vk::DescriptorBindingFlags::empty(),
                 variables: 1,
+                immutable_samplers: Vec::new(),
             },
         ],
         flags: vk::DescriptorSetLayoutCreateFlags::empty(),
@@ -932,6 +933,7 @@ fn the_merged_members_round_trip_in_one_render_pipeline() {
             immutable_sampler: None,
             flags: vk::DescriptorBindingFlags::PARTIALLY_BOUND,
             variables: 1,
+            immutable_samplers: Vec::new(),
         },
         DescriptorBinding {
             binding: 3,
@@ -945,6 +947,7 @@ fn the_merged_members_round_trip_in_one_render_pipeline() {
             immutable_sampler: None,
             flags: vk::DescriptorBindingFlags::empty(),
             variables: 1,
+            immutable_samplers: Vec::new(),
         },
     ];
     if let Some(last) = p.layout.sets.last_mut() {
@@ -1770,11 +1773,10 @@ fn the_frame_layout_is_pinned() {
     expected.extend_from_slice(&[0xbb; 32]);
     expected.extend_from_slice(&4u64.to_le_bytes());
     expected.extend_from_slice(b"body");
-    assert_eq!(bytes[..bytes.len() - 32], expected[..]);
-    use sha2::Digest;
+    assert_eq!(bytes[..bytes.len() - 8], expected[..]);
     assert_eq!(
-        bytes[bytes.len() - 32..],
-        sha2::Sha256::digest(&expected)[..]
+        bytes[bytes.len() - 8..],
+        super::checksum::of(&expected).to_le_bytes()
     );
 }
 

@@ -143,13 +143,11 @@ use metal2vulkan_runtime::{
     Error as RuntimeError, LoadAction, Origin, PipelineOptions, RenderPassDescriptor,
     ResourceOptions, Size, StoreAction, TextureDescriptor,
 };
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// The owned fixture at `name` under `validation/fixtures/public/engine`.
 fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("fixtures/public/engine")
-        .join(name)
+    metal2vulkan_devtools::engine_dir().join(name)
 }
 
 /// Whether `device`'s profile takes `deviation`.
@@ -470,7 +468,7 @@ const LANES: u64 = 72;
 
 /// The output of `case`'s Metal row in `environment`.
 fn metal_row(case: &PublicCase, environment: &str) -> Vec<u8> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("corpus");
+    let root = metal2vulkan_devtools::validation_dir().join("corpus");
     let store = CorpusStore::new(&root);
     let row = MetalObservation::current(
         store.read_metal_of_case(&case.case).unwrap(),
@@ -979,14 +977,18 @@ fn float_denormals_read_as_metal_reads_them() {
 }
 
 /// The probe's cases ([`HALF_FMA_CASES`]): every word, `fma(a, b, c)`, `a * b + c`, the two `half`
-/// results and the lone product `a * w`, is the Metal row's of the same chip where the profile
-/// takes `DriverDeviation::MetalFloatDenormals`: the product answers Metal's flushed denormal
-/// (2.2), and the fused pair Metal's canonical NaN where the profile takes
-/// `DriverDeviation::MetalCanonicalNans`, a NaN of the device's bits elsewhere
-/// (`PrecisionNote::NativeNanEncoding`, [`float_word_holds`]); the two `half` results within what
-/// the stage's notes record ([`half_pair_within`]: the device's `half` `Fma` on the RTX 5080
-/// Laptop GPU, a unit in the last place from Metal's in 300 threads). Elsewhere the denormals are
-/// the device's and the test prints how many words differ.
+/// results and the lone product `a * w`, is the Metal row's of the same chip where the kernel
+/// leaves its `float` denormals to the device as Metal's (it requires
+/// `VkProperty::MetalFloatDenormals`): the product answers Metal's flushed denormal (2.2), and the
+/// fused pair Metal's canonical NaN where the profile takes `DriverDeviation::MetalCanonicalNans`,
+/// a NaN of the device's bits elsewhere (`PrecisionNote::NativeNanEncoding`,
+/// [`float_word_holds`]); the two `half` results within what the stage's notes record
+/// ([`half_pair_within`]: the device's `half` `Fma` on the RTX 5080 Laptop GPU, a unit in the last
+/// place from Metal's in 300 threads). The kernels compute `half` in 16 bits, so their entries
+/// declare the 16-bit float controls where the profile has them: there NVIDIA's driver keeps
+/// `f32` denormals (`DriverWorkaround::FloatDenormalsKeptUnderHalfControls`), and the kernel
+/// requires no such property. Elsewhere the denormals are the device's, the stage records
+/// `PrecisionNote::DeviceDenormals`, and the test prints how many words differ.
 #[test]
 fn fused_pairs_answer_metals_nans_and_denormals() {
     let messages = Messages::default();
@@ -994,7 +996,6 @@ fn fused_pairs_answer_metals_nans_and_denormals() {
     {
         let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), at_plan).unwrap();
         let name = device.name().to_owned();
-        let metals = takes(&device, DriverDeviation::MetalFloatDenormals);
         let canonical = takes(&device, DriverDeviation::MetalCanonicalNans);
         let word = |bytes: &[u8], i: usize| {
             u32::from_le_bytes(bytes[4 * i..4 * i + 4].try_into().unwrap())
@@ -1003,6 +1004,12 @@ fn fused_pairs_answer_metals_nans_and_denormals() {
         for case_name in HALF_FMA_CASES {
             let case = public_case(case_name).unwrap();
             let notes = case_notes(&device, &case);
+            let metals = requires_property(&device, &case, VkProperty::MetalFloatDenormals);
+            assert!(
+                metals || notes.contains(&PrecisionNote::DeviceDenormals),
+                "{case_name} on {name}: the kernel leaves its denormals to the device unmeasured, \
+                 and the stage does not record it"
+            );
             let run = run_case(&device, &case).unwrap();
             let metal = metal_row(&case, METAL_ENVIRONMENT);
             assert_eq!(run.output.len(), metal.len(), "{case_name} on {name}");
@@ -1021,7 +1028,7 @@ fn fused_pairs_answer_metals_nans_and_denormals() {
                 }
             }
             eprintln!(
-                "fused pairs {case_name} on {name} (the device's denormals, as Metal's: {metals}; \
+                "fused pairs {case_name} on {name} (the kernel's denormals, as Metal's: {metals}; \
                  notes {notes:?}): {} of {} words differ from Metal, {within} more within what the \
                  notes record",
                 differ.len(),
@@ -1384,8 +1391,12 @@ const DOT_CASES: [&str; 2] = [
 /// `PrecisionNote::NativeDot` (its `half` lanes', held as `float`, on every device). Both cases
 /// answer Metal where the device's `OpDot` is Metal's own `dot`: every `float` word where the
 /// profile takes `DriverDeviation::MetalFloatFunctions` (MoltenVK). The test prints how many of
-/// the other words differ. The kernels leave their `float` denormals to the device exactly where
-/// the profile takes `DriverDeviation::MetalFloatDenormals`.
+/// the other words differ. A kernel leaves its `float` denormals to the device as Metal's (it
+/// requires `VkProperty::MetalFloatDenormals`) only where the profile takes
+/// `DriverDeviation::MetalFloatDenormals`; there, one that requires no such property records
+/// `PrecisionNote::DeviceDenormals` (an entry that declares the 16-bit float controls on a driver
+/// that keeps `f32` denormals under them, `DriverWorkaround::FloatDenormalsKeptUnderHalfControls`:
+/// the kernels' `half` lanes), as in [`fused_pairs_answer_metals_nans_and_denormals`].
 #[test]
 fn owned_dot_fixtures_answer_metal() {
     let messages = Messages::default();
@@ -1400,14 +1411,20 @@ fn owned_dot_fixtures_answer_metal() {
         let mut failures = Vec::new();
         for case_name in DOT_CASES {
             let case = public_case(case_name).unwrap();
-            assert_eq!(
-                requires_property(&device, &case, VkProperty::MetalFloatDenormals),
-                denormals,
-                "{case_name} on {name}: the kernel leaves its denormals to the device exactly \
-                 where the profile takes the deviation"
+            let notes = case_notes(&device, &case);
+            let required = requires_property(&device, &case, VkProperty::MetalFloatDenormals);
+            assert!(
+                !required || denormals,
+                "{case_name} on {name}: the kernel takes the device's denormals as Metal's where \
+                 the profile does not take the deviation"
             );
             assert!(
-                case_notes(&device, &case).contains(&PrecisionNote::NativeDot),
+                required || !denormals || notes.contains(&PrecisionNote::DeviceDenormals),
+                "{case_name} on {name}: the kernel leaves its denormals to the device unmeasured, \
+                 and the stage does not record it"
+            );
+            assert!(
+                notes.contains(&PrecisionNote::NativeDot),
                 "{case_name} on {name}: the device's dot, unrecorded"
             );
             let run = run_case(&device, &case).unwrap();
@@ -1416,9 +1433,9 @@ fn owned_dot_fixtures_answer_metal() {
             let all = differing_of(&run.output, &metal, 8, &(0..8).collect::<Vec<_>>());
             let differ: Vec<_> = all.iter().filter(|d| checked.contains(&d.1)).collect();
             eprintln!(
-                "owned dot {case_name} on {name} (the device's denormals: {denormals}, Metal's \
-                 float functions: {metals}): {} of {} words differ from Metal, {} of them in the \
-                 words checked ({checked:?})",
+                "owned dot {case_name} on {name} (the device's denormals: {denormals}, the \
+                 kernel's as Metal's: {required}, Metal's float functions: {metals}): {} of {} \
+                 words differ from Metal, {} of them in the words checked ({checked:?})",
                 all.len(),
                 metal.len() / 4,
                 differ.len()
@@ -1516,11 +1533,18 @@ fn minimums_and_maximums_answer_as_metal() {
 
 /// Cases whose every word is `half` arithmetic (with the narrowing of `float` operands and the
 /// `half` fused multiply-add of the NaN model's): the NaN model's `half` arithmetic, without and
-/// under fast math, and the `half` denormal results of `+`, `-` and `*`.
-const HALF_ARITHMETIC_CASES: [&str; 3] = [
-    "nan-model-float-to-half-narrowing-and-half-arithmetic",
-    "nan-model-float-to-half-narrowing-and-half-arithmetic-under-fast-math",
-    "half-denormal-results-of-arithmetic-and-conversions",
+/// under fast math, and the `half` denormal results of `+`, `-` and `*`. Each with whether its
+/// kernel's `half` `+`, `-` and `*` carry fast math's flags (contraction allowed).
+const HALF_ARITHMETIC_CASES: [(&str, bool); 3] = [
+    (
+        "nan-model-float-to-half-narrowing-and-half-arithmetic",
+        false,
+    ),
+    (
+        "nan-model-float-to-half-narrowing-and-half-arithmetic-under-fast-math",
+        true,
+    ),
+    ("half-denormal-results-of-arithmetic-and-conversions", false),
 ];
 
 /// The notes of a module's own `half` forms, whose words are the device's: its rounding by the
@@ -1539,8 +1563,10 @@ fn holds_a_nan(w: u32) -> bool {
 
 /// Every word of [`HALF_ARITHMETIC_CASES`] is the Metal row's of the same chip where the profile
 /// takes `DriverDeviation::MetalHalfArithmetic`: the device's 16-bit `OpFAdd`, `OpFSub` and
-/// `Fma(a, b, -0.0)`, kept apart (the kernels then require `VkProperty::MetalHalfArithmetic`).
-/// Elsewhere the module computes in `float` and rounds to `half` by its form
+/// `Fma(a, b, -0.0)`, kept apart where the AIR forbids contraction, and `OpFAdd`, `OpFSub` and
+/// `OpFMul` left to the device's compiler where fast math allows it (the stage then records
+/// `PrecisionNote::FastMathRewrites`), and every kernel requires `VkProperty::MetalHalfArithmetic` (for its kept arithmetic or its
+/// `half` reads' widening). Elsewhere the module computes in `float` and rounds to `half` by its form
 /// (`lower::arith::narrow::round`), and its words are Metal's where its stage records none of
 /// [`HALF_NATIVE`] (the float controls that make the device's conversion Metal's, or a quantize
 /// measured to be). A stage that records a native rounding (`NativeHalfConversion`,
@@ -1557,15 +1583,22 @@ fn half_arithmetic_answers_as_metal() {
         let metals = takes(&device, DriverDeviation::MetalHalfArithmetic);
         let mut failures = Vec::new();
         let mut recorded = std::collections::BTreeSet::new();
-        for case_name in HALF_ARITHMETIC_CASES {
+        for (case_name, contracts) in HALF_ARITHMETIC_CASES {
             let case = public_case(case_name).unwrap();
             assert_eq!(
                 requires_property(&device, &case, VkProperty::MetalHalfArithmetic),
                 metals,
-                "{case_name} on {name}: the kernel takes the device's 16-bit arithmetic exactly \
-                 where the profile takes the deviation"
+                "{case_name} on {name}: the kernel requires the measured fact (for its kept \
+                 16-bit arithmetic or its `half` reads' widening) exactly where the profile takes \
+                 the deviation"
             );
-            let native: Vec<PrecisionNote> = case_notes(&device, &case)
+            let notes = case_notes(&device, &case);
+            assert!(
+                !(metals && contracts) || notes.contains(&PrecisionNote::FastMathRewrites),
+                "{case_name} on {name}: the device's 16-bit arithmetic takes the rewrites fast \
+                 math allows, and the stage records them: {notes:?}"
+            );
+            let native: Vec<PrecisionNote> = notes
                 .into_iter()
                 .filter(|note| HALF_NATIVE.contains(note))
                 .collect();
@@ -2296,7 +2329,7 @@ const VERTEX_SIMDGROUP_FIXTURES: [&str; 3] = [
 /// lane's environment (the M3 Max's; the M4 drew the same words).
 fn fixture_cases(name: &str) -> Vec<(AuthoredCase, Vec<u8>)> {
     let source = format!("{}/engine/{name}", crate::source::PUBLIC_FIXTURE_DIR);
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("corpus");
+    let root = metal2vulkan_devtools::validation_dir().join("corpus");
     let store = CorpusStore::new(&root);
     let mut out = Vec::new();
     for shard in 0..64 {

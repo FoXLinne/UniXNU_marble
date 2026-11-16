@@ -4,15 +4,16 @@
 //! ```sh
 //! cargo run --release -p metal2vulkan-runtime --example queue_share -- <mode> \
 //!     [--policy adaptive|per-queue] [--seconds S] [--dispatches N] [--unshared] \
-//!     [--threads T --in-flight F [--one-vk-queue]]
+//!     [--threads T --in-flight F [--one-vk-queue]] [--long-ms L] [--period-ms P] \
+//!     [--isolation bounded|off]
 //! ```
 //!
 //! Every command buffer is one of two kinds. A *draw*: a render pass over a 512x512 `RGBA8Unorm`
 //! texture, cleared and one triangle drawn (`colored_vertex` and `colored_fragment` of the
 //! repository's owned fixture `runtime_examples.metal`, assembled by `llvm-as` on `PATH`). A *long*
 //! one: `--dispatches` dispatches of `scale_and_offset` over one buffer, sized as the run starts
-//! so the command buffer's GPU time is 30 ms. Latencies are a command buffer's `commit` to the
-//! start of its completed handler, on the host's clock.
+//! so the command buffer's GPU time is `--long-ms` (30 ms by default). Latencies are a command
+//! buffer's `commit` to the start of its completed handler, on the host's clock.
 //!
 //! - **check**: the device's check of its GPU's idling between `VkQueue`s: its verdict and
 //!   switch cost (run where no record of it is kept, read back where one is).
@@ -22,6 +23,25 @@
 //!   compositor's queue with `new_command_queue_unshared`.
 //! - **pipelined**: as isolation, but the application keeps two long command buffers in flight,
 //!   so its queue holds no idle point.
+//! - **frames**: a compositor thread commits one draw every `--period-ms` (16 ms by default) and
+//!   never waits, beside an application thread that keeps `--in-flight` long command buffers in
+//!   flight (3 by default). The compositor's latencies and how many ran over 16 ms, the
+//!   application's long command buffers a second, and the device's counts of command buffers that
+//!   waited behind another queue's batch (`WorkCounts::command_buffers_behind_other_queues` and
+//!   kin). `--unshared` makes the compositor's queue with `new_command_queue_unshared`;
+//!   `--isolation` sets `UnsharedIsolationPolicy` (`bounded`, the default, or `off`). The
+//!   application's GPU-busy share is its command buffers' GPU time over the span from its first
+//!   one's start to its last one's end; the GPU's idle share, that span less every command
+//!   buffer's GPU time, either queue's.
+//! - **pairs**: a game's frames beside a compositor's queue: each frame a long command buffer and
+//!   then a draw, committed back to back on one queue, `--in-flight` frames in flight, a frame
+//!   starting once the draw of the frame that many before ran its completed handler; the compositor commits one draw every `--period-ms`, or none at all with
+//!   `--period-ms 0` (its queue still made first). `--unshared` and `--isolation` as for
+//!   **frames**. The application's frame period, its GPU time a frame (the long one's GPU start to
+//!   the draw's GPU end) and the GPU's idle share over its frames; each command buffer's commit to
+//!   its kernel start (the scheduler's hold), the GPU's gap before each long one, and the draw's GPU
+//!   end to its completed handler; the device's hold, submission and scheduler counts a frame
+//!   (`WorkCounts::batch_hold_nanos` and kin), and the first frames one by one.
 //! - **trap**: as isolation, but the application alternates 500 ms of draws committed at 10,000 a
 //!   second with 10 long command buffers.
 //! - **alternating**: as trap, with 2 ms of draws between each long command buffer; and
@@ -37,8 +57,16 @@
 //!   queue on one `VkQueue`, each lent once (`with_vk_queue`) so it never moves.
 //! - **idle-queues**: one thread committing draws in turn over 16, then 2,048 queues, 3 in flight:
 //!   command buffers a second, and the thread's time in `command_buffer` per command buffer.
+//! - **churn**: command queues made and dropped as a guest's processes make them (about 350 in a
+//!   250 s walk, here `--churn N` over `--seconds`): a compositor thread commits one draw every
+//!   `--period-ms` (16 ms) and never waits (`--unshared` makes its queue unshared), three kept
+//!   queues commit a draw every 8 ms each, and every `seconds / N` a new queue is made that commits
+//!   one long command buffer, then a draw at each later tick, and is dropped 1 to 8 ticks later
+//!   (a deterministic sequence). `--untimed` makes the device answer GPU times from the host, as a
+//!   consumer that does so does not share `VkQueue`s. The compositor's latencies, the most queues
+//!   live at once, and the device's counts of command buffers that waited behind another queue's.
 
-use metal2vulkan::device::{DevicePolicy, QueueSharingPolicy};
+use metal2vulkan::device::{DevicePolicy, QueueSharingPolicy, UnsharedIsolationPolicy};
 use metal2vulkan::metal::{PixelFormat, PrimitiveType, TextureUsage};
 use metal2vulkan::pipeline::{ColorAttachmentDescriptor, RenderPipelineDescriptor, StageSource};
 use metal2vulkan_runtime::{
@@ -51,9 +79,6 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
-/// A command buffer's GPU time a long one is sized for.
-const LONG: Duration = Duration::from_millis(30);
 
 /// A compositor's latency past which it counts as a stall.
 const STALL_MS: f64 = 10.0;
@@ -70,6 +95,7 @@ const MOST_FLOATS: u64 = 96 << 20;
 struct Options {
     mode: String,
     policy: QueueSharingPolicy,
+    isolation: UnsharedIsolationPolicy,
     seconds: f64,
     dispatches: u64,
     unshared: bool,
@@ -78,6 +104,14 @@ struct Options {
     in_flight: usize,
     /// `rates` with every thread's queue on one `VkQueue`, each lent once so it never moves.
     one_vk_queue: bool,
+    /// A long command buffer's GPU time.
+    long: Duration,
+    /// `frames`: the compositor's period between commits.
+    period: Duration,
+    /// `churn`: the queues made over the run.
+    churn: usize,
+    /// The device answers GPU times from the host (`DeviceOptions::gpu_times_from_host`).
+    untimed: bool,
 }
 
 fn options() -> Options {
@@ -85,12 +119,17 @@ fn options() -> Options {
     let mut options = Options {
         mode: args.next().unwrap_or_else(|| "isolation".to_owned()),
         policy: QueueSharingPolicy::Adaptive,
+        isolation: UnsharedIsolationPolicy::Bounded,
         seconds: 2.0,
         dispatches: 300,
         unshared: false,
         threads: 0,
         in_flight: 3,
         one_vk_queue: false,
+        long: Duration::from_millis(30),
+        period: Duration::from_millis(16),
+        churn: 340,
+        untimed: false,
     };
     while let Some(arg) = args.next() {
         let mut value = || args.next().unwrap_or_else(|| panic!("{arg} needs a value"));
@@ -102,12 +141,27 @@ fn options() -> Options {
                     other => panic!("no policy {other}"),
                 }
             }
+            "--isolation" => {
+                options.isolation = match value().as_str() {
+                    "bounded" => UnsharedIsolationPolicy::Bounded,
+                    "off" => UnsharedIsolationPolicy::Off,
+                    other => panic!("no isolation {other}"),
+                }
+            }
             "--seconds" => options.seconds = value().parse().unwrap(),
             "--dispatches" => options.dispatches = value().parse().unwrap(),
             "--unshared" => options.unshared = true,
             "--threads" => options.threads = value().parse().unwrap(),
             "--in-flight" => options.in_flight = value().parse().unwrap(),
             "--one-vk-queue" => options.one_vk_queue = true,
+            "--churn" => options.churn = value().parse().unwrap(),
+            "--untimed" => options.untimed = true,
+            "--long-ms" => {
+                options.long = Duration::from_secs_f64(value().parse::<f64>().unwrap() / 1e3)
+            }
+            "--period-ms" => {
+                options.period = Duration::from_secs_f64(value().parse::<f64>().unwrap() / 1e3)
+            }
             other => panic!("unknown argument {other}"),
         }
     }
@@ -127,16 +181,19 @@ struct Kit {
     /// The grid of one long command buffer's dispatches.
     grid: u64,
     dispatches: u64,
+    /// The GPU time a long command buffer is sized for.
+    long_time: Duration,
 }
 
 impl Kit {
     fn new(options: &Options) -> Kit {
-        let device = device(options.policy);
+        let device = device(options);
         let settled = device.settle_queue_switch_check(Duration::from_secs(10));
         println!(
-            "device: {}; policy {:?}; check settled {settled}: {}",
+            "device: {}; policy {:?}, isolation {:?}; check settled {settled}: {}",
             device.name(),
             options.policy,
+            options.isolation,
             device.queue_switch_check_report()
         );
         let library = metal2vulkan::library::Library::from_air(&fixture_bitcode()).unwrap();
@@ -190,12 +247,13 @@ impl Kit {
             scale,
             grid: 1 << 20,
             dispatches: options.dispatches,
+            long_time: options.long,
         };
         kit.size_long();
         kit
     }
 
-    /// Size the long command buffers' grid so one's GPU time is [`LONG`].
+    /// Size the long command buffers' grid so one's GPU time is `long_time`.
     fn size_long(&mut self) {
         let queue = self.device.new_command_queue().unwrap();
         for _ in 0..3 {
@@ -204,7 +262,7 @@ impl Kit {
             command_buffer.wait_until_completed().unwrap();
             let gpu =
                 command_buffer.gpu_end_time().unwrap() - command_buffer.gpu_start_time().unwrap();
-            let wanted = self.grid as f64 * LONG.as_secs_f64() / gpu.max(1e-6);
+            let wanted = self.grid as f64 * self.long_time.as_secs_f64() / gpu.max(1e-6);
             self.grid = (wanted as u64).clamp(1 << 16, MOST_FLOATS) & !63;
         }
         let command_buffer = self.long(&queue);
@@ -294,12 +352,15 @@ impl Kit {
     }
 }
 
-/// The system default device, of the default policy but for `queue_sharing`.
-fn device(queue_sharing: QueueSharingPolicy) -> Device {
-    let mut options = DeviceOptions::default();
-    options.policy = DevicePolicy::UNTRUSTED;
-    options.policy.queue_sharing = queue_sharing;
-    Device::system_default_with(&options).unwrap()
+/// The system default device, of the default policy but for `queue_sharing` and
+/// `unshared_isolation`, as `options` say.
+fn device(options: &Options) -> Device {
+    let mut device = DeviceOptions::default();
+    device.policy = DevicePolicy::UNTRUSTED;
+    device.policy.queue_sharing = options.policy;
+    device.policy.unshared_isolation = options.isolation;
+    device.gpu_times_from_host = options.untimed;
+    Device::system_default_with(&device).unwrap()
 }
 
 /// The owned fixture's LLVM text, assembled to AIR bitcode by `llvm-as`.
@@ -396,20 +457,21 @@ fn compositor(
 
 /// The application's loop until `stop`, on its own thread: `long_every` long command buffers after
 /// each `short` of draws at 10,000 a second (none where `short` is zero), each long one waited for,
-/// or with `in_flight` long ones in flight where above 1.
+/// or with `in_flight` long ones in flight where above 1, each long one's GPU start and end in
+/// `times` where given, as queue 0. Answers how many long ones completed.
 fn application(
     kit: &Arc<Kit>,
-    short: Duration,
-    long_every: usize,
-    in_flight: usize,
+    (short, long_every, in_flight): (Duration, usize, usize),
     stop: &Arc<AtomicBool>,
-) -> std::thread::JoinHandle<()> {
+    times: Option<Times>,
+) -> std::thread::JoinHandle<u64> {
     let kit = Arc::clone(kit);
     let stop = Arc::clone(stop);
     std::thread::spawn(move || {
         let queue = kit.device.new_command_queue().unwrap();
         let target = kit.target();
         let mut flying: std::collections::VecDeque<CommandBuffer> = Default::default();
+        let mut longs = 0u64;
         while !stop.load(Ordering::Relaxed) {
             if !short.is_zero() {
                 let began = Instant::now();
@@ -430,16 +492,31 @@ fn application(
                     break;
                 }
                 let command_buffer = kit.long(&queue);
+                if let Some(times) = &times {
+                    let times = Arc::clone(times);
+                    command_buffer
+                        .add_completed_handler(Box::new(move |done: &CommandBuffer| {
+                            if let (Ok(start), Ok(end)) =
+                                (done.gpu_start_time(), done.gpu_end_time())
+                            {
+                                times.lock().unwrap().push((0, start, end));
+                            }
+                        }))
+                        .unwrap();
+                }
                 command_buffer.commit().unwrap();
                 flying.push_back(command_buffer);
                 while flying.len() >= in_flight.max(1) {
                     flying.pop_front().unwrap().wait_until_completed().unwrap();
+                    longs += 1;
                 }
             }
         }
         for command_buffer in flying {
             command_buffer.wait_until_completed().unwrap();
+            longs += 1;
         }
+        longs
     })
 }
 
@@ -448,7 +525,7 @@ fn application(
 fn beside(kit: &Arc<Kit>, options: &Options, short: Duration, long_every: usize, in_flight: usize) {
     let stop = Arc::new(AtomicBool::new(false));
     let latencies = Arc::new(Mutex::new(Vec::new()));
-    let app = application(kit, short, long_every, in_flight, &stop);
+    let app = application(kit, (short, long_every, in_flight), &stop, None);
     std::thread::sleep(Duration::from_millis(50));
     let queue = kit.queue(options.unshared);
     let comp = compositor(kit, queue, COMPOSITOR_RATE, &stop, &latencies, None);
@@ -470,6 +547,420 @@ fn beside(kit: &Arc<Kit>, options: &Options, short: Duration, long_every: usize,
         summary(&mut samples),
         kit.counts()
     );
+}
+
+/// A compositor committing one draw every `options.period` beside an application keeping
+/// `options.in_flight` long command buffers in flight: the compositor's latencies, the
+/// application's long command buffers a second, and the device's counts of waits behind other
+/// queues' batches over the run. The compositor's queue is made before the application starts, as
+/// a compositor's exists before the applications it shows: other queues' batches are held back
+/// only while an unshared queue exists.
+fn frames(kit: &Arc<Kit>, options: &Options) {
+    let stop = Arc::new(AtomicBool::new(false));
+    let latencies = Arc::new(Mutex::new(Vec::new()));
+    let times: Times = Arc::new(Mutex::new(Vec::new()));
+    let before = kit.device.work_counts();
+    let began = Instant::now();
+    let shape = (Duration::ZERO, 1, options.in_flight);
+    let queue = kit.queue(options.unshared);
+    let app = application(kit, shape, &stop, Some(Arc::clone(&times)));
+    std::thread::sleep(Duration::from_millis(50));
+    let rate = 1.0 / options.period.as_secs_f64();
+    let comp = compositor(
+        kit,
+        queue,
+        rate,
+        &stop,
+        &latencies,
+        Some((1, Arc::clone(&times))),
+    );
+    std::thread::sleep(Duration::from_secs_f64(options.seconds));
+    stop.store(true, Ordering::Relaxed);
+    comp.join().unwrap();
+    let longs = app.join().unwrap();
+    let elapsed = began.elapsed().as_secs_f64();
+    std::thread::sleep(Duration::from_millis(100));
+    let c = kit.device.work_counts();
+    let mut samples = latencies.lock().unwrap().clone();
+    let over_16 = samples.iter().filter(|&&ms| ms > 16.0).count();
+    let unshared_16 = c.unshared_command_buffers_behind_other_queues_over_16ms
+        - before.unshared_command_buffers_behind_other_queues_over_16ms;
+    let per_16 = |sum: u64| sum as f64 / unshared_16.max(1) as f64;
+    let (app_busy, gpu_idle) = busy_shares(&times.lock().unwrap());
+    let app_spans: Vec<f64> = (times.lock().unwrap().iter())
+        .filter(|(queue, _, _)| *queue == 0)
+        .map(|(_, start, end)| end - start)
+        .collect();
+    let app_mean = app_spans.iter().sum::<f64>() / app_spans.len().max(1) as f64;
+    let submissions = c.queue_submissions - before.queue_submissions;
+    println!(
+        "frames (policy {:?}, isolation {:?}, compositor {} every {:?}, application {} in flight of {:.1} ms): compositor {}, {over_16} over 16 ms; application {:.2} long command buffers/s ({:.2} ms of GPU time each), GPU-busy {:.1}%; GPU idle {:.2}%; {:.0} kernel submissions/s; {} looks held a head for isolation",
+        options.policy,
+        options.isolation,
+        if options.unshared { "unshared" } else { "shared" },
+        options.period,
+        options.in_flight,
+        kit.long_time.as_secs_f64() * 1e3,
+        summary(&mut samples),
+        longs as f64 / elapsed,
+        app_mean * 1e3,
+        app_busy * 100.0,
+        gpu_idle * 100.0,
+        submissions as f64 / elapsed,
+        c.heads_held_for_unshared_isolation - before.heads_held_for_unshared_isolation,
+    );
+    println!(
+        "  behind other queues: {} ({} over 16 ms, {} over 33 ms, longest {:.1} ms); unshared {} ({} over 16 ms, {} over 33 ms, longest {:.1} ms); unshared waits over 16 ms: {:.2} batches ahead on average, at most {}, longest run {:.1} ms on average, {} behind one run over 16 ms",
+        c.command_buffers_behind_other_queues - before.command_buffers_behind_other_queues,
+        c.command_buffers_behind_other_queues_over_16ms
+            - before.command_buffers_behind_other_queues_over_16ms,
+        c.command_buffers_behind_other_queues_over_33ms
+            - before.command_buffers_behind_other_queues_over_33ms,
+        c.wait_behind_other_queues_longest_nanos as f64 / 1e6,
+        c.unshared_command_buffers_behind_other_queues
+            - before.unshared_command_buffers_behind_other_queues,
+        unshared_16,
+        c.unshared_command_buffers_behind_other_queues_over_33ms
+            - before.unshared_command_buffers_behind_other_queues_over_33ms,
+        c.unshared_wait_behind_other_queues_longest_nanos as f64 / 1e6,
+        per_16(c.unshared_waits_over_16ms_batches_ahead - before.unshared_waits_over_16ms_batches_ahead),
+        c.unshared_waits_over_16ms_most_batches_ahead,
+        per_16(
+            c.unshared_waits_over_16ms_longest_runs_nanos
+                - before.unshared_waits_over_16ms_longest_runs_nanos
+        ) / 1e6,
+        c.unshared_waits_over_16ms_behind_one_long_run
+            - before.unshared_waits_over_16ms_behind_one_long_run,
+    );
+}
+
+/// One frame of `pairs`, in seconds of `host_time`'s clock: its start once its slot was free; the
+/// long command buffer's commit, kernel start, GPU start and GPU end; and the draw's, then its
+/// completed handler's start.
+#[derive(Clone, Copy, Default)]
+struct Pair {
+    start: f64,
+    long: [f64; 4],
+    draw: [f64; 5],
+}
+
+/// The p50 and p90 of `samples` (seconds), in milliseconds.
+fn p50_p90(mut samples: Vec<f64>) -> String {
+    if samples.is_empty() {
+        return "none".to_owned();
+    }
+    samples.sort_by(f64::total_cmp);
+    let at = |p: f64| samples[((samples.len() as f64 * p) as usize).min(samples.len() - 1)] * 1e3;
+    format!("p50 {:.2} p90 {:.2}", at(0.5), at(0.9))
+}
+
+/// The `pairs` mode (the module docs).
+fn pairs(kit: &Arc<Kit>, options: &Options) {
+    /// The frames before the measured ones.
+    const WARM: usize = 10;
+    let stop = Arc::new(AtomicBool::new(false));
+    let latencies = Arc::new(Mutex::new(Vec::new()));
+    let queue = kit.queue(options.unshared);
+    let comp = (!options.period.is_zero()).then(|| {
+        let rate = 1.0 / options.period.as_secs_f64();
+        compositor(kit, queue.clone(), rate, &stop, &latencies, None)
+    });
+    let app = kit.device.new_command_queue().unwrap();
+    let target = kit.target();
+    let in_flight = options.in_flight.max(1);
+    let slots = Arc::new((Mutex::new(in_flight), std::sync::Condvar::new()));
+    let frames: Arc<Mutex<Vec<Pair>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut before = None;
+    let began = Instant::now();
+    let mut count = 0;
+    while began.elapsed().as_secs_f64() < options.seconds || count <= WARM {
+        {
+            let (free, freed) = &*slots;
+            let mut free = free.lock().unwrap();
+            while *free == 0 {
+                free = freed.wait(free).unwrap();
+            }
+            *free -= 1;
+        }
+        if count == WARM {
+            before = Some((kit.device.work_counts(), Instant::now()));
+        }
+        let start = metal2vulkan_runtime::host_time();
+        frames.lock().unwrap().push(Pair {
+            start,
+            ..Pair::default()
+        });
+        let long = kit.long(&app);
+        let at = Arc::clone(&frames);
+        long.add_completed_handler(Box::new(move |done: &CommandBuffer| {
+            let pair = &mut at.lock().unwrap()[count];
+            pair.long[1] = done.kernel_start_time();
+            pair.long[2] = done.gpu_start_time().unwrap_or(0.0);
+            pair.long[3] = done.gpu_end_time().unwrap_or(0.0);
+        }))
+        .unwrap();
+        frames.lock().unwrap()[count].long[0] = metal2vulkan_runtime::host_time();
+        long.commit().unwrap();
+        drop(long);
+        let draw = kit.draw(&app, &target);
+        let (at, slot) = (Arc::clone(&frames), Arc::clone(&slots));
+        draw.add_completed_handler(Box::new(move |done: &CommandBuffer| {
+            let handled = metal2vulkan_runtime::host_time();
+            {
+                let pair = &mut at.lock().unwrap()[count];
+                pair.draw[1] = done.kernel_start_time();
+                pair.draw[2] = done.gpu_start_time().unwrap_or(0.0);
+                pair.draw[3] = done.gpu_end_time().unwrap_or(0.0);
+                pair.draw[4] = handled;
+            }
+            let (free, freed) = &*slot;
+            *free.lock().unwrap() += 1;
+            freed.notify_one();
+        }))
+        .unwrap();
+        frames.lock().unwrap()[count].draw[0] = metal2vulkan_runtime::host_time();
+        draw.commit().unwrap();
+        drop(draw);
+        count += 1;
+    }
+    {
+        let (free, freed) = &*slots;
+        let mut free = free.lock().unwrap();
+        while *free < in_flight {
+            free = freed.wait(free).unwrap();
+        }
+    }
+    let after = kit.device.work_counts();
+    let (before, from) = before.unwrap();
+    let elapsed = from.elapsed().as_secs_f64();
+    stop.store(true, Ordering::Relaxed);
+    if let Some(comp) = comp {
+        comp.join().unwrap();
+    }
+    drop(queue);
+    let all = frames.lock().unwrap().clone();
+    let measured = &all[WARM..];
+    let n = measured.len() as f64;
+    let periods: Vec<f64> = (all[WARM - 1..].windows(2))
+        .map(|w| w[1].start - w[0].start)
+        .collect();
+    let gpu: Vec<f64> = measured.iter().map(|f| f.draw[3] - f.long[2]).collect();
+    let busy: f64 = (measured.iter())
+        .map(|f| (f.long[3] - f.long[2]) + (f.draw[3] - f.draw[2]))
+        .sum();
+    let span = measured[measured.len() - 1].draw[3] - measured[0].long[2];
+    let long_held: Vec<f64> = measured.iter().map(|f| f.long[1] - f.long[0]).collect();
+    let draw_held: Vec<f64> = measured.iter().map(|f| f.draw[1] - f.draw[0]).collect();
+    let gaps: Vec<f64> = (all[WARM - 1..].windows(2))
+        .map(|w| w[1].long[2] - w[0].draw[3])
+        .collect();
+    let seen: Vec<f64> = measured.iter().map(|f| f.draw[4] - f.draw[3]).collect();
+    let commit_to_seen: Vec<f64> = measured.iter().map(|f| f.draw[4] - f.long[0]).collect();
+    let per = |a: u64, b: u64| (a - b) as f64 / n;
+    println!(
+        "pairs (isolation {:?}, compositor {} {}, {} frames in flight, a long command buffer of \
+         {:.1} ms and a draw a frame): {:.1} frames/s; frame period {} ms (mean {:.2}); GPU a frame \
+         {} ms; GPU idle {:.1}% of the frames' span",
+        options.isolation,
+        if options.unshared { "unshared" } else { "shared" },
+        match options.period.is_zero() {
+            true => "committing nothing".to_owned(),
+            false => format!("every {:?}", options.period),
+        },
+        in_flight,
+        kit.long_time.as_secs_f64() * 1e3,
+        n / elapsed,
+        p50_p90(periods.clone()),
+        periods.iter().sum::<f64>() / periods.len().max(1) as f64 * 1e3,
+        p50_p90(gpu),
+        (1.0 - busy / span.max(1e-9)) * 100.0,
+    );
+    println!(
+        "  commit to kernel start: long {} ms, draw {} ms; GPU gap before a long one {} ms; the \
+         draw's GPU end to its completed handler {} ms; the long one's commit to the draw's \
+         handler {} ms",
+        p50_p90(long_held),
+        p50_p90(draw_held),
+        p50_p90(gaps.clone()),
+        p50_p90(seen),
+        p50_p90(commit_to_seen),
+    );
+    println!(
+        "  a frame: batch_hold_nanos {:.2} ms, batches_held_past_a_look {:.2}, \
+         heads_held_for_unshared_isolation {:.2}, scheduler_slice_rescues {:.2}, \
+         scheduler_sleep_slices {:.2}, scheduler_wakes_completion {:.2}, scheduler_sleeps {:.2}, \
+         queue_submissions {:.2}, command_buffers_behind_other_queues {:.2}; compositor {}",
+        per(after.batch_hold_nanos, before.batch_hold_nanos) / 1e6,
+        per(
+            after.batches_held_past_a_look,
+            before.batches_held_past_a_look
+        ),
+        per(
+            after.heads_held_for_unshared_isolation,
+            before.heads_held_for_unshared_isolation
+        ),
+        per(
+            after.scheduler_slice_rescues,
+            before.scheduler_slice_rescues
+        ),
+        per(after.scheduler_sleep_slices, before.scheduler_sleep_slices),
+        per(
+            after.scheduler_wakes_completion,
+            before.scheduler_wakes_completion
+        ),
+        per(after.scheduler_sleeps, before.scheduler_sleeps),
+        per(after.queue_submissions, before.queue_submissions),
+        per(
+            after.command_buffers_behind_other_queues,
+            before.command_buffers_behind_other_queues
+        ),
+        summary(&mut latencies.lock().unwrap().clone()),
+    );
+    let first: Vec<String> = (0..8.min(periods.len()))
+        .map(|i| {
+            let f = &measured[i];
+            format!(
+                "{:.1}/{:.1}/{:.1}/{:.1}",
+                periods[i] * 1e3,
+                gaps[i] * 1e3,
+                (f.long[1] - f.long[0]) * 1e3,
+                (f.draw[1] - f.draw[0]) * 1e3
+            )
+        })
+        .collect();
+    println!(
+        "  first frames (period/GPU gap before its long one/long held/draw held, ms): {}",
+        first.join(" ")
+    );
+}
+
+/// The `churn` mode (the module docs).
+fn churn(kit: &Arc<Kit>, options: &Options) {
+    let stop = Arc::new(AtomicBool::new(false));
+    let latencies = Arc::new(Mutex::new(Vec::new()));
+    let before = kit.device.work_counts();
+    let comp = compositor(
+        kit,
+        kit.queue(options.unshared),
+        1.0 / options.period.as_secs_f64(),
+        &stop,
+        &latencies,
+        None,
+    );
+    let kept: Vec<std::thread::JoinHandle<()>> = (0..3)
+        .map(|_| {
+            let kit = Arc::clone(kit);
+            let stop = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                let queue = kit.device.new_command_queue().unwrap();
+                let target = kit.target();
+                while !stop.load(Ordering::Relaxed) {
+                    kit.draw(&queue, &target).commit().unwrap();
+                    std::thread::sleep(Duration::from_millis(8));
+                }
+            })
+        })
+        .collect();
+    let tick = Duration::from_secs_f64(options.seconds / options.churn.max(1) as f64);
+    let target = kit.target();
+    let mut live: Vec<(CommandQueue, usize, CommandBuffer)> = Vec::new();
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut most = 0;
+    let mut next = Instant::now();
+    for made in 0..options.churn {
+        live.retain(|(_, until, last)| {
+            let keep = *until > made;
+            if !keep {
+                last.wait_until_completed().unwrap();
+            }
+            keep
+        });
+        for (queue, _, last) in &mut live {
+            let draw = kit.draw(queue, &target);
+            draw.commit().unwrap();
+            *last = draw;
+        }
+        let queue = kit.device.new_command_queue().unwrap();
+        let long = kit.long(&queue);
+        long.commit().unwrap();
+        seed =
+            (seed.wrapping_mul(6_364_136_223_846_793_005)).wrapping_add(1_442_695_040_888_963_407);
+        live.push((queue, made + 1 + ((seed >> 33) % 8) as usize, long));
+        // The compositor's, the kept ones and the churn's.
+        most = most.max(1 + 3 + live.len());
+        next += tick;
+        let now = Instant::now();
+        if next > now {
+            std::thread::sleep(next - now);
+        }
+    }
+    stop.store(true, Ordering::Relaxed);
+    comp.join().unwrap();
+    for thread in kept {
+        thread.join().unwrap();
+    }
+    for (_, _, last) in &live {
+        last.wait_until_completed().unwrap();
+    }
+    std::thread::sleep(Duration::from_millis(100));
+    let c = kit.device.work_counts();
+    let mut samples = latencies.lock().unwrap().clone();
+    let over_16 = samples.iter().filter(|&&ms| ms > 16.0).count();
+    println!(
+        "churn (policy {:?}, untimed {}, compositor {} every {:?}, {} queues made, one every {:.0} ms, each with one long command buffer of {:.1} ms, at most {most} live): compositor {}, {over_16} over 16 ms; {} queues past the round robin",
+        options.policy,
+        options.untimed,
+        if options.unshared { "unshared" } else { "shared" },
+        options.period,
+        options.churn,
+        tick.as_secs_f64() * 1e3,
+        kit.long_time.as_secs_f64() * 1e3,
+        summary(&mut samples),
+        c.queues_sharing_a_vk_queue - before.queues_sharing_a_vk_queue,
+    );
+    println!(
+        "  behind other queues: {} ({} over 16 ms, {} over 33 ms, longest {:.1} ms); unshared {} ({} over 16 ms, {} over 33 ms, longest {:.1} ms)",
+        c.command_buffers_behind_other_queues - before.command_buffers_behind_other_queues,
+        c.command_buffers_behind_other_queues_over_16ms
+            - before.command_buffers_behind_other_queues_over_16ms,
+        c.command_buffers_behind_other_queues_over_33ms
+            - before.command_buffers_behind_other_queues_over_33ms,
+        c.wait_behind_other_queues_longest_nanos as f64 / 1e6,
+        c.unshared_command_buffers_behind_other_queues
+            - before.unshared_command_buffers_behind_other_queues,
+        c.unshared_command_buffers_behind_other_queues_over_16ms
+            - before.unshared_command_buffers_behind_other_queues_over_16ms,
+        c.unshared_command_buffers_behind_other_queues_over_33ms
+            - before.unshared_command_buffers_behind_other_queues_over_33ms,
+        c.unshared_wait_behind_other_queues_longest_nanos as f64 / 1e6,
+    );
+}
+
+/// Of `times` (queue, GPU start, GPU end), queue 0's GPU time over the span from its first start
+/// to its last end, and the share of that span no command buffer of either queue ran in.
+fn busy_shares(times: &[(usize, f64, f64)]) -> (f64, f64) {
+    let app: Vec<&(usize, f64, f64)> = times.iter().filter(|(queue, _, _)| *queue == 0).collect();
+    let (Some(from), Some(to)) = (
+        app.iter().map(|t| t.1).min_by(f64::total_cmp),
+        app.iter().map(|t| t.2).max_by(f64::total_cmp),
+    ) else {
+        return (0.0, 0.0);
+    };
+    let span = (to - from).max(1e-9);
+    let busy: f64 = app.iter().map(|(_, start, end)| end - start).sum();
+    let mut all: Vec<(f64, f64)> = (times.iter())
+        .map(|&(_, start, end)| (start.max(from), end.min(to)))
+        .filter(|(start, end)| end > start)
+        .collect();
+    all.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let (mut covered, mut reach) = (0.0, from);
+    for (start, end) in all {
+        if end > reach {
+            covered += end - start.max(reach);
+            reach = end;
+        }
+    }
+    (busy / span, 1.0 - covered / span)
 }
 
 /// The GPU's idle time between command buffers of different queues, as a share of the span of
@@ -777,7 +1268,7 @@ fn idle_queues(kit: &Arc<Kit>, options: &Options, count: usize) {
 fn main() {
     let options = options();
     if options.mode == "check" {
-        let device = device(options.policy);
+        let device = device(&options);
         let settled = device.settle_queue_switch_check(Duration::from_secs(10));
         println!(
             "device: {}; settled {settled}: {}",
@@ -793,6 +1284,8 @@ fn main() {
         "trap" => beside(&kit, &options, Duration::from_millis(500), 10, 1),
         "alternating" => beside(&kit, &options, Duration::from_millis(2), 1, 1),
         "slow-alternating" => beside(&kit, &options, Duration::from_millis(1500), 1, 1),
+        "frames" => frames(&kit, &options),
+        "pairs" => pairs(&kit, &options),
         "interleave" => interleave(&kit, &options),
         "rates" if options.threads > 0 => {
             rate(&kit, &options, options.threads, options.in_flight);
@@ -808,6 +1301,7 @@ fn main() {
             idle_queues(&kit, &options, 16);
             idle_queues(&kit, &options, 2048);
         }
+        "churn" => churn(&kit, &options),
         other => panic!("no mode {other}"),
     }
 }

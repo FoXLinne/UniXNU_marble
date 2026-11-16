@@ -8,7 +8,18 @@
 //! `D24_UNORM_S8_UINT` for 24-bit. Stencil is 8 bits in every format.
 //!
 //! - **Before the pass**, each aspect loaded with `Load` is copied from its texture into the
-//!   scratch image; `Clear` and `DontCare` load as the scratch's own operations.
+//!   scratch image; `Clear` and `DontCare` load as the scratch's own operations. An aspect loaded
+//!   `DontCare` that the pass does not store, in a pass whose draws reach a tile, takes the answer
+//!   of any attachment so loaded (`clear_reach.rs`, `UnstoredDontCarePolicy`), each aspect apart:
+//!   the scratch's `Clear` to the aspect's clear value, Metal's answer (an M3 Max under macOS
+//!   27.0.1, `runtime_lane::dont_care_unstored`), or its `DONT_CARE`, announced
+//!   `dont-care-unstored-load`. One the pass stores takes the single texture's answer too
+//!   (`clear_reach.rs`, measured alike on the M3 Max under macOS 27.0.1): its texels where the
+//!   draws reach no tile, else the clear value in the tiles the draws touch, where the pass
+//!   writes the aspect, and its texels in the rest. The scratch loads it by the copy in, and its
+//!   tiles are cleared after the copy; where it cannot be copied in ([`copies_in`]: a
+//!   multisampled aspect copied by draws) the scratch clears it over the render area, announced
+//!   `dont-care-load-tiles`.
 //! - **After it**, each aspect stored with `Store`, `StoreAndMultisampleResolve` or
 //!   `CustomSampleDepthStore` is copied back (a resolve of the scratch image into the separate
 //!   resolve textures is `resolve.rs`'s split resolve). An aspect stored `DontCare` is not: its
@@ -297,6 +308,18 @@ fn by_draws(device: &Device, samples: u32, aspect: ImageAspectFlags) -> bool {
     samples > 1
         && colour_copies_refused(device, Feature::SeparateMultisampledDepthStencil, aspect)
             .is_some()
+}
+
+/// Whether each aspect of `separate` (depth, stencil) can load by a copy into the scratch image
+/// that its load did not ask for: a `DontCare` load of an aspect the pass stores, which loads
+/// the texture's texels and clears the tiles the draws touch (`clear_reach::dont_care_loads`).
+/// A single-sampled aspect, and a multisampled one the colour copies move, which its copy back
+/// already needs; not one copied by draws, whose copy in needs a sampled texture and draws the
+/// store does not.
+pub(super) fn copies_in(device: &Device, separate: &Separate) -> [bool; 2] {
+    let samples = separate.depth.as_ref().unwrap_or(&separate.stencil).samples;
+    [ImageAspectFlags::DEPTH, ImageAspectFlags::STENCIL]
+        .map(|aspect| samples == 1 || !by_draws(device, samples, aspect))
 }
 
 /// The scratch image `separate`'s pass renders into, as its depth/stencil target, whose depth and

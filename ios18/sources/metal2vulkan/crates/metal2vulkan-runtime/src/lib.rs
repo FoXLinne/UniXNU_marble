@@ -175,6 +175,7 @@ mod nan_clear;
 mod neutral;
 mod noted_apart;
 mod owned_kernel;
+mod pass_log;
 mod pass_runs;
 mod pending_audit;
 mod pending_dispatch;
@@ -187,6 +188,7 @@ mod pvrtc;
 mod queue;
 mod queue_share;
 mod queue_switch_check;
+mod queue_wait;
 mod range;
 mod rate_map;
 mod rate_mapped_pass;
@@ -296,11 +298,12 @@ pub use error::FailureOrigin;
 pub use error::InstanceExtensionRequired;
 pub use error::MetalError;
 pub use error::Nil;
+pub use error::NotInPlace;
 pub use error::Unproven;
 pub use error::{
     ArchivedPipeline, BinaryArchiveError, BinaryArchiveMiss, CommandBufferError, DeadlockCause,
-    DriverSetting, EncoderCall, Error, InstanceApiVersion, Invalid, LoaderNotFound, MemoryKind,
-    MeshRecordsOverflow, Problem, RuntimeGap, SamplerLimit, ShaderCacheError,
+    DeviceRefused, DriverSetting, EncoderCall, Error, InstanceApiVersion, Invalid, LoaderNotFound,
+    MemoryKind, MeshRecordsOverflow, Problem, RuntimeGap, SamplerLimit, ShaderCacheError,
     TessellationRecordsOverflow, TimedOut, VkResultCode,
 };
 pub use error::{FailedPipeline, FailedState, PipelineCreationCause};
@@ -342,7 +345,7 @@ pub use mipmap_plan::MipmapProblem;
 #[doc(hidden)]
 pub use pipeline::budget::{set_making_budget_for_measurement, MakingBudgetStarted};
 #[doc(hidden)]
-pub use pipeline::objects::makes_layouts_past_support;
+pub use pipeline::objects::{binds_unordered_interlocked_buffers, makes_layouts_past_support};
 pub use pipeline::{
     BinaryFunctionProblem, BinaryFunctionStage, RenderPipelineFunctionsDescriptor,
     RequiredThreadsProblem,

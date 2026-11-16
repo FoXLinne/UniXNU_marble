@@ -10,7 +10,7 @@
 //!   links functions, each linked function's list, name, specialized name, specialization, AIR
 //!   hash, and constant values. A stage without linked functions keeps the key it had before
 //!   linking existed, and one
-//!   compiled without `emulated_simdgroups`, `dropped_vertex_layer`, `storage_view_slots`,
+//!   compiled without `emulated_simdgroups`, `one_row`, `dropped_vertex_layer`, `storage_view_slots`,
 //!   `signed_color_attachments`, `multisampled`, `replay_bindings`, or `framebuffer_fetch` the key
 //!   it had before those inputs existed. A stage that links dynamic libraries records each library
 //!   its imports are searched in, in order (install name and content hash), and the install name
@@ -196,6 +196,9 @@ pub fn function_key(
     if inputs.emulated_simdgroups {
         h.bytes(b"emulated-simdgroups");
     }
+    if inputs.one_row {
+        h.bytes(b"one-row");
+    }
     if inputs.dropped_vertex_layer {
         h.bytes(b"dropped-vertex-layer");
     }
@@ -258,6 +261,11 @@ pub fn function_key(
             .bytes(format!("{:?}", inputs.ycbcr_planes_sampled).as_bytes());
     }
     // Appended only when set, as `storage_view_slots`.
+    if !inputs.texel_rows.is_empty() {
+        h.bytes(b"texel-rows")
+            .bytes(format!("{:?}", inputs.texel_rows).as_bytes());
+    }
+    // Appended only when set, as `storage_view_slots`.
     if !inputs.extended_range.is_empty() {
         h.bytes(b"extended-range")
             .bytes(format!("{:?}", inputs.extended_range).as_bytes());
@@ -316,6 +324,10 @@ pub fn function_key(
     // Appended only when set.
     if inputs.flat_grid {
         h.bytes(b"flat-grid");
+    }
+    // Appended only when set.
+    if inputs.call_threadgroups {
+        h.bytes(b"call-threadgroups");
     }
     // Appended only when set.
     if inputs.render_target_array_index_varying {
@@ -380,6 +392,10 @@ pub fn function_key(
     if inputs.folded_groups {
         h.bytes(b"folded-groups");
     }
+    // Appended only when set.
+    if inputs.partial_threadgroups {
+        h.bytes(b"partial-threadgroups");
+    }
     // Appended only when set, in its derived `Debug` form (an ordered map of integers and plain
     // enums, a total encoding as `inputs_encoding`'s).
     if !inputs.zeroed_colors.is_empty() {
@@ -429,6 +445,11 @@ pub fn function_key(
     if let Some(function) = inputs.alpha_test {
         h.bytes(b"alpha-test")
             .bytes(&function.as_raw().to_le_bytes());
+    }
+    // Appended only when set.
+    if let Some(op) = inputs.logic_operation {
+        h.bytes(b"logic-operation")
+            .bytes(&op.as_raw().to_le_bytes());
     }
     // Appended only when set.
     if inputs.depth_compare_clamp_mask != 0 {
@@ -510,6 +531,14 @@ pub fn function_key(
     // function's keeps its key.
     if let Some(bytes) = inputs.object_payload {
         h.bytes(b"object-payload").u64(u64::from(bytes));
+    }
+    // Appended only when set.
+    if inputs.region_viewports {
+        h.bytes(b"region-viewports");
+    }
+    // Appended only when set.
+    if inputs.region_copies {
+        h.bytes(b"region-copies");
     }
     // Appended only when present, so a stage that links nothing keeps its key: the tag's length
     // prefix keeps the encoding unambiguous.

@@ -3,10 +3,11 @@
 //! `VkQueue`s, and the legacy masks.
 
 use crate::binding::ResidentPrefix;
+use crate::encoder_fold::{joined, FoldOrder};
 use crate::tracker::{
     join_looked_at, merge, ordered, Access, Barrier, EncoderUses, Footprint, GeometryWrites,
-    IndirectReads, LegacyBarrier, Point, Reach, Summary, Tracker, UnorderedWrites, Use, UseRange,
-    Wait, ENTRIES_PER_KEY,
+    ImagePlace, IndirectReads, LegacyBarrier, Owed, Point, Reach, Summary, Tracker,
+    UnorderedWrites, Use, UseRange, Wait, ENTRIES_PER_KEY, OWED,
 };
 use ash::vk;
 use std::ops::Range;
@@ -43,6 +44,7 @@ fn image(aspects: vk::ImageAspectFlags, levels: Range<u32>, layers: Range<u32>) 
         aspects,
         levels,
         layers,
+        place: ImagePlace::WHOLE,
     }
 }
 
@@ -1624,6 +1626,123 @@ fn legacy_masks_map_the_newer_bits() {
     );
 }
 
+/// The least barrier Vulkan states for a shader's read and write after a shader's write, between
+/// dispatches: `COMPUTE_SHADER`'s `SHADER_WRITE` before its `SHADER_READ | SHADER_WRITE`.
+fn least_between_dispatches() -> LegacyBarrier {
+    LegacyBarrier {
+        src_stages: vk::PipelineStageFlags::COMPUTE_SHADER,
+        src_access: vk::AccessFlags::SHADER_WRITE,
+        dst_stages: vk::PipelineStageFlags::COMPUTE_SHADER,
+        dst_access: vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE,
+    }
+}
+
+/// A dispatch that reads and writes the words of storage buffer 1, as `dispatch_chain`'s does.
+fn bump() -> [Use<Key>; 1] {
+    [Use {
+        key: 1,
+        tracked: true,
+        range: bytes(0..4096),
+        read: shader_read(),
+        write: shader_write(),
+    }]
+}
+
+#[test]
+fn a_folded_encoder_s_first_dispatch_takes_a_serial_encoder_s_barrier() {
+    // The second dispatch of one serial encoder.
+    let mut serial = EncoderUses::<Key>::new(true);
+    assert_eq!(serial.order(COMPUTE, &bump(), Reach::Unnamed), None);
+    let inside = serial.order(COMPUTE, &bump(), Reach::Unnamed);
+    // The first dispatch of a serial encoder folded after an encoder of the first
+    // (`encoder_fold.rs`): its own order needs nothing, the group's order the same barrier.
+    let mut first = EncoderUses::<Key>::new(true);
+    first.order(COMPUTE, &bump(), Reach::Unnamed);
+    let order = FoldOrder::after(&first.finish());
+    let mut second = EncoderUses::<Key>::new(true);
+    let own = second.order(COMPUTE, &bump(), Reach::Unnamed);
+    assert_eq!(own, None);
+    let folded = joined(own, order.barrier(&bump()));
+    assert_eq!(folded, inside);
+    assert_eq!(
+        folded.map(Barrier::legacy),
+        Some(least_between_dispatches())
+    );
+}
+
+#[test]
+fn a_memory_barrier_records_the_least_barrier_and_keeps_metal_s_promise() {
+    assert_eq!(
+        Barrier::memory_barrier().legacy(),
+        least_between_dispatches()
+    );
+    // What it records and what it owes are what Metal makes visible after it.
+    let promised = Barrier::between_dispatches();
+    assert_eq!(Barrier::memory_barrier().src, promised.src);
+    assert_eq!(Barrier::memory_barrier().dst.union(OWED), promised.dst);
+}
+
+/// A read of buffer 2's first 16 bytes as `access`.
+fn read_of_2(access: Access) -> [Use<Key>; 1] {
+    [Use::reads(2, false, bytes(0..16), access)]
+}
+
+#[test]
+fn indirect_arguments_after_a_memory_barrier_take_their_stage_and_access() {
+    let arguments = Access::new(
+        vk::PipelineStageFlags2::DRAW_INDIRECT,
+        vk::AccessFlags2::INDIRECT_COMMAND_READ,
+    );
+    let mut owed = Owed::default();
+    // Before any memory barrier, nothing is owed.
+    assert_eq!(owed.pay(&read_of_2(arguments)), None);
+    owed.memory_barrier();
+    // A shader's own reads and writes: the memory barrier made them visible.
+    assert_eq!(owed.pay(&bump()), None);
+    let paid = owed.pay(&read_of_2(arguments));
+    assert_eq!(paid, barrier(Barrier::memory_barrier().src, arguments));
+    assert_eq!(
+        paid.map(Barrier::legacy),
+        Some(LegacyBarrier {
+            src_stages: vk::PipelineStageFlags::COMPUTE_SHADER,
+            src_access: vk::AccessFlags::SHADER_WRITE,
+            dst_stages: vk::PipelineStageFlags::DRAW_INDIRECT,
+            dst_access: vk::AccessFlags::INDIRECT_COMMAND_READ,
+        })
+    );
+    // Paid once: visible to every later command.
+    assert_eq!(owed.pay(&read_of_2(arguments)), None);
+    // A memory barrier after owes it again, for the writes before it.
+    owed.memory_barrier();
+    assert_eq!(owed.pay(&read_of_2(arguments)), paid);
+}
+
+#[test]
+fn a_uniform_read_after_a_memory_barrier_takes_its_access() {
+    let uniform = Access::new(COMPUTE, vk::AccessFlags2::UNIFORM_READ);
+    let mut owed = Owed::default();
+    owed.memory_barrier();
+    // A dispatch of a storage buffer and a uniform buffer: the uniform read alone is owed.
+    let reads = [
+        bump()[0].clone(),
+        Use::reads(2, true, bytes(0..256), uniform),
+    ];
+    let paid = owed.pay(&reads);
+    assert_eq!(paid, barrier(Barrier::memory_barrier().src, uniform));
+    assert_eq!(
+        paid.map(Barrier::legacy),
+        Some(LegacyBarrier {
+            dst_access: vk::AccessFlags::UNIFORM_READ,
+            ..least_between_dispatches()
+        })
+    );
+    assert_eq!(owed.pay(&reads), None);
+    // A copy's read was never Metal's promise: a barrier of the runtime's own orders it.
+    let mut owed = Owed::default();
+    owed.memory_barrier();
+    assert_eq!(owed.pay(&read_of_2(copy_read())), None);
+}
+
 #[test]
 fn layout_moves_outside_encoders_order_as_writes_of_the_whole_image() {
     // A batch moves a caller's image into `GENERAL` before its encoders and home after them: each
@@ -2091,7 +2210,8 @@ fn a_summary_lists_its_uses_by_resource_each_in_recorded_order() {
 }
 
 /// An ordered encoder's commands write the uses it orders them by over the last command's storage
-/// ([`EncoderUses::ordered_storage`]): commands of as many uses as the first make no list again,
+/// ([`EncoderUses::ordered_storage`]): a part's first command, ordered after nothing, makes no
+/// list until the next orders after it; commands of as many uses as the first make no list again,
 /// and a command whose every use is tracked keeps the list it compared, making none apart; a
 /// command with an untracked use makes the one it keeps once, and the commands like it after it
 /// none.
@@ -2103,6 +2223,9 @@ fn an_encoder_orders_its_commands_in_storage_it_keeps() {
         writes(2, bytes(0..64), copy_write()),
         reads(1, bytes(0..64), shader_read()),
     ];
+    uses.order(TRANSFER, &tracked, Reach::Unnamed);
+    let made = uses.ordered_storage().map(|(_, room)| room);
+    assert_eq!(made, [0, 0], "a list made for a part's first command");
     uses.order(TRANSFER, &tracked, Reach::Unnamed);
     let first = uses.ordered_storage();
     assert_eq!(first[1].1, 0, "a list kept apart for tracked uses");
@@ -2122,6 +2245,129 @@ fn an_encoder_orders_its_commands_in_storage_it_keeps() {
         uses.order(TRANSFER, &untracked, Reach::Named);
         uses.order(TRANSFER, &tracked, Reach::Unnamed);
         assert_eq!(uses.ordered_storage(), second);
+    }
+}
+
+/// A part's first command orders after nothing, so the encoder takes it into the order its later
+/// commands compare with only once one does (`EncoderUses::taken_in`): an encoder of one command
+/// takes none in, ordered or recorded, nor after a split; one of two commands takes in both, and
+/// the second orders after the first's write; a split leaves the first of its part waiting again.
+#[test]
+fn a_parts_first_command_is_taken_into_its_order_only_by_a_later_one() {
+    let write = [writes(1, bytes(0..64), shader_write())];
+    let read = [reads(1, bytes(0..64), shader_read())];
+    let mut one = EncoderUses::<Key>::new(true);
+    assert_eq!(one.order(COMPUTE, &write, Reach::Unnamed), None);
+    assert_eq!(
+        one.taken_in(),
+        0,
+        "a command ordered after nothing taken in alone"
+    );
+    let mut recorded = EncoderUses::<Key>::new(true);
+    recorded.record(COMPUTE, &write, None);
+    assert_eq!(
+        recorded.taken_in(),
+        0,
+        "a recorded first command taken in alone"
+    );
+    let mut two = EncoderUses::<Key>::new(true);
+    assert_eq!(two.order(COMPUTE, &write, Reach::Unnamed), None);
+    assert_eq!(
+        two.order(COMPUTE, &read, Reach::Unnamed),
+        barrier(shader_write(), shader_read())
+    );
+    assert_eq!(two.taken_in(), 2);
+    // After a split, the next command orders after nothing of the part before.
+    two.split();
+    assert_eq!(two.order(COMPUTE, &read, Reach::Unnamed), None);
+    assert_eq!(
+        two.taken_in(),
+        2,
+        "a split part's first command taken in alone"
+    );
+    let after_read = two.order(COMPUTE, &write, Reach::Unnamed);
+    assert!(after_read.is_some(), "a write after its part's first read");
+    assert_eq!(two.taken_in(), 4);
+    // An unordered encoder takes nothing in.
+    let mut unordered = EncoderUses::<Key>::new(false);
+    unordered.order(COMPUTE, &write, Reach::Unnamed);
+    unordered.order(COMPUTE, &read, Reach::Unnamed);
+    assert_eq!(unordered.taken_in(), 0);
+}
+
+/// Taking a part's first command into its order only when a later command orders after it
+/// orders every command as taking each in at once did: for random commands of tracked and
+/// untracked uses, ordered of either reach or recorded after a barrier, with barriers asked and
+/// splits between them, the same barriers and the same summaries as an encoder whose order is
+/// never empty (a first command of a key nothing else uses, a read, given again after each
+/// split), whose commands are each taken in as they come.
+#[test]
+fn a_first_command_taken_in_late_orders_as_taken_in_at_once() {
+    const PRIMER: Key = 1000;
+    let primer = [reads(PRIMER, bytes(0..16), copy_read())];
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = |n: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % n
+    };
+    for round in 0..400 {
+        let mut late = EncoderUses::<Key>::new(true);
+        let mut eager = EncoderUses::<Key>::new(true);
+        eager.order(TRANSFER, &primer, Reach::Named);
+        for step in 0..next(10) + 1 {
+            let uses: Vec<Use<Key>> = (0..next(4) + 1)
+                .map(|_| {
+                    let start = 16 * next(3);
+                    let range = bytes(start..start + 16 * (next(2) + 1));
+                    let access = [copy_read(), copy_write(), shader_read(), shader_write()]
+                        [next(4) as usize];
+                    let tracked = next(3) > 0;
+                    match access.access.intersects(
+                        vk::AccessFlags2::TRANSFER_WRITE | vk::AccessFlags2::SHADER_STORAGE_WRITE,
+                    ) {
+                        true => Use::writes(next(4), tracked, range, access),
+                        false => Use::reads(next(4), tracked, range, access),
+                    }
+                })
+                .collect();
+            let reach = [Reach::Named, Reach::Unnamed][next(2) as usize];
+            let stages = COMPUTE | TRANSFER;
+            let what = format!("round {round} step {step}: {uses:?} {reach:?}");
+            match next(5) {
+                0 => {
+                    late.split();
+                    eager.split();
+                    eager.order(TRANSFER, &primer, Reach::Named);
+                }
+                1 => {
+                    let asked = late.barrier(&uses, reach);
+                    assert_eq!(asked, eager.barrier(&uses, reach), "barrier {what}");
+                }
+                2 => {
+                    let after = [None, barrier(shader_write(), shader_read())][next(2) as usize];
+                    late.record(stages, &uses, after);
+                    eager.record(stages, &uses, after);
+                }
+                _ => {
+                    let ordered = late.order(stages, &uses, reach);
+                    assert_eq!(ordered, eager.order(stages, &uses, reach), "order {what}");
+                }
+            }
+        }
+        let without_primer = |summaries: Vec<Summary<Key>>| -> Vec<Vec<Use<Key>>> {
+            (summaries.iter())
+                .map(|summary| {
+                    (summary.uses().iter())
+                        .filter(|used| used.key != PRIMER)
+                        .cloned()
+                        .collect()
+                })
+                .collect()
+        };
+        let late = without_primer(late.finish_parts());
+        assert_eq!(late, without_primer(eager.finish_parts()), "round {round}");
     }
 }
 
@@ -2428,4 +2674,172 @@ fn draws_check_what_their_encoder_made_resident_against_geometry_writes_once_by_
         written,
         "merged into one that meets"
     );
+}
+
+/// A host step's gate (`scheduler/mod.rs`'s `gate_of`): per `VkQueue`, the last batch that wrote
+/// the bytes it reads. A batch that wrote other bytes or only read them adds nothing; a write on
+/// another queue that covers the older one's bytes names its own queue alone, having waited for
+/// the older; a write the host saw complete is forgotten; an untracked read, or a queue past the
+/// count, answers none.
+#[test]
+fn a_host_read_waits_for_the_last_writes_of_its_bytes_alone() {
+    let mut tracker = Tracker::default();
+    submit(
+        &mut tracker,
+        &[one(&[writes(1, bytes(0..64), shader_write())])],
+        on(0, 1),
+    );
+    submit(
+        &mut tracker,
+        &[one(&[writes(2, bytes(0..64), shader_write())])],
+        on(1, 1),
+    );
+    submit(
+        &mut tracker,
+        &[one(&[reads(1, bytes(0..64), shader_read())])],
+        on(0, 2),
+    );
+    let read = Access::new(
+        vk::PipelineStageFlags2::ALL_COMMANDS,
+        vk::AccessFlags2::MEMORY_READ,
+    );
+    let records = reads(1, bytes(0..8), read);
+    let last = |tracker: &Tracker<Key>, read: &Use<Key>| {
+        tracker.last_writes(std::slice::from_ref(read), 2)
+    };
+    assert_eq!(last(&tracker, &records), Some(vec![1, 0]), "the writer");
+    let unwritten = reads(1, bytes(64..72), read);
+    assert_eq!(last(&tracker, &unwritten), Some(vec![0, 0]), "no writer");
+    let (_, waits) = submit(
+        &mut tracker,
+        &[one(&[writes(1, bytes(0..64), shader_write())])],
+        on(1, 2),
+    );
+    assert_eq!(waits, [wait(on(0, 2), COMPUTE)], "the covering write waits");
+    assert_eq!(
+        last(&tracker, &records),
+        Some(vec![0, 2]),
+        "the covering writer"
+    );
+    let untracked = Use::reads(1, false, bytes(0..8), read);
+    assert_eq!(last(&tracker, &untracked), None, "untracked");
+    assert_eq!(
+        tracker.last_writes(std::slice::from_ref(&records), 1),
+        None,
+        "a queue past the count"
+    );
+    tracker.completed(1, 2);
+    assert_eq!(last(&tracker, &records), Some(vec![0, 0]), "seen complete");
+}
+
+/// A command buffer's writes through its residency (`State::resident_writes` in
+/// `command_buffer/mod.rs`), joined to its batch's first encoder, which names none of them: they
+/// keep the tracked uses that touch something, leave the stages the encoder's fence update covers
+/// as they were (a later wait on the fence orders after the encoder's transfer alone), and make
+/// the batch the last writer a later host read of their bytes waits for.
+#[test]
+fn writes_of_no_stage_widen_no_fence_and_name_their_batch_the_writer() {
+    let fence: Key = 100;
+    let every = vk::PipelineStageFlags2::ALL_COMMANDS;
+    let written = Access::new(every, vk::AccessFlags2::MEMORY_WRITE);
+    let resident = Summary::of_no_stage(vec![
+        writes(9, bytes(0..64), written),
+        Use::writes(8, false, bytes(0..64), written),
+        writes(7, bytes(0..0), written),
+        writes(9, bytes(0..64), written),
+    ]);
+    assert_eq!(
+        resident.keys().collect::<Vec<_>>(),
+        [9],
+        "tracked, touching something, once"
+    );
+    let mut first = EncoderUses::new(true);
+    first.record(TRANSFER, &[writes(5, bytes(0..64), copy_write())], None);
+    first.update_fence(fence, None);
+    let mut joined = first.finish();
+    joined.join(resident);
+    let mut tracker = Tracker::default();
+    submit(&mut tracker, &[joined], on(0, 1));
+    let mut second = EncoderUses::new(false);
+    second.wait_for_fence(fence, None);
+    second.record(COMPUTE, &[reads(6, bytes(0..64), shader_read())], None);
+    let (barriers, _) = submit(&mut tracker, &[second.finish()], on(0, 2));
+    let after = Access::new(
+        COMPUTE,
+        vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE,
+    );
+    assert_eq!(
+        barriers,
+        [barrier(
+            Access::new(TRANSFER, vk::AccessFlags2::MEMORY_WRITE),
+            after
+        )],
+        "the fence's stages"
+    );
+    let read = Access::new(every, vk::AccessFlags2::MEMORY_READ);
+    let records = reads(9, bytes(0..8), read);
+    assert_eq!(
+        tracker.last_writes(std::slice::from_ref(&records), 2),
+        Some(vec![1, 0]),
+        "the batch writes them"
+    );
+}
+
+/// An image placed in a heap at `bytes` of the heap's memory, at level 0 and layer 0.
+fn placed(bytes: Range<u64>) -> UseRange {
+    UseRange::Image {
+        aspects: vk::ImageAspectFlags::COLOR,
+        levels: 0..1,
+        layers: 0..1,
+        place: ImagePlace::bytes(bytes),
+    }
+}
+
+/// Images placed apart in one heap order as one resource (Metal tracks a tracked heap so), but
+/// share no memory; images over the same bytes, a heap's bytes over an image's, and two uses of
+/// one image at its subresources do.
+#[test]
+fn placed_images_share_memory_where_their_bytes_meet() {
+    let (a, b) = (placed(0..4096), placed(4096..8192));
+    assert!(a.overlaps(&b), "a heap's images order as one");
+    assert!(!a.shares_memory(&b) && !b.shares_memory(&a));
+    let over = placed(2048..6144);
+    assert!(a.shares_memory(&over) && b.shares_memory(&over));
+    assert!(a.shares_memory(&a.clone()));
+    let other_level = UseRange::Image {
+        aspects: vk::ImageAspectFlags::COLOR,
+        levels: 1..2,
+        layers: 0..1,
+        place: ImagePlace::bytes(0..4096),
+    };
+    assert!(
+        !a.shares_memory(&other_level),
+        "another level of the same image"
+    );
+    assert!(a.shares_memory(&UseRange::Bytes(4000..4100)));
+    assert!(!a.shares_memory(&UseRange::Bytes(4096..5000)));
+    assert!(UseRange::Bytes(4096..5000).shares_memory(&b));
+    // An image of no known place meets every range of another kind, and others as before.
+    let whole = image(vk::ImageAspectFlags::COLOR, 0..1, 0..1);
+    assert!(whole.shares_memory(&UseRange::Bytes(1 << 40..(1 << 40) + 1)));
+    assert!(whole.shares_memory(&a) && a.shares_memory(&whole));
+    assert_eq!(a.hull(&b).map(|h| h == placed(0..8192)), Some(false));
+    // A place counts 64-byte granules, rounded out: a texture ending inside one meets the bytes
+    // after it there, and none past it, where the next texture's aligned offset lies.
+    let short = placed(0..1000);
+    assert!(short.shares_memory(&UseRange::Bytes(1000..1016)));
+    assert!(!short.shares_memory(&placed(1024..2048)));
+    // Past the 256 GiB the granules count, the whole key's memory.
+    let far = placed(1 << 40..(1 << 40) + 4096);
+    assert!(
+        far.shares_memory(&a),
+        "a place past the granules meets every range"
+    );
+}
+
+/// A use's range is copied and compared by every use of every command (`EncoderUses::note`,
+/// `command_uses_into`): an image's place in its heap takes 8 bytes of it, so it stays 32.
+#[test]
+fn a_use_range_stays_32_bytes() {
+    assert_eq!(std::mem::size_of::<UseRange>(), 32);
 }

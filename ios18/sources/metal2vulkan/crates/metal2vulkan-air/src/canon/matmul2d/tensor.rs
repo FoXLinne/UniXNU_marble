@@ -3,10 +3,12 @@
 //! A `tensor<…, tensor_inline>` is an object in thread memory whose bytes the program never reads
 //! itself: Metal's tensor header (`metal_tensor`) sizes it with `air.get_descriptor_size_tensor`,
 //! fills it with `air.init_strided_private_tensor` (a data pointer, and `rank` extents and strides
-//! of the index type), copies it with `air.slice_private_tensor_private_tensor` (no offsets and no
-//! extents: the copy constructor), and reads an extent with `air.get_extent_private_tensor`;
-//! `matmul2d` reads the object it is given. Its layout is therefore the translation's, and this
-//! one is:
+//! of the index type), copies it with `air.slice_private_tensor_private_tensor` (no offsets and
+//! no extents: the copy constructor), and reads an extent with `air.get_extent_private_tensor`;
+//! `matmul2d` reads the object it is given. AIR 2.9 (deployment target macOS 27) adds operands
+//! to two of them: three to an initialization, which Metal's header passes as null, 0 and -1,
+//! and one to an extent, which it passes as 0. Only those values are modeled; what other values
+//! carry is not established. The object's layout is the translation's, and this one is:
 //!
 //! | Bytes | Field |
 //! |---|---|
@@ -51,9 +53,10 @@ pub fn stride_at(rank: u64, d: u64) -> u64 {
 }
 
 /// The modeled form of a call of tensor operation `t` with `args`: its rank, read by `int`, when
-/// the rank is at most [`MAX_RANK`], an initialization's index arrays are not null, and a slice
-/// has neither offsets nor extents (the copy constructor). `None` for another form, which stays a
-/// call.
+/// the rank is at most [`MAX_RANK`], an initialization's index arrays are not null (and the AIR
+/// 2.9 form's three added operands are null, 0 and -1), the AIR 2.9 extent's added operand is
+/// 0, and a slice has neither offsets nor extents (the copy constructor). `None` for another
+/// form, which stays a call.
 pub fn form(
     t: Tensor,
     args: &[Value],
@@ -66,10 +69,19 @@ pub fn form(
             let r = rank(r)?;
             (int(bytes)? == INDEX_BYTES).then_some(r)
         }
-        (Tensor::Extent, &[_, r, _]) => rank(r),
+        (Tensor::Extent { .. }, &[_, r, _]) => rank(r),
+        (Tensor::Extent { .. }, &[_, r, _, z]) => {
+            let r = rank(r)?;
+            (int(z) == Some(0)).then_some(r)
+        }
         (Tensor::InitStrided { .. }, &[_, r, _, extents, strides, _]) => {
             let r = rank(r)?;
             (r == 0 || !(null(extents) || null(strides))).then_some(r)
+        }
+        (Tensor::InitStrided { .. }, &[_, r, _, extents, strides, _, p, n, k]) => {
+            let r = rank(r)?;
+            let added = null(p) && int(n) == Some(0) && int(k).map(|k| k & 0xff) == Some(0xff);
+            (added && (r == 0 || !(null(extents) || null(strides)))).then_some(r)
         }
         (Tensor::Slice, &[_, _, r, offsets, extents]) => {
             let r = rank(r)?;
@@ -84,11 +96,11 @@ pub fn is_null(consts: &ConstTable, v: Value) -> bool {
     matches!(v, Value::Const(c) if matches!(consts.get(c).map(|k| &k.value), Some(Const::Null)))
 }
 
-/// `air.init_strided_private_tensor.i32.<space>(obj, rank, data, extents, strides, kind)` of
-/// [`form`] `rank`: the data pointer, then each extent and stride copied from the two index
-/// arrays.
+/// `air.init_strided_private_tensor.i32.<space>(obj, rank, data, extents, strides, kind)` (or
+/// AIR 2.9's, with its three added operands) of [`form`] `rank`: the data pointer, then each
+/// extent and stride copied from the two index arrays.
 pub fn init(out: &mut Out<'_>, args: &[Value], rank: u64, m: &mut Meter) -> Result<(), Error> {
-    let [obj, _, data, extents, strides, _kind] = *args else {
+    let [obj, _, data, extents, strides, _kind, ..] = *args else {
         return Err(invariant("a tensor initialization of another form"));
     };
     out.store(data, obj, ALIGN, m)?;
@@ -106,10 +118,11 @@ pub fn init(out: &mut Out<'_>, args: &[Value], rank: u64, m: &mut Meter) -> Resu
     Ok(())
 }
 
-/// `air.get_extent_private_tensor.i32(obj, rank, dim)`: extent `dim` (an extent past the rank
-/// reads another field; Metal's header asks for one below it).
+/// `air.get_extent_private_tensor.i32(obj, rank, dim)` (or AIR 2.9's, with its added 0) of
+/// [`form`]: extent `dim` (an extent past the rank reads another field; Metal's header asks for
+/// one below it).
 pub fn extent(out: &mut Out<'_>, args: &[Value], m: &mut Meter) -> Result<Value, Error> {
-    let [obj, _, dim] = *args else {
+    let [obj, _, dim, ..] = *args else {
         return Err(invariant("a tensor extent of another form"));
     };
     let i32t = out.int_ty(32, m)?;
@@ -144,4 +157,74 @@ pub fn copy(out: &mut Out<'_>, args: &[Value], rank: u64, m: &mut Meter) -> Resu
         m,
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::{ConstId, Idx};
+
+    /// Constant `k` as a value: the tests' stand-in operands, read by `int` and `null` below.
+    fn k(i: u32) -> Value {
+        Value::Const(ConstId::from_index(i as usize).unwrap())
+    }
+
+    const NULL: u32 = 100;
+    const MINUS_ONE: u32 = 101;
+
+    fn int(v: Value) -> Option<u64> {
+        match v {
+            Value::Const(c) if c.index() == MINUS_ONE as usize => Some(0xff),
+            Value::Const(c) if c.index() < NULL as usize => Some(c.index() as u64),
+            _ => None,
+        }
+    }
+
+    fn null(v: Value) -> bool {
+        matches!(v, Value::Const(c) if c.index() == NULL as usize)
+    }
+
+    /// The AIR 2.9 form's added operands are modeled as Metal's header passes them (null, 0 and
+    /// -1) and no other way; the AIR 2.8 form reads as before.
+    #[test]
+    fn an_air_2_9_initialization_is_modeled_with_its_headers_added_operands() {
+        let init = |trailing| Tensor::InitStrided {
+            data: AddrSpace::Device,
+            trailing,
+        };
+        // obj, rank 2, data, extents, strides, kind 1 (constants 50 and up stand for pointers).
+        let air28 = [k(50), k(2), k(51), k(52), k(53), k(1)];
+        assert_eq!(form(init(false), &air28, &int, &null), Some(2));
+        let added = |p: u32, n: u32, kk: u32| {
+            let mut a = air28.to_vec();
+            a.extend([k(p), k(n), k(kk)]);
+            a
+        };
+        assert_eq!(
+            form(init(true), &added(NULL, 0, MINUS_ONE), &int, &null),
+            Some(2)
+        );
+        for other in [
+            added(54, 0, MINUS_ONE),
+            added(NULL, 1, MINUS_ONE),
+            added(NULL, 0, 0),
+        ] {
+            assert_eq!(form(init(true), &other, &int, &null), None, "{other:?}");
+        }
+    }
+
+    /// The AIR 2.9 extent's added operand is modeled as Metal's header passes it (0) and no
+    /// other way.
+    #[test]
+    fn an_air_2_9_extent_is_modeled_with_its_headers_added_operand() {
+        let extent = |trailing| Tensor::Extent { trailing };
+        assert_eq!(
+            form(extent(false), &[k(50), k(2), k(1)], &int, &null),
+            Some(2)
+        );
+        let air29 = [k(50), k(2), k(1), k(0)];
+        assert_eq!(form(extent(true), &air29, &int, &null), Some(2));
+        let other = [k(50), k(2), k(1), k(1)];
+        assert_eq!(form(extent(true), &other, &int, &null), None);
+    }
 }

@@ -43,6 +43,10 @@
 //! hands such a store to its driver (`render_target::DontCare::Discarded`, MoltenVK among them),
 //! where Metal keeps the texture's earlier texels, which the word would replace; and a
 //! multisampled depth on a device without either form of the write.
+//! A `DontCare` load's NaN clear depth, which Metal's tiles hold alike where its draws touch
+//! them, is not written: where the pass clears that load (`clear_reach::dont_care_loads`), a
+//! `Depth16Unorm` clears to 0, Metal's answer, and a 32-bit float depth to 1.0, announced
+//! (`signed-depth-test`).
 
 use super::blit::TRANSFER;
 use super::buffer::Buffer;
@@ -120,7 +124,7 @@ pub(super) fn degrade_nan_clears(device: &Device, layout: &PassLayout, drew: boo
 /// draw call. A resolve texture's level of the same keeps the clear's texel through the pass's
 /// resolve.
 pub(super) fn keeps_nan_sign(target: &Target, called: bool) -> bool {
-    if called || !target.texture.device().metal_compresses_textures() {
+    if called || !target.texture.generation().metal_compresses_textures() {
         return false;
     }
     let mut root = &target.texture;

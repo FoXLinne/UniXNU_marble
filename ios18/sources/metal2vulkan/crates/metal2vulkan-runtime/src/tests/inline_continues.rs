@@ -74,17 +74,16 @@ fn device(cache: &Path) -> Device {
         },
         ..DeviceOptions::default()
     };
-    // The held making is waited for until it is made, whatever the hold's length: under
-    // `PipelineWaitPolicy::Bounded` a draw whose making is held past its command buffer's bound
-    // runs nothing (`tests/deferred_calls.rs` takes that form).
+    // The held making is waited for until it is made, whatever the hold's length, under either
+    // value; under `PipelineWaitPolicy::Exact` the state's creation makes its own pipeline before
+    // it returns, held pool or not (`tests/deferred_calls.rs` takes the default's form).
     options.policy.pipeline_waits = PipelineWaitPolicy::Exact;
     Device::system_default_with(&options).unwrap()
 }
 
 /// The fixture's state of `tob_rect` and `fragment`, one `RGBA8Unorm` target.
 fn state(device: &Device, fragment: &str) -> RenderPipelineState {
-    let ll = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../metal2vulkan-validation/fixtures/public/engine/tob_renders.ll");
+    let ll = metal2vulkan_devtools::engine_dir().join("tob_renders.ll");
     let bitcode = metal2vulkan_devtools::llvm_assemble(&ll).unwrap();
     let library = metal2vulkan::library::Library::from_air(&bitcode).unwrap();
     let library = device.new_library_with_compile_library(library);

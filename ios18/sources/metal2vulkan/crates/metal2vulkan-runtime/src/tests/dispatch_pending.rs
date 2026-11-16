@@ -13,7 +13,7 @@
 use crate::pipeline::pool::held;
 use crate::{
     Buffer, CommandBuffer, CommandBufferStatus, CommandQueue, ComputePipelineState, Device,
-    DeviceKind, DeviceOptions, PipelineOptions, ResourceOptions, ShaderCacheOptions, Size,
+    DeviceKind, DeviceOptions, Fence, PipelineOptions, ResourceOptions, ShaderCacheOptions, Size,
 };
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -72,11 +72,7 @@ fn device(cache: &Path) -> Device {
 
 /// A state of the fixture's `scale_and_offset`.
 pub(super) fn state(device: &Device) -> ComputePipelineState {
-    let ll = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../metal2vulkan-validation/fixtures/public/examples/runtime_examples.ll");
-    let bitcode = metal2vulkan_devtools::llvm_assemble(&ll).unwrap();
-    let library = metal2vulkan::library::Library::from_air(&bitcode).unwrap();
-    let library = device.new_library_with_compile_library(library);
+    let library = super::encoder_holds::library(device, "examples/runtime_examples.ll");
     let function = library.new_function_with_name("scale_and_offset").unwrap();
     device
         .new_compute_pipeline_state_with_function(&function, &PipelineOptions::default())
@@ -92,14 +88,21 @@ pub(super) struct Buffers {
 
 impl Buffers {
     pub(super) fn new(device: &Device) -> Buffers {
+        let output = device
+            .new_buffer(COUNT * 4, ResourceOptions::shared())
+            .unwrap();
+        Buffers::writing(device, output)
+    }
+
+    /// The kernel's buffers, its output `output`, a `Shared` buffer of `COUNT * 4` bytes at least
+    /// (a no-copy buffer over host pages, for a leg of `hold_sites.rs`).
+    pub(super) fn writing(device: &Device, output: Buffer) -> Buffers {
         let input: Vec<u8> = (0..COUNT).flat_map(|i| (i as f32).to_le_bytes()).collect();
         Buffers {
             input: device
                 .new_buffer_with_bytes(&input, ResourceOptions::shared())
                 .unwrap(),
-            output: device
-                .new_buffer(COUNT * 4, ResourceOptions::shared())
-                .unwrap(),
+            output,
             scale: device
                 .new_buffer_with_bytes(&SCALE.to_le_bytes(), ResourceOptions::shared())
                 .unwrap(),
@@ -142,7 +145,43 @@ pub(super) fn dispatch(
     buffers: &Buffers,
     grid: Grid,
 ) -> CommandBuffer {
+    encoded(queue, state, buffers, grid, None)
+}
+
+/// [`dispatch`], its encoder updating `fence` after the dispatch (`hold_sites.rs`).
+pub(super) fn dispatch_updating(
+    queue: &CommandQueue,
+    state: &ComputePipelineState,
+    buffers: &Buffers,
+    grid: Grid,
+    fence: &Fence,
+) -> CommandBuffer {
+    encoded(queue, state, buffers, grid, Some(fence))
+}
+
+/// [`dispatch`], its encoder updating `fence` after the dispatch where one is given.
+fn encoded(
+    queue: &CommandQueue,
+    state: &ComputePipelineState,
+    buffers: &Buffers,
+    grid: Grid,
+    fence: Option<&Fence>,
+) -> CommandBuffer {
     let command_buffer = queue.command_buffer().unwrap();
+    encode_dispatch(&command_buffer, state, buffers, grid, fence);
+    command_buffer
+}
+
+/// A compute encoder of `command_buffer` that dispatches `state` over `buffers` as `grid` says,
+/// updating `fence` after the dispatch where one is given: for a command buffer that encodes
+/// work before it too (`hold_sites.rs`).
+pub(super) fn encode_dispatch(
+    command_buffer: &CommandBuffer,
+    state: &ComputePipelineState,
+    buffers: &Buffers,
+    grid: Grid,
+    fence: Option<&Fence>,
+) {
     let mut encoder = command_buffer.compute_command_encoder().unwrap();
     encoder.set_compute_pipeline_state(state).unwrap();
     encoder.set_buffer(Some(&buffers.input), 0, 0).unwrap();
@@ -153,8 +192,10 @@ pub(super) fn dispatch(
         Grid::One(threads) => encoder.dispatch_threadgroups(Size::new(1, 1, 1), threads),
     }
     .unwrap();
+    if let Some(fence) = fence {
+        encoder.update_fence(fence).unwrap();
+    }
     encoder.end_encoding().unwrap();
-    command_buffer
 }
 
 /// A command buffer of `queue` that fills a scratch buffer of its own: it needs no pipeline.

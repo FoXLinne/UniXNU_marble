@@ -14,10 +14,10 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::bind::instantiate::padded;
-use crate::bind::state::{ResourceClass, UsedResource};
+use crate::bind::state::{BoundBuffer, ResourceClass, UsedResource};
 use crate::bind::status::{ExecutionStatus, StatusReport};
 use crate::device::{DeviceDescription, DevicePolicy};
-use crate::indirect_commands::{Action, BufferBinding};
+use crate::indirect_commands::{Action, BufferBinding, CommandRecord};
 use crate::spirv::interp::{run, Buffer, Config, Order, Resources};
 use crate::spirv::testing::{assert_valid, int_constants};
 
@@ -30,6 +30,10 @@ const SINK: u64 = 0x0000_0011_0000_0000;
 /// The resident allocations `(guest, host, length)`.
 const A: (u64, u64, u64) = (0x0000_0001_0000_1000, 0x0000_0020_0000_0000, 256);
 const B: (u64, u64, u64) = (0x0000_0001_0000_8000, 0x0000_0021_0000_0000, 60);
+/// An allocation outside the resident set `(guest, host, length)`.
+const C: (u64, u64, u64) = (0x0000_0001_0004_0000, 0x0000_0022_0000_0000, 96);
+/// The device address of the consumer's upload of inline bytes the commands inherit.
+const BYTES: u64 = 0x0000_0023_0000_0040;
 
 const TOKEN: u64 = 0x0123_4567_89ab_cdef;
 const OTHER: u64 = 77;
@@ -273,6 +277,27 @@ fn run_preprocess(
     (capacity, fault): (u32, u32),
     planned: Option<generated::Planned>,
 ) -> Ran {
+    let storage = (capacity, fault, BINDING_COUNT as u32);
+    run_preprocess_counted(
+        dev,
+        limits,
+        (execution, variants),
+        records,
+        storage,
+        planned,
+    )
+}
+
+/// [`run_preprocess`] with the header's packed binding counts `counts` (`layout::COUNTS`: the
+/// kernel buffers in byte 0); [`run_preprocess`]'s count every kernel binding.
+fn run_preprocess_counted(
+    dev: &Device,
+    limits: [u32; 3],
+    (execution, variants): (&ReplayExecution, &[ReplayVariant]),
+    records: &[Vec<u8>],
+    (capacity, fault, counts): (u32, u32, u32),
+    planned: Option<generated::Planned>,
+) -> Ran {
     let pre = match planned {
         None => replay_preprocess(dev, &state(), execution, variants),
         Some(p) => super::preprocess(dev, &state(), execution, variants, Some(&|| Ok(p.clone()))),
@@ -281,6 +306,7 @@ fn run_preprocess(
     let mut storage = vec![0u8; COMMAND_BUFFER_HEADER_BYTES];
     storage[..4].copy_from_slice(&capacity.to_le_bytes());
     storage[4..8].copy_from_slice(&fault.to_le_bytes());
+    storage[12..16].copy_from_slice(&counts.to_le_bytes());
     for r in records {
         storage.extend_from_slice(r);
     }
@@ -297,6 +323,9 @@ fn run_preprocess(
     put(l.extents_offset, &pre.extents);
     put(l.variants_offset, &pre.variants);
     put(l.parent_offset, &pre.parent);
+    for bytes in &pre.inherited_bytes {
+        put(bytes.offset, &BYTES.to_le_bytes());
+    }
     if let (Some(g), Some(replay)) = (l.generated, &pre.generated) {
         put(g.templates_offset, &replay.templates);
     }
@@ -488,6 +517,65 @@ fn the_layout_keeps_every_section_apart() {
     );
 }
 
+/// Write into `bytes`, a record's, at binding `slot` of `stage`, what no write of the record's
+/// writers puts there: an address no resident allocation holds and a dynamic stride, which the
+/// descriptor does not enable.
+fn garbage(bytes: &mut [u8], stage: BufferStage, slot: usize) {
+    let at = (layout::buffers(stage) + slot as u64 * layout::BINDING) as usize;
+    bytes[at..at + 8].copy_from_slice(&0xABAB_ABAB_ABAB_ABABu64.to_le_bytes());
+    bytes[at + 8..at + 16].copy_from_slice(&7u64.to_le_bytes());
+}
+
+/// A command reads the kernel bindings below the header's count alone: of a descriptor of 2
+/// kernel buffers, 2 of the record's 128 bindings. A binding past the count, or of another stage,
+/// is zero in every compute record (the storage is made zero, an encoder's write past the count
+/// faults and writes nothing, the CPU's setter refuses one, a compute command has no other
+/// stage's setter, a copy takes a source of the same descriptor), so a record with garbage in
+/// every such binding dispatches as one without, its slots null and no miss counted: those bytes
+/// are not read. The negative control: the same garbage in a counted binding refuses the command.
+#[test]
+fn a_command_reads_only_the_kernel_bindings_its_descriptor_counts() {
+    let dev = device();
+    let variants = [variant(TOKEN, [8, 1, 1], 32)];
+    let execution = ReplayExecution::new(1, 0, 1);
+    let limits = dev.profile().fields().limits.max_compute_work_group_count;
+    let run = |record: Vec<u8>| {
+        let ev = (&execution, &variants[..]);
+        run_preprocess_counted(&dev, limits, ev, &[record], (1, 0, 2), None)
+    };
+    let dispatched = record(
+        groups([3, 2, 1], [8, 1, 1]),
+        Some(TOKEN),
+        &[(0, A.0), (1, B.0)],
+        32,
+    );
+    let mut past = dispatched.clone();
+    for stage in [
+        BufferStage::Vertex,
+        BufferStage::Fragment,
+        BufferStage::Object,
+    ] {
+        for slot in 0..BINDING_COUNT {
+            garbage(&mut past, stage, slot);
+        }
+    }
+    for slot in 2..BINDING_COUNT {
+        garbage(&mut past, BufferStage::Kernel, slot);
+    }
+    let ran = run(past);
+    assert_eq!(ran.status.replay_faults, ReplayFaults::default());
+    assert!(!ran.status.resident_miss);
+    assert_eq!(ran.args(0, 0), [3, 2, 1]);
+    for slot in 2..BINDING_COUNT as u64 {
+        assert_eq!(ran.entry(0, 2 + slot), [0; 4], "kernel {slot}");
+    }
+    let mut counted = dispatched;
+    garbage(&mut counted, BufferStage::Kernel, 1);
+    let ran = run(counted);
+    assert_eq!(ran.status.replay_faults, ReplayFaults::BUFFERS);
+    assert_eq!(ran.args(0, 0), [0; 3]);
+}
+
 #[test]
 fn a_dispatch_selects_its_variant_and_resolves_its_buffers() {
     let dev = device();
@@ -541,6 +629,11 @@ fn a_dispatch_selects_its_variant_and_resolves_its_buffers() {
     }
 }
 
+/// Commands that inherit the encoder's state run its pipeline and bind its kernel buffers as the
+/// host wrote their entries once, resolving nothing: a resident buffer at its offset, a buffer
+/// outside the resident set (one the encoder alone names) at its offset, inline bytes at the
+/// consumer's upload of them (bind offset 0), and an unbound slot as a buffer never set; no miss
+/// is counted.
 #[test]
 fn inherited_state_comes_from_the_parent() {
     let dev = device();
@@ -549,8 +642,24 @@ fn inherited_state_comes_from_the_parent() {
         pipeline: StateSource::Parent,
         buffers: StateSource::Parent,
     };
-    execution.parent.pipeline = Some(token(TOKEN));
-    execution.parent.buffers_mut(BufferStage::Kernel)[1] = bind(B.0 + 32);
+    execution.parent_pipeline = Some(token(TOKEN));
+    let buffer = |(guest, host, length): (u64, u64, u64), offset| BoundBuffer::Buffer {
+        length,
+        offset,
+        gpu_address: guest,
+        device_address: Some(host),
+        attribute_stride: None,
+    };
+    let kernel = &mut execution.parent_buffers;
+    kernel.insert(1, buffer(B, 32));
+    kernel.insert(
+        4,
+        BoundBuffer::Bytes {
+            len: 20,
+            attribute_stride: None,
+        },
+    );
+    kernel.insert(6, buffer(C, 8));
     let records = [
         record(groups([1, 1, 1], [4, 1, 1]), None, &[], 0),
         record(threads([8, 1, 1], [4, 1, 1]), None, &[], 0),
@@ -558,11 +667,25 @@ fn inherited_state_comes_from_the_parent() {
     let variants = [variant(TOKEN, [4, 1, 1], 0)];
     let ran = preprocess(&dev, &execution, &variants, &records, 0);
     assert!(!ran.status.replay_fault, "{:?}", ran.status);
+    assert!(!ran.status.resident_miss, "{:?}", ran.status);
+    let entries = ran.pre.layout.parent_offset + COMMAND_BYTES as u64;
+    assert_eq!(
+        ran.pre.inherited_bytes,
+        [InheritedBytes {
+            stage: Stage::Kernel,
+            index: 4,
+            offset: entries + 4 * roots::ENTRY_BYTES + roots::HOST,
+        }]
+    );
     assert_eq!(ran.args(0, 0), [1, 1, 1]);
     assert_eq!(ran.args(1, 0), [2, 1, 1]);
     for s in 0..2 {
-        assert_eq!(ran.entry(s, 3), [B.1, B.0, padded(B.2), 32]);
-        assert_eq!(ran.entry(s, 2), [0; 4]);
+        assert_eq!(ran.entry(s, 2 + 1), [B.1, B.0, padded(B.2), 32]);
+        assert_eq!(ran.entry(s, 2 + 4), [BYTES, 0, padded(20), 0]);
+        assert_eq!(ran.entry(s, 2 + 6), [C.1, C.0, padded(C.2), 8]);
+        for n in [0, 2, 3, 5, 7, 30] {
+            assert_eq!(ran.entry(s, 2 + n), [0; 4], "command {s}, buffer {n}");
+        }
     }
 }
 
@@ -730,8 +853,8 @@ fn a_command_no_variant_replays_dispatches_nothing_and_says_why() {
             faults: ReplayFaults::RECORD.0,
         },
         Refused {
-            name: "a pipeline state word of 2",
-            record: poke(layout::STATE as usize, 2),
+            name: "a pipeline state word of 4",
+            record: poke(layout::STATE as usize, 4),
             faults: ReplayFaults::RECORD.0,
         },
         Refused {
@@ -740,6 +863,16 @@ fn a_command_no_variant_replays_dispatches_nothing_and_says_why() {
                 let mut r = record(Action::Empty, None, &[], 32);
                 let at = layout::STATE as usize;
                 r[at..at + 4].copy_from_slice(&layout::RETAINED.to_le_bytes());
+                r
+            },
+            faults: ReplayFaults::RECORD.0,
+        },
+        Refused {
+            name: "a kernel's pipeline flag beside no pipeline",
+            record: {
+                let mut r = record(Action::Empty, None, &[], 32);
+                let at = layout::STATE as usize;
+                r[at..at + 4].copy_from_slice(&layout::KERNEL_PIPELINE.to_le_bytes());
                 r
             },
             faults: ReplayFaults::RECORD.0,
@@ -802,6 +935,26 @@ fn a_command_no_variant_replays_dispatches_nothing_and_says_why() {
     assert!(!ran.status.replay_fault, "{:?}", ran.status);
     assert_eq!((ran.args(0, 0), ran.args(1, 0)), ([2, 1, 1], [2, 1, 1]));
 
+    // A pipeline a kernel wrote runs, set or retained.
+    for word in [
+        layout::KERNEL_PIPELINE,
+        layout::RETAINED | layout::KERNEL_PIPELINE,
+    ] {
+        let mut written = clean();
+        let at = layout::STATE as usize;
+        written[at..at + 4].copy_from_slice(&word.to_le_bytes());
+        assert!(CommandRecord::decode(&written).unwrap().kernel_pipeline);
+        let ran = preprocess(
+            &dev,
+            &ReplayExecution::new(2, 0, 2),
+            &variants,
+            &[written, clean()],
+            0,
+        );
+        assert!(!ran.status.replay_fault, "{word}: {:?}", ran.status);
+        assert_eq!((ran.args(0, 0), ran.args(1, 0)), ([2, 1, 1], [2, 1, 1]));
+    }
+
     // The producer's sticky encoding fault refuses every command.
     let ran = preprocess(
         &dev,
@@ -819,16 +972,8 @@ fn a_command_no_variant_replays_dispatches_nothing_and_says_why() {
         pipeline: StateSource::Parent,
         buffers: StateSource::Parent,
     };
-    execution.parent.pipeline = Some(token(TOKEN));
+    execution.parent_pipeline = Some(token(TOKEN));
     let inheriting = || record(groups([2, 1, 1], local), None, &[], 32);
-    let mut vertex = CommandRecord {
-        action: groups([2, 1, 1], local),
-        ..CommandRecord::default()
-    };
-    vertex.bindings.buffers_mut(BufferStage::Vertex)[5] = bind(B.0);
-    vertex.threadgroup_memory_lengths = lengths(32);
-    let mut vertex_bytes = vec![0u8; COMMAND_BYTES];
-    vertex.encode_into(&mut vertex_bytes).expect("record");
     for (name, bad, faults) in [
         (
             "a pipeline set while inherited",
@@ -836,8 +981,8 @@ fn a_command_no_variant_replays_dispatches_nothing_and_says_why() {
             ReplayFaults::PIPELINE.0,
         ),
         (
-            "a vertex buffer set while inherited",
-            vertex_bytes,
+            "a kernel buffer set while inherited",
+            record(groups([2, 1, 1], local), None, &[(5, B.0)], 32),
             ReplayFaults::BUFFERS.0,
         ),
     ] {
@@ -1079,12 +1224,6 @@ fn the_binder_refuses_what_it_cannot_set_up() {
     );
     let other = ReplayVariant::flat(token(OTHER), [8, 1, 1], 64);
     assert!(replay_preprocess(&dev, &state(), &execution, &[flat, other]).is_ok());
-    let mut parent = ReplayExecution::new(1, 0, 1);
-    parent.parent.buffers_mut(BufferStage::Kernel)[0] = Some(BufferBinding {
-        address: A.0,
-        attribute_stride: Some(u64::MAX),
-    });
-    assert_eq!(refused(&parent, &ok), ReplayRefusal::InvalidParent);
     // An empty range is set up and runs nothing.
     let pre = replay_preprocess(&dev, &state(), &ReplayExecution::new(4, 4, 0), &ok)
         .expect("an empty range");
@@ -1821,10 +1960,14 @@ fn a_flat_dispatch_is_described_only_as_a_flat_variant_runs_it() {
 /// The replay's modules test a product's overflow only by `OpUMulExtended`'s high word, never by
 /// the forms NVIDIA's compiler (615.71.09) refuses beside the preprocess's other arithmetic: a
 /// division of the largest `u64` (`b > (2^64 - 1) / a`), or a comparison with `2^32 - 1` of a
-/// product of two widened `u32`s (or a select of one). Both modules on every committed profile with
-/// device addresses.
+/// product of two widened `u32`s (or a select of one). Every `OpUMulExtended` is 32-bit: a `u64`
+/// product is four of its halves' (`FunctionBuilder::mul_extended_from_halves`). Both modules on
+/// every committed profile with device addresses.
 #[test]
 fn the_replay_modules_test_overflow_by_a_products_high_word() {
+    const TYPE_INT: u32 = 21;
+    const TYPE_VECTOR: u32 = 23;
+    const TYPE_STRUCT: u32 = 30;
     const UCONVERT: u32 = 113;
     const IMUL: u32 = 132;
     const UDIV: u32 = 134;
@@ -1841,12 +1984,22 @@ fn the_replay_modules_test_overflow_by_a_products_high_word() {
             let is = |id: u32, width: u32, value: u64| consts.get(&id) == Some(&(width, value));
             let mut widened = std::collections::BTreeSet::new();
             let mut products = std::collections::BTreeSet::new();
-            let mut extended = 0;
+            // Each integer, vector or struct type's (first member's) integer width.
+            let mut widths = std::collections::BTreeMap::new();
+            let mut extended = std::collections::BTreeMap::<u32, u32>::new();
             let mut i = 5;
             while let Some(&w) = words.get(i) {
                 let (len, op) = ((w >> 16) as usize, w & 0xFFFF);
                 let at = |k: usize| words.get(i + k).copied().unwrap_or(0);
                 match op {
+                    TYPE_INT => {
+                        widths.insert(at(1), at(2));
+                    }
+                    TYPE_VECTOR | TYPE_STRUCT => {
+                        if let Some(&w) = widths.get(&at(2)) {
+                            widths.insert(at(1), w);
+                        }
+                    }
                     UCONVERT => {
                         widened.insert(at(2));
                     }
@@ -1863,7 +2016,11 @@ fn the_replay_modules_test_overflow_by_a_products_high_word() {
                         !(products.contains(&at(3)) && is(at(4), 64, u64::from(u32::MAX))),
                         "{stem} {what}: a widened u32 product compared with 2^32 - 1"
                     ),
-                    UMUL_EXTENDED => extended += 1,
+                    // OpUMulExtended type, result, a, b.
+                    UMUL_EXTENDED => {
+                        let width = widths.get(&at(1)).copied().unwrap_or(0);
+                        *extended.entry(width).or_default() += 1;
+                    }
                     _ => {}
                 }
                 if len == 0 {
@@ -1871,10 +2028,14 @@ fn the_replay_modules_test_overflow_by_a_products_high_word() {
                 }
                 i += len;
             }
-            // Five `u64` products and three `u32` ones in the flat dispatch; the preprocess's
-            // own three beside it.
-            let want = if what == "flat" { 8 } else { 11 };
-            assert_eq!(extended, want, "{stem} {what}");
+            // Five `u64` products of four each and three `u32` ones in the flat dispatch; the
+            // preprocess's own three `u32` ones beside it.
+            let want = if what == "flat" { 23 } else { 26 };
+            assert_eq!(
+                extended,
+                std::collections::BTreeMap::from([(32, want)]),
+                "{stem} {what}: OpUMulExtended by width"
+            );
         }
     }
     assert!(seen > 0);

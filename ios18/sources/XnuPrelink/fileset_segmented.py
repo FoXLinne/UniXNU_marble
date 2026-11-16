@@ -40,8 +40,9 @@ class SegmentedEmit(Emit):
             if not segment['size']:
                 continue
             at = self.layout.placements[segment['name']] - self.cache.base
-            self.data[at:at + segment['size']] = bytes(segment['size'])
-            source, size = segment['fileoff'], segment['filesize']
+            span = self.layout.span(segment['name'])   # __TEXT stops below the next retained segment
+            self.data[at:at + span] = bytes(span)
+            source, size = segment['fileoff'], min(segment['filesize'], span)
             self.data[at:at + size] = self.native.data[source:source + size]
         old_info = next(s for s in self.cache.segments if s['name'] == '__PRELINK_INFO')
         new_info = self.layout.roots['__PRELINK_INFO']
@@ -230,6 +231,10 @@ class SegmentedEmit(Emit):
                 address = self.layout.placements[name]
                 struct.pack_into('<Q', blob, 24, address)
                 struct.pack_into('<Q', blob, 40, address-self.cache.base if segment['filesize'] else 0)
+                span = self.layout.span(name)
+                if span < segment['size']:   # __TEXT mapped below the next retained segment: its command says what is mapped
+                    struct.pack_into('<Q', blob, 32, span)
+                    struct.pack_into('<Q', blob, 48, min(segment['filesize'], span))
                 if name == '__LINKEDIT':
                     size = self.layout.table_end - (address-self.cache.base)
                     struct.pack_into('<Q', blob, 32, size)

@@ -16,6 +16,7 @@
 //! Device tests: compiled only under the validation crate's GPU safety cfgs (`m2v_gpu`,
 //! `m2v_cpu_icd`), on the kind of device the cfg selects.
 
+use super::plan_room::device_with_room;
 use crate::command_buffer::completion;
 use crate::{
     Buffer, CommandBuffer, CommandQueue, Device, DeviceKind, DeviceOptions, EventRef,
@@ -34,6 +35,21 @@ const BOUND: Duration = Duration::from_secs(20);
 
 /// The device the cfg selects: a CPU device under `m2v_cpu_icd`, else a GPU.
 fn device() -> Device {
+    device_of(DeviceOptions::default())
+}
+
+/// As [`device`], with the queue plan (`queue_limits: None`) in place of the runtime tests'
+/// default queue limits (`device/create.rs`): for a test that keeps more than two of its
+/// command queues live at once.
+fn plan_device() -> Device {
+    device_of(DeviceOptions {
+        queue_limits: None,
+        ..DeviceOptions::default()
+    })
+}
+
+/// [`device`], its other options `base`'s.
+fn device_of(base: DeviceOptions) -> Device {
     let options = DeviceOptions {
         kinds: match cfg!(m2v_cpu_icd) {
             true => vec![DeviceKind::Cpu],
@@ -43,9 +59,9 @@ fn device() -> Device {
                 DeviceKind::Virtual,
             ],
         },
-        ..DeviceOptions::default()
+        ..base
     };
-    Device::system_default_with(&options).unwrap()
+    device_with_room(&options).unwrap()
 }
 
 /// A command buffer of `queue` that fills `target` whole with `value`.
@@ -118,7 +134,7 @@ fn an_idle_device_s_waiters_and_scheduler_stay_asleep() {
 #[test]
 fn with_parks_unbounded_every_change_still_wakes_its_waiter() {
     completion::park_unbounded();
-    let device = device();
+    let device = plan_device();
     let queues: Vec<CommandQueue> = (0..3)
         .map(|_| device.new_command_queue().unwrap())
         .collect();

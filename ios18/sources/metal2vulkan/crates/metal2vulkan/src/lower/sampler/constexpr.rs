@@ -198,6 +198,14 @@ pub fn address_modes(words: [u64; 2]) -> Option<[SamplerAddressMode; 3]> {
     ])
 }
 
+/// The word of constexpr sampler `words` (`metal::sampler::SamplerWord`): the word a runtime
+/// sampler of the same state holds, of its `MTLSamplerDescriptor`.
+pub(crate) fn sampler_word(words: [u64; 2]) -> Result<crate::metal::sampler::SamplerWord, Error> {
+    Ok(crate::metal::sampler::SamplerWord::of(&descriptor(
+        &state_of(words)?,
+    )?))
+}
+
 /// The `MTLSamplerDescriptor` a constexpr sampler state states (the fields Metal's runtime
 /// descriptor shares with it).
 fn descriptor(s: &SamplerState) -> Result<SamplerDescriptor, Error> {
@@ -239,6 +247,9 @@ fn descriptor(s: &SamplerState) -> Result<SamplerDescriptor, Error> {
             Reduction::Minimum => SamplerReductionMode::Minimum,
             Reduction::Maximum => SamplerReductionMode::Maximum,
         },
+        // A constexpr sampler's own bias is its `mipLodBias` ([`constexpr_desc`]), not a runtime
+        // descriptor's `lodBias`, which samples nothing differently.
+        lod_bias: 0.0,
     })
 }
 

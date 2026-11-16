@@ -1239,9 +1239,49 @@ pub struct LoopMeta {
     pub cont: BlockId,
     pub preheader: BlockId,
     pub exit_sel: Option<VarId>,
-    /// The loop's `OpLoopMerge` asks `DontUnroll`: a loop `spirv::roll` wrote to compile a
-    /// repeated region once, which a downstream compiler that unrolled it would write out again.
-    pub dont_unroll: bool,
+    /// What the loop's `OpLoopMerge` asks of the driver's unrolling.
+    pub unrolling: Unrolling,
+}
+
+/// What a loop's `OpLoopMerge` asks of the driver's unrolling: its `LoopControl`, a hint the
+/// driver may take; the loop computes the same either way.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Unrolling {
+    /// Nothing (`None`): the driver decides.
+    #[default]
+    Driver,
+    /// `Unroll`, to the degree possible: the loop's AIR latch carries `llvm.loop.unroll.full`
+    /// (Metal's compiler writes it for `#pragma clang loop unroll(full)`) or
+    /// `llvm.loop.unroll.enable` (`#pragma unroll`: fully where the trip count is known, else
+    /// partly).
+    Unroll,
+    /// `DontUnroll`: a loop written so that the driver compiles its body once (a region
+    /// `spirv::roll` rolled, a routine's own loop), or one whose AIR latch carries
+    /// `llvm.loop.unroll.disable` (`#pragma nounroll`).
+    DontUnroll,
+    /// `PartialCount` and its factor (SPIR-V 1.4): the loop's AIR latch carries
+    /// `llvm.loop.unroll.count` of that factor (`#pragma unroll N`), at least 1.
+    PartialCount(u32),
+}
+
+impl Unrolling {
+    /// The `LoopControl` bits.
+    pub const fn control(self) -> u32 {
+        match self {
+            Unrolling::Driver => 0,
+            Unrolling::Unroll => 0x1,
+            Unrolling::DontUnroll => 0x2,
+            Unrolling::PartialCount(_) => 0x100,
+        }
+    }
+
+    /// The literal the `LoopControl` bits take after them: `PartialCount`'s factor.
+    pub const fn literal(self) -> Option<u32> {
+        match self {
+            Unrolling::PartialCount(n) => Some(n),
+            _ => None,
+        }
+    }
 }
 
 /// The execution models the new core emits.
@@ -1428,6 +1468,11 @@ pub struct TypedModule {
     pub(in crate::spirv) coherent: std::collections::BTreeSet<GlobalId>,
     /// Storage-image resources decorated `Volatile` (`ModuleBuilder::volatile`).
     pub(in crate::spirv) volatile: std::collections::BTreeSet<GlobalId>,
+    /// Buffer bindings whose memory nothing in the module writes (`ModuleBuilder::unwritten_buffer`):
+    /// a compute module's storage views of one are decorated `NonWritable` where the serializer's
+    /// walk finds no write to the binding.
+    pub(in crate::spirv) unwritten_buffers:
+        std::collections::BTreeSet<crate::pipeline::sym::ResourceSlot>,
     /// The enabling capability chosen for a builtin whose registry offers alternatives
     /// (`ModuleBuilder::enable_builtin`).
     pub(in crate::spirv) enabling: std::collections::BTreeMap<GlobalId, crate::spv::Capability>,

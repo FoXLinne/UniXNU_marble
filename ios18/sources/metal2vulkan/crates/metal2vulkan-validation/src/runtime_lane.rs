@@ -381,6 +381,8 @@ mod device_recovery;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod discard_counts;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod discard_fetch_groups;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod discard_hoist;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod dispatch_costs;
@@ -569,6 +571,8 @@ mod inline_reasons;
 mod int_attributes;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod interlocked_draw_order;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod interlocked_primitive_order;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod keep_alives;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
@@ -827,6 +831,8 @@ mod snapshot_reads;
 mod snorm_tile_store;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod sparse_textures;
+#[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
+mod split_fetch_order;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
 mod srgb_decode;
 #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]

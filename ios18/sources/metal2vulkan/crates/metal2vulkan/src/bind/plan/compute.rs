@@ -62,9 +62,9 @@
 use super::resources::{separate_samplers, ResourcePlanner};
 use super::slots::{
     address_map_variant, anisotropic_variant, bindings, bound_value, buffer_use, check_slots,
-    check_sparse_textures, cross_variant, cubic_variant, mark_disjoint, plan_buffer, psb_variant,
-    record_noted, record_specialized, srgb_variant, storage_view_variant, used_uses,
-    ycbcr_in_place_variant, ycbcr_planes_sampled_variant,
+    check_sparse_textures, cross_variant, cubic_variant, heap_raw, heap_ycbcr_writes,
+    mark_disjoint, plan_buffer, psb_variant, record_noted, record_specialized, srgb_variant,
+    storage_view_variant, used_uses, ycbcr_in_place_variant, ycbcr_planes_sampled_variant,
 };
 use super::{
     BindingPlan, BoundKind, ComputeTemplate, DescriptorWrite, FieldLocation, LocalRules,
@@ -204,10 +204,11 @@ impl TileMemoryPlan {
 /// outside its array, as the end of an argument that ends past the tile's memory already is: that
 /// switch gives up Metal's answer for every out-of-range access, not this one alone.
 ///
-/// A 4-byte-aligned base is exact here because the threadgroup arena has no 16-byte unit
-/// (`memory::arena::ArenaMem` declares no `Units`), so a 16-byte access takes `Path::Vec4`'s
-/// fallback to four words at `off / 4` rather than a `uvec4` index at `off / 16`
-/// (`memory::leaf`): no access to the arena claims an alignment the base does not hold.
+/// A 4-byte-aligned base is exact here because the threadgroup arena has no 8- or 16-byte unit
+/// (`memory::arena::ArenaMem` declares no `Units`), so an 8- or 16-byte access takes `Path::Vec2`'s
+/// or `Path::Vec4`'s fallback to its words at `off / 4` rather than a `uvec2` index at `off / 8` or
+/// a `uvec4` index at `off / 16` (`memory::leaf`): no access to the arena claims an alignment the
+/// base does not hold.
 fn tile_argument_offset(offset: u32) -> u32 {
     offset - offset % TG_FLOOR
 }
@@ -390,6 +391,7 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
     let bindings = bindings(&p.layout);
 
     // Buffer slots.
+    let replayed = (p.dependencies.iter()).any(|d| d.fact == RuntimeFact::ReplayBindings);
     let mut buffers = Vec::new();
     for (&slot, iface) in &p.interface.slots {
         let b = match iface {
@@ -404,9 +406,8 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
             }
         };
         buffers.push(plan_buffer(
-            slot,
-            b,
-            ks.buffers.get(&slot.index),
+            (slot, b, ks.buffers.get(&slot.index)),
+            replayed,
             limits,
             &bindings,
         )?);
@@ -447,8 +448,9 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
             | PushField::Specialized(_) => {}
             // A structure's instance count, which instantiation reads from the state.
             PushField::InstanceCount(_) => {}
-            // An in-place YCbCr texture's words, which instantiation reads from the state.
-            PushField::YCbCrInPlace(_) => {}
+            // An in-place YCbCr texture's words, and a texture's rows in its texel buffer view,
+            // which instantiation reads from the state.
+            PushField::YCbCrInPlace(_) | PushField::TexelRows(_) => {}
             // A stage-in buffer's bound stride, which instantiation reads from the state.
             PushField::StageInStride(_) => {}
             other => return Err(internal(format!("a compute push field {other:?}"))),
@@ -510,6 +512,10 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
         for b in &set.bindings {
             if let BindingSource::Heap(_) = b.source {
                 descriptors.extend(planner(&mut heap)?.array(set.set, b)?);
+                continue;
+            }
+            // A constexpr sampler array: the layout's immutable samplers, no write.
+            if let BindingSource::SamplerArray { .. } = b.source {
                 continue;
             }
             // A separate sampler: a constexpr one is the layout's immutable sampler, no write; a
@@ -711,6 +717,16 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
                     .and_then(|m| m.spec(c.key))
                     .ok_or_else(|| internal(format!("{:?} without its facts", c.key)))?
             }
+            // What the kernel's handles can name: its raw arms drop where it names no texture
+            // held by its raw texels.
+            SpecKey::HeapRawTextures(stage) => {
+                u64::from(heap_raw(shape, stage, &|_| vec![Stage::Kernel]))
+            }
+            // What the kernel's handles can name: its YCbCr writes' marks drop where it names no
+            // texture whose writes go to its write shadow.
+            SpecKey::HeapYCbCrWrites(stage) => {
+                u64::from(heap_ycbcr_writes(shape, stage, &|_| vec![Stage::Kernel]))
+            }
             other => return Err(internal(format!("a compute specialization {other:?}"))),
         };
         fixed.push((c.key, v));
@@ -845,16 +861,28 @@ fn plan(p: &ComputePipeline, device: &Device, shape: &BindShape) -> Result<Bindi
         .dependencies
         .iter()
         .any(|d| d.fact == RuntimeFact::EmulatedSimdgroups);
-    // A pipeline compiled for a flat grid states its variant.
+    // A pipeline compiled as its one-row variant states it; a dispatch asks for it where every
+    // region is one row of a kernel with `RowLockstep` (`dispatch_variant`).
+    variant.one_row = p.dependencies.iter().any(|d| d.fact == RuntimeFact::OneRow);
+    // A pipeline compiled for a flat grid states its variant, and one of the call's threadgroups
+    // states that too.
     variant.flat_grid = p
         .dependencies
         .iter()
         .any(|d| d.fact == RuntimeFact::FlatGrid);
-    // And one compiled to fold its group counts.
+    variant.call_threadgroups = p
+        .dependencies
+        .iter()
+        .any(|d| d.fact == RuntimeFact::CallThreadgroups);
+    // And one compiled to fold its group counts, or to run a ragged grid's partial threadgroups.
     variant.folded_groups = p
         .dependencies
         .iter()
         .any(|d| d.fact == RuntimeFact::FoldedGroups);
+    variant.partial_threadgroups = p
+        .dependencies
+        .iter()
+        .any(|d| d.fact == RuntimeFact::PartialThreadgroups);
     // A tile function's explicit imageblock standing alone in a pass that keeps fewer of its
     // cells' bytes: the variant that reads the others as zero and drops their writes.
     variant.kept_imageblock_bytes = kept_imageblock_bytes(p, shape);

@@ -13,8 +13,9 @@
 //!
 //! The created device enables calibrated timestamps where listed: where it can calibrate (the
 //! device's own domain and a monotonic host one), it announces nothing, and the calibration pairs
-//! that placed the times stated deviations within [`SLACK`], each the least of two to four
-//! readings; elsewhere it announces `Degradation::UncalibratedGpuTimes` once. So does a calibrating
+//! that placed the times stated deviations within [`SLACK`], each the least of two to
+//! [`READINGS`] readings, unless a pair read all [`READINGS`] (a loaded host states more);
+//! elsewhere it announces `Degradation::UncalibratedGpuTimes` once. So does a calibrating
 //! device whose pairs placed a command buffer's times outside its life
 //! (`WorkCounts::calibration_disagreements`, printed): its timestamps count on another clock than
 //! the one it calibrates, as a Radeon 780M's after two MODE2 GPU resets, 65 s ahead, and those
@@ -49,6 +50,11 @@
 //! device made with `gpu_times_from_host`, none takes a slot, the GPU times of one with work are
 //! its kernel end (or its queue's latest end) and its completion's host time, in Metal's order, one
 //! after another on its queue, and the device announces `Degradation::GpuTimesFromHost` once.
+//!
+//! A command buffer whose work goes as two submissions, a wait for an event the host signals
+//! between them, is timed from its first work to its last, as Metal's times span the whole command
+//! buffer's GPU work: its GPU start before the signal, its end after it, on the device as made
+//! and on one made with `gpu_times_from_host`, whose start is the first submission's call.
 //!
 //! A driver whose timestamps wait for every queue's (`DriverFact::TimestampsWaitForEveryQueue`:
 //! MoltenVK 1.4.1 on Apple's GPUs) answers from the host's clock with the default options too:
@@ -88,6 +94,9 @@ const WAIT: Duration = Duration::from_secs(60);
 /// lavapipe, RADV, ANV and the RTX 3090 lay 36 us or more inside its window, so the
 /// bound only covers the calibration's own error.
 const SLACK: f64 = 20e-6;
+
+/// The most readings one calibration pair takes (the runtime's `gpu_time::READINGS`).
+const READINGS: u64 = 4;
 
 /// The command buffers held in flight at once by
 /// [`more_command_buffers_in_flight_than_metal_keeps_sample_buffers_are_timed`]: more than the 32
@@ -397,11 +406,16 @@ fn command_buffers_are_timed_in_the_hosts_time_base() {
 }
 
 /// On a `device` that calibrates: the calibration pairs that placed its command buffers' times,
-/// each the reading of the smallest deviation of two to four (`WorkCounts::calibration_readings`),
-/// stated deviations within [`SLACK`] (`WorkCounts::calibration_deviation_most`): on an Iris Xe
-/// (ANV, i915), the first reading after the GPU idled stated 165 us at the median and placed every
-/// time 156 us early, the next 7.6 us; a reading of a thread preempted inside it states the time
-/// it lost, and the pair reads again (`gpu_time.rs`).
+/// each the reading of the smallest deviation of two to [`READINGS`]
+/// (`WorkCounts::calibration_readings`), stated deviations within [`SLACK`]
+/// (`WorkCounts::calibration_deviation_most`) unless a pair read all [`READINGS`]: the runtime
+/// reads a pair again while the smallest so far states more than 20 us (`gpu_time.rs`). On an Iris
+/// Xe (ANV, i915), the first reading after the GPU idled stated 165 us at the median and placed
+/// every time 156 us early, the next 7.6 us. A reading of a thread preempted inside it states the
+/// time it lost, so the deviation is the host's load as well as the device's: on an RX 7900 XTX
+/// (RADV, Mesa 26.2.6) the least of four readings stated 37.5 us with this test alone on a host at
+/// load average 13.7 on 16 threads, and 93.4 and 124.9 us in whole suites, every placed time
+/// still inside its command buffer's life within it (`WorkCounts::calibration_disagreements`).
 fn calibrated_within_slack(device: &Device) {
     let counts = device.work_counts();
     let (pairs, readings, most, disagreed) = (
@@ -419,12 +433,14 @@ fn calibrated_within_slack(device: &Device) {
     );
     assert!(pairs > 0, "no calibration pair taken");
     assert!(
-        (2 * pairs..=4 * pairs).contains(&readings),
-        "{readings} readings of {pairs} pairs: two to four each"
+        (2 * pairs..=READINGS * pairs).contains(&readings),
+        "{readings} readings of {pairs} pairs: two to {READINGS} each"
     );
+    // The pair beyond the slack read all of its readings, the others two at least.
     assert!(
-        most as f64 <= SLACK * 1e9,
-        "a calibration pair's deviation {most} ns, beyond the slack"
+        most as f64 <= SLACK * 1e9 || readings >= READINGS + 2 * (pairs - 1),
+        "a calibration pair's deviation {most} ns, beyond the slack, of {readings} readings of \
+         {pairs} pairs: one beyond it reads {READINGS}"
     );
 }
 
@@ -642,6 +658,95 @@ fn start_behind_work(batch_order: BatchOrderPolicy) {
                  second"
             ),
         }
+    }
+    layer_reported_nothing_at_all(&messages);
+}
+
+/// A command buffer whose work goes as two submissions: a fill of [`BEHIND_LENGTH`] bytes and a
+/// signal of a shared event of its own, then a wait for another the host signals once it saw the
+/// first signal land, then a fill after it. Metal's `GPUStartTime` and `GPUEndTime` span the whole
+/// command buffer's GPU work, whatever its submissions: its start is the first fill's, before the
+/// host's signal, and its end the second's, after it, each inside its life ([`within`]). The host
+/// signals only once the first fill ran, however late a loaded host's GPU (lavapipe's queue thread)
+/// takes it up. On the device as made (where its family writes timestamps or its driver answers
+/// from the host), and on one made with `gpu_times_from_host`, whose start is the call of the first
+/// submission, where the first fill's work could begin. Printed (`GPU-TIMES-SPLIT`): the four times
+/// against the signal.
+#[test]
+fn a_command_buffer_of_two_submissions_is_timed_from_its_first_work_to_its_last() {
+    for from_host in [false, true] {
+        two_submissions(from_host);
+    }
+}
+
+/// [`a_command_buffer_of_two_submissions_is_timed_from_its_first_work_to_its_last`] on a device
+/// made with `gpu_times_from_host` as `from_host` says.
+fn two_submissions(from_host: bool) {
+    let cache = ScratchCache::new().unwrap();
+    let messages = Messages::default();
+    {
+        let device = validated_device_with(TEST_DEVICE, &messages, cache.path(), |options| {
+            options.gpu_times_from_host = from_host;
+        })
+        .unwrap();
+        let venue = Venue::of(&device);
+        if venue.bits == 0 && !from_host && !from_host_by_driver(&device) {
+            eprintln!(
+                "runtime gpu times: {}: writes no timestamps, nothing to check",
+                device.name()
+            );
+            return;
+        }
+        let queue = device.new_command_queue().unwrap();
+        let buffer = device
+            .new_buffer(BEHIND_LENGTH, ResourceOptions::private())
+            .unwrap();
+        let event: SharedEvent = device.new_shared_event().unwrap();
+        let ran: SharedEvent = device.new_shared_event().unwrap();
+        let cb = queue.command_buffer().unwrap();
+        let mut blit = cb.blit_command_encoder().unwrap();
+        blit.fill_buffer(&buffer, 0..BEHIND_LENGTH, 0x11).unwrap();
+        blit.end_encoding().unwrap();
+        cb.encode_signal_event(EventRef::from(&ran), 1).unwrap();
+        cb.encode_wait_for_event(EventRef::from(&event), 1).unwrap();
+        let mut blit = cb.blit_command_encoder().unwrap();
+        blit.fill_buffer(&buffer, 0..LENGTH, 0x22).unwrap();
+        blit.end_encoding().unwrap();
+        let before = host_time();
+        cb.commit().unwrap();
+        assert!(
+            ran.wait_until_signaled_value(1, WAIT),
+            "the first fill's signal landed"
+        );
+        let signalled = host_time();
+        event.set_signaled_value(1);
+        cb.wait_until_completed_for(WAIT).unwrap();
+        let after = host_time();
+        let label = format!("two submissions, from the host {from_host}");
+        within(&label, &cb, before, after);
+        let [gpu_start, gpu_end, kernel_start, kernel_end] = times(&cb);
+        let from_signal = |at: f64| (at - signalled) * 1e3;
+        eprintln!(
+            "GPU-TIMES-SPLIT {} (from the host {from_host}): against the signal, in ms: the commit \
+             {:+.3}, kernel start {:+.3}, kernel end {:+.3}, gpu start {:+.3}, gpu end {:+.3}, the \
+             wait's return {:+.3}",
+            device.name(),
+            from_signal(before),
+            from_signal(kernel_start),
+            from_signal(kernel_end),
+            from_signal(gpu_start),
+            from_signal(gpu_end),
+            from_signal(after),
+        );
+        assert!(
+            gpu_start < signalled,
+            "{label}: the GPU start {gpu_start}, at or after the signal {signalled}: not the \
+             first fill's"
+        );
+        assert!(
+            gpu_end >= signalled - SLACK,
+            "{label}: the GPU end {gpu_end}, before the signal {signalled}: not the second fill's"
+        );
     }
     layer_reported_nothing_at_all(&messages);
 }
@@ -1103,7 +1208,8 @@ fn broken_rules(
 /// A command buffer's kernel end after its GPU start, as plain Metal answered on the M3 Max under
 /// macOS 27.0.1: a fill's `kernelEndTime` 121311.732792 s against its `GPUStartTime` .732711 and
 /// `GPUEndTime` .732714, another's .736230 against .733545 and .733550. Not Metal's rule there,
-/// so Metal's answers are not held to it: counted and printed. The runtime's answers keep it by construction
+/// so Metal's answers are not held to it: counted and printed. The runtime's answers keep it by
+/// construction for a command buffer whose work went as one submission, as every one here does
 /// (`gpu_time.rs`: the GPU start is its kernel end time or later).
 const LATE_KERNEL_END: &str = "a kernel end after the GPU start";
 

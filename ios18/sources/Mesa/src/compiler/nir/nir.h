@@ -3541,6 +3541,13 @@ nir_alu_src_comp_get_uint(nir_alu_src src, unsigned comp, uint64_t *value)
    return false;
 }
 
+static inline double
+nir_alu_src_comp_as_float(nir_alu_src src, unsigned comp)
+{
+   nir_scalar scalar = nir_scalar_resolved(src.src.ssa, src.swizzle[comp]);
+   return nir_scalar_as_float(scalar);
+}
+
 typedef struct nir_binding {
    bool success;
 
@@ -6764,6 +6771,12 @@ typedef struct nir_lower_idiv_options {
     * division lowering
     */
    bool allow_fp16;
+
+   /* Correct 32-bit udiv in fp32.  For hardware where umul_high
+    * expands and frcp/ffma are one instruction.  Reciprocal nudged
+    * down 8 ulp.  Holds for rcp error in [-128, +8] ulp.
+    */
+   bool fp32_udiv_correction;
 } nir_lower_idiv_options;
 
 bool nir_lower_idiv(nir_shader *shader, const nir_lower_idiv_options *options);

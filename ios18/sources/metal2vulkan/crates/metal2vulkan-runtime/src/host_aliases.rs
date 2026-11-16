@@ -5,11 +5,17 @@
 //! the surface's pages (`Buffer::new_texture_with_iosurface_plane`), so two textures of one surface
 //! lay over two buffers. Metal orders two textures over one IOSurface as it orders one resource's
 //! accesses: in one encoder, in one command buffer and across one queue's command buffers (an M4,
-//! macOS 27.0.1, plain and under API validation; across queues only as
-//! the program orders them).
+//! macOS 27.0.1, plain and under API validation). Across queues, a command buffer committed after
+//! another and reaching the same surface through another texture ran after it, reading its
+//! writes, in every run on an M3 Max (macOS 27.0.1), a Radeon Pro 5300M and a UHD 630 (macOS
+//! 26.7.1) with both textures tracked, and with both untracked but once on the 5300M; a texture
+//! of another surface ran alongside (`metal2vulkan-conformance`'s
+//! `probes/cross_queue_surface_order.m`). The x86 Macs' GPUs took a later commit of another queue
+//! first now and then even over one tracked buffer, which is the order across queues the
+//! scheduler keeps (`scheduler/order.rs`).
 //!
 //! - **One memory, one key.** A no-copy buffer made over exactly the bytes a live one covers
-//!   (the same first byte and length; not a heap's) joins it: the device notes the first such
+//!   (the same first byte and length; not a heap's own) joins it: the device notes the first such
 //!   buffer's key as the memory's ([`Alias`]), and each command's uses of a buffer that joined
 //!   carry a use of the memory's key too, of the same bytes and access ([`HostAliases::augment`],
 //!   `EncoderCore`). The tracker orders those as one resource's, inside an encoder, between
@@ -19,6 +25,9 @@
 //! - **One memory, one import.** A buffer that joins a memory, of the memory class of a live
 //!   import of it, lies in that import's `VkBuffer` (`HostImport`, `Device::buffer_in_import`):
 //!   one resource to the driver, where the tracker's barriers are not all the ordering there is.
+//!   It reads the import as the first buffer does, through the import, so an import the device
+//!   may release while idle stays releasable beside it (`host_residency.rs`, "Several buffers in
+//!   one import").
 //!   A copied host buffer (`copied.rs`) joins the memory as an import does, and a later buffer of
 //!   either class lies in its copy while no import of its class lives ([`Kind::Copy`]): the copy
 //!   is the runtime's own memory of one class whatever the storage mode, and two copies of one
@@ -37,10 +46,38 @@
 //!   and its keep-alive goes then too, since those buffers keep the same bytes mapped
 //!   (`buffer.rs`'s `HostPages`). Copies between two such buffers are copies within one `VkBuffer`,
 //!   moved as within one buffer (`blit.rs`, `blit_texture.rs`). A buffer rebound onto the bytes a
-//!   live buffer was made over, of the class of its import, lies in that import too, joining no key
+//!   live buffer was made over or rebound onto, of the class of its import, lies in that import
+//!   too, joining no key
 //!   (`Device::rebind_host_pages`; a heap's own buffer, and bytes with a texture's aliasing image
 //!   over them, import their own), and in a live copy of them where its textures were planned at
 //!   the offset the copy lays the bytes at (its first byte) and no image in place rides on it.
+//! - **One page, one import.** `VK_EXT_external_memory_host` leaves undefined a host allocation
+//!   imported twice into one device ("Some platforms do not allow locking the same physical pages
+//!   for device access multiple times, so attempting to do it may result in undefined behavior"),
+//!   so a page a live import holds is never imported again while it lives
+//!   ([`HostAliases::within`], looked up by the bytes the live buffers and heaps were made over
+//!   or rebound onto, rounded out to the import's unit). A heap's own import is noted as a
+//!   buffer's is, joining no key ([`HostAliases::hold`]): a buffer over exactly a heap's bytes
+//!   lies in its import, and a heap over exactly a live import's bytes lies in that import. So is
+//!   the import a rebound buffer's new pages are, its own or the one it lies in
+//!   (`Device::rebind_host_pages`): a buffer made or rebound over exactly those bytes lies in it. A buffer whose pages a live
+//!   import holds all of is bound inside that import's memory at their offset, with a `VkBuffer`
+//!   of its own and no import (`Device::bind_in_import`, `WorkCounts::object_churn
+//!   .buffers_bound_in_import`), which keeps the import imported for good while it lives (no
+//!   residency release, `host_residency.rs`). A buffer or heap whose pages a live import holds
+//!   some of, and not all, and a heap whose pages a live import holds more of than its own bytes,
+//!   are a copy of the pages instead (`copied.rs`, `WorkCounts::copied_over_live_imports`), but
+//!   where every such import is of dma-bufs and the new pages come with a source of dma-bufs:
+//!   they then import the source's dma-bufs, never their pointer, on a device whose barriers
+//!   order blits through two imports of the same pages (`Device::imports_beside`,
+//!   `WorkCounts::object_churn.dma_buf_imports_beside_live`). The clause above is of host
+//!   pointers; two imports of dma-bufs of the same pages are two aliases of external memory,
+//!   which Vulkan's memory aliasing rules define (Vulkan 1.4, 12.11), their uses ordered by the
+//!   bytes they lie over (below). A guest RAM's chunk is not imported while a live import of an object's own holds some of its
+//!   pages, and a run is never imported alone by its pointer while its chunk's import is made
+//!   (`host_ram.rs`). `WorkCounts::object_churn.imports_inside_live` counts the imports made where
+//!   one held some of the pages all the same (two buffers made at once over them, or an object's
+//!   own import made as a chunk's over its pages was being made), a chunk's among them.
 //! - **Ownership stays the buffer's.** The added uses are hazard tracking's alone: what a command
 //!   holds and lists (`EncoderCore::touch`, rebind holds, `used_resources`) is named by the
 //!   command's own uses, each buffer by its own key.
@@ -52,8 +89,11 @@
 //!   and a buffer whose GPU writes are dropped imports a read-only view of its own, or is a copy
 //!   of its own (a copy shared with it would take its writes): Metal orders no two
 //!   no-copy buffers over one allocation (the same probe's `host` cases read stale or mixed
-//!   texels), so the runtime's joining of the same range is the IOSurface's ordering, which a
-//!   race over plain no-copy buffers may also give. A rebound buffer leaves the memory it was
+//!   texels), and across queues neither: a later commit of another queue through a second
+//!   buffer over the allocation ran alongside the first on all three Macs above, reading stale
+//!   or mixed words (`probes/cross_queue_surface_order.m`'s `nocopy-two`). So the runtime's
+//!   joining of the same range is the IOSurface's ordering, which a race over plain no-copy
+//!   buffers may also give. A rebound buffer leaves the memory it was
 //!   made over, keeping the key it joined (`Device::rebind_host_pages`); its pages stay in the
 //!   import while commands recorded before the rebind hold them. Two buffers made at once over
 //!   the same memory may each import it (each joins after its import): they share the key, not
@@ -123,6 +163,31 @@ pub(super) enum Kind {
     /// of either class lies in it while no import of its class lives, as the copy's memory is of
     /// one class whatever the buffer's storage mode, the memory a copy of its own would take.
     Copy,
+}
+
+/// What the live imports hold of the pages a new import would take ([`HostAliases::within`]).
+pub(super) enum Within<I> {
+    /// No live import holds any of them: the new import is their only one.
+    Free,
+    /// A live import holds all of them: a buffer over them is bound inside its memory.
+    Inside(Arc<I>),
+    /// Live imports hold some of them, none all: these, each live import of the memories whose
+    /// bytes meet them. A new import of them would import a page twice: of the pages' pointer,
+    /// or beside an import of their pointer, it is a copy of them instead; of dma-bufs beside
+    /// imports of dma-bufs alone, it is made (`Device::imports_beside`).
+    Meets(Vec<Arc<I>>),
+}
+
+impl<I> Within<I> {
+    /// The live imports that hold some of the pages: none where they are free, the one they lie
+    /// inside, or those that meet them.
+    pub(super) fn held_by(&self) -> &[Arc<I>] {
+        match self {
+            Within::Free => &[],
+            Within::Inside(import) => std::slice::from_ref(import),
+            Within::Meets(met) => met,
+        }
+    }
 }
 
 /// The device's no-copy buffers by the host memory they were made over (the module docs), and
@@ -340,8 +405,9 @@ struct Over {
 
 /// A memory live buffers were made over.
 struct Memory<I> {
-    /// The first such buffer's key: the memory's.
-    key: ResourceKey,
+    /// The first such buffer's key: the memory's. `None` while a heap's own buffer alone was
+    /// made over it ([`HostAliases::hold`]), which a later buffer lies in without joining.
+    key: Option<ResourceKey>,
     /// How many live buffers were made over it.
     buffers: usize,
     /// Its imports a buffer made, by kind: a later buffer lies in one while it lives
@@ -366,28 +432,46 @@ impl<I> HostAliases<I> {
         live(Kind::Import(class)).or_else(|| live(Kind::Copy))
     }
 
-    /// Whether a live import of `class` was made over memory that holds all of `memory` and more
-    /// (`WorkCounts::object_churn.imports_inside_live`): a buffer over part of a live no-copy
-    /// buffer's bytes, which imports its own.
-    pub(super) fn inside_live(&self, memory: (u64, u64), class: MemoryClass) -> bool {
+    /// What the live imports noted hold of the pages `window` (the first byte's host address and
+    /// the length of whole import units, `unit` bytes each, a new import's window): an import of
+    /// any class, not a copy, whose bytes rounded out to `unit` hold them all, which a buffer over
+    /// them lies inside ([`Within::Inside`]); else the live imports that hold some of them
+    /// ([`Within::Meets`]), beside which a new import would hold a page a second time; else none
+    /// ([`Within::Free`]). `VK_EXT_external_memory_host` leaves a host allocation imported twice
+    /// into a device undefined ("Some platforms do not allow locking the same physical pages for
+    /// device access multiple times"), so no page an import of its pointer holds is imported
+    /// again, nor by its pointer beside any import; two imports of dma-bufs of the same pages are
+    /// two aliases of external memory (`Device::imports_beside`).
+    pub(super) fn within(&self, window: (u64, u64), unit: u64) -> Within<I> {
         let inner = lock(&self.inner);
-        let end = memory.0.saturating_add(memory.1);
-        let found = inner
-            .memories
-            .overlapping(memory.0, end)
-            .filter(|&(start, length)| {
-                (start, length) != memory
-                    && start <= memory.0
-                    && end <= start.saturating_add(length)
-            })
-            .any(|at| {
-                inner.memories.get(at).is_some_and(|noted| {
-                    (noted.imports.iter()).any(|(made, import)| {
-                        *made == Kind::Import(class) && import.strong_count() > 0
-                    })
-                })
-            });
-        found
+        let unit = unit.max(1);
+        let (start, end) = (window.0, window.0.saturating_add(window.1));
+        let mut met = Vec::new();
+        for at in inner.memories.overlapping(start, end) {
+            let Some(noted) = inner.memories.get(at) else {
+                continue;
+            };
+            let mut live = (noted.imports.iter())
+                .filter(|(made, _)| matches!(made, Kind::Import(_)))
+                .filter_map(|(_, import)| import.upgrade())
+                .peekable();
+            let Some(first) = live.peek() else {
+                continue;
+            };
+            let from = at.0 - at.0 % unit;
+            let to =
+                at.0.saturating_add(at.1)
+                    .div_ceil(unit)
+                    .saturating_mul(unit);
+            if from <= start && end <= to {
+                return Within::Inside(Arc::clone(first));
+            }
+            met.extend(live);
+        }
+        match met.is_empty() {
+            true => Within::Free,
+            false => Within::Meets(met),
+        }
     }
 
     /// Note the buffer of `key`, made over `memory` (its first byte's host address and its
@@ -402,17 +486,48 @@ impl<I> HostAliases<I> {
         import: &Arc<I>,
     ) -> Option<Alias> {
         let mut inner = lock(&self.inner);
+        // A joining buffer's note always has a key: its own, where the memory had none.
+        let owner = self.note(&mut inner, key, memory, (kind, import), true)?;
+        if owner == key {
+            return None;
+        }
+        let alias = Alias { key: owner };
+        Arc::make_mut(&mut inner.aliases).insert(key, alias);
+        self.any.store(true, Ordering::Relaxed);
+        self.changed();
+        Some(alias)
+    }
+
+    /// Note a heap's own buffer of `key`, made over `memory` and lying in `import`, of `kind`, as
+    /// [`join`](Self::join) notes a buffer, but joining no key: a later buffer over the memory
+    /// lies in `import` ([`import`](Self::import)), and one over part of it inside it
+    /// ([`within`](Self::within)), each keeping its own key (a heap's bytes join none, "Not
+    /// joined" in the module docs); the first such buffer's key becomes the memory's.
+    pub(super) fn hold(&self, key: ResourceKey, memory: (u64, u64), kind: Kind, import: &Arc<I>) {
+        let mut inner = lock(&self.inner);
+        self.note(&mut inner, key, memory, (kind, import), false);
+    }
+
+    /// Note the buffer of `key` over `memory`, lying in `import` of its kind, its key the
+    /// memory's where it `joins` and the memory has none: the memory's key.
+    fn note(
+        &self,
+        inner: &mut Inner<I>,
+        key: ResourceKey,
+        memory: (u64, u64),
+        (kind, import): (Kind, &Arc<I>),
+        joins: bool,
+    ) -> Option<ResourceKey> {
         let Inner {
             made_over,
             memories,
-            aliases,
             serial,
-            placements: _,
-        } = &mut *inner;
+            ..
+        } = inner;
         let noted = memories.get_or_insert_with(memory, || {
             *serial += 1;
             Memory {
-                key,
+                key: None,
                 buffers: 0,
                 imports: Vec::new(),
                 serial: *serial,
@@ -425,6 +540,9 @@ impl<I> HostAliases<I> {
         if !noted.imports.iter().any(|(made, _)| *made == kind) {
             noted.imports.push((kind, Arc::downgrade(import)));
         }
+        if joins && noted.key.is_none() {
+            noted.key = Some(key);
+        }
         let owner = noted.key;
         let over = Over {
             memory,
@@ -432,14 +550,7 @@ impl<I> HostAliases<I> {
         };
         made_over.insert(key, over);
         self.noted.store(memories.len(), Ordering::Relaxed);
-        if owner == key {
-            return None;
-        }
-        let alias = Alias { key: owner };
-        Arc::make_mut(aliases).insert(key, alias);
-        self.any.store(true, Ordering::Relaxed);
-        self.changed();
-        Some(alias)
+        owner
     }
 
     /// The memory the buffer of `key` joined, if it joined one.

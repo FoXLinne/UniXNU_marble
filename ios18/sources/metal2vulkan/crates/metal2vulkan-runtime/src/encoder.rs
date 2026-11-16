@@ -68,7 +68,8 @@ use super::resource::ResourceKey;
 use super::retained::Retained;
 use super::row_copies::RowCopies;
 use super::shadow::{
-    CopyCause, CopyGate, GatedCopyIn, ShadowCopies, ShadowCopy, ShadowSync, ShadowUse, Step, Within,
+    CopyCause, CopyGate, GatedCopyIn, LaterRun, LevelsCopy, ShadowCopies, ShadowCopy, ShadowSync,
+    ShadowUse, Step, Within,
 };
 use super::shadow_copy_in::CopyIn;
 use super::shadow_merge::{MergeLease, ShadowMerge};
@@ -725,6 +726,10 @@ impl EncoderCore {
     ) -> Result<EncoderCore, Error> {
         let mut core = EncoderCore::segment_raw(command_buffer, ordered)?;
         core.replaying = true;
+        // Its first uses of copies taken at use take them where its first encoding's did, whose
+        // recording is never submitted (`shadow::Takes`, `command_buffer/reencode.rs`).
+        let first = command_buffer.state().replaying_takes.clone();
+        core.shadows = ShadowSync::again(first);
         Ok(core)
     }
 
@@ -1917,6 +1922,7 @@ impl EncoderCore {
             }
         };
         let copies = self.sample_moves(copies);
+        let copies = self.later_runs(copies);
         self.count_shadow_copies(&copies);
         // How this command's first copies in stood against their images' last standing, which
         // sizes the carry on a run without a timing (`shadow::CarryTally`).
@@ -1938,6 +1944,52 @@ impl EncoderCore {
             }
         }
         Ok(copies)
+    }
+
+    /// `copies` with the run each copy in of a copy taken at use records after its copy into the
+    /// first level where the compute filter or the picks make its later levels
+    /// (`shadow::LevelsCopy::run`, `Buffer::new_tiled_texture`), made now, each held until the
+    /// command buffer completes; a filter's counted as `generate_mipmaps`' is
+    /// (`WorkCounts::mipmaps_filtered`). Where one cannot be made (the device's memory), the
+    /// command buffer fails from the encoder on, as [`sample_moves`](Self::sample_moves) fails it,
+    /// and the copy makes no later level.
+    fn later_runs(&mut self, mut copies: Vec<ShadowCopy>) -> Vec<ShadowCopy> {
+        let runs = |copy: &ShadowCopy| {
+            let into = matches!(copy.step, Step::Into);
+            into && copy.copies.levels.as_ref().is_some_and(LevelsCopy::runs)
+        };
+        if !copies.iter().any(runs) {
+            return copies;
+        }
+        let device = self.device().clone();
+        let mut made = Vec::new();
+        let mut failed = None;
+        for copy in copies.iter_mut().filter(|copy| runs(copy)) {
+            let Some(levels) = &copy.copies.levels else {
+                continue;
+            };
+            match levels.run(&device) {
+                Ok(Some(run)) => {
+                    if matches!(run, LaterRun::Filter(_)) {
+                        device.shared().counts.mipmaps_filtered();
+                    }
+                    let run = Arc::new(run);
+                    made.push(Arc::clone(&run));
+                    copy.later = Some(run);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    failed.get_or_insert(error);
+                }
+            }
+        }
+        for run in made {
+            self.retain_shared(run);
+        }
+        if let Some(error) = failed {
+            self.fail_command_buffer(recording_error(&device, error));
+        }
+        copies
     }
 
     /// `copies` with the moves between each heap's multisample texture's image and Metal's tiles
@@ -2741,6 +2793,9 @@ impl EncoderCore {
         }
         // What the encoder leaves the command buffer's later encoders (`shadow::ShadowCarry`).
         state.shadows_carried(shadows.ended());
+        // What its first uses of copies taken at use decided, for an encoding of it again
+        // (`shadow::Takes`).
+        let takes = shadows.into_takes();
         if !first_copies.is_empty() {
             let again = state.shadows_copied_in(&first_copies);
             if again > 0 {
@@ -2772,7 +2827,8 @@ impl EncoderCore {
         let base = state.executions.len();
         // One part, its executions these: a log not kept comes back, to go without the lock.
         let logged = replay.as_ref().map(Replay::bytes);
-        let unkept = state.keep_replay(encoder, replay, base..base + executions.len());
+        let executed = base..base + executions.len();
+        let unkept = state.keep_replay(encoder, replay, takes, executed);
         if let (Some(bytes), None) = (logged, &unkept) {
             open.command_buffer
                 .device()

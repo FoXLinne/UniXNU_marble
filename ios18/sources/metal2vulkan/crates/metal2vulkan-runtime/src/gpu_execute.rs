@@ -7,8 +7,8 @@
 //!   predication) runs here where every record it may hold is covered: its range is given as
 //!   such, not read from a buffer; a caller's check (`execute_commands_in_buffer_checked`) has
 //!   nothing to see (`Execute::check_sees`), else the host step runs it before the commands reach
-//!   the device; the buffer does not
-//!   inherit the encoder's buffers; every pipeline state its records may name (the encoder's where
+//!   the device; where the buffer inherits the encoder's buffers, the encoder binds no
+//!   visible-function table (**Inherited buffers**, below); every pipeline state its records may name (the encoder's where
 //!   the buffer inherits it, else every state made with `supportIndirectCommandBuffers` alive at
 //!   the commit) compiles as a flat device-replay variant (`ComputePipelineState::replay_variant`:
 //!   its kernel does not observe its threadgroup partition) whose plan binds no descriptor, and
@@ -46,19 +46,18 @@
 //!     [`FREE_STATES_UNORDERED`] where no barrier goes between the commands
 //!     ([`DISPATCHES_PAST_ORDERED`] past [`FREE_STATES_ORDERED`] where one does): past those the
 //!     host step runs the execution, as it does it faster ([`dispatches_run`]).
-//! - **Order.** In a serial encoder, a barrier between every two commands
-//!   (`Barrier::between_dispatches`): the commands run in Metal's order, one after another, which
-//!   orders them wherever their uses meet, as the records' uses are GPU data. In a concurrent
-//!   encoder, Metal orders a command only after a barrier its record sets: where no route that
-//!   wrote the buffer's records may set one (`IndirectCommandBuffer::command_writes`, no
-//!   `CommandWrites::BARRIER`), the indirect dispatches go with no barrier between them, and else
-//!   with one between every two. A route encoded after the commit can still run before the
-//!   execution only where the execution's batch waits for an event its command buffer signals, so
-//!   its batch is held until then ([`Rerecord`]): where the buffer's records may set a barrier by
-//!   the time the batch is submitted, the commands are recorded again then, with the barriers, from
-//!   what the commit found (no work on the GPU is waited for). The generated-commands path runs
-//!   the commands of a segment its records leave without a barrier together, as Metal's concurrent
-//!   commands may run.
+//! - **Order.** Metal orders a command after the earlier ones of the range only where its record
+//!   sets a barrier, in either kind of encoder (`indirect_execute.rs`, **Order**; a serial
+//!   encoder adds a barrier before and after the range alone, which the segment's own are): where
+//!   no route that wrote the buffer's records may set one (`IndirectCommandBuffer::command_writes`,
+//!   no `CommandWrites::BARRIER`), the indirect dispatches go with no barrier between them, and
+//!   else with one between every two (`Barrier::between_dispatches`). A route encoded after the
+//!   commit can still run before the execution only where the execution's batch waits for an
+//!   event its command buffer signals, so its batch is held until then ([`Rerecord`]): where the
+//!   buffer's records may set a barrier by the time the batch is submitted, the commands are
+//!   recorded again then, with the barriers, from what the commit found (no work on the GPU is
+//!   waited for). The generated-commands path runs the commands of a segment its records leave
+//!   without a barrier together, as Metal's commands may run.
 //! - **Command predication.** An execution inside a block runs its preprocess by
 //!   `vkCmdDispatchIndirect` from a gate the step before it writes (`predication.rs`,
 //!   `Execute::preprocess_gate`): one invocation per command where the counter is 0, else none.
@@ -69,6 +68,17 @@
 //!   that does not decode, sets what its descriptor does not allow, or names no variant's state)
 //!   runs nothing, and the command buffer's execution report states why, from the status words the
 //!   preprocess wrote (`bind::ReplayFaults`), as the host step's report does.
+//! - **Inherited buffers.** Where the buffer inherits the encoder's buffers, every command binds
+//!   the encoder's kernel buffers as they stood at the call, each at its offset then (a
+//!   `setBufferOffset:` before the call included), as the host step binds them: the replay takes
+//!   the encoder's table (`bind::ReplayExecution::parent_buffers`), whose root entries the host
+//!   writes once into the scratch and the preprocess copies into each command's slot table,
+//!   resolving nothing, so a buffer the encoder alone names is read. Inline bytes the encoder
+//!   bound are read where it copied them at their call, in the command buffer's upload arena,
+//!   whose device address the scratch takes (`inherited_bytes`). The commands' uses of the
+//!   encoder's bindings order them as a dispatch's would (`variant_uses`). A command that sets a
+//!   buffer of its own runs nothing and reports it (`bind::ReplayFaults::BUFFERS`), as the host's
+//!   decode refuses it.
 //! - **What the commands reach.** The replay's resident set, which the preprocess resolves each
 //!   record's buffer addresses in and the commands' kernels search for the pointers they load,
 //!   holds the resources the command buffer's encoders made resident and the device's live
@@ -128,8 +138,8 @@ const FLAT_THREADS: u32 = 64;
 pub(super) const MAX_DISPATCHES: u64 = 1 << 15;
 
 /// The variants (pipeline states the records may name) an execution the indirect dispatches run
-/// may have, whatever its commands, where no barrier goes between them (a concurrent encoder's
-/// whose records no route may set a barrier in, the module's order): with them every count of
+/// may have, whatever its commands, where no barrier goes between them (an execution whose
+/// records no route may set a barrier in, the module's order): with them every count of
 /// commands ran faster on the GPU alone than in the host step. Each variant costs every command
 /// one more indirect dispatch, which MoltenVK encodes as a Metal dispatch the GPU runs even at a
 /// zero group count; past these, [`DISPATCHES_PAST_UNORDERED`] bounds those dispatches. Measured
@@ -149,8 +159,8 @@ pub(super) const FREE_STATES_UNORDERED: usize = 4;
 /// host step.
 pub(super) const DISPATCHES_PAST_UNORDERED: u64 = 256;
 
-/// [`FREE_STATES_UNORDERED`] where a barrier goes between every two commands (a serial encoder's,
-/// or a concurrent one's whose records may set one): MoltenVK ends its Metal compute encoder at
+/// [`FREE_STATES_UNORDERED`] where a barrier goes between every two commands (where the buffer's
+/// records may set one): MoltenVK ends its Metal compute encoder at
 /// each barrier, which the host step's commands pay too, so a variant's dispatches weigh less
 /// against it. Measured as [`FREE_STATES_UNORDERED`] was: at 256 commands 0.79x with one variant,
 /// 0.90x with eight, 0.94x with twelve, 0.96x with fourteen and 1.06x with sixteen; at 64
@@ -214,8 +224,8 @@ struct Total {
 }
 
 /// An execution `commit` recorded on the GPU alone by indirect dispatches with no barrier
-/// between its commands, in a concurrent encoder, as no route that wrote its buffer's records
-/// could set a barrier (the module's order): what `commit` found, kept until the batch is submitted
+/// between its commands, as no route that wrote its buffer's records could set a barrier (the
+/// module's order): what `commit` found, kept until the batch is submitted
 /// or the execution is recorded again with the barriers, where a route encoded since may set one.
 pub(super) struct Rerecord {
     icb: IndirectCommandBuffer,
@@ -269,9 +279,9 @@ pub(super) fn record(
     }
     let device = command_buffer.device();
     let residency = command_buffer.residency()?.kernel();
-    // A serial encoder orders its commands wherever their uses meet; a concurrent one only after
-    // a barrier a record sets.
-    let ordered = execute.ordered || execute.icb.command_writes().may(CommandWrites::BARRIER);
+    // A command runs after the earlier ones only where its record sets a barrier, in either kind
+    // of encoder (**Order**).
+    let ordered = execute.icb.command_writes().may(CommandWrites::BARRIER);
     let Some(total) = total(device, execute, &residency, ordered)? else {
         return Ok(None);
     };
@@ -298,15 +308,17 @@ pub(super) fn record(
 }
 
 /// `result`'s value; `None` where the binder refuses what the GPU-alone path asks for
-/// (`Unsupported`, an invalid replay, or a threadgroup size that needs another variant): the
-/// execution takes the host step. Any other error is the runtime's or the binder's.
+/// (`Unsupported`, an invalid replay, a threadgroup size that needs another variant, or an
+/// inherited buffer without a device address): the execution takes the host step. Any other
+/// error is the runtime's or the binder's.
 fn refusal<T>(result: Result<T, BindError>) -> Result<Option<T>, Error> {
     match result {
         Ok(value) => Ok(Some(value)),
         Err(
             BindError::Unsupported(_)
             | BindError::InvalidReplay { .. }
-            | BindError::NeedsVariant { .. },
+            | BindError::NeedsVariant { .. }
+            | BindError::MissingDeviceAddress { .. },
         ) => Ok(None),
         Err(error) => Err(Error::Bind(error)),
     }
@@ -324,7 +336,15 @@ fn total(
     let ExecutionRange::Fixed(range) = &execute.range else {
         return Ok(None);
     };
-    if execute.icb.descriptor().inherit_buffers || range.is_empty() {
+    if range.is_empty() {
+        return Ok(None);
+    }
+    // A visible-function table the encoder binds, which commands that inherit its buffers would
+    // read where they read a buffer, keeps the host step.
+    let inherited = execute.icb.descriptor().inherit_buffers;
+    if inherited
+        && !(execute.table.function_tables.is_empty() && execute.table.null_tables.is_empty())
+    {
         return Ok(None);
     }
     // A command whose state the CPU set and the program released since runs that state's
@@ -382,10 +402,13 @@ fn total(
     }
     let mut execution = ReplayExecution::new(capacity, range.start, range.len() as u32);
     execution.inheritance = execute.icb.inheritance();
-    execution.parent.pipeline = execute
+    execution.parent_pipeline = execute
         .pipeline
         .as_ref()
         .and_then(|pipeline| NonZeroU64::new(pipeline.gpu_resource_id().0));
+    if inherited {
+        execution.parent_buffers = execute.table.stage_table().buffers;
+    }
     // A flat variant runs each command as one region.
     execution.regions = 1;
     let Some((pre, form)) = preprocess(device, &state, &execution, &prepared, ordered)? else {
@@ -508,12 +531,34 @@ fn prepare(
     }))
 }
 
+/// Where `pre` takes the device address of the upload of each inline bytes the commands of
+/// `execute` inherit (`ReplayPreprocess::inherited_bytes`), from the scratch's start, and the
+/// address: the encoder's copy of the bytes at the call (`argument_table.rs`), which lives until
+/// the command buffer completes.
+fn inherited_bytes(execute: &Execute, pre: &ReplayPreprocess) -> Result<Vec<(u64, u64)>, Error> {
+    pre.inherited_bytes
+        .iter()
+        .map(|bytes| {
+            let address = (execute.table.bytes.get(&bytes.index))
+                .filter(|_| bytes.stage == Stage::Kernel)
+                .and_then(|inline| inline.region.device_address())
+                .ok_or_else(|| internal("inherited bytes without their upload's address"))?;
+            Ok((bytes.offset, address))
+        })
+        .collect()
+}
+
 /// The scratch's initial bytes: the parameters, the resident root table with its sink entry's
-/// `host` field at `sink`, the resident roots' extents, the variants, the parent's state and, on
-/// the generated-commands path, the variants' templates, each at its layout offset; the slot
-/// tables, region records, and arguments or sequences and counts are the preprocess's to write,
-/// zero until it does.
-fn scratch_bytes(pre: &ReplayPreprocess, sink: u64) -> Result<Vec<u8>, Error> {
+/// `host` field at `sink`, the resident roots' extents, the variants, the parent's state (each
+/// inherited bytes' `host` field at its upload's address, `inherited_bytes`: where, and the
+/// address) and, on the generated-commands path, the variants' templates, each at its layout
+/// offset; the slot tables, region records, and arguments or sequences and counts are the
+/// preprocess's to write, zero until it does.
+fn scratch_bytes(
+    pre: &ReplayPreprocess,
+    sink: u64,
+    inherited_bytes: &[(u64, u64)],
+) -> Result<Vec<u8>, Error> {
     let layout = pre.layout;
     let len = usize::try_from(layout.bytes).map_err(|_| internal("a replay scratch too large"))?;
     let mut bytes = vec![0u8; len];
@@ -543,6 +588,13 @@ fn scratch_bytes(pre: &ReplayPreprocess, sink: u64) -> Result<Vec<u8>, Error> {
             .get_mut(offset..offset + part.len())
             .ok_or_else(|| internal("a replay scratch section past the scratch"))?
             .copy_from_slice(part);
+    }
+    for &(offset, address) in inherited_bytes {
+        let offset = offset as usize;
+        bytes
+            .get_mut(offset..offset + 8)
+            .ok_or_else(|| internal("inherited bytes' address past the scratch"))?
+            .copy_from_slice(&address.to_le_bytes());
     }
     Ok(bytes)
 }
@@ -575,7 +627,7 @@ fn record_total(
             .upload(&device, &[], u64::from(NeutralResource::SINK_BYTES))?
             .device_address()
             .ok_or_else(no_address)?;
-        let bytes = scratch_bytes(pre, sink)?;
+        let bytes = scratch_bytes(pre, sink, &inherited_bytes(execute, pre)?)?;
         // Its root tables start at device addresses that are multiples of 32 (`upload.rs`).
         let upload = cb
             .uploads
@@ -609,10 +661,11 @@ fn record_total(
     // Inside a block of command predication the preprocess runs from its gate, made for one
     // invocation per command of the range (`Execute::preprocess_gate`), where the counter is 0.
     let gate = execute.preprocess_gate.clone();
-    let uses = variant_uses(residency, prepared)?;
+    let inherited = execute.icb.descriptor().inherit_buffers;
+    let uses = variant_uses(residency, prepared, inherited.then_some(&execute.table))?;
     let preprocess_uses = [reads(storage, 0..storage.length())];
 
-    let mut core = EncoderCore::segment(command_buffer, execute.ordered)?;
+    let mut core = EncoderCore::segment(command_buffer, false)?;
     let compute = vk::PipelineStageFlags2::COMPUTE_SHADER;
     let group_count = pre.group_count;
     core.command(compute, &preprocess_uses, |raw, command_buffer| {
@@ -646,11 +699,8 @@ fn record_total(
             }
         }
     });
-    // The preprocess's writes before the commands' preprocessing, indirect and shader reads; in a
-    // serial encoder the commands need no barrier of the tracker's after the preprocess's read of
-    // the records, which a command's resident write of the buffer would otherwise ask.
+    // The preprocess's writes before the commands' preprocessing, indirect and shader reads.
     core.barrier(Barrier::everything());
-    core.uses().ordered_everything();
     let made = match form {
         Form::Generated => {
             let commands = device
@@ -691,10 +741,13 @@ fn record_total(
 }
 
 /// What the commands use: the resident resources each variant's plan reaches, resolved now, at
-/// the commit, against `residency`, the command buffer's.
+/// the commit, against `residency`, the command buffer's; and where they inherit the encoder's
+/// buffers, what they reach of `inherited`, the encoder's table at the call
+/// (`ArgumentTable::bound_uses`).
 fn variant_uses(
     residency: &Residency,
     prepared: &[Prepared],
+    inherited: Option<&ArgumentTable>,
 ) -> Result<Vec<Use<ResourceKey>>, Error> {
     let empty = ArgumentTable::default();
     let stages = [(Stage::Kernel, &empty)];
@@ -710,6 +763,7 @@ fn variant_uses(
         blobs: Vec::new(),
         mesh: None,
         tessellation: None,
+        fan_out: None,
     };
     let mut uses = Vec::new();
     for p in prepared {
@@ -722,6 +776,12 @@ fn variant_uses(
             None,
         )?;
         uses.extend(command.iter().cloned());
+    }
+    if let Some(table) = inherited {
+        let bound = table
+            .bound_uses()
+            .ok_or_else(|| internal("inherited buffers beside a visible-function table"))?;
+        uses.extend(bound);
     }
     Ok(uses)
 }

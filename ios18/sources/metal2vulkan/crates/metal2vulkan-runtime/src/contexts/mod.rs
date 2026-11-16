@@ -293,6 +293,21 @@ impl<I: Run> Contexts<I> {
         lock(&self.shared.state).lines.leads(queue, is, posted)
     }
 
+    /// Hold the context of logical queue `queue`, which holds no item and runs on no thread (a
+    /// command queue's new place's, `queue.rs`), as a thread that runs it does: what is posted
+    /// there waits until [`release`](Self::release). False where it held an item or ran, changing
+    /// nothing.
+    pub(crate) fn hold(&self, queue: u64) -> bool {
+        lock(&self.shared.state).lines.take_idle(queue)
+    }
+
+    /// Let the context [`hold`](Self::hold) held run what was posted there meanwhile, in order.
+    pub(crate) fn release(&self, queue: u64) {
+        let mut state = lock(&self.shared.state);
+        state.lines.done(queue);
+        self.serve(state);
+    }
+
     /// Run `item` in the context of logical queue `queue` on this thread, where no thread runs
     /// that context, it holds no item, and `item` is [`plain`](Run::plain): the context runs on
     /// this thread meanwhile, so the items posted to it wait for `item`, then run on the pool's
@@ -359,11 +374,15 @@ impl<I: Run> Contexts<I> {
         #[cfg(all(test, any(m2v_gpu, m2v_cpu_icd)))]
         self.release_pauses(u64::MAX);
         let census = &self.shared.census;
-        let own = POOL.with(|pool| {
-            pool.borrow()
-                .as_ref()
-                .is_some_and(|pool| Arc::ptr_eq(pool, census))
-        });
+        // A thread whose thread-locals are gone (an exiting thread's, whose `exit` destroys them
+        // before the exit handlers run, `this_thread.rs`) is no handler thread.
+        let own = POOL
+            .try_with(|pool| {
+                pool.borrow()
+                    .as_ref()
+                    .is_some_and(|pool| Arc::ptr_eq(pool, census))
+            })
+            .unwrap_or(false);
         let floor = usize::from(own);
         let mut count = lock(&census.count);
         while count.threads > floor {
@@ -489,9 +508,12 @@ fn run<I: Run>(shared: &Shared<I>, first: bool) {
     shared.census.gone.notify_all();
 }
 
-/// Whether this thread is one of a pool's handler threads.
+/// Whether this thread is one of a pool's handler threads: not where its thread-locals are gone
+/// (an exiting thread's, whose `exit` destroys them before the exit handlers run,
+/// `this_thread.rs`).
 pub(crate) fn on_handler_thread() -> bool {
-    POOL.with(|pool| pool.borrow().is_some())
+    POOL.try_with(|pool| pool.borrow().is_some())
+        .unwrap_or(false)
 }
 
 /// A handler thread's wait for another queue's context, counted until dropped.

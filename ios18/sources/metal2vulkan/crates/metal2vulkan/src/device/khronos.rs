@@ -1292,6 +1292,7 @@ fn feature_route(structure: &str) -> Option<Route> {
         }
         "VkPhysicalDeviceMaintenance8FeaturesKHR" => Ext(&["VK_KHR_maintenance8"], None),
         "VkPhysicalDeviceShaderFmaFeaturesKHR" => Ext(&["VK_KHR_shader_fma"], None),
+        "VkPhysicalDeviceShaderFloat8FeaturesEXT" => Ext(&["VK_EXT_shader_float8"], None),
         "VkPhysicalDeviceBorderColorSwizzleFeaturesEXT" => {
             Ext(&["VK_EXT_border_color_swizzle"], None)
         }
@@ -1309,6 +1310,7 @@ fn feature_route(structure: &str) -> Option<Route> {
             &["VK_EXT_line_rasterization", "VK_KHR_line_rasterization"],
             None,
         ),
+        "VkPhysicalDeviceMultiDrawFeaturesEXT" => Ext(&["VK_EXT_multi_draw"], None),
         "VkPhysicalDeviceRayQueryFeaturesKHR" => Ext(&["VK_KHR_ray_query"], None),
         "VkPhysicalDeviceAccelerationStructureFeaturesKHR" => {
             Ext(&["VK_KHR_acceleration_structure"], None)
@@ -1583,6 +1585,7 @@ pub(super) const FEATURE_MEMBERS: &[(&str, VkFeature)] = {
         ("depthBiasExact", F::DepthBiasExact),
         ("shaderFmaFloat16", F::ShaderFmaFloat16),
         ("shaderFmaFloat32", F::ShaderFmaFloat32),
+        ("shaderFloat8", F::ShaderFloat8),
         ("synchronization2", F::Synchronization2),
         ("extendedDynamicState", F::ExtendedDynamicState),
         ("extendedDynamicState2", F::ExtendedDynamicState2),
@@ -1690,6 +1693,7 @@ pub(super) const FEATURE_MEMBERS: &[(&str, VkFeature)] = {
         ("imageView2DOn3DImage", F::ImageView2DOn3DImage),
         ("separateStencilMaskRef", F::SeparateStencilMaskRef),
         ("imageViewFormatSwizzle", F::ImageViewFormatSwizzle),
+        ("pointPolygons", F::PointPolygons),
         ("fullDrawIndexUint32", F::FullDrawIndexUint32),
         ("depthClipEnable", F::DepthClipEnable),
         ("depthClampControl", F::DepthClampControl),
@@ -1704,6 +1708,7 @@ pub(super) const FEATURE_MEMBERS: &[(&str, VkFeature)] = {
         ("provokingVertexLast", F::ProvokingVertexLast),
         ("bresenhamLines", F::BresenhamLines),
         ("alphaToOne", F::AlphaToOne),
+        ("multiDraw", F::MultiDraw),
     ]
 };
 
@@ -1780,6 +1785,8 @@ pub(crate) fn extension_from_name(name: &str) -> Option<VkExtension> {
         "VK_KHR_maintenance5" => E::KhrMaintenance5,
         "VK_EXT_texture_compression_astc_hdr" => E::ExtTextureCompressionAstcHdr,
         "VK_EXT_4444_formats" => E::Ext4444Formats,
+        "VK_EXT_multi_draw" => E::ExtMultiDraw,
+        "VK_EXT_shader_float8" => E::ExtShaderFloat8,
         "VK_IMG_format_pvrtc" => E::ImgFormatPvrtc,
         "VK_EXT_border_color_swizzle" => E::ExtBorderColorSwizzle,
         "VK_EXT_custom_border_color" => E::ExtCustomBorderColor,

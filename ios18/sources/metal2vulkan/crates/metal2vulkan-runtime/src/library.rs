@@ -9,8 +9,11 @@
 //! it with, as its stage or as a function the stage links ([`Function::linked_function`],
 //! `MTLLinkedFunctions`), and the options it was made with (`newFunctionWithDescriptor:`): one
 //! compiled to a binary is what Metal takes in a stage's `binaryFunctions` and adds to a made
-//! pipeline state.
+//! pipeline state. A library and its functions hold no Vulkan object, so they go on past the
+//! device's recovery, as Metal's do, the recovery carrying their handle of the device alone
+//! (`device/carry.rs`'s `LineDevice`), which a library's functions share.
 
+use super::device::carry::LineDevice;
 use super::device::device_error;
 use super::error::{invalid, Problem, RuntimeGap};
 use super::Device;
@@ -31,7 +34,9 @@ use std::sync::{Arc, Mutex};
 /// A Metal library (`MTLLibrary`). Cheap to clone; `Send + Sync`.
 #[derive(Clone, Debug)]
 pub struct Library {
-    device: Device,
+    /// The device: its root handle, which the checks of the calls that take the library match
+    /// by its line, and the generation handle `device` answers.
+    device: LineDevice,
     library: metal2vulkan::library::Library,
     /// What the library holds of the sampler IDs its functions' pipeline states numbered, shared
     /// with every live library of the same content (`resource_ids/numbered.rs`).
@@ -53,7 +58,8 @@ pub struct Library {
 /// Cheap to clone; `Send + Sync`.
 #[derive(Clone, Debug)]
 pub struct Function {
-    device: Device,
+    /// The device, its library's.
+    device: LineDevice,
     function: metal2vulkan::library::Function,
     constants: FunctionConstantValues,
     /// Whether the function was made with constant values (`newFunctionWithName:constantValues:`),
@@ -192,7 +198,7 @@ impl Device {
     ) -> Library {
         let holds = LibraryHolds::of(&self.shared().resource_ids, *library.content_hash());
         Library {
-            device: self.clone(),
+            device: LineDevice::new(self),
             library,
             holds,
             reflections: Arc::default(),
@@ -201,9 +207,18 @@ impl Device {
 }
 
 impl Library {
-    /// `device`.
-    pub fn device(&self) -> &Device {
-        &self.device
+    /// `device`: a generation handle of the device, owned, as Metal's `device` answers a retained
+    /// device: of the generation the library was made on, then of each one the device's recoveries
+    /// carried the library to. The handle is the caller's: it keeps meaning that generation while
+    /// held, past a recovery that carries the library on, its raw handles that generation's
+    /// `VkDevice`'s, kept alive while held.
+    pub fn device(&self) -> Device {
+        self.device.generation().clone()
+    }
+
+    /// A root handle of the library's device, which the calls that take it match by its line.
+    pub(crate) fn root_device(&self) -> &Device {
+        self.device.root()
     }
 
     /// `functionNames`, in the library's table order. A Core Image kernel library's extern
@@ -293,7 +308,9 @@ impl Library {
     /// ignored, as Metal ignores it. The others are checked against the constants the function
     /// declares when a pipeline state compiles it, where Metal checks them here: a value of
     /// another type, or a used constant without a value, refuses that pipeline state
-    /// (`Compile`). A dynamic library's function is refused as
+    /// (`Compile`), and so do values that put two of the function's arguments on overlapping
+    /// slots of one argument table (`Compile(InvalidDescriptor(OverlappingArgument))`; Metal's
+    /// "argument has invalid location"). A dynamic library's function is refused as
     /// [`new_function_with_name`](Self::new_function_with_name) refuses it.
     pub fn new_function_with_name_constant_values(
         &self,
@@ -407,9 +424,25 @@ impl Library {
 }
 
 impl Function {
-    /// `device`.
-    pub fn device(&self) -> &Device {
-        &self.device
+    /// `device`: a generation handle of the device, owned, as Metal's `device` answers a retained
+    /// device: of the generation its library was made on, then of each one the device's recoveries
+    /// carried its library to. The handle is the caller's: it keeps meaning that generation while
+    /// held, past a recovery that carries its library on, its raw handles that generation's
+    /// `VkDevice`'s, kept alive while held.
+    pub fn device(&self) -> Device {
+        self.generation().clone()
+    }
+
+    /// The generation handle [`device`](Self::device) answers a clone of, borrowed for the
+    /// runtime's own reads: a caller's handle is `device`'s, as a recovery lets go of the
+    /// object's handle of a lost generation at that generation's rest (`device/carry.rs`).
+    pub(crate) fn generation(&self) -> &Device {
+        self.device.generation()
+    }
+
+    /// A root handle of the function's device, which the calls that take it match by its line.
+    pub(crate) fn root_device(&self) -> &Device {
+        self.device.root()
     }
 
     /// `name`: the specialized name a [`FunctionDescriptor`] made the function with, else the

@@ -1,13 +1,16 @@
 //! Pipeline records (`warm/record.rs`) and the warm pass (`warm/pass.rs`): a device with a record
-//! hook hands it one record per pipeline state creation that made its state; a device handed the
-//! records an earlier process's device made over the same shader cache directory makes their
-//! translations and `VkPipeline`s before the program creates them, takes nothing the program sees,
-//! stops at its byte budget, and announces a record it cannot read and goes on.
+//! hook hands it one record per pipeline state creation that made its state, and one per compute
+//! dispatch shape whose pipelines a dispatch made; a device handed the records an earlier
+//! process's device made over the same shader cache directory makes their translations and
+//! `VkPipeline`s (a dispatch record's too) before the program asks for them, takes nothing the
+//! program sees, stops at its byte budget, and announces a record it cannot read, and a creation
+//! that fails by its kind, and goes on.
 //!
 //! # What is counted, and why counts
 //!
 //! Every assertion is a count of the structure (records handed over and warmed, libraries
-//! written, stages decoded, functions translated, identifiers taken, messages heard), never a
+//! written, stages decoded, functions translated, driver caches handed over, identifiers taken,
+//! messages heard), never a
 //! time: a count holds on any host under any load. The times the cross-process test prints (the
 //! creations on a warmed device, on an unwarmed one over the same directory, and on a cold one)
 //! are figures of this host, printed and not asserted.
@@ -29,9 +32,10 @@
 
 use super::blit_holds::Scratch;
 use super::descriptor_key_once::descriptor;
+use super::dispatch_pending::{self, dispatch, Buffers, Grid};
 use crate::{
-    BinaryArchiveDescriptor, Device, DeviceKind, DeviceOptions, MessageSink, PipelineOptions,
-    PipelineRecord, ShaderCacheOptions, WarmStatistics,
+    BinaryArchiveDescriptor, CommandBuffer, CommandBufferStatus, Device, DeviceKind, DeviceOptions,
+    MessageSink, PipelineOptions, PipelineRecord, ShaderCacheOptions, Size, WarmStatistics,
 };
 use metal2vulkan::pipeline::{ComputePipelineDescriptor, RenderPipelineDescriptor, StageSource};
 use std::path::{Path, PathBuf};
@@ -48,23 +52,26 @@ const STATES: u64 = 3;
 const DIRECTORY: &str = "M2V_TEST_WARM_DIRECTORY";
 const RECORDS: &str = "M2V_TEST_WARM_RECORDS";
 
-/// What a device's message sink heard: its degrade notices, and the id names of its other
-/// messages.
+/// What a device's message sink heard: its degrade notices, and the id names and texts of its
+/// other messages.
 #[derive(Default)]
 struct Heard {
     notices: AtomicU64,
-    names: Mutex<Vec<String>>,
+    names: Mutex<Vec<(String, String)>>,
 }
 
 impl Heard {
     /// How many messages of id name `name` it heard.
     fn named(&self, name: &str) -> usize {
-        self.names
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|heard| *heard == name)
-            .count()
+        self.texts(name).len()
+    }
+
+    /// The texts of the messages of id name `name` it heard, in order.
+    fn texts(&self, name: &str) -> Vec<String> {
+        (self.names.lock().unwrap().iter())
+            .filter(|(heard, _)| heard == name)
+            .map(|(_, text)| text.clone())
+            .collect()
     }
 }
 
@@ -102,7 +109,8 @@ fn device(
             match message.degradation.is_some() {
                 true => heard.notices.fetch_add(1, Ordering::Relaxed),
                 false => {
-                    heard.names.lock().unwrap().push(message.id_name.clone());
+                    let named = (message.id_name.clone(), message.text.clone());
+                    heard.names.lock().unwrap().push(named);
                     0
                 }
             };
@@ -114,8 +122,7 @@ fn device(
 /// The compute descriptor of `runtime_examples`' `scale_and_offset`, requiring its threadgroup
 /// (so its creation makes its first dispatch's `VkPipeline`).
 fn compute(device: &Device) -> ComputePipelineDescriptor {
-    let ll = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../metal2vulkan-validation/fixtures/public/examples/runtime_examples.ll");
+    let ll = metal2vulkan_devtools::fixtures_dir().join("examples/runtime_examples.ll");
     let bitcode = metal2vulkan_devtools::llvm_assemble(&ll).unwrap();
     let function = device
         .new_library_with_compile_library(
@@ -163,15 +170,45 @@ fn make(
 
 /// The records a device over `cache` hands over for [`make_states`]; the device is gone when
 /// this returns, so its cache thread wrote what it was handed.
+///
+/// A creation waits for the makings it hands the device's pool a bound at most
+/// (`DevicePolicy::pipeline_creation_wait`): one past it runs on and holds the device, so a drop
+/// of the states and the device meanwhile leaves the device's teardown, and its cache thread's
+/// last writes, to the reaper's thread, after this drop returns. So the states go only once the
+/// pool is idle, each piece's hold given back to its state.
 pub(super) fn recorded(cache: &Path) -> Vec<PipelineRecord> {
     let records = Arc::new(Mutex::new(Vec::new()));
     let device = device(cache, Some(&records), None);
-    drop(make_states(&device));
+    let states = make_states(&device);
+    let started = Instant::now();
+    while device.work_counts().pipeline_pool_busy != 0 {
+        assert!(
+            started.elapsed() < crate::tests::SETTLE,
+            "the pipeline pool still busy"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    drop(states);
     assert_eq!(device.warm_statistics().records_made, STATES);
+    let weak = device.downgrade();
     drop(device);
+    assert!(
+        weak.upgrade().is_none(),
+        "the device outlived its last handle: its cache thread's writes may not be done"
+    );
     let records = records.lock().unwrap().clone();
     assert_eq!(records.len() as u64, STATES, "one record per creation");
     records
+}
+
+/// The records `s` counts in an outcome: the six record counts' sum.
+fn done(s: &WarmStatistics) -> u64 {
+    s.records_warmed
+        + s.records_translated
+        + s.records_failed
+        + s.records_unread
+        + s.records_not_warmable
+        + s.records_not_run
 }
 
 /// `device`'s statistics once the warm passes over `records` records are done (each record
@@ -180,13 +217,7 @@ fn warmed(device: &Device, records: u64) -> WarmStatistics {
     let deadline = Instant::now() + Duration::from_secs(120);
     loop {
         let s = device.warm_statistics();
-        let done = s.records_warmed
-            + s.records_translated
-            + s.records_failed
-            + s.records_unread
-            + s.records_not_warmable
-            + s.records_not_run;
-        if done >= records {
+        if done(&s) >= records {
             return s;
         }
         assert!(
@@ -498,6 +529,46 @@ fn a_warm_pass_takes_nothing_the_program_sees() {
     println!("the creations announced {warm_notices} notice(s) on both devices");
 }
 
+/// The program's compute state of a pipeline a warm pass made makes its variant's objects again
+/// (the pass kept none), and hashes none of its stage's words: the device kept the digests the
+/// pass's variants took (`pipeline/objects.rs`, `WordsDigests`). Paired: the pass itself, on a
+/// device that knew none of them, took one at least.
+#[test]
+fn the_program_s_state_after_a_pass_hashes_no_stage_words() {
+    let recording = Scratch::new("warm-digests-recording");
+    let records = recorded(&recording.0);
+    let scratch = Scratch::new("warm-digests");
+    let warm = device(&scratch.0, None, None);
+    let kernel = compute(&warm);
+    let derived = crate::pipeline::objects::words_digests_derived;
+    let before_pass = derived();
+    warm.warm(records, u64::MAX);
+    let s = warmed(&warm, STATES);
+    assert_eq!(s.records_warmed, STATES, "{s:?}");
+    assert!(
+        derived() > before_pass,
+        "the pass, on a device that knew no pipeline, hashed no stage's words"
+    );
+    let stages = |device: &Device| {
+        let counts = device.work_counts();
+        counts.shader_modules_made + counts.shader_modules_shared
+    };
+    let (before, stages_before) = (derived(), stages(&warm));
+    let state = warm
+        .new_compute_pipeline_state(&kernel, &PipelineOptions::default())
+        .unwrap();
+    assert!(
+        stages(&warm) > stages_before,
+        "the program's state made no variant's objects: nothing here asked for a digest"
+    );
+    assert_eq!(
+        derived() - before,
+        0,
+        "the program's state hashed the stage words the pass's variant hashed"
+    );
+    drop(state);
+}
+
 /// A pass stops before its next record once the driver data its makings added reaches its byte
 /// budget: none is made under a budget of 0 bytes, and only the first under a budget of 1 byte.
 /// The 1-byte pass runs over a directory of its own, which holds none of the records' driver
@@ -629,6 +700,317 @@ fn an_unread_record_is_announced_and_the_pass_goes_on() {
     );
 }
 
+/// A record whose creation fails is counted failed and announced once for its kind of failure,
+/// as a warning naming that kind and nothing of the record's function, and the pass goes on: two
+/// records of `scale_and_offset` asking for more threads a threadgroup than Metal permits (2048
+/// and 4096, which Metal refuses alike) fail around the render record, which is warmed between
+/// them, and the device's sink hears the warning once, naming the kind the program's own creation
+/// of the descriptor meets.
+#[test]
+fn a_failed_creation_is_announced_once_by_its_kind_and_the_pass_goes_on() {
+    let scratch = Scratch::new("warm-failed");
+    let records = recorded(&scratch.0);
+    let heard = Arc::new(Heard::default());
+    let warm = device(&scratch.0, None, Some(&heard));
+    let refused = |threads: u32| {
+        let mut refused = compute(&warm);
+        refused.max_total_threads_per_threadgroup = Some(threads);
+        refused
+    };
+    let record = |threads: u32| {
+        let pipeline = crate::warm::Pipeline::Compute(refused(threads), 0, Vec::new());
+        PipelineRecord::of(&pipeline).unwrap()
+    };
+    let met = warm
+        .new_compute_pipeline_state(&refused(2048), &PipelineOptions::default())
+        .expect_err("Metal refuses 2048 threads a threadgroup");
+    let kind = crate::warm::failure_kind(&met);
+    let render = PipelineRecord::from_bytes(&records[0].to_bytes()).unwrap();
+    warm.warm(vec![record(2048), render, record(4096)], u64::MAX);
+    let s = warmed(&warm, STATES);
+    assert_eq!(
+        (s.records_failed, s.records_warmed, s.records_not_run),
+        (2, 1, 0),
+        "the two refused records failed, the render one between them warmed: {s:?}"
+    );
+    let said = heard.texts(crate::warm::FAILED);
+    assert_eq!(said.len(), 1, "one warning for the one kind: {said:?}");
+    assert!(said[0].contains(&format!("({kind})")), "{}", said[0]);
+    assert!(!said[0].contains("scale_and_offset"), "{}", said[0]);
+}
+
+/// The compute descriptor of the owned synthetic kernel `words`, which keeps a private array of
+/// 256 KiB a thread, indexed by its thread's position: more than any device holds (the most a
+/// device was measured to hold is 192 KiB, Metal's own, `metal2vulkan`'s
+/// `device::function_storage`), so every device refuses it for good,
+/// `Unsupported{PrivateMemory}`, once its translation has decoded, specialized and planned it.
+fn refused_kernel(device: &Device) -> ComputePipelineDescriptor {
+    const WORDS: u32 = 65536;
+    let text = format!(
+        r#"; Owned synthetic kernel: a private array of {WORDS} words a thread.
+source_filename = "warm_refused.metal"
+
+define void @words(ptr addrspace(1) %out, i32 %gid) {{
+entry:
+  %a = alloca [{WORDS} x i32], align 4
+  %w = urem i32 %gid, {WORDS}
+  %p = getelementptr inbounds [{WORDS} x i32], ptr %a, i32 0, i32 %w
+  store i32 %gid, ptr %p, align 4
+  %r = mul i32 %gid, 7
+  %i = urem i32 %r, {WORDS}
+  %q = getelementptr inbounds [{WORDS} x i32], ptr %a, i32 0, i32 %i
+  %x = load i32, ptr %q, align 4
+  %g = zext i32 %gid to i64
+  %o = getelementptr inbounds i32, ptr addrspace(1) %out, i64 %g
+  store i32 %x, ptr addrspace(1) %o, align 4
+  ret void
+}}
+
+!llvm.module.flags = !{{!0}}
+!air.kernel = !{{!1}}
+!air.version = !{{!6}}
+!air.language_version = !{{!7}}
+!0 = !{{i32 7, !"air.max_device_buffers", i32 31}}
+!1 = !{{ptr @words, !2, !3}}
+!2 = !{{}}
+!3 = !{{!4, !5}}
+!4 = !{{i32 0, !"air.buffer", !"air.location_index", i32 0, i32 1, !"air.read_write", !"air.address_space", i32 1, !"air.arg_type_size", i32 4, !"air.arg_type_align_size", i32 4, !"air.arg_type_name", !"uint", !"air.arg_name", !"out"}}
+!5 = !{{i32 1, !"air.thread_position_in_grid", !"air.arg_type_name", !"uint", !"air.arg_name", !"gid"}}
+!6 = !{{i32 2, i32 8, i32 0}}
+!7 = !{{!"Metal", i32 4, i32 0, i32 0}}
+"#
+    );
+    let air = metal2vulkan_devtools::llvm_assemble_text(&text).unwrap();
+    let function = device
+        .new_library_with_compile_library(metal2vulkan::library::Library::from_air(&air).unwrap())
+        .new_function_with_name("words")
+        .unwrap();
+    ComputePipelineDescriptor::new(StageSource::Function(function.function_descriptor()))
+}
+
+/// The record of a creation of the compute descriptor `descriptor`.
+fn compute_record(descriptor: &ComputePipelineDescriptor) -> PipelineRecord {
+    let pipeline = crate::warm::Pipeline::Compute(descriptor.clone(), 0, Vec::new());
+    PipelineRecord::of(&pipeline).unwrap()
+}
+
+/// A creation refused for good is kept, and a later pass over the same directory answers its
+/// record from that at once: the first device's pass makes the creation of [`refused_kernel`]'s
+/// record, decoding its stage until the translation refuses it, and counts it failed; a second
+/// device over the directory, as a later boot's, counts the same record failed of the same kind,
+/// announced as the first was, with no stage decoded and no translation looked up
+/// (`WarmStatistics::records_failed_before`), and the program's own creation there still
+/// translates and meets the refusal itself. A failure that is no refusal (Metal's own refusal of
+/// 2048 threads a threadgroup, `Invalid`) is not kept: a pass makes it again each time.
+#[test]
+fn a_refusal_for_good_answers_a_later_pass_at_once() {
+    let scratch = Scratch::new("warm-refusal-kept");
+    let first = device(&scratch.0, None, None);
+    let refused = refused_kernel(&first);
+    let record = compute_record(&refused);
+    first.warm(vec![record.clone()], u64::MAX);
+    let s = warmed(&first, 1);
+    assert_eq!(
+        (s.records_failed, s.records_failed_before),
+        (1, 0),
+        "the first pass made the creation, which failed: {s:?}"
+    );
+    let decoded = first.work_counts().stage_entries_specialized;
+    assert!(
+        decoded > 0,
+        "the first pass decoded the refused stage, or the later leg's zero is vacuous"
+    );
+    // The first device's cache thread writes what it was handed before its drop returns.
+    let started = Instant::now();
+    while first.work_counts().pipeline_pool_busy != 0 {
+        assert!(
+            started.elapsed() < crate::tests::SETTLE,
+            "the pool still busy"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let weak = first.downgrade();
+    drop(first);
+    assert!(
+        weak.upgrade().is_none(),
+        "the first device outlived its drop"
+    );
+
+    let heard = Arc::new(Heard::default());
+    let later = device(&scratch.0, None, Some(&heard));
+    later.warm(vec![record], u64::MAX);
+    let s = warmed(&later, 1);
+    assert_eq!(
+        (s.records_failed, s.records_failed_before),
+        (1, 1),
+        "the later pass answered the record from the kept refusal: {s:?}"
+    );
+    let cache = later.shader_cache_statistics();
+    assert_eq!(
+        (
+            later.work_counts().stage_entries_specialized,
+            cache.hits + cache.misses
+        ),
+        (0, 0),
+        "the later pass decoded no stage and looked no translation up"
+    );
+    let met = later
+        .new_compute_pipeline_state(&refused, &PipelineOptions::default())
+        .expect_err("every device refuses 256 KiB of private memory a thread");
+    let kind = crate::warm::failure_kind(&met);
+    assert!(kind.contains("PrivateMemory"), "{kind}");
+    assert!(
+        later.work_counts().stage_entries_specialized > 0,
+        "the program's own creation translates the kernel"
+    );
+    let said = heard.texts(crate::warm::FAILED);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains(&format!("({kind})")), "{}", said[0]);
+
+    let mut invalid = compute(&later);
+    invalid.max_total_threads_per_threadgroup = Some(2048);
+    let invalid = compute_record(&invalid);
+    later.warm(vec![invalid.clone()], u64::MAX);
+    later.warm(vec![invalid], u64::MAX);
+    let s = warmed(&later, 3);
+    assert_eq!(
+        (s.records_failed, s.records_failed_before),
+        (3, 1),
+        "a failure that is no refusal is made again by each pass: {s:?}"
+    );
+}
+
+/// The threads [`dispatch_pending`]'s buffers hold, and a grid of the same ragged edge in
+/// threadgroups of [`GROUP`] (one threadgroup and the edge of 40).
+const THREADS: u64 = 1000;
+const SAME_EDGE: u64 = 104;
+const GROUP: u64 = 64;
+
+/// Commit `command_buffer` and wait for it to complete.
+fn run(command_buffer: CommandBuffer) {
+    command_buffer.commit().unwrap();
+    command_buffer
+        .wait_until_completed_for(Duration::from_secs(60))
+        .unwrap();
+    assert_eq!(
+        command_buffer.status(),
+        CommandBufferStatus::Completed,
+        "{:?}",
+        command_buffer.error()
+    );
+}
+
+/// What the program's first dispatch of [`THREADS`] threads in threadgroups of [`GROUP`] over a
+/// state of `dispatch_pending`'s kernel cost `device`, the state created before: its makings that
+/// were handed a driver cache the device held (`ShaderCache::caches_shared`), the `VkPipeline`s
+/// it made, the functions it translated, and the driver's reported hits and misses.
+fn first_dispatch(device: &Device) -> [u64; 5] {
+    let state = dispatch_pending::state(device);
+    let buffers = Buffers::new(device);
+    let queue = device.new_command_queue().unwrap();
+    let shared = device.shared().shader_cache.caches_shared();
+    let before = (device.work_counts(), device.shader_cache_statistics());
+    let grid = Grid::Threads(Size::new(THREADS, 1, 1), Size::new(GROUP, 1, 1));
+    run(dispatch(&queue, &state, &buffers, grid));
+    let after = (device.work_counts(), device.shader_cache_statistics());
+    assert!(
+        buffers.written(THREADS),
+        "the dispatch wrote what Metal's writes"
+    );
+    [
+        device.shared().shader_cache.caches_shared() - shared,
+        after.0.variant_pipelines_made - before.0.variant_pipelines_made,
+        after.0.functions_translated - before.0.functions_translated,
+        after.1.driver_pipeline_hits - before.1.driver_pipeline_hits,
+        after.1.driver_pipeline_misses - before.1.driver_pipeline_misses,
+    ]
+}
+
+/// A compute state whose descriptor requires no threadgroup makes its regions' `VkPipeline`s at
+/// its first dispatch of each shape (`pipeline/dispatch_making.rs`), and that dispatch hands the
+/// hook a record of the creation and the dispatch: once, since the same dispatch again and a grid
+/// of the same ragged edge make nothing and hand nothing over. A warm pass over that record makes
+/// those `VkPipeline`s, so on the warmed device each making of the program's own first dispatch
+/// of the shape is handed the driver cache the pass's making of its record filled
+/// (`ShaderCache::caches_shared`), and translates nothing: the driver's compile of each was paid by
+/// the pass. The program's state shares no live object with the pass's (`warm/pass.rs`), so its
+/// dispatch still makes its `VkPipeline`s, out of that cache. A device warmed with the creation's
+/// record alone makes none of them on its pass and shares no cache at the dispatch, so the counts
+/// that moved are the dispatch record's. What the driver reports of each making is printed.
+#[test]
+fn a_warm_pass_makes_the_pipelines_of_the_dispatches_its_records_name() {
+    let scratch = Scratch::new("warm-dispatch");
+    let hook = Arc::new(Mutex::new(Vec::new()));
+    let recording = device(&scratch.0, Some(&hook), None);
+    let state = dispatch_pending::state(&recording);
+    assert_eq!(hook.lock().unwrap().len(), 1, "the creation's record");
+    let buffers = Buffers::new(&recording);
+    let queue = recording.new_command_queue().unwrap();
+    let grid = |threads: u64| Grid::Threads(Size::new(threads, 1, 1), Size::new(GROUP, 1, 1));
+    let made = || recording.work_counts().variant_pipelines_made;
+    let made_before = made();
+    run(dispatch(&queue, &state, &buffers, grid(THREADS)));
+    let regions = made() - made_before;
+    assert!(
+        regions > 0,
+        "the first dispatch made its regions' pipelines"
+    );
+    assert_eq!(hook.lock().unwrap().len(), 2, "the first dispatch's record");
+    run(dispatch(&queue, &state, &buffers, grid(THREADS)));
+    run(dispatch(&queue, &state, &buffers, grid(SAME_EDGE)));
+    assert_eq!(
+        (made() - made_before, hook.lock().unwrap().len()),
+        (regions, 2),
+        "the same dispatch again, and a grid of the same edge, make and record nothing"
+    );
+    assert_eq!(recording.warm_statistics().records_made, 2);
+    drop((state, buffers, queue));
+    drop(recording);
+    // Carried as bytes, as a later process holds them.
+    let records: Vec<PipelineRecord> = (hook.lock().unwrap().iter())
+        .map(|record| PipelineRecord::from_bytes(&record.to_bytes()).unwrap())
+        .collect();
+
+    let warm = device(&scratch.0, None, None);
+    warm.warm(records.clone(), u64::MAX);
+    let s = warmed(&warm, 2);
+    assert_eq!(
+        (s.records_warmed, s.dispatch_pipelines_warmed),
+        (2, regions),
+        "both records warmed, the dispatch's {regions} pipeline(s) made: {s:?}"
+    );
+    let warmed_dispatch = first_dispatch(&warm);
+    drop(warm);
+
+    let control = device(&scratch.0, None, None);
+    control.warm(records[..1].to_vec(), u64::MAX);
+    let s = warmed(&control, 1);
+    assert_eq!(
+        (s.records_warmed, s.dispatch_pipelines_warmed),
+        (1, 0),
+        "the creation's record makes no dispatch's pipeline: {s:?}"
+    );
+    let control_dispatch = first_dispatch(&control);
+    drop(control);
+
+    println!(
+        "the program's first dispatch, as [makings handed a held driver cache, pipelines made, \
+         functions translated, driver hits, driver misses]: {warmed_dispatch:?} on the device \
+         warmed with the dispatch's record, {control_dispatch:?} on the one warmed with the \
+         creation's alone"
+    );
+    assert_eq!(
+        warmed_dispatch[..3],
+        [regions, regions, 0],
+        "each of the dispatch's makings takes the cache the pass filled, and nothing translates"
+    );
+    assert_eq!(
+        control_dispatch[..3],
+        [0, regions, 0],
+        "without the dispatch's record no making finds a cache, or the warmed count is vacuous"
+    );
+}
+
 /// Every file under `directory`, recursively.
 fn walk(directory: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
@@ -643,4 +1025,93 @@ fn walk(directory: &Path) -> Vec<PathBuf> {
         }
     }
     files
+}
+
+/// A device whose instance reports messages names each pipeline it makes for the layers'
+/// messages, a program's by its Metal function's name (`VariantObjects::pipeline_name`,
+/// `DeviceShared::name_pipeline`); a device whose instance reports none works out no name.
+#[test]
+fn a_device_that_reports_messages_names_a_kernels_pipelines_by_its_function() {
+    let scratch = Scratch::new("pipeline-names");
+    let named = |heard: Option<&Arc<Heard>>| {
+        let device = device(&scratch.0, None, heard);
+        let (_, compute) = descriptors(&device);
+        let options = PipelineOptions::default();
+        let state = device
+            .new_compute_pipeline_state(&compute, &options)
+            .unwrap();
+        state.pipeline_name()
+    };
+    let heard = Arc::new(Heard::default());
+    assert_eq!(
+        named(Some(&heard)),
+        "scale_and_offset",
+        "named by its kernel's name"
+    );
+    assert_eq!(named(None), "", "no name worked out without messages");
+}
+
+/// `device`'s statistics once its pass makes the record at `at`, at most two minutes from now.
+fn in_making(device: &Device, at: u64) -> WarmStatistics {
+    let deadline = Instant::now() + Duration::from_secs(120);
+    loop {
+        let s = device.warm_statistics();
+        if s.record_in_making == Some(at) {
+            return s;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the pass never made record {at}: {s:?}"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+/// While a pass makes a record, the statistics name its place among the records handed, which
+/// the six record counts' sum is then, and how long its making has worked; between records and
+/// once the pass is done, nothing. Two calls hand [`STATES`] records, then the last two of them
+/// again (places 3 and 4), and the test's gate (`warm::gate`) holds the records at 1 and 4 in
+/// their making, working, as a slow read would: each is seen in making at its place, its time
+/// growing by the time it is held, and the pass goes on once the gate opens.
+#[test]
+fn the_record_in_making_names_its_place_and_how_long_it_worked() {
+    const HELD: Duration = Duration::from_millis(300);
+    let scratch = Scratch::new("warm-in-making");
+    let records = recorded(&scratch.0);
+    let warm = device(&scratch.0, None, None);
+    let s = warm.warm_statistics();
+    assert_eq!(
+        (s.record_in_making, s.record_in_making_nanos),
+        (None, 0),
+        "no pass runs"
+    );
+    let warmer = &warm.shared().warmer;
+    for at in [1, 4] {
+        crate::warm::gate::close(warmer, at);
+    }
+    warm.warm(records.clone(), u64::MAX);
+    warm.warm(records[1..].to_vec(), u64::MAX);
+    for at in [1, 4] {
+        let s = in_making(&warm, at);
+        assert_eq!(
+            done(&s),
+            at,
+            "the counts' sum is the place in making: {s:?}"
+        );
+        std::thread::sleep(HELD);
+        let later = warm.warm_statistics();
+        assert_eq!(later.record_in_making, Some(at), "{later:?}");
+        let grown = later.record_in_making_nanos - s.record_in_making_nanos;
+        assert!(
+            grown >= HELD.as_nanos() as u64,
+            "the making worked {grown} ns of the {HELD:?} it was held: {later:?}"
+        );
+        crate::warm::gate::open(warmer, at);
+    }
+    let s = warmed(&warm, STATES + 2);
+    assert_eq!(
+        (s.record_in_making, s.record_in_making_nanos, done(&s)),
+        (None, 0, STATES + 2),
+        "every record made, none in making: {s:?}"
+    );
 }

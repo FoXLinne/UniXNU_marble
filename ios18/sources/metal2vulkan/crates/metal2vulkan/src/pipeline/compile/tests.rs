@@ -525,6 +525,13 @@ fn function_keys_cover_their_inputs() {
     let replay = a.function_compile_key(&fd, &replay);
     assert_ne!(with_true, replay);
     assert_ne!(multisampled, replay);
+    // So is OpenCL mode, which binds the hidden buffers and honors `air.convert`'s suffixes: a
+    // pipeline of either mode never takes the other's translation.
+    let mut cl = LoweringInputs::new();
+    cl.open_cl_mode = true;
+    let cl = a.function_compile_key(&fd, &cl);
+    assert_ne!(with_true, cl);
+    assert_ne!(replay, cl);
     // So is the interlocked framebuffer fetch's pipeline state, by its attachments' state.
     let fetch = |format| {
         let mut i = LoweringInputs::new();
@@ -556,6 +563,15 @@ fn function_keys_cover_their_inputs() {
     flat.replay_bindings = true;
     flat.flat_grid = true;
     assert_ne!(replay, a.function_compile_key(&fd, &flat));
+    // So is a flat variant of the call's threadgroups.
+    let mut plain_flat = LoweringInputs::new();
+    plain_flat.flat_grid = true;
+    let mut call_flat = plain_flat.clone();
+    call_flat.call_threadgroups = true;
+    assert_ne!(
+        a.function_compile_key(&fd, &plain_flat),
+        a.function_compile_key(&fd, &call_flat)
+    );
     // So is the raw render target slice index's varying.
     let mut layer = LoweringInputs::new();
     layer.render_target_array_index_varying = true;
@@ -663,6 +679,7 @@ fn the_inputs_encoding_is_the_earlier_derived_debug() {
             inputs_encoding(&inputs),
             derived
                 .replace(", emulated_simdgroups: false", "")
+                .replace(", one_row: false", "")
                 .replace(", dropped_vertex_layer: false", "")
                 .replace(", stage_input: None", "")
                 .replace(", storage_view_slots: {}", "")
@@ -676,10 +693,12 @@ fn the_inputs_encoding_is_the_earlier_derived_debug() {
                 .replace(", snapshot_textures: {}", "")
                 .replace(", ycbcr_in_place: {}", "")
                 .replace(", ycbcr_planes_sampled: {}", "")
+                .replace(", texel_rows: {}", "")
                 .replace(", viewport_index_varying: false", "")
                 .replace(", max_call_stack_depth: None", "")
                 .replace(", open_cl_mode: false", "")
                 .replace(", flat_grid: false", "")
+                .replace(", call_threadgroups: false", "")
                 .replace(", render_target_array_index_varying: false", "")
                 .replace(", primitive_id_varying: false", "")
                 .replace(", primitive_id_indices: None", "")
@@ -691,6 +710,7 @@ fn the_inputs_encoding_is_the_earlier_derived_debug() {
                 .replace(", absent_varyings: {}", "")
                 .replace(", viewport_compensation: None", "")
                 .replace(", folded_groups: false", "")
+                .replace(", partial_threadgroups: false", "")
                 .replace(", extended_range: {}", "")
                 .replace(", extended_range_colors: {}", "")
                 .replace(", word_colors: {}", "")
@@ -704,6 +724,7 @@ fn the_inputs_encoding_is_the_earlier_derived_debug() {
                 .replace(", unattached_colors: {}", "")
                 .replace(", sample_mask: None", "")
                 .replace(", alpha_test: None", "")
+                .replace(", logic_operation: None", "")
                 .replace(", depth_compare_clamp_mask: 0", "")
                 .replace(", read_only_tests: false", "")
                 .replace(", shader_tests: false", "")
@@ -724,7 +745,9 @@ fn the_inputs_encoding_is_the_earlier_derived_debug() {
                 .replace(", instanced_attributes: {}", "")
                 .replace(", color_group: None", "")
                 .replace(", object_payload: None", "")
-                .replace(", tessellation: None", ""),
+                .replace(", tessellation: None", "")
+                .replace(", region_viewports: false", "")
+                .replace(", region_copies: false", ""),
             "{derived}"
         );
     }
@@ -1498,13 +1521,16 @@ fn a_vertex_pipeline_makes_its_input_assembly_dynamic_exactly_with_both_extended
 /// interlock: no input attachment, no color attachment state for it, the interlock, the
 /// fragment-stage store, and the format's storage access required; a blending attachment's blend
 /// the shader computes (`R32Float`'s the generic one, noted). Where the pipeline's state blocks
-/// that form (alpha to coverage), the pipeline is refused with the blocker; with neither form,
-/// refused naming both: an unordered read is never compiled.
+/// that form (alpha to coverage), the pipeline is refused with the blocker. With neither form it
+/// reads the input attachment without rasterization-order access, which the consumer's barriers
+/// order between draws alone, and its fragment stage records
+/// `PrecisionNote::UnorderedFetchWithinDraw`, which neither ordered form records. A raster order
+/// group on the color input (`fetch_ordered`) takes the interlock where the device has it, and
+/// with neither form orders that read alone: no interlock, noted.
 #[test]
 fn a_framebuffer_fetch_pipeline_is_ordered_exactly_where_the_device_orders_it() {
     use crate::device::requirements::{FormatUsage, VkExtension, VkFeature};
-    use crate::error::Capability;
-    use crate::pipeline::RenderPipeline;
+    use crate::pipeline::{PrecisionNote, RenderPipeline};
     const ORDERED: VkFeature = VkFeature::RasterizationOrderColorAttachmentAccess;
     const INTERLOCK: VkFeature = VkFeature::FragmentShaderPixelInterlock;
     let (Some(io), Some(fetch)) = (fixture("stage_io"), fixture("fragment_fetch")) else {
@@ -1540,10 +1566,19 @@ fn a_framebuffer_fetch_pipeline_is_ordered_exactly_where_the_device_orders_it() 
         Ok::<RenderPipeline, Error>(pipe)
     };
 
+    let unordered = |pipe: &RenderPipeline| {
+        (pipe.stages.iter())
+            .filter(|s| s.stage == vk::ShaderStage::FRAGMENT)
+            .any(|s| {
+                s.precision_notes
+                    .contains(&PrecisionNote::UnorderedFetchWithinDraw)
+            })
+    };
     let lavapipe = description("lavapipe");
     assert!(lavapipe.has(ORDERED));
     {
         let pipe = compile(&lavapipe, DevicePolicy::default(), &d).expect("lavapipe");
+        assert!(!unordered(&pipe));
         assert_eq!(pipe.graphics.input_attachments.len(), 1);
         assert!(pipe.graphics.storage_attachments.is_empty());
         assert!(pipe.graphics.rasterization_order_attachment_access);
@@ -1562,6 +1597,7 @@ fn a_framebuffer_fetch_pipeline_is_ordered_exactly_where_the_device_orders_it() 
     assert!(interlocked.has(INTERLOCK));
     {
         let pipe = compile(&interlocked, DevicePolicy::default(), &d).expect("interlocked");
+        assert!(!unordered(&pipe));
         assert!(pipe.graphics.input_attachments.is_empty());
         assert!(pipe.graphics.color_attachments.iter().all(Option::is_none));
         let [s] = pipe.graphics.storage_attachments.as_slice() else {
@@ -1604,7 +1640,7 @@ fn a_framebuffer_fetch_pipeline_is_ordered_exactly_where_the_device_orders_it() 
             .expect("a fragment stage");
         assert!(fragment
             .precision_notes
-            .contains(&crate::pipeline::PrecisionNote::UnmeasuredFetchBlend));
+            .contains(&PrecisionNote::UnmeasuredFetchBlend));
     }
     // Alpha to coverage, which can drop the fragment's samples, blocks the form.
     let mut covered = d.clone();
@@ -1619,18 +1655,29 @@ fn a_framebuffer_fetch_pipeline_is_ordered_exactly_where_the_device_orders_it() 
 
     let mut without = interlocked.clone();
     without.features.remove(&INTERLOCK);
-    match compile(&without, DevicePolicy::default(), &d) {
-        Err(Error::Unsupported(u)) => assert_eq!(
-            (u.feature, u.needs),
-            (
-                Feature::FramebufferFetch,
-                Needs::AnyOf(vec![
-                    vec![Capability::Feature(ORDERED)],
-                    vec![Capability::Feature(INTERLOCK)],
-                ])
-            )
-        ),
-        other => panic!("{:?}", other.map(|_| ())),
+    let pipe = compile(&without, DevicePolicy::default(), &d).expect("neither");
+    assert!(unordered(&pipe));
+    assert_eq!(pipe.graphics.input_attachments.len(), 1);
+    assert!(pipe.graphics.storage_attachments.is_empty());
+    assert!(!pipe.graphics.rasterization_order_attachment_access);
+    for f in [ORDERED, INTERLOCK] {
+        assert!(!pipe.requirements.features.contains(&f), "{f:?}");
+    }
+    let mut grouped = d.clone();
+    grouped.fragment = Some(StageSource::Function(FunctionDescriptor::new(
+        Library::from_air(&fetch)
+            .expect("library")
+            .function("fetch_ordered")
+            .expect("fragment"),
+    )));
+    let pipe = compile(&interlocked, DevicePolicy::default(), &grouped).expect("grouped");
+    assert!(!unordered(&pipe));
+    assert!(pipe.requirements.features.contains(&INTERLOCK));
+    let pipe = compile(&without, DevicePolicy::default(), &grouped).expect("grouped, neither");
+    assert!(unordered(&pipe));
+    assert_eq!(pipe.graphics.input_attachments.len(), 1);
+    for f in [ORDERED, INTERLOCK] {
+        assert!(!pipe.requirements.features.contains(&f), "{f:?}");
     }
 }
 
@@ -2832,25 +2879,36 @@ fn the_interface_states_whether_the_function_takes_a_command_buffer() {
 }
 
 /// The interface states what the function may write into indirect command buffers, from its
-/// AIR: a kernel that encodes compute commands (`icb_replay_encode`) its operations' bits and no
-/// primitive type; kernels that draw (`icb_render_replay_encode_draw_only`,
-/// `icb_render_indexed_encode`) their draws' bits and the constant primitive type they pass
-/// (points); a kernel that takes no command buffer (`icb_replay_template`) nothing. A pipeline's
-/// interface holds its stages' together.
+/// AIR: a kernel that encodes compute commands (`icb_replay_encode`) its operations' bits, no
+/// primitive type and the compute kind; kernels that draw (`icb_render_replay_encode_draw_only`,
+/// `icb_render_indexed_encode`) their draws' bits, the constant primitive type they pass
+/// (points) and the render kind; a kernel that takes no command buffer (`icb_replay_template`)
+/// nothing. A pipeline's interface holds its stages' together.
 #[test]
 fn the_interface_states_what_the_function_may_write_into_command_buffers() {
     use crate::pipeline::interface::CommandWrites as W;
     let p =
         crate::pipeline::testing::profile("lavapipe", DevicePolicy::default()).expect("profile");
-    for (entry, operations, primitive_types) in [
+    for (entry, operations, primitive_types, kinds) in [
         (
             "icb_replay_encode",
             W::PIPELINE | W::BUFFER | W::THREADGROUP_MEMORY | W::DISPATCH | W::BARRIER,
             0,
+            W::COMPUTE_COMMANDS,
         ),
-        ("icb_render_replay_encode_draw_only", W::DRAW, 0b1),
-        ("icb_render_indexed_encode", W::DRAW_INDEXED, 0b1),
-        ("icb_replay_template", 0, 0),
+        (
+            "icb_render_replay_encode_draw_only",
+            W::DRAW,
+            0b1,
+            W::RENDER_COMMANDS,
+        ),
+        (
+            "icb_render_indexed_encode",
+            W::DRAW_INDEXED,
+            0b1,
+            W::RENDER_COMMANDS,
+        ),
+        ("icb_replay_template", 0, 0, 0),
     ] {
         let bc = match llvm_assemble(&engine_dir().join(format!("{entry}.ll"))) {
             Ok(b) => b,
@@ -2865,6 +2923,7 @@ fn the_interface_states_what_the_function_may_write_into_command_buffers() {
         let want = W {
             operations,
             primitive_types,
+            kinds,
         };
         assert_eq!(a.interface.command_writes, want, "{entry}");
         let linked = crate::pipeline::link::link(
@@ -3206,8 +3265,10 @@ fn a_fragment_reads_the_viewport_index_its_vertex_function_wrote() {
 /// A merged draw replay's vertex function (`VariantKey::merged_draws`) reads its command's slot
 /// table from the header at its `MergedDrawAddress`, a hole of the vertex stage, in place of a
 /// `RootTableAddress`, and its plan states the variant. A fragment function that reads a buffer
-/// or `[[primitive_id]]`, which a merged draw does not keep per command, is refused, as is a
-/// merged key without replay bindings.
+/// reads its command's fragment slot table from the header too, at the command its vertex wrote
+/// (`IoRole::MergedCommand`): `MergedDrawAddress` is its push field, `RootTableAddress` none. One
+/// that reads `[[primitive_id]]`, which Metal counts per command, is refused, as is a merged key
+/// without replay bindings.
 #[test]
 fn a_merged_draw_reads_its_command_s_table_from_its_header() {
     use crate::cache::VariantKey;
@@ -3275,25 +3336,104 @@ fn a_merged_draw_reads_its_command_s_table_from_its_header() {
         .fields
         .iter()
         .any(|f| f.field == PushField::MergedDrawAddress)));
-    for (vertex, fragment) in [
-        (
-            ("primitive_ids", "pi_place"),
-            ("primitive_ids", "pi_ids", metal::PixelFormat::RGBA32Uint),
-        ),
-        (
-            ("a8r_targets", "a8r_vertex"),
-            ("a8r_targets", "a8r_fill", metal::PixelFormat::RGBA8Unorm),
-        ),
-    ] {
-        compile(vertex, Some(fragment), &VariantKey::new())
-            .expect("fixture")
-            .expect("plain");
-        let refused = compile(vertex, Some(fragment), &key)
-            .expect("fixture")
-            .expect_err("a fragment's command values under a merged draw");
+    let (vertex, fragment) = (
+        ("primitive_ids", "pi_place"),
+        ("primitive_ids", "pi_ids", metal::PixelFormat::RGBA32Uint),
+    );
+    compile(vertex, Some(fragment), &VariantKey::new())
+        .expect("fixture")
+        .expect("plain");
+    let refused = compile(vertex, Some(fragment), &key)
+        .expect("fixture")
+        .expect_err("a fragment's primitive ID under a merged draw");
+    assert!(
+        format!("{refused:?}").contains("GpuEncodedIndirectCommands"),
+        "{fragment:?}: {refused:?}"
+    );
+    let (vertex, fragment) = (
+        ("a8r_targets", "a8r_vertex"),
+        ("a8r_targets", "a8r_fill", metal::PixelFormat::RGBA8Unorm),
+    );
+    let buffered = compile(vertex, Some(fragment), &key)
+        .expect("fixture")
+        .expect("a fragment's buffer under a merged draw");
+    let fragment_fields: Vec<PushField> = (buffered.interface.push.iter())
+        .filter(|p| p.stage == crate::pipeline::sym::Stage::Fragment)
+        .flat_map(|p| p.fields.iter().map(|f| f.field))
+        .collect();
+    assert!(
+        fragment_fields.contains(&PushField::MergedDrawAddress)
+            && !fragment_fields.contains(&PushField::RootTableAddress),
+        "{fragment_fields:?}"
+    );
+}
+
+/// A merged draw replay's functions find their command's slot tables before any entry hook reads
+/// one: a fragment function that loads a pointer from its argument buffer reads that buffer's
+/// root entry at entry (`access::dynamic::emit_entry`), from the fragment slot table the command
+/// its vertex wrote names, and the merged variant of `icb_merged_arguments` (a vertex function
+/// that fetches `[[stage_in]]` attributes, a fragment function whose argument buffer holds two
+/// textures and a constant pointer) compiles on each device that has the replay, every stage
+/// passing L3, its fragment stage reading the header at its `MergedDrawAddress`.
+#[test]
+fn a_merged_fragment_reads_its_argument_buffer_through_its_command_s_table() {
+    use crate::cache::VariantKey;
+    use crate::pipeline::sym::{PushField, Stage};
+    let Some(bc) = fixture("icb_merged_arguments") else {
+        return;
+    };
+    let lib = Library::from_air(&bc).expect("library");
+    let function = |name: &str| {
+        StageSource::Function(FunctionDescriptor::new(lib.function(name).expect(name)))
+    };
+    let mut d = RenderPipelineDescriptor::new(function("ica_vertex"));
+    d.fragment = Some(function("ica_fragment"));
+    d.color_attachments[0] = Some(ColorAttachmentDescriptor::new(
+        metal::PixelFormat::RGBA32Uint,
+    ));
+    let mut input = VertexDescriptor::new();
+    input
+        .layouts
+        .insert(0, VertexBufferLayoutDescriptor::new(Some(8)));
+    input
+        .layouts
+        .insert(1, VertexBufferLayoutDescriptor::new(Some(4)));
+    input.attributes.insert(
+        0,
+        VertexAttributeDescriptor::new(metal::VertexFormat::Float2, 0, 0),
+    );
+    input.attributes.insert(
+        1,
+        VertexAttributeDescriptor::new(metal::VertexFormat::UInt, 0, 1),
+    );
+    d.vertex_descriptor = Some(input);
+    for stem in ["moltenvk-m3", "amd-rdna3-radv", "lavapipe"] {
+        let dev = device(stem);
+        let base = dev
+            .compile_render_variant(&d, &VariantKey::new(), &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: base: {e}"));
+        let layouts = crate::bind::draw_replay_vertex_layouts(&base.vertex_input).expect("layouts");
+        let shape = crate::bind::BindShape {
+            far_vertex_buffers: layouts,
+            ..Default::default()
+        };
+        let mut key = base.plan(&dev, &shape).expect("base plan").variant;
+        key.replay_bindings = true;
+        key.merged_draws = true;
+        let merged = dev
+            .compile_render_variant(&d, &key, &Budget::standard())
+            .unwrap_or_else(|e| panic!("{stem}: merged: {e}"));
+        for stage in &merged.stages {
+            l3(&stage.spirv, &merged.requirements, &dev);
+        }
+        let fragment: Vec<PushField> = (merged.interface.push.iter())
+            .filter(|p| p.stage == Stage::Fragment)
+            .flat_map(|p| p.fields.iter().map(|f| f.field))
+            .collect();
         assert!(
-            format!("{refused:?}").contains("GpuEncodedIndirectCommands"),
-            "{fragment:?}: {refused:?}"
+            fragment.contains(&PushField::MergedDrawAddress)
+                && !fragment.contains(&PushField::RootTableAddress),
+            "{stem}: {fragment:?}"
         );
     }
 }
@@ -3302,8 +3442,12 @@ fn a_merged_draw_reads_its_command_s_table_from_its_header() {
 /// every buffer its vertex function reaches through its root entry (`BufferForm::Psb`), from the
 /// slot table at the stage's own `RootTableAddress`, and needs no `SlotGuestBase`
 /// (`icb_render_replay_template`); its plan states the variant. A vertex function that fetches
-/// a `[[stage_in]]` attribute (`icb_render_stride_template`) is refused: no fetch reads the slot
-/// table.
+/// a `[[stage_in]]` attribute (`icb_render_stride_template`) in fixed function is refused:
+/// fixed-function input reads no slot table. A draw replay names its layout among those the draw
+/// pulls (`bind::draw_replay_vertex_layouts`, `BindShape::far_vertex_buffers`) with no buffer
+/// bound there: the base plan asks for the pulled-vertex-buffer variant, whose replay variant
+/// compiles, one draw per command and merged, binds no layout and pulls the attribute, whose
+/// read reaches the slot table; every stage passes L3, and its plan states its key.
 #[test]
 fn a_replayed_draw_reads_its_buffers_through_the_slot_table() {
     use crate::cache::VariantKey;
@@ -3367,13 +3511,111 @@ fn a_replayed_draw_reads_its_buffers_through_the_slot_table() {
         RenderPipelineDescriptor::new(StageSource::Function(FunctionDescriptor::new(vertex)));
     d.rasterization_enabled = false;
     d.vertex_descriptor = Some(vertex_descriptor(&[(0, metal::VertexFormat::UInt)]));
-    dev.compile_render_variant(&d, &VariantKey::new(), &Budget::standard())
+    let base = dev
+        .compile_render_variant(&d, &VariantKey::new(), &Budget::standard())
         .expect("fetched");
     let refused = dev
         .compile_render_variant(&d, &key, &Budget::standard())
         .expect_err("a fetch under replay bindings");
     assert!(
         format!("{refused:?}").contains("GpuEncodedIndirectCommands"),
+        "{refused:?}"
+    );
+    // The replay names the base's layouts in the shape, no buffer bound at them: the base plan
+    // asks for the pulled-vertex-buffer variant, whose replay forms' plans state themselves.
+    let layouts = crate::bind::draw_replay_vertex_layouts(&base.vertex_input).expect("layouts");
+    assert_eq!(layouts, std::collections::BTreeSet::from([0]));
+    let shape = crate::bind::BindShape {
+        far_vertex_buffers: layouts.clone(),
+        ..Default::default()
+    };
+    let plan = base
+        .plan(&dev, &shape)
+        .expect("the base plan, no buffer bound");
+    assert_eq!(plan.variant.pulled_vertex_buffers, layouts);
+    for merged in [false, true] {
+        let mut pulled = plan.variant.clone();
+        pulled.replay_bindings = true;
+        pulled.merged_draws = merged;
+        let p = dev
+            .compile_render_variant(&d, &pulled, &Budget::standard())
+            .unwrap_or_else(|e| panic!("merged {merged}: {e}"));
+        let input = &p.vertex_input;
+        assert!(input.bindings.is_empty(), "merged {merged}");
+        assert_eq!(input.pulled.len(), 1, "merged {merged}");
+        assert_eq!(input.variant_pulled, layouts);
+        // The pulled layout's buffer is read through its root entry, as every other slot.
+        let slots = forms(&p);
+        assert!(
+            !slots.is_empty() && slots.iter().all(|f| *f == BufferForm::Psb),
+            "merged {merged}: {slots:?}"
+        );
+        for stage in &p.stages {
+            l3(&stage.spirv, &p.requirements, &dev);
+        }
+        let replayed = p.plan(&dev, &shape).expect("the variant's plan");
+        assert_eq!(replayed.variant, pulled, "merged {merged}");
+        assert!(replayed.vertex_buffers.is_empty(), "merged {merged}");
+    }
+}
+
+/// A draw replay's variant reads every buffer through the slot table its replay's preprocess
+/// writes, so inline bytes the encoder bound at a slot it reads are no refusal: commands that
+/// inherit the encoder's buffers read them at the consumer's upload of them, whose address the
+/// preprocess's entry takes (`bind::DrawReplayPreprocess::inherited_bytes`). Its plan for a shape
+/// with inline bytes at every buffer slot plans; one with a buffer bound without a device
+/// address there, which no entry can name, stays `MissingDeviceAddress`.
+#[test]
+fn a_replayed_draw_plans_inline_bytes_at_its_slots() {
+    use crate::bind::{BindShape, BufferShape, StageShape};
+    use crate::cache::VariantKey;
+    use crate::error::BindError;
+    use crate::pipeline::interface::SlotInterface;
+    let dev = device("moltenvk-m3");
+    let mut key = VariantKey::new();
+    key.replay_bindings = true;
+    let Some(bc) = fixture("icb_render_replay_template") else {
+        return;
+    };
+    let vertex = Library::from_air(&bc)
+        .expect("library")
+        .function("icb_render_replay_template")
+        .expect("vertex");
+    let mut d =
+        RenderPipelineDescriptor::new(StageSource::Function(FunctionDescriptor::new(vertex)));
+    d.rasterization_enabled = false;
+    let replayed = dev
+        .compile_render_variant(&d, &key, &Budget::standard())
+        .expect("replayed");
+    let slots: Vec<_> = (replayed.interface.slots.iter())
+        .filter(|(_, s)| matches!(s, SlotInterface::Buffer(_)))
+        .map(|(slot, _)| *slot)
+        .collect();
+    assert!(!slots.is_empty());
+    let shape_with = |bound: BufferShape| {
+        let mut shape = BindShape::default();
+        for slot in &slots {
+            let stage: &mut StageShape = shape.stages.entry(slot.stage).or_default();
+            stage.buffers.insert(slot.index, bound);
+        }
+        shape
+    };
+    let bytes = BufferShape::Bytes {
+        attribute_stride: None,
+    };
+    let plan = replayed
+        .plan(&dev, &shape_with(bytes))
+        .expect("inline bytes");
+    assert!(plan.variant.replay_bindings);
+    let unaddressed = BufferShape::Buffer {
+        attribute_stride: None,
+        device_address: false,
+        length_class: 0,
+        offset_alignment: 4,
+    };
+    let refused = replayed.plan(&dev, &shape_with(unaddressed));
+    assert!(
+        matches!(refused, Err(BindError::MissingDeviceAddress { .. })),
         "{refused:?}"
     );
 }

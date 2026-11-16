@@ -19,6 +19,17 @@ impl super::Device {
     pub(crate) fn inform(&self, id_name: &str, text: String) {
         inform_through(self.shared().instance.sink(), id_name, text);
     }
+
+    /// [`inform`](Self::inform) the message `text` gives, of kind `told`, unless the device said
+    /// one of that kind before: then it is counted, not said (`Device::tell`).
+    pub(crate) fn inform_once(
+        &self,
+        told: crate::degradation::Told,
+        id_name: &str,
+        text: impl FnOnce() -> String,
+    ) {
+        self.tell(told, || informational(id_name, text()));
+    }
 }
 
 /// [`Device::inform`](crate::Device::inform) through `sink`, else on stderr, where the device is
@@ -63,7 +74,8 @@ thread_local! {
 /// `MVKBaseObject::reportMessage`), so a message reported on another thread, or after the call
 /// returns, relays. A pipeline making the runtime hands to a thread of its own at the
 /// user-initiated class (`device/compiles.rs`) takes the expectation with it ([`expected_here`],
-/// [`withheld_for_here`]). With no diagnostics, `call` alone.
+/// [`withheld_for_here`]). With no diagnostics, or past this thread's thread-locals' end (a
+/// program's exit handler, `this_thread.rs`), `call` alone, its messages relayed.
 pub(crate) fn expecting<T>(
     diagnostics: Vec<DriverDiagnostic>,
     call: impl FnOnce() -> T,
@@ -78,15 +90,20 @@ pub(crate) fn expecting<T>(
             let _ = EXPECTED.try_with(|expected| expected.borrow_mut().take());
         }
     }
-    EXPECTED.with(|expected| {
+    let set = EXPECTED.try_with(|expected| {
         *expected.borrow_mut() = Some(Expected {
             diagnostics,
             withheld: 0,
         })
     });
+    if set.is_err() {
+        return (call(), 0);
+    }
     let clear = Clear;
     let result = call();
-    let withheld = EXPECTED.with(|expected| expected.borrow().as_ref().map_or(0, |e| e.withheld));
+    let withheld = EXPECTED
+        .try_with(|expected| expected.borrow().as_ref().map_or(0, |e| e.withheld))
+        .unwrap_or(0);
     drop(clear);
     (result, withheld)
 }

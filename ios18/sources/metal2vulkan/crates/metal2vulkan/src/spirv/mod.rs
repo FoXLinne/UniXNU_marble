@@ -7,7 +7,9 @@
 pub mod builder;
 pub mod dead;
 pub mod error;
+pub mod half_hold;
 pub mod helper_branches;
+pub mod hoist;
 pub mod ids;
 // The CPU interpreter: test support for the crate's own tests.
 #[cfg(test)]

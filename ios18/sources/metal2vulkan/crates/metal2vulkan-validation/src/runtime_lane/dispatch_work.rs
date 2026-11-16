@@ -1,7 +1,9 @@
 //! Device tests of a dispatch's set 0 on the device the cfg selects, under the validation layer:
 //! pushed (`vkCmdPushDescriptorSet` at the compute bind point) where the device has the push
 //! command, else allocated, written and bound, and the same words either way
-//! (`WorkCounts::dispatches_pushing_set_zero`); and what a dispatch settles, taken again by the
+//! (`WorkCounts::dispatches_pushing_set_zero`), each push's writes counted
+//! (`dispatch_set_zero_writes_pushed`), only those that changed, an encoder folded into the one
+//! before it pushing its first whole; and what a dispatch settles, taken again by the
 //! encoder's next dispatch only where its inputs are the same (`WorkCounts::
 //! dispatches_settled_as_before`, `set_zero_sets_reused`). Each runs both ways
 //! (`draw_work::on_device_both_ways`). And what a dispatch settles with what the encoder made
@@ -33,7 +35,8 @@ const THREADS: u64 = 16;
 const DISPATCHES: u64 = 4;
 
 /// Dispatches that each bind other offsets of the same buffers push their set 0 where the device
-/// pushes it, and bind it where it does not: every dispatch's words are its own, both ways.
+/// pushes it, and bind it where it does not: every dispatch's words are its own, both ways. The
+/// pushes count the writes they carry.
 #[test]
 fn dispatches_push_their_set_zero_where_the_device_pushes() {
     on_device_both_ways(|device| {
@@ -56,8 +59,29 @@ fn dispatches_push_their_set_zero_where_the_device_pushes() {
                 .dispatch_threads(Size::new(THREADS, 1, 1), Size::new(THREADS, 1, 1))
                 .unwrap();
         }
-        let pushed =
-            device.work_counts().dispatches_pushing_set_zero - before.dispatches_pushing_set_zero;
+        let counts = device.work_counts();
+        let pushed = grew(&before, &counts, |counts| {
+            counts.dispatches_pushing_set_zero
+        });
+        let writes = grew(&before, &counts, |counts| {
+            counts.dispatch_set_zero_writes_pushed
+        });
+        let tracked = grew(&before, &counts, |counts| counts.dispatches_tracked);
+        let uses = grew(&before, &counts, |counts| counts.dispatch_uses_tracked);
+        eprintln!(
+            "DISPATCH-WORK: {pushed} pushes carried {writes} descriptor writes; {tracked} \
+             dispatches tracked {uses} uses"
+        );
+        // Each dispatch reads its input and writes its output: at least two uses.
+        assert_eq!(tracked, DISPATCHES);
+        assert!(
+            uses >= 2 * DISPATCHES,
+            "{uses} uses of {tracked} dispatches"
+        );
+        // The first push carries set 0 whole; each later one, the writes whose descriptors the
+        // other offsets changed, which the device's offset alignment decides
+        // ([`dispatches_push_only_the_writes_that_changed`]).
+        assert_eq!(writes == 0, pushed == 0, "{pushed} pushes, {writes} writes");
         encoder.end_encoding().unwrap();
         command_buffer.commit().unwrap();
         command_buffer.wait_until_completed_for(WAIT).unwrap();
@@ -74,6 +98,120 @@ fn dispatches_push_their_set_zero_where_the_device_pushes() {
             .map(|t| 3 * t + 1)
             .collect();
         assert_eq!(words, want);
+    });
+}
+
+/// One dispatch of [`dispatches_push_only_the_writes_that_changed`]: its encoder, its input and
+/// output, and the descriptor writes its push carries where the device pushes set 0.
+struct Pushed {
+    encoder: usize,
+    input: usize,
+    output: usize,
+    writes: u64,
+}
+
+/// A dispatch pushes only the writes of its set 0 that differ from those the encoder's dispatch
+/// before it pushed (`WorkCounts::dispatch_set_zero_writes_pushed`): none where it binds the same
+/// buffers, and two where it swaps both. An encoder that records on in the `VkCommandBuffer` of
+/// the encoder before it (`WorkCounts::encoders_folded`) pushes its first dispatch's set 0 whole,
+/// though the last dispatch before it pushed the same. Each dispatch's words are its own, the
+/// validation layer reporting nothing, both ways ([`on_device_both_ways`]).
+#[test]
+fn dispatches_push_only_the_writes_that_changed() {
+    on_device_both_ways(|device| {
+        let kernel = state(device, "a4_index_word", false);
+        // Input `k`'s word `i` is `1000 k + i`.
+        let inputs: Vec<_> = (0..2u32)
+            .map(|k| {
+                let words = (0..3 * THREADS as u32).map(|i| 1000 * k + i);
+                let bytes: Vec<u8> = words.flat_map(u32::to_le_bytes).collect();
+                buffer_with(device, &bytes).unwrap()
+            })
+            .collect();
+        let zeros = vec![0; (4 * THREADS) as usize];
+        let outputs: Vec<_> = (0..3)
+            .map(|_| buffer_with(device, &zeros).unwrap())
+            .collect();
+        let step = |encoder, input, output, writes| Pushed {
+            encoder,
+            input,
+            output,
+            writes,
+        };
+        let steps = [
+            step(0, 0, 0, 2),
+            // The same buffers again.
+            step(0, 0, 0, 0),
+            // Both swapped.
+            step(0, 1, 1, 2),
+            // The next encoder's first, of the buffers the last pushed.
+            step(1, 1, 1, 2),
+            step(1, 0, 2, 2),
+            step(1, 0, 2, 0),
+        ];
+        let queue = device.new_command_queue().unwrap();
+        // A dispatch whose pipeline is being made records later, in a segment of its own, which
+        // ends its encoder's group (`pending_dispatch.rs`): one dispatch first, completed, so the
+        // pipeline is made before the encoders below.
+        let made = queue.command_buffer().unwrap();
+        let mut encoder = made.compute_command_encoder().unwrap();
+        encoder.set_compute_pipeline_state(&kernel).unwrap();
+        encoder.set_buffer(Some(&inputs[0]), 0, 0).unwrap();
+        encoder.set_buffer(Some(&outputs[0]), 0, 1).unwrap();
+        encoder
+            .dispatch_threads(Size::new(THREADS, 1, 1), Size::new(THREADS, 1, 1))
+            .unwrap();
+        encoder.end_encoding().unwrap();
+        made.commit().unwrap();
+        made.wait_until_completed_for(WAIT).unwrap();
+        assert_eq!(made.status(), CommandBufferStatus::Completed);
+        let command_buffer = queue.command_buffer().unwrap();
+        let before = device.work_counts();
+        let mut carried = Vec::new();
+        for at in 0..2 {
+            let mut encoder = command_buffer.compute_command_encoder().unwrap();
+            encoder.set_compute_pipeline_state(&kernel).unwrap();
+            for step in steps.iter().filter(|step| step.encoder == at) {
+                encoder.set_buffer(Some(&inputs[step.input]), 0, 0).unwrap();
+                encoder
+                    .set_buffer(Some(&outputs[step.output]), 0, 1)
+                    .unwrap();
+                let last = device.work_counts();
+                encoder
+                    .dispatch_threads(Size::new(THREADS, 1, 1), Size::new(THREADS, 1, 1))
+                    .unwrap();
+                let counts = device.work_counts();
+                carried.push(grew(&last, &counts, |counts| {
+                    counts.dispatch_set_zero_writes_pushed
+                }));
+            }
+            encoder.end_encoding().unwrap();
+        }
+        let folded = grew(&before, &device.work_counts(), |counts| {
+            counts.encoders_folded
+        });
+        eprintln!(
+            "DISPATCH-WORK: pushes carried {carried:?} descriptor writes, {folded} encoder folded"
+        );
+        assert_eq!(folded, 1, "the second encoder records on in the first's");
+        let want: Vec<u64> = (steps.iter())
+            .map(|step| if pushes(device) { step.writes } else { 0 })
+            .collect();
+        assert_eq!(carried, want);
+        command_buffer.commit().unwrap();
+        command_buffer.wait_until_completed_for(WAIT).unwrap();
+        assert_eq!(command_buffer.status(), CommandBufferStatus::Completed);
+        for (output, k) in [(0, 0), (1, 1), (2, 0)] {
+            let words: Vec<u32> = read_buffer(&outputs[output], 0, 4 * THREADS)
+                .unwrap()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|word| u32::from_le_bytes(*word))
+                .collect();
+            let want: Vec<u32> = (0..THREADS as u32).map(|t| 1000 * k + 3 * t + 1).collect();
+            assert_eq!(words, want, "output {output}");
+        }
     });
 }
 
@@ -415,12 +553,14 @@ struct Planning {
 }
 
 /// A dispatch whose bind state has the shape one of its pipeline state's latest direct dispatches
-/// planned, of the same grid, takes that one's variant, plan and made pipelines: one whose buffer's
-/// offset alone moved, and another encoder's first dispatch of the state. A grid or a resource
-/// made resident plans again, and the next dispatch of the new shape takes that; and an encoder of
-/// the first shape again, after one of the other planned, takes what that first shape planned, which
-/// the state keeps beside the other (`pipeline::Planned`), where it kept one alone before. Every
-/// dispatch writes its words. Both ways ([`on_device_both_ways`]).
+/// planned, of the same grid or another grid of its class (`pipeline::GridClass`: here a whole
+/// grid of one row at the same threadgroup size), takes that one's variant, plan and made
+/// pipelines: one whose buffer's offset alone moved, one of twice its grid, and another encoder's
+/// first dispatch of the state. A grid of another class (a ragged one) or a resource made resident
+/// plans again, and the next dispatch of the new shape takes that; and an encoder of the first
+/// shape again, after one of the other planned, takes what that first shape planned, which the
+/// state keeps beside the other (`pipeline::Planned`). Every dispatch writes its words. Both ways
+/// ([`on_device_both_ways`]).
 #[test]
 fn dispatches_take_what_their_state_planned_for_the_same_shape() {
     on_device_both_ways(|device| {
@@ -429,7 +569,7 @@ fn dispatches_take_what_their_state_planned_for_the_same_shape() {
             .flat_map(u32::to_le_bytes)
             .collect();
         let input = buffer_with(device, &input).unwrap();
-        const WORDS: u64 = 14 * THREADS;
+        const WORDS: u64 = 16 * THREADS;
         let out = buffer_with(device, &vec![0; (4 * WORDS) as usize]).unwrap();
         let queue = device.new_command_queue().unwrap();
         let command_buffer = queue.command_buffer().unwrap();
@@ -444,33 +584,39 @@ fn dispatches_take_what_their_state_planned_for_the_same_shape() {
             vec![
                 step("the first", 0, THREADS, (false, false)),
                 step("out's offset", THREADS, THREADS, (true, false)),
-                step("the grid", 2 * THREADS, 2 * THREADS, (false, false)),
+                step("the grid", 2 * THREADS, 2 * THREADS, (true, false)),
                 step(
                     "out's offset again",
                     4 * THREADS,
                     2 * THREADS,
                     (true, false),
                 ),
+                step(
+                    "a ragged grid",
+                    6 * THREADS,
+                    THREADS + THREADS / 2,
+                    (false, false),
+                ),
             ],
             vec![
-                step("another encoder", 6 * THREADS, 2 * THREADS, (true, false)),
+                step("another encoder", 8 * THREADS, 2 * THREADS, (true, false)),
                 step(
                     "a buffer made resident",
-                    8 * THREADS,
+                    10 * THREADS,
                     2 * THREADS,
                     (false, false),
                 ),
                 step(
                     "out's offset, resident",
-                    10 * THREADS,
+                    12 * THREADS,
                     2 * THREADS,
                     (true, false),
                 ),
-                step("nothing", 10 * THREADS, 2 * THREADS, (false, true)),
+                step("nothing", 12 * THREADS, 2 * THREADS, (false, true)),
             ],
             vec![step(
                 "an encoder of the first shape",
-                12 * THREADS,
+                14 * THREADS,
                 2 * THREADS,
                 (true, false),
             )],

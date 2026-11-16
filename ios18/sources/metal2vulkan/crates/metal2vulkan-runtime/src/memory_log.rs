@@ -10,11 +10,23 @@
 //!   bytes and range again. Memory that waits for the batches in flight before it is freed
 //!   (`freed_memory.rs`) is named as it starts to wait. The memory device creation makes and frees
 //!   to prime the driver (`device/prime.rs`) is not logged.
+//! - **Refused blocks.** One line per block of the runtime's the driver refused to allocate
+//!   ([`refused_line`]): its memory type and bytes, what its `vkAllocateMemory` chain asked (the
+//!   allocation flags, the handle types it was to be exportable as, the buffer it was dedicated
+//!   to), and the `VkResult` the driver answered. A placement that then takes another memory type
+//!   (`Degradation::DeviceMemoryOverflow` among them) follows the refusals that sent it there.
 //! - **Large placements.** One line per placement of at least `LOGGED_PLACEMENT_BYTES` (4 MiB)
 //!   in a pooled block, as it is placed and as it is returned ([`placement_line`]): whether it is
 //!   an image or a buffer, its memory class where placed, its bytes, its offset and its block's
 //!   handle and memory type, which the block's own lines name. A few such placements fill a block,
-//!   so their comings and goings show what makes and frees blocks.
+//!   so their comings and goings show what makes and frees blocks. A placement that takes a kept
+//!   empty dedicated block (`memory.rs`'s `Pool::place_dedicated`), which makes no block, says so
+//!   too, with the block's handle and memory type.
+//! - **Copied host pages.** One line per copy of the caller's host pages a no-copy buffer or heap
+//!   lies in (`copied.rs`, `copied-host-pages`) as it is made and as it goes ([`copied_line`]):
+//!   the caller's pointer and length, and the copy's host address, the two ranges the runtime's
+//!   comparisons write on the CPU (each commit's copy in writes the copy, each batch's merge back
+//!   the caller's pages), so a write found in memory that is neither can be placed against them.
 //! - **The device address.** A block with a buffer of addresses (`memory.rs`) gives that buffer's.
 //!   Any other memory's line says the address is unknown: the log makes and binds no Vulkan object
 //!   to learn one, as a diagnostic changes no GPU work. A buffer of `SHADER_DEVICE_ADDRESS` usage
@@ -22,6 +34,12 @@
 //!   resident as it is asked (about 25 ms a GiB on an M3 Max), whose destroy fails a submission
 //!   encoding meanwhile (`DestroyedAddressBufferFailsSubmission`). On NVIDIA's drivers a buffer's
 //!   device address is the GPU virtual address the driver's fault reports name.
+//! - **glibc's heap.** Where the process's allocator is glibc's (Linux, the GNU environment),
+//!   every line ends with its heap at that moment, every arena's, as `mallinfo2` states it: the
+//!   bytes in use, the bytes free, what its arenas hold of the system, what it mapped apart for
+//!   large allocations, and the `malloc_trim` calls the process's large makings made
+//!   (`pipeline/compile_memory.rs`'s `heap`). So a resident set that grows and stays reads as free
+//!   heap glibc keeps, heap in use, or memory `malloc` did not map.
 //! - **Off, it costs nothing.** The switch is read once; no line is formatted.
 
 use super::driver_facts::inform_through;
@@ -40,6 +58,7 @@ fn enabled() -> bool {
 }
 
 /// A device's memory log, where the switch is on: where its lines go.
+#[derive(Clone)]
 pub(super) struct MemoryLog {
     sink: Option<MessageSink>,
 }
@@ -77,10 +96,57 @@ impl MemoryLog {
         ));
     }
 
-    /// Deliver `text`, a line of the log.
+    /// Deliver `text`, a line of the log, glibc's heap after it where the allocator is glibc's
+    /// (the module docs).
     pub(super) fn line(&self, text: String) {
+        let text = match crate::pipeline::compile_memory::heap() {
+            Some(heap) => format!("{text}; {heap}"),
+            None => text,
+        };
         inform_through(self.sink.as_ref(), ID_NAME, text);
     }
+}
+
+/// The line saying the driver refused a block of `bytes` bytes of memory type `type_index`,
+/// `vkAllocateMemory` answering `result` to a chain of the allocation `flags`, exportable as
+/// `export` where given, dedicated to `dedicated_to` where it is not null (the module docs).
+pub(super) fn refused_line(
+    (type_index, bytes): (u32, u64),
+    flags: vk::MemoryAllocateFlags,
+    export: Option<vk::ExternalMemoryHandleTypeFlags>,
+    dedicated_to: vk::Buffer,
+    result: vk::Result,
+) -> String {
+    use ash::vk::Handle;
+    let export = match export {
+        Some(handles) => format!("exportable as handle types 0x{:x}", handles.as_raw()),
+        None => "not exportable".to_owned(),
+    };
+    let dedicated = match dedicated_to == vk::Buffer::null() {
+        true => "dedicated to nothing".to_owned(),
+        false => format!("dedicated to buffer 0x{:x}", dedicated_to.as_raw()),
+    };
+    format!(
+        "metal2vulkan: memory: refused, a block of type {type_index}: {bytes} bytes, allocation \
+         flags 0x{:x}, {export}, {dedicated}: {result:?}",
+        flags.as_raw()
+    )
+}
+
+/// The line saying `what` happened to the copy numbered `id` of the caller's `length` bytes at
+/// `pages`, held at `copy` in memory the host maps (the module docs).
+pub(super) fn copied_line(
+    what: &str,
+    id: u64,
+    (pages, length): (usize, usize),
+    copy: usize,
+) -> String {
+    format!(
+        "metal2vulkan: memory: copy {id} {what}: the caller's pages at 0x{pages:x} to 0x{:x} \
+         ({length} bytes), held at 0x{copy:x} to 0x{:x}",
+        pages.saturating_add(length),
+        copy.saturating_add(length)
+    )
 }
 
 /// The line saying `what` happened to a placement of `bytes` bytes, an image's (`image`) or a

@@ -15,7 +15,7 @@ use crate::image_plan::{ImageFacts, ImagePlan};
 use crate::resource_ids::texture_arrays;
 use crate::{
     FamilyRow, FeatureRow, FormatCapabilities, FormatCapability, FormatRow, Framework, GpuFamily,
-    LimitRow, Refusal, RowAudit, RowState, RuntimeGap,
+    IndirectRule, LimitRow, Refusal, RowAudit, RowState, RuntimeGap,
 };
 use ash::vk;
 use metal2vulkan::device::{Device, DevicePolicy, OpBits, VkExtension, VkFeature, VkLimit};
@@ -266,11 +266,13 @@ fn each_family_lists_its_columns_rows() {
 }
 
 /// States read from the device: framebuffer fetch's form, cube arrays, the SIMD and quad rows by
-/// the stages' classes, and a limit's cell against the device's limit.
+/// the stages' classes, and a limit's cell against the device's limit, the texture buffer's width
+/// through its parts past it.
 #[test]
 fn states_follow_their_sources() {
     use FeatureRow as F;
     let mut storage_fetch = BTreeSet::new();
+    let mut parted = BTreeSet::new();
     for (stem, desc) in committed_descriptions() {
         let all = all_audits(&stem, &desc);
         let (enabled, _) = created(&stem, &desc);
@@ -279,9 +281,9 @@ fn states_follow_their_sources() {
         // Through input attachments in rasterization order exact; through the pixel interlock's
         // storage form exact but where the device renders a color format only through a word
         // whose fetch is not built, an 8-bit sRGB word (the one- and two-channel sRGB formats on
-        // NVIDIA and ANV) or an `RGB9E5Float` one; with neither form, refused. A packed 16-bit
-        // word's fetch decodes the word (`lower::fragment::fetch`), so `BGRA4Unorm`, which
-        // MoltenVK renders only that way, is no gap.
+        // NVIDIA and ANV) or an `RGB9E5Float` one; with neither form, offered and logged. A
+        // packed 16-bit word's fetch decodes the word (`lower::fragment::fetch`), so `BGRA4Unorm`,
+        // which MoltenVK renders only that way, is no gap.
         if enabled.has(VkFeature::RasterizationOrderColorAttachmentAccess) {
             assert_eq!(blending, RowState::Exact, "{stem}");
         } else if enabled.has(VkFeature::FragmentShaderPixelInterlock) {
@@ -310,14 +312,9 @@ fn states_follow_their_sources() {
                 storage_fetch.insert(c);
             }
         } else {
-            assert_eq!(
-                blending,
-                refused(
-                    Feature::FramebufferFetch,
-                    Capability::Feature(VkFeature::RasterizationOrderColorAttachmentAccess)
-                ),
-                "{stem}"
-            );
+            // Neither form: input attachments ordered between draws, the overlapping fragments
+            // of one draw unordered, logged (`PrecisionNote::UnorderedFetchWithinDraw`).
+            assert_eq!(blending, RowState::Exact, "{stem}");
         }
         let cube = state(apple9, feature(F::CubeMapTextureArrays)).unwrap();
         assert_eq!(
@@ -364,15 +361,27 @@ fn states_follow_their_sources() {
                 );
             }
         }
-        // Apple3's texture buffers: 256 M texels (2^28) against `maxTexelBufferElements`.
+        // Apple3's texture buffers: 256 M texels (2^28) against `maxTexelBufferElements`, or past
+        // it through views of their parts, where the device indexes texel buffer arrays by a
+        // `NonUniform` value and a stage holds that many views.
         let width = state(
             &all[&GpuFamily::Apple3],
             FamilyRow::Limit(LimitRow::TextureBufferWidth),
         )
         .unwrap();
         let available = u64::from(enabled.limits.max_texel_buffer_elements);
-        if available >= 1 << 28 {
+        let compile = Device::new(enabled.clone(), DevicePolicy::UNTRUSTED).unwrap();
+        let d = compile.profile().descriptors();
+        let parts = metal2vulkan::bind::texel_buffer_parts(compile.profile().limits(), 1 << 28);
+        let in_parts = d.non_uniform_uniform_texel_buffer
+            && d.non_uniform_storage_texel_buffer
+            && parts <= enabled.limits.max_per_stage_descriptor_sampled_images
+            && parts <= enabled.limits.max_per_stage_descriptor_storage_images;
+        if available >= 1 << 28 || in_parts {
             assert_eq!(width, RowState::Exact, "{stem}");
+            if available < 1 << 28 {
+                parted.insert(stem.clone());
+            }
         } else {
             assert_eq!(
                 width,
@@ -389,6 +398,10 @@ fn states_follow_their_sources() {
         }
     }
     assert_eq!(storage_fetch.len(), 4, "{storage_fetch:?}");
+    // lavapipe's and ANV's 2^27 and MoltenVK's 2^26 reach 2^28 through parts.
+    for stem in ["lavapipe", "intel-irisxe-anv", "moltenvk-m3"] {
+        assert!(parted.contains(stem), "{stem}: {parted:?}");
+    }
 }
 
 /// Vertex amplification: Apple7's count of 8 is exact on a device with `multiview`, through the
@@ -724,6 +737,44 @@ fn the_function_pointer_rows_are_the_table_array() {
     assert!(exact_somewhere, "no committed profile has the table array");
 }
 
+/// A RADV device answers function pointers, dynamic libraries and rasterization rate maps as an
+/// AMD Mac's Metal does (yes to each, an AMD Radeon Pro 5300M on macOS 26.7.1): in Apple9's
+/// column, the function pointer rows of both pipeline kinds and the dynamic library rows are
+/// exact (the rows `supportsFunctionPointers`, `supportsFunctionPointersFromRender`,
+/// `supportsDynamicLibraries` and `supportsRenderDynamicLibraries` are answered by), and
+/// `supportsRasterizationRateMapWithLayerCount:` answers yes for 1 and 2. The Radeon 780M's is
+/// the committed RADV profile; the device test `threadgroup_memory_device` checks the same answers
+/// on the device it runs on.
+#[test]
+fn a_radv_device_answers_function_pointers_libraries_and_rate_maps() {
+    let stem = "amd-780m-radv";
+    let apple9 = &audits(stem)[&GpuFamily::Apple9];
+    for row in [
+        FeatureRow::FunctionPointersCompute,
+        FeatureRow::FunctionPointersRender,
+        FeatureRow::ComputeDynamicLibraries,
+        FeatureRow::RenderDynamicLibraries,
+    ] {
+        assert_eq!(
+            state(apple9, feature(row)),
+            Some(RowState::Exact),
+            "{stem} {row:?}"
+        );
+    }
+    let (_, desc) = committed_descriptions()
+        .into_iter()
+        .find(|(s, _)| s == stem)
+        .unwrap();
+    let (_, p) = created(stem, &desc);
+    for layers in [1, 2] {
+        assert_eq!(
+            p.supports_rasterization_rate_map_with_layer_count(layers),
+            Ok(true),
+            "{stem} {layers}"
+        );
+    }
+}
+
 /// Tile dispatches run: the tile rows are what the compile layer and the binder refuse of Metal's
 /// tile shading on every device, and a pass's tile memory is Metal's, but at 8 samples, which
 /// Apple's measured GPUs lack.
@@ -852,7 +903,9 @@ fn indirect_command_buffer_rows_name_what_is_still_missing() {
         let (compute, render) = if needs.is_empty() {
             (
                 None,
-                Some(RowState::Gap(RuntimeGap::IndirectRenderCommands)),
+                Some(RowState::Gap(RuntimeGap::IndirectRenderCommands(
+                    IndirectRule::FamilyRow,
+                ))),
             )
         } else {
             refused_somewhere = true;

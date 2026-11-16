@@ -8,9 +8,10 @@
 //!
 //! - **Tensor objects** follow this translation's layout ([`tensor`]).
 //! - **Cooperative tensors** follow Metal's measured layouts ([`layout`]): a thread's storage holds
-//!   its elements contiguously, construction zeroes them (`+0` over floats, a destination's and a
-//!   right input's alike), the size helpers answer constants (so the storage allocas SCCP sees are
-//!   static), and the coordinate helper computes an element's place from the lane's index in its
+//!   its elements contiguously, construction zeroes them (`+0` over floats, a destination's, a
+//!   right input's and a left input's alike), the size helpers answer constants (so the storage
+//!   allocas SCCP sees are static), and the coordinate helper computes an element's place from the
+//!   lane's index in its
 //!   simdgroup and the simdgroup's index in the threadgroup, which the expansion adds to the kernel
 //!   as two builtin parameters ([`Lanes`]).
 //! - **`run`** computes each destination element the thread holds as Metal was measured to:
@@ -18,15 +19,22 @@
 //!   in `multiply` mode, then for `k` ascending below the descriptor's `k`, over integers
 //!   `acc += a * b`, wrapping, and over floats `acc = fma(a, b, acc)`, one rounding per step
 //!   (`llvm.fma.f32`), with or without relaxed precision. An element of `A` or `B` past its
-//!   tensor's extents reads zero. A cooperative right input's element is another lane's, read
-//!   with a shuffle every lane of the simdgroup runs.
+//!   tensor's extents reads zero. A cooperative input's element is another lane's, read with a
+//!   shuffle every lane of the simdgroup runs. An 8-bit float element (`metal_fp8_e4m3_format`,
+//!   `metal_fp8_e5m2_format`, measured over 32 x 32 x 32 on one simdgroup) is read as the float
+//!   of the same value, as Metal reads it: e4m3 has no infinity or NaN (`0x7F` is 480), and an
+//!   e5m2 NaN reads as the quiet NaN `0x7FC00000`. The body widens it by an `air.convert` of the
+//!   tensor's format (`Fp8::TensorE4M3`, `Fp8::TensorE5M2`), which a device with its own 8-bit
+//!   float type widens through that type.
 //!
 //! A call this does not model stays a call. If one survives SCCP, [`refuse_left`] refuses the
 //! kernel as `Unsupported{Tensors, NotImplemented}`, naming what is not modeled: a shape or
-//! simdgroup count no probe measured, a cooperative left input, a tensor destination, a dynamic
-//! `k`, a tensor other than `tensor_inline`, an element type outside the measured ones, the
-//! forms `get_element_index`, the copies,
-//! conversions, reductions, the `_v2` and single-thread runs, and any stage but a kernel.
+//! simdgroup count no probe measured, a transposed cooperative left input, a tensor destination,
+//! a dynamic `k`, a tensor other than `tensor_inline`, an element type outside the measured ones,
+//! a product of 8-bit floats over another descriptor, relaxed precision, more simdgroups, or a
+//! cooperative input,
+//! the forms `get_element_index`, the copies, conversions, reductions, the single-thread runs, a
+//! `_v2` run's tensor with scale factors or a static extent, and any stage but a kernel.
 
 mod layout;
 mod synth;

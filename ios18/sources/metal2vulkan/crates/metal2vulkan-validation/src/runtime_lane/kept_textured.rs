@@ -46,9 +46,8 @@ use metal2vulkan_devtools::llvm_assemble;
 use metal2vulkan_runtime::DeviceOptions;
 use metal2vulkan_runtime::{
     BlitOption, Buffer, CommandBuffer, CommandBufferStatus, CommandQueue, ComputePipelineState,
-    Device, Origin, PipelineOptions, Size, Texture, WorkCounts,
+    Device, Fence, Origin, PipelineOptions, Size, Texture, WorkCounts,
 };
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 /// The commands each page encodes and executes: two chunks' (the runtime's
@@ -306,8 +305,7 @@ impl Spin {
     /// `queue`, from commit to completion, until one takes [`MEASURED`], scaled to [`SLICE`]. The
     /// first, not timed, makes the pipeline's `VkPipeline`.
     fn new(device: &Device, queue: &CommandQueue) -> Spin {
-        let ll = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("fixtures/public/engine/kernel_spin_on_an_unraised_word.ll");
+        let ll = metal2vulkan_devtools::engine_dir().join("kernel_spin_on_an_unraised_word.ll");
         let library = device
             .new_library_with_air(&llvm_assemble(&ll).unwrap())
             .unwrap();
@@ -325,7 +323,7 @@ impl Spin {
         let loads = buffer_with(device, &[0; 4]).unwrap();
         let run = |spin: &Spin| {
             let command_buffer = queue.command_buffer().unwrap();
-            spin.encode(&command_buffer, &loads, 1);
+            spin.encode(&command_buffer, &loads, 1, None);
             let at = Instant::now();
             command_buffer.commit().unwrap();
             completed(&command_buffer);
@@ -344,8 +342,14 @@ impl Spin {
     }
 
     /// Encode, in an encoder of its own, `dispatches` dispatches of one thread spinning to the
-    /// cap, each storing its count at the start of `loads`.
-    fn encode(&self, command_buffer: &CommandBuffer, loads: &Buffer, dispatches: u32) {
+    /// cap, each storing its count at the start of `loads`, and `then` updated after them.
+    fn encode(
+        &self,
+        command_buffer: &CommandBuffer,
+        loads: &Buffer,
+        dispatches: u32,
+        then: Option<&Fence>,
+    ) {
         let mut compute = command_buffer.compute_command_encoder().unwrap();
         compute.set_compute_pipeline_state(&self.state).unwrap();
         compute.set_buffer(Some(&self.word), 0, 0).unwrap();
@@ -356,13 +360,18 @@ impl Spin {
                 .dispatch_threadgroups(Size::new(1, 1, 1), Size::new(1, 1, 1))
                 .unwrap();
         }
+        if let Some(fence) = then {
+            compute.update_fence(fence).unwrap();
+        }
         compute.end_encoding().unwrap();
     }
 }
 
 /// Commit, on `queue`, a command buffer that spins and then copies every texel of `page`'s
-/// textures, of `shade`, from the buffer the spin wrote, so the copies follow the spin. It, not
-/// waited for.
+/// textures, of `shade`, from the buffer the spin wrote. It, not waited for. The copies wait for
+/// a fence the spin's encoder updates, so they follow the spin: the spin writes only the buffer's
+/// first word and the copies read past it, and the runtime orders a tracked buffer's commands by
+/// the bytes they share, here none, where Metal orders the whole buffer.
 fn spun_copies(
     device: &Device,
     queue: &CommandQueue,
@@ -372,9 +381,11 @@ fn spun_copies(
     // The spin's count, then the texels, 64 bytes a texture.
     let bytes = [vec![0; 64], page.texels(shade)].concat();
     let source = buffer_with(device, &bytes).unwrap();
+    let spun = device.new_fence();
     let command_buffer = queue.command_buffer().unwrap();
-    spin.encode(&command_buffer, &source, DISPATCHES);
+    spin.encode(&command_buffer, &source, DISPATCHES, Some(&spun));
     let mut blit = command_buffer.blit_command_encoder().unwrap();
+    blit.wait_for_fence(&spun).unwrap();
     for (at, texture) in (0u64..).zip(page.textures()) {
         (blit.copy_from_buffer_to_texture(
             &source,

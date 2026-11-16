@@ -93,6 +93,22 @@ pub const COMMAND_BYTES: usize =
     ((THREADGROUP_WORD + THREADGROUP_COUNT + 2) * 4).next_multiple_of(8);
 /// Host-initialized command count, atomic encoding-fault flag, descriptor flags, and packed binding counts.
 pub const COMMAND_BUFFER_HEADER_BYTES: usize = 16;
+/// Bytes of one command's written flag (a `u32`), past every record ([`written_flag_offset`]).
+pub const WRITTEN_FLAG_BYTES: usize = 4;
+
+/// The byte offset of command `index`'s written flag in the storage of a buffer of `capacity`
+/// commands: the flags follow the records, one `u32` a command. Each encoder operation that
+/// writes a command's record (one the header's policy takes, `lower::access::encode`) stores 1
+/// at its flag, contained as the record's fields are: storage that ends at its records takes no
+/// flag, and its records are written as before. A consumer whose storage holds the flags, and
+/// whose own writes of the records set them as well, knows a record whose flag is clear to hold
+/// what it last reset it to, and may reset only the flagged ones, clearing each flag with its
+/// record (`bind::IcbResetModule`).
+pub const fn written_flag_offset(capacity: u32, index: u32) -> u64 {
+    COMMAND_BUFFER_HEADER_BYTES as u64
+        + capacity as u64 * COMMAND_BYTES as u64
+        + index as u64 * WRITTEN_FLAG_BYTES as u64
+}
 
 /// The guest address of the records of the indirect command buffer of resource ID 0, the null
 /// one, which no records lie at ([`records_address`]).
@@ -564,6 +580,13 @@ pub enum Action {
 }
 
 impl Action {
+    /// What a record holding the action, and no barrier, holds of what a command may write
+    /// ([`CommandRecord::writes`] of such a record): its operation, and a draw's primitive type
+    /// (every type for a private one, past Metal's five).
+    pub fn writes(&self) -> crate::pipeline::CommandWrites {
+        writes_of(self, false)
+    }
+
     /// Whether the action's arguments take the stage-in region's words
     /// (`layout::DRAW_ARGUMENT_WORDS`): an indexed draw's, a patch draw's, an indexed patch
     /// draw's or a mesh draw's. A render command sets no stage-in region.
@@ -799,7 +822,8 @@ impl CommandRecord {
     }
 }
 
-/// What a record of `action` and `barrier` holds ([`CommandRecord::writes`]).
+/// What a record of `action` and `barrier` holds ([`CommandRecord::writes`]): its action's
+/// command kind too, a dispatch's compute and a draw's render; a record of no action names none.
 pub(crate) fn writes_of(action: &Action, barrier: bool) -> crate::pipeline::CommandWrites {
     use crate::pipeline::CommandWrites;
     let draw = |operations: u32, primitive_type: u32| CommandWrites {
@@ -809,25 +833,27 @@ pub(crate) fn writes_of(action: &Action, barrier: bool) -> crate::pipeline::Comm
         } else {
             CommandWrites::ALL_PRIMITIVE_TYPES
         },
+        kinds: CommandWrites::RENDER_COMMANDS,
     };
-    let only = |operations: u32| CommandWrites {
+    let only = |operations: u32, kinds: u8| CommandWrites {
         operations,
         primitive_types: 0,
+        kinds,
     };
     let mut writes = match *action {
         Action::Empty => CommandWrites::NONE,
         Action::DispatchThreadgroups { .. } | Action::DispatchThreads { .. } => {
-            only(CommandWrites::DISPATCH)
+            only(CommandWrites::DISPATCH, CommandWrites::COMPUTE_COMMANDS)
         }
         Action::DrawPrimitives { primitive_type, .. } => draw(CommandWrites::DRAW, primitive_type),
         Action::DrawIndexedPrimitives { primitive_type, .. } => {
             draw(CommandWrites::DRAW_INDEXED, primitive_type)
         }
         Action::DrawPatches { .. } | Action::DrawIndexedPatches { .. } => {
-            only(CommandWrites::DRAW_PATCHES)
+            only(CommandWrites::DRAW_PATCHES, CommandWrites::RENDER_COMMANDS)
         }
         Action::DrawMeshThreadgroups { .. } | Action::DrawMeshThreads { .. } => {
-            only(CommandWrites::DRAW_MESH)
+            only(CommandWrites::DRAW_MESH, CommandWrites::RENDER_COMMANDS)
         }
     };
     if barrier {
@@ -873,11 +899,14 @@ impl CommandRecord {
     /// have changed.
     pub fn write_field(bytes: &mut [u8], field: RecordField) -> Result<Range<usize>, RecordError> {
         let view = RecordView::new(bytes)?;
-        let (action, retained) = (view.action(), view.retained_pipeline().is_some());
-        let (stage_in, lengths) = (
-            view.stage_in_region(),
-            [0, 1].map(|index| view.threadgroup_memory_length(index).unwrap_or(0)),
-        );
+        // The stage-in region and the first two lengths are read only for an action, which checks
+        // them: a setter of another field reads no more of the record than `RecordView::new` does.
+        let action = view.action();
+        let retained = view.retained_pipeline().is_some();
+        let stage_in = |view: &RecordView<'_>| view.stage_in_region();
+        let lengths = |view: &RecordView<'_>| {
+            [0, 1].map(|index| view.threadgroup_memory_length(index).unwrap_or(0))
+        };
         let word_bytes = |word: usize, words: usize| word * 4..(word + words) * 4;
         match field {
             RecordField::Barrier(barrier) => {
@@ -959,6 +988,7 @@ impl CommandRecord {
                 Ok(at..at + 4)
             }
             RecordField::Action(new) => {
+                let (stage_in, lengths) = (stage_in(&view), lengths(&view));
                 let wide = new.takes_stage_in_words();
                 if wide && stage_in != [0; 6] {
                     return Err(RecordError::StageInRegion);

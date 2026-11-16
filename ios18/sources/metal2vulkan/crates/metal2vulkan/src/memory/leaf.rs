@@ -5,7 +5,9 @@
 //! ([`WordMem`]: a descriptor view, later the PSB and arena forms). Memory holds the
 //! little-endian bytes of the value under the AIR datalayout; the register value is the
 //! arithmetic family's representation ([`Form`]): an `iN` zero-extended in a `u32` or `u64`, `i1`
-//! as `bool` (one byte, `byte != 0`), floats native.
+//! as `bool` (one byte, `byte != 0`), floats native. A store masks an integer narrower than its
+//! container to its width before placing it ([`words_of`]): a poison value (a `nuw` operation's,
+//! `ops::int_binary`) may carry bits above the width, and the store writes only its own bytes.
 //!
 //! A vector of more than four whole-byte lanes is held **chunked**: its register value is the
 //! arithmetic family's composite of 4-lane chunks, the last holding the remaining 1 to 4 lanes.
@@ -15,11 +17,15 @@
 //! and the register value goes chunk by chunk.
 //!
 //! No narrow storage type is used: a leaf is composed from the 32-bit words covering it. The
-//! **path** depends only on the access's alignment `a` ([`Path`]):
+//! **path** depends only on the access's alignment `a` and, for an 8- or 16-byte leaf, the alignment
+//! its offset is proven to have ([`Path`]):
 //!
-//! - [`Path::Vec4`] (`n == 16` and `a >= 16`): the offset is a multiple of 16, so the leaf is
+//! - [`Path::Vec4`] (`n == 16`, `a >= 16`, and the offset proven a multiple of 16): the leaf is
 //!   `uvec4` unit `off/16` where the memory has one ([`Units::vec4`]), else [`Path::Aligned`]'s
 //!   four words.
+//! - [`Path::Vec2`] (`n == 8`, `a >= 8`, and the offset proven a multiple of 8): the leaf is
+//!   `uvec2` unit `off/8` where the memory has one ([`Units::vec2`]), else [`Path::Aligned`]'s two
+//!   words.
 //! - [`Path::Aligned`] (`a >= 4`): the offset is a multiple of 4, so the leaf is words
 //!   `off/4 .. off/4 + ceil(n/4)`.
 //! - [`Path::OneWord`] (`n <= 2` and `a >= n`): the leaf lies inside one word at a dynamic byte
@@ -62,21 +68,43 @@
 //! performs each atomic as one read-modify-write; the model does not promise that, and no device
 //! run has measured it.
 //!
-//! **`uvec4` units**. A word memory may also load and store 16-byte units through a typed `uvec4`
-//! view ([`WordMem::read_vec4`]; a descriptor slot's `{ uvec4[] }` view, or its uniform view's own
-//! vectors, `memory::views`). There a [`Path::Vec4`] leaf is one unit at index `off / 16`, its
-//! register value one bitcast of the vector (four 32-bit lanes or two 64-bit ones) or the
-//! composition of its four words: one load or store where the aligned path moves four words. The
-//! unit holds exactly the leaf's bytes, so no byte outside the leaf is read or written, as on the
-//! word path.
+//! **Vector units**. A word memory may also load and store 16-byte units through a typed `uvec4`
+//! view and 8-byte units through a typed `uvec2` view ([`WordMem::read_vec`]; a descriptor slot's
+//! `{ uvec4[] }` and `{ uvec2[] }` views, or its uniform view's own vectors, `memory::views`).
+//! There a [`Path::Vec4`] leaf is one unit at index `off / 16` and a [`Path::Vec2`] leaf one at
+//! `off / 8`, its register value one bitcast of the vector (32-bit lanes, or 64-bit ones) or the
+//! composition of its words: one load or store where the aligned path moves four or two words. A
+//! device that merges neighbouring word accesses only where it can prove the wider alignment
+//! (RADV under `robustBufferAccess2`, Mesa 26.2.6) then moves the leaf in one access, not two or
+//! four.
+//! The unit holds exactly the leaf's bytes, so no byte outside the leaf is read or written, as on
+//! the word path.
 //!
 //! **Volatile**. A volatile access is the same leaf through a word memory whose [`WordOps`] carry
 //! `volatile`: every word or unit it loads or stores has the `Volatile` memory operand.
 //!
-//! The alignment is a promise about the Metal address; it carries to the offset in a word memory
-//! because every word memory's base is 4-byte aligned in the Metal address space (the binder's
-//! descriptor bases are), and to a `uvec4` unit's index because a descriptor view's base is 16-byte
-//! aligned there.
+//! **Placement**. Metal does not place an access at the alignment its AIR states. Measured with
+//! rows of 21 elements, one thread a row (`probes/vector_access_placement.m` in the conformance
+//! crate), on an Apple M3 Max under macOS 27.0.1, and for the first row on an AMD Radeon Pro
+//! 5300M under macOS 26.7.1 too, the same answer from the same library:
+//!
+//! | Access | Its address | Where Metal reads or writes it |
+//! |---|---|---|
+//! | `float4` (`align 16`) load and store: device (both GPUs) | 4, 8 or 12 mod 16 | at the address |
+//! | the same in threadgroup and constant memory (M3 Max) | 4, 8 or 12 mod 16 | at the address |
+//! | `half4` store (`align 8`): device (M3 Max) | 2 mod 4 | the multiple of 4 below |
+//! | `uchar4` store (`align 4`): device (M3 Max) | odd | the multiple of 4 below |
+//! | `float4 *` buffer bound at offset 4 (M3 Max) | 4 mod 16 | at the address |
+//!
+//! Metal's API validation fails that last bind ("must be a multiple of 16"): a buffer's bind
+//! offset is a multiple of its argument's `air.arg_type_align_size`. An alignment of at least 4
+//! carries to the offset in a word memory, because every word memory's base is 4-byte aligned in
+//! the Metal address space (the binder's descriptor bases are): the words at `off/4` are those
+//! Metal reads, for each row of the table. A `uvec4` unit at `off/16` is exact only where `off` is
+//! a multiple of 16, and a `uvec2` unit at `off/8` only where it is a multiple of 8, which the
+//! access's `align` does not say (the `half4` row), so each is taken only where the offset is
+//! proven one (`MemoryPlan::proven_align`: the structure of the pointer's offset and its roots'
+//! bases, a buffer's from its argument's alignment); elsewhere the leaf is its words at `off/4`.
 
 use crate::air::ir::{Type, TypeId as AirTypeId, TypeLayouts};
 use crate::air::Entry;
@@ -187,9 +215,12 @@ fn not_lowered() -> Error {
 /// How a leaf is composed from words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Path {
-    /// A 16-byte leaf at an offset that is a multiple of 16: one `uvec4` unit where the memory
+    /// A 16-byte leaf at an offset proven a multiple of 16: one `uvec4` unit where the memory
     /// has one ([`Units::vec4`]), else [`Path::Aligned`]'s four words.
     Vec4,
+    /// An 8-byte leaf at an offset proven a multiple of 8: one `uvec2` unit where the memory has
+    /// one ([`Units::vec2`]), else [`Path::Aligned`]'s two words.
+    Vec2,
     /// The offset is a multiple of 4.
     Aligned,
     /// A 1- or 2-byte leaf inside one word.
@@ -237,7 +268,7 @@ impl Leaf {
                     bytes: u32::from(k) * lane,
                     // A chunk is shorter than the vector: its words start on a word.
                     path: match self.path {
-                        Path::Vec4 => Path::Aligned,
+                        Path::Vec4 | Path::Vec2 => Path::Aligned,
                         p => p,
                     },
                 };
@@ -250,7 +281,7 @@ impl Leaf {
     /// per instruction, with a sub-word store's two atomics on every word.
     pub fn cost(&self) -> u32 {
         let per = match self.path {
-            Path::Vec4 | Path::Aligned => 48 * self.words(),
+            Path::Vec4 | Path::Vec2 | Path::Aligned => 48 * self.words(),
             Path::OneWord => 96,
             Path::Bytes => 96 * self.bytes,
         };
@@ -271,17 +302,19 @@ impl Leaf {
     }
 }
 
-/// The leaf of an access of AIR type `ty` with alignment `align` bytes (1 when unstated), or the
-/// refusal of a type that is not a scalar or vector the arithmetic family holds on `p`. A
-/// vector's lanes must be whole bytes (`<N x i1>` and odd widths are bit-packed in LLVM); one of
-/// 5 to 255 lanes is chunked, and a `<1 x T>` (a chunked composite of one scalar) or a vector of
-/// more lanes is not implemented.
+/// The leaf of an access of AIR type `ty` with alignment `align` bytes (1 when unstated) at an
+/// offset proven a multiple of `proven` bytes (`MemoryPlan::proven_align`; the module doc's
+/// placement), or the refusal of a type that is not a scalar or vector the arithmetic family holds
+/// on `p`. A vector's lanes must be whole bytes (`<N x i1>` and odd widths are bit-packed in LLVM);
+/// one of 5 to 255 lanes is chunked, and a `<1 x T>` (a chunked composite of one scalar) or a
+/// vector of more lanes is not implemented.
 pub fn leaf_of(
     e: &Entry,
     p: &DeviceProfile,
     layouts: &TypeLayouts,
     ty: AirTypeId,
     align: u64,
+    proven: u64,
 ) -> Result<Leaf, Error> {
     // A 64-bit integer is two words on a profile without `shaderInt64`, in a chunk too.
     let form = match legal::chunked(e.module.types(), ty) {
@@ -330,8 +363,10 @@ pub fn leaf_of(
     ) {
         return Err(not_lowered());
     }
-    let path = if bytes == 16 && align >= 16 {
+    let path = if bytes == 16 && align >= 16 && proven >= 16 {
         Path::Vec4
+    } else if bytes == 8 && align >= 8 && proven >= 8 {
+        Path::Vec2
     } else if align >= 4 {
         Path::Aligned
     } else if bytes <= 2 && u64::from(bytes) <= align {
@@ -342,14 +377,16 @@ pub fn leaf_of(
     Ok(Leaf { form, bytes, path })
 }
 
-/// The units a word memory also loads and stores directly: narrow 1- and 2-byte units and 16-byte
-/// `uvec4` units.
+/// The units a word memory also loads and stores directly: narrow 1- and 2-byte units, 8-byte
+/// `uvec2` units and 16-byte `uvec4` units.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Units {
     /// 2-byte units (a `u16` view).
     pub u16: bool,
     /// 1-byte units (a `u8` view).
     pub u8: bool,
+    /// 8-byte units (a `uvec2` view).
+    pub vec2: bool,
     /// 16-byte units (a `uvec4` view).
     pub vec4: bool,
 }
@@ -359,14 +396,16 @@ impl Units {
     pub const NONE: Units = Units {
         u16: false,
         u8: false,
+        vec2: false,
         vec4: false,
     };
 
-    /// Whether `bytes`-byte units (1, 2, or 16) are available.
+    /// Whether `bytes`-byte units (1, 2, 8, or 16) are available.
     pub fn has(self, bytes: u32) -> bool {
         match bytes {
             1 => self.u8,
             2 => self.u16,
+            8 => self.vec2,
             16 => self.vec4,
             _ => false,
         }
@@ -377,6 +416,7 @@ impl Units {
         Units {
             u16: self.u16 || other.u16,
             u8: self.u8 || other.u8,
+            vec2: self.vec2 || other.vec2,
             vec4: self.vec4 || other.vec4,
         }
     }
@@ -386,50 +426,57 @@ impl Units {
         Units {
             u16: self.u16 && other.u16,
             u8: self.u8 && other.u8,
+            vec2: self.vec2 && other.vec2,
             vec4: self.vec4 && other.vec4,
         }
     }
 
     /// Whether no unit is set.
     pub fn is_empty(self) -> bool {
-        !self.u16 && !self.u8 && !self.vec4
+        !self.u16 && !self.u8 && !self.vec2 && !self.vec4
     }
 
     /// The units profile `p` can declare as storage-buffer views: a narrow width needs its
     /// storage access and, since requirement derivation asks a declared 8- or 16-bit integer type
-    /// for its arithmetic capability (`spirv::requirements`), its integer feature; a `uvec4` view
-    /// needs nothing.
+    /// for its arithmetic capability (`spirv::requirements`), its integer feature; a `uvec2` or
+    /// `uvec4` view needs nothing.
     pub fn storage_on(p: &DeviceProfile) -> Units {
         let l = &p.fields().leaf;
         Units {
             u16: l.storage_buffer_16bit && l.int16,
             u8: l.storage_buffer_8bit && l.int8,
+            vec2: true,
             vec4: true,
         }
     }
 }
 
 /// The units an access of `leaf` (a `store` or a load) uses where its memory has them: a
-/// [`Path::Vec4`] leaf's `uvec4` unit, a [`Path::OneWord`] leaf's one narrow unit of its size, and
-/// an aligned store's partial last word's 2-byte and 1-byte parts. A load of an aligned leaf reads
-/// whole words, and a [`Path::Bytes`] leaf joins words, so neither uses one.
+/// [`Path::Vec4`] leaf's `uvec4` unit, a [`Path::Vec2`] leaf's `uvec2` unit, a [`Path::OneWord`]
+/// leaf's one narrow unit of its size, and an aligned store's partial last word's 2-byte and 1-byte
+/// parts. A load of an aligned leaf reads whole words, and a [`Path::Bytes`] leaf joins words, so
+/// neither uses one.
 pub fn leaf_units(leaf: &Leaf, store: bool) -> Units {
     match leaf.path {
         Path::Vec4 => Units {
             vec4: true,
             ..Units::NONE
         },
+        Path::Vec2 => Units {
+            vec2: true,
+            ..Units::NONE
+        },
         Path::OneWord => Units {
             u16: leaf.bytes == 2,
             u8: leaf.bytes == 1,
-            vec4: false,
+            ..Units::NONE
         },
         Path::Aligned if store => {
             let tail = leaf.bytes % 4;
             Units {
                 u16: tail >= 2,
                 u8: tail % 2 == 1,
-                vec4: false,
+                ..Units::NONE
             }
         }
         Path::Aligned | Path::Bytes => Units::NONE,
@@ -477,16 +524,23 @@ pub trait WordMem {
     ) -> BResult<()> {
         Err(dangling())
     }
-    /// Load the `uvec4` unit `index` (a `u32` index of 16-byte units): the four little-endian
-    /// words of its bytes. Called only where [`WordMem::units`] has `vec4`.
-    fn read_vec4(&mut self, _fb: &mut FunctionBuilder<'_>, _index: Value) -> BResult<Value> {
-        Err(dangling())
-    }
-    /// Store the `uvec4` `value` to the 16-byte unit `index`. Called only where [`WordMem::units`]
-    /// has `vec4`.
-    fn write_vec4(
+    /// Load the `uvecN` unit `index` of `N = lanes` words (2 or 4; a `u32` index of `4N`-byte
+    /// units): the little-endian words of its bytes. Called only where [`WordMem::units`] has
+    /// units of `4N` bytes.
+    fn read_vec(
         &mut self,
         _fb: &mut FunctionBuilder<'_>,
+        _lanes: u32,
+        _index: Value,
+    ) -> BResult<Value> {
+        Err(dangling())
+    }
+    /// Store the `uvecN` `value` (`N = lanes`, 2 or 4) to the `4N`-byte unit `index`. Called only
+    /// where [`WordMem::units`] has units of `4N` bytes.
+    fn write_vec(
+        &mut self,
+        _fb: &mut FunctionBuilder<'_>,
+        _lanes: u32,
         _index: Value,
         _value: Value,
     ) -> BResult<()> {
@@ -886,10 +940,12 @@ pub fn words_of(fb: &mut FunctionBuilder<'_>, leaf: &Leaf, v: Value) -> BResult<
                 } else {
                     u32::from(bits / 8)
                 };
+                let x = ops::mask(fb, scalar, x)?;
                 put(fb, &mut out, i * lane_bytes, x)?;
             }
             Held::Wide { .. } => return Err(dangling()),
             Held::Int { .. } | Held::Float(FloatFmt::F64) => {
+                let x = ops::mask(fb, scalar, x)?;
                 let (lo, hi) = split64(fb, x)?;
                 put(fb, &mut out, 8 * i, lo)?;
                 if 8 * i + 4 < leaf.bytes {
@@ -973,7 +1029,10 @@ fn vector_words(
         filled(fb, out)
     };
     Ok(Some(match form.held {
-        Held::Int { container: 32, .. } => placed(fb, v)?,
+        Held::Int { container: 32, .. } => {
+            let v = ops::mask(fb, form, v)?;
+            placed(fb, v)?
+        }
         Held::Float(FloatFmt::Half | FloatFmt::BFloat) => {
             // A narrow float is held widened: one encode of every lane, a `half`'s by the
             // device's narrowing (`narrow::to_bits`).
@@ -986,6 +1045,7 @@ fn vector_words(
             placed(fb, u)?
         }
         Held::Int { container: 64, .. } | Held::Float(FloatFmt::F64) if n == 2 => {
+            let v = ops::mask(fb, form, v)?;
             let ty = uvec_ty(fb, 4)?;
             let u = fb.convert(ConvOp::Bitcast, v, ty)?;
             let mut out = Vec::with_capacity(4);
@@ -998,25 +1058,26 @@ fn vector_words(
     }))
 }
 
-/// Whether a 16-byte leaf's register value is one `uvec4`'s bits: four 32-bit lanes or two
-/// 64-bit ones, held natively (not chunked, nor as word pairs).
-fn vec4_bits(leaf: &Leaf) -> bool {
+/// Whether a vector unit's leaf (8 or 16 bytes) has a register value of the `uvecN`'s bits:
+/// 32-bit lanes, or 64-bit ones, filling its bytes, held natively (not chunked, nor as word pairs).
+fn vec_bits(leaf: &Leaf) -> bool {
     let form = leaf.form;
+    let lanes = u32::from(form.lanes);
     !leaf.chunked()
         && !form.is_wide()
-        && matches!(
-            (form.held, form.lanes),
-            (
-                Held::Int {
-                    bits: 32,
-                    container: 32
-                } | Held::Float(FloatFmt::F32),
-                4
-            ) | (
-                Held::Int { container: 64, .. } | Held::Float(FloatFmt::F64),
-                2
-            )
-        )
+        && match form.held {
+            Held::Int {
+                bits: 32,
+                container: 32,
+            }
+            | Held::Float(FloatFmt::F32) => 4 * lanes == leaf.bytes,
+            Held::Int {
+                bits: 64,
+                container: 64,
+            }
+            | Held::Float(FloatFmt::F64) => 8 * lanes == leaf.bytes,
+            _ => false,
+        }
 }
 
 /// `v` as type `to` of the same bits: itself, or one bitcast.
@@ -1027,25 +1088,27 @@ fn as_bits(fb: &mut FunctionBuilder<'_>, v: Value, to: TypeId) -> BResult<Value>
     fb.convert(ConvOp::Bitcast, v, to)
 }
 
-/// The register value of 16-byte `leaf` from `v`, the `uvec4` of its little-endian words: one
-/// bitcast where its bits are the vector's ([`vec4_bits`]), else [`value_of`] of the four words.
-fn value_of_vec4(fb: &mut FunctionBuilder<'_>, leaf: &Leaf, v: Value) -> BResult<Value> {
-    if vec4_bits(leaf) {
+/// The register value of 8- or 16-byte `leaf` from `v`, the `uvec2` or `uvec4` of its
+/// little-endian words: one bitcast where its bits are the vector's ([`vec_bits`]), else
+/// [`value_of`] of the words.
+fn value_of_vec(fb: &mut FunctionBuilder<'_>, leaf: &Leaf, v: Value) -> BResult<Value> {
+    if vec_bits(leaf) {
         let ty = ops::ty(fb, leaf.form)?;
         return as_bits(fb, v, ty);
     }
-    let mut words = Vec::with_capacity(4);
-    for i in 0..4 {
+    let mut words = Vec::with_capacity(leaf.words() as usize);
+    for i in 0..leaf.words() {
         words.push(fb.composite_extract(v, &[i])?);
     }
     value_of(fb, leaf, &words)
 }
 
-/// The `uvec4` of 16-byte `leaf`'s register value `v`, its little-endian words: one bitcast where
-/// its bits are the vector's ([`vec4_bits`]), else [`words_of`] gathered.
-fn vec4_of(fb: &mut FunctionBuilder<'_>, leaf: &Leaf, v: Value) -> BResult<Value> {
-    let ty = uvec_ty(fb, 4)?;
-    if vec4_bits(leaf) {
+/// The `uvec2` or `uvec4` of 8- or 16-byte `leaf`'s register value `v`, its little-endian words:
+/// one bitcast where its bits are the vector's ([`vec_bits`]), else [`words_of`] gathered.
+fn vec_of(fb: &mut FunctionBuilder<'_>, leaf: &Leaf, v: Value) -> BResult<Value> {
+    let lanes = u8::try_from(leaf.words()).map_err(|_| dangling())?;
+    let ty = uvec_ty(fb, lanes)?;
+    if vec_bits(leaf) {
         return as_bits(fb, v, ty);
     }
     let words = words_of(fb, leaf, v)?;
@@ -1149,13 +1212,13 @@ pub fn load(
     off: Value,
 ) -> BResult<Value> {
     let words = match leaf.path {
-        // The leaf's one `uvec4` unit, at `off / 16`.
-        Path::Vec4 if mem.units().vec4 => {
-            let index = shr(fb, off, 4)?;
-            let v = mem.read_vec4(fb, index)?;
-            return value_of_vec4(fb, leaf, v);
+        // The leaf's one `uvec4` unit at `off / 16`, or `uvec2` unit at `off / 8`.
+        Path::Vec4 | Path::Vec2 if mem.units().has(leaf.bytes) => {
+            let index = shr(fb, off, leaf.bytes.trailing_zeros())?;
+            let v = mem.read_vec(fb, leaf.words(), index)?;
+            return value_of_vec(fb, leaf, v);
         }
-        Path::Vec4 | Path::Aligned => {
+        Path::Vec4 | Path::Vec2 | Path::Aligned => {
             let two = k32(fb, 2)?;
             let w = u32_op(fb, BinOp::ShiftRightLogical, off, two)?;
             let mut words = Vec::with_capacity(leaf.words() as usize);
@@ -1221,17 +1284,17 @@ pub fn store(
     off: Value,
     v: Value,
 ) -> BResult<bool> {
-    // The leaf's one `uvec4` unit, at `off / 16`.
-    if leaf.path == Path::Vec4 && mem.units().vec4 {
-        let x = vec4_of(fb, leaf, v)?;
-        let index = shr(fb, off, 4)?;
-        mem.write_vec4(fb, index, x)?;
+    // The leaf's one `uvec4` unit at `off / 16`, or `uvec2` unit at `off / 8`.
+    if matches!(leaf.path, Path::Vec4 | Path::Vec2) && mem.units().has(leaf.bytes) {
+        let x = vec_of(fb, leaf, v)?;
+        let index = shr(fb, off, leaf.bytes.trailing_zeros())?;
+        mem.write_vec(fb, leaf.words(), index, x)?;
         return Ok(false);
     }
     let mut merged = false;
     let words = words_of(fb, leaf, v)?;
     match leaf.path {
-        Path::Vec4 | Path::Aligned => {
+        Path::Vec4 | Path::Vec2 | Path::Aligned => {
             let two = k32(fb, 2)?;
             let w = u32_op(fb, BinOp::ShiftRightLogical, off, two)?;
             let units = mem.units().intersect(leaf_units(leaf, true));

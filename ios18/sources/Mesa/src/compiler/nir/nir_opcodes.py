@@ -508,17 +508,6 @@ dst.x |= _mesa_signed_to_signed(src0.y, 16) << 16;
 Convert two signed integers into a packed signed short (clamp is applied).
 """)
 
-unop_horiz("pack_uvec2_to_uint", 1, tuint32, 2, tuint32, """
-dst.x = (src0.x & 0xffff) | (src0.y << 16);
-""")
-
-unop_horiz("pack_uvec4_to_uint", 1, tuint32, 4, tuint32, """
-dst.x = ((src0.x & 0xff) <<  0) |
-        ((src0.y & 0xff) <<  8) |
-        ((src0.z & 0xff) << 16) |
-        ((src0.w & 0xff) << 24);
-""")
-
 unop_horiz("pack_32_4x8", 1, tuint32, 4, tuint8,
            "dst.x = src0.x | ((uint32_t)src0.y << 8) | ((uint32_t)src0.z << 16) | ((uint32_t)src0.w << 24);")
 
@@ -1701,6 +1690,14 @@ opcode("prmt_nv", 0, tuint32, [0, 0, 0], [tuint32, tuint32, tuint32],
 # Shift must be a constant.
 opcode("lea_nv", 0, tuint, [0, 0, 0], [tuint, tuint, tuint32], False,
        "", "src0 + (src1 << (src2 % bit_size))")
+
+# Clamps src0 to src1. src1 must be positive otherwise the result is considered undefined.
+opcode("fclamp_nv", 0, tfloat, [0, 0], [tfloat, tfloat], False, "",
+"""
+bool sign = signbit(src0);
+double res = util_min_num(fabs(src0), src1);
+dst = copysign(res, sign ? -1.0 : 0.0);
+""")
 
 # 24b multiply into 32b result (with sign extension)
 binop("imul24", tint32, _2src_commutative,

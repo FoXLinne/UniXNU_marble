@@ -357,6 +357,26 @@ pub enum VkFeature {
     /// runtime draws Apple's `setLineWidth:` widths through it where the device's own lines are
     /// its route (`render/line_width.rs`).
     WideLines,
+    // Appended.
+    /// `VK_EXT_multi_draw`'s `multiDraw`: `vkCmdDrawMultiEXT` and `vkCmdDrawMultiIndexedEXT`, one
+    /// command of several draws, each draw's `DrawIndex` its index in the command ("if
+    /// vkCmdDrawMultiEXT or vkCmdDrawMultiIndexedEXT is used, this variable contains the integer
+    /// value corresponding to the zero-based index of the draw", the specification's `DrawIndex`).
+    /// The runtime draws a rate-mapped pass's regions through it, several in one command, each
+    /// region's viewport selected by its draw's index (`LoweringInputs::region_viewports`).
+    MultiDraw,
+    // Appended.
+    /// `VK_EXT_shader_float8`'s `shaderFloat8`: the SPIR-V capability `Float8EXT`, 8-bit floats of
+    /// the encodings `Float8E4M3EXT` and `Float8E5M2EXT` (`SPV_EXT_float8`), which Vulkan requires
+    /// of every device that lists the extension. The lowering converts an 8-bit float to a wider
+    /// one through the device's own type where it has it (`lower::arith::narrow`'s `fp8_native`).
+    ShaderFloat8,
+    // Appended.
+    /// `pointPolygons` (a portability-subset member): `VK_POLYGON_MODE_POINT` with rasterization
+    /// on (`VUID-VkPipelineRasterizationStateCreateInfo-pointPolygons-04458`), as the render
+    /// encoder's `TriangleFillMode::Points` draws. Like every portability member, a device without
+    /// `VK_KHR_portability_subset` has no such restriction.
+    PointPolygons,
 }
 
 /// A Vulkan device extension the new core can require.
@@ -484,6 +504,15 @@ pub enum VkExtension {
     /// `VK_FORMAT_A4R4G4B4_UNORM_PACK16` and `VK_FORMAT_A4B4G4R4_UNORM_PACK16`, which hold
     /// `MTLPixelFormatBGRA4Unorm`'s word.
     Ext4444Formats,
+    // Appended.
+    /// `VK_EXT_multi_draw` (never promoted): [`VkFeature::MultiDraw`].
+    ExtMultiDraw,
+    // Appended.
+    /// `VK_EXT_shader_float8` (never promoted): the 8-bit float types of `SPV_EXT_float8`, whose
+    /// `shaderFloat8` Vulkan requires of every device that lists it. The core enables it where the
+    /// device lists it, and there refuses a `matmul2d` of 8-bit floats, whose conversion through
+    /// the device's type is not built yet.
+    ExtShaderFloat8,
 }
 
 /// One subgroup operation class (`VkSubgroupFeatureFlagBits`).
@@ -640,7 +669,10 @@ pub enum VkProperty {
     /// No Vulkan query reports it: `DenormFlushToZero` makes only the results' flush a
     /// requirement, the operands' remains the device's choice. A module that leaves such an
     /// operation's denormals to the device, recording no `PrecisionNote::DeviceDenormals` for it,
-    /// requires it; without it, they are the device's own, and the module records that note.
+    /// requires it; without it, they are the device's own, and the module records that note. So
+    /// does a module whose entry declares the 16-bit float controls on a driver measured to keep
+    /// `f32` denormals there (`DriverWorkaround::FloatDenormalsKeptUnderHalfControls`), which
+    /// requires no such property.
     MetalFloatDenormals,
     /// The device reads a center-sampled varying of a multisampled pipeline at the pixel center
     /// in every fragment invocation, a sample-rate one's included, as Metal does (the driver's
@@ -871,6 +903,10 @@ pub enum VkProperty {
     /// that hands Metal's `interpolate_at_offset` to the instruction moved by 7/16 requires it in
     /// place of [`VkProperty::InterpolateAtOffsetCentered`].
     InterpolateAtOffsetFromSevenSixteenths,
+    /// `subgroupSupportedStages` contains the geometry stage, which runs only the translator's
+    /// own geometry stages (`pipeline::link::geometry`): a geometry module's subgroup operations
+    /// require it, where a Metal stage's require [`VkProperty::SubgroupStage`].
+    SubgroupGeometryStage,
 }
 
 /// One depth or stencil resolve mode (`VkResolveModeFlagBits`), named by
@@ -1193,6 +1229,8 @@ pub enum SpirvExtension {
     KhrQuadControl,
     // Appended.
     KhrPostDepthCoverage,
+    // Appended.
+    ExtFloat8,
 }
 
 /// The SPIR-V capabilities a module's [`Requirements`] list without the feature that enables them,

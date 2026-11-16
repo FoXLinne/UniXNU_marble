@@ -18,10 +18,13 @@
 //! - a checked execution's host step checks each command before it records any, from the records
 //!   it read once; `commit` checks the CPU's records it records the same way, where a state the
 //!   records may name may encode, and never where none may;
-//! - the blit encoder's copy, reset and optimize act on the commands as they run;
+//! - the blit encoder's copy, reset and optimize act on the commands as they run, and a reset
+//!   resets every command a kernel, the CPU or a copy wrote since the last (its written flags);
 //! - a record the kernel wrote runs the state its ID named as it wrote it, after the program
-//!   released it and after another state took its ID; where the state was released before the
-//!   buffer could be written, nothing, announced;
+//!   released it and after another state took its ID, and where the state was released before the
+//!   buffer could be written; past the ID's last four holders, nothing, announced. A record the
+//!   CPU set a state on runs the state the kernel's write of its pipeline named, and the CPU's
+//!   where the kernel wrote only its buffers;
 //! - a kernel reaches the buffer made last with the ID it encodes through, placed or not, and
 //!   none once that one is gone, the buffer at an ID a reservation leaves next, and an ID's
 //!   records where an earlier ID's run past their start;
@@ -56,7 +59,7 @@ use metal2vulkan_runtime::{
     Error, EventRef, ExecutedCommands, ExecutedCommandsHandler, ExecutedPipeline, Execution,
     IdPlacement, IndirectCommand, IndirectCommandBuffer, IndirectCommandBufferDescriptor,
     IndirectCommandBufferProblem, IndirectCommandCheckNeeds, Invalid, PipelineOptions, Problem,
-    RecordsRead, ResourceId, ResourceIdKind, ResourceOptions, RuntimeGap, Size,
+    RecordsRead, ResourceId, ResourceIdKind, ResourceOptions, RuntimeGap, Size, WorkCounts,
 };
 use std::ptr::NonNull;
 use std::sync::{mpsc, Arc, Mutex};
@@ -88,7 +91,8 @@ fn on_device_adjusted(adjust: fn(&mut DeviceOptions), test: impl FnOnce(&Device)
 }
 
 /// [`on_device`] of a test whose own steps force `own` too, each announced once beside
-/// [`HOST_STEPS`] and the `Shared` buffers' system memory.
+/// [`HOST_STEPS`], the `Shared` buffers' system memory, and the staged records where a host step
+/// staged them ([`records_staged`]).
 fn on_device_forcing(own: &[Degradation], test: impl FnOnce(&Device)) {
     on_device_forcing_with(|_| {}, own, test);
 }
@@ -100,14 +104,35 @@ fn on_device_forcing_with(
     test: impl FnOnce(&Device),
 ) {
     on_device_with(adjust, |device, messages| {
+        let before = device.work_counts();
         test(device);
         let kinds: Vec<Degradation> = HOST_STEPS.iter().chain(own).copied().collect();
-        let shared = forced(&[(
-            Degradation::SharedInSystemMemory,
-            shared_in_system_memory(device),
-        )]);
+        let shared = forced(&[
+            (
+                Degradation::SharedInSystemMemory,
+                shared_in_system_memory(device),
+            ),
+            (
+                Degradation::StagedIndirectRecords,
+                records_staged(device, &before),
+            ),
+        ]);
         assert_made_once(messages, &kinds, &shared);
     });
+}
+
+/// Whether the steps since `before` staged a host access of indirect command buffer records in
+/// device-local memory, which the device announces once (`Degradation::StagedIndirectRecords`):
+/// on a device without unified memory, records a kernel wrote first lie in device-local memory,
+/// and a host step reads them while its command buffer holds them, through the staging queue.
+/// None with unified memory, where every buffer's records lie in the host's memory.
+fn records_staged(device: &Device, before: &WorkCounts) -> bool {
+    let staged =
+        device.work_counts().icb_records_staged_accesses - before.icb_records_staged_accesses;
+    if device.properties().has_unified_memory {
+        assert_eq!(staged, 0, "unified memory stages no records");
+    }
+    staged > 0
 }
 
 /// A state of owned fixture `stem`'s kernel, made with `supportIndirectCommandBuffers` as
@@ -188,7 +213,12 @@ impl Setup {
 
     /// Encode the writing kernel on `encoder`: one thread a command.
     pub(super) fn write(&self, encoder: &mut ComputeCommandEncoder) {
-        encoder.set_compute_pipeline_state(&self.writer).unwrap();
+        self.write_with(encoder, &self.writer);
+    }
+
+    /// [`write`](Self::write) by `writer`, a kernel of the writing kernel's buffers.
+    fn write_with(&self, encoder: &mut ComputeCommandEncoder, writer: &ComputePipelineState) {
+        encoder.set_compute_pipeline_state(writer).unwrap();
         encoder.set_buffer(Some(&self.arguments), 0, 0).unwrap();
         encoder.set_buffer(Some(&self.params), 0, 1).unwrap();
         encoder.set_buffer(Some(&self.out), 0, 2).unwrap();
@@ -262,6 +292,17 @@ impl Setup {
         }
     }
 
+    /// The setup whose writer's argument buffer names pipeline state ID `id` in place of the
+    /// template's.
+    fn naming(self, device: &Device, id: ResourceId) -> Setup {
+        let mut arguments = self.icb.gpu_resource_id().0.to_le_bytes().to_vec();
+        arguments.extend(id.0.to_le_bytes());
+        Setup {
+            arguments: buffer_with(device, &arguments).unwrap(),
+            ..self
+        }
+    }
+
     /// The setup with its template released, the writer's state in its place: the argument
     /// buffer still names the template's ID, which a state made after may take.
     fn releasing_template(self) -> Setup {
@@ -274,6 +315,11 @@ impl Setup {
     /// `out`, which the commands write.
     pub(super) fn out(&self) -> &Buffer {
         &self.out
+    }
+
+    /// The buffer of the commands the kernel writes.
+    pub(super) fn icb(&self) -> &IndirectCommandBuffer {
+        &self.icb
     }
 
     /// `out`, read back.
@@ -660,8 +706,12 @@ fn a_kernel_writes_the_buffer_that_holds_the_id_now() {
 /// releases the template after the kernel wrote the commands, they run the template's program,
 /// and so they do after a state made after (the flat template of `generated_executions`) took its
 /// ID, unannounced. Where the program released the template before any command buffer that may
-/// write the buffer was encoded, the buffer keeps no program of it: Metal runs it, the commands
-/// run nothing, announced (`Degradation::ReleasedCommandState`).
+/// write the buffer was encoded, and no state took its ID, they run its program too, unannounced,
+/// as the M3 Max and the UHD 630 run it (the device keeps the program of a freed ID's last holder).
+/// Where four states took the ID and gave it back after the kernel wrote the commands, the
+/// device's last holders of the ID no longer list the template, and where the program released a
+/// state before it made any buffer of commands, the device kept its program for none: the
+/// commands run nothing, announced (`Degradation::ReleasedCommandState`).
 #[test]
 fn commands_a_kernel_wrote_run_the_state_their_id_named_then() {
     for taken in [false, true] {
@@ -691,7 +741,7 @@ fn commands_a_kernel_wrote_run_the_state_their_id_named_then() {
             assert_eq!(setup.output(), expected(), "taken {taken}");
         });
     }
-    on_device_forcing(&RELEASED_STATES, |device| {
+    on_device(|device| {
         let queue = device.new_command_queue().unwrap();
         let setup = Setup::new(device, 2).releasing_template();
         let command_buffer = queue.command_buffer().unwrap();
@@ -702,10 +752,125 @@ fn commands_a_kernel_wrote_run_the_state_their_id_named_then() {
         complete(&command_buffer);
         assert_eq!(
             setup.output(),
-            expected_in(0..0),
-            "the commands ran nothing"
+            expected(),
+            "released before the write: the template's program ran"
         );
     });
+    on_device_forcing(&RELEASED_STATES, |device| {
+        let queue = device.new_command_queue().unwrap();
+        let setup = Setup::new(device, 2);
+        let id = setup.template.gpu_resource_id();
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut encoder = command_buffer.compute_command_encoder().unwrap();
+        setup.write(&mut encoder);
+        encoder.end_encoding().unwrap();
+        complete(&command_buffer);
+        let setup = setup.releasing_template();
+        for _ in 0..4 {
+            let taker = flat_template(device);
+            assert_eq!(taker.gpu_resource_id(), id, "a flat template takes the ID");
+        }
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut encoder = command_buffer.compute_command_encoder().unwrap();
+        setup.execute(&mut encoder);
+        encoder.end_encoding().unwrap();
+        complete(&command_buffer);
+        assert_eq!(
+            setup.output(),
+            expected_in(0..0),
+            "past the ID's last four holders: the commands ran nothing"
+        );
+    });
+    on_device_forcing(&RELEASED_STATES, |device| {
+        let queue = device.new_command_queue().unwrap();
+        let gone = state(device, "icb_replay_template", true);
+        let id = gone.gpu_resource_id();
+        let template = state(device, "icb_replay_template", true);
+        drop(gone);
+        let setup = Setup::with_template(device, 2, template).naming(device, id);
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut encoder = command_buffer.compute_command_encoder().unwrap();
+        setup.write(&mut encoder);
+        setup.execute(&mut encoder);
+        encoder.end_encoding().unwrap();
+        complete(&command_buffer);
+        assert_eq!(
+            setup.output(),
+            expected_in(0..0),
+            "released while no buffer of commands lived: the commands ran nothing"
+        );
+    });
+}
+
+/// A record the CPU set a state on, which a kernel wrote again, the state among it, runs the
+/// state its ID named as the kernel wrote it, as Metal's does (the consumer's oracle, an M3 Max
+/// and a Radeon Pro 5300M): the CPU sets the template on every command, the program releases it,
+/// the flat template takes its ID, and the kernel writes the commands, naming the ID from its
+/// argument buffer. They run the flat template, unannounced.
+#[test]
+fn a_state_a_kernel_wrote_over_the_cpu_s_runs_the_id_s_holder_then() {
+    on_device(|device| {
+        let setup = Setup::new(device, 2);
+        setup.write_on_the_cpu();
+        let id = setup.template.gpu_resource_id();
+        let setup = setup.releasing_template();
+        let taker = flat_template(device);
+        assert_eq!(
+            taker.gpu_resource_id(),
+            id,
+            "the flat template takes the ID"
+        );
+        let queue = device.new_command_queue().unwrap();
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut encoder = command_buffer.compute_command_encoder().unwrap();
+        setup.write(&mut encoder);
+        setup.execute(&mut encoder);
+        encoder.end_encoding().unwrap();
+        complete(&command_buffer);
+        assert_eq!(setup.output(), flat_sums(), "the flat template ran");
+    });
+}
+
+/// A record the CPU set a state on, whose buffers alone a kernel wrote again, runs the state the
+/// CPU set, as every Mac runs it (the consumer's oracle, an M3 Max, a UHD 630 and a Radeon Pro
+/// 5300M): the CPU sets the template on every command, the program releases it, the flat template
+/// takes its ID, and the owned `icb_replay_encode_buffers` kernel writes each command's kernel
+/// buffers, the windows the CPU set. They run the template's program, unannounced: the record
+/// tells the kernel's write of its pipeline from the CPU's (`CommandRecord::kernel_pipeline`).
+#[test]
+fn a_record_whose_buffers_alone_a_kernel_wrote_runs_the_state_the_cpu_set() {
+    on_device(|device| {
+        let setup = Setup::new(device, 2);
+        setup.write_on_the_cpu();
+        let id = setup.template.gpu_resource_id();
+        let setup = setup.releasing_template();
+        let taker = flat_template(device);
+        assert_eq!(
+            taker.gpu_resource_id(),
+            id,
+            "the flat template takes the ID"
+        );
+        let buffers = state(device, "icb_replay_encode_buffers", false);
+        let queue = device.new_command_queue().unwrap();
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut encoder = command_buffer.compute_command_encoder().unwrap();
+        setup.write_with(&mut encoder, &buffers);
+        setup.execute(&mut encoder);
+        encoder.end_encoding().unwrap();
+        complete(&command_buffer);
+        assert_eq!(setup.output(), expected(), "the template's program ran");
+    });
+}
+
+/// What the flat template computes for the commands (`generated_executions`): each command's
+/// thread `p` adds `params[0] + 3 p + 11 THREADS + 30` of its window to word `p` of its window of
+/// `out`, which starts at 0.
+fn flat_sums() -> Vec<u32> {
+    (0..COMMANDS as usize)
+        .flat_map(|command| {
+            (0..THREADS as u32).map(move |p| param(command, 0) + 3 * p + 11 * THREADS as u32 + 30)
+        })
+        .collect()
 }
 
 /// A kernel encoding through an ID reaches the buffer made last with it, placed or not, as
@@ -1269,6 +1434,154 @@ fn blits_copy_reset_and_optimize_commands_as_they_run() {
         );
         blit.end_encoding().unwrap();
         complete(&command_buffer);
+    });
+}
+
+/// [`expected`] where only the commands of `ran` run: zero in the other commands' windows.
+fn expected_of(ran: &[usize]) -> Vec<u32> {
+    expected()
+        .into_iter()
+        .enumerate()
+        .map(|(word, value)| {
+            if ran.contains(&(word / WINDOW)) {
+                value
+            } else {
+                0
+            }
+        })
+        .collect()
+}
+
+/// Whether the getters read command `index` of `icb` as a reset command: no dispatch, no
+/// barrier, no pipeline state, no buffer and no threadgroup length.
+fn reads_reset(icb: &IndirectCommandBuffer, index: u64) -> bool {
+    match icb.commands(index..index + 1).unwrap().remove(0) {
+        IndirectCommand::Compute(command) => {
+            command.dispatch.is_none()
+                && !command.barrier
+                && command.pipeline.is_none()
+                && command.kernel_buffers.iter().all(Option::is_none)
+                && command.threadgroup_memory_lengths.iter().all(|&l| l == 0)
+        }
+        other => panic!("not a compute command: {other:?}"),
+    }
+}
+
+/// A blit's reset writes only the commands whose written flag is set (`blit_indirect.rs`), so
+/// every writer of the records sets it: after a kernel's writes, the CPU's setters and a blit's
+/// copy, each in a command buffer before the reset's, a reset of part of the range leaves its
+/// commands reset, the getters reading them so and an execution after it (its host step)
+/// running nothing for them, and the rest as written. A second reset of
+/// the whole range after the first resets the rest, and the kernel's writes after a reset reach
+/// the next one too: a reset clears the flags it consumed, and a later write sets them again.
+/// Each reset is one dispatch of the flagged reset and no fill or copy of the records, where the
+/// device counts its commands.
+#[test]
+fn a_reset_resets_what_each_writer_wrote_since_the_last() {
+    on_device_forcing(&[Degradation::UnmeasuredUniqueIdentifier], |device| {
+        let queue = device.new_command_queue().unwrap();
+        let setup = Setup::new(device, 2);
+        let counted = device.work_counts().commands_uncounted == 0;
+        // A reset of `range` of `icb` in a command buffer of its own, then the execution of every
+        // command of `icb` in the next.
+        let reset_then_run = |icb: &IndirectCommandBuffer, range: std::ops::Range<u64>| {
+            let before = device.work_counts().commands_recorded;
+            let command_buffer = queue.command_buffer().unwrap();
+            let mut blit = command_buffer.blit_command_encoder().unwrap();
+            blit.reset_commands_in_buffer(icb, range).unwrap();
+            blit.end_encoding().unwrap();
+            complete(&command_buffer);
+            let after = device.work_counts().commands_recorded;
+            if counted {
+                let recorded = (
+                    after.cmd_dispatch - before.cmd_dispatch,
+                    after.cmd_fill_buffer - before.cmd_fill_buffer,
+                    after.cmd_copy_buffer - before.cmd_copy_buffer,
+                );
+                // The flagged reset's dispatch, and the fill that clears the slots past the
+                // records (every compute command's threadgroup lengths there): no fill or copy of
+                // the records.
+                assert_eq!(recorded, (1, 1, 0), "one dispatch of the flagged reset");
+            }
+            let command_buffer = queue.command_buffer().unwrap();
+            let mut blit = command_buffer.blit_command_encoder().unwrap();
+            blit.fill_buffer(&setup.out, 0..setup.out.length(), 0)
+                .unwrap();
+            blit.end_encoding().unwrap();
+            let mut encoder = command_buffer.compute_command_encoder().unwrap();
+            encoder
+                .use_resource(setup.params.as_resource(), ResourceUsage::READ)
+                .unwrap();
+            encoder
+                .use_resource(setup.out.as_resource(), ResourceUsage::WRITE)
+                .unwrap();
+            encoder
+                .execute_commands_in_buffer(icb, 0..COMMANDS)
+                .unwrap();
+            encoder.end_encoding().unwrap();
+            complete(&command_buffer);
+            setup.output()
+        };
+        let resets = |icb: &IndirectCommandBuffer| -> Vec<bool> {
+            (0..COMMANDS).map(|index| reads_reset(icb, index)).collect()
+        };
+        // A kernel's writes, then a reset of commands 1 and 2.
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut encoder = command_buffer.compute_command_encoder().unwrap();
+        setup.write(&mut encoder);
+        encoder.end_encoding().unwrap();
+        complete(&command_buffer);
+        assert_eq!(
+            resets(&setup.icb),
+            [false; 4],
+            "the kernel wrote every command"
+        );
+        let out = reset_then_run(&setup.icb, 1..3);
+        assert_eq!(out, expected_of(&[0, 3]), "kernel: 1 and 2 reset");
+        assert_eq!(resets(&setup.icb), [false, true, true, false], "kernel");
+        // The whole range: the flags of 1 and 2 cleared, 0 and 3 reset now.
+        let out = reset_then_run(&setup.icb, 0..COMMANDS);
+        assert_eq!(out, expected_of(&[]), "kernel: all reset");
+        assert_eq!(resets(&setup.icb), [true; 4], "kernel: all reset");
+        // The kernel's writes after a reset set the flags again.
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut encoder = command_buffer.compute_command_encoder().unwrap();
+        setup.write(&mut encoder);
+        encoder.end_encoding().unwrap();
+        complete(&command_buffer);
+        let out = reset_then_run(&setup.icb, 3..4);
+        assert_eq!(out, expected_of(&[0, 1, 2]), "kernel again: 3 reset");
+        assert_eq!(
+            resets(&setup.icb),
+            [false, false, false, true],
+            "kernel again"
+        );
+        // The CPU's setters, then a reset of commands 0 and 1.
+        setup.write_on_the_cpu();
+        let out = reset_then_run(&setup.icb, 0..2);
+        assert_eq!(out, expected_of(&[2, 3]), "CPU: 0 and 1 reset");
+        assert_eq!(resets(&setup.icb), [true, true, false, false], "CPU");
+        // The CPU's own reset of command 2: the commands it leaves reset need no blit's.
+        setup.icb.reset_with_range(2..3).unwrap();
+        let out = reset_then_run(&setup.icb, 0..COMMANDS);
+        assert_eq!(out, expected_of(&[]), "CPU: all reset");
+        assert_eq!(resets(&setup.icb), [true; 4], "CPU: all reset");
+        // A copy of the CPU's commands into a fresh buffer, then a reset of 2 and 3 there.
+        setup.write_on_the_cpu();
+        let copied = commands_buffer(device, 2);
+        let command_buffer = queue.command_buffer().unwrap();
+        let mut blit = command_buffer.blit_command_encoder().unwrap();
+        blit.copy_indirect_command_buffer(&setup.icb, 0..COMMANDS, &copied, 0)
+            .unwrap();
+        blit.end_encoding().unwrap();
+        complete(&command_buffer);
+        assert_eq!(resets(&copied), [false; 4], "copied");
+        let out = reset_then_run(&copied, 2..4);
+        assert_eq!(out, expected_of(&[0, 1]), "copy: 2 and 3 reset");
+        assert_eq!(resets(&copied), [false, false, true, true], "copy");
+        let out = reset_then_run(&copied, 0..COMMANDS);
+        assert_eq!(out, expected_of(&[]), "copy: all reset");
+        assert_eq!(resets(&copied), [true; 4], "copy: all reset");
     });
 }
 

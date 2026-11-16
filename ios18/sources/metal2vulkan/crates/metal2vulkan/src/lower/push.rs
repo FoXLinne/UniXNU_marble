@@ -115,6 +115,8 @@ pub const fn shape(f: PushField) -> FieldShape {
         PushField::Specialized(_) => FieldShape::U32,
         // An in-place YCbCr texture's size, planes and conversion.
         PushField::YCbCrInPlace(_) => FieldShape::UVec4Array(2),
+        // A texture's size, rows and first texel in its texel buffer view.
+        PushField::TexelRows(_) => FieldShape::UVec4Array(1),
         // The residual is below `min{Storage,Uniform}BufferOffsetAlignment`.
         PushField::SlotBindOffset(_) | PushField::VertexBufferStride(_) => FieldShape::U32,
         // A texture's mipmap level count, an acceleration structure's instance count, the render
@@ -139,8 +141,12 @@ pub const fn shape(f: PushField) -> FieldShape {
         | PushField::ControlPointIndexOffset => FieldShape::U32,
         // An emulated tessellation draw's chunk.
         PushField::TessellationChunk => FieldShape::U32,
+        // The first region a recording of a rate-mapped pass's regions draws.
+        PushField::RegionFirst => FieldShape::U32,
         // A band's viewport half extent and half width, four `f32`s.
         PushField::LineBand => FieldShape::UVec4Array(1),
+        // A fan-out probe's flag index.
+        PushField::RegionProbe => FieldShape::U32,
         // The whole indices from the bound index offset to the buffer's end, unsaturated:
         // `firstIndex + indexCount` reaches `2^33`.
         PushField::IndexCapacity => FieldShape::U64,

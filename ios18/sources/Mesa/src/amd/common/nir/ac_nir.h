@@ -263,13 +263,19 @@ ac_nir_lower_ngg_mesh(nir_shader *shader, const ac_nir_lower_ngg_options *option
 
 bool
 ac_nir_lower_task_outputs_to_mem(nir_shader *shader,
-                                 bool has_query);
+                                 bool has_query,
+                                 enum amd_gfx_level gfx_level);
 
 bool
-ac_nir_lower_mesh_inputs_to_mem(nir_shader *shader, bool has_task_shader);
+ac_nir_lower_mesh_inputs_to_mem(nir_shader *shader, bool has_task_shader,
+                                enum amd_gfx_level gfx_level);
 
 bool
 ac_nir_lower_global_access(nir_shader *shader, enum amd_gfx_level gfx_level);
+
+nir_def *
+ac_nir_get_buffer_num_records(nir_builder *b, unsigned bit_size, nir_def *desc,
+                              enum amd_gfx_level gfx_level);
 
 bool ac_nir_lower_resinfo(nir_shader *nir, enum amd_gfx_level gfx_level);
 bool ac_nir_lower_image_opcodes(nir_shader *nir);
@@ -462,7 +468,7 @@ bool
 ac_nir_lower_image_tex(nir_shader *nir, const ac_nir_lower_image_tex_options *options);
 
 void
-ac_nir_store_debug_log_amd(nir_builder *b, nir_def *uvec4);
+ac_nir_store_debug_log_amd(nir_builder *b, enum amd_gfx_level gfx_level, nir_def *uvec4);
 
 unsigned
 ac_nir_varying_expression_max_cost(nir_shader *producer, nir_shader *consumer);
