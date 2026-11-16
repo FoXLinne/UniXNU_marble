@@ -28,10 +28,15 @@ extern uint32_t native_marble_wifi_fault[8];
 void marble_wifi_dma_capture(void);
 extern volatile int native_gpu_addon_stage;
 volatile uint32_t native_marble_wifi_runtime_stats[16];
+volatile uint64_t native_marble_wifi_power_stats[16];
+volatile uint64_t native_marble_wifi_wake_stats[2];
+volatile uint64_t native_marble_wifi_wait_stats[4];
+volatile uint32_t native_marble_wifi_link_stats[10];
 char native_marble_wifi_text[128][160];
 volatile uint32_t native_marble_wifi_text_count;
 uint32_t native_marble_wifi_bhi[16],native_marble_wifi_pci[8];
 void marble_wifi_wake(void);
+void marble_wifi_command_wake(void);
 }
 namespace {
 constexpr unsigned kArenaBlocks=16384;
@@ -42,17 +47,30 @@ IOMemoryMap *gDbiMap;
 unsigned gMsiCap,gPcieCap;
 volatile uint32_t gPending,gWake;
 IOService *gDiagnostics;
+void wakeWorker(bool force) {
+    // The wait path checks gWake before and after arming its sleep. One wake
+    // covers an IRQ/TX burst while gPending and the packet queues retain work.
+    const bool pending = __atomic_exchange_n(&gWake, 1u, __ATOMIC_RELEASE);
+    __atomic_fetch_add(&native_marble_wifi_wake_stats[pending && !force ? 1 : 0], 1ULL, __ATOMIC_RELAXED);
+    if (force || !pending) thread_wakeup(event_t(&gWake));
+}
 void publishDiagnostics() {
     if (!gDiagnostics) return;
     gDiagnostics->setProperty("BoardStats",const_cast<uint32_t *>(native_marble_wifi_stats),24*4);
+    gDiagnostics->setProperty("PowerStats",const_cast<uint64_t *>(native_marble_wifi_power_stats),16*8);
     gDiagnostics->setProperty("RuntimeStats",const_cast<uint32_t *>(native_marble_wifi_runtime_stats),16*4);
     gDiagnostics->setProperty("SmmuRegisters",native_marble_wifi_smmu,16*4);
     gDiagnostics->setProperty("AtosStats",const_cast<uint32_t *>(native_ufs_extra_atos),8*4);
     gDiagnostics->setProperty("DmaFault",native_marble_wifi_fault,8*4);
     gDiagnostics->setProperty("BhiRegisters",native_marble_wifi_bhi,16*4);
     gDiagnostics->setProperty("PciRegisters",native_marble_wifi_pci,8*4);
-    gDiagnostics->setProperty("LogCount",static_cast<unsigned long long>(native_marble_wifi_text_count),32);
-    gDiagnostics->setProperty("Logs",native_marble_wifi_text,sizeof(native_marble_wifi_text));
+    static uint32_t publishedLogs; static bool haveLogs;
+    const uint32_t logs=native_marble_wifi_text_count;
+    if (!haveLogs || logs!=publishedLogs) {
+        gDiagnostics->setProperty("LogCount",static_cast<unsigned long long>(logs),32);
+        gDiagnostics->setProperty("Logs",native_marble_wifi_text,sizeof(native_marble_wifi_text));
+        publishedLogs=logs; haveLogs=true;
+    }
 }
 uint64_t nowNs() {uint64_t n; absolutetime_to_nanoseconds(mach_absolute_time(),&n); return n;}
 uint64_t bootNs() {uint64_t n; absolutetime_to_nanoseconds(mach_continuous_time(),&n); return n;}
@@ -136,13 +154,14 @@ int configWrite(int offset,int size,uint32_t value) {
 int msiTarget(uint32_t *lo,uint32_t *hi,uint32_t *data) {*lo=gArena.iova; *hi=0; *data=0; return 0;}
 void msiInterrupt(void *) {
     uint32_t bits=gDbi[0x830/4];
+    __atomic_fetch_add(&native_marble_wifi_power_stats[5],1ULL,__ATOMIC_RELAXED);
+    if (!bits) { __atomic_fetch_add(&native_marble_wifi_power_stats[6],1ULL,__ATOMIC_RELAXED); return; }
     gDbi[0x830/4]=bits;
     __asm__ volatile("dsb sy" ::: "memory");
     native_marble_wifi_runtime_stats[2]++;
     native_marble_wifi_runtime_stats[3]|=bits;
     __atomic_fetch_or(&gPending,bits,__ATOMIC_RELEASE);
-    __atomic_store_n(&gWake,1,__ATOMIC_RELEASE);
-    thread_wakeup(event_t(&gWake));
+    wakeWorker(false);
 }
 void poll() {nw_wifi_irq_mode(1);nw_wifi_irq_pending(__atomic_exchange_n(&gPending,0,__ATOMIC_ACQ_REL));nw_wifi_poll();}
 void wait(unsigned ms) {
@@ -157,7 +176,8 @@ extern "C" void native_wifi_logf(int level,const char *format,...) __attribute__
 extern "C" void native_wifi_logf(int level,const char *format,...) {
     char line[160]; va_list ap; va_start(ap,format); vsnprintf(line,sizeof(line),format,ap); va_end(ap); logLine(level,line);
 }
-extern "C" void marble_wifi_wake(void) {__atomic_store_n(&gWake,1u,__ATOMIC_RELEASE); thread_wakeup(event_t(&gWake));}
+extern "C" void marble_wifi_wake(void) {wakeWorker(false);}
+extern "C" void marble_wifi_command_wake(void) {wakeWorker(true);}
 extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile uint32_t *cfg,volatile uint32_t *dbi,unsigned requested) {
     auto *st=native_marble_wifi_runtime_stats;
     st[0]=1;
@@ -209,9 +229,16 @@ extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile
     nw_wifi_irq_mode(1);
     bool networkStarted=false;
     uint64_t slice=nowNs();
-    uint64_t nextReport=0;
+    uint64_t nextReport=0, nextRegistryReport=0;
     for (;;) {
+        const bool traceTransition=native_marble_wifi_power_stats[12]!=NW_STA_UP;
+        uint64_t stageBegan=traceTransition ? nowMs() : 0;
         bool busy=nw_wifi_step();
+        if (traceTransition && nowMs()-stageBegan>=100)
+            native_wifi_logf(4,"wifi: slow runtime step ms=%llu",nowMs()-stageBegan);
+        native_marble_wifi_power_stats[0]=1;
+        native_marble_wifi_power_stats[1]++;
+        if (busy) native_marble_wifi_power_stats[2]++;
         st[5]=gArena.used; st[6]=gArena.peak; st[7]=gArena.failures;
         st[8]=nw_wifi_stats.stage; st[9]=nw_wifi_stats.last_err;
         st[10]=nw_wifi_stats.scans; st[11]=nw_wifi_bss_count();
@@ -220,8 +247,45 @@ extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile
             marble_wifi_net_start(status.mac);
             nw_wifi_power(1); nw_wifi_scan(nullptr,0); networkStarted=true; st[0]=5;
         }
-        if (nowMs()>=nextReport) {publishDiagnostics(); nextReport=nowMs()+1000;}
-        if (!busy) {unsigned ms=nw_wifi_wait_ms(1000); if (ms) wait(ms); slice=nowNs();}
+        stageBegan=traceTransition ? nowMs() : 0;
+        nw_wifi_status worker{}; nw_wifi_status_get(&worker);
+        if (traceTransition && nowMs()-stageBegan>=100)
+            native_wifi_logf(4,"wifi: slow runtime status ms=%llu",nowMs()-stageBegan);
+        // Associated links keep 1 s telemetry; idle radios rely on timers and MSI wakeups.
+        const unsigned idleMs=worker.state==NW_STA_UP ? 1000 : 5000;
+        if (nowMs()>=nextReport) {
+            stageBegan=traceTransition ? nowMs() : 0;
+            nw_wifi_link_info link{}; nw_wifi_link_info_get(&link);
+            if (traceTransition && nowMs()-stageBegan>=100)
+                native_wifi_logf(4,"wifi: slow runtime link-info ms=%llu",nowMs()-stageBegan);
+            static_assert(sizeof(link)==40,"wireless link telemetry");
+            const uint32_t *words=reinterpret_cast<const uint32_t *>(&link);
+            for (unsigned i=0;i<10;i++) native_marble_wifi_link_stats[i]=words[i];
+            nw_power_save_status ps{}; nw_wifi_power_save_get(&ps);
+            native_marble_wifi_power_stats[7]=ps.requested; native_marble_wifi_power_stats[8]=ps.applied;
+            native_marble_wifi_power_stats[9]=ps.pending; native_marble_wifi_power_stats[10]=static_cast<uint32_t>(ps.error);
+            native_marble_wifi_power_stats[11]=ps.attempts;
+            nw_wifi_status station{}; nw_wifi_status_get(&station);
+            native_marble_wifi_power_stats[12]=station.state; native_marble_wifi_power_stats[13]=nw_wifi_stats.scans;
+            native_marble_wifi_power_stats[14]=nw_wifi_stats.frames; native_marble_wifi_power_stats[15]=nowMs();
+            const uint64_t reportedAt=nowMs();
+            if (reportedAt>=nextRegistryReport) {
+                stageBegan=traceTransition ? nowMs() : 0;
+                publishDiagnostics(); nextRegistryReport=reportedAt+5000;
+                if (traceTransition && nowMs()-stageBegan>=100)
+                    native_wifi_logf(4,"wifi: slow runtime registry ms=%llu",nowMs()-stageBegan);
+            }
+            nextReport=reportedAt+idleMs;
+        }
+        if (!busy) {unsigned ms=nw_wifi_wait_ms(idleMs);
+            if (ms) {
+                uint64_t began=nowNs(); wait(ms); uint64_t elapsed=(nowNs()-began)/1000;
+                native_marble_wifi_power_stats[3]++;
+                native_marble_wifi_power_stats[4]+=elapsed;
+                native_marble_wifi_wait_stats[0]=ms; native_marble_wifi_wait_stats[1]=elapsed;
+                if (elapsed>native_marble_wifi_wait_stats[2]) native_marble_wifi_wait_stats[2]=elapsed;
+                native_marble_wifi_wait_stats[3]=worker.state;
+            } slice=nowNs();}
         else if (nowNs()-slice>=2000000) {thread_yield_to_preemption(); slice=nowNs();}
     }
 }

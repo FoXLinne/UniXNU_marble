@@ -16,6 +16,9 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--component', required=True, type=Path)
 p.add_argument('--os-root', required=True, type=Path)
 p.add_argument('--output', required=True, type=Path)
+p.add_argument('--build', default='22H384')
+p.add_argument('--runtime-target', default='ios18')
+p.add_argument('--source-scripts', type=Path, default=DEVICE / 'ios18/source/scripts')
 a = p.parse_args()
 out = a.output.resolve()
 out.mkdir(parents=True, exist_ok=True)
@@ -40,7 +43,7 @@ job = {'Label': 'org.unixnu.wifi.supplicant', 'ProgramArguments': [
     'Umask': 0o77, 'ProcessType': 'Interactive',
     'StandardOutPath': '/var/log/unixnu-wifi.log', 'StandardErrorPath': '/var/log/unixnu-wifi.log'}
 (out / 'daemons/org.unixnu.wifi.supplicant.plist').write_bytes(plistlib.dumps(job))
-script = DEVICE / 'ios18/source/scripts/build-boot-runtime.py'
+script = a.source_scripts / 'build-boot-runtime.py'
 spec = importlib.util.spec_from_file_location('wifi_boot_runtime', script)
 runtime = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runtime)
@@ -50,7 +53,7 @@ report.update(runtime.sign_launchd_cache(cache))
 directories = {name: name for name in ('bin', 'etc/wifi', 'daemons', 'xpc')}
 files = {str(path.relative_to(out)): hashlib.sha256(path.read_bytes()).hexdigest()
          for directory in directories.values() for path in sorted((out / directory).rglob('*')) if path.is_file()}
-(out / 'report.json').write_text(json.dumps({'target': 'ios18', 'build': '22H384', 'directories': directories,
+(out / 'report.json').write_text(json.dumps({'target': a.runtime_target, 'build': a.build, 'directories': directories,
     'files': files, 'cdhashes': [cdhash, report['cdhash']], 'launchd_cache': report,
     'supplicant': json.loads((a.component / 'out/wpa-ios/report.json').read_text())}, indent=2) + '\n')
 print(out)

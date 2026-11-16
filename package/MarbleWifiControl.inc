@@ -66,7 +66,7 @@ int controlSend(void *, uint64_t session, const void *bytes, size_t length) {
     if (result == ENOBUFS || result == EWOULDBLOCK) return NW_CONTROL_SEND_AGAIN;
     return NW_CONTROL_SEND_CLOSED;
 }
-void controlWake(void *) {marble_wifi_wake();}
+void controlWake(void *) {marble_wifi_command_wake();}
 int controlStart() {
     if (gControlRef) return 0;
     if (!gControlLock) gControlLock = IOLockAlloc();
