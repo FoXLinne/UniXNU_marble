@@ -1,0 +1,72 @@
+--- a/osfmk/vm/vm_fault.c
++++ b/osfmk/vm/vm_fault.c
+@@ -9259,15 +9259,20 @@
+     CA_BOOL, vmtc_one_bit_flip,       /* single bit flip */
+     CA_BOOL, vmtc_testing);           /* caused on purpose by testing */
+ 
++#if DEVELOPMENT || DEBUG || MARBLE_IOS27_DIAGNOSTICS
++/* Keep the latest comparison available to the resident diagnostic reader. */
++static size_t vmtc_last_buffer_size __attribute__((used)) = 0;
++static uint64_t *vmtc_last_before_buffer __attribute__((used)) = NULL;
++static uint64_t *vmtc_last_after_buffer __attribute__((used)) = NULL;
++#endif
++
++#if MARBLE_IOS27_DIAGNOSTICS
++/* seq (odd while updating), pid, code VA, page PA, size, diff bytes,
++ * copyin failed, completed comparisons. Readers must check seq twice. */
++volatile uint64_t vmtc_marble_record[8] __attribute__((used));
++#endif
++
+ #if DEVELOPMENT || DEBUG
+-/*
+- * Buffers used to compare before/after page contents.
+- * Stashed to aid when debugging crashes.
+- */
+-static size_t vmtc_last_buffer_size = 0;
+-static uint64_t *vmtc_last_before_buffer = NULL;
+-static uint64_t *vmtc_last_after_buffer = NULL;
+-
+ /*
+  * Needed to record corruptions due to testing.
+  */
+@@ -9338,6 +9343,14 @@
+ 		}
+ 		return NULL;
+ 	}
++#if MARBLE_IOS27_DIAGNOSTICS
++	vmtc_marble_record[0]++;
++	__sync_synchronize();
++	vmtc_marble_record[1] = proc_selfpid();
++	vmtc_marble_record[2] = code_addr;
++	vmtc_marble_record[3] = ptoa(VM_PAGE_GET_PHYS_PAGE(page)) +
++	    ((code_addr & PAGE_MASK) & ~(MIN(vm_map_page_size(current_map()), PAGE_SIZE) - 1));
++#endif
+ 	return buffer;
+ }
+ 
+@@ -9419,7 +9432,7 @@
+ 	 * set on development / debug kernels in case they
+ 	 * can provide evidence for debugging memory stomps.
+ 	 */
+-#if DEVELOPMENT || DEBUG
++#if DEVELOPMENT || DEBUG || MARBLE_IOS27_DIAGNOSTICS
+ 	if (vmtc_last_before_buffer != NULL) {
+ 		kmem_free(kernel_map, (vm_offset_t)vmtc_last_before_buffer, vmtc_last_buffer_size);
+ 	}
+@@ -9429,7 +9442,15 @@
+ 	vmtc_last_before_buffer = old_code_buffer;
+ 	vmtc_last_after_buffer = new_code_buffer;
+ 	vmtc_last_buffer_size = size;
+-#else /* DEVELOPMENT || DEBUG */
++#if MARBLE_IOS27_DIAGNOSTICS
++	vmtc_marble_record[4] = size;
++	vmtc_marble_record[5] = diff_count;
++	vmtc_marble_record[6] = event->vmtc_copyin_fail;
++	vmtc_marble_record[7]++;
++	__sync_synchronize();
++	vmtc_marble_record[0]++;
++#endif
++#else /* DEVELOPMENT || DEBUG || MARBLE_IOS27_DIAGNOSTICS */
+ 	kfree_data(new_code_buffer, size);
+ 	kmem_free(kernel_map, (vm_offset_t)old_code_buffer, size);
+ #endif /* DEVELOPMENT || DEBUG */

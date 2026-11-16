@@ -1,0 +1,22 @@
+--- a/config/MASTER.arm64
++++ b/config/MASTER.arm64
+@@ -25,7 +25,7 @@
+ #  BSD_DEV =        [ BSD_BASE config_netboot config_imgsrc_access config_coredump config_ucoredump pgo config_vnguard ]
+ #  BSD_DEBUG =      [ BSD_BASE config_netboot config_imgsrc_access config_coredump config_ucoredump pgo config_vnguard ]
+ #  FILESYS_BASE =   [ devfs fifo fs_compression config_protect config_mnt_rootsnap config_triggers config_fse routefs namedstreams config_dataless_files bindfs]
+-#  FILESYS_RELEASE= [ FILESYS_BASE ]
++#  FILESYS_RELEASE= [ FILESYS_BASE config_union_mounts ]
+ #  FILESYS_DEV =    [ FILESYS_BASE config_union_mounts fdesc ]
+ #  FILESYS_DEBUG =  [ FILESYS_BASE config_union_mounts fdesc ]
+ #  SKYWALK_BASE =   [ skywalk config_nexus_user_pipe config_nexus_kernel_pipe config_nexus_flowswitch config_nexus_netif ]
+--- a/config/MASTER.arm64.bcm2837
++++ b/config/MASTER.arm64.bcm2837
+@@ -29,7 +29,7 @@
+ #  BSD_DEV =        [ BSD_BASE config_netboot config_imgsrc_access pgo config_vnguard rosetta BSD_EXTRAS_DEV ]
+ #  BSD_DEBUG =      [ BSD_BASE config_netboot config_imgsrc_access pgo config_vnguard rosetta BSD_EXTRAS_DEBUG ]
+ #  FILESYS_BASE =   [ devfs fifo fs_compression config_protect config_mnt_rootsnap config_triggers config_fse routefs namedstreams config_dataless_files bindfs]
+-#  FILESYS_RELEASE= [ FILESYS_BASE ]
++#  FILESYS_RELEASE= [ FILESYS_BASE config_union_mounts ]
+ #  FILESYS_DEV =    [ FILESYS_BASE fdesc config_union_mounts ]
+ #  FILESYS_DEBUG =  [ FILESYS_BASE fdesc config_union_mounts ]
+ #  SKYWALK_BASE =   [ skywalk config_nexus_user_pipe config_nexus_kernel_pipe config_nexus_flowswitch config_nexus_netif ]

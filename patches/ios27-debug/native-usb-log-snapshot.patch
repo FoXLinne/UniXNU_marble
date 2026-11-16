@@ -1,0 +1,36 @@
+--- a/bsd/kern/subr_log.c
++++ b/bsd/kern/subr_log.c
+@@ -845,3 +845,33 @@
+ 	}
+ }
+ STARTUP(OSLOG, STARTUP_RANK_SECOND, oslog_init_msgbuf);
++
++/* Native USB diagnostics snapshot; the read leaves /dev/klog's cursor intact. */
++#if defined(ARM64_BOARD_CONFIG_BCM2837)
++static int
++sysctl_marble_log(struct sysctl_oid *oidp __unused, void *arg1 __unused,
++    int arg2 __unused, struct sysctl_req *req)
++{
++	if (req->newptr != USER_ADDR_NULL) return EPERM;
++	const size_t capacity = MAX_MSG_BSIZE;
++	char *snapshot = kalloc_data(capacity, Z_WAITOK);
++	if (snapshot == NULL) return ENOMEM;
++	bsd_log_lock_safe();
++	const size_t size = MIN((size_t)msgbufp->msg_size, capacity);
++	const size_t cursor = (size_t)msgbufp->msg_bufx;
++	size_t used = 0;
++	if (msgbufp->msg_size > 0 && cursor < (size_t)msgbufp->msg_size) {
++		const size_t first = (cursor + (size_t)msgbufp->msg_size - size) % (size_t)msgbufp->msg_size;
++		for (size_t i=0; i<size; ++i) {
++			const char value = msgbufp->msg_bufc[(first+i) % (size_t)msgbufp->msg_size];
++			if (value != 0) snapshot[used++] = value;
++		}
++	}
++	bsd_log_unlock();
++	const int error = SYSCTL_OUT(req, snapshot, used);
++	kfree_data(snapshot, capacity);
++	return error;
++}
++SYSCTL_PROC(_kern, OID_AUTO, marble_log, CTLTYPE_OPAQUE | CTLFLAG_RD | CTLFLAG_LOCKED,
++    0, 0, sysctl_marble_log, "S", "marble kernel message snapshot");
++#endif

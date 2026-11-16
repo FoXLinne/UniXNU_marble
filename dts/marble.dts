@@ -20,12 +20,18 @@
 };
 
 &cpu0 { status = "okay"; unixnu,cluster-type = "E"; };
-&cpu1 { unixnu,cluster-type = "E"; };
-&cpu2 { unixnu,cluster-type = "E"; };
-&cpu3 { unixnu,cluster-type = "E"; };
-&cpu4 { unixnu,cluster-type = "P"; };
-&cpu5 { unixnu,cluster-type = "P"; };
-&cpu6 { unixnu,cluster-type = "P"; };
-&cpu7 { unixnu,cluster-type = "P"; };
+&cpu1 { status = "okay"; unixnu,cluster-type = "E"; };
+&cpu2 { status = "okay"; unixnu,cluster-type = "E"; };
+&cpu3 { status = "okay"; unixnu,cluster-type = "E"; };
+&cpu4 { status = "okay"; unixnu,cluster-type = "P"; };
+&cpu5 { status = "okay"; unixnu,cluster-type = "P"; };
+&cpu6 { status = "okay"; unixnu,cluster-type = "P"; };
+&cpu7 { status = "okay"; unixnu,cluster-type = "P"; };
+&gic {
+    unixnu,adt-name = "intc";
+    // The running board firmware describes 256 KiB redistributor frames.
+    redistributor-stride = /bits/ 64 <0x40000>;
+};
+// MarbleRootDisk publishes the UFS provider and owns its absolute MMIO windows.
 &ufs { status = "okay"; };
-// CPU 1 owns the resident firmware USB service for the current iOS 18 image.
+// The iOS 27 target gives USB ownership to XNU and enables all eight cores.

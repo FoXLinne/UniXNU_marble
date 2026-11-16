@@ -1,0 +1,15 @@
+--- a/bsd/vfs/kpi_vfs.c
++++ b/bsd/vfs/kpi_vfs.c
+@@ -756,6 +756,12 @@
+ 	if ((error = VFS_GETATTR(mp, vfa, ctx)) != 0) {
+ 		return error;
+ 	}
++#if defined(MARBLE_IOS27_DIAGNOSTICS) && !XNU_TARGET_OS_OSX
++	/* The marble installation has sealed system images and a separate Data
++	 * container. Expose Data capacity through the logical root's space APIs. */
++	extern void native_marble_storage_getattr(mount_t, struct vfs_attr *, vfs_context_t);
++	native_marble_storage_getattr(mp, vfa, ctx);
++#endif
+ 
+ 	/*
+ 	 * If we have a filesystem create time, use it to default some others.

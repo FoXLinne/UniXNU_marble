@@ -1,0 +1,84 @@
+{
+  "target": "ios27",
+  "build": "24B119",
+  "product": "iPhone12,1",
+  "device_class": "n104ap",
+  "advertised_ui_identity": "D84",
+  "wallpaper": {
+    "product": "iPhone16,2",
+    "compatible_device_fallback": "iPhone15,3",
+    "target_type": "D84",
+    "event_timing_source_product": "N104",
+    "notes": "Identity keys mirror profiles/ios-18.7.11-22H384.toml [ui_identity] (D84 spoof retained). 24B119 EventTimingProfiles ships N104.*.plist only; N841 files from 22H384 do not exist."
+  },
+  "os_version": "27.2",
+  "xnu": "12377.121.6",
+  "inputs": {
+    "os_dmg": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-08279-215.dmg",
+    "systemos_cryptex_aea": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-10128-227.dmg.aea",
+    "systemos_cryptex_dmg": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-10128-227.dmg",
+    "kernelcache": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed",
+    "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc"
+  },
+  "dyld_cache": {
+    "path_in_cryptex": "System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e",
+    "uuid": "555BFDAA-D930-31AC-A915-D472C273C527",
+    "platform": "iOS",
+    "os_version": "27.2",
+    "images": 4759,
+    "subcaches": 79,
+    "shared_region": "0x180000000-0x30794c000",
+    "subcache_uuids_used": {
+      "dyld_shared_cache_arm64e.07": "AAC91601-D852-34FE-962C-EB53F96DC625",
+      "dyld_shared_cache_arm64e.28": "140CD9E8-3402-3E7B-90C8-3F36972FD0FD",
+      "dyld_shared_cache_arm64e.36": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "dyld_shared_cache_arm64e.38": "084C358D-6CA7-32B3-9501-BBFB28AD2ACD",
+      "dyld_shared_cache_arm64e.59": "B96AAAE2-778B-3990-801C-7D4881DC162F"
+    }
+  },
+  "crash_info": {
+    "dyld_all_image_infos_uuid_bytes": [85, 91, 253, 170, 217, 48, 49, 172, 169, 21, 212, 114, 194, 115, 197, 39],
+    "annotation_version": 5,
+    "annotations": {
+      "Foundation": "0x1eaf990a8",
+      "CoreFoundation": "0x1eaf8a188",
+      "libswiftCore": "0x1eb00e958",
+      "libc++abi": "0x2da9270e8",
+      "libsystem_c": "0x1eb1c5408"
+    },
+    "objc_legacy_message_slot": "0x1eaf700c8",
+    "notes": "Each address is the image's __DATA_CONST/__crash_info section start (the v5 crash_info struct). The libobjc slot is its __crash_info+8 message pointer, written by _objc_crashlog at 0x180434fb0 (str x8,[x23,#0xc8], x23=0x1eaf70000). Addresses are unslid cache VAs; the kernel adds the live cache slide before copyin."
+  },
+  "audio_clock": {
+    "board_host_clock_hz": 19200000,
+    "apple_assumed_hz": 24000000,
+    "constant_le_bytes": "0000000060e37641",
+    "replacement_le_bytes": "00000000804f7241",
+    "gate": "PE_parse_boot_argn marble-audio>=2 or marble-haptics>=2",
+    "sites": ["fixups.json entries group=audio-clock"],
+    "notes": "HAL (CoreAudio AudioGetHostClockFrequency), DSP queue config (AudioDSPGraph::Graph::configure), and RemoteIO IO/timestamp math (AURemoteIO::PerformIO, getHALThreadPriority) each carry a private 24e6 double; all three are patched so HAL timestamps and DSP queue periods share the board's 19.2 MHz counter. Calendar time is independent and unchanged."
+  },
+  "appsync": {
+    "pins_24B119": {
+      "usr/libexec/installd": "408906e8625f927a9165a13ec07398e4a21f7e1dd60d1ad385d17801bd0fdf06",
+      "usr/libexec/backboardd": "fc815313fa72a32acea6bf94c209e758831e5ed85a0ce5befc8c5f1aa218b285",
+      "System/Library/PrivateFrameworks/MobileInstallation.framework/XPCServices/com.apple.MobileInstallationHelperService.xpc/com.apple.MobileInstallationHelperService": "d0a25d6cdc5d99471e18895ba050bff23f9f9f94bba7a2843693de5df00a808c",
+      "System/Library/CoreServices/SpringBoard.app/SpringBoard": "ff41677ffca18709052d945f27709c5928e22ff36269f0fdfbc981b11fd7119c"
+    },
+    "marker": "24B119",
+    "dylib": "/usr/lib/UniXNUAppSync.dylib",
+    "notes": "pins are sha256 of the raw 24B119 OS-root binaries; same layout as ios27/source/scripts/appsync/build.py PINS but re-pinned for this build."
+  },
+  "ui": {
+    "screen_category": 11,
+    "identity_source": "profiles/ios-18.7.11-22H384.toml [ui_identity] (D84 spoof retained for 27.2)",
+    "compiler_target": "arm64e-apple-ios27.0"
+  },
+  "tunings": {
+    "os_source_product": "N104",
+    "board_published_product": "D84",
+    "os_path": "Library/Audio/Tunings/N104",
+    "file_count": 251,
+    "notes": "24B119 ships N104 haptics/VAD assets for iPhone12,1; the N841 directory used by the 22H384 builder does not exist on this OS. D84 copies are produced by renaming N104 path components."
+  }
+}

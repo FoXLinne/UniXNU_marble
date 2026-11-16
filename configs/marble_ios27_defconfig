@@ -1,0 +1,15 @@
+# iOS 27.2 / 24B119, arm64e, XNU 12377.121.6.
+CONFIG_XNU_BUILD_ARCHIVES=y
+CONFIG_XNU_SOURCE_CORECRYPTO14=y
+CONFIG_XNU_SOURCE_PTHREAD=y
+CONFIG_XNU_ARM_DT_PLATFORM=y
+CONFIG_XNU_ARMCPU=y
+CONFIG_XNU_NATIVE_ARCH_TIMER=y
+CONFIG_XNU_NATIVE_PAN=y
+CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
+CONFIG_XNU_CRYPTO_BOOTSTRAP="source"
+CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y
+CONFIG_XNU_DT_PANIC_REGION=y
+CONFIG_XNU_ARMVIRT_PLATFORM=n
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/marble-boot/libMarbleBoot.a -Wl,-force_load,{tree}/build/marble-storage/libMarbleStorage.a -Wl,-force_load,{tree}/build/marble-gpu/libMarbleGpu.a"
+CONFIG_XNU_EXTRA_CFLAGS="-Wno-reserved-identifier -Wno-pre-c11-compat -Wno-missing-designated-field-initializers -Wno-suggest-override -Wno-unnecessary-virtual-specifier -Wno-suggest-destructor-override -Wno-ms-bitfield-padding -DMARBLE_IOS27_DIAGNOSTICS=1"

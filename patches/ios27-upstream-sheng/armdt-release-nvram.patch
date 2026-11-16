@@ -1,0 +1,23 @@
+--- a/ArmDTPlatform.cpp
++++ b/ArmDTPlatform.cpp
+@@ -14,6 +14,7 @@
+ 
+ #include <IOKit/IOPlatformExpert.h>
+ #include <IOKit/IODeviceTreeSupport.h>
++#include <IOKit/IONVRAM.h>
+ #include <IOKit/IOLib.h>
+ #include <libkern/c++/OSData.h>
+ #include <libkern/c++/OSIterator.h>
+@@ -162,6 +163,12 @@
+ 
+ bool ArmDTPlatform::hasNVRAMProxy (IOService *provider)
+ {
++  // RELEASE IODTNVRAM removes nvram-proxy-data after parsing its image.
++  // Recognize that initialized service before looking for an unused input.
++  IORegistryEntry *options = provider->childFromPath ("options", gIODTPlane);
++  bool initialized = options != nullptr && OSDynamicCast (IODTNVRAM, options) != nullptr;
++  if (options != nullptr) options->release ();
++  if (initialized) return true;
+   IORegistryEntry *chosen = provider->childFromPath ("chosen", gIODTPlane);
+   if (chosen == nullptr) {
+     return false;

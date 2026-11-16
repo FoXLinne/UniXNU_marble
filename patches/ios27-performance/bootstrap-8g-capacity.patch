@@ -1,0 +1,48 @@
+--- a/osfmk/arm/pmap/pmap.h
++++ b/osfmk/arm/pmap/pmap.h
+@@ -116,10 +116,10 @@
+  */
+ #define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 34)
+ #elif !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
+-/* Native 4 KiB: two roots plus up to seven L2 pages per 6 GiB mapping.
+- * The physical and virtual bases may each straddle an extra 1 GiB region.
+- */
+-#define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 16)
++/* Native 4 KiB: the 8 GiB board window needs two roots plus up to
++ * nine L2 pages for each of the physical and virtual mappings.
++ */
++#define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 32)
+ #else /* defined(ARM_LARGE_MEMORY) */
+ #define BOOTSTRAP_TABLE_SIZE (ARM_PGBYTES * 8)
+ #endif /* defined(ARM_LARGE_MEMORY) */
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -628,9 +628,25 @@
+ 
+ 	b Lbootstrap_tables_ready
+ Lbootstrap_tables_exhausted:
+-	// MMU is still off. Stop with the offending cursor/end preserved for
+-	// the early debugger rather than corrupting memory or forging a map.
+-	b Lbootstrap_tables_exhausted
++	/* Publish the failure through the loader-owned boot_args tail. */
++	add x17, x20, #0x840
++	mov x0, #0xd1
++	str x0, [x17, #8]
++	stp x2, x10, [x17, #16]
++	dc cvac, x17
++	dsb sy
++	/* The marble loader supplies a physical firmware return address. */
++	ldr x16, [x20, #0x808]
++	cbz x16, Lbootstrap_tables_reset
++	mov x0, xzr
++	br x16
++Lbootstrap_tables_reset:
++	movz w0, #0x0009
++	movk w0, #0x8400, lsl #16
++	smc #0
++	/* The board watchdog covers a platform reset service failure. */
++1:	wfe
++	b 1b
+ Lbootstrap_tables_ready:
+ 	/* Ensure TTEs are visible */
+ 	dsb		ish

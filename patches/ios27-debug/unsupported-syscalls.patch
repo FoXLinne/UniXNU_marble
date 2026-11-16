@@ -1,0 +1,37 @@
+--- a/bsd/dev/arm/systemcalls.c
++++ b/bsd/dev/arm/systemcalls.c
+@@ -86,6 +86,11 @@
+  *
+  * Outputs:	none
+  */
++#if defined(MARBLE_IOS27_DIAGNOSTICS) && MARBLE_IOS27_DIAGNOSTICS
++volatile uint64_t marble_unknown_syscall_count __attribute__((used));
++volatile uint64_t marble_unknown_syscalls[16] __attribute__((used));
++#endif
++
+ void
+ unix_syscall(
+ 	struct arm_saved_state * state,
+@@ -180,6 +185,22 @@
+ 	AUDIT_SYSCALL_ENTER(code, proc, uthread);
+ 	error = (*(callp->sy_call))(proc, &uthread->uu_arg[0], &(uthread->uu_rval[0]));
+ 	AUDIT_SYSCALL_EXIT(code, proc, uthread, error);
++
++#if defined(MARBLE_IOS27_DIAGNOSTICS) && MARBLE_IOS27_DIAGNOSTICS
++	/* Capture the first ENOSYS for each target ABI call without changing its result. */
++	if (__improbable(error == ENOSYS)) {
++		extern volatile uint64_t marble_unknown_syscall_count;
++		extern volatile uint64_t marble_unknown_syscalls[16];
++		const unsigned int bucket = code < 1024 ? code : 1023;
++		const uint64_t bit = 1ULL << (bucket & 63);
++		__atomic_fetch_add(&marble_unknown_syscall_count, 1, __ATOMIC_RELAXED);
++		const uint64_t previous = __atomic_fetch_or(&marble_unknown_syscalls[bucket >> 6], bit, __ATOMIC_RELAXED);
++		if (!(previous & bit)) {
++			printf("MarbleABI: ENOSYS build=24B119 syscall=%u pid=%d name=%s pc=0x%llx\n",
++			    code, pid, proc->p_comm, (unsigned long long)get_saved_state_pc(state));
++		}
++	}
++#endif
+ 
+ #if CONFIG_MACF
+ skip_syscall:

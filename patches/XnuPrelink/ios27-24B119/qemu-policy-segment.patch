@@ -1,0 +1,22 @@
+--- a/fileset_layout.py
++++ b/fileset_layout.py
+@@ -151,6 +151,19 @@
+             self.reserve(name, address)
+             self.roots[name] = dict(segment, va=address, fileoff=address-cache.base,
+                                     filesize=segment['size'])
++        # VM-specific signed block tables are read-only data, with their own
++        # root mapping after LINKEDIT/boot data. Retained kext constants keep
++        # their original addresses and page protections.
++        for segment in native.segments:
++            if segment['name'] != '__QEMUPOLICY':
++                continue
++            if any(section['segment'] == segment['name'] and section['name'] != '__const'
++                   for section in native.sections):
++                raise ValueError('QEMU policy segment contains a non-constant section')
++            address = self.allocate(segment['size'])
++            self.reserve(segment['name'], address)
++            self.roots[segment['name']] = dict(segment, va=address,
++                fileoff=address-cache.base, filesize=segment['size'])
+         # Zero-sized markers have distinct semantics even when their old
+         # addresses alias a real segment. Relocate them by section ordinal.
+         for segment in native.segments:

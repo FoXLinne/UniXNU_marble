@@ -1,0 +1,43 @@
+--- a/fileset_emit.py	2026-11-11 23:56:08
++++ b/fileset_emit.py	2026-11-12 02:37:33
+@@ -669,6 +669,7 @@
+         for name in symbols:
+             names[name] = address
+     sites = {}
++    deferred = []
+     for path in sorted((Path(__file__).parent / 'fixtures').glob('fileset-*-symbols.json')):
+         record = json.loads(path.read_text())
+         pinned = record['inputs']
+@@ -678,9 +679,12 @@
+             if not entry.get('evidence'):
+                 raise ValueError('Reviewed site requires recorded evidence')
+             if entry['native_symbol'] not in names:
++                if entry.get('board_provided'):
++                    deferred.append(dict(entry, reason='native symbol absent from analysis kernel'))
++                    continue
+                 raise ValueError(f'Reviewed site names a missing native symbol: {entry["native_symbol"]}')
+             sites[(int(entry['site'], 16) + collection_slide) & MASK64] = names[entry['native_symbol']]
+-    return sites
++    return sites, deferred
+ 
+ 
+ def validate_map(raw, native_data, payload):
+@@ -737,7 +741,8 @@
+             if left != right:
+                 raise ValueError('Component import changed the original kernel')
+         site_inputs = dict(inputs, kernelcache_sha256=hashlib.sha256(base_cache_data).hexdigest())
+-    emit.site_pairs = reviewed_sites(site_inputs, native, collection_slide)
++    emit.site_pairs, deferred_sites = reviewed_sites(site_inputs, native, collection_slide)
++    emit.report['deferred_sites'] = len(deferred_sites)
+     emit.stub, emit.stubbed = None, defaultdict(Counter)
+     emit.old_starts = set(emit.old.function_starts())
+     if stub_symbol:
+@@ -763,6 +768,8 @@
+         'native_original_branches': emit.original_branches,
+         'missing': {owner: {hex(target): count for target, count in sorted(targets.items())}
+                     for owner, targets in sorted(emit.missing.items())},
++        'deferred_sites': [dict(site=e['site'], native_symbol=e['native_symbol'], reason=e['reason'])
++                           for e in deferred_sites],
+         'stubbed': {owner: {hex(target): count for target, count in sorted(targets.items())}
+                     for owner, targets in sorted(emit.stubbed.items())},
+         'stub_symbol': stub_symbol,

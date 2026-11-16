@@ -41,6 +41,9 @@ struct ctx {
 #ifndef PANIC_TEXT_BYTES
 #define PANIC_TEXT_BYTES 256
 #endif
+#ifndef PANIC_BUILD
+#define PANIC_BUILD "marble"
+#endif
 
 __attribute__((noreturn)) static void park (void)
 {
@@ -251,6 +254,7 @@ __attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main 
   if (PANIC_TEXT && *(volatile u8 *)PANIC_TEXT == 0) {
     g.log = (u8 *)PANIC_TEXT;
   }
+  format (&g, PANIC_BUILD "\n", args);
   format (&g, fmt, args);
   format (&g, "\nLR=%p", &caller);
   for (u32 depth = 0; depth < 20; depth++) {
@@ -261,6 +265,12 @@ __attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main 
     frame = next;
   }
   g.log = 0;
+  if (PANIC_TEXT) {
+    for (u64 address = PANIC_TEXT & ~63UL;
+         address < PANIC_TEXT + PANIC_TEXT_BYTES; address += 64) {
+      __asm__ volatile ("dc cvac, %0" :: "r"(address) : "memory");
+    }
+  }
   __asm__ volatile ("dsb sy");
   /* The raw argument slots are not dumped: the formatted message above already carries them (room for the PANIC_TEXT copy). */
   mark[0] = 0xC0FFEE11u;

@@ -1,0 +1,18 @@
+--- a/osfmk/kern/exception.c
++++ b/osfmk/kern/exception.c
+@@ -1106,6 +1106,7 @@
+ 		}
+ 		printf("sheng-ubt %s: #%d fp=0x%llx ret=0x%llx\n", tag, i, fp, frame[1] & 0x00007fffffffffffULL);
+ 
++#if defined(MARBLE_LAUNCHD_CACHE_24A446) && MARBLE_LAUNCHD_CACHE_24A446
+ 		uint64_t ret = frame[1] & 0x00007fffffffffffULL;
+ 		/* 24A446 launchd: cache-parser caller follows its fatal-cache frame.
+ 		 * Its saved x19 is the original XPC data object passed to the parser. */
+@@ -1135,6 +1136,7 @@
+ 			cache_trace = 0;
+ 		}
+ 		previous_return = ret;
++#endif
+ 		if (frame[0] <= fp) {
+ 			break;
+ 		}

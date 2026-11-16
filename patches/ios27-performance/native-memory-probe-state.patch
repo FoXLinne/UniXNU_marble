@@ -1,0 +1,11 @@
+--- a/osfmk/mach/arm/thread_status.h
++++ b/osfmk/mach/arm/thread_status.h
+@@ -341,7 +341,7 @@
+ #define HAS_SET_SAVED_STATE_CPSR        1
+ #endif /* CONFIG_DTRACE */
+ 
+-#if DEBUG || DEVELOPMENT
++#if DEBUG || DEVELOPMENT || defined(ARM64_BOARD_CONFIG_BCM2837)
+ #define HAS_ADD_SAVED_STATE_PC          1
+ #endif
+ 

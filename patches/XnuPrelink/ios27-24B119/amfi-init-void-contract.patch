@@ -1,0 +1,13 @@
+--- a/fileset_emit.py
++++ b/fileset_emit.py
+@@ -151,6 +151,10 @@
+                 raise ValueError(f'{entry["CFBundleIdentifier"]} is not a security extension')
+             entry['_NativePrelinkEarlySecurityInit'] = signed(
+                 (early_security_init[entry['CFBundleIdentifier']] + delta) & MASK64, 64)
++            if (entry['CFBundleIdentifier'] == 'com.apple.driver.AppleMobileFileIntegrity'
++                    and early_security_init[entry['CFBundleIdentifier']] == 0xfffffff008f40418
++                    and hashlib.sha256(cache.data).hexdigest() == '8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc'):
++                entry['_NativePrelinkEarlySecurityInitVoid'] = True
+         retained.append(entry)
+     missing = set(early_security_init or {}) - {e['CFBundleIdentifier'] for e in retained}
+     if missing:

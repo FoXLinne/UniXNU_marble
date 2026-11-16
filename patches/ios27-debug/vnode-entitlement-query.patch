@@ -1,0 +1,54 @@
+--- a/iokit/Kernel/IOUserClient.cpp
++++ b/iokit/Kernel/IOUserClient.cpp
+@@ -48,6 +48,7 @@
+ #include <sys/proc.h>
+ #include <sys/kauth.h>
+ #include <sys/codesign.h>
++#include <sys/ubc.h>
+ #include <sys/code_signing.h>
+ #include <vm/vm_kern_xnu.h>
+ 
+@@ -1610,22 +1611,29 @@
+ 	off_t offset,
+ 	const char *entitlement)
+ {
+-	OSDictionary *entitlements;
+-	OSObject *value;
+-
+-	entitlements = copyClientEntitlementsVnode(vnode, offset);
+-	if (entitlements == NULL) {
++	if (vnode == NULL || entitlement == NULL || amfi == NULL) {
+ 		return NULL;
+ 	}
+-
+-	/* Fetch the entitlement value from the dictionary. */
+-	value = entitlements->getObject(entitlement);
+-	if (value != NULL) {
+-		value->retain();
+-	}
+-
+-	entitlements->release();
+-	return value;
++	struct cs_blob *blob = ubc_cs_blob_get(vnode, -1, -1, offset);
++	if (blob == NULL) {
++		return NULL;
++	}
++	OSObject *context = (OSObject *)csblob_os_entitlements_copy(blob);
++	if (context == NULL) {
++		return NULL;
++	}
++
++	/* Match the task entitlement path: let AMFI copy the requested value
++	 * through its typed interface. The signature-backed context and the
++	 * returned object's ownership stay with their existing owners. */
++	void *value = NULL;
++	kern_return_t result = amfi->OSEntitlements.copyEntitlementAsOSObject(
++	    context, entitlement, &value);
++	context->release();
++	if (result != KERN_SUCCESS) {
++		return NULL;
++	}
++	return (OSObject *)value;
+ }
+ 
+ bool

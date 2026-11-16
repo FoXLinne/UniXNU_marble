@@ -1,0 +1,23 @@
+--- a/bsd/vfs/vfs_syscalls.c
++++ b/bsd/vfs/vfs_syscalls.c
+@@ -5400,6 +5400,9 @@
+ openat_internal(vfs_context_t ctx, user_addr_t path, int flags, int mode,
+     int fd, enum uio_seg segflg, int *retval, uint64_t *objidp, fsid_t *fsidp)
+ {
++	extern int native_marble_metadata_directory_open(proc_t, user_addr_t, int);
++	if (segflg == UIO_USERSPACE)
++		flags = native_marble_metadata_directory_open(vfs_context_proc(ctx), path, flags);
+ 	struct filedesc *fdp = &vfs_context_proc(ctx)->p_fd;
+ 	struct {
+ 		struct vnode_attr va;
+--- a/security/mac_vfs.c
++++ b/security/mac_vfs.c
+@@ -969,6 +969,8 @@
+ mac_vnode_check_access(vfs_context_t ctx, struct vnode *vp,
+     int acc_mode)
+ {
++	extern int native_marble_metadata_directory_access(proc_t, vnode_t, int);
++	acc_mode = native_marble_metadata_directory_access(vfs_context_proc(ctx), vp, acc_mode);
+ 	if (native_metal_cache_path(ctx, vp, NULL)) return 0;
+ 
+ 	kauth_cred_t cred;

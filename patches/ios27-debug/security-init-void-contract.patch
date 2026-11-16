@@ -1,0 +1,16 @@
+--- a/libkern/c++/OSKext.cpp
++++ b/libkern/c++/OSKext.cpp
+@@ -8564,7 +8564,12 @@
+ 		    : "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+ 		    "x17", "x30", "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v16", "v17", "v18", "v19", "v20",
+ 		    "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "cc", "memory");
+-		result = (int)x0;
++		/* Some original policy registration routines have a void contract.
++		 * They panic internally on registration failure and leave an unrelated
++		 * lock pointer in x0 after unlocking. Preserve the startfunc result. */
++		if (getPropertyForHostArch("_NativePrelinkEarlySecurityInitVoid") != kOSBooleanTrue) {
++			result = (int)x0;
++		}
+ 		if (result != KERN_SUCCESS) {
+ 			OSKextLog(this, kOSKextLogErrorLevel | kOSKextLogLoadFlag,
+ 			    "Kext %s early security initializer failed: %d", getIdentifierCString(), result);

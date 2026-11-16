@@ -1,0 +1,134 @@
+["os"]
+"name" = "ios-27.2-24B119"
+"arch" = "arm64e"
+"darwin" = "25.5.0"
+"xnu_version" = "12377.121.6"
+"xnu_revision" = "ac9718fb1af618d5ce8678d0dc6e8a58f252216f"
+"driverkit_tag" = "xnu-12377.121.6"
+"trustcache_tag" = "xnu-8796.101.5"
+"ios_version" = "27.2"
+"abi" = []
+
+["ipsw"]
+"url" = "https://updates.cdn-apple.com/2026FallFCS/22a2de9b-5ef9-44b7-9ace-62f861167fd8/iPhone12,1_27.2_24B119_Restore.ipsw"
+"product" = "iPhone12,1"
+"version" = "27.2"
+"build" = "24B119"
+"device_class" = "n104ap"
+"chip_id" = 32816
+"board_id" = 4
+"fetch" = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
+
+["ipsw"."sha256"]
+"141-08279-215.dmg.aea.trustcache" = "36854ea1e2d2421765276d9f3ed4e90f8191545b0ce32a9b57e57fe258148b11"
+"kernelcache.release.iphone12b" = "b3704e210582d113c3f0791ed77376ecf1863fc48dac2e8ca5944add34dcc663"
+"141-10128-227.dmg.aea.trustcache" = "f96d46bda90044bb2069ff421f27df67b7dfe11abac96cc8b19b20d9b3b724ef"
+"DeviceTree.n104ap.im4p" = "25c4ba33bb75eeab349da87bac0f142199020e9f15dad8e155be5b2a4362a1d0"
+
+["kernel"]
+
+["kernel"."prelink"]
+"early_security_init" = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff008f40418"
+"tool" = "kits/XnuPrelink/emit_prelink.py"
+"kernel" = "build/xnu/ios-release-obj/RELEASE_ARM64_BCM2837/mach.release.bcm2837.unstripped.noctf"
+"slide" = "-0x1000000"
+"roots" = ["com.apple.driver.AppleUSBXDCI", "com.apple.iokit.IOUSBDeviceFamily", "com.apple.driver.AppleUSBDeviceMux", "com.apple.driver.usb.AppleUSBCommon", "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib", "com.apple.driver.AppleARMWatchdogTimer", "com.apple.driver.AppleAudioClockLibs", "com.apple.driver.AppleEffaceableStorage", "com.apple.driver.AppleIISController", "com.apple.driver.AppleM2ScalerCSCDriver", "com.apple.driver.AppleMobileFileIntegrity", "com.apple.driver.ApplePMGR", "com.apple.driver.IODARTFamily", "com.apple.filesystems.apfs", "com.apple.iokit.CoreAnalyticsFamily", "com.apple.iokit.IOAVFamily", "com.apple.iokit.IOAudio2Family", "com.apple.iokit.IOCECFamily", "com.apple.iokit.IOCryptoAcceleratorFamily", "com.apple.iokit.IOGPUFamily", "com.apple.iokit.IOHDCPFamily", "com.apple.iokit.IOMobileGraphicsFamily", "com.apple.iokit.IOReportFamily", "com.apple.iokit.IOSlowAdaptiveClockingFamily", "com.apple.iokit.IOStorageFamily", "com.apple.iokit.IOSurface", "com.apple.kec.Libm", "com.apple.kec.corecrypto", "com.apple.kext.AppleMatch", "com.apple.kext.CoreTrust", "com.apple.security.AppleImage4", "com.apple.security.sandbox", "com.apple.iokit.IOHIDFamily", "com.apple.iokit.IOHIDEventDriver"]
+"kernelcache_sha256" = "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc"
+
+["adt"]
+
+["adt"."root"]
+
+["adt"."root"."string"]
+"model" = "iPhone12,1"
+"target-type" = "N104"
+"compatible" = "N104AP"
+
+["adt"."chosen"]
+
+["adt"."chosen"."string"]
+"osenvironment" = "main"
+"crypto-hash-method" = "sha2-384"
+
+["adt"."chosen"."u32"]
+"board-id" = 12
+"security-domain" = 1
+"certificate-production-status" = 0
+"effective-production-status-ap" = 0
+"certificate-security-mode" = 1
+"effective-security-mode-sep" = 1
+"amfi-only-platform-code" = 1
+
+[["source"]]
+"name" = "IOStorageFamily"
+"kind" = "refer"
+"git" = "https://github.com/apple-oss-distributions/IOStorageFamily.git"
+"ref" = "IOStorageFamily-337.100.1"
+"commit" = "7edb88fbae296fb7c8ce2f64e115e116e566d51c"
+
+[["source"]]
+"name" = "IOHIDFamily"
+"kind" = "refer"
+"git" = "https://github.com/apple-oss-distributions/IOHIDFamily.git"
+"ref" = "IOHIDFamily-2238.120.5"
+"commit" = "e31e90a24c27ad6cbe981650d12a1a4124065b03"
+
+[["source"]]
+"name" = "libplatform"
+"kind" = "refer"
+"git" = "https://github.com/apple-oss-distributions/libplatform.git"
+"ref" = "libplatform-375.120.2"
+"commit" = "b7ed7cf5cf7dd12b98672435db2225a860f199d8"
+
+[["source"]]
+"name" = "libdispatch"
+"kind" = "refer"
+"git" = "https://github.com/apple-oss-distributions/libdispatch.git"
+"ref" = "libdispatch-1542.100.32"
+"commit" = "701f4d1a24ae9c6863901bbbb22624b7d1b87321"
+
+[["source"]]
+"name" = "AvailabilityVersions"
+"kind" = "refer"
+"git" = "https://github.com/apple-oss-distributions/AvailabilityVersions.git"
+"ref" = "AvailabilityVersions-157.2"
+"commit" = "149b1777f3e8c2133042d8e188f72e3adf6a7110"
+
+[["source"]]
+"name" = "libpthread"
+"kind" = "refer"
+"git" = "https://github.com/apple-oss-distributions/libpthread.git"
+"ref" = "libpthread-539.100.4"
+"commit" = "1f4f5265b319111142f1bf3a27d4484ef5a98314"
+
+["userdata"]
+
+[["userdata"."windows"]]
+"name" = "OS"
+"component" = "OS"
+
+[["userdata"."windows"]]
+"name" = "SystemOS"
+"component" = "Cryptex1,SystemOS"
+"optional" = true
+
+["root"]
+"os_volume_uuid" = "E0577111-0369-4BCF-A4E5-59B612AA9E31"
+"systemos_volume_uuid" = "46885FBD-E14C-4630-805A-8AC4BFD8D326"
+"os_image_sha256" = "60dbb74c46a598e60707e6e5048ee29d3473e88bb5d2862899fa9818d0997717"
+"systemos_image_sha256" = "fa3596065f16e955a96b2671718ced0992e4957e6d1ec28fc87465bf573ec42f"
+
+["ui_identity"]
+"product" = "iPhone16,2"
+"name" = "iPhone 15 Pro Max"
+"target_type" = "D84"
+"hardware_model" = "D84AP"
+"artwork_device_subtype" = 2796
+"screen_category" = 11
+"compatible_device_fallback" = "iPhone15,3"
+"generation" = 1602
+"large_format_phone" = true
+"island_notch_location" = 144
+"chrome_identifier" = "com.apple.dt.devicekit.chrome.phone8"
+"oled_display" = true
+"udid_version" = 2

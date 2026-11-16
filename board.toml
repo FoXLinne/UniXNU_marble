@@ -6,20 +6,36 @@
 "description" = "Redmi Note 12 Turbo"
 "kit" = "marble"
 "soc_source" = "sm7475"
-"os_profile" = "ios-18.7.11-22H384"
+"os_profile" = "ios-27.2-24B119"
 
 ["components"]
 "include" = ["ArmDTPlatform", "ArmCpu", "DarwinBoot", "XnuPrelink", "RamBlock", "GopFramebuffer", "QcomGeniSpi", "ArmSmmu4K", "SoftwareAES", "AppleKeyStoreState"]
 
 ["kernel"]
-"defconfig" = "marble_ios18_defconfig"
+"defconfig" = "marble_ios27_defconfig"
 "config_fragments" = ["arch:configs/common.config", "soc:configs/sm7475.config"]
-"patch_series" = ["device:patches/xnu/series"]
-"archives" = []
+"patch_series" = ["arch:patches/xnu/series", "soc:patches/xnu-12377/series", "os:patches/xnu/series", "device:patches/ios27-upstream-sheng/series", "device:patches/xnu-12377/series", "device:patches/ios27-performance/series", "device:patches/ios27-debug/series"]
+"archives" = ["build-corecrypto-14.py", "build-corecrypto-14.py --namespace", "component:ArmDTPlatform", "component:ArmCpu", "build-libpthread-kernel.py", "build_ios27_drivers.py"]
 
 ["device_tree"]
 "source" = "device:dts/marble.dts"
 "include_dirs" = ["soc:dts"]
+
+["adt"."defaults"."u32"]
+# Preserve the marble vnode budget used by the iOS 18 device tree.
+"kern.maxvnodes" = 66560
+# The resident USB board requires the root domain to remain awake.
+"sleep-disabled" = 1
+
+["adt"."buttons"."string"]
+"compatible" = "buttons"
+"device_type" = "buttons"
+
+["adt"."buttons"."strings"]
+"button-names" = ["hold", "voldown", "volup"]
+
+["adt"."buttons"."u32"]
+"home-button-type" = 2
 
 ["firmware"]
 "config" = "marble"
@@ -40,26 +56,32 @@
 "title" = "UniXNU"
 "dram_size" = "0x400000000"
 "panic_screen" = true
-"kernel_args" = ["-v", "serial=0", "keepsyms=1", "debug=0x14e", "msgbuf=1048576"]
+"kernel_args" = ["-v", "serial=3", "keepsyms=1", "debug=0x14e", "msgbuf=4194304", "early_console=1", "-no_slto_panic", "cpus=8", "memory-outside=1", "smp=1", "armcpu-self-ipi=1", "armcpu-ipi-intid=1", "marble-ufs=1", "marble-adreno=1", "fb-gpu=1", "fb-bgra=1", "sheng-gpu-addon=1", "diag=1", "marble-display-flip=1", "marble-display-mmio=1", "dpu-scanout=1", "vsync=120", "vsync-fixed=1", "marble-wifi=4", "marble-wifi-service=1", "marble-audio=2", "marble-haptics=2", "rootstage-runtime-usb=0", "marble-native-services=1", "appsync=1", "gpu-addon=1", "gpu-ttbr=2", "gpu-preempt=2", "early-retire=0", "offline-legacy-phase=4", "offline-legacy-register=1", "offline-legacy-gop=1", "offline-legacy-pm=1", "offline-legacy-transfer=1", "offline-legacy-retire=1", "offline-legacy-cpu-present=1", "offline-legacy-validate=1", "offline-key-events=1", "aks=1", "owner-dataprotect=1", "owner-staged-apps=1", "sheng-aks=1", "sheng-aks-sls=3", "marble-display-scale=3", "marble-ui-identity=1602", "sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2", "marble-skip-setup=1", "no-lc=1"]
 
 ["payload"."adt"]
-"chip_id" = "8020"
+"chip_id" = "8030"
 "owned_memory_size" = "0x200000000"
 "unique_chip_id" = "required"
-"root_match_volume_uuid" = "D38FFE6A-C933-4C2C-BDE0-CCCDC3889156"
+"root_match_volume_uuid" = "E0577111-0369-4BCF-A4E5-59B612AA9E31"
+"tool" = "scripts/make-marble-adt.py"
+"cpu_regs" = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
+"owned_memory_outside_ranges" = 64
+"owned_memory_excluded_ranges" = 64
+"loader_inputs" = true
 
 ["package"]
-"unixnu" = ".cache/UniXNU"
+"unixnu" = "ios27/source"
 "boot_partition_bytes" = 100663296
 
 ["package"."defconfig"]
 "ios-18.7.11-22H384" = "marble_ios18_defconfig"
 "ipados-17.7.11-21H461" = "marble_defconfig"
+"ios-27.2-24B119" = "marble_ios27_defconfig"
 
 ["maintenance"]
 "upstream_revision" = "13e5973748a8447cbb90520c9a2dd5e65e272435"
 "soc_revision" = "88e8be4791e18e2ffa97bd58cbd451b8fd6a59f5"
-"validation" = "local-build-and-device"
+"validation" = "ios27 migration: input-pinned; kernel ABI and hardware qualification pending"
 "integration_sources" = "upstream_revisions.json"
 
 ["os_overrides"]
@@ -101,7 +123,7 @@
 "title" = "UniXNU"
 "dram_size" = "0x400000000"
 "panic_screen" = true
-"kernel_args" = ["-v", "serial=0", "debug=0x14e", "cpus=8", "sheng-smp=1", "armcpu-diagnostics=1", "-no_slto_panic", "early_console=1", "sheng-pmgr=2"]
+"kernel_args" = ["-v", "serial=0", "debug=0x14e", "cpus=8", "memory-outside=1", "sheng-smp=1", "armcpu-diagnostics=1", "-no_slto_panic", "early_console=1", "sheng-pmgr=2"]
 
 ["os_overrides"."ipados-17.7.11-21H461"."payload"."adt"]
 "tool" = "scripts/make-marble-adt.py"

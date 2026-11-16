@@ -1,0 +1,20 @@
+--- a/scripts/unixnu/profiles.py
++++ b/scripts/unixnu/profiles.py
+@@ -23,8 +23,16 @@
+     names = sorted(path.name for path in (ctx.root / 'profiles/os').iterdir() if path.is_dir())
+     if wanted in names:
+         return wanted
++    configured = ctx.raw_board.get('board', {}).get('os_profile', '')
++    # A device's major-version shortcut follows its declared baseline.
++    # marble's --os 27 therefore selects iOS 27.2, alongside the shared iPad profiles.
++    if wanted.isdecimal() and configured in names:
++        import re
++        match = re.match(r'(?:ios|ipados|macos)-(\d+)(?:\.|-)', configured)
++        if match and match[1] == wanted:
++            return configured
+     family, version = 'ipados-', wanted
+-    for prefix in ('ipados-', 'macos-'):
++    for prefix in ('ipados-', 'macos-', 'ios-'):
+         if wanted.startswith(prefix):
+             family, version = prefix, wanted[len(prefix):]
+             break

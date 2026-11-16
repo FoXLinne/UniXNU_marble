@@ -1,0 +1,26 @@
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -797,12 +797,15 @@
+ 	/* Initialize the file systems. */
+ 	bsd_init_kprintf("calling vfsinit\n");
+ 	vfsinit();
++#if defined(XNU_SOURCE_STORAGE) && XNU_SOURCE_STORAGE
+ 	/* Optional source storage runtime registers after the IOKit bootstrap. */
+ 	extern void native_source_storage_start(void) __attribute__((weak_import));
+ 	if (&native_source_storage_start)
+ 		native_source_storage_start();
++#endif
+ #if DEVELOPMENT || DEBUG
+ 	native_apfs_load_probe();
++#if defined(XNU_SOURCE_STORAGE) && XNU_SOURCE_STORAGE
+ 	{
+ 		/* With log=1, let the UFS log writer start first, so a failure in the display path below is logged. */
+ 		extern volatile uint32_t boot_log_rounds __attribute__((weak_import));
+@@ -813,6 +816,7 @@
+ 			}
+ 		}
+ 	}
++#endif
+ 	native_mobile_graphics_load_probe();
+ 	native_iogpu_load_probe();
+ #if defined(XNU_ADRENO_FIRMWARE_PROBE) && XNU_ADRENO_FIRMWARE_PROBE

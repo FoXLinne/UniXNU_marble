@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Copy marble's iOS 17 or iOS 18 sources into a build directory."""
+"""Stage marble's selected OS sources into a build directory."""
 import argparse
 from pathlib import Path
 
@@ -8,11 +8,15 @@ from marble_sources import DEVICE, stage_ios17, stage_ios18
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--os', choices=('17', '18'), required=True)
+    parser.add_argument('--os', choices=('17', '18', '27'), required=True)
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     outputs = DEVICE.parents[1] / 'outputs/UniXNU_marble'
-    if args.os == '17':
+    if args.os == '27':
+        from ios27_migration import prepare, DEFAULT_OUTPUT
+        output = args.output or DEFAULT_OUTPUT
+        prepare(output.resolve())
+    elif args.os == '17':
         output = args.output or outputs / 'ios17/tree'
         stage_ios17(output)
     else:

@@ -1,0 +1,133 @@
+diff -ru a/package/MarbleScanout.cpp b/package/MarbleScanout.cpp
+--- a/package/MarbleScanout.cpp	2026-11-14 17:04:58
++++ b/package/MarbleScanout.cpp	2026-11-14 17:04:58
+@@ -233,7 +233,7 @@
+     IOLog("MarbleScanout: kernel MMIO buffers=%u pipes=%x span=%llu\n",MarbleScanoutSlots,mailbox->pipe_mask,layout.slotBytes);
+     return true;
+ }
+-IOReturn scanoutFlip(uint32_t slot) {
++IOReturn scanoutCommit(uint32_t slot) {
+     if (!scanoutMdp || (slot>=MarbleScanoutSlots && slot!=0xffffffffU)) return kIOReturnBadArgument;
+     constexpr uint32_t pipes[8]={0x5000,0x7000,0x9000,0xb000,0x25000,0x27000,0x29000,0x2b000};
+     const uint32_t mask=mailbox->pipe_mask, flush=mailbox->flush_mask;
+@@ -252,6 +252,11 @@
+     scanoutMdp[0x16018/4]=flush;
+     __asm__ volatile("dsb sy" ::: "memory");
+     marble_scanout_wait_stats[0]=marble_scanout_wait_stats[0]+1;
++    return kIOReturnSuccess;
++}
++// Waits for the display to latch the committed pipe addresses at its next vblank.
++IOReturn scanoutSettle() {
++    const uint32_t flush=mailbox->flush_mask;
+     const uint64_t began=mach_absolute_time();uint64_t ns=0;
+     while (scanoutMdp[0x16018/4]&flush) {
+         absolutetime_to_nanoseconds(mach_absolute_time()-began,&ns);
+@@ -273,6 +278,10 @@
+     if (ns>=50000000)marble_scanout_wait_stats[1]=marble_scanout_wait_stats[1]+1;
+     return kIOReturnSuccess;
+ }
++IOReturn scanoutFlip(uint32_t slot) {
++    const IOReturn status=scanoutCommit(slot);
++    return status ? status : scanoutSettle();
++}
+ IOReturn flip(uint32_t slot, uint64_t timeoutNs=100000000) {
+     refresh();
+     if (mailbox->requested!=mailbox->completed) return kIOReturnBusy;
+@@ -296,16 +305,19 @@
+ extern "C" bool native_gop_scanout_active(void) {
+     if (!ready) return false;
+     IOLockLock(scanoutLock);
+-    const bool active = !failed && ownership.shown < MarbleScanoutSlots;
++    const bool active = !failed && (ownership.shown < MarbleScanoutSlots || ownership.pending < MarbleScanoutSlots);
+     IOLockUnlock(scanoutLock);
+     return active;
+ }
+ extern "C" bool native_marble_panel_control_available(void) {
+     return configure() && mailbox->reserved[4]==MARBLE_PANEL_DCS_CAP;
+ }
++static IOReturn settlePending();
+ static IOReturn panelControl(uint32_t operation,uint32_t value) {
+     if (!native_marble_panel_control_available()) return kIOReturnUnsupported;
+     IOLockLock(scanoutLock);
++    // Panel commands share the CTL flush register; no pipe flush may be pending.
++    if (const IOReturn settled=settlePending()) {failed=true;IOLockUnlock(scanoutLock);return settled;}
+     unsigned native=0;PE_parse_boot_argn("marble-native-services",&native,sizeof(native));
+     if (native) {
+         const IOReturn result=native_marble_kernel_panel_control(operation,value,mailbox);
+@@ -334,18 +346,26 @@
+     if (!memory) return nullptr;
+     *slots=MarbleScanoutSlots;*slotBytes=layout.slotBytes;return memory;
+ }
++// The GPU client writes the slot after the pending one, so a present commits and
++// returns; the latch of the pending slot is awaited at the next present.
++static IOReturn settlePending() {
++    if (ownership.pending>=MarbleScanoutSlots) return kIOReturnSuccess;
++    const IOReturn status=scanoutSettle();
++    if (status) return status;
++    ownership.latched(ownership.pending);marble_scanout_state[7]=ownership.shown;marble_scanout_state[8]=ownership.pending;
++    const uint32_t count = marble_scanout_latch_count;
++    marble_scanout_latch_ticks[count % 2048] = mach_absolute_time();
++    __atomic_store_n(&marble_scanout_latch_count, count + 1, __ATOMIC_RELEASE);
++    return kIOReturnSuccess;
++}
+ extern "C" IOReturn native_gop_scanout_present(uint32_t slot) {
+     if (!ready) return kIOReturnNotReady;
+     IOLockLock(scanoutLock);
+-    if (failed || !ownership.begin(slot)) {IOLockUnlock(scanoutLock);return kIOReturnNotReady;}
+-    marble_scanout_state[8]=ownership.pending;const IOReturn status=scanoutFlip(slot);
+-    if (!status) {
+-        ownership.latched(slot);marble_scanout_state[7]=ownership.shown;marble_scanout_state[8]=ownership.pending;
+-        const uint32_t count = marble_scanout_latch_count;
+-        marble_scanout_latch_ticks[count % 2048] = mach_absolute_time();
+-        __atomic_store_n(&marble_scanout_latch_count, count + 1, __ATOMIC_RELEASE);
+-    }
+-    else failed=true;
++    if (failed) {IOLockUnlock(scanoutLock);return kIOReturnNotReady;}
++    IOReturn status=settlePending();
++    if (!status && !ownership.begin(slot)) {IOLockUnlock(scanoutLock);return kIOReturnNotReady;}
++    if (!status) {marble_scanout_state[8]=ownership.pending;status=scanoutCommit(slot);}
++    if (status) failed=true;
+     IOLockUnlock(scanoutLock);return status;
+ }
+ extern "C" bool native_gop_scanout_snapshot(void *output, uint64_t capacity) {
+@@ -370,7 +390,8 @@
+ }
+ extern "C" void native_gop_scanout_restore() {
+     if (!ready) return;
+-    IOLockLock(scanoutLock);const IOReturn status=scanoutFlip(0xffffffffU);
++    IOLockLock(scanoutLock);IOReturn status=settlePending();
++    if (!status) status=scanoutFlip(0xffffffffU);
+     if (!status) {failed=false;ownership.restored();marble_scanout_state[7]=ownership.shown;marble_scanout_state[8]=ownership.pending;}
+     else failed=true;
+     IOLockUnlock(scanoutLock);
+diff -ru a/scripts/test_scanout_kernel_mmio.py b/scripts/test_scanout_kernel_mmio.py
+--- a/scripts/test_scanout_kernel_mmio.py	2026-11-14 17:04:58
++++ b/scripts/test_scanout_kernel_mmio.py	2026-11-14 17:04:58
+@@ -16,7 +16,7 @@
+         elif source[end]=='}':depth-=1
+         end+=1
+     return source[start:end]
+-flip = function('scanoutFlip')+'\n'+function('flip')
++flip = '\n'.join(function(name) for name in ('scanoutCommit','scanoutSettle','scanoutFlip','flip'))
+ flip = re.sub(r'__asm__ volatile\(.*?\);', '(void)0;', flip, flags=re.S)
+ program = r'''
+ #include <cassert>
+@@ -72,6 +72,12 @@
+  fresh();latchedAfter=0;assert(scanoutFlip(0)==kIOReturnTimeout);
+  assert(registers[0x16018/4]==state.flush_mask&&ticks==50000000);
+  fresh();state.pipe_mask=1U<<8;assert(scanoutFlip(0)==kIOReturnBadArgument);
++ // A commit returns before the latch; the next commit is refused until it settles.
++ fresh();assert(scanoutCommit(0)==kIOReturnSuccess&&registers[0x16018/4]==state.flush_mask&&!sleeps);
++ assert(registers[0x5014/4]==state.base+layout.slotBytes+32);
++ assert(scanoutCommit(1)==kIOReturnBusy&&registers[0x5014/4]==state.base+layout.slotBytes+32);
++ assert(scanoutSettle()==kIOReturnSuccess&&!registers[0x16018/4]);
++ assert(scanoutCommit(1)==kIOReturnSuccess&&registers[0x5014/4]==state.base+2*layout.slotBytes+32);
+  // Hardware acknowledges during sleep; a delayed CPU wake must observe it.
+  fresh();latchedAfter=1;schedulingDelay=75000000;
+  assert(scanoutFlip(1)==kIOReturnSuccess&&!registers[0x16018/4]);
+@@ -89,4 +95,4 @@
+     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', str(device / 'package'),
+                     str(path / 'test.cpp'), '-o', str(path / 'test')], check=True)
+     subprocess.run([str(path / 'test')], check=True)
+-print('Kernel scanout: address validation, real deadlines, delayed-wake acknowledgements, mailbox errors and boot restoration passed')
++print('Kernel scanout: pipelined commit and settle, address validation, real deadlines, delayed-wake acknowledgements, mailbox errors and boot restoration passed')

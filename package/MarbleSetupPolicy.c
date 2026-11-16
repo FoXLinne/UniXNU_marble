@@ -116,9 +116,14 @@ int native_marble_setup_policy(proc_t process, user_addr_t scratch)
     if (display_error) return display_error;
     unsigned enabled = 0;
     if (!PE_parse_boot_argn("marble-skip-setup", &enabled, sizeof(enabled)) || enabled != 1) return 0;
-    const char *marker = "/private/var/db/marble-setup-complete";
+    /* Data survives OS upgrades; setup completion belongs to this build. */
+    const char *marker = "/private/var/db/marble-setup-complete-24B119";
     int error = exists(marker);
-    if (!error) { marble_setup_policy_status = 0; return 0; }
+    if (!error) {
+        printf("MarbleSetup: build=24B119 completion marker present\n");
+        marble_setup_policy_status = 0;
+        return 0;
+    }
     if (error != ENOENT) return error;
     static const struct { const char *name, *body; } preferences[] = {
         {"com.apple.purplebuddy", "<key>SetupDone</key><true/><key>SetupFinishedAllSteps</key><true/>"

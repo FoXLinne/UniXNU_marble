@@ -30,6 +30,7 @@ expected original instruction first, and the tool refuses a kernel that does
 not match. Offsets are specific to the kernel built by build-xnu-4k-baseline.sh.
 """
 import argparse
+import json
 import os
 import shutil
 import struct
@@ -135,11 +136,18 @@ _start:
 
 def kernel_symbols(kernel):
     """Address -> name for the kernel's symbols, from llvm-nm."""
+    raw = Path(kernel).read_bytes()
+    if struct.unpack_from('<I', raw, 12)[0] == 12:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ios27/sources/XnuPrelink'))
+        from kc_image import Image
+        collection = Image(raw)
+        member = Image(raw, collection.entries['com.apple.kernel'][1])
+        return {address: names[0] for address, names in member.symbols().items() if names}
     nm = shutil.which('llvm-nm') or '/opt/homebrew/opt/llvm/bin/llvm-nm'
     table = {}
     for line in subprocess.run([nm, '-n', kernel], capture_output=True, text=True, check=True).stdout.splitlines():
         parts = line.split()
-        if len(parts) == 3:
+        if len(parts) == 3 and all(c in '0123456789abcdefABCDEF' for c in parts[0]):
             table.setdefault(int(parts[0], 16), parts[2])
     return table
 
@@ -183,6 +191,10 @@ def assemble_c(source, va, workdir, symbols):
     font_dir = Path(os.environ.get('UNIXNU_UEFI') or ROOT / 'uefi-sheng') / 'Silicon/Silicium/SiliciumPkg/Library/FrameBufferSerialPortLib'
     obj, elf, binary = (workdir / name for name in ('panic.o', 'panic.elf', 'panic.bin'))
     definitions = []
+    label = os.environ.get('UNIXNU_PANIC_BUILD', 'marble')
+    if len(label) > 160 or any(ord(c) < 32 or ord(c) > 126 or c == '%' for c in label):
+        raise SystemExit('Panic build label must contain 1..160 printable ASCII characters without format specifiers')
+    definitions.append('-DPANIC_BUILD=' + json.dumps(label))
     # Optional: the board's banner buffer for the panic message (kits/sheng/BootProgress.c); kernels without it get 0 (no copy).
     if '_native_resident_panic_return' in symbols:
         definitions.append(f'-DRESIDENT_RETURN={symbols["_native_resident_panic_return"]:#x}UL')
@@ -354,12 +366,16 @@ def main():
     parser.add_argument('--reset-after', metavar='SYMBOL', help='place the reset after this call in arm_init instead of stage 3')
     parser.add_argument('--reset-before', action='store_true', help='reset at the call site before invoking SYMBOL (requires --reset-after)')
     parser.add_argument('--panic-screen', action='store_true', help='draw panic() messages on the screen')
+    parser.add_argument('--panic-only', action='store_true',
+                        help='use the verified entry padding for the panic renderer; retain normal entry instructions')
     parser.add_argument('--no-reset', action='store_true', help='no reset probe at all')
     parser.add_argument('--occurrence', type=int, default=1, help='which call to SYMBOL (1 = first)')
     parser.add_argument('--in', dest='function', default='_arm_init', help='function that makes the call (default _arm_init)')
     args = parser.parse_args()
     if args.reset_before and not args.reset_after:
         raise SystemExit('--reset-before requires --reset-after')
+    if args.panic_only and (not args.panic_screen or not args.no_reset):
+        raise SystemExit('--panic-only requires --panic-screen --no-reset')
     data = bytearray(args.kernel.read_bytes())
     load_segments(data)
     kernel_names = rebase(args.kernel, data)
@@ -388,6 +404,8 @@ def main():
     else:
         sites.append((AFTER_MMU_VA, 3, {'target': AFTER_MMU_VA + 4}))
         description = f'stage 3 reset {args.reset_delay} s after the MMU is on'
+    if args.panic_only:
+        sites = []
 
     with tempfile.TemporaryDirectory() as tmp:
         for site, stage, symbols in sites:
@@ -400,7 +418,8 @@ def main():
         struct.pack_into('<I', data, file_offset(site), branch(site, CAVES[stage]))
     if args.panic_screen:
         # Right after the last probe cave in use, so the padding is shared as tightly as possible.
-        PANIC_CAVE = max(CAVES[stage] for _, stage, _ in sites) + CAVE_SIZE
+        PANIC_CAVE = (CAVES[1] if args.panic_only else
+                      max(CAVES[stage] for _, stage, _ in sites) + CAVE_SIZE)
         if word(PANIC_VA) in (0, 0xFFFFFFFF) or any(data[file_offset(PANIC_CAVE):file_offset(PANIC_CAVE_END)]):
             raise SystemExit('panic() or the panic screen padding is not as expected')
         with tempfile.TemporaryDirectory() as tmp:
@@ -418,7 +437,7 @@ def main():
         struct.pack_into('<I', data, file_offset(common), branch(common, common_entry))
         description += f', panic screen ({len(code):#x} bytes at {entry:#x}; common funnel at {common:#x})'
     args.kernel.write_bytes(data)
-    print(f'patched {args.kernel.name}: stage 1 blue bar, stage 2 magenta bar, {description}')
+    print(f'patched {args.kernel.name}: {description}')
 
 if __name__ == '__main__':
     main()

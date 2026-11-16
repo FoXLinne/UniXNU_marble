@@ -21,6 +21,7 @@ extern int native_root_block_authorized(dev_t);
 extern int native_root_block_cache_authorized(dev_t);
 extern int native_root_block_volume_device(const char *, dev_t *, char *, size_t);
 extern int native_marble_data_volume(dev_t *, char *, size_t);
+extern void native_marble_storage_register_data(mount_t);
 extern void commpage_update_dyld_flags(uint64_t);
 extern uint64_t dyld_flags;
 extern int sheng_boot_watchdog_policy(void *, uint64_t);
@@ -33,6 +34,7 @@ __attribute__((used)) const unsigned int native_ios18_ce_page_shift = 14;
 int native_marble_prepare_systemos(proc_t, user_addr_t, user_addr_t *);
 int native_marble_bindfs_allowed(void);
 static int bootBindMount;
+volatile int marble_systemos_phase,marble_systemos_error;
 
 struct marble_ui_exit {
     uint32_t pid, reason_namespace;
@@ -165,7 +167,9 @@ static int preparePreboot(proc_t process, user_addr_t scratch)
         struct mkdir_args request = {.path = scratch + 0x800, .mode = 0755};
         error = copyout(paths[i], request.path, strlen(paths[i]) + 1);
         if (!error) error = mkdir(process, &request, &result);
-        if (error && error != EEXIST) return error;
+        if (error && error != EEXIST) {
+            panic("MarbleStorage: preboot mkdir %s failed %d",paths[i],error);
+        }
     }
     struct mount_args request = {.type = scratch + 0x100, .path = scratch + 0x120,
                                 .flags = MNT_RDONLY, .data = scratch + 0x200};
@@ -262,6 +266,7 @@ static int prepareData(proc_t process, user_addr_t scratch)
     if (device_vnode) vnode_put(device_vnode);
     int accepted = actual == selected && !(vfs_flags(mounted) & MNT_RDONLY) &&
         !strcmp(vfs_statfs(mounted)->f_fstypename, "apfs");
+    if (accepted) native_marble_storage_register_data(mounted);
     vnode_put(data_root);
     return accepted ? 0 : EAUTH;
 }
@@ -276,11 +281,15 @@ int native_marble_prepare_systemos(proc_t process, user_addr_t scratch, user_add
     dev_t root_device = device_vnode ? vnode_specrdev(device_vnode) : NODEV;
     if (device_vnode) vnode_put(device_vnode);
     if (!(vfs_flags(root) & MNT_RDONLY) || !native_root_block_authorized(root_device)) return EAUTH;
+    marble_systemos_phase=1;
     int error = prepareData(process, scratch);
-    if (!error) error = preparePreboot(process, scratch);
-    if (error) return error;
+    if (error) panic("MarbleStorage: Data preparation failed %d",error);
+    marble_systemos_phase=2;
+    error = preparePreboot(process,scratch);
+    if (error) panic("MarbleStorage: preboot bind failed %d",error);
     dev_t selected = NODEV;
     char path[64] = {0};
+    marble_systemos_phase=3;
     if (!native_root_block_volume_device(uuid, &selected, path, sizeof(path))) return ENOENT;
     user64_addr_t spec = scratch + 0x160;
     uint8_t payload[0x150] = {0};
@@ -299,7 +308,10 @@ int native_marble_prepare_systemos(proc_t process, user_addr_t scratch, user_add
         (error = copyout(mountpoint, request.path, strlen(mountpoint) + 1)) ||
         (error = copyout(path, spec, strlen(path) + 1)) ||
         (error = copyout(payload, request.data, sizeof(payload)))) return error;
+    marble_systemos_phase=4;
     error = mount(process, &request, &result);
+    marble_systemos_error=error;
+    if(error)panic("MarbleStorage: SystemOS APFS mount %s failed %d",path,error);
     printf("MarbleStorage: SystemOS mount %s returned %d\n", path, error);
     if (error) return error;
     vnode_t mounted_root = NULLVP;
@@ -314,6 +326,7 @@ int native_marble_prepare_systemos(proc_t process, user_addr_t scratch, user_add
     vnode_put(mounted_root);
     if (!accepted || !native_root_block_authorized(root_device) ||
         !(vfs_flags(mounted) & MNT_UNION) || vnode_mountedhere(original_root) != mounted) return EAUTH;
+    marble_systemos_phase=5;
     error = bindCryptex(process, scratch, "/System", "/private/preboot/Cryptexes/OS/System");
     if (!error) error = bindCryptex(process, scratch, "/usr", "/private/preboot/Cryptexes/OS/usr");
     if (error) return error;
@@ -325,12 +338,15 @@ int native_marble_prepare_systemos(proc_t process, user_addr_t scratch, user_add
     vnode_put(cache);
     if (!cache_visible) return EAUTH;
     if (!marble_app_union_status) native_marble_ls_store_rebuild(process, scratch);
+    marble_systemos_phase=6;
     error = sheng_boot_watchdog_policy(process, scratch);
-    if (error) return error;
+    if (error) panic("MarbleStorage: watchdog policy failed %d",error);
+    marble_systemos_phase=7;
     error = native_marble_setup_policy(process, scratch);
-    if (error) return error;
+    if (error) panic("MarbleStorage: setup policy failed %d",error);
+    marble_systemos_phase=8;
     error = native_marble_metal_prepare(process, scratch);
-    if (error) return error;
+    if (error) panic("MarbleStorage: Metal preparation failed %d",error);
     static const char *const graphics_environment[] = {
         "CA_DISABLE_FRAMEBUFFER_COMPRESSION=1", "CA_DISPLAY_EDR_HEADROOM=1",
         "CA_FP16_MIN_HEADROOM=1e30", "CA_FORCE_FP16_FRAMEBUFFER=0", "CA_ALLOW_EDR_MIRRORING=0"};

@@ -1,0 +1,25 @@
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -652,9 +652,22 @@
+ 	return;
+ }
+ 
++#if defined(XNU_ARMCPU) && XNU_ARMCPU && !defined(APPLE_ARM64_ARCH_FAMILY)
++uint64_t armcpu_stackshot_unavailable;
++#endif
++
+ static kern_return_t
+ DebuggerHaltOtherCores(boolean_t proceed_on_failure, bool is_stackshot)
+ {
++#if defined(XNU_ARMCPU) && XNU_ARMCPU && !defined(APPLE_ARM64_ARCH_FAMILY)
++	/* Generic GIC IPIs are maskable. Advertise the missing synchronous
++	 * debugger rendezvous before stopping cores or changing its counters.
++	 * The existing caller returns this status to the stackshot requester. */
++	if (is_stackshot) {
++		__atomic_fetch_add(&armcpu_stackshot_unavailable, 1, __ATOMIC_RELAXED);
++		return KERN_NOT_SUPPORTED;
++	}
++#endif
+ #if defined(__arm64__)
+ 	return DebuggerXCallEnter(proceed_on_failure, is_stackshot);
+ #else /* defined(__arm64__) */

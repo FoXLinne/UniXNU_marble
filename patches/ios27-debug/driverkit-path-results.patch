@@ -1,0 +1,15 @@
+--- a/bsd/dev/arm/systemcalls.c
++++ b/bsd/dev/arm/systemcalls.c
+@@ -185,6 +185,12 @@
+ 	AUDIT_SYSCALL_ENTER(code, proc, uthread);
+ 	error = (*(callp->sy_call))(proc, &uthread->uu_arg[0], &(uthread->uu_rval[0]));
+ 	AUDIT_SYSCALL_EXIT(code, proc, uthread, error);
++#if defined(MARBLE_IOS27_DIAGNOSTICS) && MARBLE_IOS27_DIAGNOSTICS
++	extern void native_marble_path_trace(struct proc *, unsigned, int, const uint64_t *, const int32_t *);
++	native_marble_path_trace(proc, code, error, (const uint64_t *)&uthread->uu_arg[0],
++	    (const int32_t *)&uthread->uu_rval[0]);
++#endif
++
+ 
+ #if defined(MARBLE_IOS27_DIAGNOSTICS) && MARBLE_IOS27_DIAGNOSTICS
+ 	/* Capture the first ENOSYS for each target ABI call without changing its result. */

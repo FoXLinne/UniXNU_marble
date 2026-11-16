@@ -1,0 +1,222 @@
+{
+  "target": "ios27",
+  "build": "24B119",
+  "cache_uuid": "555BFDAA-D930-31AC-A915-D472C273C527",
+  "cache_images": 4759,
+  "cache_subcaches": 79,
+  "shared_region": "0x180000000-0x30794c000",
+  "format": "dyld_shared_cache_arm64e.<NN>,<file_offset_hex>,<original_bytes_hex>,<replacement_bytes_hex>",
+  "notes": "Every entry was re-derived from the 24B119 SystemOS cryptex dyld cache. Offsets are file offsets inside the named subcache. Original bytes were read back from the mounted cache at the listed offset and verified on 2026-02; the kernel validated-page fixup path checks them again before patching.",
+  "entries": [
+    {
+      "group": "powerlog",
+      "entry": "dyld_shared_cache_arm64e.36,27660fc,1800781e9c3657950803621e0039691e1b00781e,1800789e9c3657950803629e0039691e1b00789e",
+      "image": "/System/Library/PrivateFrameworks/PowerlogCore.framework/PowerlogCore",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[PLTimeManager bucketTimeStampForDate:withTimeReference:withBucketInterval:]",
+      "va": "0x222b660fc",
+      "file_offset": "0x27660fc",
+      "reason": "fcvtzs w24,d0 / scvtf d8,w24 / fcvtzs w27,d0 widen to x-register conversions for 64-bit bucket seconds. Preserve the intervening bl and fsub d0,d8,d9 encodings; changing the fsub sign bit creates an unallocated instruction and SIGILL."
+    },
+    {
+      "group": "powerlog",
+      "entry": "dyld_shared_cache_arm64e.36,276625c,b5021b0b,b5021b8b",
+      "image": "/System/Library/PrivateFrameworks/PowerlogCore.framework/PowerlogCore",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[PLTimeManager bucketTimeStampForDate:withTimeReference:withBucketInterval:]",
+      "va": "0x222b6625c",
+      "file_offset": "0x276625c",
+      "reason": "add w21,w21,w27 accumulates bucketed seconds in a 32-bit register; widen to add x21,x21,x27. Same operands as the 22H384 site with commuted source registers."
+    },
+    {
+      "group": "powerlog",
+      "entry": "dyld_shared_cache_arm64e.36,2766300,6003621e7fa05295ee355795f80300aa20b347f9a002621e,6003629e7fa05295ee355795f80300aa20b347f9a002629e",
+      "image": "/System/Library/PrivateFrameworks/PowerlogCore.framework/PowerlogCore",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[PLTimeManager bucketTimeStampForDate:withTimeReference:withBucketInterval:]",
+      "va": "0x222b66300",
+      "file_offset": "0x2766300",
+      "reason": "scvtf d0,w27 then two calls, a register move and a literal load before scvtf d0,w21; widen both endpoint conversions. Window bytes match the 22H384 site shape exactly."
+    },
+    {
+      "group": "powerlog",
+      "entry": "dyld_shared_cache_arm64e.36,27663e4,a802621e,a802629e",
+      "image": "/System/Library/PrivateFrameworks/PowerlogCore.framework/PowerlogCore",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[PLTimeManager bucketTimeStampForDate:withTimeReference:withBucketInterval:]",
+      "va": "0x222b663e4",
+      "file_offset": "0x27663e4",
+      "reason": "scvtf d8,w21 -> scvtf d8,x21 on the 64-bit seconds path."
+    },
+    {
+      "group": "powerlog",
+      "entry": "dyld_shared_cache_arm64e.36,276647c,6003621e,6003629e",
+      "image": "/System/Library/PrivateFrameworks/PowerlogCore.framework/PowerlogCore",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[PLTimeManager bucketTimeStampForDate:withTimeReference:withBucketInterval:]",
+      "va": "0x222b6647c",
+      "file_offset": "0x276647c",
+      "reason": "scvtf d0,w27 -> scvtf d0,x27 on the 64-bit seconds path."
+    },
+    {
+      "group": "powerlog",
+      "entry": "dyld_shared_cache_arm64e.36,2766f9c,0800781e080dd31a087d131b0001621e,0800789e080dd39a087d139b0001629e",
+      "image": "/System/Library/PrivateFrameworks/PowerlogCore.framework/PowerlogCore",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[PLTimeManager bucketNSDate:withBucketInterval:]",
+      "va": "0x222b66f9c",
+      "file_offset": "0x2766f9c",
+      "reason": "fcvtzs w8,d0; sdiv w8,w8,w19; mul w8,w8,w19; scvtf d0,w8 truncates persistent monotonic dates at INT32_MAX. Widen all four instructions; instruction stream is byte-identical to the 22H384 site."
+    },
+    {
+      "group": "powerlog",
+      "entry": "dyld_shared_cache_arm64e.36,276542c,ea02621e0803621e,ea02629e0803629e",
+      "image": "/System/Library/PrivateFrameworks/PowerlogCore.framework/PowerlogCore",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[PLCoreStorage writeProportionateAggregateEntry:withStartDate:withEndDate:]",
+      "va": "0x222b6542c",
+      "file_offset": "0x276542c",
+      "reason": "caller conversion pair scvtf d10,w23 / scvtf d8,w24 on aggregated durations; widen to x23/x24 so the caller side of the bucket path stays in 64-bit seconds."
+    },
+    {
+      "group": "powerlog",
+      "entry": "dyld_shared_cache_arm64e.36,2768160,0900621e,0900629e",
+      "image": "/System/Library/PrivateFrameworks/PowerlogCore.framework/PowerlogCore",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "__37-[PLCoreStorage writeAggregateEntry:]_block_invoke.760",
+      "va": "0x222b68160",
+      "file_offset": "0x2768160",
+      "reason": "caller scvtf d9,w0 converts a returned bucket timestamp for storage; widen to x0. The adjacent fcvtzs w4,d8 at 0x222b6814c feeds an int-typed argument and is intentionally left alone."
+    },
+    {
+      "group": "lcs",
+      "entry": "dyld_shared_cache_arm64e.59,76ae0e4,c7be1894f80300aae00316aae20318aac75b1894f6be1894,c00000b4f80300aae00316aae20318aac75b18941f2003d5",
+      "image": "/System/Library/PrivateFrameworks/LockedContentServices.framework/LockedContentServices",
+      "subcache_uuid": "B96AAAE2-778B-3990-801C-7D4881DC162F",
+      "symbol": "-[LCSCaptureApplicationMonitor _lock_updateKnownCaptureApplications:]",
+      "va": "0x28faae0e4",
+      "file_offset": "0x76ae0e4",
+      "reason": "Else-branch of the monitor's known-applications update: [x19 allKeys] -> retain -> [self _updateTCCMonitorForBundleIdentifiers:] -> release. When the optional container dictionary is absent the getter yields nil; cbz x0,+0x18 skips the retain/update/release window to the shared continuation at 0x28faae0fc (identical to the tbnz skip target), preserving the notification flow. Same nil-guard transform as 22H384, applied to this build's equivalent insert site."
+    },
+    {
+      "group": "telephony",
+      "entry": "dyld_shared_cache_arm64e.07,6999300,7f2303d5f44fbea9fd7b01a9,7f2303d5000080d2ff0f5fd6",
+      "image": "/System/Library/PrivateFrameworks/TelephonyUtilities.framework/TelephonyUtilities",
+      "subcache_uuid": "AAC91601-D852-34FE-962C-EB53F96DC625",
+      "symbol": "-[TUCallCenter currentCallCount]",
+      "va": "0x19ed99300",
+      "file_offset": "0x6999300",
+      "reason": "marble has no cellular baseband; return 0 before the call-center query. Prologue pacibsp/stp x28,x27/stp x29,x30 identical to 22H384."
+    },
+    {
+      "group": "telephony",
+      "entry": "dyld_shared_cache_arm64e.07,69c7bc0,7f2303d5f44fbea9fd7b01a9,7f2303d5000080d2ff0f5fd6",
+      "image": "/System/Library/PrivateFrameworks/TelephonyUtilities.framework/TelephonyUtilities",
+      "subcache_uuid": "AAC91601-D852-34FE-962C-EB53F96DC625",
+      "symbol": "-[TUCallCenter currentCalls]",
+      "va": "0x19edc7bc0",
+      "file_offset": "0x69c7bc0",
+      "reason": "return nil for the current-call list."
+    },
+    {
+      "group": "telephony",
+      "entry": "dyld_shared_cache_arm64e.07,698d7d4,7f2303d5f44fbea9fd7b01a9,7f2303d5000080d2ff0f5fd6",
+      "image": "/System/Library/PrivateFrameworks/TelephonyUtilities.framework/TelephonyUtilities",
+      "subcache_uuid": "AAC91601-D852-34FE-962C-EB53F96DC625",
+      "symbol": "-[TUCallServicesInterface currentCalls]",
+      "va": "0x19ed8d7d4",
+      "file_offset": "0x698d7d4",
+      "reason": "return nil for the XPC current-call getter."
+    },
+    {
+      "group": "telephony",
+      "entry": "dyld_shared_cache_arm64e.07,6993734,7f2303d5ffc300d1,7f2303d5ff0f5fd6",
+      "image": "/System/Library/PrivateFrameworks/TelephonyUtilities.framework/TelephonyUtilities",
+      "subcache_uuid": "AAC91601-D852-34FE-962C-EB53F96DC625",
+      "symbol": "-[TUCallServicesInterface waitForInitialStateIfNecessary]",
+      "va": "0x19ed93734",
+      "file_offset": "0x6993734",
+      "reason": "pacibsp/sub sp,#0x30 prologue identical to 22H384; return immediately so the call-state wait never blocks the UI."
+    },
+    {
+      "group": "telephony",
+      "entry": "dyld_shared_cache_arm64e.07,69b062c,7f2303d5ff4302d1,7f2303d5ff0f5fd6",
+      "image": "/System/Library/PrivateFrameworks/TelephonyUtilities.framework/TelephonyUtilities",
+      "subcache_uuid": "AAC91601-D852-34FE-962C-EB53F96DC625",
+      "symbol": "-[TUCallServicesInterface fetchCurrentCalls]",
+      "va": "0x19edb062c",
+      "file_offset": "0x69b062c",
+      "reason": "pacibsp/sub sp,#0x90 prologue identical to 22H384 refresh site; return immediately so stale call state is never refreshed in."
+    },
+    {
+      "group": "telephony",
+      "entry": "dyld_shared_cache_arm64e.36,6da0468,7f2303d5f657bda9f44f01a9,7f2303d5000080d2ff0f5fd6",
+      "image": "/System/Library/CoreServices/SpringBoard.app/SpringBoard",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[SBTelephonyManager inCall]",
+      "va": "0x2271a0468",
+      "file_offset": "0x6da0468",
+      "reason": "report no active call to SpringBoard; prologue identical to 22H384."
+    },
+    {
+      "group": "telephony",
+      "entry": "dyld_shared_cache_arm64e.36,6d9c590,7f2303d5f657bda9f44f01a9,7f2303d5000080d2ff0f5fd6",
+      "image": "/System/Library/CoreServices/SpringBoard.app/SpringBoard",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "-[SBTelephonyManager inCallUsingSpeakerOrReceiver]",
+      "va": "0x22719c590",
+      "file_offset": "0x6d9c590",
+      "reason": "report no speaker/receiver call path to SpringBoard."
+    },
+    {
+      "group": "audio-clock",
+      "gated": "marble-audio>=2 || marble-haptics>=2",
+      "entry": "dyld_shared_cache_arm64e.38,415e2f8,0000000060e37641,00000000804f7241",
+      "image": "/System/Library/Frameworks/CoreAudio.framework/CoreAudio",
+      "subcache_uuid": "084C358D-6CA7-32B3-9501-BBFB28AD2ACD",
+      "symbol": "_AudioGetHostClockFrequency constant",
+      "va": "0x22c55e2f8",
+      "file_offset": "0x415e2f8",
+      "reason": "24000000.0 double read by _AudioGetHostClockFrequency (0x22c4f1108 ldr d0,[x8,#0x2f8]) and by every other CoreAudio host-time user of [x*,#0x2f8]; the board clock runs at 19.2 MHz (19200000.0). HAL timestamps convert through this constant."
+    },
+    {
+      "group": "audio-clock",
+      "gated": "marble-audio>=2 || marble-haptics>=2",
+      "entry": "dyld_shared_cache_arm64e.28,70f02e8,0000000060e37641,00000000804f7241",
+      "image": "/System/Library/PrivateFrameworks/AudioDSPGraph.framework/AudioDSPGraph",
+      "subcache_uuid": "140CD9E8-3402-3E7B-90C8-3F36972FD0FD",
+      "symbol": "AudioDSPGraph::Graph::configure / Boxes::FCBox::copyOutput constant",
+      "va": "0x2074f02e8",
+      "file_offset": "0x70f02e8",
+      "reason": "DSP queue-period math: Graph::configure stores 24e6/count as the queue period and FCBox::copyOutput multiplies seconds by the same constant for tick conversion. Must match the HAL clock or DSP timestamps drift."
+    },
+    {
+      "group": "audio-clock",
+      "gated": "marble-audio>=2 || marble-haptics>=2",
+      "entry": "dyld_shared_cache_arm64e.36,67d3fe8,0000000060e37641,00000000804f7241",
+      "image": "/System/Library/Audio/Plug-Ins/RemoteIO/libEmbeddedSystemAUs.dylib",
+      "subcache_uuid": "7B2B14B5-F6A5-3C55-A340-72AE9274881A",
+      "symbol": "AURemoteIO::PerformIO / getHALThreadPriority constant",
+      "va": "0x226bd3fe8",
+      "file_offset": "0x67d3fe8",
+      "reason": "RemoteIO DSP-side host clock copy: PerformIO multiplies the fractional IO period by this constant and clamps to ~1202 frames; getHALThreadPriority derives the real-time thread period from it. Same 19.2 MHz board clock."
+    }
+  ],
+  "surveyed_not_patched": [
+    {
+      "image": "PHASE",
+      "va": "0x20dfe3500",
+      "note": "24000000.0 copy sits inside acoustics/filter constant tables (wavenumber, convolver, oscillator); no host-clock consumer qualified."
+    },
+    {
+      "image": "libAudioDSP.dylib",
+      "va": "0x20735ddd0",
+      "note": "referenced only by address arithmetic into a parameter structure; no qualified host-clock read."
+    },
+    {
+      "image": "AudioToolboxCore",
+      "va": "0x19f60aef0",
+      "note": "no code reference to the constant found in this build; left unchanged."
+    }
+  ]
+}

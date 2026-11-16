@@ -1,0 +1,86 @@
+--- a/bsd/kern/ubc_subr.c
++++ b/bsd/kern/ubc_subr.c
+@@ -6379,6 +6379,39 @@
+ 	return written;
+ }
+ 
++/* Reconstruct signature input from exact, configured text replacements.
++ * The executable page stays untouched. Bytes outside recognized replacements
++ * retain their current values so ordinary signature validation detects damage. */
++uint32_t
++cs_text_fixup_original_page(struct vnode *vp, memory_object_offset_t page_offset,
++    const void *kva, void *original)
++{
++	uint32_t matched = 0;
++	if (vp == NULLVP || vp->v_name == NULL) {
++		return 0;
++	}
++	if (original != NULL) {
++		memcpy(original, kva, PAGE_SIZE);
++	}
++	for (uint32_t i = 0; i < cs_text_fixup_count; i++) {
++		const struct cs_text_fixup *f = &cs_text_fixups[i];
++		if (f->offset < page_offset || f->offset - page_offset > PAGE_SIZE ||
++		    f->length > PAGE_SIZE - (f->offset - page_offset) ||
++		    strcmp(vp->v_name, f->name) != 0) {
++			continue;
++		}
++		size_t at = (size_t)(f->offset - page_offset);
++		if (memcmp((const uint8_t *)kva + at, f->replacement, f->length) != 0) {
++			continue;
++		}
++		if (original != NULL) {
++			memcpy((uint8_t *)original + at, f->original, f->length);
++		}
++		matched++;
++	}
++	return matched;
++}
++
+ boolean_t
+ cs_validate_range(
+ 	struct vnode    *vp,
+--- a/osfmk/vm/vm_protos.h
++++ b/osfmk/vm/vm_protos.h
+@@ -286,6 +286,8 @@
+     vm_size_t size,
+     unsigned *result);
+ extern uint32_t cs_text_fixup_page(struct vnode *vp, memory_object_offset_t page_offset, void *kva);
++extern uint32_t cs_text_fixup_original_page(struct vnode *vp, memory_object_offset_t page_offset,
++    const void *kva, void *original);
+ extern void cs_validate_page(
+ 	struct vnode *vp,
+ 	memory_object_t pager,
+--- a/osfmk/vm/vm_fault.c
++++ b/osfmk/vm/vm_fault.c
+@@ -8940,13 +8940,29 @@
+ 	validated = 0;
+ 	tainted = 0;
+ 	nx = 0;
++	const void *signature_data = kaddr;
++	void *original_page = NULL;
++#if __arm64__
++	/* Revalidation sees the configured replacements installed after the first
++	 * signature check. Restore those bytes in a temporary validation copy. */
++	if (cs_text_fixup_original_page(vnode, mo_offset, kaddr, NULL) != 0) {
++		original_page = kalloc_data(PAGE_SIZE, Z_NOWAIT);
++		if (original_page != NULL) {
++			cs_text_fixup_original_page(vnode, mo_offset, kaddr, original_page);
++			signature_data = original_page;
++		}
++	}
++#endif
+ 	cs_validate_page(vnode,
+ 	    pager,
+ 	    mo_offset,
+-	    (const void *)((const char *)kaddr),
++	    signature_data,
+ 	    &validated,
+ 	    &tainted,
+ 	    &nx);
++	if (original_page != NULL) {
++		kfree_data(original_page, PAGE_SIZE);
++	}
+ 
+ 	page->vmp_cs_validated |= validated;
+ 	page->vmp_cs_tainted |= tainted;

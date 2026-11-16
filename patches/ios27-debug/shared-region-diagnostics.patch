@@ -1,0 +1,30 @@
+--- a/bsd/vm/vm_unix.c
++++ b/bsd/vm/vm_unix.c
+@@ -138,6 +138,9 @@
+ #include <sys/trust_caches.h>
+ #include <libkern/amfi/amfi.h>
+ #include <IOKit/IOBSD.h>
++
++/* Retain shared-cache failure diagnostics in the RELEASE bring-up kernel. */
++#undef printf
+ 
+ #if VM_MAP_DEBUG_APPLE_PROTECT
+ SYSCTL_INT(_vm, OID_AUTO, map_debug_apple_protect, CTLFLAG_RW | CTLFLAG_LOCKED, &vm_map_debug_apple_protect, 0, "");
+--- a/osfmk/vm/vm_shared_region.c
++++ b/osfmk/vm/vm_shared_region.c
+@@ -90,11 +90,14 @@
+ #include <ptrauth.h>
+ #endif /* __has_feature(ptrauth_calls) */
+ 
++/* Retain shared-cache failure diagnostics in the RELEASE bring-up kernel. */
++#undef printf
++
+ /* "dyld" uses this to figure out what the kernel supports */
+ int shared_region_version = 3;
+ 
+ /* trace level, output is sent to the system log file */
+-int shared_region_trace_level = SHARED_REGION_TRACE_ERROR_LVL;
++int shared_region_trace_level = SHARED_REGION_TRACE_DEBUG_LVL;
+ 
+ /* should local (non-chroot) shared regions persist when no task uses them ? */
+ int shared_region_persistence = 0;      /* no by default */
