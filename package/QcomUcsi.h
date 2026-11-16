@@ -26,6 +26,7 @@ struct QcomUcsi {
     uint32_t buffer_bytes, version, cci, status, polls, polling, changes, errors;
     int change_pending, change_read;   /* a connector change seen; its status was read and the change waits for its acknowledge */
     int connected, partner, usb, status_valid;   /* the last GET_CONNECTOR_STATUS */
+    uint32_t request_data_object;
 };
 static inline void ucsi_put32(uint8_t *p, uint32_t v) {p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24);}
 static inline uint32_t ucsi_get32(const uint8_t *p) {return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;}
@@ -81,6 +82,7 @@ static inline uint32_t ucsi_advance(struct QcomUcsi *u, uint8_t *out, const uint
             /* UCSI_CONSTAT: connected bit 19, partner flag USB bit 21, partner type bits 31:29. */
             const uint32_t status = ucsi_get32(buffer + kUcsiOffMessageIn);
             u->status = status;
+            u->request_data_object=((cci>>8)&0xffu)>=8?ucsi_get32(buffer+kUcsiOffMessageIn+4):0;
             u->connected = (status >> 19) & 1;
             u->usb = (status >> 21) & 1;
             u->partner = (int)(status >> 29);

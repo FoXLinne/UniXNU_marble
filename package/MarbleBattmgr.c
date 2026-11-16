@@ -25,6 +25,7 @@ static const struct {uint8_t opcode, property, slow;} kFields[BmFields] = {
     [BmChargeType] = {MARBLE_BATTMGR_OP_BATTERY_GET, 3, 0},
     [BmThermalLevel] = {MARBLE_BATTMGR_OP_BATTERY_GET, 10, 0},
     [BmChargeCurrent] = {MARBLE_BATTMGR_OP_BATTERY_GET, 12, 0},
+    [BmUsbTypecCompliant] = {MARBLE_BATTMGR_OP_USB_GET, 12, 0},
 };
 #define NO_CYCLE 0xff
 
@@ -90,9 +91,11 @@ void marble_battmgr_sample(MarbleBattmgr *b)
     b->in_flight = 0;
 }
 
+static void check_limit(MarbleBattmgr *b);
 uint32_t marble_battmgr_next(MarbleBattmgr *b, uint8_t out[MARBLE_BATTMGR_REQUEST_BYTES])
 {
     if (b->in_flight || b->limit_in_flight) return 0;
+    if(b->limit_due)check_limit(b);
     if (b->limit_due) {
         header(out, MARBLE_BATTMGR_OP_USB_SET);
         put32(out + 12, 0);
@@ -116,19 +119,51 @@ uint32_t marble_battmgr_next(MarbleBattmgr *b, uint8_t out[MARBLE_BATTMGR_REQUES
  * (CDP 3) its 1.5 A; others (dedicated chargers, Type-C current, PD contracts) are the firmware's own. */
 static uint32_t wanted_limit(const MarbleBattmgr *b, int port)
 {
-    return port == 1 ? b->sdp_limit_ua : port == 3 ? 1500000u : 0u;
+    if(b->source_known && b->source_firmware_owned)return 0;
+    const int typec=b->source_known &&
+        (b->source_limit_ua==1500000u || b->source_limit_ua==3000000u);
+    /* Explicit Type-C Rp current supersedes the legacy SDP class's500mA.
+     * Validate an initial1.5A step within the advertised1.5A/3A budget;
+     * firmware retains battery-current, thermal and hardware protections. */
+    const int compliant=(b->valid&(1u<<BmUsbTypecCompliant)) && b->value[BmUsbTypecCompliant]==1;
+    if(typec && compliant && !b->source_voltage_fault)return 1500000u;
+    uint32_t want=b->source_known && b->source_limit_ua && !typec?b->source_limit_ua:
+        port == 1 ? b->sdp_limit_ua : port == 3 ? 1500000u : 0u;
+    if(typec && b->source_voltage_fault)want=500000u;
+    if(want>500000u && (!(b->valid&(1u<<BmUsbMax)) || b->value[BmUsbMax]<=0))return 0;
+    if((b->valid&(1u<<BmUsbMax)) && b->value[BmUsbMax]>0 && want>(uint32_t)b->value[BmUsbMax])
+        want=(uint32_t)b->value[BmUsbMax];
+    return want;
 }
 
 /* After a cycle: a set is due when the port wants a higher limit than the firmware reports, at most three tries per port type. */
 static void check_limit(MarbleBattmgr *b)
 {
-    if (!(b->valid & (1u << BmUsbOnline)) || !b->value[BmUsbOnline]) {b->limit_port = -1; b->limit_tries = 0; b->limit_due = 0; return;}
+    b->limit_due=0;
+    if (!(b->valid & (1u << BmUsbOnline)) || !b->value[BmUsbOnline]) {b->limit_port = -1; b->limit_tries = 0; b->limit_due = 0; b->source_voltage_fault=0;return;}
+    if(b->source_known && !b->source_voltage_fault && b->source_limit_ua>=1500000u &&
+        (b->valid&(1u<<BmUsbVoltage)) && b->value[BmUsbVoltage]>0 && b->value[BmUsbVoltage]<4500000) {
+        b->source_voltage_fault=1;b->limit_tries=0;
+    }
     const int port = (b->valid >> BmUsbAdapter) & 1 ? b->value[BmUsbAdapter] : (b->valid >> BmUsbType) & 1 ? b->value[BmUsbType] : 0;
     if (port != b->limit_port) {b->limit_port = port; b->limit_tries = 0;}
     const uint32_t want = wanted_limit(b, port);
     if (!want || b->limit_tries >= 3) return;
-    if ((b->valid >> BmUsbLimit) & 1 && b->value[BmUsbLimit] >= (int32_t)want - 100000) return;  /* 100 mA under it: input limiting */
+    if ((b->valid >> BmUsbLimit) & 1) {
+        const int64_t current=b->value[BmUsbLimit],target=want;
+        if(b->source_known) {
+            if(current>=target-100000 && current<=target)return;
+        } else if(current>=target-100000)return;
+    }
     b->limit_due = want;
+}
+
+void marble_battmgr_source_budget(MarbleBattmgr *b,uint32_t known,uint32_t firmware_owned,uint32_t budget_ua)
+{
+    if(b->source_known==known && b->source_firmware_owned==firmware_owned && b->source_limit_ua==budget_ua)return;
+    b->source_known=known;b->source_firmware_owned=firmware_owned;b->source_limit_ua=budget_ua;
+    b->limit_tries=0;b->limit_due=0;
+    check_limit(b);
 }
 
 /* Complete a refresh or current sample, then service queued work. */

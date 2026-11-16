@@ -29,7 +29,7 @@ enum {
     BmStatus, BmPresent, BmCapacity, BmVoltage, BmCurrent, BmTemperature, BmCharge,
     BmUsbOnline, BmUsbType, BmUsbVoltage, BmUsbCurrent, BmTimeToEmpty, BmTimeToFull,
     BmFull, BmDesign, BmCycles, BmUsbAdapter, BmUsbLimit, BmUsbMax, BmChargeType,
-    BmThermalLevel, BmChargeCurrent, BmFields
+    BmThermalLevel, BmChargeCurrent, BmUsbTypecCompliant, BmFields
 };
 
 typedef struct {
@@ -48,6 +48,8 @@ typedef struct {
     int32_t limit_port;
     uint32_t limit_due, limit_in_flight, limit_tries, limit_sets;
     int32_t limit_result;
+    uint32_t source_known,source_firmware_owned,source_limit_ua;
+    uint32_t source_voltage_fault;
 } MarbleBattmgr;
 
 /* Firmware current is discharge-positive; IOPMPowerSource current is charge-positive.
@@ -68,6 +70,9 @@ typedef struct {
 enum {BmIgnored = 0, BmAnswer = 1, BmCycleDone = 2, BmNotified = 3, BmEnabled = 4, BmSampleDone = 5};
 
 void marble_battmgr_init(MarbleBattmgr *b);
+/* Negotiated source budget. Higher Type-C requests require firmware's
+ * compliance flag; PD and source-role charging stay firmware-owned. */
+void marble_battmgr_source_budget(MarbleBattmgr *b,uint32_t known,uint32_t firmware_owned,uint32_t budget_ua);
 /* The notification enable request (sent once the channel is up). */
 uint32_t marble_battmgr_enable_request(uint8_t out[MARBLE_BATTMGR_ENABLE_BYTES]);
 /* Starts a refresh cycle (no effect while one runs: it is remembered and runs after). slow: also the fields that hardly change. */

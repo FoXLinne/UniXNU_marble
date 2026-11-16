@@ -22,6 +22,7 @@
 #include <pexpert/pexpert.h>
 #include <kern/clock.h>
 #include "QcomUcsi.h"
+#include "MarbleChargeSourcePolicy.h"
 extern "C" {
 bool native_runtime_usb_configured(void);
 bool native_resident_usb_service_active(void);
@@ -38,6 +39,7 @@ extern "C" int marble_adsp_send(MarbleAdspChannel *, const void *, uint32_t) __a
 // [13] cycles, [14] messages dropped (ring full) | ignored << 16, [15] send refusals
 extern "C" {extern volatile int32_t native_battery_stats[16];}
 extern "C" {volatile int32_t native_battery_raw[10], native_charger_stats[16];}
+extern "C" {volatile uint32_t marble_charge_source_stats_v2[20];}
 
 namespace {
 constexpr uint32_t kRequestMs = 2000, kRefreshMs = 15000, kSlowEvery = 10, kRing = 16, kMessage = QCOM_UCSI_MAX_MESSAGE;
@@ -245,6 +247,21 @@ class MarbleBattery : public IOPMPowerSource {
         if(ucsi.polling)ucsiTimer->setTimeoutMS(kUcsiPollMs);
         else ucsiTimer->cancelTimeout();
         if(ucsi.status_valid)native_marble_usb_vbus(ucsi.connected&&ucsi.usb&&ucsi.partner==kUcsiPartnerDfp);
+        updateChargeSource();
+        if(bm.limit_due)pump();
+    }
+    void updateChargeSource() {
+        const uint32_t configured=configuredSdpLimit();
+        const MarbleChargeSourcePolicy p=marble_charge_source_policy(ucsi.status_valid,ucsi.status,configured);
+        marble_battmgr_source_budget(&bm,p.known,p.firmware_owned,p.budget_ua);
+        const uint32_t values[]={p.known,ucsi.status,p.mode,(ucsi.status>>20)&1u,p.budget_ua,
+            bm.limit_due?bm.limit_due:bm.limit_in_flight,p.firmware_owned,
+            uint32_t(bm.value[BmUsbMax]),uint32_t(bm.value[BmUsbLimit]),configured,
+            ucsi.errors,uint32_t(ucsi.state),ucsi.request_data_object,
+            uint32_t(bm.value[BmUsbType]),uint32_t(bm.value[BmUsbAdapter]),bm.valid|(bm.source_voltage_fault?0x80000000u:0u),
+            uint32_t(bm.value[BmUsbTypecCompliant]),bm.source_voltage_fault,
+            uint32_t((bm.valid>>BmUsbTypecCompliant)&1u),ucsi.cci};
+        for(unsigned i=0;i<20;++i)marble_charge_source_stats_v2[i]=values[i];
     }
     static void ucsiAction(OSObject *owner,IOTimerEventSource *) {
         auto *self=OSDynamicCast(MarbleBattery,owner);
@@ -293,6 +310,7 @@ class MarbleBattery : public IOPMPowerSource {
         OSSafeReleaseNULL(symbol);
     }
     void recordRaw() {
+        updateChargeSource();
         if (!ucsi.status_valid && (bm.valid & (1u << BmUsbOnline))) native_marble_usb_vbus(bm.value[BmUsbOnline]);
         const int fields[] = {BmCapacity, BmVoltage, BmCurrent, BmTemperature, BmCharge, BmFull, BmDesign};
         for (unsigned i=0; i<7; ++i) native_battery_raw[i]=(bm.valid >> fields[i]) & 1 ? bm.value[fields[i]] : -999999;
