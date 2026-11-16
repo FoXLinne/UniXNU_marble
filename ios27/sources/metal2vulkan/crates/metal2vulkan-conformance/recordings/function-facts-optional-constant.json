@@ -1,0 +1,401 @@
+{
+  "format": 1,
+  "case": "function-facts-optional-constant",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "function_constant_interface.ll",
+      "entry": "fc_fragment_unobserved_input",
+      "source_sha256": "5b11a08f3a82f7b6d2eba8a4b7721635ff7ebb5eb602957c8ebf57992321d13b"
+    },
+    {
+      "fixture": "function_constant_interface.air.ll",
+      "entry": "fc_fragment_unobserved_input",
+      "source_sha256": "39087c31da0a65052f1c252df7bd6d395fed63f7153ea735993f1daa05bd6d53"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "5b11a08f3a82f7b6d2eba8a4b7721635ff7ebb5eb602957c8ebf57992321d13b"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "39087c31da0a65052f1c252df7bd6d395fed63f7153ea735993f1daa05bd6d53"
+                        }
+                      }
+                    },
+                    {
+                      "name": "entry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "ee61cb2292b428bdf2147b721bd01eaff6afd5e588ab858d21fc5a604d358b1e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "constants",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "name",
+                      "observed": {
+                        "value": {
+                          "lines": [
+                            "fc_fragment_unobserved_input"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "name": "function_type",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLFunctionTypeFragment"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 2
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "patch_type",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLPatchTypeNone"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "patch_control_point_count",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "None",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "options",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "names": {
+                              "set": []
+                            },
+                            "raw": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    },
+                    {
+                      "name": "vertex_attributes",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "None",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "stage_input_attributes",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "None",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "function_constants",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 1
+                            }
+                          }
+                        },
+                        {
+                          "name": "constant/has_blend",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "data_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeBool"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 53
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "index",
+                              "observed": {
+                                "value": {
+                                  "uint": 4
+                                }
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {}
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "function-facts-optional-constant",
+        "calls": 2,
+        "in_calls": 23603583,
+        "on_cpu": 606250,
+        "blocked": 22968833,
+        "elsewhere": 4167,
+        "spend": 23607166,
+        "spend_least": 23215084,
+        "spend_most": 27642958,
+        "per_call": [
+          {
+            "call": "function_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 10042,
+            "on_cpu": 10208,
+            "blocked": 0,
+            "wall_least": 8750,
+            "wall_most": 13750,
+            "wall_total": 10042,
+            "on_cpu_total": 10208,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 23589958,
+            "on_cpu": 596917,
+            "blocked": 22968833,
+            "wall_least": 23204834,
+            "wall_most": 27625041,
+            "wall_total": 23589958,
+            "on_cpu_total": 596917,
+            "blocked_total": 22968833
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "function-facts-optional-constant",
+        "calls": 2,
+        "in_calls": 1273000,
+        "on_cpu": 1273751,
+        "blocked": 0,
+        "elsewhere": 12875,
+        "spend": 1286000,
+        "spend_least": 1141167,
+        "spend_most": 1313875,
+        "per_call": [
+          {
+            "call": "function_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 1018042,
+            "on_cpu": 1018334,
+            "blocked": 0,
+            "wall_least": 938292,
+            "wall_most": 1058458,
+            "wall_total": 1018042,
+            "on_cpu_total": 1018334,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 243750,
+            "on_cpu": 247208,
+            "blocked": 0,
+            "wall_least": 180000,
+            "wall_most": 263583,
+            "wall_total": 243750,
+            "on_cpu_total": 247208,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

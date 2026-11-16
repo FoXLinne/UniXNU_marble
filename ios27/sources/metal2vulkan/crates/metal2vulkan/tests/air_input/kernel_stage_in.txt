@@ -1,0 +1,230 @@
+target triple = "air64_v28-apple-macosx26.0.0"
+source_filename = "-"
+; datalayout DataLayout { endian: Little, pointers: {0: PointerSpec { size_bits: 64, abi_bits: 64, pref_bits: 64, index_bits: 64 }}, ints: {1: AlignSpec { abi_bits: 8, pref_bits: 8 }, 8: AlignSpec { abi_bits: 8, pref_bits: 8 }, 16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }}, floats: {16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }, 128: AlignSpec { abi_bits: 128, pref_bits: 128 }}, vectors: {16: AlignSpec { abi_bits: 16, pref_bits: 16 }, 24: AlignSpec { abi_bits: 32, pref_bits: 32 }, 32: AlignSpec { abi_bits: 32, pref_bits: 32 }, 48: AlignSpec { abi_bits: 64, pref_bits: 64 }, 64: AlignSpec { abi_bits: 64, pref_bits: 64 }, 96: AlignSpec { abi_bits: 128, pref_bits: 128 }, 128: AlignSpec { abi_bits: 128, pref_bits: 128 }, 192: AlignSpec { abi_bits: 256, pref_bits: 256 }, 256: AlignSpec { abi_bits: 256, pref_bits: 256 }, 512: AlignSpec { abi_bits: 512, pref_bits: 512 }, 1024: AlignSpec { abi_bits: 1024, pref_bits: 1024 }}, aggregate: AlignSpec { abi_bits: 0, pref_bits: 64 }, native_ints: [8, 16, 32], stack_align_bits: None, alloca_space: 0, program_space: 0, globals_space: 0, mangling: None, fn_ptr_align: None, non_integral: [] }
+%t10 = type void (<4 x float>, <4 x i32>, i32, <2 x half>, ptr addrspace(1), <2 x i32>, <2 x i32>)
+%t11 = type void (<4 x float>, <4 x i32>, i32, <2 x half>, <4 x i32>, ptr addrspace(1), <2 x i32>, <2 x i32>)
+%t13 = type void (float, ptr addrspace(1), i32, <3 x i32>, <3 x i32>)
+%t16 = type void (ptr addrspace(1), i32, <2 x i16>, <2 x i16>)
+%t18 = type [2 x i32]
+c7 = %t18 [27, 0]
+c26 = <4 x i32> [0, 1, 2, poison]
+c27 = <4 x i32> [0, 4, 5, 6]
+c28 = <4 x i32> [0, 1, 2, 3]
+
+define %t10 @f0 "stage_in_fetch" memory(Mod, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" %a4( Mod nocapture "air-buffer-no-alias"="" ) {
+bb0:
+  %i0 = extractelement %a5, i64 1
+  %i1 = extractelement %a6, i64 0
+  %i2 = mul i32 %i1, %i0
+  %i3 = extractelement %a5, i64 0
+  %i4 = add i32 %i2, %i3
+  %i5 = mul i32 %i4, i32 3
+  %i6 = zext %i5 to i64
+  %i7 = getelementptr inbounds <4 x i32>, %a4, %i6
+  %i8 = bitcast %i7 to ptr addrspace(1)
+  store %a0, %i8, align 16
+  %i10 = add i32 %i5, i32 1
+  %i11 = zext %i10 to i64
+  %i12 = getelementptr inbounds <4 x i32>, %a4, %i11
+  store %a1, %i12, align 16
+  %i14 = insertelement <4 x i32> undef, %a2, i64 0
+  %i15 = bitcast %a3 to <2 x i16>
+  %i16 = extractelement %i15, i64 0
+  %i17 = zext %i16 to i32
+  %i18 = insertelement %i14, %i17, i64 1
+  %i19 = extractelement %i15, i64 1
+  %i20 = zext %i19 to i32
+  %i21 = insertelement %i18, %i20, i64 2
+  %i22 = insertelement %i21, %i4, i64 3
+  %i23 = add i32 %i5, i32 2
+  %i24 = zext %i23 to i64
+  %i25 = getelementptr inbounds <4 x i32>, %a4, %i24
+  store %i22, %i25, align 16
+  ret void
+}
+
+define %t11 @f1 "stage_in_fetch_wide" memory(Mod, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="128" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" %a5( Mod nocapture "air-buffer-no-alias"="" ) {
+bb0:
+  %i0 = extractelement %a6, i64 1
+  %i1 = extractelement %a7, i64 0
+  %i2 = mul i32 %i1, %i0
+  %i3 = extractelement %a6, i64 0
+  %i4 = add i32 %i2, %i3
+  %i5 = shl i32 %i4, i32 2
+  %i6 = zext %i5 to i64
+  %i7 = getelementptr inbounds <4 x i32>, %a5, %i6
+  %i8 = bitcast %i7 to ptr addrspace(1)
+  store %a0, %i8, align 16
+  %i10 = or i32 %i5, i32 1
+  %i11 = zext %i10 to i64
+  %i12 = getelementptr inbounds <4 x i32>, %a5, %i11
+  store %a1, %i12, align 16
+  %i14 = insertelement <4 x i32> undef, %a2, i64 0
+  %i15 = bitcast %a3 to <2 x i16>
+  %i16 = extractelement %i15, i64 0
+  %i17 = zext %i16 to i32
+  %i18 = insertelement %i14, %i17, i64 1
+  %i19 = extractelement %i15, i64 1
+  %i20 = zext %i19 to i32
+  %i21 = insertelement %i18, %i20, i64 2
+  %i22 = insertelement %i21, %i4, i64 3
+  %i23 = or i32 %i5, i32 2
+  %i24 = zext %i23 to i64
+  %i25 = getelementptr inbounds <4 x i32>, %a5, %i24
+  store %i22, %i25, align 16
+  %i27 = or i32 %i5, i32 3
+  %i28 = zext %i27 to i64
+  %i29 = getelementptr inbounds <4 x i32>, %a5, %i28
+  store %a4, %i29, align 16
+  ret void
+}
+
+define %t13 @f2 "stage_in_region" memory(Mod, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="96" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" %a1( Mod nocapture "air-buffer-no-alias"="" ) {
+bb0:
+  %i0 = insertelement <4 x float> undef, %a0, i64 0
+  %i1 = bitcast %i0 to <4 x i32>
+  %i2 = shufflevector <4 x i32> %a3, <3 x i32> poison, <0, 1, 2, poison>
+  %i3 = shufflevector <4 x i32> %i1, %i2, <0, 4, 5, 6>
+  %i4 = shl i32 %a2, i32 1
+  %i5 = zext %i4 to i64
+  %i6 = getelementptr inbounds <4 x i32>, %a1, %i5
+  store %i3, %i6, align 16
+  %i8 = shufflevector <4 x i32> %a4, <3 x i32> poison, <0, 1, 2, poison>
+  %i9 = insertelement %i8, %a2, i64 3
+  %i10 = or i32 %i4, i32 1
+  %i11 = zext %i10 to i64
+  %i12 = getelementptr inbounds <4 x i32>, %a1, %i11
+  store %i9, %i12, align 16
+  ret void
+}
+
+define %t16 @f3 "stage_in_region_short" memory(Mod, NoModRef, NoModRef) "approx-func-fp-math"="true" "frame-pointer"="all" "min-legal-vector-width"="32" "no-builtins"="" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "no-signed-zeros-fp-math"="true" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" %a0( Mod nocapture "air-buffer-no-alias"="" ) {
+bb0:
+  %i0 = shufflevector <4 x i16> %a2, %a3, <0, 1, 2, 3>
+  %i1 = zext %a1 to i64
+  %i2 = getelementptr inbounds <4 x i16>, %a0, %i1
+  store %i0, %i2, align 8
+  ret void
+}
+!md0 = !"SDK Version"
+!md1 = !"wchar_size"
+!md2 = !"frame-pointer"
+!md3 = !"air.max_device_buffers"
+!md4 = !"air.max_constant_buffers"
+!md5 = !"air.max_threadgroup_buffers"
+!md6 = !"air.max_textures"
+!md7 = !"air.max_read_write_textures"
+!md8 = !"air.max_samplers"
+!md9 = !"air.stage_in"
+!md10 = !"air.location_index"
+!md11 = !"air.arg_type_name"
+!md12 = !"float4"
+!md13 = !"air.arg_name"
+!md14 = !"f"
+!md15 = !"uint4"
+!md16 = !"u"
+!md17 = !"int"
+!md18 = !"i"
+!md19 = !"half2"
+!md20 = !"h"
+!md21 = !"air.buffer"
+!md22 = !"air.read_write"
+!md23 = !"air.address_space"
+!md24 = !"air.arg_type_size"
+!md25 = !"air.arg_type_align_size"
+!md26 = !"out"
+!md27 = !"air.thread_position_in_grid"
+!md28 = !"uint2"
+!md29 = !"gid"
+!md30 = !"air.threads_per_grid"
+!md31 = !"grid"
+!md32 = !"int4"
+!md33 = !"v"
+!md34 = !"float"
+!md35 = !"uint"
+!md36 = !"t"
+!md37 = !"air.stage_in_grid_origin"
+!md38 = !"uint3"
+!md39 = !"origin"
+!md40 = !"air.stage_in_grid_size"
+!md41 = !"size"
+!md42 = !"ushort4"
+!md43 = !"ushort2"
+!md44 = !"air.compile.denorms_disable"
+!md45 = !"air.compile.fast_math_enable"
+!md46 = !"air.compile.framebuffer_fetch_enable"
+!md47 = !"Apple metal version 32023.921 (metalfe-32023.921.6)"
+!md48 = !"Metal"
+!md49 = !"omnipotent char"
+!md50 = !"Simple C++ TBAA"
+!md51 = i32 2
+!md52 = %t18 c7
+!md53 = i32 1
+!md54 = i32 4
+!md55 = i32 7
+!md56 = i32 31
+!md57 = i32 128
+!md58 = i32 8
+!md59 = i32 16
+!md60 = ptr addrspace(0) @f0
+!md61 = i32 0
+!md62 = i32 3
+!md63 = i32 5
+!md64 = i32 6
+!md65 = ptr addrspace(0) @f1
+!md66 = ptr addrspace(0) @f2
+!md67 = ptr addrspace(0) @f3
+!md68 = i64 0
+!md69 = !{!md51, !md0, !md52}
+!md70 = !{!md53, !md1, !md54}
+!md71 = !{!md55, !md2, !md51}
+!md72 = !{!md55, !md3, !md56}
+!md73 = !{!md55, !md4, !md56}
+!md74 = !{!md55, !md5, !md56}
+!md75 = !{!md55, !md6, !md57}
+!md76 = !{!md55, !md7, !md58}
+!md77 = !{!md55, !md8, !md59}
+!md78 = !{}
+!md79 = !{!md61, !md9, !md10, !md61, !md53, !md11, !md12, !md13, !md14}
+!md80 = !{!md53, !md9, !md10, !md53, !md53, !md11, !md15, !md13, !md16}
+!md81 = !{!md51, !md9, !md10, !md51, !md53, !md11, !md17, !md13, !md18}
+!md82 = !{!md62, !md9, !md10, !md62, !md53, !md11, !md19, !md13, !md20}
+!md83 = !{!md54, !md21, !md10, !md61, !md53, !md22, !md23, !md53, !md24, !md59, !md25, !md59, !md11, !md15, !md13, !md26}
+!md84 = !{!md63, !md27, !md11, !md28, !md13, !md29}
+!md85 = !{!md64, !md30, !md11, !md28, !md13, !md31}
+!md86 = !{!md79, !md80, !md81, !md82, !md83, !md84, !md85}
+!md87 = !{!md60, !md78, !md86}
+!md88 = !{!md54, !md9, !md10, !md54, !md53, !md11, !md32, !md13, !md33}
+!md89 = !{!md63, !md21, !md10, !md61, !md53, !md22, !md23, !md53, !md24, !md59, !md25, !md59, !md11, !md15, !md13, !md26}
+!md90 = !{!md64, !md27, !md11, !md28, !md13, !md29}
+!md91 = !{!md55, !md30, !md11, !md28, !md13, !md31}
+!md92 = !{!md79, !md80, !md81, !md82, !md88, !md89, !md90, !md91}
+!md93 = !{!md65, !md78, !md92}
+!md94 = !{!md61, !md9, !md10, !md61, !md53, !md11, !md34, !md13, !md33}
+!md95 = !{!md53, !md21, !md10, !md61, !md53, !md22, !md23, !md53, !md24, !md59, !md25, !md59, !md11, !md15, !md13, !md26}
+!md96 = !{!md51, !md27, !md11, !md35, !md13, !md36}
+!md97 = !{!md62, !md37, !md11, !md38, !md13, !md39}
+!md98 = !{!md54, !md40, !md11, !md38, !md13, !md41}
+!md99 = !{!md94, !md95, !md96, !md97, !md98}
+!md100 = !{!md66, !md78, !md99}
+!md101 = !{!md61, !md21, !md10, !md61, !md53, !md22, !md23, !md53, !md24, !md58, !md25, !md58, !md11, !md42, !md13, !md26}
+!md102 = !{!md53, !md27, !md11, !md35, !md13, !md36}
+!md103 = !{!md51, !md37, !md11, !md43, !md13, !md39}
+!md104 = !{!md62, !md40, !md11, !md43, !md13, !md41}
+!md105 = !{!md101, !md102, !md103, !md104}
+!md106 = !{!md67, !md78, !md105}
+!md107 = !{!md44}
+!md108 = !{!md45}
+!md109 = !{!md46}
+!md110 = !{!md47}
+!md111 = !{!md51, !md58, !md61}
+!md112 = !{!md48, !md54, !md61, !md61}
+!md113 = !{!md50}
+!md114 = !{!md49, !md113, !md68}
+!md115 = !{!md114, !md114, !md68}
+!"llvm.module.flags" = !{!md69, !md70, !md71, !md72, !md73, !md74, !md75, !md76, !md77}
+!"air.kernel" = !{!md87, !md93, !md100, !md106}
+!"air.compile_options" = !{!md107, !md108, !md109}
+!"llvm.ident" = !{!md110}
+!"air.version" = !{!md111}
+!"air.language_version" = !{!md112}

@@ -1,0 +1,908 @@
+{
+  "format": 1,
+  "case": "function-facts-patch-attributes",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "tessellation.ll",
+      "entry": "tess_triangle_points",
+      "source_sha256": "6ef018757a5924dd35f70089f0509d0839023dba8dc1556741c0f63d1600bbfe"
+    },
+    {
+      "fixture": "tessellation.air.ll",
+      "entry": "tess_triangle_points",
+      "source_sha256": "025dc6c6d4c08579a0929c9049c55f3c4926411f2f327527619ea13bf6674976"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6ef018757a5924dd35f70089f0509d0839023dba8dc1556741c0f63d1600bbfe"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "025dc6c6d4c08579a0929c9049c55f3c4926411f2f327527619ea13bf6674976"
+                        }
+                      }
+                    },
+                    {
+                      "name": "entry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6e6f5dbd875f4091661e4fa717d5cf6764fc50ffa071b5ab46d2020a92102cb6"
+                        }
+                      }
+                    },
+                    {
+                      "name": "constants",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "name",
+                      "observed": {
+                        "value": {
+                          "lines": [
+                            "tess_triangle_points"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "name": "function_type",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLFunctionTypeVertex"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 1
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "patch_type",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLPatchTypeTriangle"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 1
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "patch_control_point_count",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "uint": 3
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "options",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "names": {
+                              "set": []
+                            },
+                            "raw": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    },
+                    {
+                      "name": "vertex_attributes",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 4
+                            }
+                          }
+                        },
+                        {
+                          "name": "attribute/0",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "position"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 0
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeFloat4"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 6
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "name": "attribute/1",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "uv"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 1
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeHalf2"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 17
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "name": "attribute/2",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "color"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 2
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeUChar4"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 52
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "name": "attribute/3",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "tint"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 5
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeFloat4"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 6
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "stage_input_attributes",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 4
+                            }
+                          }
+                        },
+                        {
+                          "name": "attribute/0",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "position"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 0
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeFloat4"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 6
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "name": "attribute/1",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "uv"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 1
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeHalf2"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 17
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "name": "attribute/2",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "color"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 2
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeUChar4"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 52
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "name": "attribute/3",
+                          "observed": {
+                            "value": "absent"
+                          },
+                          "children": [
+                            {
+                              "name": "name",
+                              "observed": {
+                                "value": {
+                                  "lines": [
+                                    "tint"
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_index",
+                              "observed": {
+                                "value": {
+                                  "uint": 5
+                                }
+                              }
+                            },
+                            {
+                              "name": "attribute_type",
+                              "observed": {
+                                "value": {
+                                  "fields": {
+                                    "name": {
+                                      "lines": [
+                                        "MTLDataTypeFloat4"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "uint": 6
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "active",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_data",
+                              "observed": {
+                                "value": {
+                                  "bool": true
+                                }
+                              }
+                            },
+                            {
+                              "name": "patch_control_point_data",
+                              "observed": {
+                                "value": {
+                                  "bool": false
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "function_constants",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {}
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "function-facts-patch-attributes",
+        "calls": 2,
+        "in_calls": 22945458,
+        "on_cpu": 626667,
+        "blocked": 22351999,
+        "elsewhere": 2334,
+        "spend": 22948624,
+        "spend_least": 22228833,
+        "spend_most": 27451583,
+        "per_call": [
+          {
+            "call": "function_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 11750,
+            "on_cpu": 11875,
+            "blocked": 0,
+            "wall_least": 10917,
+            "wall_most": 14833,
+            "wall_total": 11750,
+            "on_cpu_total": 11875,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 22933708,
+            "on_cpu": 614250,
+            "blocked": 22351999,
+            "wall_least": 22214166,
+            "wall_most": 27432625,
+            "wall_total": 22933708,
+            "on_cpu_total": 614250,
+            "blocked_total": 22351999
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "function-facts-patch-attributes",
+        "calls": 2,
+        "in_calls": 794208,
+        "on_cpu": 797958,
+        "blocked": 0,
+        "elsewhere": 5750,
+        "spend": 794417,
+        "spend_least": 740708,
+        "spend_most": 837708,
+        "per_call": [
+          {
+            "call": "function_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 616500,
+            "on_cpu": 616750,
+            "blocked": 0,
+            "wall_least": 575041,
+            "wall_most": 631500,
+            "wall_total": 616500,
+            "on_cpu_total": 616750,
+            "blocked_total": 0
+          },
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 177708,
+            "on_cpu": 181208,
+            "blocked": 0,
+            "wall_least": 159917,
+            "wall_most": 211375,
+            "wall_total": 177708,
+            "on_cpu_total": 181208,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

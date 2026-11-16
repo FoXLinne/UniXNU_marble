@@ -1,0 +1,72 @@
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void kernel_pi_scaled_sin_cos(
+    device uint *out [[buffer(0)]],
+    device const float *in [[buffer(1)]])
+{
+    out[0] = as_type<uint>(precise::sinpi(in[0]));
+    out[1] = as_type<uint>(precise::sinpi(in[1]));
+    out[2] = as_type<uint>(precise::sinpi(in[2]));
+    out[3] = as_type<uint>(precise::sinpi(in[3]));
+    out[4] = as_type<uint>(precise::sinpi(in[4]));
+    out[5] = as_type<uint>(precise::sinpi(in[5]));
+    out[6] = as_type<uint>(precise::sinpi(in[6]));
+    out[7] = as_type<uint>(precise::sinpi(in[7]));
+    out[8] = as_type<uint>(precise::sinpi(in[8]));
+    out[9] = as_type<uint>(precise::sinpi(in[9]));
+    out[10] = as_type<uint>(precise::sinpi(in[10]));
+    out[11] = as_type<uint>(precise::sinpi(in[11]));
+    out[12] = as_type<uint>(precise::sinpi(in[12]));
+    out[13] = as_type<uint>(precise::sinpi(in[13]));
+    out[14] = as_type<uint>(precise::sinpi(in[14]));
+    out[15] = as_type<uint>(precise::sinpi(in[15]));
+    out[16] = as_type<uint>(precise::sinpi(in[16]));
+    out[17] = as_type<uint>(precise::sinpi(in[17]));
+    out[18] = as_type<uint>(precise::sinpi(in[18]));
+    out[19] = as_type<uint>(precise::sinpi(in[19]));
+    out[20] = as_type<uint>(precise::sinpi(in[20]));
+    out[21] = as_type<uint>(precise::sinpi(in[21]));
+    out[22] = as_type<uint>(precise::sinpi(in[22]));
+    out[23] = as_type<uint>(precise::sinpi(in[23]));
+    out[24] = as_type<uint>(precise::sinpi(in[24]));
+    out[25] = as_type<uint>(precise::sinpi(in[25]));
+    out[26] = as_type<uint>(precise::sinpi(in[26]));
+    out[27] = as_type<uint>(precise::sinpi(in[27]));
+    out[28] = as_type<uint>(precise::sinpi(in[28]));
+    out[29] = as_type<uint>(precise::sinpi(in[29]));
+    out[30] = as_type<uint>(precise::sinpi(in[30]));
+    out[31] = as_type<uint>(precise::sinpi(in[31]));
+    out[32] = as_type<uint>(precise::cospi(in[0]));
+    out[33] = as_type<uint>(precise::cospi(in[1]));
+    out[34] = as_type<uint>(precise::cospi(in[2]));
+    out[35] = as_type<uint>(precise::cospi(in[3]));
+    out[36] = as_type<uint>(precise::cospi(in[4]));
+    out[37] = as_type<uint>(precise::cospi(in[5]));
+    out[38] = as_type<uint>(precise::cospi(in[6]));
+    out[39] = as_type<uint>(precise::cospi(in[7]));
+    out[40] = as_type<uint>(precise::cospi(in[8]));
+    out[41] = as_type<uint>(precise::cospi(in[9]));
+    out[42] = as_type<uint>(precise::cospi(in[10]));
+    out[43] = as_type<uint>(precise::cospi(in[11]));
+    out[44] = as_type<uint>(precise::cospi(in[12]));
+    out[45] = as_type<uint>(precise::cospi(in[13]));
+    out[46] = as_type<uint>(precise::cospi(in[14]));
+    out[47] = as_type<uint>(precise::cospi(in[15]));
+    out[48] = as_type<uint>(precise::cospi(in[16]));
+    out[49] = as_type<uint>(precise::cospi(in[17]));
+    out[50] = as_type<uint>(precise::cospi(in[18]));
+    out[51] = as_type<uint>(precise::cospi(in[19]));
+    out[52] = as_type<uint>(precise::cospi(in[20]));
+    out[53] = as_type<uint>(precise::cospi(in[21]));
+    out[54] = as_type<uint>(precise::cospi(in[22]));
+    out[55] = as_type<uint>(precise::cospi(in[23]));
+    out[56] = as_type<uint>(precise::cospi(in[24]));
+    out[57] = as_type<uint>(precise::cospi(in[25]));
+    out[58] = as_type<uint>(precise::cospi(in[26]));
+    out[59] = as_type<uint>(precise::cospi(in[27]));
+    out[60] = as_type<uint>(precise::cospi(in[28]));
+    out[61] = as_type<uint>(precise::cospi(in[29]));
+    out[62] = as_type<uint>(precise::cospi(in[30]));
+    out[63] = as_type<uint>(precise::cospi(in[31]));
+}

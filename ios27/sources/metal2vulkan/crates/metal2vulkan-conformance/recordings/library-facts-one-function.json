@@ -1,0 +1,306 @@
+{
+  "format": 1,
+  "case": "library-facts-one-function",
+  "suite_version": 1,
+  "shaders": [
+    {
+      "fixture": "a27_ob1_threadgroup.ll",
+      "entry": "ob1_threadgroup",
+      "source_sha256": "0c98a096e60fd50b4a119ac1539c8907a7ca14df5c4c0ea9163bae96240c1235"
+    },
+    {
+      "fixture": "a27_ob1_threadgroup.air.ll",
+      "entry": "ob1_threadgroup",
+      "source_sha256": "6e2d8bc010bac734195035dcb2466f5947642236e3ec187537ef47b6ff23815e"
+    }
+  ],
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "air",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "0c98a096e60fd50b4a119ac1539c8907a7ca14df5c4c0ea9163bae96240c1235"
+                        }
+                      }
+                    },
+                    {
+                      "name": "air-typed",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "6e2d8bc010bac734195035dcb2466f5947642236e3ec187537ef47b6ff23815e"
+                        }
+                      }
+                    },
+                    {
+                      "name": "entry",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a42c4eb5d83dd0303ce05318114985e750ae0adc64778504160be62a196e30b8"
+                        }
+                      }
+                    },
+                    {
+                      "name": "reads",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "b718f1354f7247312eca086d9a024afe5fa717ddea5adeddd6f12bcf945b2e8c"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "library",
+                  "observed": {
+                    "value": {
+                      "variant": {
+                        "name": "Ok",
+                        "payload": "absent"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "facts",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "function_names",
+                      "observed": {
+                        "value": "absent"
+                      },
+                      "children": [
+                        {
+                          "name": "count",
+                          "observed": {
+                            "value": {
+                              "uint": 1
+                            }
+                          }
+                        },
+                        {
+                          "name": "names",
+                          "observed": {
+                            "value": {
+                              "set": [
+                                "ob1_threadgroup"
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "library_type",
+                      "observed": {
+                        "value": {
+                          "fields": {
+                            "name": {
+                              "lines": [
+                                "MTLLibraryTypeExecutable"
+                              ]
+                            },
+                            "raw": {
+                              "uint": 0
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "install_name",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "None",
+                            "payload": "absent"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {}
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "library-facts-one-function",
+        "calls": 2,
+        "in_calls": 21833708,
+        "on_cpu": 580834,
+        "blocked": 21267792,
+        "elsewhere": 2125,
+        "spend": 21838583,
+        "spend_least": 21068334,
+        "spend_most": 25217667,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 21830750,
+            "on_cpu": 577792,
+            "blocked": 21267792,
+            "wall_least": 21058292,
+            "wall_most": 25211750,
+            "wall_total": 21830750,
+            "on_cpu_total": 577792,
+            "blocked_total": 21267792
+          },
+          {
+            "call": "library_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 3042,
+            "on_cpu": 3166,
+            "blocked": 0,
+            "wall_least": 2917,
+            "wall_most": 6042,
+            "wall_total": 3042,
+            "on_cpu_total": 3166,
+            "blocked_total": 0
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "library-facts-one-function",
+        "calls": 2,
+        "in_calls": 66834,
+        "on_cpu": 67333,
+        "blocked": 0,
+        "elsewhere": 1500,
+        "spend": 74043,
+        "spend_least": 66251,
+        "spend_most": 107792,
+        "per_call": [
+          {
+            "call": "library",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 66375,
+            "on_cpu": 66792,
+            "blocked": 0,
+            "wall_least": 64625,
+            "wall_most": 91209,
+            "wall_total": 66375,
+            "on_cpu_total": 66792,
+            "blocked_total": 0
+          },
+          {
+            "call": "library_facts",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 417,
+            "on_cpu": 541,
+            "blocked": 0,
+            "wall_least": 375,
+            "wall_most": 542,
+            "wall_total": 417,
+            "on_cpu_total": 541,
+            "blocked_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,299 @@
+{
+  "format": 1,
+  "case": "shared-event-handle-round-trip",
+  "suite_version": 1,
+  "answers": [
+    {
+      "key": {
+        "chip": "apple-m3-max",
+        "os_version": "27.0.1",
+        "os_build": "26A434",
+        "metal_level": "27.0.1"
+      },
+      "provenance": "metal_run",
+      "device": "Apple M3 Max",
+      "runs": 3,
+      "outcomes": [
+        {
+          "runs": 3,
+          "transcript": {
+            "root": {
+              "name": "case",
+              "observed": {
+                "value": "absent"
+              },
+              "children": [
+                {
+                  "name": "inputs",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "2667841550a345b2e029c41ce42de32961f90ac87688dbcc38839c33d3f942fd"
+                        }
+                      }
+                    },
+                    {
+                      "name": "values",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "d17f8a2c755af6aec2df9ab4e7607812bcf28b7715e965dbfc031afe1cf68089"
+                        }
+                      }
+                    },
+                    {
+                      "name": "wait-bound-millis",
+                      "observed": {
+                        "value": "absent",
+                        "digest": {
+                          "kind": "sha256",
+                          "hex": "a111f275cc2e7588000001d300a31e76336d15b9d314cd1a1d8f3d3556975eed"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "handle-round-trip",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-handle-round-trip"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "device",
+                      "observed": {
+                        "value": {
+                          "bool": false
+                        }
+                      }
+                    },
+                    {
+                      "name": "signaled-value/new",
+                      "observed": {
+                        "value": {
+                          "uint": 0
+                        }
+                      }
+                    },
+                    {
+                      "name": "signaled-value/after-the-host-set-it",
+                      "observed": {
+                        "value": {
+                          "uint": 7
+                        }
+                      }
+                    },
+                    {
+                      "name": "handle/label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-handle-round-trip"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "reopened/label",
+                      "observed": {
+                        "value": {
+                          "variant": {
+                            "name": "Some",
+                            "payload": {
+                              "lines": [
+                                "conformance-handle-round-trip"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "reopened/device",
+                      "observed": {
+                        "value": {
+                          "bool": false
+                        }
+                      }
+                    },
+                    {
+                      "name": "reopened/signaled-value",
+                      "observed": {
+                        "value": {
+                          "uint": 7
+                        }
+                      }
+                    },
+                    {
+                      "name": "signaled-value/after-the-reopened-was-set",
+                      "observed": {
+                        "value": {
+                          "uint": 11
+                        }
+                      }
+                    },
+                    {
+                      "name": "reopened/wait-for-a-value-it-reached",
+                      "observed": {
+                        "value": {
+                          "bool": true
+                        }
+                      }
+                    },
+                    {
+                      "name": "reopened/wait-for-a-value-nothing-signals",
+                      "observed": {
+                        "value": {
+                          "bool": false
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "notices",
+                  "observed": {
+                    "value": "absent"
+                  },
+                  "children": [
+                    {
+                      "name": "set",
+                      "observed": {
+                        "value": {
+                          "nothing": "announced_nothing"
+                        }
+                      }
+                    },
+                    {
+                      "name": "counts",
+                      "observed": {
+                        "value": {
+                          "fields": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "validated": "ran"
+    }
+  ],
+  "costs": [
+    {
+      "venue": "Apple M3 Max",
+      "runs": 8,
+      "measured": "8 run(s) of the whole selection on Apple M3 Max, in the case set's own order, the largest each count reached",
+      "contrasted": "8 run(s) of each case on its own on Apple M3 Max, nothing before it on the device, the largest each count reached",
+      "bounds": {
+        "scheduler_passes": 1,
+        "scheduler_sleeps": 1,
+        "scheduler_wakes_host": 1,
+        "wakes_spared": 3
+      }
+    }
+  ],
+  "times": [
+    {
+      "leg": "metal",
+      "venue": "native Metal",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 236,
+      "times": {
+        "case": "shared-event-handle-round-trip",
+        "calls": 1,
+        "in_calls": 11803125,
+        "on_cpu": 32917,
+        "blocked": 11771292,
+        "elsewhere": 875,
+        "spend": 11808125,
+        "spend_least": 11744959,
+        "spend_most": 12059959,
+        "per_call": [
+          {
+            "call": "shared_event_handle_round_trip",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 11803125,
+            "on_cpu": 32917,
+            "blocked": 11771292,
+            "wall_least": 11739334,
+            "wall_most": 12059209,
+            "wall_total": 11803125,
+            "on_cpu_total": 32917,
+            "blocked_total": 11771292
+          }
+        ]
+      }
+    },
+    {
+      "leg": "ours",
+      "venue": "Apple M3 Max",
+      "chip": "apple-m3-max",
+      "os_build": "26A434",
+      "rounds": 8,
+      "measured": "8 round(s) of the whole selection, in the case set's own order, each round on a fresh device, our shader cache carried over between the cases of a round; a figure is the median of the rounds' own medians; Metal's leg ran at a one-minute load average of 3.18 and ours at 2.63; the legs run one after the other, so the per-call margin is judged only when both are 26.0 or under and within 2.0x of each other",
+      "instrument": 233,
+      "times": {
+        "case": "shared-event-handle-round-trip",
+        "calls": 1,
+        "in_calls": 15029417,
+        "on_cpu": 26583,
+        "blocked": 15004000,
+        "elsewhere": 4042,
+        "spend": 15033542,
+        "spend_least": 14896167,
+        "spend_most": 15054333,
+        "per_call": [
+          {
+            "call": "shared_event_handle_round_trip",
+            "least_calls": 1,
+            "most_calls": 1,
+            "wall": 15029417,
+            "on_cpu": 26583,
+            "blocked": 15004000,
+            "wall_least": 14892125,
+            "wall_most": 15048625,
+            "wall_total": 15029417,
+            "on_cpu_total": 26583,
+            "blocked_total": 15004000
+          }
+        ]
+      }
+    }
+  ]
+}

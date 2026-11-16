@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: MIT
+// Entry points of the native Metal frontend over the bridge (NativeBridgeMetalFrontend.mm).
+#pragma once
+#include <stddef.h>
+#include <stdint.h>
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+extern "C" {
+// Opens the process's one device: loader exports vkGetInstanceProcAddr (Turnip), cache is a writable shader-cache directory, registryID is the
+// accelerator service's registry entry. missing (may be null) is told the class and selector of every unimplemented call.
+id native_bridge_metal_open(const char *loader, const char *cache, uint64_t registryID, void (*missing)(const char *, const char *));
+// The system shader cache (SharedShaderCache.h), named before native_bridge_metal_open. A reader passes the layer's directory and the
+// user ids whose files it trusts there: its device then asks that directory, read only and by the layer's owner and mode rules, for
+// what its own cache lacks. The process that fills the layer passes writer true and opens its device in the layer's directory: what
+// it writes is readable by everyone. Returns whether the layer was taken; the reason of a refusal is in the `cache:` log line.
+bool native_bridge_metal_system_cache(const char *reader, const uint32_t *owners, unsigned count, bool writer);
+// Bare AIR bitcode as a library (the bridge's fixtures; Metal itself accepts only metallibs).
+id native_bridge_metal_library_with_air(const void *bytes, size_t length);
+// One line for the plugin's status report: command buffers committed/failed locally, pipelines made, refusals, the last refusal's text.
+size_t native_bridge_metal_status(char *out, size_t size);
+// The pixel formats of the textures asked for (first eight distinct) and how many texture requests the runtime refused.
+size_t native_bridge_metal_formats(char *out, size_t size);
+// The process's first problem (a refusal or a missing call) into out, and how many problems there were.
+uint64_t native_bridge_metal_first_problem(char *out, size_t size);
+// A note from the plugin for the telemetry's problem lines.
+void native_bridge_metal_note(const char *what);
+// Called once, on the thread that hit it, with the first problem's text (null: not called).
+extern void (*native_bridge_metal_problem_hook)(const char *);
+extern void (*native_bridge_metal_loss_hook)(const char *);
+size_t native_bridge_metal_telemetry(char *out, size_t size);
+// Structured cumulative artifact/driver-cache counters for offline qualification.
+struct NmbShaderCacheStats;
+bool native_bridge_metal_shader_cache_stats(struct NmbShaderCacheStats *out);
+bool native_bridge_metal_work_stats(uint64_t out[10]);
+// The same fixed CPU, memory and pipeline workload on the tablet and the host, so their times compare directly (int-145): compute, first-touch
+// page faults, memset bandwidth, CommonCrypto SHA-256, then the first `pairs` vertex/fragment pairs of the given QuartzCore metallib made into
+// BGRA8 render states and drawn once each (pipeline_timing_host's draw=1 order). The results become the telemetry's Y rows; also returned.
+size_t native_bridge_metal_benchmark(id device, const char *metallib, unsigned pairs, char *out, size_t size);
+// Lets go of every held IOSurface import whose surface only the import still retains (also done at each command buffer's completion).
+void native_bridge_metal_trim_surface_imports(void);
+// Purgeable memory (bridge/NativeMetalPurge.rs). Discards the buffers, textures and heaps their caller declared Volatile or Empty
+// that nothing uses: cause 0 all of them (what the memory pressure handler does), cause 1 those idle for idleMs (what the age timer
+// does, with the runtime's spare block age). Returns the bytes discarded; nothing with the boot argument gpu-purge=0.
+uint64_t native_bridge_metal_purge(uint32_t cause, uint64_t idleMs);
+// The bridge's sixteen purge counts (nmb_device_purge_counts).
+bool native_bridge_metal_purge_counts(uint64_t out[16]);
+// What a memory pressure event does: held surface imports, discardable resources, then the runtime's kept memory. Returns the bytes
+// of the resources discarded.
+uint64_t native_bridge_metal_relieve_memory(void);
+}
+#endif

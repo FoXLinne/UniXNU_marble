@@ -1,0 +1,78 @@
+schema_version = 2
+
+[board]
+example = true
+name = "example"
+soc = "SM8550"
+soc_source = "sm8550"
+os_profile = "ipados-17.7.11-21H461"
+description = "Hardware values required"
+kit = "example"
+
+[components]
+include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot"]
+
+[kernel]
+defconfig = "example_defconfig"
+
+# The packaging script selects the defconfig of each OS profile from [package.defconfig].
+config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "os:configs/ipados.config"]
+patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches/xnu/series", "device:patches/xnu/series"]
+
+[device_tree]
+source = "device:dts/board.dts"
+include_dirs = ["soc:dts"]
+
+[firmware]
+# Scripts that run before the firmware build, with UNIXNU_UEFI (the firmware checkout) and
+# UNIXNU_DEVICE (this repository) in the environment: fetch the official firmware archive, extract
+# the inputs, generate the package binaries, build the firmware device tree, check the memory map.
+# preflight = ["scripts/download-example-firmware.py", "scripts/extract-example-firmware.py --delete-archive", "scripts/check-example-firmware.py"]
+
+# The official fastboot archive the firmware inputs come from: downloaded with concurrent HTTP
+# ranges, streamed, only the named inputs retained, the archive itself deleted after extraction.
+# No extracted firmware lives in a repository.
+# ["firmware"."image"]
+# "url" = "https://cdn.example.com/vendor/device_images_1.0.0.tgz"
+# "sha256" = "0000000000000000000000000000000000000000000000000000000000000000"
+# "md5" = "00000000000000000000000000000000"
+# "bytes" = 0
+
+# Replace with this board's UEFI configuration and paths.
+config = "example"
+dsc = "Platforms/Vendor/examplePkg/example.dsc"
+fd = "Build/examplePkg/{target}_CLANGPDB/FV/SILICIUM_UEFI.fd"
+packages = ["{uefi}", "{tree}/package", "{tree}/drivers/DarwinBoot", "{edk2}"]
+
+[bootimg]
+# The device tree of the boot image, relative to the build tree; a firmware preflight
+# script builds it (docs/porting/packaging.md).
+# dtb = "build/example/example.dtb"
+
+[firmware.defines]
+DEVICE_MODEL = "example"
+
+[payload]
+volume = "EXAMPLE"
+size_mib = 192
+loader = "firmware"
+title = "UniXNU"
+kernel_args = ["-v", "serial=3"]
+
+[package]
+# The UniXNU checkout, relative to this repository: scripts/package.sh reads it.
+unixnu = "../UniXNU"
+
+[package.defconfig]
+"ipados-17.7.11-21H461" = "example_defconfig"
+# A second OS profile of the same branch: only the values that differ, merged over the
+# board, with remove listing the dotted keys the board sets and this profile does not.
+# [os_overrides."ipados-26.5.2-23F84".kernel]
+# config_fragments = ["arch:configs/common.config", "os:configs/ipados.config"]
+# [os_overrides."ipados-26.5.2-23F84"]
+# remove = ["payload.root_policies"]
+
+[payload.adt]
+# Supply the board's identity seed through --unique-chip-id.
+chip_id = "207"
+unique_chip_id = "required"
