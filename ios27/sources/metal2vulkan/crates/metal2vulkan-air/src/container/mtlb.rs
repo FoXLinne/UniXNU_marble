@@ -349,7 +349,20 @@ pub(super) fn parse(bytes: &[u8]) -> Result<Metallib<'_>, Error> {
     if at != entries_end {
         return Err(container_error(ContainerError::BadOffset, 32));
     }
-    let (extended, _) = tags::read_list(file, at, file.len())?;
+    // Older metallibs place the first metadata record immediately after the
+    // function list, without an extended-header tag list or its ENDT marker.
+    // Bound that header by the sections so metadata cannot be read as tags.
+    let extended_end = [header.public_metadata, header.private_metadata, header.bitcode]
+        .into_iter()
+        .map(|section| section.offset)
+        .filter(|start| *start >= at as u64)
+        .min()
+        .unwrap_or(header.file_size);
+    let extended = if at as u64 == extended_end {
+        Vec::new()
+    } else {
+        tags::read_list(file, at, offset(extended_end)?)?.0
+    };
     let mut linkage = linkage(file, &extended)?;
     if header.file_type == FILE_TYPE_DYNAMIC {
         let section = header.bitcode;

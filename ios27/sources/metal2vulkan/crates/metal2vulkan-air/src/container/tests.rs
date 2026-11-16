@@ -511,6 +511,28 @@ fn walk(stream: &[u8]) -> Result<usize, Error> {
 }
 
 #[test]
+fn metadata_may_follow_the_function_list_without_an_extended_header() {
+    let mut builder = Builder::new(vec![FnSpec::new("legacy_kernel", 2, 1)]);
+    builder.version = (2, 2);
+    let mut bytes = builder.build();
+    let at = 92 + u64::from_le_bytes(bytes[32..40].try_into().unwrap()) as usize;
+    assert_eq!(&bytes[at..at + 4], b"ENDT");
+    bytes.drain(at..at + 4);
+    for field in [16, 40, 56, 72] {
+        let value = u64::from_le_bytes(bytes[field..field + 8].try_into().unwrap());
+        bytes[field..field + 8].copy_from_slice(&(value - 4).to_le_bytes());
+    }
+    let lib = metallib(&bytes);
+    assert!(lib.extended.is_empty());
+    assert_eq!(lib.functions[0].name, "legacy_kernel");
+    assert_eq!(lib.functions[0].bitcode, builder.functions[0].bitcode);
+
+    // An omitted extended header must not relax metadata validation.
+    bytes[at + 4..at + 8].copy_from_slice(b"BAD!");
+    assert!(parse(&bytes).is_err());
+}
+
+#[test]
 fn parses_every_function_and_its_metadata() {
     let bytes = sample().build();
     let lib = metallib(&bytes);
