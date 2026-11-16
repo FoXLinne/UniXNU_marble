@@ -1,0 +1,273 @@
+--- a/src/freedreno/vulkan/tu_knl_darwin.cc
++++ b/src/freedreno/vulkan/tu_knl_darwin.cc
+@@ -38,11 +38,12 @@
+ /* 'NTNL': first word of a tunnelled call, as served by the driver (NativeAdrenoPublish.cpp). */
+ #define DW_TUNNEL_MAGIC 0x4e544e4cu
+ 
+-/* One GPU per process: the kernel service has a single connection slot, so the connection and the fence bookkeeping are
+- * process state rather than per tu_device state. */
++/* Logical devices share a process connection, fences and GPU address space. Each
++ * enumeration probe and logical device owns one reference until its cleanup. */
+ static struct {
+    io_connect_t conn;
+    bool open;
++   unsigned users;
+    pthread_mutex_t lock;
+    /* Fences of the submissions still possibly in flight, oldest first (the kernel keeps at most eight jobs). */
+    uint32_t inflight[8];
+@@ -57,6 +58,8 @@
+    NativeAdrenoAbiDeviceInfo info;
+    NativeAdrenoAbiParams params;
+ } dw = { .lock = PTHREAD_MUTEX_INITIALIZER };
++static pthread_mutex_t dw_lifecycle_lock = PTHREAD_MUTEX_INITIALIZER;
++static void darwin_reset_iova(void);
+ 
+ /* Preserve the native handle, CPU view and IOVA until the captured ring fence
+  * actually completed. An unrelated later submission never extends this lease.
+@@ -101,6 +104,9 @@
+    uint64_t used;   /* bytes handed out */
+ };
+ 
++static struct darwin_va darwin_shared_va;
++static pthread_mutex_t darwin_va_lock = PTHREAD_MUTEX_INITIALIZER;
++
+ struct darwin_retire_state {
+    pthread_mutex_t lock;
+    struct darwin_retired_bo *entries;   /* a ring of `capacity` records, grown when full */
+@@ -112,18 +118,22 @@
+    uint64_t cache_bytes, cache_stamp, cache_cleaned_s;
+    uint32_t pressure_seen;
+    struct darwin_bo_cache_stats cache_stats;
+-   struct darwin_va va;
++   struct darwin_retire_state *stats_next;
+ };
++static pthread_mutex_t darwin_stats_lock = PTHREAD_MUTEX_INITIALIZER;
+ static struct darwin_retire_state *darwin_stats_state;   /* for tu_darwin_bo_cache_stats */
+ 
+ extern "C" __attribute__((visibility("default"))) void tu_darwin_bo_cache_stats(uint64_t out[8]);
+ extern "C" __attribute__((visibility("default"))) void
+ tu_darwin_bo_cache_stats(uint64_t out[8])
+ {
++   pthread_mutex_lock(&darwin_stats_lock);
+    struct darwin_retire_state *retire = darwin_stats_state;
+    memset(out, 0, 8 * sizeof(uint64_t));
+-   if (!retire)
++   if (!retire) {
++      pthread_mutex_unlock(&darwin_stats_lock);
+       return;
++   }
+    pthread_mutex_lock(&retire->lock);
+    out[0] = retire->cache_stats.lookups;
+    out[1] = retire->cache_stats.hits;
+@@ -132,8 +142,11 @@
+    out[4] = retire->cache_stats.flushes;
+    out[5] = retire->cache_bytes;
+    out[6] = retire->cache_stats.bytes_peak;
+-   out[7] = retire->va.holes;
++   pthread_mutex_lock(&darwin_va_lock);
++   out[7] = darwin_shared_va.holes;
++   pthread_mutex_unlock(&darwin_va_lock);
+    pthread_mutex_unlock(&retire->lock);
++   pthread_mutex_unlock(&darwin_stats_lock);
+ }
+ 
+ /* The priority the driver was last given for this process (NativeAdrenoMethodSetPriority). */
+@@ -191,7 +204,7 @@
+ extern "C" const char *tu_darwin_last_error(void) { return darwin_startup_error; }
+ 
+ static VkResult
+-dw_open_connection(struct tu_instance *instance)
++dw_open_connection_unlocked(struct tu_instance *instance)
+ {
+    /* TU_DARWIN_SERVICE names the IOKit service (default: the AGX accelerator the original Metal discovery finds), TU_DARWIN_OPEN_TYPE its open
+     * type (default 0x4147, the type the driver serves to the plugin). NativeAdrenoGpuPublished with type 0 is the unsandboxed direct form. */
+@@ -254,6 +267,21 @@
+    return VK_SUCCESS;
+ }
+ 
++/* A failed second CreateDevice releases its own reference. A probe borrows the
++ * existing connection without replacing live handles or resetting fences. */
++static VkResult
++dw_open_connection(struct tu_instance *instance)
++{
++   pthread_mutex_lock(&dw_lifecycle_lock);
++   VkResult result = VK_SUCCESS;
++   if (!dw.open)
++      result = dw_open_connection_unlocked(instance);
++   if (result == VK_SUCCESS)
++      ++dw.users;
++   pthread_mutex_unlock(&dw_lifecycle_lock);
++   return result;
++}
++
+ /* What the process's own Metal queues ask for (the frontend's setGPUPriority: and setBackgroundGPUPriority:), given to the driver as they
+  * come: the runtime sent the board's default at device open, before the process could ask. 0xffffffff keeps that value. False before the
+  * device is open or when the driver refuses it (a foreground priority of 3, the disabled level, is not a queue's foreground).
+@@ -329,11 +357,18 @@
+ static void
+ dw_close_connection(void)
+ {
+-   if (dw.open) {
++   pthread_mutex_lock(&dw_lifecycle_lock);
++   if (dw.users && !--dw.users) {
++      pthread_mutex_lock(&dw.lock);
+       IOServiceClose(dw.conn);
+       dw.conn = 0;
+       dw.open = false;
+-   }
++      dw.inflight_count = 0;
++      dw.last_fence = 0;
++      pthread_mutex_unlock(&dw.lock);
++      darwin_reset_iova();
++   }
++   pthread_mutex_unlock(&dw_lifecycle_lock);
+ }
+ 
+ static VkResult
+@@ -561,15 +596,25 @@
+    va->used -= size;
+ }
+ 
++static void
++darwin_reset_iova(void)
++{
++   pthread_mutex_lock(&darwin_va_lock);
++   rb_tree_foreach_safe(struct darwin_va_hole, hole, &darwin_shared_va.address, by_address)
++      free(hole);
++   darwin_shared_va = {};
++   pthread_mutex_unlock(&darwin_va_lock);
++}
++
+ static VkResult
+ darwin_allocate_iova(struct tu_device *dev, uint64_t size, uint64_t alignment, uint64_t client_iova,
+                      enum tu_bo_alloc_flags flags, uint64_t *iova)
+ {
+-   struct darwin_va *va = &((struct darwin_retire_state *)dev->darwin_retire)->va;
++   struct darwin_va *va = &darwin_shared_va;
+    *iova = 0;
+-   mtx_lock(&dev->vma_mutex);
++   pthread_mutex_lock(&darwin_va_lock);
+    if (!va->seeded) {
+-      /* Nothing else allocates from the heap the device made: the whole range is free. */
++      /* Every logical device allocates from the connection's address space. */
+       va->seeded = true;
+       darwin_va_add(va, dev->physical_device->va_start, dev->physical_device->va_size);
+    }
+@@ -578,7 +623,7 @@
+          if (darwin_va_alloc_at(va, client_iova, size))
+             *iova = client_iova;
+          else {
+-            mtx_unlock(&dev->vma_mutex);
++            pthread_mutex_unlock(&darwin_va_lock);
+             return VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS;
+          }
+       } else {
+@@ -587,17 +632,17 @@
+    } else {
+       *iova = darwin_va_alloc(va, size, MAX2(os_page_size, alignment), false);
+    }
+-   mtx_unlock(&dev->vma_mutex);
++   pthread_mutex_unlock(&darwin_va_lock);
+    return *iova ? VK_SUCCESS : VK_ERROR_OUT_OF_DEVICE_MEMORY;
+ }
+ 
+ static void
+ darwin_free_iova(struct tu_device *dev, uint64_t iova, uint64_t size)
+ {
+-   struct darwin_va *va = &((struct darwin_retire_state *)dev->darwin_retire)->va;
+-   mtx_lock(&dev->vma_mutex);
++   struct darwin_va *va = &darwin_shared_va;
++   pthread_mutex_lock(&darwin_va_lock);
+    darwin_va_free(va, iova, size);
+-   mtx_unlock(&dev->vma_mutex);
++   pthread_mutex_unlock(&darwin_va_lock);
+ }
+ 
+ /* Hands the CPU lease, the kernel allocation and the GPU range of a BO back. VK_NOT_READY: the kernel still holds it (retry later);
+@@ -653,11 +698,14 @@
+ darwin_cache_log(struct darwin_retire_state *retire)
+ {
+    const struct darwin_bo_cache_stats *st = &retire->cache_stats;
++   pthread_mutex_lock(&darwin_va_lock);
++   const uint64_t holes = darwin_shared_va.holes;
++   pthread_mutex_unlock(&darwin_va_lock);
+    fprintf(stderr, "NativeAdreno BO cache: %llu allocations, %llu reused (%llu.%llu%%), %llu cached now (%llu MiB), %llu evicted, %llu flushed, %llu free GPU ranges\n",
+            (unsigned long long)st->lookups, (unsigned long long)st->hits, (unsigned long long)(st->hits * 100 / st->lookups),
+            (unsigned long long)(st->hits * 1000 / st->lookups % 10), (unsigned long long)retire->cache_count,
+            (unsigned long long)(retire->cache_bytes >> 20), (unsigned long long)st->evictions, (unsigned long long)st->flushes,
+-           (unsigned long long)retire->va.holes);
++           (unsigned long long)holes);
+ }
+ 
+ /* Drops the cache entry at the index for real. VK_NOT_READY keeps it. */
+@@ -1592,12 +1640,9 @@
+ darwin_device_init(struct tu_device *dev)
+ {
+    dev->fd = -1;
+-   /* The enumeration probe closed its connection; take the single slot for this device. */
+-   if (!dw.open) {
+-      VkResult result = dw_open_connection(dev->physical_device->instance);
+-      if (result != VK_SUCCESS)
+-         return result;
+-   }
++   VkResult result = dw_open_connection(dev->physical_device->instance);
++   if (result != VK_SUCCESS)
++      return result;
+    struct darwin_retire_state *retire = (struct darwin_retire_state *)
+       vk_zalloc(&dev->vk.alloc, sizeof(*retire), 8, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+    if (!retire) {
+@@ -1610,7 +1655,10 @@
+       return vk_error(dev, VK_ERROR_INITIALIZATION_FAILED);
+    }
+    dev->darwin_retire = retire;
++   pthread_mutex_lock(&darwin_stats_lock);
++   retire->stats_next = darwin_stats_state;
+    darwin_stats_state = retire;
++   pthread_mutex_unlock(&darwin_stats_lock);
+    darwin_watch_memory_pressure();
+    retire->pressure_seen = p_atomic_read(&darwin_memory_pressure);
+    return VK_SUCCESS;
+@@ -1619,27 +1667,36 @@
+ static void
+ darwin_device_finish(struct tu_device *dev)
+ {
+-   /* Closing the connection makes the kernel drain the GPU and free every object this client created. */
+-   dw_close_connection();
++   /* Drain and release this device's deferred BOs while peers retain their
++    * connection and mappings. The VMA mutex may have gone on CreateDevice failure. */
++   darwin_wait_idle(dev);
+    struct darwin_retire_state *retire = (struct darwin_retire_state *)dev->darwin_retire;
+    if (retire) {
+-      /* Some CreateDevice failure paths already destroyed the VMA heap/mutex.
+-       * Never return ranges here: they are either gone or about to be destroyed. */
++      /* The shared address allocator remains live through peer device teardown. */
+       if (debug_get_bool_option("TU_DARWIN_RETIRE_TRACE", false))
+          mesa_logi("darwin BO retirement: enqueued=%llu reaped=%llu pending-at-close=%u pressure=%llu",
+                    (unsigned long long)retire->enqueued, (unsigned long long)retire->reaped,
+                    retire->count, (unsigned long long)retire->pressure_waits);
+       if (retire->cache_stats.lookups)
+          darwin_cache_log(retire);
+-      darwin_stats_state = NULL;
+-      rb_tree_foreach_safe(struct darwin_va_hole, hole, &retire->va.address, by_address)
+-         free(hole);
++      pthread_mutex_lock(&darwin_stats_lock);
++      struct darwin_retire_state **link = &darwin_stats_state;
++      while (*link && *link != retire)
++         link = &(*link)->stats_next;
++      if (*link)
++         *link = retire->stats_next;
++      pthread_mutex_unlock(&darwin_stats_lock);
++      pthread_mutex_lock(&retire->lock);
++      darwin_reap_locked(dev, retire);
++      darwin_cache_flush(dev, retire);
++      pthread_mutex_unlock(&retire->lock);
+       pthread_mutex_destroy(&retire->lock);
+       free(retire->entries);
+       free(retire->cache);
+       vk_free(&dev->vk.alloc, retire);
+       dev->darwin_retire = NULL;
+    }
++   dw_close_connection();
+ }
+ 
+ static int

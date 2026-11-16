@@ -11,10 +11,13 @@
 #include "AdrenoHfi.h"
 #include "AdrenoHfiVotes.h"
 #include "MarbleGpu.h"
+#include "MarbleGpuIdlePolicy.h"
+#include <kern/clock.h>
 
 extern "C" const uint8_t marble_gmu_firmware[];
 extern "C" const uint64_t marble_gmu_firmware_size;
 extern "C" { volatile uint32_t native_gpu_dcvs[15] = {0, 7}; }
+extern "C" {volatile uint64_t marble_gpu_idle_power[16];extern volatile uint32_t marble_backlight_stats[8];}
 
 namespace {
 struct Registers {
@@ -90,21 +93,26 @@ struct Gmu {
         }
         return {};
     }
-    int exchange(unsigned command, const uint32_t *payload, size_t words) {
+    int exchange(unsigned command, const uint32_t *payload, size_t words,uint32_t *firmwareError=nullptr,bool quick=false) {
         uint32_t header = 0, error = 0, reply[16] = {};
         size_t replyWords = 0;
         auto status = AdrenoHfiSend(&hfi, command, payload, words, &header);
         if (status) return -5;
-        unsigned elapsed = 0;
-        for (; elapsed < 100; ++elapsed) {
+        unsigned elapsed = 0,fastPolls=quick?100:0;
+        for (; elapsed < 100;) {
             // Match KGSL's inline reply path: acknowledge MSGQ before consuming it.
             write(0x1f991, 1);
             status = AdrenoHfiPoll(&hfi, reply, 16, &replyWords, &error);
             if (status != AdrenoHfiEmpty) break;
-            IOSleep(1);
+            // Runtime wake votes normally acknowledge within microseconds.
+            // Keep them inside a 1 ms polling window before the sleep path;
+            // startup and slow firmware retain the existing sleep budget.
+            if(fastPolls) {--fastPolls;IODelay(10);}
+            else {++elapsed;IOSleep(1);}
         }
         IOLog("MarbleGPU: HFI command=%u header=%x status=%u error=%x reply_words=%lu elapsed=%u skipped=%x/%x/%x\n",
             command, header, status, error, replyWords, elapsed, hfi.skipped_header, hfi.skipped_ret, hfi.skipped_code);
+        if(firmwareError)*firmwareError=error;
         if (status) {
             volatile uint32_t *queues = hfi.shared;
             IOLog("MarbleGPU: HFI timeout queues cmd=%u/%u reply=%u/%u debug=%u/%u AO=%x CM3=%x init=%x HFI=%x FSR=%x\n",
@@ -398,6 +406,44 @@ struct Gmu {
 };
 Gmu *device;
 bool ready;
+MarbleGpuIdlePolicy idlePolicy;
+uint64_t runtimeMicros() {
+    clock_sec_t seconds=0;clock_usec_t micros=0;
+    clock_get_system_microtime(&seconds,&micros);
+    return uint64_t(seconds)*1000000+micros;
+}
+}
+// Invoked under NativeAdrenoPublish's submission lock on a thread. The
+// periodic completion pass supplies the live outstanding-job count; a submit
+// requests its high vote before dispatch touches the command processor.
+extern "C" IOReturn native_marble_gpu_power_activity(bool mayIdle,uint64_t pending) {
+    if(!native_marble_gmu_ready() || !device)return kIOReturnNotReady;
+    const bool panelOn=marble_backlight_stats[7]!=0;
+    marble_gpu_idle_power[0]=1;marble_gpu_idle_power[9]=panelOn;
+    marble_gpu_idle_power[10]=pending;
+    const bool idle=mayIdle && !panelOn && !pending;
+    const int status=idlePolicy.change(idle,[](unsigned level,unsigned bandwidth)->int {
+        ++marble_gpu_idle_power[level==1?2:3];
+        const uint64_t began=runtimeMicros();
+        const uint32_t vote[]={1,level,bandwidth};uint32_t firmwareError=0;
+        int result=device->exchange(30,vote,3,&firmwareError,true);
+        if(!result && firmwareError)result=-5;
+        const uint64_t elapsed=runtimeMicros()-began;
+        marble_gpu_idle_power[6]=elapsed;
+        if(elapsed>marble_gpu_idle_power[7])marble_gpu_idle_power[7]=elapsed;
+        marble_gpu_idle_power[5]=uint32_t(result);marble_gpu_idle_power[12]=firmwareError;
+        if(result) {++marble_gpu_idle_power[4];++native_gpu_dcvs[3];}
+        else {
+            native_gpu_dcvs[1]=level;++native_gpu_dcvs[2];
+            marble_gpu_idle_power[8]=bandwidth;
+            marble_gpu_idle_power[11]=level==1?220000000:580000000;
+        }
+        return result;
+    });
+    marble_gpu_idle_power[1]=idlePolicy.lowConfirmed();
+    marble_gpu_idle_power[13]=idlePolicy.needsRestore();
+    marble_gpu_idle_power[14]=idlePolicy.idleDisabled();
+    return status?kIOReturnIOError:kIOReturnSuccess;
 }
 extern "C" bool native_marble_gmu_ready(void) {
     return __atomic_load_n(&ready, __ATOMIC_ACQUIRE);

@@ -22,6 +22,8 @@ volatile uint64_t marble_panel_dcs_state[8];
 volatile uint32_t marble_panel_mode_state[12];
 volatile uint64_t marble_scanout_latch_ticks[2048];
 volatile uint32_t marble_scanout_latch_count;
+// Commits, late acknowledgements, pending timeouts, last wait ns, flush, status.
+volatile uint64_t marble_scanout_wait_stats[6];
 uint32_t marble_scanout_registers[8][8];
 volatile uint32_t native_ufs_dpu_smmu[24];
 volatile uint32_t native_ufs_dpu_state;
@@ -231,7 +233,7 @@ bool configure() {
     IOLog("MarbleScanout: kernel MMIO buffers=%u pipes=%x span=%llu\n",MarbleScanoutSlots,mailbox->pipe_mask,layout.slotBytes);
     return true;
 }
-IOReturn scanoutFlip(uint32_t slot) {
+IOReturn scanoutCommit(uint32_t slot) {
     if (!scanoutMdp || (slot>=MarbleScanoutSlots && slot!=0xffffffffU)) return kIOReturnBadArgument;
     constexpr uint32_t pipes[8]={0x5000,0x7000,0x9000,0xb000,0x25000,0x27000,0x29000,0x2b000};
     const uint32_t mask=mailbox->pipe_mask, flush=mailbox->flush_mask;
@@ -249,13 +251,36 @@ IOReturn scanoutFlip(uint32_t slot) {
     __asm__ volatile("dsb sy" ::: "memory");
     scanoutMdp[0x16018/4]=flush;
     __asm__ volatile("dsb sy" ::: "memory");
+    marble_scanout_wait_stats[0]=marble_scanout_wait_stats[0]+1;
+    return kIOReturnSuccess;
+}
+// Waits for the display to latch the committed pipe addresses at its next vblank.
+IOReturn scanoutSettle() {
+    const uint32_t flush=mailbox->flush_mask;
     const uint64_t began=mach_absolute_time();uint64_t ns=0;
     while (scanoutMdp[0x16018/4]&flush) {
-        IOSleep(1);
         absolutetime_to_nanoseconds(mach_absolute_time()-began,&ns);
-        if (ns>=50000000) return kIOReturnTimeout;
+        if (ns>=50000000) {
+            // Scheduling delay can exceed a frame while the hardware finishes.
+            // Sample the acknowledgement before classifying the deadline.
+            const uint32_t pending=scanoutMdp[0x16018/4];
+            if (!(pending&flush)) break;
+            marble_scanout_wait_stats[2]=marble_scanout_wait_stats[2]+1;
+            marble_scanout_wait_stats[3]=ns;marble_scanout_wait_stats[4]=pending;
+            marble_scanout_wait_stats[5]=kIOReturnTimeout;
+            return kIOReturnTimeout;
+        }
+        IOSleep(1);
     }
+    absolutetime_to_nanoseconds(mach_absolute_time()-began,&ns);
+    marble_scanout_wait_stats[3]=ns;marble_scanout_wait_stats[4]=scanoutMdp[0x16018/4];
+    marble_scanout_wait_stats[5]=kIOReturnSuccess;
+    if (ns>=50000000)marble_scanout_wait_stats[1]=marble_scanout_wait_stats[1]+1;
     return kIOReturnSuccess;
+}
+IOReturn scanoutFlip(uint32_t slot) {
+    const IOReturn status=scanoutCommit(slot);
+    return status ? status : scanoutSettle();
 }
 IOReturn flip(uint32_t slot, uint64_t timeoutNs=100000000) {
     refresh();
@@ -264,28 +289,35 @@ IOReturn flip(uint32_t slot, uint64_t timeoutNs=100000000) {
     mailbox->slot=slot;__asm__ volatile("dmb ishst":::"memory");mailbox->requested=sequence;
     __asm__ volatile("dc cvac,%0\n\tdsb sy\n\tsev"::"r"(reinterpret_cast<uintptr_t>(mailbox)+64):"memory");
     const uint64_t began=mach_absolute_time();uint64_t ns=0;
-    do {
+    for (;;) {
         refresh();
         if (mailbox->completed==sequence) return mailbox->error ? kIOReturnIOError : kIOReturnSuccess;
-        IOSleep(1);__asm__ volatile("sev":::"memory");
         absolutetime_to_nanoseconds(mach_absolute_time()-began,&ns);
-    } while (ns<timeoutNs);
-    return kIOReturnTimeout;
+        if (ns>=timeoutNs) {
+            refresh();
+            if (mailbox->completed==sequence) return mailbox->error ? kIOReturnIOError : kIOReturnSuccess;
+            return kIOReturnTimeout;
+        }
+        IOSleep(1);__asm__ volatile("sev":::"memory");
+    }
 }
 }
 extern "C" bool native_gop_scanout_active(void) {
     if (!ready) return false;
     IOLockLock(scanoutLock);
-    const bool active = !failed && ownership.shown < MarbleScanoutSlots;
+    const bool active = !failed && (ownership.shown < MarbleScanoutSlots || ownership.pending < MarbleScanoutSlots);
     IOLockUnlock(scanoutLock);
     return active;
 }
 extern "C" bool native_marble_panel_control_available(void) {
     return configure() && mailbox->reserved[4]==MARBLE_PANEL_DCS_CAP;
 }
+static IOReturn settlePending();
 static IOReturn panelControl(uint32_t operation,uint32_t value) {
     if (!native_marble_panel_control_available()) return kIOReturnUnsupported;
     IOLockLock(scanoutLock);
+    // Panel commands share the CTL flush register; no pipe flush may be pending.
+    if (const IOReturn settled=settlePending()) {failed=true;IOLockUnlock(scanoutLock);return settled;}
     unsigned native=0;PE_parse_boot_argn("marble-native-services",&native,sizeof(native));
     if (native) {
         const IOReturn result=native_marble_kernel_panel_control(operation,value,mailbox);
@@ -314,18 +346,26 @@ extern "C" IOMemoryDescriptor *native_gop_scanout_ring(uint32_t *slots,uint64_t 
     if (!memory) return nullptr;
     *slots=MarbleScanoutSlots;*slotBytes=layout.slotBytes;return memory;
 }
+// The GPU client writes the slot after the pending one, so a present commits and
+// returns; the latch of the pending slot is awaited at the next present.
+static IOReturn settlePending() {
+    if (ownership.pending>=MarbleScanoutSlots) return kIOReturnSuccess;
+    const IOReturn status=scanoutSettle();
+    if (status) return status;
+    ownership.latched(ownership.pending);marble_scanout_state[7]=ownership.shown;marble_scanout_state[8]=ownership.pending;
+    const uint32_t count = marble_scanout_latch_count;
+    marble_scanout_latch_ticks[count % 2048] = mach_absolute_time();
+    __atomic_store_n(&marble_scanout_latch_count, count + 1, __ATOMIC_RELEASE);
+    return kIOReturnSuccess;
+}
 extern "C" IOReturn native_gop_scanout_present(uint32_t slot) {
     if (!ready) return kIOReturnNotReady;
     IOLockLock(scanoutLock);
-    if (failed || !ownership.begin(slot)) {IOLockUnlock(scanoutLock);return kIOReturnNotReady;}
-    marble_scanout_state[8]=ownership.pending;const IOReturn status=scanoutFlip(slot);
-    if (!status) {
-        ownership.latched(slot);marble_scanout_state[7]=ownership.shown;marble_scanout_state[8]=ownership.pending;
-        const uint32_t count = marble_scanout_latch_count;
-        marble_scanout_latch_ticks[count % 2048] = mach_absolute_time();
-        __atomic_store_n(&marble_scanout_latch_count, count + 1, __ATOMIC_RELEASE);
-    }
-    else failed=true;
+    if (failed) {IOLockUnlock(scanoutLock);return kIOReturnNotReady;}
+    IOReturn status=settlePending();
+    if (!status && !ownership.begin(slot)) {IOLockUnlock(scanoutLock);return kIOReturnNotReady;}
+    if (!status) {marble_scanout_state[8]=ownership.pending;status=scanoutCommit(slot);}
+    if (status) failed=true;
     IOLockUnlock(scanoutLock);return status;
 }
 extern "C" bool native_gop_scanout_snapshot(void *output, uint64_t capacity) {
@@ -350,7 +390,8 @@ extern "C" bool native_gop_scanout_snapshot(void *output, uint64_t capacity) {
 }
 extern "C" void native_gop_scanout_restore() {
     if (!ready) return;
-    IOLockLock(scanoutLock);const IOReturn status=scanoutFlip(0xffffffffU);
+    IOLockLock(scanoutLock);IOReturn status=settlePending();
+    if (!status) status=scanoutFlip(0xffffffffU);
     if (!status) {failed=false;ownership.restored();marble_scanout_state[7]=ownership.shown;marble_scanout_state[8]=ownership.pending;}
     else failed=true;
     IOLockUnlock(scanoutLock);

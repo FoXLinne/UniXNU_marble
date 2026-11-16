@@ -3,6 +3,7 @@
 #include <IOKit/IOService.h>
 #include <IOKit/IOPlatformExpert.h>
 #include <IOKit/IODeviceMemory.h>
+#include <IOKit/IOBufferMemoryDescriptor.h>
 #include <IOKit/IODeviceTreeSupport.h>
 #include <IOKit/IOUserClient.h>
 #include <libkern/c++/OSMetaClass.h>
@@ -13,6 +14,7 @@
 #include <pexpert/pexpert.h>
 #include <kern/thread.h>
 #include "MarbleInputLatency.h"
+#include "MarblePlatformMatch.h"
 
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" kmod_info_t g_kernel_kmod_info;
@@ -302,15 +304,23 @@ void native_marble_display_start(void)
     IOPlatformDevice *nub = new IOPlatformDevice;
     IOService *parent = IOService::getPlatform();
     IODeviceMemory *memory = IODeviceMemory::withRange(video.v_baseAddr, video.v_rowBytes * video.v_height);
-    OSArray *ranges = OSArray::withCapacity(1);
-    if (!nub || !parent || !memory || !ranges || !nub->init()) panic("MarbleDisplay: provider allocation");
-    ranges->setObject(memory); nub->setDeviceMemory(ranges); nub->setName("NativeGOPFramebuffer");
+    static IOBufferMemoryDescriptor *surfaceBacking;
+    surfaceBacking=IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task,
+        kIODirectionInOut|kIOMemoryPhysicallyContiguous|kIOMemoryKernelUserShared,
+        32U<<20,0x4000);
+    IODeviceMemory *surfaceMemory=surfaceBacking ? IODeviceMemory::withRange(
+        surfaceBacking->getPhysicalAddress(),surfaceBacking->getLength()) : nullptr;
+    OSArray *ranges = OSArray::withCapacity(2);
+    if (!nub || !parent || !memory || !surfaceMemory || !ranges || !nub->init()) panic("MarbleDisplay: provider allocation");
+    ranges->setObject(memory);ranges->setObject(surfaceMemory);surfaceMemory->release();
+    nub->setDeviceMemory(ranges); nub->setName("NativeGOPFramebuffer");
     ranges->release(); memory->release();
     IORegistryEntry *chosen = IORegistryEntry::fromPath("/chosen", gIODTPlane);
     OSData *pitch = chosen ? OSDynamicCast(OSData, chosen->getProperty("dot-pitch")) : nullptr;
     if (pitch && pitch->getLength() == sizeof(uint32_t)) nub->setProperty("dot-pitch", pitch);
     OSSafeReleaseNULL(chosen);
     if (!nub->attach(parent) || !nub->start(parent)) panic("MarbleDisplay: provider start");
+    nub->registerService(kIOServiceSynchronous);
     IORegistryEntry *armio = IORegistryEntry::fromPath("/arm-io", gIODTPlane);
     const char type[] = "display-subsystem";
     OSData *data = OSData::withBytes(type, sizeof(type));
@@ -340,12 +350,14 @@ void native_marble_display_start(void)
     native_gop_presenter_set_source(presenter, nub);
     if (!presenter->attach(home) || !presenter->start(home)) panic("MarbleGPU: presenter start");
     gpuPresenter = presenter;
-    native_marble_gpu_start();
-    int gpuStatus = native_marble_gpu_wait();
-    if (gpuStatus) panic("MarbleGPU: accelerator startup status=%x", gpuStatus);
-    native_marble_backlight_start();
-    native_keyevents_start();
-    native_marble_charging_start();
-    native_marble_hid_start();
+    if (marble_platform_matches()) {
+        native_marble_gpu_start();
+        int gpuStatus = native_marble_gpu_wait();
+        if (gpuStatus) panic("MarbleGPU: accelerator startup status=%x", gpuStatus);
+        native_marble_backlight_start();
+        native_keyevents_start();
+        native_marble_charging_start();
+        native_marble_hid_start();
+    }
 }
 }

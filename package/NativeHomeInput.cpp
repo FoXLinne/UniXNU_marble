@@ -59,6 +59,7 @@ static IORegistryEntry *findEventDriver(IORegistryEntry *parent, unsigned depth)
 // IOHIDEventDriver never sets. Wrap this device's event driver dispatch in a copied vtable and mark finger events whose
 // contact began within 48 px of an edge with kIOHIDDigitizerEventFromEdgeTip (0x800), as the stock multitouch stack does.
 namespace edge {
+extern "C" {volatile uint32_t native_touch_dispatch_state[8];}
 #if defined(NATIVE_HID_SOURCE_API) && NATIVE_HID_SOURCE_API && !__has_feature(ptrauth_calls)
 // Source-only bring-up without pointer authentication emits ordinary digitizer reports: a copied vtable of another family's ABI is never used.
 extern "C" {volatile uint32_t native_touch_hid_multi[3];}
@@ -66,7 +67,7 @@ extern "C" {volatile uint32_t native_touch_edge_stats[4];} // installed stays ze
 static void install(IORegistryEntry *) {}
 #else
 enum {kSlots=256,kDispatch=198,kGetType=18,kGetInteger=23,kSetInteger=24,kGetFixed=25,kContacts=256};
-enum : uint32_t {kDigitizer=11,kX=0xB0000,kY=0xB0001,kIndex=0xB0005,kMask=0xB0007,kTouch=0xB0009,kMaskTouch=2,kFromEdgeTip=0x800};
+enum : uint32_t {kDigitizer=11,kX=0xB0000,kY=0xB0001,kIndex=0xB0005,kMask=0xB0007,kRange=0xB0008,kTouch=0xB0009,kMaskTouch=2,kFromEdgeTip=0x800};
 // 48 panel pixels of 3048 x 2032 (the sweet reference uses 48 px), in the driver's normalised IOFixed coordinates.
 static int32_t kEdgeX=48*65536/1080,kEdgeY=48*65536/2400;
 #if __has_feature(ptrauth_calls)
@@ -106,8 +107,12 @@ static bool mark(void *child) {
     if(index>=kContacts) {native_touch_edge_stats[3]=native_touch_edge_stats[3]+1;return false;}
     const uint32_t mask=(uint32_t)call<int32_t,uint32_t,IOOptionBits>(child,kGetInteger,kDivGetInteger,kMask,0);
     const bool touch=call<int32_t,uint32_t,IOOptionBits>(child,kGetInteger,kDivGetInteger,kTouch,0)!=0;
+    const int32_t x=call<int32_t,uint32_t,IOOptionBits>(child,kGetFixed,kDivGetFixed,kX,0),y=call<int32_t,uint32_t,IOOptionBits>(child,kGetFixed,kDivGetFixed,kY,0);
+    native_touch_dispatch_state[0]=index;native_touch_dispatch_state[1]=mask;
+    native_touch_dispatch_state[2]=touch;native_touch_dispatch_state[3]=uint32_t(x);native_touch_dispatch_state[4]=uint32_t(y);
+    native_touch_dispatch_state[5]=uint32_t(call<int32_t,uint32_t,IOOptionBits>(child,kGetInteger,kDivGetInteger,kRange,0));
+    native_touch_dispatch_state[6]=native_touch_dispatch_state[6]+1;
     if((mask&kMaskTouch) && touch) {   // the contact begins: its position now decides
-        const int32_t x=call<int32_t,uint32_t,IOOptionBits>(child,kGetFixed,kDivGetFixed,kX,0),y=call<int32_t,uint32_t,IOOptionBits>(child,kGetFixed,kDivGetFixed,kY,0);
         fromEdge[index]=x<kEdgeX || x>65536-kEdgeX || y<kEdgeY || y>65536-kEdgeY;
         native_touch_edge_stats[1]=native_touch_edge_stats[1]+1;
         if(fromEdge[index])native_touch_edge_stats[2]=native_touch_edge_stats[2]+1;
@@ -357,7 +362,7 @@ extern "C" IOService *native_hid_input_allocate(void) { return new NativeHomeInp
 
 #define TOUCH_FINGER \
     0x09,0x22,0xa1,0x02,0x09,0x42,0x15,0x00,0x25,0x01,0x75,0x01,0x95,0x01,0x81,0x02, \
-    0x09,0x47,0x81,0x02,0x75,0x06,0x95,0x01,0x81,0x03, \
+    0x09,0x47,0x81,0x02,0x09,0x32,0x81,0x02,0x75,0x05,0x95,0x01,0x81,0x03, \
     0x09,0x51,0x75,0x08,0x95,0x01,0x15,0x00,0x26,0xff,0x00,0x81,0x02, \
     0x05,0x01,0x09,0x30,0x15,0x00,0x26,0xff,0x7f,0x75,0x10,0x95,0x01,0x81,0x02, \
     0x09,0x31,0x81,0x02,0x05,0x0d,0xc0,
@@ -402,7 +407,7 @@ class NativeMarbleTouchInput : public IOHIDDevice {
         for (unsigned id = 0; id < 10; ++id) {
             if (seen[id][0]) {
                 uint8_t *finger = report + 1 + 6 * slots++;
-                finger[0] = 3; finger[1] = id;
+                finger[0] = 7; finger[1] = id; // Tip Switch, Confidence and In Range.
                 memcpy(finger + 2, seen[id] + 2, 4);
                 next[id][0] = 3;
                 memcpy(next[id] + 2, seen[id] + 2, 4);

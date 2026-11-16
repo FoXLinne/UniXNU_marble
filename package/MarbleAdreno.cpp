@@ -29,6 +29,7 @@ extern "C" const uint8_t marble_sqe_firmware[];
 extern "C" const uint64_t marble_sqe_firmware_size;
 extern "C" IOReturn native_adreno_publish(NativeAdrenoVm *, NativeAdrenoSubmit *, NativeAdrenoRing *,
     const NativeAdrenoRingClock *, const NativeAdrenoTimer *, const NativeAdrenoAbiDeviceInfo *, uint32_t, uint32_t);
+extern "C" void native_adreno_publish_static_init(void) __asm__("__GLOBAL__sub_I_NativeAdrenoPublish.cpp");
 extern "C" void native_adreno_accelerator_static_init(void) __asm__("__GLOBAL__sub_I_NativeAdrenoAccelerator.cpp");
 extern "C" IOService *native_adreno_accelerator_allocate(void);
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
@@ -562,7 +563,18 @@ class CommandProcessor {
         publishedInfo.va_start = GpuClientVaStart;
         publishedInfo.va_size = inputBits > 32 ? (UINT64_C(1) << inputBits) - GpuClientVaStart : 0;
         if (native_adreno_io_coherent) publishedInfo.flags |= NativeAdrenoDeviceCachedCoherent;
-        if (!status) status = native_adreno_publish(vm, &submit, &ring, &clock, &timer, &publishedInfo, inputBits, outputBits);
+        if (!status) {
+            static bool publishClassesReady;
+            if (!publishClassesReady) {
+                void *registration=OSMetaClass::preModLoad(g_kernel_kmod_info.name);
+                if (!registration) return kIOReturnNoResources;
+                native_adreno_publish_static_init();
+                status=OSMetaClass::postModLoad(registration);
+                if (status) return status;
+                publishClassesReady=true;
+            }
+            status=native_adreno_publish(vm,&submit,&ring,&clock,&timer,&publishedInfo,inputBits,outputBits);
+        }
         if (status) return status;
         native_adreno_set_restart(restart, this);
         preemptCall = thread_call_allocate_with_options(finishPreemption, this,

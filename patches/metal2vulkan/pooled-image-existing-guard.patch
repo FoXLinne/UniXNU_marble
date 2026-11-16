@@ -1,0 +1,11 @@
+--- a/crates/metal2vulkan-runtime/src/memory.rs
++++ b/crates/metal2vulkan-runtime/src/memory.rs
+@@ -5158,7 +5158,7 @@
+             // A dedicated image takes a spare block of its pool where one fits ([`SPARE_FOR`]); one
+             // placed apart takes memory no submission has used ([`Fit`]).
+             if holds == Holds::Images && addressed.is_none() {
+-                let mut memory = lock(memory);
++                let memory = &mut *guard;
+                 if let Some(block) =
+                     memory.take_spare(device, pool, if dedicated { size } else { block_size })
+                 {

@@ -14,10 +14,19 @@ int native_marble_metal_prepare(proc_t, user_addr_t);
 boolean_t native_marble_haptics_vnode(vfs_context_t, vnode_t, struct componentname *);
 boolean_t native_marble_haptics_vnode(vfs_context_t context, vnode_t vnode, struct componentname *component)
 {
-    uint32_t enabled = 0;
-    PE_parse_boot_argn("marble-haptics", &enabled, sizeof(enabled));
     proc_t process = vfs_context_proc(context);
-    if (enabled < 2 || !process || strcmp(process->p_name, "audiomxd")) return FALSE;
+    if (!process || strcmp(process->p_name, "audiomxd")) return FALSE;
+    /* Boot arguments are immutable. Publish the valid bit with the value so
+     * concurrent vnode checks can share the result without a sleeping lock. */
+    static uint64_t boot_mode;
+    uint64_t cached = __atomic_load_n(&boot_mode, __ATOMIC_ACQUIRE);
+    if (!cached) {
+        uint32_t enabled = 0;
+        PE_parse_boot_argn("marble-haptics", &enabled, sizeof(enabled));
+        cached = (1ULL << 32) | enabled;
+        __atomic_store_n(&boot_mode, cached, __ATOMIC_RELEASE);
+    }
+    if ((uint32_t)cached < 2) return FALSE;
     char path[MAXPATHLEN];
     int length = sizeof(path);
     if (vn_getpath(vnode, path, &length)) return FALSE;
@@ -30,7 +39,11 @@ boolean_t native_marble_haptics_vnode(vfs_context_t context, vnode_t vnode, stru
     return vnode_vtype(vnode) == VCHR &&
         (!strcmp(path, "/dev/marble-haptics") || !strcmp(path, "/dev/marble-speaker"));
 }
+#ifdef MARBLE_IOS27
+extern volatile int native_bindfs_boot_mount;
+#else
 volatile int native_bindfs_boot_mount;
+#endif
 volatile int native_gpu_addon_stage = 0;
 volatile int native_gpu_addon_status = -1;
 volatile int native_gpu_addon2_stage = 0;
@@ -345,7 +358,7 @@ int native_marble_metal_prepare(proc_t process, user_addr_t scratch)
     static const char timing_target[] = "/System/Library/EventTimingProfiles";
     native_gpu_addon_mount(process, scratch, 0x400, timing_source, sizeof(timing_source),
         timing_target, sizeof(timing_target),
-        "/System/Library/EventTimingProfiles/N841.Default.plist",
+        "/System/Library/EventTimingProfiles/N104.Default.plist",
         "/System/Library/EventTimingProfiles/D84.Default.plist",
         &native_gpu_addon3_stage, &native_gpu_addon3_status);
     printf("MarbleMetal: event timing mount=%d/%d\n", native_gpu_addon3_stage, native_gpu_addon3_status);
@@ -410,7 +423,7 @@ int native_marble_metal_prepare(proc_t process, user_addr_t scratch)
         if (marble_haptics_overlay_status[0]) return marble_haptics_overlay_status[0];
         native_gpu_addon_mount(process, scratch, 0x400, tunings, sizeof(tunings),
             "/Library/Audio/Tunings", sizeof("/Library/Audio/Tunings"),
-            "/Library/Audio/Tunings/N841/Haptics/hapticengineconfig.plist",
+            "/Library/Audio/Tunings/N104/Haptics/hapticengineconfig.plist",
             "/Library/Audio/Tunings/D84/Haptics/hapticengineconfig.plist",
             &marble_haptics_overlay_stage[1], &marble_haptics_overlay_status[1]);
         printf("MarbleHaptics: HAL overlay=%d/%d tunings=%d/%d\n",
