@@ -19,6 +19,8 @@
 #include <libkern/zlib.h>
 #include <SparseDisk.h>
 #include "MarbleUfs.h"
+#include "MarblePlatformMatch.h"
+#include "MarbleVirtualStorage.h"
 #include <pexpert/pexpert.h>
 #include <pexpert/boot.h>
 
@@ -28,6 +30,7 @@ extern "C" int native_root_block_authorized(dev_t);
 extern "C" int native_root_block_cache_authorized(dev_t);
 extern "C" int native_root_block_volume_device(const char *, dev_t *, char *, size_t);
 extern "C" int native_marble_data_volume(dev_t *, char *, size_t);
+extern "C" int native_qemu_scratch_volume(dev_t *, char *, size_t);
 extern "C" const OSMetaClass *native_source_storage_parent(void);
 extern "C" void marble_storage_base_init(void) __asm__("__GLOBAL__sub_I_IOBlockStorageDevice.cpp");
 extern "C" void marble_root_disk_init(void) __asm__("__GLOBAL__sub_I_MarbleRootDisk.cpp");
@@ -169,11 +172,13 @@ static int rootBlockIndex(dev_t device)
 
 extern "C" int native_root_block_authorized(dev_t device)
 {
+    if (!marble_platform_matches()) return native_qemu_root_authorized(device);
     return rootBlockIndex(device) == 0;
 }
 
 extern "C" int native_root_block_cache_authorized(dev_t device)
 {
+    if (!marble_platform_matches()) return native_qemu_cache_authorized(device);
     return rootBlockIndex(device) == 1;
 }
 
@@ -227,11 +232,13 @@ static int waitRootBlockVolume(const char *uuid, unsigned index, dev_t *device, 
 
 extern "C" int native_root_block_volume_device(const char *uuid, dev_t *device, char *path, size_t size)
 {
+    if (!marble_platform_matches()) return native_qemu_volume_device(uuid, device, path, size);
     return waitRootBlockVolume(uuid, 1, device, path, size);
 }
 
 extern "C" int native_marble_data_volume(dev_t *device, char *path, size_t size)
 {
+    if (!marble_platform_matches()) return native_qemu_scratch_volume(device, path, size);
     return marble_data_uuid[0] && waitRootBlockVolume(marble_data_uuid, 2, device, path, size);
 }
 
@@ -353,9 +360,14 @@ extern "C" void native_marble_root_start(void)
     if (!handle) panic("MarbleStorage: class registration handle unavailable");
     marble_storage_base_init();
     marble_root_disk_init();
+    if (!marble_platform_matches()) native_qemu_storage_metaclass_init();
     status = OSMetaClass::postModLoad(handle);
     if (status) panic("MarbleStorage: class registration failed %x", status);
     IOLog("MarbleStorage: source arm64e block class registered, base size %lu\n", sizeof(IOBlockStorageDevice));
+    if (!marble_platform_matches()) {
+        native_qemu_storage_start();
+        return;
+    }
     IORegistryEntry *map = IORegistryEntry::fromPath("/chosen/memory-map", gIODTPlane);
     OSData *range = map ? OSDynamicCast(OSData, map->getProperty("RootDisks")) : nullptr;
     if (!range || range->getLength() != 16) panic("MarbleStorage: RootDisks handoff absent");
