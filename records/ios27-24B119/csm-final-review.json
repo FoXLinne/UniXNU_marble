@@ -1,0 +1,64 @@
+{
+  "format": "csm-final-review/1",
+  "scope": "Three remaining CSM/image4-v2 targets only; all other mappings are main-owned",
+  "inputs": {
+    "original_kernelcache": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed",
+    "original_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+    "board_native": "outputs/UniXNU_marble/ios27_24B119/kernel.native.macho",
+    "board_native_sha256": "45877b748ebf90d03c149f041292788025709f032c6a19c7601f5310cae32824",
+    "xnu_source": "outputs/UniXNU_marble/ios27_24B119/performance-port (xnu-12377)",
+    "txm_request_header": "TXM call ABI (OBTS v8 / Kernel.framework): +0x00 selector, +0x06 failure_fatal, +0x08 skip_logs, +0x0c num_input_args, +0x10 num_output_args, +0x14 txm_ret"
+  },
+  "functions": [
+    {
+      "original": "0xfffffff00a7381f8",
+      "size": 64,
+      "original_sha256": "d4c2dfc723aa1286106b1d3ef007d264686a07a6d7bd6d9449b7e395e136facd",
+      "consumers": ["AppleMobileFileIntegrity", "sandbox"],
+      "verdict": "verified",
+      "native_symbol": "_extended_research_mode_state",
+      "body": "w8 = (dword@0x7c7e0cc != 0) || (byte@0x7c7e0c8 bit0) || (dword@0x7c7e0d0 == 1); return w8 & byte@0x7c280be9",
+      "evidence": "Instruction-for-instruction identical to native _extended_research_mode_state @fffffff007746eb0 and _research_mode_state @fffffff007746e6c (same 16-insn shape: dword-cbnz / ldrb-tbnz / dword-cmp#1-cset / ldrb-and-ret). The triple condition is allow_research_modes() from bsd/sys/code_signing.h (PE_vmm_present != 0 || (PE_esdm_fuses & 1) || PE_i_can_has_debugger() == true); the mask byte is the mode flag. Sibling 0xfffffff00a7381b8 is byte-identical except mask @0x7c280be8 -> _research_mode_state; declaration order in kern_codesigning.c (research_mode_enabled then extended_research_mode_enabled) and native mask offsets (+0x1a0 vs +0x1a1) confirm ordering: +0xbe8=research, +0xbe9=extended. Previous _cs_debug / _cs_process_global_enforcement guesses are wrong: _cs_debug is a data symbol (not in named_functions, anchor silently dropped) and native cs_process_global_enforcement/cs_system_enforcement are constant-return stubs with no flag reads.",
+      "sibling_warning": "0xfffffff00a7381b8 (64b, sha256 3f1fb5555d87eb4bd6cabe905c8d71818696cc13119ad8fc69b1b4eaf5852aef) is auto-bound to _is_address_space_debugged in fileset.map.json; it is byte-identical to 0x7381f8 except mask byte and is actually _research_mode_state. Main should re-review that binding.",
+      "return_type": "bool/uint32 (argless)"
+    },
+    {
+      "original": "0xfffffff00a738238",
+      "size": 64,
+      "original_sha256": "9426ddbedfc8724e51ed873f84235ebed01872154c1e5ab752647c07bc2807e0",
+      "consumers": ["AppleMobileFileIntegrity"],
+      "consumer_site": "AMFI __auth_got slot 0xfffffff007e9fee8",
+      "verdict": "unresolved-source-gap",
+      "selector": 6,
+      "request_header_fields": { "selector@0x00": 6, "failure_fatal@0x06": 0, "skip_logs@0x08": 0, "num_input_args@0x0c": 0, "num_output_args@0x10": 0 },
+      "body": "Zeroes a 0x68-byte TXM request packet on the stack, stores selector=6 at +0, calls the CSM request-mailbox worker 0xfffffff00a739590, returns its status",
+      "mailbox": "0xfffffff00a739590 (1900b) is a waitq-protected work-queue consumer: dequeues packets, unpacks field array at +0xc (argc 0..7) into a local arg vector, calls 0xfffffff00aa1c5dc which marshals x0..x7 + w16=selector into the image4/TXM monitor trap, stores status at req+0x14, then waitq_wakeup64_nthreads the caller",
+      "candidates": [
+        "TXMSelectorUpdateDeviceState / _update_csm_device_state (argless, non-fatal, early-init device-state sync; native symbol exists but is an empty stub @fffffff007746f0c)",
+        "TXMSelectorCompleteSecurityBootMode (argless AMFI boot-completion notify; also plausible but failure would more likely be fatal, see 0x7382a0)"
+      ],
+      "gap": "xnu-12377 has no request-marshal ABI: native kernel_image4_* calls the registered image4_v2_interface directly (g env ptr + braa to fn ptr). The v2 selector-wrapping exports are xnu-13432-new, so no same-name native function exists to bind to. Requires a source-level bridge: either implement the wrapper as a packet build + mailbox submit compatible with 0x739590-equivalent native machinery, or map the export to the native direct-call equivalent of the same selector."
+    },
+    {
+      "original": "0xfffffff00a7382a0",
+      "size": 72,
+      "original_sha256": "e1666231f6a985355c90d36abca796c142a510da259747c50bde795a364023cb",
+      "consumers": ["AppleMobileFileIntegrity"],
+      "consumer_site": "AMFI __auth_got slot 0xfffffff007e9ff88",
+      "verdict": "unresolved-source-gap",
+      "selector": 8,
+      "request_header_fields": { "selector@0x00": 8, "failure_fatal@0x06": 1, "skip_logs@0x08": 0, "num_input_args@0x0c": 0, "num_output_args@0x10": 0 },
+      "body": "Same 0x68-byte TXM request builder as 0x738238 but selector=8 and strb w8,[sp,#6] sets failure_fatal=true; no input or output args",
+      "candidates": [
+        "TXMSelectorCompleteSecurityBootMode (argless AMFI boot-completion notify; failure_fatal=1 consistent with mandatory boot-mode completion)",
+        "TXMKernelSelectorAssociateKernelEntitlements-class early init call (argless variants only; arg-taking selectors ruled out by zero argc)"
+      ],
+      "gap": "Same xnu-13432 request-marshal ABI gap as 0x738238; no native implementation exists."
+    }
+  ],
+  "additional_observations": [
+    "0xfffffff00a7382e8 (100b) is also a request builder but parameterized (selector/arg0 from runtime x19, plus store to [x8+0x3d4]); it is auto-bound to _update_csm_device_state in fileset.map.json, which is questionable since native _update_csm_device_state is an empty stub and this function is not argless. Candidates: _kernel_image4_monitor_trap or a generic selector forwarder. Flagged for main.",
+    "Selector constants confirmed on adjacent bound builders: 0x1a=Image4SetReleaseType, 0x1b=Image4GetExports, 0x1c=Image4SetNonce, 0x1d=DeveloperModeToggle(29 per OBTS deck), 0x1e=EnableRestrictedMode, 0x1f=EnterLockdownMode (enable/disable share selector, flag arg differs) — consistent with TXMKernelSelector enum ordering.",
+    "image4_v2_load_local_policy / image4_v2_load_diavlo_root_ca naming hypothesis is NOT supported for these two targets: both requests are fully argless with no output words, whereas policy/root-CA loads carry object payload args. TXM selector names above are the better hypothesis space."
+  ]
+}

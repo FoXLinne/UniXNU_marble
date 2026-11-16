@@ -1,0 +1,13 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a3ee3b8",
+      "original_sha256": "b269e48d467a5817be0d95bb5474a88ff81b1d9bf59873809bc2abb81b257230",
+      "native_symbol": "_vfs_context_issignal",
+      "evidence": "vfs_context_issignal(ctx,sigset_t mask): saves mask x1; resolves ctx thread to proc with current_proc fallback; null proc returns 0; tailcalls proc_pendingsignals at 0xfffffff00a7110f0. Callee locks proc, ORs thread pending signals AND mask excluding process/thread sigmask. Exact source counterpart bsd/vfs/kpi_vfs.c and bsd/kern/kern_sig.c; credential-taking suser identity rejected.",
+      "function_bytes": 112
+    }
+  ],
+  "callee": "0xfffffff00a7110f0",
+  "contract": "sigset_t vfs_context_issignal(vfs_context_t ctx, sigset_t mask)"
+}

@@ -1,0 +1,25 @@
+{
+  "targets": [
+    "0xfffffff00acf7ce8",
+    "0xfffffff007be17c8"
+  ],
+  "method": "capstone operand and register-write walk; final consumer instructions retained for review",
+  "sites": [
+    {
+      "module": "com.apple.driver.AppleMobileFileIntegrity",
+      "function": "0xfffffff008f4de80",
+      "pc": "0xfffffff008f4dec8",
+      "instruction": "ldr x8, [x8, #0x60]",
+      "referenced": "0xfffffff007ea0060",
+      "target": "0xfffffff007be17c8"
+    },
+    {
+      "module": "com.apple.driver.AppleMobileFileIntegrity",
+      "function": "0xfffffff008f4de80",
+      "pc": "0xfffffff008f4decc",
+      "instruction": "ldr w8, [x8]",
+      "referenced": "0xfffffff007be17c8",
+      "target": "0xfffffff007be17c8"
+    }
+  ]
+}

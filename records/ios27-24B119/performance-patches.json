@@ -1,0 +1,32 @@
+{
+  "source": "ios27/source/profiles/os/macos-27.3-26C5035r/patches/xnu-12377",
+  "patches": [
+    {
+      "name": "window-memory-excluded-ranges.patch",
+      "sha256": "a53fdc0d23cdac9d8764e81e64a37cbfa8cb46967ea1151ca7eedd20467fb9e0",
+      "applied_to_12377_with_arch_soc_os_sheng": true
+    },
+    {
+      "name": "payload-boot-memory-report.patch",
+      "sha256": "57e4e44e4b68796e9b42a97d6bffd264e687b3c0e92956fd961118a7f76f9a1f",
+      "applied_to_12377_with_arch_soc_os_sheng": true
+    },
+    {
+      "name": "platform-error-name-address.patch",
+      "sha256": "2e50174296dfba7ad9c3d2bad55c1e95adffba83abd5545b52e08b7a1c576899",
+      "applied_to_12377_with_arch_soc_os_sheng": true
+    },
+    {
+      "name": "window-outside-memory-adoption.patch",
+      "sha256": "0c94281f61371bd85a2fc0de396762e7463f80a7f0f861ae4c13c6fde0728a58",
+      "applied_to_12377_with_arch_soc_os_sheng": true
+    }
+  ],
+  "adaptation": "outside adoption insertion anchored after payload accounting counters before ml_static_mfree; the upstream VM and fault-probe implementation is retained",
+  "runtime": "pending marble boot; maximum usable RAM policy selected",
+  "release_compatibility": {
+    "patch": "native-memory-probe-state.patch",
+    "reason": "RELEASE omits add_saved_state_pc when DTrace and XNUPOST are disabled; non-Apple target memory probes require the same PAC-aware saved-state update helper",
+    "result": "rebuild pending"
+  }
+}

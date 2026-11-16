@@ -1,0 +1,50 @@
+{
+  "process": {
+    "pid": 321,
+    "name": "backboardd"
+  },
+  "thread": "0xfffffff8294e00e0",
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/directory-search-images/backboardd-live-context.json",
+  "plugin": {
+    "address": "0x119280000",
+    "path": "/System/Library/Extensions/NativeAdrenoMetal.bundle/NativeAdrenoMetal"
+  },
+  "frames": [
+    "0x2484c80dc",
+    "0x18be16548",
+    "0x18be13edc",
+    "0x119d0c39c",
+    "0x119e0d51c",
+    "0x119e05e9c",
+    "0x119e03ffc",
+    "0x11a24df0c",
+    "0x11a24b8ec",
+    "0x11a3648e4",
+    "0x11a3645f4",
+    "0x11936eae8",
+    "0x1192cf7dc",
+    "0x18feae048",
+    "0x18fbd9cb4",
+    "0x18fdf5d88",
+    "0x18fdc243c",
+    "0x18ff2a80c",
+    "0x18ff29dcc",
+    "0x1bacbdfb4",
+    "0x1baca6b60",
+    "0x18ff29c88",
+    "0x100e2cb30",
+    "0x1bacbdfb4",
+    "0x1baca6b60",
+    "0x100e1ebd4"
+  ],
+  "symbolication": {
+    "tool": "atos arm64e",
+    "frame": "0x119d0c39c",
+    "function": "metal2vulkan_runtime::memory::place",
+    "source": "crates/metal2vulkan-runtime/src/memory.rs:5161"
+  },
+  "cause": "Fit::Pooled holds guard from lock(memory); image spare branch locks the same Mutex again while guard is needed below",
+  "repair": "borrow &mut *guard for spare lookup and placement",
+  "source_sha256": "15ce66ea577aae93a8e46029b766ca2e0dd61944cf2af2a9b19f505feeb9e5d0",
+  "runtime_result": "pending"
+}

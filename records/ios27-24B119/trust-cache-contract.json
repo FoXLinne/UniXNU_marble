@@ -1,0 +1,33 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a737764",
+      "native_symbol": "_native_ios27_query_trust_cache",
+      "evidence": "Four arguments: query type w0 <=3, cdhash x1, cdhash length x2, optional 16-byte query token x3. Selector14, three input words and two return words. AMFI x2 comes from csblob_get_cdhash_with_length output byte through 0x8f41650 -> 0x8f41bd8 -> 0x8f3f704 -> 0x8f377e0. Token decoded by retained libTrustCache at 0x8f4c168; native query retains shared runtime lock and real library lookup. Typed board adapter records actual query return/token/category; delegates to native query_trust_cache_with_length and returns its result.",
+      "original_sha256": "1edfeb3868c2fa4b39748a317834ee05d126938270ea4722f88056b4bcddd420"
+    },
+    {
+      "original": "0xfffffff00a7378d0",
+      "native_symbol": "_query_trust_cache_for_rem_with_length",
+      "evidence": "Three arguments: cdhash x0, length x1, optional uint8 REM permissions output x2; selector15 with two input words, one return word; writes byte only on KERN_SUCCESS.",
+      "original_sha256": "a68682fb74a4ae500175894584862a6eda479ba81bf38499060339b718758f83"
+    },
+    {
+      "original": "0xfffffff00a73722c",
+      "original_sha256": "313a990746305fafb22c83c1e964ac3ea1cfcef191f403036dc60930aad05ee3",
+      "native_symbol": "_load_trust_cache",
+      "evidence": "Four arguments: IMG4 object pointer/length x0/x1, external manifest pointer/length x2/x3; loops trust-cache type4 through27, zeroes auxiliary manifest pair and calls seven-argument 0xa7372a8; accepts success or already-in-set."
+    },
+    {
+      "original": "0xfffffff00a7372a8",
+      "original_sha256": "6f064822cfe879f3ae87c646fc7806a4be57f4198beda2d9a1510d17cd06997f",
+      "native_symbol": "_load_trust_cache_with_type",
+      "evidence": "Seven arguments: type x0, object x1/x2, external manifest x3/x4, auxiliary manifest x5/x6; validates all three pointer/length pairs for overflow; IMG4 extraction and typed load follow. Panic ext-manifest matches source kern_trustcache.c load_trust_cache_with_type."
+    }
+  ],
+  "source": "xnu-work/80755fa3de097358/bsd/kern/kern_trustcache.c",
+  "query_token_bytes": 16,
+  "hash_length_producer": "csblob_get_cdhash_with_length, optional uint8 output",
+  "device_evidence": "outputs/UniXNU_marble/ios27_24B119/device-20261113/target-overlays/early-116.json",
+  "status": "source-contract-repaired; prelink pending"
+}

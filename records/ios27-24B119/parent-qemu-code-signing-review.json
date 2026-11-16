@@ -1,0 +1,15 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a737f4c",
+      "original_sha256": "296abf4ffe738730ce593b48a1b1189be9d4ee5bb6ef84cc644a95343c33ff57",
+      "native_symbol": "_code_signing_configuration",
+      "evidence": "QEMU security-extension startup reaches this two-output-pointer API. Target stores monitor through x0 and config through x1 at +0xd8/+0xe4; acquire/release config initialization and source kern_codesigning.c code_signing_configuration match. proc-taking cs_process_enforcement contract rejected by actual zone_require_ro panic.",
+      "function_bytes": 236
+    }
+  ],
+  "qemu_run": "outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-034854",
+  "panic": "zone_require_ro failed: address not in a ro zone",
+  "caller": "OSKext::start -> AMFI -> configuration API",
+  "parameter_contract": "void code_signing_configuration(code_signing_monitor_type_t *monitor, code_signing_config_t *config)"
+}

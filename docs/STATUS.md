@@ -1,5 +1,44 @@
 # marble 阶段状态
 
+## iOS 27.2 真机维护：2026-11-16
+
+当前版本为 v49：Wi-Fi 内核沿用 v47，USB 固件沿用 v48，图形插件加入旧版 metallib 扩展头边界修复。
+
+- Wi-Fi 自动连接及三次开关重连的 DHCP 用时为 1.271181、1.307573、0.859908 秒；v49 网络诊断接口响应 HTTP 200。
+- USB 主机命令中断 10 秒后停止喂看门狗的策略移除。v48 的 60 秒端口禁用实验保留连续内核运行及图形输出记录，v49 保留该修复。
+- 用户确认登录窗口期间的重启由 USB 断连触发，故障归入 USB 看门狗修复。
+- PiliPlus 的 Flutter 旧版 metallib 在函数表后紧接元数据，解析器按节边界识别空扩展头。三个实际库共 65 个函数完成解码，20 个容器回归用例通过。
+- v49 的 Runner PID 534 保持运行，推荐页封面、文字、滚动及热门页切换完成真机检查，应用停留在热门页。
+
+验收摘要：[device-acceptance-2026-11-16.json](../records/ios27-24B119/device-acceptance-2026-11-16.json)。视频播放属于独立功能范围。
+
+以下保留各日期的历史记录。
+
+## iOS 27.2 真机维护：2026-11-14
+
+`candidate-connection-lifetime` 通过桌面解锁、设置、墙纸图库与渐变编辑、四次深浅色切换、
+控制中心、多任务、锁屏唤醒解锁及新增青色墙纸组合测试。SpringBoard 与 backboardd 退出计数为 0；
+显示等待 4132 次，延迟确认成功 1 次，真实超时 0 次。桌面墙纸中心像素为 RGB(81,213,251)。
+
+崩溃追踪定位到第二个 Vulkan 设备创建失败后的连接清理：进程共用的 GPU 连接被关闭，
+首个设备持有的 8 MiB CPU 映射随 `dropViews` 撤销，玻璃效果写入触发 SIGSEGV。
+Turnip 修复覆盖连接引用、共用 GPU 地址分配及设备独立缓存释放。
+原关闭函数在主机回归触发映射存活断言；修复函数通过 AddressSanitizer、UndefinedBehaviorSanitizer
+及 2400 次并发引用与分配测试。源码补丁见 `patches/ios27-gpu/turnip-shared-connection-lifetime.patch`。
+
+证据、镜像摘要及测试边界见 [连接生命周期记录](../records/ios27-24B119/connection-lifetime.json)。
+墙纸图库与保存卡片的缩略图、渲染响应性能及本次拉取的 GPU 上游源码整合属于进行中的维护范围。
+
+## iOS 27.2 迁移：2026-11-12
+
+分支 `port/ios27.2-marble`，目标 `24B119`。完整范围、阶段结果、来源与续接命令见
+[迁移交接](IOS27_HANDOFF.md)、[迁移进度](../records/ios27-24B119/progress.json) 和 CURRENT.json。
+18 个组件的上游与本地适配合入记录状态为 staged；Turnip、Metal 桥接、签名插件与
+24B119 runtime 构建完成。最终 runtime 含原生 USB 内核日志服务，716 个文件、28 个签名摘要。
+原版类 ABI、完整驱动库与预链接映射继续处理；真机启动与功能结果待采集。
+
+以下内容保存 iOS 18 的历史阶段及设备状态。
+
 日期：2026-11-11。系统目标：iOS 18.7.11 / 22H384，XNU 11417.140.69 arm64e RELEASE。
 
 ## 设备终态

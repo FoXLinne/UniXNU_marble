@@ -1,0 +1,138 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a8b03b0",
+      "original_sha256": "29bf15f4a980ada816e4fe4796068d5ecd36d764f347e7ef7d6a96d46a264dc1",
+      "native_symbol": "__ZN11OSSerialize10setIndexedEb",
+      "evidence": "void OSSerialize::setIndexed(bool): allocates OSData(256) and stores indexData; no use of incoming bool; source libkern/c++/OSSerializeBinary.cpp; initWithCapacity has bool return, OSArray tags allocation and guarded kernel mapping, absent here",
+      "function_bytes": 156
+    },
+    {
+      "original": "0xfffffff00a98da28",
+      "original_sha256": "cd122fe2cffbbf546b5778939b44a49fead4d17ff04e12179b76bc80bf507d2b",
+      "native_symbol": "_IOCircularDataQueueEnqueue",
+      "evidence": "IOReturn IOCircularDataQueueEnqueue(queue,data,size_t): null checks, kIOReturnBadArgument, queue header identity, element bound, atomic pair CAS, modulo producer advance and memcpy; source iokit/IOKit/IOCircularDataQueueImplementation.h. Separate C queue and error-code contract from IOSharedDataQueue bool methods",
+      "function_bytes": 420
+    },
+    {
+      "original": "0xfffffff00a98c770",
+      "native_symbol": "__ZN17IOSharedDataQueue7enqueueEPvj",
+      "evidence": "Boolean IOSharedDataQueue::enqueue(data,UInt32 size): dataSize+4 overflow check, tail/head capacity/wrap paths, writes size followed by memcpy, store-release tail at queue+8, empty transition notification; source iokit/Kernel/IOSharedDataQueue.cpp",
+      "original_sha256": "7c7727066203a634c13d04bddc37779f4cbc5593cdbfa04a97986eea5448ed3d",
+      "function_bytes": 432
+    },
+    {
+      "original": "0xfffffff00a799fa0",
+      "native_symbol": "_sock_getsockname",
+      "evidence": "errno_t sock_getsockname(socket,output,int length): EINVAL null output or negative w2; lock; pru_sockaddr through pr_usrreqs+0xa0; unlock; copy min(length,sa_len); free sockaddr. Source bsd/kern/kpi_socket.c; peer path additionally checks connected state",
+      "original_sha256": "fe5f78578b37f03eeb30bd809676e26112e0534376b87da267d2a889d5c9e768",
+      "function_bytes": 304
+    },
+    {
+      "original": "0xfffffff00a6b13ac",
+      "original_sha256": "76d2edd1eb3c226ca6abbfe9dae9779069007ca0c0d4d699ccf9e0d211bba8ae",
+      "native_symbol": "_kernel_debug_register_callback",
+      "evidence": "int kernel_debug_register_callback(kd_callback_t): indirect 24-byte callback structure, leading function/context pointers and trailing iop_name[8]; substitutes literal IOP-??? for invalid/empty name then passes name,flags=0,function,context to register_coproc_internal. Literal at 0xfffffff00708a9db; source bsd/kern/kdebug.c; task_is_driver accepts task and inspects task role flags",
+      "function_bytes": 216
+    },
+    {
+      "original": "0xfffffff00a1ea70c",
+      "original_sha256": "78d58ef1c0374f048866a135e9b2cc67ee5b5461bef2e4c03c387262cc72a22e",
+      "native_symbol": "_kdp_register_callout",
+      "evidence": "void kdp_register_callout(fn,arg): allocates struct kdp_callout (32 bytes), stores fn+8, callout_in_progress=false at+16, arg+24, CAS-prepends next at+0. Exact field order and lock-free list source osfmk/kern/debug.c:1009-1035. cpu_event callback uses a different 24-byte three-pointer element and spinlock.",
+      "function_bytes": 100
+    },
+    {
+      "original": "0xfffffff00a3ec79c",
+      "original_sha256": "08774d8d64efc3a43be28fabe3f7ddfbd6601c33249ff0b2be1ebe3c87e4234f",
+      "native_symbol": "_vfs_context_is64bit",
+      "evidence": "vfs_context_is64bit(ctx): resolves context thread or current thread, reads thread options 64bit-address flag; zero-argument per-thread bit test after context lookup, no process signal list traversal. Source bsd/vfs/kpi_vfs.c and thread_is_64bit_addr/uthread_is64bit",
+      "function_bytes": 32
+    },
+    {
+      "original": "0xfffffff00a3ee5c0",
+      "native_symbol": "_native_ios27_vfs_context_iopolicy_0x8000",
+      "evidence": "vfs_context_iopolicy_unassigned_0x8000(ctx): resolves context proc with kernel fallback, reads u16 proc iopolicy at +0x616, returns bit15. Source bsd/vfs/kpi_vfs.c tests P_VFS_IOPOLICY_0x8000; distinct from thread address-width predicate; package/ios27-runtime/MarbleVfsPolicy27.c implements the process bit predicate against native source layout",
+      "original_sha256": "85691f66a26d333762d497715b314cd531c5f4f6ceccffdd889cdf33a0c06a65",
+      "function_bytes": 80
+    },
+    {
+      "original": "0xfffffff00a20c52c",
+      "original_sha256": "18df7b52d341d23fe7fce879c332abb8427c744a2f86dd5b8a8d9623941b6329",
+      "function_bytes": 228,
+      "native_symbol": "_cpu_event_register_callback",
+      "evidence": "void cpu_event_register_callback(fn,param): allocates 24-byte three-pointer element, acquires cpu_callback_chain spinlock, writes fn+0,param+8,next+16, release-stores new head, unlocks. Exact osfmk/kern/machine.c contract and layout; separate from kdp_register_callout 32-byte lock-free chain."
+    },
+    {
+      "original": "0xfffffff00a229634",
+      "original_sha256": "01818f355ec1dc4338c8c9679a770b7d7bbbc1d517ef3d0d4563d29bef282040",
+      "native_symbol": "_sched_disable_acc_rail",
+      "evidence": "void sched_disable_acc_rail(die_id,die_cluster_id): topology cluster table scans die+0x18/cluster+0x20; complements cpu_mask+0x10; under sched_available_cores spinlock clears pcs_required_online_pmgr; if powered-core update required stores REASON_PMGR_SYSTEM then signals update thread. Exact osfmk/kern/sched_prim.c source. ml_cpu_signal_retract takes one MPIDR and sends IPI, a separate contract",
+      "function_bytes": 880
+    },
+    {
+      "original": "0xfffffff00aa3496c",
+      "native_symbol": "_pmap_claim_reserved_ppl_page",
+      "evidence": "No-argument reserved PPL page API unsupported path; complete body calls panic with function string pmap_claim_reserved_ppl_page at 0xfffffff007055177, pmap.c filename and function-not-supported format. Map to source pmap_claim_reserved_ppl_page no-PPL implementation; unrelated to VA/PA conversion",
+      "original_sha256": "6aed8e97448b4aebd8c05c27d87c36f4174966aca42fd69adabf5499123a96ea",
+      "function_bytes": 56
+    },
+    {
+      "original": "0xfffffff00aa349a4",
+      "native_symbol": "_pmap_free_reserved_ppl_page",
+      "evidence": "Reserved PPL page free API unsupported path; complete body calls panic with function string pmap_free_reserved_ppl_page at 0xfffffff007055194 and pmap.c filename. Source pmap_free_reserved_ppl_page has pointer arg ignored without PPL; unrelated to phys-to-virtual conversion",
+      "original_sha256": "59bf0a4eef7163f77cca655bad0a2e20a574fdf7b8426bd89c72cd5033d13e0b",
+      "function_bytes": 56
+    },
+    {
+      "original": "0xfffffff00aa36a3c",
+      "original_sha256": "270e3f8691f72932d5b54c15ba75782fa0a900b4afe6ad4133552961da730434",
+      "native_symbol": "_kernel_image4_storage_data",
+      "evidence": "Noreturn wrapper calls shared panic helper at0xfffffff00aa36a4c whose embedded strings are txm.c and unsupported AppleImage4 interface. Unique source txm_image4_storage_data(size_t *allocated_size), inlined by kernel_image4_storage_data wrapper; native non-monitor backend implements actual storage allocation. ml_lockdown_handler_register has two args and calls the supplied function, unrelated.",
+      "function_bytes": 16
+    },
+    {
+      "original": "0xfffffff00a870f78",
+      "original_sha256": "cde9f18073098046841fac59413e236b8c7a4f07344c83229a58c4b963abd96a",
+      "native_symbol": "__ZN7OSArray9setObjectERK11OSSharedPtrIK15OSMetaClassBaseE",
+      "evidence": "OSArray::setObject(OSSharedPtr<const OSMetaClassBase> const&): dereferences x1 wrapper to x2; loads this->count +0x14 and dispatches indexed virtual setObject(count,obj). Source libkern/c++/OSArray.cpp shared-pointer overload; pointer overload would preserve x1 as the actual object",
+      "function_bytes": 40
+    },
+    {
+      "original": "0xfffffff00a2ba7d4",
+      "native_symbol": "_vm_kernel_addrhide",
+      "evidence": "void vm_kernel_addrhide(vm_offset_t,vm_offset_t *): saves output pointer, strips pointer, checks VM_KERNEL_IS_SLID ranges, writes zero if outside slid ranges, otherwise calls unslide helper then stores result. Source vm/vm_kern.c and mach/vm_param.h VM_KERNEL_ADDRHIDE RELEASE definition. buf_kernel_addrperm_addr is single argument with pointer return and salt, absent here",
+      "original_sha256": "38200dd1fac88435c7eabb218af1f81af6932bd5f343f1c24ea5316c3c399321",
+      "function_bytes": 144
+    },
+    {
+      "original": "0xfffffff00a2ba864",
+      "original_sha256": "bd5ac08afd995a046df39ae232bf8583401b4b51ae82f3aa1e5dd01dd367965b",
+      "native_symbol": "_vm_kernel_addrperm_external",
+      "evidence": "void vm_kernel_addrperm_external(addr,out): saves out; strips pointer; checks slid ranges for unslide path; kernel-address window takes ML_ADDRPERM helper, other addresses preserved; writes result through x1. Source vm/vm_kern.c. Four-argument vm_packing_verify_range has packing bounds and panic contracts absent here",
+      "function_bytes": 176
+    },
+    {
+      "original": "0xfffffff00a94e5e4",
+      "original_sha256": "4fbebae9fb372d9c6d825377c1ae2910e0e32b4925ce63f064f78e6c7874131d",
+      "native_symbol": "__ZN18IOMemoryDescriptor26ktraceEmitPhysicalSegmentsEv",
+      "evidence": "IOReturn IOMemoryDescriptor::ktraceEmitPhysicalSegments(): no args beyond this; kdebug_debugid_enabled(0x05410004), getPreparationID>=2, descriptor ID validation, loops getLength/getPhysicalSegment(offset,&length,0). Source iokit/Kernel/IOMemoryDescriptor.cpp. setPurgeable takes two additional state/output args and VM purgeability control absent here",
+      "function_bytes": 308
+    },
+    {
+      "original": "0xfffffff00a365374",
+      "original_sha256": "cabac3136a1bcced2d4a79eaa3d3f164edbf6865e1e26a43704cdf1273a6bfa8",
+      "native_symbol": "_ml_arm_sleep",
+      "evidence": "void ml_arm_sleep(): identifies BootCpuData, records wake absolute time, all-ones reset time, stores ARM_CPU_ON_SLEEP_PATH 0x50535553 into CPU token; boot CPU clears global stall and shuts down platform, secondary waits stall before final sleep. Source osfmk/arm64/cpu.c sleep sequence; PE_cpu_halt expects CPU-ID argument dispatch absent here",
+      "function_bytes": 356
+    },
+    {
+      "original": "0xfffffff00a36d384",
+      "original_sha256": "44071423d7024e667e9b0f9c799a42aaac7f2c8ec6ab4d59debccee03eb6d38b",
+      "native_symbol": "_armcpu_signal_mpidr",
+      "evidence": "void ml_cpu_signal(unsigned physical_mpidr): reads MPIDR, selects local/global Apple IPI register based on AFF1, writes AFF0/cluster and ISB; no sleep. Native ArmCpu armcpu_signal_mpidr bridges same physical target to GIC SGI1R or configured software-pended SPI with logical-index lookup; actual interrupt handler receives regular CPU signals",
+      "function_bytes": 56
+    }
+  ],
+  "review_basis": "full original bodies and parameter, return, state-update source contracts"
+}

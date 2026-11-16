@@ -1,0 +1,17 @@
+{
+  "component": "ArmDTPlatform",
+  "source": "ios27/sources/ArmDTPlatform/ArmDTPlatform.cpp",
+  "source_sha256": "9dcccf6b090ef5741efeac9affd32669b6d43978e9664840d9386e699a50e971",
+  "patch": "patches/ios27-upstream-sheng/armdt-release-nvram.patch",
+  "patch_sha256": "8f8cc4a3a113aafda6df832f935f99dffc3e3e3d59a1755a59fe5bec60e03f58",
+  "runtime_reason": "IONVRAM.cpp removes nvram-proxy-data after parsing in RELEASE; existing IODTNVRAM /options service demonstrates initialization",
+  "qemu_before": "ArmDTPlatform hasNVRAMProxy failed after AMFI startup",
+  "build_log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/armdt-nvram-build.log",
+  "qemu_after": {
+    "status": "configured",
+    "cpus_published": 8,
+    "nvram_service": 1,
+    "run": "outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-042852",
+    "next_panic": "MarbleStorage: RootDisks handoff absent"
+  }
+}

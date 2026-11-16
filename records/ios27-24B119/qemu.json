@@ -1,0 +1,632 @@
+{
+  "created_at": "2026-11-12T05:12:18.348477+08:00",
+  "status": "observed",
+  "run": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217",
+  "qemu": "QEMU emulator version 11.1.3",
+  "cpus": 8,
+  "memory_mib": 8192,
+  "owned_memory_mib": 4096,
+  "inputs": {
+    "esp/EFI/BOOT/BOOTAA64.EFI": {
+      "source": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-debug/stage/EFI/UniXNU/UniXNU.efi",
+      "sha256": "5f04e709a37d315fd71896ce3074789ac32a8b24048d5948ca8ff2e70c02e14b"
+    },
+    "esp/EFI/UniXNU/Payloads/DarwinBoot.efi": {
+      "source": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-debug/stage/EFI/UniXNU/Payloads/DarwinBoot.efi",
+      "sha256": "0b97a1427614e1e476c61bca6101021d22f28b35a9bcf02e851bf036420d4a29"
+    },
+    "esp/EFI/UniXNU/Payloads/kernel.macho": {
+      "source": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/kernel.virtual-storage.debug.macho",
+      "sha256": "d2ab566767538ce344dadb4b50b01b71897c2f06f6bf2c62123ef3804d0b122e"
+    },
+    "esp/EFI/UniXNU/Payloads/kernel.macho.trustcache": {
+      "original_modules": [
+        "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-08279-215.dmg.aea.trustcache",
+        "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-10128-227.dmg.aea.trustcache"
+      ],
+      "owner": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-payload-refresh/owner.trustcache",
+      "sha256": "f075602783c2c6b15ad3e76a01762dc0073427466495f2fd9d94e38e3f4e94dc"
+    },
+    "esp/EFI/UniXNU/Payloads/kernel.macho.gpuaddon": {
+      "source": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-payload-refresh/runtime.gpuaddon",
+      "sha256": "ca3384c354558dca620161db8f5aec608a3f40913b7dd2d30b63c08e7fa6963d"
+    }
+  },
+  "counter_frequency_hz": 62500000,
+  "dt_command": [
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/tools/marble-build/venv/bin/python",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217/make-dt.py",
+    "--armvirt",
+    "--armcpu",
+    "--smp",
+    "8",
+    "--dram-size",
+    "0x200000000",
+    "--owned-memory-size",
+    "0x100000000",
+    "--trust-cache",
+    "--nvram-proxy",
+    "--crypto-hash-method",
+    "sha2-384",
+    "--qemu-vmm-present",
+    "--qemu-accel",
+    "tcg",
+    "--output",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217/esp/EFI/UniXNU/Payloads/kernel.macho.adt",
+    "--virtio-mmio-fdt",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217/virt.dtb",
+    "--root-match-volume-uuid",
+    "E0577111-0369-4BCF-A4E5-59B612AA9E31"
+  ],
+  "command": [
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/tools/marble-build/venv/bin/python",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217/gdb-stop.py",
+    "0xfffffff008f40418",
+    "--fixture",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217",
+    "--esp",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217/esp",
+    "--kernel",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217/esp/EFI/UniXNU/Payloads/kernel.macho",
+    "--qemu-memory-mib",
+    "8192",
+    "--smp",
+    "8",
+    "--gic-version",
+    "3",
+    "--qemu-accel",
+    "tcg",
+    "--qemu-ramfb",
+    "--capture-screen",
+    "--system-registers",
+    "--timeout",
+    "180",
+    "--finish-function",
+    "--virtio-block-image",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-08279-215.dmg",
+    "--virtio-extra-block-image",
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-10128-227.dmg",
+    "--read-memory",
+    "fffffff00ad076c0:4",
+    "--read-memory",
+    "fffffff00ad076c4:4",
+    "--read-memory",
+    "fffffff00ad076c8:4",
+    "--read-memory",
+    "fffffff00ad076cc:4",
+    "--read-memory",
+    "fffffff00ad076d4:4",
+    "--read-memory",
+    "fffffff00ad076d8:4",
+    "--read-memory",
+    "fffffff00ad075b0:4",
+    "--read-memory",
+    "fffffff00ad075ac:4",
+    "--read-memory",
+    "fffffff00ad075b8:20",
+    "--read-memory",
+    "fffffff00ad07618:20",
+    "--read-memory",
+    "fffffff00ad07640:20",
+    "--read-memory",
+    "fffffff00ad071d0:4",
+    "--read-memory",
+    "fffffff00ad264f0:4",
+    "--read-memory",
+    "fffffff00ad26560:4",
+    "--read-memory",
+    "fffffff00ad26564:4",
+    "--read-memory",
+    "fffffff00ad26534:4",
+    "--read-memory",
+    "fffffff00ad26548:4",
+    "--read-memory",
+    "fffffff00ad26540:8",
+    "--read-memory",
+    "fffffff00ad26648:4",
+    "--read-memory",
+    "fffffff00ad2664c:4",
+    "--read-memory",
+    "fffffff00ad26650:4",
+    "--read-memory",
+    "fffffff00ad1ea80:4",
+    "--read-memory",
+    "fffffff00ad265c4:4",
+    "--read-memory",
+    "fffffff00ad265c8:4",
+    "--read-memory",
+    "fffffff00ad265d4:4",
+    "--read-memory",
+    "fffffff00ad1da48:20",
+    "--cstring-log-address",
+    "0xfffffff00a837164"
+  ],
+  "platform": "QEMU virt / cortex-a710 / GICv3",
+  "scope": "UEFI and candidate kernel boundary; physical marble execution deferred",
+  "device_tree_sha256": "81444b6dca480f490c14882ad16fe38166d3a10de2ccc7063b72658f0fb360f7",
+  "config_sha256": "cd4bdc415c9bfa737662cc1423b16efea3fa04e2b2b67e90a6fc2bbed0413ff5",
+  "cpu_topology": "8 Cortex-A710 cores in one performance cluster",
+  "disks": [
+    {
+      "name": "OS",
+      "source": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-08279-215.dmg",
+      "format": "raw",
+      "raw_bytes": 9265217536,
+      "sha256": "60dbb74c46a598e60707e6e5048ee29d3473e88bb5d2862899fa9818d0997717",
+      "offset": 1048576,
+      "read_only": true
+    },
+    {
+      "name": "SystemOS",
+      "source": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-10128-227.dmg",
+      "format": "raw",
+      "raw_bytes": 6178209792,
+      "sha256": "fa3596065f16e955a96b2671718ced0992e4957e6d1ec28fc87465bf573ec42f",
+      "offset": 9266266112,
+      "read_only": true
+    }
+  ],
+  "scratch_disk": {
+    "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/disks/scratch-data-apfs.qcow2",
+    "uuid": "EBB6F869-6B86-4C29-81CD-DB60F974D56D",
+    "format": "qcow2",
+    "read_only": false,
+    "virtual_bytes": 34359738368
+  },
+  "dt_generator_sha256": "71045bc9bea7e9451d0913c2e486411e6f9950ed8b3a904a5fe845e1dcfd392e",
+  "upstream_observer_sha256": "30f99434c8128ec8609803f767a8aac3ff6aef5b09cba92b1cf966add278952e",
+  "observer_sha256": "fda84a71c8a774fc489e72df5537badbb2dc8a9d0bdb51961b8f144c4f5974a3",
+  "observer_exit_code": 0,
+  "finished_at": "2026-11-12T05:12:26.623500+08:00",
+  "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/qemu/run-20261112-051217/gdb-stop.json",
+  "result": {
+    "x0": "0xfffffff63763f7b0",
+    "x1": "0xfffffff3843110e0",
+    "x2": "0x12bb3",
+    "x3": "0xfffffff007c64e18",
+    "x4": "0xfffffff012805000",
+    "x5": "0x4b98",
+    "x6": "0xa",
+    "x7": "0xf00000000",
+    "x8": "0xfffffff63763f7b8",
+    "x9": "0x12bb3",
+    "x10": "0xffff",
+    "x11": "0x30006",
+    "x12": "0x30005",
+    "x13": "0x30005",
+    "x14": "0x5",
+    "x15": "0xfffffff550fe2d88",
+    "x16": "0xf9dd86300a1d49a0",
+    "x17": "0xfffffff007e9f878",
+    "x18": "0x0",
+    "x19": "0xfffffff384343800",
+    "x20": "0xfffffff46a96a838",
+    "x21": "0xcda1fff46a96a838",
+    "x22": "0xd",
+    "x23": "0xfffffff384344c20",
+    "x24": "0xcda1fff384343800",
+    "x25": "0xcdb3683008f4c64c",
+    "x26": "0xcda1fff384344c20",
+    "x27": "0xfffffff00ad04178",
+    "x28": "0xd",
+    "x29": "0xfffffffa9747cce0",
+    "x30": "0x148ff6700a7df524",
+    "sp": "0xfffffffa9747cc70",
+    "pc": "0xfffffff00a7df524",
+    "stop": "T05thread:01;",
+    "pstate": "0x60400204",
+    "kernel_sha256": "d2ab566767538ce344dadb4b50b01b71897c2f06f6bf2c62123ef3804d0b122e",
+    "qemu_memory_mib": 8192,
+    "qemu_accelerator": "tcg",
+    "qemu_cpu_model": "cortex-a710,cntfrq=62500000",
+    "bounded_timeout_interrupted": false,
+    "trace_events": [],
+    "skipped_target_hits": 0,
+    "entry_string_events": [],
+    "entry_register_selection": null,
+    "entry_process_name": null,
+    "entry_min_pid": 0,
+    "entry_process_events": [],
+    "entry_kernel_bytes_match": null,
+    "entry_selection_limit": 16,
+    "primary_start_event": null,
+    "kext_log_events": [],
+    "kext_log_hits": 0,
+    "kext_log_capture_exhausted": false,
+    "syscall_number_filter": [],
+    "syscall_start_event": null,
+    "syscall_events": [],
+    "syscall_log_exhausted": false,
+    "cstring_start_event": null,
+    "cstring_events": [
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bcb4c8",
+        "argument": "0xfffffff0074f20ad",
+        "stack_bytes": "44734f07f0ffffff00000000000000003088e00af0ffffff7014e207f0ffffff20010000000000009015e207f0ffffff80010000000000007841d00af0ffffffc04e3484f3ffa1cdb082be08b08aaee620303484f3ffa1cdc04e3484f3ffffff0a0000000000000000000000000000003088e00af0ffffff20303484f3ffffff",
+        "value": "%s\n",
+        "elapsed_seconds": 7.898
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff10c44797faffffffc0f48c0af09ad3ff202efe50f5ffffff5302000000000000ddc74797faffffffe075e207f0ffffff50c44797faffffff389fbd0870b1c7fc202efe50f5ffffff5302000000000000ddc74797faffffff60c44797faffffff00c74797fafffffff82fbe0870228bd7",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.905
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "202efe50f5ffffff5302000000000000ddc74797faffffff60c44797faffffff00c74797fafffffff82fbe0870228bd7b01a986af4ffffffd01a986af4ff86a490c44797faffffff530200000000000048ae986a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "value": "\n",
+        "elapsed_seconds": 7.906
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.909
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d5477cf9e107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.91
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.912
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547e4f9e107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.913
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.916
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d5474cfae107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.916
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.919
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547b4fae107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.92
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.922
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d5471cfbe107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.923
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.925
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d54784fbe107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.926
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.928
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547ecfbe107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.929
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.931
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d54754fce107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.932
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.934
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547bcfce107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.935
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.937
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d54724fde107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.937
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.939
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d5478cfde107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.94
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff0000000000000000000000000000000066634f07f0ffffff0200000000000000e075e207f0ffffff0080906af4ffffff00c74797faffffff389fbd087094fce366634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.942
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "66634f07f0ffffff0200000000000000e075e207f0ffffff10c74797faffffff90ca4797faffffff44cdbd0870f5d547f4fde107f0ffffff0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "\n",
+        "elapsed_seconds": 7.943
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd5c00",
+        "argument": "0xfffffff0074f4c57",
+        "stack_bytes": "5388e00af0ffffff554c4f07f0ffffff00000000000000000000000000000000802dfe50f5ffffffe075e207f0ffffff130000000000000030c84797faffffff10c64797faffffff389fbd08f0a9fd40802dfe50f5ffffffe075e207f0ffffff30c74797faffffff20c64797faffffffa0c64797faffffffe450bd08f013ff38",
+        "value": "%s:%s",
+        "elapsed_seconds": 7.946
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008bd9f38",
+        "argument": "0xfffffff0074f4c5d",
+        "stack_bytes": "802dfe50f5ffffffe075e207f0ffffff30c74797faffffff20c64797faffffffa0c64797faffffffe450bd08f013ff38130000000000000024f4230a30389f3d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "value": "\n",
+        "elapsed_seconds": 7.946
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008f3ead8",
+        "argument": "0xfffffff00765b16d",
+        "stack_bytes": "30b16507f0ffffff0100000000000000c048d50af0ffffffe009f50af0ffffff00cc4797faffffff88c8680a3071ea87e06cd00af0ffffffa0cb2784f3ffa1cda0cb2784f3ffffff0100000000000000f840d00af0ffffffdbc26507f0ffffff60cc4797fafffffff805f40830038ca200383484f3ffffff939d210700000000",
+        "value": "%s: /product is missing udid-version\n",
+        "elapsed_seconds": 7.964
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008f40698",
+        "argument": "0xfffffff00765c501",
+        "stack_bytes": "5c508012f0ffffff939d210700000000204c3484f3ffa1cd4cc6f4083068b3cd00383484f3ffa1cd204c3484f3ffffff0d0000000000000038a8966af4ffa1cd38a8966af4ffffff00383484f3ffffffe0cc4797faffffff24f57d0a70f68f14f0bd6337f6ffffffb46f7d0a70e4b958204c3484f3ffffff0000000000000000",
+        "value": "AMFI: queried model name from device tree: %s\n",
+        "elapsed_seconds": 7.966
+      },
+      {
+        "handler": "0xfffffff00a837164",
+        "caller": "0xfffffff008f3a004",
+        "argument": "0xfffffff007659821",
+        "stack_bytes": "040000000000000001000000f5ffa1cd002bfe50f5ffa1cd00000000f0ffffff30c56507f0ffffff002bfe50f5ffffff5c508012f0ffffffdbc26507f0ffffff60cc4797faffffff2c09f408304aab6f5c508012f0ffffff939d210700000000204c3484f3ffa1cd4cc6f4083068b3cd00383484f3ffa1cd204c3484f3ffffff",
+        "value": "AMFI: Booted in a VM\n",
+        "elapsed_seconds": 7.969
+      }
+    ],
+    "cstring_log_exhausted": false,
+    "registry_string_events": [],
+    "registry_string_log_exhausted": false,
+    "boot_path": "uefi-unixnu-darwinboot",
+    "virtio_block_input": {
+      "name": "141-08279-215.dmg",
+      "bytes": 9265217536,
+      "format": "raw",
+      "read_only": true,
+      "device_attached": true,
+      "first_sector_sha256": "c568e347a9847ceae5f4cdaf6f72cf6161daa5981e8f94af60f4118e6aaf56ca"
+    },
+    "virtio_extra_block_input": {
+      "name": "141-10128-227.dmg",
+      "bytes": 6178209792,
+      "format": "raw",
+      "read_only": true,
+      "device_attached": true,
+      "first_sector_sha256": "46094314cbae2857734b0aefdad0adf6772682e6574758e975dbc293324fd811"
+    },
+    "finished_function_entry": "0xfffffff008f40418",
+    "function_return_target": "0xfffffff00a7df524",
+    "function_entry_arguments": [
+      "0xfffffff008f40418",
+      "0x0",
+      "0x1",
+      "0xfffffff007c22d40",
+      "0x41",
+      "0x49",
+      "0x6e",
+      "0xffffe000"
+    ],
+    "function_entry_stack": "0xfffffffa9747cc70",
+    "function_return_stack_matched": true,
+    "function_return_other_stacks_skipped": 0,
+    "entry_regions": {},
+    "entry_indirect_memory": {},
+    "entry_user_vectors": {},
+    "stack_bytes": "f0bd6337f6ffffffb46f7d0a70e4b958204c3484f3ffffff00000000000000000d0000000000000000383484f3ffa1cd204c3484f3ffffff0090d50af0ffffff204c3484f3ffffff000000000000000000000000000000000200000000000000000000000000000000383484f3ffffff70cd4797faffffff98417e0af0108f72f0bd6337f6ffffff00000000000000000000000000000000000000000d0000000200000000000000b4009d9502422e0b0000000000000000000000000000000000383484f3ffa1cd00000000000000000000000000000000020000000000000000383484f3ffffff0000000000000000f03d0051f5ffffffe0103184f3ffffff",
+    "frame_chain": [
+      {
+        "fp": "0xfffffffa9747cce0",
+        "lr": "0x728f10f00a7e4198"
+      },
+      {
+        "fp": "0xfffffffa9747cd70",
+        "lr": "0x728ab2f00a7f34e8"
+      },
+      {
+        "fp": "0xfffffffa9747cdf0",
+        "lr": "0xbecd5cf00a7f3258"
+      },
+      {
+        "fp": "0xfffffffa9747ce50",
+        "lr": "0xf7ba86700ab292dc"
+      },
+      {
+        "fp": "0xfffffffa9747cec0",
+        "lr": "0x75cb44b00a20429c"
+      },
+      {
+        "fp": "0xfffffffa9747cf20",
+        "lr": "0x1f9562f00a17b5f0"
+      }
+    ],
+    "frame_indirect_memory": {},
+    "stack_pointer_memory": {
+      "0": {
+        "address": "0xfffffff63763bdf0",
+        "bytes": "636f6d2e6170706c652e6472697665722e4170706c654d6f62696c6546696c65496e7465677269747900000000000000636f6d2e6170706c652e696f6b69742e436f7265416e616c797469637346616d696c79000000000000000000000000002f53797374656d2f4c6962726172792f457874656e73696f6e732f494f415646616d696c792e6b657874000000000000636f6d2e6170706c652e636f6d70696c6572732e6c6c766d2e636c616e672e315f30000000000000000000000000000034304135374134452d323641302d313144382d393239352d303030413935384132433738000000000000000000000000636f6d2e6170706c652e696f6b69742e494f43727970746f416363656c657261746f7246616d696c790000000000000000000000000000000000000000000000"
+      },
+      "2": {
+        "address": "0xfffffff384344c20",
+        "bytes": "e018c207b0a2e93704000400000000002816986af4ffffff8065f650f5ffffff38680051f5ffffffb8660051f5ffffff00000000000000002833a5d4e80000002833a5d4e800000013000000000000004828fd0af0ffffff889a5e37f6ffffff48742784f3ffffffc0f0c99df2ffffff00000000000000000000000000000000a2041200000000000100000000000000b04c3484f3ffffffb04c3484f3ffffff6f9eefc1d7b94d268fce833e06c27a35d01f2d84f3ffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000e018c207f09b985102000200000000001857986af4ffffff406df650f5fffffff8280051f5ffffff682e0051f5ffffff00000000000000002833a5d4e80000002833a5d4e80000000000000000000000"
+      }
+    },
+    "memory": {
+      "fffffff00ad076c0:4": "00000000",
+      "fffffff00ad076c4:4": "00000000",
+      "fffffff00ad076c8:4": "00000000",
+      "fffffff00ad076cc:4": "00000000",
+      "fffffff00ad076d4:4": "00000000",
+      "fffffff00ad076d8:4": "00000000",
+      "fffffff00ad075b0:4": "00000000",
+      "fffffff00ad075ac:4": "00000000",
+      "fffffff00ad075b8:20": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fffffff00ad07618:20": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fffffff00ad07640:20": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fffffff00ad071d0:4": "00000000",
+      "fffffff00ad264f0:4": "00000000",
+      "fffffff00ad26560:4": "00000000",
+      "fffffff00ad26564:4": "00000000",
+      "fffffff00ad26534:4": "00000000",
+      "fffffff00ad26548:4": "00000000",
+      "fffffff00ad26540:8": "0000000000000000",
+      "fffffff00ad26648:4": "00000000",
+      "fffffff00ad2664c:4": "00000000",
+      "fffffff00ad26650:4": "00000000",
+      "fffffff00ad1ea80:4": "00000000",
+      "fffffff00ad265c4:4": "00000000",
+      "fffffff00ad265c8:4": "00000000",
+      "fffffff00ad265d4:4": "00000000",
+      "fffffff00ad1da48:20": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "indirect_memory": {},
+    "system_registers": {
+      "TTBR0_EL1": "0x57e6c000",
+      "TTBR1_EL1": "0x57e6d000",
+      "TCR_EL1": "0x80032a51a2511",
+      "ESR_EL1": "0x9600004f",
+      "SCTLR_EL1": "0xfc54793d",
+      "SPSR_EL1": "0x20400204",
+      "ELR_EL1": "0xfffffff00a174d48",
+      "CNTFRQ_EL0": "0x3b9aca0",
+      "FAR_EL1": "0xfffffffa9749a000",
+      "ID_AA64MMFR0_EL1": "0x22200101122",
+      "ID_AA64MMFR1_EL1": "0x10212122"
+    },
+    "argument_memory": {
+      "x0": "�",
+      "x1": "",
+      "x3": "��|\np\n�\u0001�>�\n�Q�n��|\n��į�\n0V��$N�\n0ۛ�DL�\n0_��dJ�\npX�ѠI�\n�\"�\u0004�H�\n��L�G�\n�M��\u0014��\np��^@C�\n���\u0010\u0014A�\n0��l�@�\n�4��\u0004@�\n�-��L?�\n�Ӻ\b�>�\n�\\��p=�\np\u0002��T<�\n0\u0011�ZH;�\n0����:�\n��8:�\n0.�\u001589�\n�����8�\n�R��88�\n�2��X6�\n�H�tx4�\n0R�\f�2�\np�"
+    },
+    "qemu_screen_capture": {
+      "file": "screen.png",
+      "sha256": "531f5885bdff5591e46bc1bd0384dac5cc51a741fc3768c4f23b477d3a545a59",
+      "bytes": 23259,
+      "width": 800,
+      "height": 600
+    }
+  },
+  "checkpoint_reached": false,
+  "guest_status": "checkpoint-observation"
+}

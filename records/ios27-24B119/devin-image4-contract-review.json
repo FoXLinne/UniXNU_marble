@@ -1,0 +1,258 @@
+{
+ "format": "devin-image4-contract-review/1",
+ "target": "iOS 27.2 build 24B119, original kernelcache",
+ "kernelcache": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed",
+ "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+ "fileset": "com.apple.kernel",
+ "consumer_fileset": "com.apple.security.Image4",
+ "method": [
+  "Complete Capstone disassembly of every reviewed function (function-start to function-start via kc_image.function_starts)",
+  "TXM request layout decoded on-stack: +0x00 u32 selector, +0x06 u8 failure_fatal, +0x08 u8 skip_logs, +0x0c u32 num_input_args, +0x10 u32 num_output_args, +0x14 txm_ret (u16 code @ +0x14, u16 errno @ +0x18 when code == protocol-errno marker)",
+  "AppleImage4 kext auth-GOT slots decoded (tagged pointer = kc_base + (qword & 0x3fffffff)) and stub->slot->target chains resolved",
+  "Kext call-site register setup and all referenced cstrings extracted",
+  "Compared against xnu source: bsd/kern/kern_codesigning.c, bsd/kern/code_signing/txm.c, EXTERNAL_HEADERS/image4/cs/traps.h, libkern/libkern/image4/{api,dlxk,interface}.h, libkern/libkern/img4/interface.h, EXTERNAL_HEADERS/img4/runtime.h"
+ ],
+ "txm_call_core": {
+  "address": "0xfffffff00a739590",
+  "size": 1900,
+  "sha256": "59181558f0c2cc9904a7489c33f745ecc023049719d49d9046064a946ec1f6c9",
+  "identity": "txm_kernel_call core dispatcher (per-cpu TXM call-frame pool at 0x7c7b428-adjacent globals; packs up to 8 input args by num_input_args, executes call, writes ret+errno into req+0x14)",
+  "verdict": "verified-shape (all Image4 wrappers funnel here; same body as used by selectors 0x1c,0x2d-0x37)"
+ },
+ "txm_buffer_helpers": {
+  "alloc": {
+   "address": "0xfffffff00a737db0",
+   "size": 148,
+   "sha256": "6186fbd72245ac8515c2cc1d3ed90c586d8c739fd2d769af8f612ad358c7b324",
+   "contract": "f(len): NULL len -> panic (assert @0x7093478 line 0x46); len+0x3fff overflow -> panic (@0x70b8200 line 0x1dd); else page-rounds to 16K and allocs via 0xa2b7bd8 (kmem-style alloc, flags 0x4180/0x17); returns zeroed TXM-sharable buffer or NULL"
+  },
+  "memcpy": "0xfffffff00aa3eeb0",
+  "register_into_call": "0xfffffff00a739dc8",
+  "unregister": "0xfffffff00a739eac",
+  "free_slot": "0xfffffff00a737e44"
+ },
+ "functions": [
+  {
+   "original": "0xfffffff00a73929c",
+   "size": 460,
+   "sha256": "f661fc765cc48b1196154952317be3e9da10e13f3ae2e75257f64c087cb329d8",
+   "existing_fixture_label": "_kernel_image4_copy_object",
+   "verified_identity": "kernel_image4_monitor_trap",
+   "verdict": "verified",
+   "signature": "errno_t kernel_image4_monitor_trap(image4_cs_trap_t selector, const void *input_data, size_t input_size, void *output_data, size_t *output_size)",
+   "argument_registers": {
+    "x0": "selector (image4_cs_trap_t, u64)",
+    "x1": "input_data (const void *, validated non-NULL)",
+    "x2": "input_size (size_t, validated non-zero)",
+    "x3,x4": "output_data, output_size - present in signature per source, unused by body"
+   },
+   "return": "errno_t in w0: 0 success; 22 (EINVAL) on NULL input, zero size, or vector-size mismatch; 78 (ENOSYS) for reserved selectors 1 and 2; 1 (EPERM) when TXM ret code != 5; otherwise the monitor-supplied errno; 1 also when a TXM staging buffer cannot be allocated",
+   "body": [
+    "w0=22; if (x1==0 || x2==0) return 22",
+    "if (x1+x2 overflows) -> panic @0x709367c 'image4_ dispatch: overflow on input: %p | %lu' (src line 0x70c)",
+    "img4if = *(0x7c3b028); if img4if NULL -> vector_size=-1 else vector_size = blraa [img4if+0xf8](selector) [image4_cs_trap_vector_size, PAC discr x17=0xba5]",
+    "if (input_size != vector_size) return 22",
+    "if (selector-1 <= 1) return 78 (reserved selectors 1,2 -> ENOSYS)",
+    "if (selector != 5) -> tail b 0xa73b754(selector, input_data, input_size)",
+    "selector==5 (IMAGE4_CS_TRAP_IMAGE_ACTIVATE): copies 32-byte argv into sp+0x30; w21=payload_len@+0x10? (struct field at argv+0x10 used as len; src ptr argv+0x8), w22=manifest_len@argv+0x1c, manifest src argv+0x14; allocates two TXM buffers via 0xa737db0, memcpy 0xaa3eeb0, registers via 0xa739dc8, rewrites argv pointers to staged buffers, calls 0xa73b754(5, &argv, 0x20); on failure unregisters/frees via 0xa739eac+0xa737e44"
+   ],
+   "evidence": "Exact match to kern_codesigning.c kernel_image4_monitor_trap + _kernel_image4_monitor_trap_image_activate: EINVAL(22) constants, selector<3 reserved ENOSYS(78), cs_trap_vector_size at img4 interface offset +0xf8 (dlxk field cs_trap_vector_size), selector-5 payload/manifest staging, panic strings. Fixture label _kernel_image4_copy_object is WRONG; copy_object is the ENOSYS stub pair (see 0xa739194/0xa73919c).",
+   "consumers": "not imported by com.apple.security.Image4 auth-GOT"
+  },
+  {
+   "original": "0xfffffff00a73b754",
+   "size": 156,
+   "sha256": "535e8b0a8457a407cf1c4c3be0cb9b6a178be923b9347c9eaae5f8b20c834f64",
+   "verified_identity": "_kernel_image4_monitor_trap (inner) = CSM_PREFIX(image4_monitor_trap) -> TXM selector 0x2d dispatch",
+   "verdict": "verified",
+   "signature": "errno_t f(image4_cs_trap_t selector, const void *input_data, size_t input_size)",
+   "body": "txm_call {selector=0x2d (kTXMKernelSelectorImage4Dispatch), num_input_args=5} args=(selector, input_data, input_size, NULL, NULL) via 0xa739590; on call failure: if txm_ret==5 use u32 errno at req+0x18 (errno==0 -> panic @0x7093927 'image4_ dispatch: %llu returned no error'-style, src line 0x742); else return 1 (EPERM). Matches txm.c txm_image4_monitor_trap exactly.",
+   "verdict_note": "internal dispatch shared by monitor_trap wrapper 0xa73929c"
+  },
+  {
+   "original": "0xfffffff00a739468",
+   "size": 120,
+   "sha256": "ca76636479584f32cd86f666a91c7094f45c883b66513ba2b65724645d2dd94c",
+   "existing_fixture_label": "_kernel_image4_execute_object",
+   "verified_identity": "new TXM Image4 selector 0x34 wrapper - per-domain nonce-digest commit to the code-signing monitor (v2 nonce API)",
+   "verdict": "identity-by-semantics; source-level name unresolved (function absent from xnu-12377 kern_codesigning.c; real execute_object returns ENOSYS, see 0xa739194)",
+   "signature": "errno_t f(uint32_t /* or u64 */ domain_or_type, const void *nonce_digest_struct, uint64_t len_or_handle)",
+   "txm_request": {
+    "selector": "0x34 (52)",
+    "failure_fatal": 1,
+    "skip_logs": 0,
+    "num_input_args": 3,
+    "num_output_args": 0,
+    "input_args": ["x0 (u64)", "x1 (raw pointer)", "x2 (u64)"]
+   },
+   "return": "errno_t: 0 on success; on TXM failure returns req+0x18 u16 errno when txm_ret code==0x2b else 0xffff",
+   "consumer_evidence": [
+    "com.apple.security.Image4 auth-GOT slot 0xfffffff0080d1a58 -> 0xa739468; call stub 0xfffffff009ef4a98; single call site 0xfffffff009ee3a44 inside kext fn 0x9ee38fc",
+    "fn 0x9ee38fc is the nonce-'magazine' init path: acquires mix-and-match status (0x9ef0250), initializes nonce slots (0x9ef0554), resolves signing authority (0x9ef068c), then iterates the slot array (stride 0x78) under lock @0xafd2ec8",
+    "per slot: helper 0x9ef0d84/0x9ef2200 queries the ApBootNonce digest from AppleImage4 and writes a 0x38-byte struct {u8 digest[48]; u64 len=0x30} at sp+0x10; on failure logs 'Image4: unable to get nonce digest for slot: %u | %u'",
+    "on success calls wrapper(x0 = slot->+0x14 u32 domain/type id, x1 = &digest_struct, x2 = *(struct+0x30) i.e. 48/len-or-handle) -> selector 0x34 sends (domain, digest ptr, third scalar) to the monitor",
+    "paired with PPL-side panic strings 'Image4: attempted to set nonce digest again: %u', 'invalid nonce type for setting digest', 'nonce digest too large for PPL' (kext fns 0x9ee6f54)"
+   ],
+   "semantic": "v2 monitor-side equivalent of set_nonce: commits the per-domain 48-byte ApBootNonce digest into the code-signing monitor. NOT execute_object (execute_object has no live TXM implementation - ENOSYS)."
+  },
+  {
+   "original": "0xfffffff00a7394e0",
+   "size": 108,
+   "sha256": "6f9eb4c437ed6813792cba6185fce066eef6147200e9efcb1851dd57bb829405",
+   "existing_fixture_label": "_kernel_image4_roll_nonce",
+   "verified_identity": "new TXM Image4 selector 0x35 wrapper - roll nonce for a nonce domain in the code-signing monitor (v2 nonce API)",
+   "verdict": "semantics verified (roll nonce); exact source-level symbol name unresolved; argument is a u32 nonce-domain/type index, NOT the old (ndi ptr) signature",
+   "signature": "errno_t f(uint64_t domain_or_type)",
+   "txm_request": {
+    "selector": "0x35 (53)",
+    "failure_fatal": 1,
+    "skip_logs": 0,
+    "num_input_args": 1,
+    "num_output_args": 0,
+    "input_args": ["x0 (u64 domain/type)"]
+   },
+   "return": "errno_t: 0 on success; on TXM failure returns req+0x18 u16 errno when txm_ret code==0x2b else 0xffff",
+   "consumer_evidence": [
+    "com.apple.security.Image4 auth-GOT slot 0xfffffff0080d1a50 -> 0xa7394e0; stub 0xfffffff009ef4a88; single call site 0xfffffff009ee3f34 inside kext fn 0x9ee3edc",
+    "fn 0x9ee3edc is external-method-table entry index 4 (table @0x80cf588+, entry {fn, scalarIn=1, structIn=0, scalarOut=1, structOut=0}); reads u32 scalarInput[0] = domain id",
+    "looks up slot by domain id (helper 0x9ef0734 walks [obj+0x48] slots stride 0x78 matching +0x14), invokes local roll helper 0x9ef10a4 -> 0x9ef25e4 (logs 'Image4: error rolling nonce with AppleImage4: %d'), sets slot flag bit1; only when the flag newly transitions does it call wrapper(domain) -> mirrors the roll into the monitor",
+    "paired with PPL-side panic 'Image4: attempted to roll nonce without PPL context/mutable buffer' (fn 0x9ee705c)"
+   ],
+   "semantic": "v2 monitor-side nonce roll. Fixture name roll_nonce is semantically consistent but the ABI differs from the old kernel_image4_roll_nonce(ndi): arg is a domain index, return is errno_t."
+  },
+  {
+   "original": "0xfffffff00a73954c",
+   "size": 28,
+   "sha256": "c7ade9a12cae1570a6c914af011d2d07a4ba808332b8db1a8787ffa76149da6f",
+   "existing_fixture_label": "_kernel_image4_monitor_trap",
+   "verified_identity": "new TXM Image4 selector 0x36 wrapper - load supplemental root (Diavlo Root CA) manifest+payload into the code-signing monitor",
+   "verdict": "semantics verified via consumer panic string + argument flow; exact source-level symbol name unresolved. Fixture label monitor_trap is WRONG (real monitor_trap is 0xa73929c)",
+   "signature": "errno_t f(const void *manifest, size_t manifest_len, const void *payload, size_t payload_len)",
+   "body": "cbz on each of x0..x3 -> return 3; else tail-call helper 0xa73b7f0(x0,x1,x2,x3)",
+   "return": "errno_t: 3 when any of the four args is NULL/0; else 0/errno from helper",
+   "helper_0xa73b7f0": {
+    "size": 312,
+    "sha256": "4b67a70961214e85462f1bed5d64c2983cc0261aaab621e6b3e7a610ca9c6d13",
+    "contract": "txm_call {selector=0x36 (54), failure_fatal=0, num_input_args=4}; allocs two TXM buffers via 0xa737db0 (NULL alloc -> ret 0x19=25), memcpy args into them, registers via 0xa739dc8, input args=(buf1,len1,buf2,len2); dispatch 0xa739590; txm_ret==0x2b -> return u16 errno else 0xffff; 0 on success; buffers unregistered/freed on failure path"
+   },
+   "consumer_evidence": [
+    "com.apple.security.Image4 auth-GOT slot 0xfffffff0080d1a40 -> 0xa73954c; stub 0xfffffff009ef4978; single call site 0xfffffff009ee4180 inside Image4UserClient::objectLoad (fn 0x9ee3f48, external-method index 5, structInputSize=0x28)",
+    "input struct: {u32 type@0, user manifest ptr@8, manifest len@0x10, user payload ptr@0x18, payload len@0x20}; kernel copyin of both buffers",
+    "type 0 path only: checks entitlement 'com.apple.private.img4.set-supplemental-root', executes supplemental root in kext expert (0x9eec6a4, failure -> 'Image4: unable to load Diavlo Root CA: %u'), queries monitor capability via kernel 0xa737f4c(out u32==2), then calls wrapper(manifest, manifest_len, payload, payload_len)",
+    "wrapper failure -> panic 'Image4: failed to load Diavlo Root CA with code-signing-monitor: %u' (fn 0x9ef27f8); success -> 'Image4: successfully loaded Diavlo Root CA on the system'"
+   ],
+   "semantic": "pushes the supplemental-software trust root (Diavlo Root CA object spec, IMG4_RUNTIME_OBJECT_SPEC_SUPPLEMENTAL_ROOT; 'object can only be executed once per boot' per img4/runtime.h) into the code-signing monitor after kext-side execution."
+  },
+  {
+   "original": "0xfffffff00a739568",
+   "size": 20,
+   "sha256": "507048440cb8ea813b3b08b0114d90ec1174a95c35f3055bfa6a9e69715c29f6",
+   "existing_fixture_label": "_kernel_image4_set_nonce",
+   "verified_identity": "new TXM Image4 selector 0x37 wrapper - load local-policy manifest into the code-signing monitor",
+   "verdict": "semantics verified via consumer panic string + argument flow; exact source-level symbol name unresolved. Fixture label set_nonce is WRONG (old-style set_nonce is 0xa739054 sel 0x31)",
+   "signature": "errno_t f(const void *manifest, size_t manifest_len)",
+   "body": "cbz x0 or cbz x1 -> return 3; else tail-call helper 0xa73b928(x0,x1)",
+   "return": "errno_t: 3 when either arg is NULL/0; else 0/errno from helper",
+   "helper_0xa73b928": {
+    "size": 216,
+    "sha256": "22f6d9ebcad86fc5ba09ea9bbcbdcd920272b09244acd5326b9c4b039ba45b8c",
+    "contract": "txm_call {selector=0x37 (55), failure_fatal=0, num_input_args=2}; allocs one TXM buffer via 0xa737db0 (NULL alloc -> ret 0x19=25), memcpy, register via 0xa739dc8, input args=(buf,len); dispatch 0xa739590; txm_ret==0x2b -> return u16 errno else 0xffff; 0 on success"
+   },
+   "consumer_evidence": [
+    "com.apple.security.Image4 auth-GOT slot 0xfffffff0080d1a48 -> 0xa739568; stub 0xfffffff009ef4988; single call site 0xfffffff009ee41b0 inside Image4UserClient::objectLoad type-1 branch",
+    "type 1 path: entitlement 'com.apple.private.img4.set-local-policy', executes local policy in kext expert (0x9eec880, failure -> 'Image4: unable to load local policy: %u'), capability query via 0xa737f4c, then wrapper(manifest, manifest_len) - no payload buffer",
+    "wrapper failure -> panic 'Image4: failed to load local policy with code-signing-monitor: %u' (fn 0x9ef27c0); success -> 'Image4: successfully loaded local policy on the system'"
+   ],
+   "semantic": "pushes the user-authorized local-policy object (IMG4_RUNTIME_OBJECT_SPEC_LOCAL_POLICY) into the code-signing monitor. NOT set_nonce."
+  }
+ ],
+ "old_api_wrappers_verified": [
+  {
+   "original": "0xfffffff00a739054",
+   "size": 84,
+   "sha256": "306bc19d26cf7426e02744e5ff929903af2ffc26ad2ed37a7ef5beb1e3812c85",
+   "identity": "kernel_image4_set_nonce (OLD v1 ABI)",
+   "verdict": "verified",
+   "contract": "void f(ndi, nonce): txm_call selector 0x1f (31), failure_fatal=1, 2 input args; matches txm.c txm_image4_set_nonce"
+  },
+  {
+   "original": "0xfffffff00a7390a8",
+   "size": 80,
+   "sha256": "6d971d7ec57d3cc72fb1c6d0de3ad5ee61564cba78eaf4766fc0885b54f319e6",
+   "identity": "kernel_image4_roll_nonce (OLD v1 ABI)",
+   "verdict": "verified",
+   "contract": "void f(ndi): selector 0x20 (32), fatal, 1 input arg; matches txm_image4_roll_nonce"
+  },
+  {
+   "original": "0xfffffff00a7390f8",
+   "size": 156,
+   "sha256": "036e86591d46532777b878fca2021a869c317fe7dc7b187eb4ed05dee99c6de7",
+   "identity": "kernel_image4_copy_nonce (OLD v1 ABI)",
+   "verdict": "verified",
+   "contract": "errno_t f(ndi, nonce_out): selector 0x21 (33), 1 input + 1 output arg; non-errno TXM failure -> EPERM; matches txm_image4_copy_nonce"
+  },
+  {
+   "original": "0xfffffff00a739194",
+   "size": 8,
+   "sha256": "dc551d58aabc846cf665447bba989d9f58dc4422c479171fc63c5500655600b4",
+   "identity": "kernel_image4_execute_object - ENOSYS stub (returns 78)",
+   "verdict": "verified-stub; unordered pair with 0xa73919c - the two stubs are byte-identical (mov w0,#0x4e; ret), cannot order execute_object vs copy_object without symbol data; both are unimplemented under TXM per txm.c"
+  },
+  {
+   "original": "0xfffffff00a73919c",
+   "size": 8,
+   "sha256": "dc551d58aabc846cf665447bba989d9f58dc4422c479171fc63c5500655600b4",
+   "identity": "kernel_image4_copy_object - ENOSYS stub (returns 78)",
+   "verdict": "verified-stub; see 0xa739194 - pair order unresolved"
+  },
+  {
+   "original": "0xfffffff00a7391a4",
+   "size": 80,
+   "sha256": "ec176b4738a90e0bca41a79fb26dc66dadb82f0c305d998e63cf1e0289f893f1",
+   "identity": "kernel_image4_get_monitor_exports",
+   "verdict": "verified",
+   "contract": "returns TXM export pointer: selector 0x2e (46), fatal, 1 output arg; matches txm_image4_get_monitor_exports"
+  },
+  {
+   "original": "0xfffffff00a7391f4",
+   "size": 84,
+   "sha256": "c471ec9a060b55ea94cb9a2131e7c93fc5d392ec1ec67305b5e59935cfd0cd3c",
+   "identity": "kernel_image4_set_release_type",
+   "verdict": "verified",
+   "contract": "returns 0: selector 0x2f (47), fatal, 1 input arg; matches txm_image4_set_release_type"
+  },
+  {
+   "original": "0xfffffff00a739248",
+   "size": 84,
+   "sha256": "44be4e5132b47144903e827cf29a874606b6e6155a1f1a480399e07e33255ce0",
+   "identity": "kernel_image4_set_bnch_shadow",
+   "verdict": "verified",
+   "contract": "returns 0: selector 0x30 (48), fatal, 1 input arg; matches txm_image4_set_bnch_shadow"
+  }
+ ],
+ "mislabeled_neighbor": {
+  "original": "0xfffffff00a738b94",
+  "size": 80,
+  "sha256": "7fa800b84890f7a14c88e888feec3546730b8a9bc6ce9d87425b664c5efd84a0",
+  "note": "function-fixture-input-audit lists _kernel_image4_set_nonce shared between 0xa739568 and 0xa738b94 - BOTH are wrong. 0xa738b94 is a TXM wrapper with selector 0x1c (28), 2 input args {x0, [x0+0x40]} - not an Image4 API. The real old-style set_nonce is 0xa739054 (sel 0x1f); 0xa739568 is the sel-0x37 local-policy loader."
+ },
+ "supporting_kernel_functions": [
+  {
+   "original": "0xfffffff00a737f4c",
+   "size": 236,
+   "sha256": "296abf4ffe738730ce593b48a1b1189be9d4ee5bb6ef84cc644a95343c33ff57",
+   "role": "monitor capability/version probe used by AppleImage4 before sel-0x36/0x37 calls: lazily initializes globals @0x7c28a9c (=2, out-param 0) and @0x7c28aa0 (feature bitmask computed from a config struct at [0x7c28bc0] flag bytes +0x06,+0x48,+0x49,+0x4a,+0x4b,+0x4d,+0x4f and boot flag @0x7c28be0), once-guarded by stlrb flag @0x7c28a98. Callers pass (u32*, u32*); objectLoad uses only the first out (=2)."
+  }
+ ],
+ "image4_kext_interface_registration": {
+  "site": "kext fn 0xfffffff009ee37a0 calls kernel image4_v2_interface_register (0xfffffff00a8c4828) with table @0x80cf988; fields +0x08/+0x10/+0x18/+0x20/+0x28 hold kext fns 0x9ee6f54 ('set nonce digest' panics), 0x9ee705c ('roll nonce' panics), 0x9eec6a4 (supplemental root exec), 0x9eec880 (local policy exec), 0x9ee30e8",
+  "note": "the registered object is the img4/runtime interface table consumed through img4if->i4if_v*, not the dlxk singleton; duplicate-registration panic strings confirm the three distinct singletons img4 / image4_v2 / dlxk"
+ },
+ "summary_corrections": {
+  "0xfffffff00a73929c": "kernel_image4_monitor_trap (fixture's copy_object is wrong; copy_object is an ENOSYS stub at 0xa73919c/0xa739194)",
+  "0xfffffff00a739468": "NOT execute_object: TXM sel 0x34, (domain,digest-ptr,u64) = monitor nonce-digest commit; name unresolved",
+  "0xfffffff00a7394e0": "TXM sel 0x35, 1 domain arg = monitor nonce roll; fixture roll_nonce semantically right, ABI is v2 (u32 domain, errno_t)",
+  "0xfffffff00a73954c": "NOT monitor_trap: TXM sel 0x36, (manifest,len,payload,len) = supplemental-root/Diavlo load; name unresolved",
+  "0xfffffff00a739568": "NOT set_nonce: TXM sel 0x37, (manifest,len) = local-policy load; name unresolved"
+ }
+}

@@ -1,0 +1,29 @@
+{
+  "source": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/ios27/sources/DarwinBoot",
+  "override": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/component-overrides/DarwinBoot",
+  "patches": [
+    {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/DarwinBoot/ios27-resident-memory.patch",
+      "sha256": "bb08cb985b837bba86194d5baa5c403257a973b922a7b82516887a3d2f63576d"
+    },
+    {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/DarwinBoot/ios27-resident-reader.patch",
+      "sha256": "86bafc494bb90d01343e47fd78a3df18580ee618698f82606ad96fc1835d2655"
+    },
+    {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/DarwinBoot/ios27-runtime-capacity.patch",
+      "sha256": "293ec5fd532c5f0dc06bb0329c6006883c6e90d6ff280b4ee816b14cb9a43d2c"
+    },
+    {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/DarwinBoot/ios27-resident-cache-skip.patch",
+      "sha256": "1003a82f1ba31528f5d0c983c2da09c6fa8323b2a9ce8a493f7b33948f426718"
+    },
+    {
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/patches/DarwinBoot/ios27-handoff-firmware-context.patch",
+      "sha256": "7cbc71619650b72b3b8044df0b5abfe785ca2c6b99ed0f2528a4080f0a3ea6f7"
+    }
+  ],
+  "contract": "ROOT_STAGE_DRAM_TABLE v1",
+  "policy": "eight-core retained boot; reserve outside VM DRAM; retain firmware return allocation area",
+  "device_result": "pending"
+}

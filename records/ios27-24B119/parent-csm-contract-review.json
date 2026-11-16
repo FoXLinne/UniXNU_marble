@@ -1,0 +1,103 @@
+{
+  "target": "24B119",
+  "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+  "source": "bsd/kern/kern_codesigning.c; bsd/kern/code_signing/xnu.c and txm.c",
+  "functions": [
+    {
+      "original": "0xfffffff00a738100",
+      "original_sha256": "087b8359f1e9f58fad3105b1d9ee000ce0375bc18916088abffd1746b2ffce00",
+      "function_bytes": 80,
+      "native_symbol": "_enable_developer_mode",
+      "evidence": "request0x1f one boolean1; toggle developer mode true; paired false wrapper0x738150 precedes state getter0x7381a0; same developer/research/restricted source sequence as verified24A446",
+      "native_address": "0xfffffff007746e24"
+    },
+    {
+      "original": "0xfffffff00a738150",
+      "original_sha256": "938f91b0cecbe2af310cf1c099d50892b7c0e775d061dd134e8f1d29205aa6ff",
+      "function_bytes": 80,
+      "native_symbol": "_disable_developer_mode",
+      "evidence": "request0x1f one boolean0; toggle developer mode false; paired true wrapper then developer_mode_state getter",
+      "native_address": "0xfffffff007746e3c"
+    },
+    {
+      "original": "0xfffffff00a7381a0",
+      "original_sha256": "60db4e2c0b1e02f802cb2f020d71b1525561e480530c5015dbe3ad664637628b",
+      "function_bytes": 24,
+      "native_symbol": "_developer_mode_state",
+      "evidence": "global pointer+0xbd8 optional; loads pointed boolean then masks bit0; matches developer_mode_enabled pointer semantics",
+      "native_address": "0xfffffff007746e50"
+    },
+    {
+      "original": "0xfffffff00a7381b8",
+      "original_sha256": "3f1fb5555d87eb4bd6cabe905c8d71818696cc13119ad8fc69b1b4eaf5852aef",
+      "function_bytes": 64,
+      "native_symbol": "_research_mode_state",
+      "evidence": "common allow_research_modes gate from boot-policy globals, AND research boolean+0xbe8; source returns research_mode_enabled only when allow_research_modes",
+      "native_address": "0xfffffff007746e6c"
+    },
+    {
+      "original": "0xfffffff00a7381f8",
+      "original_sha256": "d4c2dfc723aa1286106b1d3ef007d264686a07a6d7bd6d9449b7e395e136facd",
+      "function_bytes": 64,
+      "native_symbol": "_extended_research_mode_state",
+      "evidence": "same allow_research_modes gate as0x7381b8; AND adjacent extended research boolean+0xbe9; two64byte getter bodies differ only final global byte offset",
+      "native_address": "0xfffffff007746eb0"
+    },
+    {
+      "original": "0xfffffff00a738238",
+      "original_sha256": "9426ddbedfc8724e51ed873f84235ebed01872154c1e5ab752647c07bc2807e0",
+      "function_bytes": 64,
+      "native_symbol": "_restricted_execution_mode_enable",
+      "evidence": "argless64byte wrapper request selector6, nonfatal, no input words; next state wrapper follows; verified24A446 restricted_execution_mode_enable same64byte ABI; native12377 xnu_rem_enable returns KERN_NOT_SUPPORTED when CODE_SIGNING_MONITOR=0",
+      "native_address": "0xfffffff007746ef4"
+    },
+    {
+      "original": "0xfffffff00a738278",
+      "original_sha256": "fe4bb7e84d9bebae59e200ff1638f7efcb9580e72e1af7088306a26526372d0b",
+      "function_bytes": 40,
+      "native_symbol": "_restricted_execution_mode_state",
+      "evidence": "argless state getter reads csm restricted-state pointer; absent returns KERN_NOT_SUPPORTED0x2e, state -1 returns success0 else KERN_DENIED0x35; native12377 xnu_rem_state returns KERN_NOT_SUPPORTED without monitor",
+      "native_address": "0xfffffff007746f00"
+    },
+    {
+      "original": "0xfffffff00a7382a0",
+      "original_sha256": "e1666231f6a985355c90d36abca796c142a510da259747c50bde795a364023cb",
+      "function_bytes": 72,
+      "native_symbol": "_update_csm_device_state",
+      "evidence": "argless void request selector8, fatal byte1 at request+6, no input words;72byte body matches24A446 update_device_state; source txm_update_device_state failure_fatal=true and no inputs",
+      "native_address": "0xfffffff007746f0c"
+    },
+    {
+      "original": "0xfffffff00a7382e8",
+      "original_sha256": "7116ba9395ba01f9296f6694c312bed2ddee632ae3bf6682fcb33d467eec43dd",
+      "function_bytes": 100,
+      "native_symbol": "_complete_security_boot_mode",
+      "evidence": "one uint32 mode arg; request selector9 fatal1 num_input_args1; stores original mode into security_boot_mode_complete after dispatch; exact source complete_security_boot_mode contract and100byte body",
+      "native_address": "0xfffffff007746f14"
+    },
+    {
+      "original": "0xfffffff00a738af4",
+      "original_sha256": "add191cb66f7d55f4998eb729f8ea7b2fcfe170b945d1d2bf4d1aa3be27cf3fa",
+      "function_bytes": 76,
+      "native_symbol": "_set_local_signing_public_key",
+      "evidence": "one public-key pointer request selector0x1a; verified24A446 selector0x1a same76byte setter contract; source set_local_signing_public_key forwards same key",
+      "native_address": "0xfffffff007746f3c"
+    },
+    {
+      "original": "0xfffffff00a738b40",
+      "original_sha256": "b64af74d5affeb337a9753adb58d15f241376464d846578f4fc9416f85f7d6fc",
+      "function_bytes": 84,
+      "native_symbol": "_get_local_signing_public_key",
+      "evidence": "argless request selector0x1b returns pointer field from reply; verified24A446 selector0x1b getter84byte contract",
+      "native_address": "0xfffffff007746fb4"
+    },
+    {
+      "original": "0xfffffff00a738b94",
+      "original_sha256": "7fa800b84890f7a14c88e888feec3546730b8a9bc6ce9d87425b664c5efd84a0",
+      "function_bytes": 80,
+      "native_symbol": "_unrestrict_local_signing_cdhash_ext",
+      "evidence": "one extended cdhash pointer; loads uint64 length+0x40 and sends selector0x1c with two input words hash,length; verified24A446 unrestrict_local_signing_cdhash_ext selector0x1c identical80byte contract; native applies20byte hash path when length matches",
+      "native_address": "0xfffffff007747010"
+    }
+  ]
+}

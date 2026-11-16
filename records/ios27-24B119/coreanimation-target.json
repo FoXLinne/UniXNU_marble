@@ -1,0 +1,25 @@
+{
+  "build": "24B119",
+  "source_sha256": "647e8d2d59ab69e244bc7ac208e2075ea476a1ed6e53d9b3b3ea8413939f5211",
+  "generated_sha256": "7947437e526ebca4a937ca52019794267295074e493c05404abb044a54f2ca6a",
+  "mechanism": "exported CAGetDebug*EnvVariableName and CASetDebug* calls",
+  "exports_checked": [
+    "CAGetDebugValueEnvVariableName",
+    "CASetDebugValueFloat",
+    "CAGetDebugOptionEnvVariableName",
+    "CASetDebugOption"
+  ],
+  "setter_abi": "CASetDebugValueFloat takes option in w0 and float in s0; verified against 24B119 instructions",
+  "float_option_limit": 96,
+  "boolean_option_limit": 300,
+  "device_result": "pending",
+  "evidence": {
+    "sdk_exports": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.2.sdk/System/Library/Frameworks/QuartzCore.framework/QuartzCore.tbd",
+    "target_symbols": {
+      "CASetDebugValueFloat": "0x18467cad0",
+      "CASetDebugOption": "0x18467c0d0"
+    },
+    "disassembly_float": "/tmp/marble-ios27-disasm-18467cad0.txt",
+    "disassembly_boolean": "/tmp/marble-ios27-disasm-18467c0d0.txt"
+  }
+}

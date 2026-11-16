@@ -1,0 +1,9 @@
+{
+  "patch": "patches/ios27-debug/gic-stackshot-capability.patch",
+  "patch_sha256": "36944fc2f9905c38754fd2aabdda390c6e8fc31c52308c3268a65253e65462f4",
+  "board_sha256": "81a77b1787c49aceddd20a5d3bf9982ab363e47b13e06a9b628920f47e269f4a",
+  "observer_sha256": "fc3e326920650db489f523508df0d086741b7dfaf67948f9d6e282e4d5be5fb9",
+  "contract": "generic GIC stackshot requests return KERN_NOT_SUPPORTED before CPU halt; caller propagates status; panic rendezvous path preserved",
+  "limitation": "synchronous all-core stackshot remains pending GIC debug IPI adaptation",
+  "status": "building"
+}

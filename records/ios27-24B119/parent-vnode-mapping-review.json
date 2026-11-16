@@ -1,0 +1,14 @@
+{
+  "target": "24B119",
+  "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+  "functions": [
+    {
+      "original": "0xfffffff00a3cb4e8",
+      "original_sha256": "aac83474e3a71b6c090f6a5a9b818d547ce0051f47ec61e04a2380f07ebd1163",
+      "function_bytes": 12,
+      "native_symbol": "_vnode_getfromfd",
+      "evidence": "three arguments vfs_context,int fd,vnode_t*out; thunk zeros optional x3,x4 then tailcalls0xa3cae2c. Body resolves vfs_context_proc from ctx/thread, zeroes*out, calls fp_getfvp(proc,fd,&fp,&vp), gets vnode iocount and drops fileproc; exact bsd/vfs/vfs_syscalls.c vnode_getfromfd contract",
+      "source": "bsd/vfs/vfs_syscalls.c"
+    }
+  ]
+}

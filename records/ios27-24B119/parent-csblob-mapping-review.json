@@ -1,0 +1,103 @@
+{
+  "target": "24B119",
+  "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+  "source": "bsd/kern/kern_cs.c",
+  "functions": [
+    {
+      "original": "0xfffffff00a6bd808",
+      "original_sha256": "f935b7f7f760c1fc9101bc1e1588691da44f6fa868c8651fb60ee17b663e8410",
+      "function_bytes": 28,
+      "native_symbol": "_csblob_get_platform_binary",
+      "evidence": "null returns 0; bit0 of platform-flags byte +0xdc returns 1 or 0",
+      "native_address": "0xfffffff0076cba9c"
+    },
+    {
+      "original": "0xfffffff00a6bdbdc",
+      "original_sha256": "bea1b8b553ec0961f683c8439c353be293da991adcd3848441ae4b6c10aa5f6d",
+      "function_bytes": 20,
+      "native_symbol": "_csblob_get_cdhash_with_length",
+      "evidence": "optional uint8 length output from +0x98; returns cdhash address blob+0x58",
+      "native_address": "0xfffffff0076cbe8c"
+    },
+    {
+      "original": "0xfffffff00a6bdbf8",
+      "original_sha256": "729fb310881452b8469a86ca9fe6538cb5abfa9f0ed27e417a6e3f67ad5efb1e",
+      "function_bytes": 148,
+      "native_symbol": "_csblob_set_validation_category",
+      "evidence": "blob and category arguments; current value 0 or10 permits assignment; setting10 always allowed; same value success; other changes -1; immutable zone update for ro_addr",
+      "native_address": "0xfffffff0076cbeb0"
+    },
+    {
+      "original": "0xfffffff00a6bdc8c",
+      "original_sha256": "f0012dc4823812318679c1d1a773070ef58cc7bb934713906fe09197a50748da",
+      "function_bytes": 8,
+      "native_symbol": "_csblob_get_validation_category",
+      "evidence": "returns unsigned category field blob+0xe0",
+      "native_address": "0xfffffff0076cbf44"
+    },
+    {
+      "original": "0xfffffff00a6bdc94",
+      "original_sha256": "7ed5cbdf0a2fc7beb678dfbcc070cc69962d65b87bc58fccaff61ae08f150c96",
+      "function_bytes": 84,
+      "native_symbol": "_csblob_set_auxiliary_info",
+      "evidence": "blob and uint64 info; writes +0xe8 or zalloc_ro_update at offset0xe8 length8; returns0",
+      "native_address": "0xfffffff0076cbf50"
+    },
+    {
+      "original": "0xfffffff00a6bdce8",
+      "original_sha256": "91126818b91e6c658aba941cdc52be48c76903dd7308b0d57361e2fbf8a6e140",
+      "function_bytes": 8,
+      "native_symbol": "_csblob_get_auxiliary_info",
+      "evidence": "returns uint64 blob+0xe8, matching paired setter",
+      "native_address": "0xfffffff0076cbfa4"
+    },
+    {
+      "original": "0xfffffff00a6bdcf0",
+      "original_sha256": "c3655affb4b6340719620b41e759fe59fe186eec92d75c7164b1f89b3d861716",
+      "function_bytes": 60,
+      "native_symbol": "_csblob_get_trust_level",
+      "evidence": "authenticates csm_obj at +0xf0; if present returns trust level +0xfc; otherwise UINT32_MAX",
+      "native_address": "0xfffffff0076cbfb0"
+    },
+    {
+      "original": "0xfffffff00a6bdd2c",
+      "original_sha256": "a28213a16d3021900ec3b7340d6d01776144729f69c6b144002f7adc208d868f",
+      "function_bytes": 8,
+      "native_symbol": "_csblob_get_code_directory",
+      "evidence": "returns blob+0xb0 code-directory pointer; target csblob_get_entitlements separately loads +0xb0 as CodeDirectory and reads big-endian special-slot count; source getter returns csb_cd",
+      "native_address": "0xfffffff0076cbfbc"
+    },
+    {
+      "original": "0xfffffff00a6bf1b8",
+      "original_sha256": "9c5712d2c63b50095129b899579fc2a7f617e37303efc1cdcdbc61d4290a6d11",
+      "function_bytes": 172,
+      "native_symbol": "_cs_identity_get",
+      "evidence": "process flags CS_SIGNED; authenticated text vnode+0x538 and text offset+0x540; ubc_cs_blob_get; parses CSMAGIC_CODEDIRECTORY0xfade0c02; returns code directory identifier offset",
+      "native_address": "0xfffffff0076cd540"
+    },
+    {
+      "original": "0xfffffff00a6bf2e0",
+      "original_sha256": "cb54949d467f73d9dcbdbcb28d5a644a4eec1b14f07f76f0b273836bd51115b8",
+      "function_bytes": 8,
+      "native_symbol": "_launch_constraint_data_get_launch_type",
+      "evidence": "one argument pointer; loads byte0 and returns launch type",
+      "native_address": "0xfffffff0076cd700"
+    },
+    {
+      "original": "0xfffffff00a6bdb6c",
+      "original_sha256": "a43ceab51832eca6b0dc21456b440332d15af5d27db4a8b93d478dce8f933b93",
+      "function_bytes": 8,
+      "native_symbol": "_csblob_get_teamid",
+      "evidence": "returns blob+0xb8 teamid pointer; follows CodeDirectory field at0xb0; actual 64-byte cdhash layout and adjacent csblob_get_identity identify source field",
+      "native_address": "0xfffffff0076cbe10"
+    },
+    {
+      "original": "0xfffffff00a75b344",
+      "original_sha256": "e84bec682c469223f98cb04c1e09701a5752e583786d51053f774d91ed7249c7",
+      "function_bytes": 424,
+      "native_symbol": "_csblob_get_der_entitlements",
+      "evidence": "three arguments blob,start**,length*; zeroes both outputs; bounds digest-size<=64; DER blob+0xc8 gated by CS_VALID; special slot6; hashes via cs_init/update/final; compares; outputs blob and ntohl length; return85 EBADEXEC on failure",
+      "native_address": "0xfffffff007766d48"
+    }
+  ]
+}

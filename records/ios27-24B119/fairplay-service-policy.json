@@ -1,0 +1,33 @@
+{
+  "status": "physical device query blockage cleared; migration advanced",
+  "disabled_job": "com.apple.fairplayd.H2",
+  "mechanism": "existing sheng-disable-jobs launchd override",
+  "reference": "ios18/source/scripts/appsync/README.md:19",
+  "reason": "installd metadata query holds LaunchServices rebuild and migration; service launch recurrence",
+  "source_sha256": "a34a829d36ba195cd8b6b43c330b690cf1e444a5f0fdea09cc8a50d60aac7807",
+  "device_result": {
+    "installd": "event loop; prior fairPlaySinfInfo query stack cleared",
+    "lsd": "server run loop; database seeding wait cleared",
+    "migration_plugins": [
+      "/System/Library/DataClassMigrators/ContainerMigrator.migrator/ContainerMigrator",
+      "/System/Library/DataClassMigrators/00LaunchServicesMigrator.migrator/00LaunchServicesMigrator",
+      "/System/Library/DataClassMigrators/MSUDataMigrator.migrator/MSUDataMigrator",
+      "/System/Library/DataClassMigrators/SystemAppMigrator.migrator/SystemAppMigrator",
+      "/System/Library/DataClassMigrators/MergeBuddyProvisioningResponse.migrator/MergeBuddyProvisioningResponse",
+      "/System/Library/DataClassMigrators/AppleAccountMigrator.migrator/AppleAccountMigrator",
+      "/System/Library/DataClassMigrators/Accounts.migrator/Accounts",
+      "/System/Library/DataClassMigrators/MobileSlideShow.migrator/MobileSlideShow"
+    ],
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/disabled-fairplayd/sample-032",
+    "ui": "pending"
+  },
+  "data_policy": "preserve existing Data",
+  "candidate": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-disabled-fairplayd/candidate.json",
+  "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-disabled-fairplayd/marble_ios27_temporary_boot.img",
+  "image_sha256": "deea7e5804de93d8035a962d0869806d069b2d135f4e511807345fc15d1f75bb",
+  "kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/phone-package/kernel.pooled-image-lock-panic.macho",
+  "kernel_sha256": "b355fb831d3ea08d1242c069edce952e57def619c15ed19e408e86edbb7da2ed",
+  "boot_args": "-v serial=3 keepsyms=1 debug=0x14e msgbuf=4194304 early_console=1 -no_slto_panic cpus=8 memory-outside=1 smp=1 armcpu-self-ipi=1 armcpu-ipi-intid=1 marble-ufs=1 marble-adreno=1 fb-gpu=1 fb-bgra=1 sheng-gpu-addon=1 metal-flow=1 marble-display-flip=1 marble-display-mmio=1 dpu-scanout=2 vsync=120 vsync-fixed=1 marble-wifi=4 marble-wifi-service=1 marble-audio=2 marble-haptics=2 rootstage-runtime-usb=3 marble-native-services=1 appsync=1 gpu-addon=1 gpu-ttbr=2 gpu-preempt=2 early-retire=0 offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 offline-key-events=1 aks=1 owner-dataprotect=1 owner-staged-apps=1 sheng-aks=1 sheng-aks-sls=3 marble-display-scale=3 marble-ui-identity=1602 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2 marble-skip-setup=1 no-lc=1",
+  "observer_pid": 50196,
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/disabled-fairplayd"
+}

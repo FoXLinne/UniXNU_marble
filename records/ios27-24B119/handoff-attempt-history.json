@@ -1,0 +1,38 @@
+{
+  "handoff_difference": {
+    "ios18": "cache loop jumps over contiguous VM window",
+    "ios27": "cache loop visits each64-byte VM line unless the descriptor tail is entirely owned",
+    "repair": "jump to owned range end; retain external VM range ownership",
+    "status": "firmware building"
+  },
+  "handoff_repair": {
+    "status": "built-awaiting-runtime",
+    "patches": [
+      "patches/DarwinBoot/ios27-handoff-checkpoints.patch",
+      "patches/DarwinBoot/ios27-resident-cache-skip.patch"
+    ],
+    "source": "component-overrides/DarwinBoot/DarwinBootPkg/Driver/Resident.c",
+    "source_sha256": "37127909214293800b5578f697a65e5ef1d990b73cd46ea0100e4aec3665b918",
+    "candidate": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-handoff-fixed/candidate.json",
+    "image_sha256": "f37e82f12e95681bf13ed08be73fb12b049ba8addffaacd00a5fed678cce6a3e",
+    "entry_kernel_sha256": "9f87aa4f05d0b7a07656a55be0f12a4d04ea84145c2dd772dac88251ad3ca706",
+    "root_manifest_unchanged_from_entry_candidate": true,
+    "observed_boundary": "Resident run; neither kernel entry band observed",
+    "firmware_markers": [
+      "before context save",
+      "after context save",
+      "before GIC snapshot",
+      "after GIC snapshot",
+      "after firmware cache maintenance",
+      "before DarwinEnter"
+    ],
+    "manual_requirement": "physical fastboot entry; automatic boot watcher active"
+  },
+  "firmware_return": {
+    "returns": 1,
+    "esr": "0",
+    "pc": "0xfc26ab98",
+    "checkpoint": 3,
+    "record": "outputs/UniXNU_marble/ios27_24B119/device-20261113/handoff-fixed-firmware.txt"
+  }
+}

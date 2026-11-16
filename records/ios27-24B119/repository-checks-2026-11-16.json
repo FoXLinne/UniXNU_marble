@@ -1,0 +1,149 @@
+{
+  "date": "2026-11-16",
+  "base_commit": "7a0d68fff2557f12be9f8c47f618fd332b7a3e67",
+  "source_tip": "795192b3de3959a875c52ed2fb16a50ec79feb6c",
+  "branch": "port/ios27.2-marble",
+  "remote": "origin",
+  "source_commits": [
+    {
+      "commit": "ad0005b391ea580d4bdbe31e427f71eb5acc7b85",
+      "group": "upstream",
+      "subject": "chore(upstream): refresh firmware and iOS 18 source snapshots",
+      "files": 1876
+    },
+    {
+      "commit": "dbb3764690b7ce3da26f1860a83e23d00e98c7b3",
+      "group": "sources",
+      "subject": "feat(ios27): import target build and component sources",
+      "files": 12275
+    },
+    {
+      "commit": "a2fc939260be5fdc674a5aeb2efe029ea92e0118",
+      "group": "platform",
+      "subject": "feat(ios27): integrate 24B119 platform and runtime tooling",
+      "files": 126
+    },
+    {
+      "commit": "a744ba2a685040922ed447a0179c95d97b6b8a1e",
+      "group": "usb",
+      "subject": "fix(usb): retain resident watchdog and diagnostics across disconnects",
+      "files": 35
+    },
+    {
+      "commit": "3255dee633a5e10ce7a96aacb4766fe78a76e33f",
+      "group": "storage",
+      "subject": "fix(storage): preserve overlays and report native capacity",
+      "files": 17
+    },
+    {
+      "commit": "a682c64f051a0639895923e60dc4346418f6771b",
+      "group": "graphics",
+      "subject": "fix(graphics): manage display resources and GPU connection lifetimes",
+      "files": 27
+    },
+    {
+      "commit": "88787f0976b8f0f6f8265f4d3411811be36b575b",
+      "group": "power",
+      "subject": "fix(power): integrate idle policies and battery charge reporting",
+      "files": 25
+    },
+    {
+      "commit": "d3b64c21d363c552a84d23870c5c91c52ded2841",
+      "group": "wifi",
+      "subject": "fix(wifi): stabilize autojoin and defer regulatory scan waits",
+      "files": 287
+    },
+    {
+      "commit": "795192b3de3959a875c52ed2fb16a50ec79feb6c",
+      "group": "metallib",
+      "subject": "fix(metal): bound optional metallib headers by metadata sections",
+      "files": 2
+    }
+  ],
+  "python_scripts_syntax_checked": 143,
+  "checks": [
+    {
+      "check": "test_root_usb_watchdog.py",
+      "returncode": 0
+    },
+    {
+      "check": "test_root_usb_reboot.py",
+      "returncode": 0
+    },
+    {
+      "check": "test_native_usb_client.py",
+      "returncode": 0
+    },
+    {
+      "check": "test_firmware_bootloader_reset.py",
+      "returncode": 0
+    },
+    {
+      "check": "test_root_storage_overlay.py",
+      "returncode": 0
+    },
+    {
+      "check": "test_scanout_kernel_mmio.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_wifi_scan_policy.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_wifi_scan_timestamp.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_wifi_capability_wire.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_wifi_wake.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_ios27_source_export.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_ios27_connection_lifetime.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_ios27_cache_identity.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_ios27_bo_lifetime.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_render_drain_ownership.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_marble_cpu_idle_policy.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_marble_charge_source.py",
+      "returncode": 0
+    },
+    {
+      "check": "tests/check_marble_gpu_idle_policy.py",
+      "returncode": 0
+    }
+  ],
+  "source_sha256": "29354b5b7bcf8b022302ba2dbf5fa743b8f9bd42802d6a2836b6d0394b68bd3a",
+  "source_files": 13085,
+  "excluded_local_outputs": [
+    "metal2vulkan validation corpus observations",
+    "mirrored ios27 upstream documentation",
+    "system and Data disks",
+    "firmware binaries",
+    "raw device logs and screenshots",
+    "diagnostic authentication keys"
+  ],
+  "device_acceptance": "records/ios27-24B119/device-acceptance-2026-11-16.json"
+}

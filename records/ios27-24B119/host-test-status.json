@@ -1,0 +1,61 @@
+{
+  "target": "24B119",
+  "checks": [
+    {
+      "name": "retained-dram-ownership",
+      "status": "passed",
+      "log": "/tmp/ios27-resident-memory-final.log",
+      "scope": "production loader retained allocation/reload, capacity refusal, partial allocation and malformed table"
+    },
+    {
+      "name": "gpu-register-peer-scheduling",
+      "status": "passed",
+      "record": "records/ios27-24B119/scheduling-review.json",
+      "scope": "preemption, ring/backpressure, BV progress, 400-job recovery"
+    },
+    {
+      "name": "original-class-pac",
+      "status": "passed",
+      "record": "records/ios27-24B119/compiled-vtable-audit.json",
+      "scope": "compiled class slot count and PAC discriminator contracts"
+    },
+    {
+      "name": "hid-edge-abi",
+      "status": "passed",
+      "record": "records/ios27-24B119/hid-edge-target-review.json",
+      "scope": "two complete 220-slot event service tables and event value methods"
+    },
+    {
+      "name": "display-bindings",
+      "status": "passed",
+      "record": "records/ios27-24B119/display-helper-parent-review.json",
+      "scope": "compiled target addresses, corruption refusal and surface factory output bounds"
+    },
+    {
+      "name": "panic-renderer",
+      "status": "compiled",
+      "text_bytes": 2630,
+      "writable_bytes": 0,
+      "scope": "4KiB retained text, cache publication and USB capture"
+    },
+    {
+      "name": "qemu-27.2",
+      "status": "kernel-runtime-observed",
+      "reason": "platform configuration and eight CPU nubs reached; signed storage integration active",
+      "record": "records/ios27-24B119/qemu.json"
+    },
+    {
+      "name": "qemu-signed-system-images",
+      "status": "passed",
+      "record": "qemu/storage/full-image-verification.json",
+      "scope": "C/RSA verification and every block of actual original OS and SystemOS; runtime VM qualification pending"
+    }
+  ],
+  "device_acceptance": [
+    "eight-core boot and full memory",
+    "USB log retrieval and panic return",
+    "all board peripherals",
+    "Metal rendering and frame timing",
+    "lock/unlock/reconnect/power lifecycle"
+  ]
+}

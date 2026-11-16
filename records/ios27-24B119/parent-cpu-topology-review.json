@@ -1,0 +1,33 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a36eb10",
+      "original_sha256": "fbb3ecad7ba1c61d5dcf74f98e1a074fc81b3c355658cf5f44e828a913c9651a",
+      "native_symbol": "_ml_get_cpu_number",
+      "evidence": "uint32_t phys_id in w0; mask 0xffff; scans topology cpu phys_id +4, returns logical index or -1; XNU osfmk/arm64/machine_routines.c counterparts inspected",
+      "function_bytes": 88
+    },
+    {
+      "original": "0xfffffff00a36eb68",
+      "original_sha256": "90fc70c4a6cd1d0aed3ce95cb95d2261be8122969c03c13e0a48dbfd3892e4ce",
+      "native_symbol": "_ml_get_cluster_number",
+      "evidence": "uint32_t phys_id in w0; mask 0xffff; scans phys_id +4, returns matching cpu cluster_id +8 or -1; XNU osfmk/arm64/machine_routines.c counterparts inspected",
+      "function_bytes": 120
+    },
+    {
+      "original": "0xfffffff00a36ebe0",
+      "original_sha256": "ccb793a30331293327b04ea4eebebeef0262988e7a3cef09a5a8d5babf0ea7a7",
+      "native_symbol": "_ml_get_cpu_number_local",
+      "evidence": "zero args; reads MPIDR_EL1 into x9 then masks 0xffff; returns logical cpu index; XNU osfmk/arm64/machine_routines.c counterparts inspected",
+      "function_bytes": 88
+    },
+    {
+      "original": "0xfffffff00a36ec38",
+      "original_sha256": "d3cb99f567a788b1efbebe54af6305f23e01c2ba4262e9adb48be7ccf054d50d",
+      "native_symbol": "_ml_get_cluster_number_local",
+      "evidence": "zero args; reads MPIDR_EL1 into x10; scans phys_id +4 and returns cluster_id +8; XNU osfmk/arm64/machine_routines.c counterparts inspected",
+      "function_bytes": 124
+    }
+  ],
+  "contract_rule": "argument-taking physical-ID APIs and zero-argument MPIDR-local APIs retain distinct entrypoints"
+}

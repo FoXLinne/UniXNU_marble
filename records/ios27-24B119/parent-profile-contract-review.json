@@ -1,0 +1,34 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a75b4ec",
+      "native_symbol": "_csblob_register_profile",
+      "evidence": "bsd/kern/ubc_subr.c:962 csblob_register_profile(struct cs_blob *csblob, cs_profile_register_t *profile); x0 = struct cs_blob *csblob (monitor sig object loaded from signed pointer csb_csm_obj @ +0xf0, IA-key diversity 0xe82b, NULL passes NULL); x1 = cs_profile_register_t *profile (uuid_t uuid @ +0x00, const void *sig_data @ +0x10, size_t sig_size @ +0x18, const void *data @ +0x20, size_t size @ +0x28, matching bsd/sys/code_signing.h:103); int; 0 on full success and when register returns KERN_NOT_SUPPORTED (0x2e), EPERM (1) otherwise: register rejects other errors, trust failure and associate failure return EPERM; call1 returns accepted iff w0==0 or w0==0xb (KERN_ALREADY_IN_SET), w0==0x2e returns 0 else 1; call2 nonzero returns 1; call3 returns cset ne = EPERM; exact source control flow and field offsets; all three callees verified below against csm_* bodies",
+      "original_sha256": "008ebe68ef3bc1ff4c8ae52f9894aed970fb168e80b373037abbb0cf51cfeb13",
+      "function_bytes": 172
+    },
+    {
+      "original": "0xfffffff00a738a70",
+      "original_sha256": "2967d9f304f0a5b51192ab1e82f8a8f49b0f3b31b26263e9d864dda096b6ee3b",
+      "native_symbol": "_set_compilation_service_cdhash_ext",
+      "evidence": "bsd/kern/kern_codesigning.c:949 set_compilation_service_cdhash_ext(const cs_cdhash_ext_t *cdhash); x0 = const cs_cdhash_ext_t *cdhash (hash[64] @ +0x00, size_t length @ +0x40, bsd/sys/code_signing.h:388); void; ldr x1,[x0,#0x40] extracts ext length then tail-calls helper; helper builds txm_call selector 0x1d with num_input_args 2 forwarding (cdhash, length) under compilation_service_lock at 0xfffffff00ad97400 via txm_kernel_call 0xfffffff00a739590; sibling non-ext _set_compilation_service_cdhash at 0xfffffff00a7389fc copies 20-byte hash into zeroed 64-byte stack buffer with length field 0x14 and calls the same helper, proving this is the ext variant; selector 0x1d follows verified 0x1a/0x1b/0x1c local-signing selectors in parent-csm-contract-review",
+      "function_bytes": 8
+    },
+    {
+      "original": "0xfffffff00a738aec",
+      "original_sha256": "b58810f0892fcc5c8599bc2b7636773436bac2f30cb5ba97a6eec76dc5fd0489",
+      "native_symbol": "_match_compilation_service_cdhash_ext",
+      "evidence": "bsd/kern/kern_codesigning.c:958 match_compilation_service_cdhash_ext(const cs_cdhash_ext_t *cdhash); x0 = const cs_cdhash_ext_t *cdhash (hash[64] @ +0x00, size_t length @ +0x40); bool: helper converts kern_return_t to (ret == KERN_SUCCESS); ldr x1,[x0,#0x40] then tail-call; helper builds txm_call selector 0x1e, failure_silent byte set, num_input_args 2 / num_output_args 1 (template 02000000 01000000 loaded from __const 0xfffffff00700dcb8), forwards (cdhash, length) under the same compilation_service_lock, ends cmp w0,#0; cset w0,eq matching source 'return ret == KERN_SUCCESS'; sibling non-ext _match_compilation_service_cdhash at 0xfffffff00a738a78 uses identical stack-ext prologue",
+      "function_bytes": 8
+    },
+    {
+      "original": "0xfffffff00a73834c",
+      "original_sha256": "788f1512f26f87f558ccda89030f23036527961be061f31e047ad5b93b8aafe2",
+      "native_symbol": "_garbage_collect_provisioning_profiles",
+      "evidence": "bsd/kern/kern_codesigning.c:583 garbage_collect_provisioning_profiles(void) -> csm_free_provisioning_profiles (same file :866); none; void; single-instruction tail thunk to 0xfffffff00a738350, whose 280-byte body takes profiles_lock (0xfffffff00ad53b48) exclusive, walks SLIST all_profiles head 0xfffffff00ad973d8 (node: skip_collector byte +0x18, profile_obj +0x10, link +0x20), clears skip_collector, calls txm unregister helper 0xfffffff00a73a5d0 on profile_obj, KERN_FAILURE (5) keeps the node, other non-success panics with 'unable to unregister profile from monitor: %d | %p @%s:%d' + 'kern_codesigning.c', KERN_SUCCESS SLIST_REMOVEs and kfree_types; exact csm_free_provisioning_profiles contract",
+      "function_bytes": 4
+    }
+  ],
+  "source_report": "devin-profile-contract-review.json",
+  "parent_verification": "whole target function hashes checked; csblob register/trust/associate sequence and compilation ext pointer/length wrappers match inspected source"
+}

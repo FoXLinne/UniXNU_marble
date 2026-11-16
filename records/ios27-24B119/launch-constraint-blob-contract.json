@@ -1,0 +1,13 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a6bda94",
+      "original_sha256": "d62b469b23992eefc9d2961a12db86d110924feb81a6a7e78616fb208812cfb7",
+      "native_symbol": "_csproc_get_blob",
+      "evidence": "proc_t input; checks signed p_textvp+0x538 and CS_SIGNED bit29; tailcalls ubc_cs_blob_get(textvp,-1,-1,p_textoff+0x540). Returns struct cs_blob pointer, preserving exact source csproc_get_blob contract. AMFI launch-constraint virtual getter0x8f343ec calls through GOT0x7e9fc08; previous platform-identifier binding returns a byte, causing empty constraint-query context.",
+      "function_bytes": 200
+    }
+  ],
+  "evidence": "AMFI slot0x7e99be8 getter0x8f343ec -> stub0x8f5d34c -> GOT0x7e9fc08 -> original0xa6bda94",
+  "status": "binding repaired; prelink pending"
+}

@@ -1,0 +1,214 @@
+{
+  "inputs": {
+    "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+    "entry": "com.apple.kernel"
+  },
+  "functions": [
+    {
+      "original": "0xfffffff00a935540",
+      "native_symbol": "__ZN13IOEventSource19signalWorkAvailableEv",
+      "evidence": "IOEventSource source osfmk/IOKit/Kernel/IOEventSource.cpp delegates through workLoop at +0x30. Original and native load the same receiver field, authenticate IOService vptr, use workLoop vtable byte offset 0xd0 and final IA discriminator 0xedeb; native uses an expanded signed-call tail thunk while original has fused BRAA. API signature and argument registers preserved.",
+      "original_sha256": "e7cbd86e8fed35973d75255ac067c79162e966b133e27d912a0fd30c53e3f9ed",
+      "original_disassembly": [
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x1, [x16, #0xd0]!",
+        "movk x16, #0xedeb, lsl #48",
+        "braa x1, x16"
+      ],
+      "native_disassembly": [
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x8, [x16, #0xd0]!",
+        "mov x1, x16",
+        "mov x16, x8",
+        "mov x17, x1",
+        "movk x17, #0xedeb, lsl #48",
+        "braa x16, x17",
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0"
+      ]
+    },
+    {
+      "original": "0xfffffff00a935560",
+      "native_symbol": "__ZN13IOEventSource8openGateEv",
+      "evidence": "IOEventSource source osfmk/IOKit/Kernel/IOEventSource.cpp delegates through workLoop at +0x30. Original and native load the same receiver field, authenticate IOService vptr, use workLoop vtable byte offset 0xd8 and final IA discriminator 0x1ba6; native uses an expanded signed-call tail thunk while original has fused BRAA. API signature and argument registers preserved.",
+      "original_sha256": "6dbf50e55a6aa15c0ee226e84ea80b5d335b5a654595b7b4890bb387aad39587",
+      "original_disassembly": [
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x1, [x16, #0xd8]!",
+        "movk x16, #0x1ba6, lsl #48",
+        "braa x1, x16"
+      ],
+      "native_disassembly": [
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x8, [x16, #0xd8]!",
+        "mov x1, x16",
+        "mov x16, x8",
+        "mov x17, x1",
+        "movk x17, #0x1ba6, lsl #48",
+        "braa x16, x17",
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0"
+      ]
+    },
+    {
+      "original": "0xfffffff00a935580",
+      "native_symbol": "__ZN13IOEventSource9closeGateEv",
+      "evidence": "IOEventSource source osfmk/IOKit/Kernel/IOEventSource.cpp delegates through workLoop at +0x30. Original and native load the same receiver field, authenticate IOService vptr, use workLoop vtable byte offset 0xe0 and final IA discriminator 0x3946; native uses an expanded signed-call tail thunk while original has fused BRAA. API signature and argument registers preserved.",
+      "original_sha256": "7a54f0432a09546afadd594113618f4c87da166daedee7dfaf444a7f2cc636f3",
+      "original_disassembly": [
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x1, [x16, #0xe0]!",
+        "movk x16, #0x3946, lsl #48",
+        "braa x1, x16"
+      ],
+      "native_disassembly": [
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x8, [x16, #0xe0]!",
+        "mov x1, x16",
+        "mov x16, x8",
+        "mov x17, x1",
+        "movk x17, #0x3946, lsl #48",
+        "braa x16, x17",
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0"
+      ]
+    },
+    {
+      "original": "0xfffffff00a9355c0",
+      "native_symbol": "__ZN13IOEventSource9sleepGateEPvj",
+      "evidence": "IOEventSource source osfmk/IOKit/Kernel/IOEventSource.cpp delegates through workLoop at +0x30. Original and native load the same receiver field, authenticate IOService vptr, use workLoop vtable byte offset 0xf0 and final IA discriminator 0xa662; native uses an expanded signed-call tail thunk while original has fused BRAA. API signature and argument registers preserved.",
+      "original_sha256": "355f1b20f3b3ea588ff97067192b81cf6908532e9d79af5ec7b6211535557e59",
+      "original_disassembly": [
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x3, [x16, #0xf0]!",
+        "movk x16, #0xa662, lsl #48",
+        "braa x3, x16"
+      ],
+      "native_disassembly": [
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x8, [x16, #0xf0]!",
+        "mov x3, x16",
+        "mov x16, x8",
+        "mov x17, x3",
+        "movk x17, #0xa662, lsl #48",
+        "braa x16, x17",
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0"
+      ]
+    },
+    {
+      "original": "0xfffffff00a9355e0",
+      "native_symbol": "__ZN13IOEventSource9sleepGateEPvyj",
+      "evidence": "IOEventSource source osfmk/IOKit/Kernel/IOEventSource.cpp delegates through workLoop at +0x30. Original and native load the same receiver field, authenticate IOService vptr, use workLoop vtable byte offset 0x110 and final IA discriminator 0x3b96; native uses an expanded signed-call tail thunk while original has fused BRAA. API signature and argument registers preserved.",
+      "original_sha256": "9a8439dc1df624171b2d67ef8f776dd9949a363ca0cebc74a2380646525f85c0",
+      "original_disassembly": [
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "mov x17, #0x110",
+        "add x16, x16, x17",
+        "ldr x4, [x16]",
+        "movk x16, #0x3b96, lsl #48",
+        "braa x4, x16"
+      ],
+      "native_disassembly": [
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "mov x17, #0x110",
+        "add x16, x16, x17",
+        "ldr x8, [x16]",
+        "mov x4, x16",
+        "mov x16, x8",
+        "mov x17, x4",
+        "movk x17, #0x3b96, lsl #48",
+        "braa x16, x17",
+        "bti c",
+        "ldr x0, [x0, #0x30]"
+      ]
+    },
+    {
+      "original": "0xfffffff00a935608",
+      "native_symbol": "__ZN13IOEventSource10wakeupGateEPvb",
+      "evidence": "IOEventSource source osfmk/IOKit/Kernel/IOEventSource.cpp delegates through workLoop at +0x30. Original and native load the same receiver field, authenticate IOService vptr, use workLoop vtable byte offset 0xf8 and final IA discriminator 0xdec; native uses an expanded signed-call tail thunk while original has fused BRAA. API signature and argument registers preserved.",
+      "original_sha256": "f2ce2b72585ae5618ee3a022f3245e6080c225c94fab344170ab98f6a29e5d20",
+      "original_disassembly": [
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x3, [x16, #0xf8]!",
+        "movk x16, #0xdec, lsl #48",
+        "braa x3, x16"
+      ],
+      "native_disassembly": [
+        "bti c",
+        "ldr x0, [x0, #0x30]",
+        "ldr x16, [x0]",
+        "mov x17, x0",
+        "movk x17, #0xcda1, lsl #48",
+        "autda x16, x17",
+        "ldr x8, [x16, #0xf8]!",
+        "mov x3, x16",
+        "mov x16, x8",
+        "mov x17, x3",
+        "movk x17, #0xdec, lsl #48",
+        "braa x16, x17",
+        "bti c",
+        "str x1, [x0, #0x38]",
+        "ret ",
+        "bti c"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+  "target": "_page_shift",
+  "slots": [
+    "0xfffffff007ea0060"
+  ],
+  "consumers": [],
+  "runtime": "pending",
+  "qualified_site": "0xfffffff007ea0060",
+  "native_symbol": "_native_ios27_ce_page_shift",
+  "value": 14,
+  "semantics": "CoreEntitlements query function0xfffffff008f4de80 loads page shift via GOT at0x7ea0060, forms (1<<shift)-1, ANDs with SP, returns CE error2 when offset<0x80. Native kernel stack retains16KiB ABI; query consumer receives14 while transport and VM consumers keep native12.",
+  "critical_instructions": [
+    "0xfffffff008f4dec8 ldr x8,[x8,#0x60]",
+    "0xfffffff008f4decc ldr w8,[x8]",
+    "0xfffffff008f4ded4 lsl w8,w9,w8",
+    "0xfffffff008f4ded8 mvn w8,w8",
+    "0xfffffff008f4dee0 and x8,x8,x9",
+    "0xfffffff008f4dee4 cmp x8,#0x80",
+    "0xfffffff008f4dee8 b.lo0xfffffff008f4e070",
+    "0xfffffff008f4e070 mov w0,#2"
+  ],
+  "status": "target consumer reviewed; per-site fixture pending"
+}

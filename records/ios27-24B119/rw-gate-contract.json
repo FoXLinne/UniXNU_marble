@@ -1,0 +1,19 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a209668",
+      "original_sha256": "616c77284d9ffc1ebf61f7e615223950e32fe05b911a24e39199024657d3361a",
+      "function_bytes": 308,
+      "native_symbol": "_lck_rw_gate_try_close",
+      "evidence": "Original body reads gate from x1 and preserves x0 lock ABI; native public rw gate wrapper shifts x1 into internal gate argument. APFS caller supplies lock x0 and gate x1."
+    },
+    {
+      "original": "0xfffffff00a20979c",
+      "original_sha256": "acc64f7b33b0cd3c760456285e5c175517696f00ce8eaa316242ca8cf58ef1a2",
+      "function_bytes": 296,
+      "native_symbol": "_lck_rw_gate_close",
+      "evidence": "Original body reads gate from x1 and preserves x0 lock ABI; native public rw gate wrapper shifts x1 into internal gate argument. APFS caller supplies lock x0 and gate x1."
+    }
+  ],
+  "panic_evidence": "device-20261113/hid-binding-return/previous-globals.json"
+}

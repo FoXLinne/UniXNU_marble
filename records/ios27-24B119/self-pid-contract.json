@@ -1,0 +1,36 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a6fa5b0",
+      "native_symbol": "_proc_ppid",
+      "original_sha256": "e2d8dc3374c7e7800967ce835b6e96cbbfcbf2440d01113184698905e19b2ea0",
+      "function_bytes": 116,
+      "evidence": "proc_t input; null returns -1; proc zone validation; loads p_ppid at +0x20. Source proc_internal.h places p_ppid before p_pid; native proc_ppid loads +0x20. Both original and native proc_selfppid load +0x20. Original proc_selfpid loads +0x60, matching proc_pid below.",
+      "source": "bsd/kern/kern_proc.c; bsd/sys/proc_internal.h"
+    },
+    {
+      "original": "0xfffffff00a6f91e4",
+      "native_symbol": "_proc_pid",
+      "original_sha256": "ec21dc0cf255a60bebdad9dd7b706669ef652707658272a8bb718dac13674337",
+      "function_bytes": 140,
+      "evidence": "proc_t input; null returns -1; proc zone validation; kernproc returns 0; loads p_pid at +0x60. Same contract and field as original proc_selfpid at0xa6fa8c4 and native proc_pid. Previous binding to proc_ppid returned parent PID1 for launchd child services in sandbox checks.",
+      "source": "bsd/kern/kern_proc.c; bsd/sys/proc_internal.h"
+    }
+  ],
+  "self_getters": {
+    "0xfffffff00a6fa8c4": "proc_selfpid; p_pid +0x60",
+    "0xfffffff00a6fa904": "proc_selfppid; p_ppid +0x20"
+  },
+  "device_evidence": "device-20261113/logd-recovery/20261113-225225-338893/kernel-045.log",
+  "status": "PID and parent PID bindings repaired; self getters preserved",
+  "logd_failure": {
+    "assertion": "kern_result == KERN_SUCCESS",
+    "function": "__IOHIDEventSystemClientRefresh",
+    "source": "IOHIDEventSystemClient.c:614",
+    "cache_assert_call": "0x18f6137f4",
+    "evidence": "device-20261113/logd-recovery/20261113-225225-338893/logd-symbolicated.json"
+  },
+  "runtime_result": "sandbox logd28/backboardd68/lockdownd86 report their actual PIDs; display clients receive success; system later recovers to bootloader",
+  "candidate": "candidate-proc-pid/candidate.json",
+  "evidence": "device-20261113/proc-pid/kernel-041.log"
+}

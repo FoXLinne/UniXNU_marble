@@ -1,0 +1,13 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a6fbfd0",
+      "native_symbol": "_proc_getexecutablevnode_noblock",
+      "evidence": "proc_t input; holds process lock, authenticates p_textvp at+0x538, holds vnode, drops process lock, calls vnode_getwithref_noblock then drops hold and returns vnode on success or NULL on failure. AMFI get-vnode method0x8f33f50 calls this through GOT0x7e9fe60; RAII destructor uses vnode_put. Source bsd/kern/kern_proc.c proc_getexecutablevnode_noblock has matching retained vnode return. Previous csproc_get_blob returned read-only signature blob, causing vnode_put atomic lock write fault.",
+      "original_sha256": "5b44d5bc023b83c88baeb262111818d8652a8ae6b4861b20e538d0d5e1e866a5",
+      "function_bytes": 308
+    }
+  ],
+  "device_evidence": "device-20261113/trust-contract/vnode-diagnostic.json",
+  "runtime_result": "repair applied; prelink pending"
+}

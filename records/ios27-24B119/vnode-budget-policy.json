@@ -1,0 +1,31 @@
+{
+  "status": "vnode exhaustion cleared; SpringBoard database wait followed by watchdog panic",
+  "prior_desired": 1024,
+  "prior_max": 2048,
+  "observed_used": 2023,
+  "observed_free": 0,
+  "desired": 66560,
+  "mechanism": "ADT /defaults kern.maxvnodes read by native bsd_startup",
+  "reference": "scripts/make-marble-adt.py:184",
+  "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/vnode-budget",
+  "sources": {
+    "work/UniXNU-marble/board.toml": "3e5d3fa7a080f8e003dce26347c1895b1f3139a30ab818b491725c44574b400a",
+    "work/UniXNU-marble/scripts/check_ios27_candidate.py": "00e300ea1ce1324b41cda3dc83f0c600d3fde4abef9b6f58f10f0e4f5a60125e"
+  },
+  "device_result": {
+    "desired": 66560,
+    "maximum": 133120,
+    "free_observed": 57069,
+    "vnode_limit_kills": 0,
+    "following_failure": "SpringBoard application database wait; userspace watchdog panic",
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/vnode-budget"
+  },
+  "candidate": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-vnode-budget/candidate.json",
+  "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-vnode-budget/marble_ios27_temporary_boot.img",
+  "image_sha256": "71d2409ff26b254f064a355c7219a083585ce01130b42aba9ce88ebf7bf4395c",
+  "kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/phone-package/kernel.pooled-image-lock-panic.macho",
+  "kernel_sha256": "b355fb831d3ea08d1242c069edce952e57def619c15ed19e408e86edbb7da2ed",
+  "observer_pid": 52898,
+  "observer_source_sha256": "da9aa9957322b3c89b45f3f2f7e86403ef87172dc13b93881f3d7cbe375bda22",
+  "live_context": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/assetsd-fault"
+}

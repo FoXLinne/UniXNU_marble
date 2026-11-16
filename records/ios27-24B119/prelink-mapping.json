@@ -1,0 +1,231 @@
+{
+  "tool": "scripts/ios27_prelink.py",
+  "status": "mapped-not-loadable",
+  "inputs": {
+    "kernelcache": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed",
+    "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+    "native": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/kernel.native.macho",
+    "native_sha256": "b2e5644f7f93ff351aca01a84bec555b948e8c0416fbbc111982d458a8c41f0b",
+    "reference": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree/build/xnu/fileset-reference/mach.release.bcm2837.unstripped.noctf",
+    "reference_sha256": "70b79f1f677ffc92b4aec04027fcee7cfece35e3b6345c45c88d28a417e58297"
+  },
+  "patches_applied": [
+    "patch:amfi-init-void-contract.patch",
+    "fixture:fileset-24B119-symbols.json",
+    "patch:fileset-emit-deferred-sites.patch",
+    "patch:qemu-policy-segment.patch"
+  ],
+  "report": {
+    "format": "MH_FILESET",
+    "inputs": {
+      "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+      "native_sha256": "b2e5644f7f93ff351aca01a84bec555b948e8c0416fbbc111982d458a8c41f0b",
+      "entry": "com.apple.kernel"
+    },
+    "matcher_version": 8,
+    "matcher_signature": "fbbbe021efbacb1056fd4ef384eaa56f4cd93853ef79d775ec2fc3e0472b647d",
+    "reference_sha256": "70b79f1f677ffc92b4aec04027fcee7cfece35e3b6345c45c88d28a417e58297",
+    "closure": [
+      "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
+      "com.apple.driver.AppleARMPlatform",
+      "com.apple.driver.AppleARMWatchdogTimer",
+      "com.apple.driver.AppleAudioClockLibs",
+      "com.apple.driver.AppleEffaceableStorage",
+      "com.apple.driver.AppleIISController",
+      "com.apple.driver.AppleM2ScalerCSCDriver",
+      "com.apple.driver.AppleMobileFileIntegrity",
+      "com.apple.driver.ApplePMGR",
+      "com.apple.driver.AppleUSBDeviceMux",
+      "com.apple.driver.AppleUSBXDCI",
+      "com.apple.driver.IODARTFamily",
+      "com.apple.driver.usb.AppleUSBCommon",
+      "com.apple.filesystems.apfs",
+      "com.apple.iokit.CoreAnalyticsFamily",
+      "com.apple.iokit.IOAVFamily",
+      "com.apple.iokit.IOAudio2Family",
+      "com.apple.iokit.IOCECFamily",
+      "com.apple.iokit.IOCryptoAcceleratorFamily",
+      "com.apple.iokit.IOGPUFamily",
+      "com.apple.iokit.IOHDCPFamily",
+      "com.apple.iokit.IOHIDEventDriver",
+      "com.apple.iokit.IOHIDFamily",
+      "com.apple.iokit.IOMobileGraphicsFamily",
+      "com.apple.iokit.IOReportFamily",
+      "com.apple.iokit.IOSlowAdaptiveClockingFamily",
+      "com.apple.iokit.IOStorageFamily",
+      "com.apple.iokit.IOSurface",
+      "com.apple.iokit.IOUSBDeviceFamily",
+      "com.apple.kec.Libm",
+      "com.apple.kec.corecrypto",
+      "com.apple.kext.AppleMatch",
+      "com.apple.kext.CoreTrust",
+      "com.apple.kpi.bsd",
+      "com.apple.kpi.dsep",
+      "com.apple.kpi.iokit",
+      "com.apple.kpi.libkern",
+      "com.apple.kpi.mach",
+      "com.apple.kpi.private",
+      "com.apple.kpi.unsupported",
+      "com.apple.security.AppleImage4",
+      "com.apple.security.Image4",
+      "com.apple.security.sandbox"
+    ],
+    "collection_base": "0xfffffff007004000",
+    "collection_slide": "0x0",
+    "native_link_address": "0xfffffff007004000",
+    "statistics": {
+      "deferred_sites": 0,
+      "segment_layout": {
+        "__TEXT": {
+          "old": "0xfffffff007004000",
+          "new": "0xfffffff00716c000",
+          "size": "0x124000"
+        },
+        "__DATA_CONST": {
+          "old": "0xfffffff007128000",
+          "new": "0xfffffff007bcc000",
+          "size": "0x100000"
+        },
+        "__TEXT_EXEC": {
+          "old": "0xfffffff007228000",
+          "new": "0xfffffff00a174000",
+          "size": "0x9bc000"
+        },
+        "__KLD": {
+          "old": "0xfffffff007be4000",
+          "new": "0xfffffff00ab30000",
+          "size": "0x4000"
+        },
+        "__LASTDATA_CONST": {
+          "old": "0xfffffff007be8000",
+          "new": "0xfffffff007ccc000",
+          "size": "0x4000"
+        },
+        "__LAST": {
+          "old": "0xfffffff007bec000",
+          "new": "0xfffffff00ab34000",
+          "size": "0x0"
+        },
+        "__KLDDATA": {
+          "old": "0xfffffff007bec000",
+          "new": "0xfffffff00b464000",
+          "size": "0x4000"
+        },
+        "__DATA": {
+          "old": "0xfffffff007bf0000",
+          "new": "0xfffffff00ac78000",
+          "size": "0x144000"
+        },
+        "__BOOTDATA": {
+          "old": "0xfffffff007d34000",
+          "new": "0xfffffff00b468000",
+          "size": "0x84000"
+        },
+        "__PRELINK_TEXT": {
+          "old": "0xfffffff004004000",
+          "new": "0xfffffff00ab34000",
+          "size": "0x0"
+        },
+        "__PRELINK_INFO": {
+          "old": "0xfffffff007db8000",
+          "new": "0xfffffff00ab34000",
+          "size": "0x0"
+        },
+        "__PLK_TEXT_EXEC": {
+          "old": "0xfffffff007db8000",
+          "new": "0xfffffff00ab34000",
+          "size": "0x0"
+        },
+        "__PRELINK_DATA": {
+          "old": "0xfffffff007db8000",
+          "new": "0xfffffff00adbc000",
+          "size": "0x0"
+        },
+        "__PLK_DATA_CONST": {
+          "old": "0xfffffff007db8000",
+          "new": "0xfffffff00ab34000",
+          "size": "0x0"
+        },
+        "__PLK_LLVM_COV": {
+          "old": "0xfffffff007db8000",
+          "new": "0xfffffff00ab34000",
+          "size": "0x0"
+        },
+        "__PLK_LINKEDIT": {
+          "old": "0xfffffff007db8000",
+          "new": "0xfffffff00ab34000",
+          "size": "0x0"
+        },
+        "__LINKINFO": {
+          "old": "0xfffffff007db8000",
+          "new": "0xfffffff00b0ac000",
+          "size": "0x48000"
+        },
+        "__LINKEDIT": {
+          "old": "0xfffffff007e00000",
+          "new": "0xfffffff00b0f4000",
+          "size": "0x32c000"
+        }
+      },
+      "native_original_branches_rebound": 0,
+      "native_split_relocations": {
+        "kind_4": 38,
+        "kind_3": 8,
+        "pointers": 49525,
+        "kind_5": 130310,
+        "kind_6": 143714,
+        "kind_7": 4106
+      },
+      "native_chain_sites": 49525,
+      "old_kernel_sites_dropped": 44126,
+      "unselected_chain_sites_dropped": 372228,
+      "kext_chain_sites_kept": 89805,
+      "kext_pointers_rebound": 51011,
+      "inline_data_pools_preserved": 6,
+      "inline_data_bytes_preserved": 7204,
+      "component_hmacs": {
+        "com.apple.kec.corecrypto": "b07038659ea1df091bf8ce9e5224f40aa488e298e5248c8ddbb7e394ce4c849d"
+      },
+      "corecrypto_hmac_sha256": "18fdc705c5ef00f0ca83d064f9dc89c2d7b0800f20a55d864079c31eb8203d74",
+      "unselected_entries_dropped": 207,
+      "native_base": "0xfffffff00716c000",
+      "native_fileoff": "0x168000"
+    },
+    "native_original_branches": [],
+    "missing": {},
+    "deferred_sites": [],
+    "stubbed": {},
+    "stub_symbol": null,
+    "personalities_dropped": [
+      "com.apple.driver.AppleARMPlatform",
+      "com.apple.security.Image4"
+    ],
+    "early_security_init": {
+      "com.apple.driver.AppleMobileFileIntegrity": "0xfffffff008f40418"
+    },
+    "missing_address_space": "output collection",
+    "mapping_complete": true,
+    "runtime_qualified": false,
+    "loadable": false,
+    "candidate_bytes": 72253440,
+    "candidate_sha256": "b4d477b269b54d58d4e6ac59be1af65cc9b09bacd0a570517845c2997cc17b33",
+    "kernelcache": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed",
+    "native": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/kernel.native.macho",
+    "map": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/prelink-candidate/kernel.fileset.map.json",
+    "output": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/prelink-candidate/kernel.fileset.macho",
+    "candidate_written": true,
+    "allow_missing": false
+  },
+  "summary": {
+    "mapping_complete": true,
+    "runtime_qualified": false,
+    "loadable": false,
+    "missing_targets": [],
+    "missing_references": 0,
+    "stubbed_targets": [],
+    "stubbed_references": 0,
+    "components": []
+  },
+  "source_patch_recommendations": [],
+  "log_tail": "original: 20772 functions, 2864 diversities\nnative:   24072 functions, 1331 diversities\nreviewed anchors: 137\noriginal: 20772 functions, 2864 diversities\nnative:   19902 functions, 916 diversities\nreviewed anchors: 130\nstring anchors: 3579\nPAC checked shape anchors: 4518\nreviewed data: 11\ntyped allocation views: 239\ndata slots: 28, data by users: 18, sysctl: 9, fields: 6\nfunctions: 14801/20772 (368 call-sites, 3827 calls, 551 data-users, 140 metaclass-getter, 4518 pac-checked-shape, 390 reference-shape, 130 reviewed, 5 shape, 3579 string, 1293 vtable)\ndata: 4122 (239 allocation-view, 6 fields, 71 metaclass-vtable, 3693 refs, 11 reviewed, 28 slot, 9 sysctl, 18 users, 46 vtable-layout, 1 vtable-user)\nkext-facing targets named: 2288/2949\nconflicts: {'double-bind': 331}\nreference symbol anchors: 4903\nreference order anchors: 12095\nstring anchors: 86\nPAC checked shape anchors: 11\nreviewed data: 11\ntyped allocation views: 239\nreference data names: 248\npure leaves: 5\nPC-independent leaf bodies: 113\nbound tail bodies: 0\ndata slots: 0, data by users: 0, sysctl: 0, fields: 0\nfunctions: 17642/20772 (24 call-sites, 235 calls, 24 data-users, 113 leaf-body, 11 pac-checked-shape, 5 pure-leaf, 12095 reference-order, 2 reference-shape, 4903 reference-symbol, 137 reviewed, 86 string, 7 vtable)\ndata: 4299 (239 allocation-view, 248 reference-data, 3775 refs, 11 reviewed, 26 vtable-layout)\nkext-facing targets named: 2769/2949\nconflicts: {'double-bind': 228}\nwrote /Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/prelink-candidate/kernel.fileset.macho (72253440 bytes)\nunresolved closure references: 0; stubbed functions: 0; runtime qualification: pending\n"
+}

@@ -1,0 +1,57 @@
+{
+  "tree": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree",
+  "objects": [
+    "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/build/ios27-ioav/obj/NativeLegacyIOAVAdapter.o"
+  ],
+  "archive": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/build/ios27-ioav/obj/libios27-ioav.a",
+  "archive_sha256": "3639c1d282f8c30394120206a4e698f98e934336167a9d4871d9e851ac34847f",
+  "target": "24B119",
+  "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+  "originals": {
+    "__orig_ioav_timing_withData": {
+      "module": "com.apple.iokit.IOAVFamily",
+      "address": "0xfffffff0097ad798",
+      "prefix": "5f2403d57f2303d5f657bda9f44f01a9fd7b02a9fd830091f40302aaf50301aa",
+      "prefix_sha256": "85c6663044f8dfd63eb447c57ae6046a6c037196ddfdbf34643f56616a896503"
+    },
+    "__orig_ioav_timing_setColorElements": {
+      "module": "com.apple.iokit.IOAVFamily",
+      "address": "0xfffffff0097aec88",
+      "prefix": "5f2403d57f2303d5f657bda9f44f01a9fd7b02a9fd830091f30301aaf40300aa",
+      "prefix_sha256": "bc41bbafcb9b9f318bad705c96aeac6773feffcc9a519315c877b64d863c2b37"
+    },
+    "__orig_ioav_color_withCapabilities": {
+      "module": "com.apple.iokit.IOAVFamily",
+      "address": "0xfffffff0097acb18",
+      "prefix": "5f2403d57f2303d5ffc300d1fd7b02a9fd830091e80300aaa92b41a9ab1340f9",
+      "prefix_sha256": "a196219a01562b1fdb5051afcbd20fc1857486d066c9715d4662020c1bca0ab9"
+    },
+    "__orig_iomfb_hotPlug_notify": {
+      "module": "com.apple.iokit.IOMobileGraphicsFamily",
+      "address": "0xfffffff009a7a4d4",
+      "prefix": "5f2403d57f2303d5f44fbea9fd7b01a9fd430091f30301aaf40300aa00a44df9",
+      "prefix_sha256": "6197366491a5aebf56ecbc64ca6d39724e340ac6c30d5d0b345b8311401b1f09"
+    }
+  },
+  "compiled_stub_targets": {
+    "__orig_ioav_timing_withData": "0xfffffff0097ad798",
+    "__orig_ioav_timing_setColorElements": "0xfffffff0097aec88",
+    "__orig_ioav_color_withCapabilities": "0xfffffff0097acb18",
+    "__orig_iomfb_hotPlug_notify": "0xfffffff009a7a4d4"
+  },
+  "compile_record": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json",
+  "scope": "four original IOAV timing/color and framebuffer hotplug helpers; optional cross-system adapter",
+  "default_ios27_display": {
+    "NATIVE_LEGACY_MACOS": 0,
+    "NATIVE_LEGACY_DEFAULT_SURFACE": 1
+  },
+  "source": "package/ios27-ioav/NativeLegacyIOAVAdapter.cpp",
+  "hardware_result": "pending",
+  "proof": {
+    "timing_factory": "allocates the 176-byte IOAVVideoTimingElement via its metaclass and calls the data/standard/timing initializer",
+    "color_factory": "packs seven capability scalars then calls the six-argument worker constructing the 112-byte IOAVVideoColorElement",
+    "colors": "original timing vtable slot28 authenticated discriminator0x828c; retains new array, swaps field0x70, releases old array and notifies",
+    "hotplug": "original IOMobileFramebufferLegacy vtable slot278 authenticated discriminator0x786c"
+  },
+  "machine_code_review": "Each 24-byte compiled stub checked as BTI; MOVZ/MOVK full64-bit original address; BR x16. All target functions start at original module function boundaries with BTI."
+}

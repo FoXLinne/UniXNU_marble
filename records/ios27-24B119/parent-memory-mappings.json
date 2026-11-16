@@ -1,0 +1,219 @@
+{
+  "inputs": {
+    "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+    "entry": "com.apple.kernel",
+    "reference": "outputs/UniXNU_marble/ios27_24B119/tree/build/xnu/fileset-reference/mach.release.bcm2837.unstripped.noctf",
+    "reference_sha256": "70b79f1f677ffc92b4aec04027fcee7cfece35e3b6345c45c88d28a417e58297"
+  },
+  "functions": [
+    {
+      "original": "0xfffffff00a8c8850",
+      "native_symbol": "__ZN9IOService12Start_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_E",
+      "native_reference": "0xfffffff00786a8e8",
+      "arguments": "(IORPC rpc, OSMetaClassBase *self, kern_return_t (*fn)(OSMetaClassBase *, IOService *)) in x0/x1/x2; fn arrives PAC-signed with diversity 0xe4fe from the dispatch table",
+      "message_id": "IOService_Start_ID = 0xab6f76dde6d693f2 (generated DriverKit/IOService.h)",
+      "caller_contract": "com.apple.iokit.IOStorageFamily fn 0xfffffff009bd24d4 (class _Dispatch switch) case at 0xfffffff009bd2694: signs method 0xfffffff009bba5f4 with PACIA diversity 0xe4fe, places rpc on stack, calls import stub 0xfffffff009bd4a98 -> GOT 0xfffffff00806b3f0 -> 0xfffffff00a8c8850",
+      "bindings": [
+        "com.apple.iokit.IOStorageFamily 0xfffffff00806b3f0 auth=1 -> 0xfffffff00a8c8850",
+        "com.apple.iokit.IOHIDFamily 0xfffffff008020de0 auth=1 -> 0xfffffff00a8c8850"
+      ],
+      "evidence": "Generated IOService dispatch invoke stub. Original initializes w0=kIOReturnIPCError (0xe00002bf), validates IORPC: objectRefs==2 ([message+0x20]), kernelContent->objectCount==2 ([kernelContent+0x10]), sendSize>=0x6c ([rpc+0x10]), replySize>=0x3c ([rpc+0x14]); clears kernelContent->flags bit 0x100; loads objects[1] at kernelContent+0x20, authenticates its vptr (autda 0xcda1) and compares its metaclass ancestry to IOService::gMetaClass 0xfffffff00ad5c410; blraa-invokes supplied method (x2) then builds the reply. Native symbol __ZN9IOService12Start_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_E at 0xfffffff00786a8e8 is an 80-instruction body with identical frame (0x40), identical validation constants (0x2bf/e000, ==2, >=0x6c, >=0x3c, ~0x100 mask) and the same metaclass compare against __ZN9IOService10gMetaClassE at 0xfffffff007a9ab88; only load-scheduling differs. Identity within the trio proven by the IOStorageFamily _Dispatch switch: msgid 0xab6f76dde6d693f2 (IOService_Start_ID) selects this stub, sibling case 0x98e715041c459fa5 selects Stop_Invoke.",
+      "original_sha256": "05679b5d7ceade198f3df7d465e190b2ebc51bf63ff8c7fc450ba5cc9a3d0e6f",
+      "original_disassembly": [
+        "pacibsp",
+        "stp x24, x23, [sp, #-0x40]!",
+        "stp x22, x21, [sp, #0x10]",
+        "stp x20, x19, [sp, #0x20]",
+        "stp x29, x30, [sp, #0x30]",
+        "add x29, sp, #0x30",
+        "mov x8, x0",
+        "mov w0, #0x2bf"
+      ],
+      "native_disassembly": [
+        "pacibsp",
+        "stp x24, x23, [sp, #-0x40]!",
+        "stp x22, x21, [sp, #0x10]",
+        "stp x20, x19, [sp, #0x20]",
+        "stp x29, x30, [sp, #0x30]",
+        "add x29, sp, #0x30",
+        "mov x8, x0",
+        "mov w0, #0x2bf"
+      ],
+      "prefix_sha256": "7fb577cce5a562c6cb39eaf0d0c980e59d97ccec97f6ef60c89c64768033c991",
+      "function_bytes": 288
+    },
+    {
+      "original": "0xfffffff00a8c8970",
+      "native_symbol": "__ZN9IOService11Stop_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_E",
+      "native_reference": "0xfffffff00786aa04",
+      "arguments": "(IORPC rpc, OSMetaClassBase *self, kern_return_t (*fn)(OSMetaClassBase *, IOService *)) in x0/x1/x2; fn arrives PAC-signed with diversity 0xe4fe from the dispatch table",
+      "message_id": "IOService_Stop_ID = 0x98e715041c459fa5 (generated DriverKit/IOService.h)",
+      "caller_contract": "com.apple.iokit.IOStorageFamily fn 0xfffffff009bd24d4 (_Dispatch switch) case at 0xfffffff009bd25c8: signs method 0xfffffff009bba5e8 with PACIA diversity 0xe4fe, places rpc on stack, calls import stub 0xfffffff009bd4a88 -> GOT 0xfffffff00806b3e8 -> 0xfffffff00a8c8970",
+      "bindings": [
+        "com.apple.iokit.IOStorageFamily 0xfffffff00806b3e8 auth=1 -> 0xfffffff00a8c8970",
+        "com.apple.iokit.IOHIDFamily 0xfffffff008020dd8 auth=1 -> 0xfffffff00a8c8970"
+      ],
+      "evidence": "Generated IOService dispatch invoke stub, sibling of Start_Invoke. Same 80-instruction template body as 0xfffffff00a8c8850 (the two share the first 32 bytes verbatim): kIOReturnIPCError prologue, objectRefs==2 / objectCount==2 / sendSize>=0x6c / replySize>=0x3c validation, flags &= ~0x100, objects[1] authenticated and metaclass-checked against IOService::gMetaClass 0xfffffff00ad5c410, then authenticated method call and reply construction. Native symbol __ZN9IOService11Stop_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_E at 0xfffffff00786aa04 matches frame, constants, metaclass compare (__ZN9IOService10gMetaClassE) and flow. Identity proven by the IOStorageFamily _Dispatch case: msgid 0x98e715041c459fa5 (IOService_Stop_ID) signs method 0xfffffff009bba5e8 and calls stub->GOT 0xfffffff00806b3e8 -> this function.",
+      "original_sha256": "5bec6f9098c3bfed1d53471e5dd0c5963961237fabf19dbf70ee6a1992aff928",
+      "original_disassembly": [
+        "pacibsp",
+        "stp x24, x23, [sp, #-0x40]!",
+        "stp x22, x21, [sp, #0x10]",
+        "stp x20, x19, [sp, #0x20]",
+        "stp x29, x30, [sp, #0x30]",
+        "add x29, sp, #0x30",
+        "mov x8, x0",
+        "mov w0, #0x2bf"
+      ],
+      "native_disassembly": [
+        "pacibsp",
+        "stp x24, x23, [sp, #-0x40]!",
+        "stp x22, x21, [sp, #0x10]",
+        "stp x20, x19, [sp, #0x20]",
+        "stp x29, x30, [sp, #0x30]",
+        "add x29, sp, #0x30",
+        "mov x8, x0",
+        "mov w0, #0x2bf"
+      ],
+      "prefix_sha256": "7fb577cce5a562c6cb39eaf0d0c980e59d97ccec97f6ef60c89c64768033c991",
+      "function_bytes": 288
+    },
+    {
+      "original": "0xfffffff00a8c8e88",
+      "native_symbol": "__ZN9IOService20SetProperties_InvokeE5IORPCP15OSMetaClassBasePFiS2_P12OSDictionaryE",
+      "native_reference": "0xfffffff00786b030",
+      "arguments": "(IORPC rpc, OSMetaClassBase *self, kern_return_t (*fn)(OSMetaClassBase *, OSDictionary *)) in x0/x1/x2; fn arrives PAC-signed from the dispatch table",
+      "message_id": "IOService_SetProperties_ID = 0xd8a753ea156f9162 (generated DriverKit/IOService.h)",
+      "caller_contract": "Bound as an authenticated method-table entry in com.apple.iokit.IOHIDFamily at 0xfffffff008020df8, adjacent to Stop_Invoke (0xfffffff008020dd8) and Start_Invoke (0xfffffff008020de0) — the iig-generated sibling ordering of IOService dispatch invokes",
+      "bindings": [
+        "com.apple.iokit.IOHIDFamily 0xfffffff008020df8 auth=1 -> 0xfffffff00a8c8e88"
+      ],
+      "evidence": "Generated IOService dispatch invoke stub for the OSDictionary argument variant. Same validation template as Start/Stop (kIOReturnIPCError, objectRefs==2, objectCount==2, sendSize>=0x6c, replySize>=0x3c, flags &= ~0x100) with a smaller 0x30 frame, and the objects[1] metaclass check compares against OSDictionary::gMetaClass 0xfffffff00ad59828 — proven by the OSMetaClass(name=\"OSDictionary\",...) registration callsite materializing x0=0xfffffff00ad59828 — matching the PFiS2_P12OSDictionaryE method signature. Native symbol __ZN9IOService20SetProperties_InvokeE5IORPCP15OSMetaClassBasePFiS2_P12OSDictionaryE at 0xfffffff00786b030 has the identical 80-instruction flow, same constants, same frame, and compares the argument metaclass to __ZN12OSDictionary10gMetaClassE at 0xfffffff007a98058.",
+      "original_sha256": "fc854d85be1ef5b4deba857551798258e9c35d19f28b33014633354e4d1e4eb1",
+      "original_disassembly": [
+        "pacibsp",
+        "stp x22, x21, [sp, #-0x30]!",
+        "stp x20, x19, [sp, #0x10]",
+        "stp x29, x30, [sp, #0x20]",
+        "add x29, sp, #0x20",
+        "mov x8, x0",
+        "mov w0, #0x2bf",
+        "movk w0, #0xe000, lsl #16"
+      ],
+      "native_disassembly": [
+        "pacibsp",
+        "stp x22, x21, [sp, #-0x30]!",
+        "stp x20, x19, [sp, #0x10]",
+        "stp x29, x30, [sp, #0x20]",
+        "add x29, sp, #0x20",
+        "mov x8, x0",
+        "mov w0, #0x2bf",
+        "movk w0, #0xe000, lsl #16"
+      ],
+      "prefix_sha256": "10e7922bac889a3bfa37ddf20dd51ad4b1983249eb04996acc13ffa673e39662",
+      "function_bytes": 276
+    },
+    {
+      "original": "0xfffffff00a953b2c",
+      "native_symbol": "__ZN18IOMemoryDescriptor10setContextEP8OSObject",
+      "native_reference": "0xfffffff0078f5c5c",
+      "arguments": "(IOMemoryDescriptor *this, OSObject *obj) in x0/x1; tail-forwards obj in x2 and loads x1 = *gOSBooleanFalse (global slot 0xfffffff00ad99be0; native _gOSBooleanFalse at 0xfffffff007ace640) as the OSSymbol key",
+      "message_id": null,
+      "caller_contract": "Bound as authenticated method-pointer entries: com.apple.iokit.IOSurface 0xfffffff0080731f8 (vtable entry 15 of the class built by IOSurface modinit fn 0xfffffff009c0ceb4) -> this function",
+      "bindings": [
+        "com.apple.iokit.IOSurface 0xfffffff0080731f8 auth=1 -> 0xfffffff00a953b2c"
+      ],
+      "evidence": "Four-instruction thunk: mov x2,x1; ldr x1,[gOSBooleanFalse]; b 0xfffffff00a953668 — exactly source iokit/Kernel/IOMemoryDescriptor.cpp:2701 'setContext((const OSSymbol *) kOSBooleanFalse, obj)'. Callee 0xfffffff00a953668 is setContext(const OSSymbol*, OSObject*): returns early when (reserved|obj)==0 (orr/cbz), lazily allocates IOMemoryDescriptorReserved at this+0x10 from kalloc_type zone 0xfffffff007c91590 (flags via [zone+0x28]&0x10 -> 0x8004|4, casal install, loser freed via 0xfffffff00a1fc3d4), acquires the context lock at 0xfffffff00ad9a2f8, lazily creates reserved->contextObjects at +0x58 via OSDictionary gMetaClass 0xfffffff00ad59828 alloc (vptr+0x68) + initWithCapacity(2) (vptr+0xd0, disc 0x9c02), calls dict->setObject(key,obj) (vptr+0xf0, disc 0x8d9e) or dict->removeObject(key) (vptr+0x108, disc 0x9a44) when obj==NULL, then unlocks — matching IOMemoryDescriptor.cpp:2644-2662 line for line. Native __ZN18IOMemoryDescriptor10setContextEP8OSObject at 0xfffffff0078f5c5c contains the same body inlined (identical reserved|obj zero-check at head) rather than a tail call — same source, different codegen.",
+      "original_sha256": "79c5aeb8628e8b279b1d5c90ba5d3f938c810a0671b42caea419b3ec7ed52773",
+      "original_disassembly": [
+        "mov x2, x1",
+        "adrp x8, #0xfffffff00ad99000",
+        "ldr x1, [x8, #0xbe0]",
+        "b #0xfffffff00a953668"
+      ],
+      "native_disassembly": [
+        "pacibsp",
+        "stp x22, x21, [sp, #-0x30]!",
+        "stp x20, x19, [sp, #0x10]",
+        "stp x29, x30, [sp, #0x20]",
+        "add x29, sp, #0x20",
+        "ldr x21, [x0, #0x10]",
+        "orr x8, x1, x21",
+        "cbnz x8, #0xfffffff0078f5c8c"
+      ],
+      "prefix_sha256": "2148558e87596020a42b9db5d638f451c84ca626d5c3a6c92d02bcf9d745654c",
+      "function_bytes": 16
+    },
+    {
+      "original": "0xfffffff00a953b3c",
+      "native_symbol": "__ZN18IOMemoryDescriptor15getDescriptorIDEv",
+      "native_reference": "0xfffffff0078efad0",
+      "arguments": "(IOMemoryDescriptor *this) in x0; returns uint64_t descriptorID in x0",
+      "message_id": null,
+      "caller_contract": "Bound as authenticated method-pointer entries in both consumers: com.apple.iokit.IOGPUFamily 0xfffffff007ffbf50 and com.apple.iokit.IOSurface 0xfffffff008073210 (vtable entry 18)",
+      "bindings": [
+        "com.apple.iokit.IOGPUFamily 0xfffffff007ffbf50 auth=1 -> 0xfffffff00a953b3c",
+        "com.apple.iokit.IOSurface 0xfffffff008073210 auth=1 -> 0xfffffff00a953b3c"
+      ],
+      "evidence": "Calls helper 0xfffffff00a94d8d0 = setDescriptorID(): lazily allocates IOMemoryDescriptorReserved at this+0x10 from kalloc_type zone 0xfffffff007c91590 (casal install, loser freed via zone 0xfffffff007c915d0 path), then if reserved->descriptorID at +0x18 == kIODescriptorIDInvalid (0) performs ldadd on counter 0xfffffff00ace3870 (gIOMDDescriptorID) and casal into +0x18 — matching IOMemoryDescriptor.cpp:3050-3055 (getKernelReserved + OSIncrementAtomic64(&gIOMDDescriptorID) + OSCompareAndSwap64). Then returns reserved ? reserved->descriptorID : 0, matching getDescriptorID at IOMemoryDescriptor.cpp:3059-3067 (kIODescriptorIDInvalid==0 per IOMemoryDescriptor.h:275). Native __ZN18IOMemoryDescriptor15getDescriptorIDEv at 0xfffffff0078efad0 is the same function with the helper inlined: identical zone-id flags test ([ktv+0x28]&0x10 -> 0x8004/4), descriptorID field at +0x18, ldadd on __ZL17gIOMDDescriptorID (0xfffffff007a26c58), casal, return reserved ? [+0x18] : 0. Field offset +0x18 (descriptorID) vs +0x20 (preparationID in setPreparationID at 0xfffffff0078f5e1c) distinguishes it from getPreparationID/setPreparationID.",
+      "original_sha256": "db92cf543a6e4bc532172950c5689c7d4deac695c95da326e50840b0142e51ef",
+      "original_disassembly": [
+        "pacibsp",
+        "stp x20, x19, [sp, #-0x20]!",
+        "stp x29, x30, [sp, #0x10]",
+        "add x29, sp, #0x10",
+        "mov x19, x0",
+        "bl #0xfffffff00a94d8d0",
+        "ldr x8, [x19, #0x10]",
+        "cbz x8, #0xfffffff00a953b64"
+      ],
+      "native_disassembly": [
+        "pacibsp",
+        "stp x20, x19, [sp, #-0x20]!",
+        "stp x29, x30, [sp, #0x10]",
+        "add x29, sp, #0x10",
+        "mov x19, x0",
+        "ldr x0, [x0, #0x10]",
+        "cbnz x0, #0xfffffff0078efb14",
+        "adrp x0, #0xfffffff0071ae000"
+      ],
+      "prefix_sha256": "f79274e995a0a0f65f186908eef36e801f06fa94471a69039eba50913b3c59b5",
+      "function_bytes": 56
+    },
+    {
+      "original": "0xfffffff00a98de10",
+      "native_symbol": "_IOCircularDataQueueCopyLatest",
+      "native_reference": "0xfffffff0079307c4",
+      "arguments": "(IOCircularDataQueue *queue, void *out) in x0/x1; returns IOReturn",
+      "message_id": null,
+      "caller_contract": "Bound as authenticated entry in com.apple.iokit.IOHIDFamily method table at 0xfffffff008020a38",
+      "bindings": [
+        "com.apple.iokit.IOHIDFamily 0xfffffff008020a38 auth=1 -> 0xfffffff00a98de10"
+      ],
+      "evidence": "16-instruction wrapper: x0==NULL -> kIOReturnBadArgument (0xe00002c2); else stores x1 into a single-element stack array, passes its address plus w3=1, and calls 0xfffffff00a98dbe4. The callee matches native __ZL28_getLatestInQueueMemInternalP19IOCircularDataQueuePPvPmb at 0xfffffff00793055c: autda-blend 0xaa79 on [queue+0x10] head pointer, magic compare [head] vs [queue+0x18], entry size [queue+0x20], buffer base head+0x20, index = (head->tailIndex==0 ? [queue+0x2c] : tailIndex) - 1 (newest entry), umull row multiply, dmb ishld acquire, PAC range-check poison 0xc8a2 — the identical index-1 arithmetic that only _getLatestInQueueMemInternal has (Next/Previous/Current inners use cursor fields and different compares). Of the four structurally identical Copy wrappers in the native image (CopyLatest/Next/Previous/Current), only _IOCircularDataQueueCopyLatest at 0xfffffff0079307c4 calls that inner, and its 16-instruction body matches the original exactly.",
+      "original_sha256": "1ccfa043010d2cb529852b1612e6a79f873541f05b79a5f6e6b2dfb5c6cee90f",
+      "original_disassembly": [
+        "cbz x0, #0xfffffff00a98de48",
+        "pacibsp",
+        "sub sp, sp, #0x20",
+        "stp x29, x30, [sp, #0x10]",
+        "add x29, sp, #0x10",
+        "str x1, [sp, #8]",
+        "add x1, sp, #8",
+        "mov w3, #1"
+      ],
+      "native_disassembly": [
+        "bti c",
+        "cbz x0, #0xfffffff0079307fc",
+        "pacibsp",
+        "sub sp, sp, #0x20",
+        "stp x29, x30, [sp, #0x10]",
+        "add x29, sp, #0x10",
+        "str x1, [sp, #8]",
+        "add x1, sp, #8"
+      ],
+      "prefix_sha256": "6c476fa1392da60990d81d08fe7b21cd59e3a462fc693fb41b2198c516b75e2c",
+      "function_bytes": 64
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "source": {
+    "status": "physical recorded regression passed",
+    "source": "ios27/sources/Mesa/src/freedreno/vulkan/tu_knl_darwin.cc",
+    "source_sha256": "94accbec159ebe58457e43cd3fe2b8d6f5bded3e4dad0b438c788f9f850c9fb8",
+    "cause": "second tu_CreateDevice failure calls darwin_device_finish and IOServiceClose on process-shared connection; dropViews removes first device live map",
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/connection-lifetime",
+    "fault": {
+      "pid": 68,
+      "address": "0x12948f235",
+      "unmapped_base": "0x129400000",
+      "unmapped_bytes": 8388608,
+      "mapping_sequence": 116,
+      "drop_views_sequence": 935
+    },
+    "change": "reference-count enumeration and device connection ownership; share IOVA allocation; drain own deferred and cached BOs before releasing ownership",
+    "device_result": {
+      "observed_at": "2026-11-14T15:29:14.861902+08:00",
+      "status": "physical UI regression passed for recorded cases",
+      "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/connection-lifetime",
+      "primary_ui_exit_counts": [
+        0,
+        0
+      ],
+      "glass_fault_magic": "0x0",
+      "scanout": {
+        "waits": 4132,
+        "late_ack_successes": 1,
+        "timeouts": 0
+      },
+      "cases": [
+        "unlock",
+        "Settings",
+        "wallpaper gallery",
+        "gradient editor and cancel",
+        "four light-dark changes with pixel comparison",
+        "Control Center",
+        "app switcher",
+        "lock-wake-unlock",
+        "new cyan gradient add and wallpaper pair",
+        "new wallpaper visible on Home"
+      ],
+      "wallpaper_home_rgb": [
+        81,
+        213,
+        251
+      ],
+      "remaining": [
+        "wallpaper gallery and saved-card thumbnails",
+        "rendering and input latency measurement",
+        "latest fetched GPU source integration"
+      ]
+    },
+    "host_test": "logs/connection-lifetime-host-test.log",
+    "host_cases": [
+      "probe retains live connection and fences",
+      "second-device failure preserves primary mapping",
+      "shared GPU ranges remain disjoint",
+      "replay address conflict refused",
+      "2400 concurrent acquire-allocate-free-release",
+      "final release closes and resets allocator",
+      "failed initial open leaves reference count zero"
+    ],
+    "test_source": "scripts/tests/check_ios27_connection_lifetime.py",
+    "packaging_source": "scripts/rebuild_ios27_turnip_payload.py",
+    "build_log": "logs/turnip27.log",
+    "kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/phone-package/kernel.connection-lifetime-panic.macho",
+    "kernel_sha256": "bb2790054b748f9a6d7fec72ed369744b7d4cf05183527a257d2903d88d6505d",
+    "runtime_report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-payload-connection-lifetime/report.json",
+    "runtime_addon_sha256": "d81ce9cfe2d341808239fc82e885edcdabaa7f20f232050cb8d1bd0781e49b54",
+    "runtime_trust_sha256": "0fc8510a8b7a4313322b29d27524ac883e2a32123c4ac1745b60d335871e6e68",
+    "changed_payload_files": [
+      "addons/NativeAdrenoMetal.bundle/NativeAdrenoMetal",
+      "addons/NativeAdrenoMetal.bundle/_CodeSignature/CodeResources",
+      "addons/NativeAdrenoMetal.bundle/gpu-build.json",
+      "addons/NativeAdrenoMetal.bundle/libvulkan_freedreno.dylib"
+    ],
+    "image_sha256": "bede9ca82871517ee5e4fd342007eb370e79926542f0a42e49229cb51be47872",
+    "source_patch": "patches/ios27-gpu/turnip-shared-connection-lifetime.patch"
+  },
+  "candidate": {
+    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-connection-lifetime/marble_ios27_temporary_boot.img",
+    "image_sha256": "bede9ca82871517ee5e4fd342007eb370e79926542f0a42e49229cb51be47872",
+    "kernel": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/phone-package/kernel.connection-lifetime-panic.macho",
+    "kernel_sha256": "bb2790054b748f9a6d7fec72ed369744b7d4cf05183527a257d2903d88d6505d",
+    "candidate": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-connection-lifetime/candidate.json",
+    "target": "ios-27.2-24B119",
+    "device_result": "physical UI regression passed for recorded cases",
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/connection-lifetime",
+    "observed_at": "2026-11-14T15:29:14.861902+08:00"
+  },
+  "results": {
+    "observed_at": "2026-11-14T15:29:14.861902+08:00",
+    "status": "physical UI regression passed for recorded cases",
+    "evidence": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/device-20261114/connection-lifetime",
+    "primary_ui_exit_counts": [
+      0,
+      0
+    ],
+    "glass_fault_magic": "0x0",
+    "scanout": {
+      "waits": 4132,
+      "late_ack_successes": 1,
+      "timeouts": 0
+    },
+    "cases": [
+      "unlock",
+      "Settings",
+      "wallpaper gallery",
+      "gradient editor and cancel",
+      "four light-dark changes with pixel comparison",
+      "Control Center",
+      "app switcher",
+      "lock-wake-unlock",
+      "new cyan gradient add and wallpaper pair",
+      "new wallpaper visible on Home"
+    ],
+    "wallpaper_home_rgb": [
+      81,
+      213,
+      251
+    ],
+    "remaining": [
+      "wallpaper gallery and saved-card thumbnails",
+      "rendering and input latency measurement",
+      "latest fetched GPU source integration"
+    ]
+  }
+}

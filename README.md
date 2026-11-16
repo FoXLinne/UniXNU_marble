@@ -1,22 +1,20 @@
 # UniXNU marble
 
-Redmi Note 12 Turbo / POCO F5（marble，SM7475，Adreno 725）的板级适配仓库。默认研究目标为 iOS 18.7.11 / 22H384；iPadOS 17.7.11 / 21H461 保留历史运行记录。
+Redmi Note 12 Turbo / POCO F5（marble，SM7475，Adreno 725）的板级适配仓库。`port/ios27.2-marble` 分支目标为 iOS 27.2 / 24B119；iOS 18.7.11 / 22H384 和 iPadOS 17.7.11 / 21H461 保留来源与历史运行记录。
 
-## 当前阶段：2026-11-11
+## 当前阶段：2026-11-16
 
-手机恢复 Android 17，槽位 A，`sys.boot_completed=1`。用户要求停止设备操作。仓库保存实验源码、构建来源和故障记录。
+iOS 27.2 / 24B119 真机运行版本为 v49，采用临时 RAM 启动。当前内核、固件、图形插件、镜像摘要及运行记录见 [CURRENT.json](CURRENT.json)。源码和回归用例随仓库保存；系统盘、Data、固件二进制、原始日志与截图保留在本地工作区。
 
-| 功能 | 阶段结果 |
+| 功能 | 真机结果 |
 | --- | --- |
-| 系统启动、UFS | iOS 候选可进入系统，UFS 接口迁移存在启动记录；Android 与 Data 身份保留 |
-| 显示、GPU | 桌面和锁屏存在运行证据；渲染正确性、Safari、流畅度与稳定性保持待处理 |
-| Wi-Fi | 扫描、WPA2 认证、DHCP 存在真机记录；连接提示及重连按候选验收 |
-| USB | RootStage 和 Apple USB 均有运行记录；断线恢复及锁屏路径存在故障 |
-| 电量、充电 | 电量、电流、充电与 Powerlog 数据存在记录；设置统计页面按阶段记录验收 |
-| 扬声器 | 系统播放曾工作；锁屏后失声；末轮候选收到锁屏一次触发崩溃的反馈，验收失败 |
-| 马达 | 内核自检震动；系统触觉待接通，CoreHaptics 返回 -4810 |
+| 系统与图形 | v49 进入锁屏、桌面与应用；PiliPlus 推荐页、列表滚动和热门页切换完成检查 |
+| Wi-Fi | v47 完成自动连接及三次开关重连，DHCP 用时 1.271、1.308、0.860 秒；v49 沿用该内核，联网日志接口响应 HTTP 200 |
+| USB | v48 修复主机命令中断触发看门狗重启；端口禁用 60 秒后系统持续运行，v49 沿用该固件 |
+| PiliPlus | v49 支持省略扩展头的旧版 metallib；三个实际着色器库的 65 个函数完成解码，应用启动、列表显示和交互完成真机检查 |
+| 其他外设 | 分项结果、历史候选和剩余范围见 [阶段状态](docs/STATUS.md) 与 CURRENT.json |
 
-当前源码含实验性音频改动及部分上游整合。85 个上游仓库的同步来源与冲突清单保存在 [同步记录](records/upstream-sync-2026-11-11.json)。主机测试、构建通过和真机功能结果分别记录。
+功能摘要见 [2026-11-16 验收记录](records/ios27-24B119/device-acceptance-2026-11-16.json)。历史 iOS 18 音频、触觉及图形记录保留在专题文档中。
 
 ## 文档入口
 
@@ -38,7 +36,7 @@ Redmi Note 12 Turbo / POCO F5（marble，SM7475，Adreno 725）的板级适配�
 | `package/`、`hal/` | 板级驱动、固件接口、系统音频插件和诊断代码 |
 | `profiles/`、`patches/`、`configs/` | 输入约束、系统适配和构建配置 |
 | `scripts/` | 源码准备、构建、打包、主机检查与维护脚本 |
-| `ios17/`、`ios18/`、`firmware/source/` | 设备仓库管理的来源快照及本地适配 |
+| `ios17/`、`ios18/`、`ios27/`、`firmware/source/` | 设备仓库管理的来源快照及本地适配 |
 | `firmware/inputs/` | 硬件输入与来源信息 |
 | `records/`、`docs/` | 阶段证据、来源、状态说明和操作参考 |
 | `source_origins.json`、`source_snapshot.json` | 来源提交、待整合提交和本地源码摘要 |

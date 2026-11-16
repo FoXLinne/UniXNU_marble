@@ -1,0 +1,227 @@
+{
+  "target": {
+    "ios": "27.2",
+    "build": "24B119",
+    "product": "iPhone12,1",
+    "device_class": "n104ap",
+    "board": "bcm2837",
+    "kernel_component": "kernelcache.release.iphone12b"
+  },
+  "base": {
+    "xnu": "12377.121.6",
+    "commit": "ac9718fb1af618d5ce8678d0dc6e8a58f252216f",
+    "authoritative_upstream": {
+      "UniXNU": "6b24c06ce487e8c48105b7b4635d0d97f7ec6cdd",
+      "UniXNU-sheng": "abfc15a6e05d36b616ad2d8a3b52fef960999a0e"
+    }
+  },
+  "prerequisite_series": [
+    {
+      "order": 1,
+      "name": "arch/arm64e",
+      "path": "ios27/source/profiles/arch/arm64e/patches/xnu/series",
+      "patches": 69,
+      "note": "applied by parent pipeline"
+    },
+    {
+      "order": 2,
+      "name": "soc/sm8550-common",
+      "patches": ["sheng-platform-power.patch", "native-smp-secondary.patch"],
+      "note": "must precede OS series; zzz-boot-progress.patch anchors on the sheng_pmgr_run hunk"
+    },
+    {
+      "order": 3,
+      "name": "os/ipados-27.0.1-24A446",
+      "path": "ios27/source/profiles/os/ipados-27.0.1-24A446/patches/xnu/series",
+      "patches": ["zzz-boot-progress.patch", "darwin26-syscalls.patch", "darwin26-kpi.patch", "darwin26-shared-region.patch"]
+    },
+    {
+      "order": 4,
+      "name": "device/sheng-xnu-12377",
+      "path": "work/upstream/UniXNU-sheng/patches/xnu-12377/series",
+      "patches": 16,
+      "note": "appsync, wifi, bluetooth, amp, audio, source-storage, diagnostics, sigp"
+    }
+  ],
+  "device_series": {
+    "path": "patches/xnu-12377/series",
+    "order_note": "mac_vfs.c patches are cumulative in this order; phone-ui-startup must precede marble-platform-hooks",
+    "patches": [
+      {
+        "file": "native-rtc.patch",
+        "sha256": "7ab64cb780b0b840ae1d1f58c5f2503a939d36d1b09c625c6d042f0f43e235af",
+        "files": ["iokit/Kernel/IOPlatformExpert.cpp"],
+        "provenance": "patches/xnu-11417/native-rtc.patch, verbatim semantic port",
+        "hooks": ["native_marble_rtc_get", "native_marble_rtc_set"],
+        "implemented_by": "package/MarbleRtc.cpp"
+      },
+      {
+        "file": "fractional-mhz-microtime.patch",
+        "sha256": "0321f9a94bb9e580d0e771df9211ae62645d3bf75289fc5bc9311a90666fd945",
+        "files": ["osfmk/arm/rtclock.c"],
+        "provenance": "patches/xnu-11417/fractional-mhz-microtime.patch, verbatim semantic port",
+        "purpose": "scale the sub-second abstime remainder by the 19.2 MHz timer instead of the truncated microsecond divisor"
+      },
+      {
+        "file": "early-video-console.patch",
+        "sha256": "84ffd85e7e0ae0d00ed6fcfff88fb5777d8faf10457252f04a520ce153d6245e",
+        "files": ["pexpert/arm/pe_init.c"],
+        "provenance": "patches/xnu-11417/early-video-console.patch, verbatim semantic port",
+        "purpose": "early_console/-v boot args select text console and acquire the screen"
+      },
+      {
+        "file": "release-msgbuf-size.patch",
+        "sha256": "66e00f353973768e53baec9d718dfd1f977adeab7ed7ac22e6a6efe0252788e2",
+        "files": ["bsd/kern/subr_log.c"],
+        "provenance": "patches/xnu-11417/release-msgbuf-size.patch, identical hunk",
+        "purpose": "keep the msgbuf= boot-arg startup outside CONFIG_XNUPOST in RELEASE builds"
+      },
+      {
+        "file": "gpu-trust-cache.patch",
+        "sha256": "d2f99cec7e473dd8e87e315ac473e9a0bbe89a722ccdb0a2224f723194d3d581",
+        "files": ["bsd/kern/kern_trustcache.c"],
+        "provenance": "patches/xnu-11417/gpu-trust-cache.patch, identical hunk; ARM64_BOARD_CONFIG_BCM2837 is set via MACHINE_FLAGS_ARM64_BCM2837",
+        "purpose": "allow the owner-built GPU trust module appended by the boot payload in RELEASE"
+      },
+      {
+        "file": "metal-cache-access.patch",
+        "sha256": "cfa5706a43460ed7a34afb288cbe7f3b9591fc69ea94aaba04ccc14d3a9453c1",
+        "files": ["security/mac_vfs.c"],
+        "provenance": "patches/xnu-11417/metal-cache-access.patch, applied clean on 12377",
+        "purpose": "same-user Metal shader cache directory authorization at the vnode boundary"
+      },
+      {
+        "file": "metal-cache-times.patch",
+        "sha256": "f953c105d7a57318ab506d3170cb0800045ff21d26c432116a7ecea6bb2a6dd2",
+        "files": ["security/mac_vfs.c"],
+        "provenance": "patches/xnu-11417/metal-cache-times.patch, applied clean on 12377",
+        "purpose": "setattrlist timing hook for the Metal cache path"
+      },
+      {
+        "file": "haptics-device-access.patch",
+        "sha256": "5fc79ac98cc098171f6208351a0ef25c33e2478e0e952f3c4a18d7dcecd0c190",
+        "files": ["security/mac_vfs.c"],
+        "provenance": "patches/xnu-11417/haptics-device-access.patch, applied clean on 12377",
+        "hooks": ["native_marble_haptics_vnode"],
+        "implemented_by": "package/MarbleMetal.c (weak_import)"
+      },
+      {
+        "file": "phone-ui-startup.patch",
+        "sha256": "cc290c8bdb0c53413383ce137868ad260083317638aebaf3e36fe81ee0b37468",
+        "files": ["bsd/kern/kern_exec.c", "security/mac_base.c"],
+        "provenance": "patches/xnu-11417/phone-ui-startup.patch, applied clean on 12377",
+        "hooks": ["native_marble_ui_dyld_policy"],
+        "implemented_by": "package/MarbleUiPolicy.c (weak_import)"
+      },
+      {
+        "file": "marble-platform-hooks.patch",
+        "sha256": "9e258fa33f434d617af7708d12bae496d74635f7e81454780b91a6bd28203807",
+        "files": [
+          "bsd/kern/bsd_init.c",
+          "bsd/kern/kern_exec.c",
+          "bsd/kern/kern_exit.c",
+          "bsd/kern/ubc_subr.c",
+          "bsd/miscfs/bindfs/bind_vfsops.c",
+          "osfmk/kern/debug.c",
+          "osfmk/arm64/machine_routines.c",
+          "pexpert/arm/pe_bootargs.c"
+        ],
+        "provenance": "marble-specific hunks extracted from patches/xnu-11417/arm64e.patch; each call site re-anchored on the fully patched 12377 tree",
+        "hooks": [
+          "native_marble_pmgr_start",
+          "native_root_block_authorized",
+          "native_marble_root_start",
+          "native_marble_display_start",
+          "native_marble_prepare_systemos",
+          "native_marble_cellular_text_fixup",
+          "native_marble_bindfs_allowed",
+          "native_marble_ui_exit",
+          "native_resident_record_panic",
+          "native_resident_panic_return",
+          "native_root_block_boot_args"
+        ],
+        "implemented_by": "package/ (MarblePmgr.cpp, MarbleRootDisk.cpp, MarbleDisplay.cpp, MarbleSystemOS.c, MarbleUiPolicy.c, NativeResident.cpp, NativeRootBlock.cpp)",
+        "notes": [
+          "root-auth fallback runs only when XNU_OWNER_ROOT_AUDIT is unset; sheng's native_verified_block_root_authorized path takes precedence if the parent enables it",
+          "resident panic block is guarded by XNU_ARM_DT_PLATFORM (defconfig sets it)",
+          "CS_TEXT_FIXUP_BYTES raised 16->32 because marble's compiled-in fixup entries reach 24 bytes",
+          "_enable_virtual_timer keeps the physical timer unmasked when XNU_ARMCPU is set"
+        ]
+      }
+    ]
+  },
+  "inherited_replacements": [
+    {
+      "ios18": "patches/xnu-11417/arm64e.patch (bulk)",
+      "replacement": "upstream arm64e series (69 patches): PAC/TCR/pmap, 4K user ABI + signature hash cache, text fixups, union fs, work intervals, sandbox grants, fileset-unmapped call, trustcache runtime layout, MASTER.arm64.bcm2837, CoreEntitlements, exports"
+    },
+    {
+      "ios18": "patches/xnu-11417/native-union-statfs-fsid.patch",
+      "replacement": "upstream native-union-statfs-fsid.patch (arch series)"
+    },
+    {
+      "ios18": "patches/xnu-11417/native-pac-el0.patch",
+      "replacement": "upstream native-pac-arm64-user-jop.patch; superset (keys on at EL0 entry, off on arm64-thread return)"
+    },
+    {
+      "ios18": "patches/xnu-11417/appsync-user-trust.patch",
+      "replacement": "sheng sheng-appsync-user-trust.patch; identical appsync_is_user_code/platform_binary logic plus runtime trust registration; path check accepts any .app under /var"
+    },
+    {
+      "ios18": "patches/xnu-11417/sheng-amp.patch",
+      "replacement": "sheng zzyf-sheng-amp.patch + sched_clutch sheng_edge policy"
+    },
+    {
+      "ios18": "patches/xnu-11417/sheng-owner-dataprotect.patch",
+      "replacement": "upstream: NATIVE_DATAPROTECT emulation already in bsd/vfs/kpi_vfs.c (owner-dataprotect=1)"
+    },
+    {
+      "ios18": "patches/xnu-11417/wifi-association-event-cluster.patch",
+      "replacement": "sheng sheng-wifi-association-event.patch; improved variant (cluster mbuf only for KEV_IEEE80211_CLASS events)"
+    },
+    {
+      "ios18": "ios18/source/patches/xnu/architectural-timer-entry.patch",
+      "replacement": "obsolete: the BCM2837 timer-routing block in start.s no longer exists in 12377"
+    },
+    {
+      "ios18": "ios18/source/patches/xnu/native-trust-cache-runtime.patch",
+      "replacement": "obsolete: 12377 startup.c calls trust_cache_runtime_init() unconditionally"
+    },
+    {
+      "ios18": "ios18/source/patches/xnu/non-apple-pmap-field.patch",
+      "replacement": "inherited upstream: pmap.h already carries disable_jop/reserved13 split"
+    },
+    {
+      "ios18": "ios18/source/patches/xnu/published-freezer-condition.patch",
+      "replacement": "inherited upstream: FREEZE_ENABLED_DEFAULT condition fixed with XR exclusion"
+    },
+    {
+      "ios18": "ios18/source/patches/xnu/disabled-deferred-reclaim.patch",
+      "replacement": "obsolete: the patched call site no longer exists in 12377 vm_user.c"
+    },
+    {
+      "ios18": "ios18/source/patches/xnu/{offline-pgz-alignment-probe,pgz-aligned-validation}.patch",
+      "replacement": "not ported: diagnostic probes for the iOS 18 4K transition; upstream native-4k-* rework supersedes. Re-add only if 4K zone misalignment recurs"
+    }
+  ],
+  "unresolved_gaps": [
+    "text-fixup entries compiled into package/MarbleUiPolicy.c name iOS 18 (22H384) dyld_shared_cache_arm64e files and offsets; they apply only when original bytes match, so they are inert on iOS 27 until updated for the 24B119 shared cache",
+    "native-rtc depends on package/MarbleRtc.cpp; the RTC device binding is driver work owned by the parent agent",
+    "no compile or hardware verification was possible in this scope; git apply checks only"
+  ],
+  "verification": {
+    "worktree": "build/ios27-patch-port/xnu-12377 (detached), verify worktree build/ios27-patch-port/xnu-12377/xnu-12377-verify at baseline e9e8a6c",
+    "commands": [
+      "git worktree add --detach xnu-12377-verify e9e8a6c  # e9e8a6c = ac9718f + arch(69) + sm8550(2) + os(4) + sheng(16..19) series applied",
+      "while read p; do git apply --check $M/$p && git apply $M/$p; done < patches/xnu-12377/series",
+      "diff -r -q xnu-12377-verify <authored tree>"
+    ],
+    "results": [
+      "10/10 patches: git apply --check OK and git apply OK, in series order, on the fully upstream-patched baseline",
+      "series-applied tree is byte-identical to the authored tree",
+      "earlier failure fixed: metal-cache-times/haptics-device-access were regenerated as incremental diffs; phone-ui-startup gained its security/mac_base.c hunk"
+    ],
+    "upstream_series_results": "arch 69/69, sm8550 2/2 (must precede os: zzz-boot-progress needs sheng_pmgr_run hunk), os 4/4, sheng 16/16 apply clean in that order",
+    "hardware": "pending; no device operations performed"
+  }
+}

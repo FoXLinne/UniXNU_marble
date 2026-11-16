@@ -1,0 +1,25 @@
+{
+  "target": "24B119",
+  "key_got": "0xfffffff008030f70",
+  "key_encoding_review": "four MOVZ/MOVK words verified against the complete GOT address; corrupted high-halfword negative case rejected",
+  "factory_bounds": [
+    "width and height in 1..16384",
+    "actual output dimensions match",
+    "BGRA format",
+    "zero surface plane count",
+    "stride >= width*4",
+    "stride*height <= memory descriptor length"
+  ],
+  "layout_branch": {
+    "flag_offset": "0x48",
+    "flag": 0,
+    "branch": "0xfffffff009a74b68",
+    "stride_alignment": 128,
+    "planes_count_input": 1,
+    "bytes_per_element_input": 4,
+    "surface_plane_count_output": 0,
+    "evidence": "one-plane path uses 0x9a74b98 width*elementBytes rounded to 128; 0x9a74cac branches past multi-plane setup for count < 2"
+  },
+  "source_sha256": "34c2ac8180548c7df9b08be13225f8ba1156e3adf730ec8e36bce12a3b3d5769",
+  "device_result": "pending"
+}

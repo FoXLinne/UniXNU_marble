@@ -1,0 +1,114 @@
+{
+  "target": "24B119",
+  "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+  "functions": [
+    {
+      "original": "0xfffffff00a6fb09c",
+      "original_sha256": "a445050736d990c1f6f016096c4b32edad82124947ed03dfdf5e2b7432ae7e45",
+      "native_symbol": "_proc_name",
+      "evidence": "pid, output buffer, signed size; zero buffer; proc_find; strlcpy proc+0x55c with min(size,17); proc_rele",
+      "source": "bsd/kern/kern_proc.c",
+      "native_address": "0xfffffff007708400",
+      "prefix_sha256": "479192b34db080692529dfbbf47f8f5abfa17fa8b68e740137fe608017e410e2",
+      "function_bytes": 144
+    },
+    {
+      "original": "0xfffffff00a6fb12c",
+      "original_sha256": "eafaf7232eac73d069d23b7edefe10e7206a27df9af6188124f0e8c6de749d8d",
+      "native_symbol": "_proc_best_name",
+      "evidence": "returns proc+0x56d when name byte nonzero; otherwise proc+0x55c; source proc_best_name selects p_name or p_comm",
+      "source": "bsd/kern/kern_proc.c",
+      "native_address": "0xfffffff00770854c",
+      "prefix_sha256": "bad83c2229ff1e8b86c95753f0fcffac32afcceb832fd7568d10932242b78dcb",
+      "function_bytes": 24
+    },
+    {
+      "original": "0xfffffff00a6f93cc",
+      "original_sha256": "3afe660e49d219b288e2144a42504e225a95e4cf3c6b735133675cff3234a62b",
+      "native_symbol": "_proc_find_ident_validated",
+      "evidence": "two arguments; returns EINVAL on either null; proc_find from ident pid; validation and writes proc_t output",
+      "source": "bsd/kern/kern_proc.c",
+      "native_address": "0xfffffff0077063e8",
+      "prefix_sha256": "b2a63856fa85edcc8f10929e23f94c435c1be79f558999977f9a97fd97d77d12",
+      "function_bytes": 404
+    },
+    {
+      "original": "0xfffffff00a6f9728",
+      "original_sha256": "8f63bae5e01abc165b633b07d3b1945802cf9cf6c56dedf0671e0c9cf28d8e20",
+      "native_symbol": "_proc_find_ident",
+      "evidence": "one argument; local output pointer; calls validated helper then returns null on error or proc pointer on success",
+      "source": "bsd/kern/kern_proc.c",
+      "native_address": "0xfffffff0077068c8",
+      "prefix_sha256": "b476e40c7b6591b8cf6ba901b1c1a7ea27330cc17099ae7510a33aaf92a17757",
+      "function_bytes": 52
+    },
+    {
+      "original": "0xfffffff00a6faef0",
+      "original_sha256": "f513d039aeeace44ab50af85d4d4da138c5634b61d86a20a42cf0cb2bec41e39",
+      "native_symbol": "_proc_parent",
+      "evidence": "proc parent traversal under proc_list lock, parent ref acquisition and proc_parent wait cstring; one-argument pointer return",
+      "source": "bsd/kern/kern_proc.c",
+      "native_address": "0xfffffff0077081a8",
+      "prefix_sha256": "d3ae0c0373e376b586a5c8d19297785f2c4569e1167ebb68546af2bf20c279bc",
+      "function_bytes": 428
+    },
+    {
+      "original": "0xfffffff00a6fc104",
+      "original_sha256": "7edabb1f862b45eba106fea02a0380cebdcc0191a10695da2044414aec93c020",
+      "native_symbol": "_proc_getexecutablevnode",
+      "evidence": "one proc argument; loads authenticated p_textvp at +0x538; vnode_getwithref; returns retained vnode or null with process-lock handling",
+      "source": "bsd/kern/kern_proc.c",
+      "native_address": "0xfffffff0077094dc",
+      "prefix_sha256": "703725801869d8c88f4a329cd78bb9a84d8fb563a9be5ca3742e945b686ee87e",
+      "function_bytes": 260
+    },
+    {
+      "original": "0xfffffff00a6fa5b0",
+      "native_symbol": "_proc_ppid",
+      "original_sha256": "e2d8dc3374c7e7800967ce835b6e96cbbfcbf2440d01113184698905e19b2ea0",
+      "function_bytes": 116,
+      "evidence": "proc_t input; null returns -1; proc zone validation; loads p_ppid at +0x20. Source proc_internal.h places p_ppid before p_pid; native proc_ppid loads +0x20. Both original and native proc_selfppid load +0x20. Original proc_selfpid loads +0x60, matching proc_pid below.",
+      "source": "bsd/kern/kern_proc.c; bsd/sys/proc_internal.h"
+    },
+    {
+      "original": "0xfffffff00a6f91e4",
+      "native_symbol": "_proc_pid",
+      "original_sha256": "ec21dc0cf255a60bebdad9dd7b706669ef652707658272a8bb718dac13674337",
+      "function_bytes": 140,
+      "evidence": "proc_t input; null returns -1; proc zone validation; kernproc returns 0; loads p_pid at +0x60. Same contract and field as original proc_selfpid at0xa6fa8c4 and native proc_pid. Previous binding to proc_ppid returned parent PID1 for launchd child services in sandbox checks.",
+      "source": "bsd/kern/kern_proc.c; bsd/sys/proc_internal.h"
+    },
+    {
+      "original": "0xfffffff00a6f9270",
+      "original_sha256": "8d2c92dafb3d65515e687c7c7aadda6881b17474b02f6261cf12822531dde385",
+      "function_bytes": 144,
+      "native_symbol": "_proc_pidversion",
+      "evidence": "one proc pointer; loads and validates proc_ro at+0x18 with zone5/backpointer; returns p_idversion u32 at ro+0x18; matches source proc_pidversion(proc_get_ro(p)->p_idversion)",
+      "native_address": "0xfffffff0077061b4"
+    }
+  ],
+  "rejected_assignments": {
+    "0xfffffff00a6faef0": "_proc_name",
+    "0xfffffff00a6f93cc": "_proc_find_ident",
+    "0xfffffff00a6fc104": "_proc_gettty_dev",
+    "0xfffffff00a6fa5b0": "_proc_find_ident_validated"
+  },
+  "superseded_pid_bindings": [
+    {
+      "original": "0xfffffff00a6fa5b0",
+      "original_sha256": "e2d8dc3374c7e7800967ce835b6e96cbbfcbf2440d01113184698905e19b2ea0",
+      "native_symbol": "_proc_pid",
+      "evidence": "one proc pointer argument; null returns -1; zone/bounds validates proc allocation; returns u32 p_pid at proc+0x20; source bsd/kern/kern_proc.c proc_pid has this exact null and field-return contract",
+      "source": "bsd/kern/kern_proc.c",
+      "function_bytes": 116
+    },
+    {
+      "original": "0xfffffff00a6f91e4",
+      "original_sha256": "ec21dc0cf255a60bebdad9dd7b706669ef652707658272a8bb718dac13674337",
+      "function_bytes": 140,
+      "native_symbol": "_proc_ppid",
+      "evidence": "proc argument; null returns -1; proc zone bounds/type validation; kernel proc returns0; other proc loads p_ppid at+0x60; target proc_pid at0x6fa5b0 loads p_pid+0x20 while proc_pgrpid at0x701ab4 loads+0x24; checked source proc_ppid contract",
+      "source": "bsd/kern/kern_proc.c"
+    }
+  ]
+}

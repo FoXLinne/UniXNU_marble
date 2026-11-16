@@ -1,0 +1,38 @@
+{
+  "target": "24B119",
+  "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+  "functions": [
+    {
+      "original": "0xfffffff00a8c4790",
+      "original_sha256": "57e372b30e5c1b88ccbe39f1979435cd5e79698a989911d3888e741fe19ea257",
+      "function_bytes": 64,
+      "native_symbol": "_img4_interface_register",
+      "evidence": "singleton+0x20; exact duplicate panic img4 interface already set @%s:%d and interface.c",
+      "native_address": "0xfffffff0078be194"
+    },
+    {
+      "original": "0xfffffff00a8c47d0",
+      "original_sha256": "75a155e2ac880df83266659a329498b479b5cee90330a7c10535770fc69c4fbf",
+      "function_bytes": 64,
+      "native_symbol": "_image4_dlxk_link",
+      "evidence": "singleton+0x28; exact duplicate panic image4 dlxk interface already set @%s:%d and dlxk.c",
+      "native_address": "0xfffffff0078be1d8"
+    },
+    {
+      "original": "0xfffffff00a8c4828",
+      "original_sha256": "57333d5d1fa14463db576128cd30442b433e475d7f4b6f4f207f52059f28924e",
+      "function_bytes": 64,
+      "native_symbol": "_image4_v2_interface_register",
+      "evidence": "singleton+0x30; exact duplicate panic libImage4_V2 interface already set @%s:%d and image4_v2.c",
+      "native_address": "0xfffffff0078be238"
+    },
+    {
+      "original": "0xfffffff00a8c4810",
+      "original_sha256": "6963a423e4c95b015016c9ae57e69a794e1a7cb9f3b389826e07d5492b9820a3",
+      "function_bytes": 24,
+      "native_symbol": "_image4_dlxk_get",
+      "evidence": "one version scalar; loads singleton+0x28, halfword dlxk_version and returns null if requested version too high, else pointer; source libkern/image4/dlxk.c",
+      "native_address": "0xfffffff0078be21c"
+    }
+  ]
+}

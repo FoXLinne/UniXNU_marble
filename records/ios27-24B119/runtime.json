@@ -1,0 +1,129 @@
+{
+  "target": "ios27",
+  "build": "24B119",
+  "product": "iPhone12,1",
+  "device_class": "n104ap",
+  "scope": "userland/runtime migration from 22H384/24A446 to 24B119",
+  "editable_paths": [
+    "scripts/build_ios27_runtime.py",
+    "package/ios27-runtime/",
+    "profiles/runtime/ios27-24B119/",
+    "records/ios27-24B119/runtime.json",
+    "records/ios27-24B119/runtime.md"
+  ],
+  "mounts": {
+    "os_root": {
+      "path": "/private/tmp/marble-24b119-os",
+      "device": "/dev/disk12s1",
+      "image": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-08279-215.dmg",
+      "attach": "hdiutil attach -readonly"
+    },
+    "cryptex_root": {
+      "path": "/private/tmp/marble-24b119-cryptex",
+      "device": "/dev/disk14s1",
+      "image": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/141-10128-227.dmg",
+      "decrypted_from": "141-10128-227.dmg.aea",
+      "attach": "hdiutil attach -readonly"
+    },
+    "dyld_cache": {
+      "path": "System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e",
+      "uuid": "555BFDAA-D930-31AC-A915-D472C273C527",
+      "subcaches_used": [
+        "dyld_shared_cache_arm64e.07",
+        "dyld_shared_cache_arm64e.28",
+        "dyld_shared_cache_arm64e.36",
+        "dyld_shared_cache_arm64e.38",
+        "dyld_shared_cache_arm64e.59",
+        "dyld_shared_cache_arm64e"
+      ]
+    }
+  },
+  "cli": {
+    "script": "scripts/build_ios27_runtime.py",
+    "args": [
+      "--os-root",
+      "--cryptex-root",
+      "--output"
+    ],
+    "optional": [
+      "--gpu-addon",
+      "--source-scripts",
+      "--components",
+      "--skip-appsync",
+      "--skip-wifi",
+      "--skip-haptics"
+    ],
+    "verified_invocation": "python3 scripts/build_ios27_runtime.py --os-root /private/tmp/marble-24b119-os --cryptex-root /private/tmp/marble-24b119-cryptex --output outputs/UniXNU_marble/ios27_24B119/runtime --gpu-addon <canonical NGPUADD2 metal addon>",
+    "gpu_addon_input": "outputs/UniXNU_marble/audio-20261110/boot-lock-state0/wifi.gpuaddon",
+    "gpu_addon_input_sha256": "07e423c6c0a4f859512610a9fd796dd1cda993d508e8b5b5eb39b8bb0cd634f2"
+  },
+  "generated": {
+    "output_dir": "outputs/UniXNU_marble/ios27_24B119/runtime",
+    "report": "outputs/UniXNU_marble/ios27_24B119/runtime/runtime.json",
+    "patch_inputs": {
+      "text_fixups": "patch-inputs/text-fixups.txt",
+      "fixups_json": "patch-inputs/text-fixups.json",
+      "hook_sources": "patch-inputs/hook-sources.json"
+    },
+    "c_hooks": {
+      "ui_policy": "package/ios27-runtime/MarbleUiPolicy27.c",
+      "ui_policy_sha256": "2447e13d383dbe159e8dee36102696cc5c252a25ce910bdbfe318dbbca5faf01",
+      "crash_info": "package/ios27-runtime/MarbleCrashInfo27.c",
+      "crash_info_sha256": "4c4d5dd0c0f7b7df1d9059a9a5fdda34fa0b465b589d486fc59a3d40a6ca36ce",
+      "driver_selection_contract": "The driver build must select MarbleUiPolicy27.c in place of package/MarbleUiPolicy.c and MarbleCrashInfo27.c in place of the __crash_info address block in package/MarbleSystemOS.c when building the ios27/24B119 payload. See patch-inputs/hook-sources.json."
+    }
+  },
+  "steps": {
+    "validate_os": "validated (24B119, AppSync pin hashes re-verified, launchd.plist sha256 7e241a31f72fdd6026c156180b9c43fc415a8fcd897c6b9399b75844fbeb42c6)",
+    "fixups": "verified (19/19 entries byte-exact against live cache)",
+    "wifi": "built (unixnu-wpa_supplicant signed, org.unixnu.wifi.supplicant daemon)",
+    "launchd": "built (732 OS jobs preserved + org.unixnu.wifi.supplicant; detached signature cdhash 1afb9213656dea59223afc97d6115ec1ea78c7f4)",
+    "haptics": "built (MarbleHaptics.driver signed cdhash d9c9f7b9f6970252a5dc84f0f51931163eb539a3; 251 N104 tunings published as N104 + D84)",
+    "phone_ui": "built (phone-ui.gpuaddon, MarblePhoneUI.dylib + NativeAdrenoMetal.bundle signed, screen category 11, target arm64e-apple-ios27.0)",
+    "wallpaper": "built (103 resource files merged into addon; 24 HEIC layers converted; N104 event-timing shipped as D84; iPhone16,2/iPhone15,3 defaults registered)",
+    "appsync": "built (UniXNUAppSync.dylib + libunixnu-ldid.dylib + unixnu-appinst + 4 re-pinned patched system executables; entitlements and identifiers preserved)"
+  },
+  "fixup_groups": {
+    "powerlog": "8 sites in dyld_shared_cache_arm64e.36 (PowerlogCore UUID 7B2B14B5-F6A5-3C55-A340-72AE9274881A): widen PLTimeManager 32-bit timestamp arithmetic to 64-bit (scvtf w->x, add w->x, sdiv/msub patterns preserved)",
+    "telephony": "7 sites: 5 in .07 (TelephonyUtilities UUID AAC91601-D852-34FE-962C-EB53F96DC625) and 2 in .36 (SpringBoard SBTelephonyManager): zero-safe call/count sequences preserving original prologues",
+    "lcs": "1 site in .59 (LockedContentServices UUID B96AAAE2-778B-3990-801C-7D4881DC162F): skip absent optional container IDs without breaking notification flow",
+    "audio_clock": "3 sites mapping 24 MHz host-clock constants to 19.2 MHz: CoreAudio .38 AudioGetHostClockFrequency const (VA 0x22c55e2f8), AudioDSPGraph .28 queue config (VA 0x2074f02e8), EmbeddedSystemAUs PerformIO/thread-priority (VA 0x226bd3fe8). PHASE 24 MHz constants inspected and excluded (acoustics tables, not clock consumers)"
+  },
+  "crash_info": {
+    "cache_uuid_gate": "MarbleCrashInfo27.c refuses to apply addresses unless the running cache UUID matches 555BFDAA-D930-31AC-A915-D472C273C527",
+    "addresses": {
+      "CoreFoundation ___crashreporter_info__": "0x1eaf8ab50",
+      "CoreFoundation __crash_info": "0x1eaf8a188",
+      "Foundation __crash_info": "0x1eaf990a8",
+      "libc++abi __crash_info": "0x2da9270e8",
+      "libdispatch __crash_info": "0x1ec216a78",
+      "libswiftCore __crash_info": "0x1eb00e958",
+      "libsystem_c __crash_info": "0x1eb1c5408",
+      "libobjc __crash_info": "0x1eaf700c0",
+      "libobjc message slot": "0x1eaf700c8 (__crash_info + 8)"
+    }
+  },
+  "appsync_pins_24B119": {
+    "usr/libexec/installd": "408906e8625f927a9165a13ec07398e4a21f7e1dd60d1ad385d17801bd0fdf06",
+    "usr/libexec/backboardd": "fc815313fa72a32acea6bf94c209e758831e5ed85a0ce5befc8c5f1aa218b285",
+    "MobileInstallationHelperService": "d0a25d6cdc5d99471e18895ba050bff23f9f9f94bba7a2843693de5df00a808c",
+    "SpringBoard": "ff41677ffca18709052d945f27709c5928e22ff36269f0fdfbc981b11fd7119c"
+  },
+  "inherited_24A446": "profiles/runtime/ios27-24B119/inherited-24A446.md documents every inherited 24A446/22H384 probe and its 24B119 qualification or removal; none is applied unconditionally",
+  "trust_manifest": "24 signed artifacts enumerated in runtime.json trust_manifest (cdhash + sha256) for the parent's trust-append step",
+  "device_validation": "not performed; no device operations were requested or run",
+  "notes": [
+    "Host clock is 19.2 MHz throughout HAL and DSP paths; calendar time is unaffected.",
+    "N841 assets do not exist on 24B119; haptics/event-timing use N104 sources published under the D84 advertised identity.",
+    "Python 3.9 compatibility shims (tomli->tomllib, tarfile filter) are confined to scripts/build_ios27_runtime.py.",
+    "Ath12kWifi deps were populated by the component's own tools/fetch-sources.sh (gitignored deps/, source-locked)."
+  ],
+  "actual_qualification_output": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-qualification",
+  "final_gpu_runtime": "pending current 27 GPU addon rebuild",
+  "current_gpu_runtime": {
+    "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime/runtime.json",
+    "payload": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-payload/report.json",
+    "addon_sha256": "f58adccecc09623258e1ff16e611741b26646e4098a89c6913ccc929213ef746",
+    "status": "built and assembled with current iOS27 Metal plugin"
+  }
+}

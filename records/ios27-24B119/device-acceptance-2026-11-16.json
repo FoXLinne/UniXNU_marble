@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-16",
+  "target": "iOS 27.2 / 24B119",
+  "version": "v49",
+  "boot": "temporary fastboot boot; RAM kernel overlay",
+  "image_sha256": "d9cf018f8add20cb9e614b975b8604236a405fab1cabec36508126507f92a826",
+  "kernel_sha256": "24b91990d1eabd7487d8163aefbc22eec772e0fa2161a3359db7123c290b68ba",
+  "runtime": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-payload-piliplus-v49",
+  "wifi": {
+    "qualified_in": "v47",
+    "retained_in": "v49",
+    "dhcp_reconnect_seconds": [
+      1.271181,
+      1.307573,
+      0.859908
+    ],
+    "current_wifi_diagnostic_http_status": 200
+  },
+  "usb": {
+    "fixed_in": "v48",
+    "retained_in": "v49",
+    "cause": "10 second host-command lease stopped watchdog servicing",
+    "host_port_disabled_seconds": 60,
+    "result": "kernel and display continued across host interruption"
+  },
+  "piliplus": {
+    "fixed_in": "v49",
+    "bundle": "com.example.piliplus",
+    "cause": "old metallib omits extended header; parser read metadata as tags",
+    "actual_shader_functions_decoded": 65,
+    "container_regression_cases_passed": 20,
+    "device_actions": [
+      "launch from home screen",
+      "load recommendation list",
+      "scroll list",
+      "switch to Hot tab"
+    ],
+    "process_pid": 534,
+    "result": "application left running on Hot tab",
+    "playback_scope": "not exercised by startup acceptance"
+  },
+  "upstream": {
+    "metal2vulkan": "244fa022868b8cb49c3e69ccfcfd10aaeb88b184",
+    "AdrenoMetal": "9f6a887aa249ccad5a3e5dde46b64526524163f3"
+  },
+  "evidence": "Raw logs, images and device captures remain in the local outputs/UniXNU_marble/ios27_24B119 directory."
+}

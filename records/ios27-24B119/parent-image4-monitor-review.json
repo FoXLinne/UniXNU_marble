@@ -1,0 +1,46 @@
+{
+  "functions": [
+    {
+      "original": "0xfffffff00a73929c",
+      "original_sha256": "f661fc765cc48b1196154952317be3e9da10e13f3ae2e75257f64c087cb329d8",
+      "native_symbol": "_kernel_image4_monitor_trap",
+      "evidence": "kernel_image4_monitor_trap; errno_t kernel_image4_monitor_trap(image4_cs_trap_t selector, const void *input_data, size_t input_size, void *output_data, size_t *output_size); Exact match to kern_codesigning.c kernel_image4_monitor_trap + _kernel_image4_monitor_trap_image_activate: EINVAL(22) constants, selector<3 reserved ENOSYS(78), cs_trap_vector_size at img4 interface offset +0xf8 (dlxk field cs_trap_vector_size), selector-5 payload/manifest staging, panic strings. Fixture label _kernel_image4_copy_object is WRONG; copy_object is the ENOSYS stub pair (see 0xa739194/0xa73919c).; ",
+      "function_bytes": 460
+    },
+    {
+      "original": "0xfffffff00a739468",
+      "native_symbol": "_native_ios27_image4_monitor_set_nonce_digest",
+      "evidence": "new TXM Image4 selector 0x34 wrapper - per-domain nonce-digest commit to the code-signing monitor (v2 nonce API); errno_t f(uint32_t /* or u64 */ domain_or_type, const void *nonce_digest_struct, uint64_t len_or_handle); ; com.apple.security.Image4 auth-GOT slot 0xfffffff0080d1a58 -> 0xa739468; call stub 0xfffffff009ef4a98; single call site 0xfffffff009ee3a44 inside kext fn 0x9ee38fc; fn 0x9ee38fc is the nonce-'magazine' init path: acquires mix-and-match status (0x9ef0250), initializes nonce slots (0x9ef0554), resolves signing authority (0x9ef068c), then iterates the slot array (stride 0x78) under lock @0xafd2ec8; per slot: helper 0x9ef0d84/0x9ef2200 queries the ApBootNonce digest from AppleImage4 and writes a 0x38-byte struct {u8 digest[48]; u64 len=0x30} at sp+0x10; on failure logs 'Image4: unable to get nonce digest for slot: %u | %u'; on success calls wrapper(x0 = slot->+0x14 u32 domain/type id, x1 = &digest_struct, x2 = *(struct+0x30) i.e. 48/len-or-handle) -> selector 0x34 sends (domain, digest ptr, third scalar) to the monitor; paired with PPL-side panic strings 'Image4: attempted to set nonce digest again: %u', 'invalid nonce type for setting digest', 'nonce digest too large for PPL' (kext fns 0x9ee6f54)",
+      "original_sha256": "ca76636479584f32cd86f666a91c7094f45c883b66513ba2b65724645d2dd94c",
+      "function_bytes": 120
+    },
+    {
+      "original": "0xfffffff00a7394e0",
+      "original_sha256": "6f9eb4c437ed6813792cba6185fce066eef6147200e9efcb1851dd57bb829405",
+      "native_symbol": "_native_ios27_image4_monitor_roll_nonce",
+      "evidence": "new TXM Image4 selector 0x35 wrapper - roll nonce for a nonce domain in the code-signing monitor (v2 nonce API); errno_t f(uint64_t domain_or_type); ; com.apple.security.Image4 auth-GOT slot 0xfffffff0080d1a50 -> 0xa7394e0; stub 0xfffffff009ef4a88; single call site 0xfffffff009ee3f34 inside kext fn 0x9ee3edc; fn 0x9ee3edc is external-method-table entry index 4 (table @0x80cf588+, entry {fn, scalarIn=1, structIn=0, scalarOut=1, structOut=0}); reads u32 scalarInput[0] = domain id; looks up slot by domain id (helper 0x9ef0734 walks [obj+0x48] slots stride 0x78 matching +0x14), invokes local roll helper 0x9ef10a4 -> 0x9ef25e4 (logs 'Image4: error rolling nonce with AppleImage4: %d'), sets slot flag bit1; only when the flag newly transitions does it call wrapper(domain) -> mirrors the roll into the monitor; paired with PPL-side panic 'Image4: attempted to roll nonce without PPL context/mutable buffer' (fn 0x9ee705c)",
+      "function_bytes": 108
+    },
+    {
+      "original": "0xfffffff00a73954c",
+      "native_symbol": "_native_ios27_image4_monitor_load_root",
+      "evidence": "new TXM Image4 selector 0x36 wrapper - load supplemental root (Diavlo Root CA) manifest+payload into the code-signing monitor; errno_t f(const void *manifest, size_t manifest_len, const void *payload, size_t payload_len); ; com.apple.security.Image4 auth-GOT slot 0xfffffff0080d1a40 -> 0xa73954c; stub 0xfffffff009ef4978; single call site 0xfffffff009ee4180 inside Image4UserClient::objectLoad (fn 0x9ee3f48, external-method index 5, structInputSize=0x28); input struct: {u32 type@0, user manifest ptr@8, manifest len@0x10, user payload ptr@0x18, payload len@0x20}; kernel copyin of both buffers; type 0 path only: checks entitlement 'com.apple.private.img4.set-supplemental-root', executes supplemental root in kext expert (0x9eec6a4, failure -> 'Image4: unable to load Diavlo Root CA: %u'), queries monitor capability via kernel 0xa737f4c(out u32==2), then calls wrapper(manifest, manifest_len, payload, payload_len); wrapper failure -> panic 'Image4: failed to load Diavlo Root CA with code-signing-monitor: %u' (fn 0x9ef27f8); success -> 'Image4: successfully loaded Diavlo Root CA on the system'",
+      "original_sha256": "c7ade9a12cae1570a6c914af011d2d07a4ba808332b8db1a8787ffa76149da6f",
+      "function_bytes": 28
+    },
+    {
+      "original": "0xfffffff00a739568",
+      "original_sha256": "507048440cb8ea813b3b08b0114d90ec1174a95c35f3055bfa6a9e69715c29f6",
+      "native_symbol": "_native_ios27_image4_monitor_load_local_policy",
+      "evidence": "new TXM Image4 selector 0x37 wrapper - load local-policy manifest into the code-signing monitor; errno_t f(const void *manifest, size_t manifest_len); ; com.apple.security.Image4 auth-GOT slot 0xfffffff0080d1a48 -> 0xa739568; stub 0xfffffff009ef4988; single call site 0xfffffff009ee41b0 inside Image4UserClient::objectLoad type-1 branch; type 1 path: entitlement 'com.apple.private.img4.set-local-policy', executes local policy in kext expert (0x9eec880, failure -> 'Image4: unable to load local policy: %u'), capability query via 0xa737f4c, then wrapper(manifest, manifest_len) - no payload buffer; wrapper failure -> panic 'Image4: failed to load local policy with code-signing-monitor: %u' (fn 0x9ef27c0); success -> 'Image4: successfully loaded local policy on the system'",
+      "function_bytes": 20
+    }
+  ],
+  "source_report": "devin-image4-contract-review.json",
+  "backend": "native source code_signing/xnu.c; CS_MONITOR_TYPE_NONE",
+  "new_monitor_plane": "typed ENOTSUP capability boundary with invalid-input checks and request counters; kext capability-gated monitor calls follow local Image4 evaluation",
+  "acceptance_pending": [
+    "monitor request counters remain zero during normal source-backend boot",
+    "Image4 service and nonce/object lifecycle after launchd"
+  ]
+}

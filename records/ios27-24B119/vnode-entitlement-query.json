@@ -1,0 +1,9 @@
+{
+  "source": "iokit/Kernel/IOUserClient.cpp:IOUserClient::copyClientEntitlementVnode",
+  "trigger": "exec_check_security_entitlement -> IOUserClient::copyClientEntitlementVnode -> cs_entitlements_dictionary_copy_vnode -> AMFI whole-dictionary copy returns errno14 and panics at OSEntitlements.cpp:863",
+  "implementation": "resolve signed vnode cs_blob; retain OSEntitlements context; call AMFI OSEntitlements.copyEntitlementAsOSObject for requested key; release context; return copied typed value on KERN_SUCCESS",
+  "reference": "IOUserClient::copyClientEntitlement uses the paired copyEntitlementAsOSObjectWithProc interface",
+  "patch": "patches/ios27-debug/vnode-entitlement-query.patch",
+  "status": "source compilation running",
+  "evidence": "device-20261113/panic-resident-pid/fault-memory/active-cpu0-kernelstack.bin"
+}

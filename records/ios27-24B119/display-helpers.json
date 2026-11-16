@@ -1,0 +1,152 @@
+{
+  "target": {
+    "product": "iPhone12,1",
+    "version": "iOS 27.2",
+    "build": "24B119",
+    "xnu": "12377.121.6",
+    "arch": "arm64e",
+    "kernelcache": "outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed",
+    "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc"
+  },
+  "module": {
+    "path": "package/ios27-display",
+    "source": "package/ios27-display/NativeLegacyDisplayHelpers.cpp",
+    "build_script": "package/ios27-display/build.py",
+    "build_command": "python3 package/ios27-display/build.py",
+    "archive": "build/ios27-display/obj/libios27-display.a",
+    "archive_sha256": "005796b48cbd63afc608811a5cac6a5333cfef2d6206bd95b51becc67d7ca475",
+    "object": "build/ios27-display/obj/NativeLegacyDisplayHelpers.o",
+    "compile_record": "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json",
+    "integration": "parent adds the archive to the driver link; no source-tree or build_ios27_drivers.py changes made here"
+  },
+  "required_symbols": [
+    "_native_legacy_default_surface_create",
+    "_native_legacy_set_refresh_properties",
+    "_native_legacy_vsync_notify",
+    "_native_legacy_surface_descriptor",
+    "_native_legacy_surface_width",
+    "_native_legacy_surface_height",
+    "_native_legacy_surface_stride",
+    "_native_legacy_surface_allocation",
+    "_native_legacy_surface_format",
+    "_native_legacy_surface_planes"
+  ],
+  "helpers": {
+    "_native_legacy_surface_descriptor": {
+      "stub": "__orig_surf_descriptor",
+      "module": "com.apple.iokit.IOSurface",
+      "target": "0xfffffff009be5bf4",
+      "prefix_sha256": "5db464a716b74f73",
+      "bytes": "5f2403d5001840f9c0035fd6",
+      "shape": "bti c; ldr x0, [x0, #0x30]; ret",
+      "signature": "IOMemoryDescriptor *(OSObject *surface)",
+      "evidence": "swap teardown 0xfffffff009a71bd4-0xfffffff009a71c30 fetches this field, unlocks it via vt+0xe0 (diversity 0x9285) then releases it via vt+0x28 (diversity 0x3a87): the locked memory descriptor"
+    },
+    "_native_legacy_surface_width": {
+      "stub": "__orig_surf_width",
+      "module": "com.apple.iokit.IOSurface",
+      "target": "0xfffffff009be5cf8",
+      "prefix_sha256": "d0ac190e57eb01b5",
+      "bytes": "5f2403d5002c40f9c0035fd6",
+      "shape": "bti c; ldr x0, [x0, #0x58]; ret",
+      "signature": "uint64_t (OSObject *surface)",
+      "evidence": "swap validator at 0xfffffff009a762f0-0xfffffff009a76314 enforces src_x + src_width <= field+0x58 (same byte pattern as the 24A446 check 5f2403d5002c40f9c0035fd6)"
+    },
+    "_native_legacy_surface_height": {
+      "stub": "__orig_surf_height",
+      "module": "com.apple.iokit.IOSurface",
+      "target": "0xfffffff009be5d04",
+      "prefix_sha256": "72a3c06a1ffc3a43",
+      "shape": "bti c; ldr x0, [x0, #0x60]; ret",
+      "bytes": "5f2403d5003040f9c0035fd6",
+      "signature": "uint64_t (OSObject *surface)",
+      "evidence": "paired bounds check src_y + src_height <= field+0x60 at 0xfffffff009a76390-0xfffffff009a763b8 (matches 24A446 check 5f2403d5003040f9c0035fd6)"
+    },
+    "_native_legacy_surface_stride": {
+      "stub": "__orig_surf_stride",
+      "module": "com.apple.iokit.IOSurface",
+      "target": "0xfffffff009be5d1c",
+      "prefix_sha256": "a71549e67a222ef0",
+      "shape": "bti c; ldr x0, [x0, #0x68]; ret",
+      "bytes": "5f2403d5003440f9c0035fd6",
+      "signature": "uint64_t (OSObject *surface)",
+      "evidence": "original debug serializer 0xfffffff009a7bad4 prints this field under the 'src_stride' cstring at 0xfffffff00787695d (matches 24A446 check)"
+    },
+    "_native_legacy_surface_format": {
+      "stub": "__orig_surf_format",
+      "module": "com.apple.iokit.IOSurface",
+      "target": "0xfffffff009be5ce0",
+      "prefix_sha256": "c707ce87c7b9f80d",
+      "shape": "bti c; ldr w0, [x0, #0x80]; ret",
+      "bytes": "5f2403d5008040b9c0035fd6",
+      "signature": "uint32_t (OSObject *surface)",
+      "evidence": "w32 load compared against the pixel-format constants in the format dispatch path; the same +0x80 field is written by the 0xfffffff009bedfd0 setter the factory calls (matches 24A446 check)"
+    },
+    "_native_legacy_surface_planes": {
+      "stub": "__orig_surf_planes",
+      "module": "com.apple.iokit.IOSurface",
+      "target": "0xfffffff009be5d4c",
+      "prefix_sha256": "89ad9ef1fcbf2da1",
+      "shape": "bti c; ldr w0, [x0, #0x98]; ret",
+      "bytes": "5f2403d5009840b9c0035fd6",
+      "signature": "uint32_t (OSObject *surface)",
+      "evidence": "zero/nonzero gate at the 'src_stride' serialization site selects per-plane stride queries via 0xfffffff009a8139c (matches 24A446 check)"
+    },
+    "_native_legacy_surface_allocation": {
+      "rule": "native_legacy_surface_descriptor(surface)->getLength()",
+      "evidence": "the original IOSurface exposes no allocation-size getter; the sheng 24A446 adapter uses the same descriptor->getLength() rule. The +0x30 object is the locked memory descriptor (see _native_legacy_surface_descriptor)"
+    },
+    "_native_legacy_set_refresh_properties": {
+      "stub": "__orig_refresh_props",
+      "module": "com.apple.iokit.IOMobileGraphicsFamily",
+      "target": "0xfffffff009a7e3d4",
+      "prefix_sha256": "2600cc5d698abd12",
+      "shape": "bti c; pacibsp; ...",
+      "signature": "bool (void *display)",
+      "evidence": "only function in IOMobileGraphicsFamily referencing the 'IOMFBDisplayRefresh' cstring (0xfffffff007877127); invokes getRefreshAttributes via authenticated slot +0x9f8 (call-site diversity 0xdcfc) and setProperty via slot +0xc8 (diversity 0xff53)"
+    },
+    "_native_legacy_vsync_notify": {
+      "stub": "__orig_vsync_notify",
+      "module": "com.apple.iokit.IOMobileGraphicsFamily",
+      "target": "0xfffffff009a7a200",
+      "prefix_sha256": "55e07b8c1f2f08a3",
+      "shape": "bti c; pacibsp; sub sp, ...",
+      "signature": "void (void *display, uint64_t timestamp, uint64_t continuousTime, uint64_t interval)",
+      "evidence": "called at 0xfffffff009a72cd4-0xfffffff009a72ce8 only when the vsync client queue field display+0x1ab8 is non-empty, with args [display+0x100..0x110]; iterates the list and calls each client's vt+0x7e8 callback (diversity 0x9562)"
+    },
+    "_native_legacy_default_surface_create": {
+      "signature": "OSObject *(OSObject *root, uint32_t width, uint32_t height)",
+      "contract": "root is the display's IOSurfaceRoot object (original reads it from display+0x1b40); returns a freshly allocated and laid-out surface, never a stale create_default_fb_surface residue",
+      "sequence": [
+        {"step": 1, "call": "opts = f(capacity=1)", "target": "0xfffffff00a878000", "module": "com.apple.kernel", "prefix_sha256": "6584e72cb9d87e49"},
+        {"step": 2, "call": "region = f(\"PurpleGfxMem\")", "target": "0xfffffff00a8a9920", "module": "com.apple.kernel", "prefix_sha256": "d5b9b53d83e99b1a"},
+        {"step": 3, "call": "opts->vt+0x100 setObject(key, region); region->release()", "slot": "+0x100 (slot 32)", "call_diversity": "0xc323", "key_source": "**(0xfffffff008030f70)", "evidence": "byte-for-byte copy of call site 0xfffffff009a78150-0xfffffff009a78188; release is vt+0x28 diversity 0x3a87"},
+        {"step": 4, "call": "surface = create(root, 0, opts); opts->release()", "target": "0xfffffff009bf75b8", "module": "com.apple.iokit.IOSurface", "prefix_sha256": "355325c9fdf98799", "bytes": "5f2403d5030080d2e3ffff17", "shape": "bti c; mov w3,#0; b 0xfffffff009bf7544 (4-arg create thunk)"},
+        {"step": 5, "call": "region = f(root, \"PurpleGfxMem\"); setregion(surface, region)", "lookup": "0xfffffff009bf7bb4", "setter": "0xfffffff009bedd54", "module": "com.apple.iokit.IOSurface", "evidence": "same object the original caches at display+0x1d10; 0x9bedd54 is the this+0x28 setter thunk"},
+        {"step": 6, "call": "setformat(surface, 0x42475241)", "target": "0xfffffff009bedfd0", "bytes": "5f2403d5018000b9c0035fd6", "shape": "str w1,[x0,#0x80]; ret", "evidence": "0x42475241 is the constant the original gates its format-extra path on; written to the same +0x80 field the format getter reads"},
+        {"step": 7, "calls": ["f(surface,0)", "f(surface,1)"], "targets": ["0xfffffff009bedd60", "0xfffffff009bedfec"], "module": "com.apple.iokit.IOSurface", "evidence": "the original's two post-format flag calls, same arguments"},
+        {"step": 8, "call": "layout(surface, width, height, params)", "target": "0xfffffff009a74928", "module": "com.apple.iokit.IOMobileGraphicsFamily", "prefix_sha256": "d63ff266d7ecfad0", "evidence": "layout_buffers: params[0x48]=0 selects the auto-derive path (stride computed at 0xfffffff009a77f7c); params = {format@0, planes@4, elems@8, zeros} matching display+0x1c40; nonzero w0 = success"}
+      ],
+      "failure_path": "any failed step releases the partially built object and returns nullptr; on layout failure the surface itself is released"
+    }
+  },
+  "vtable_proof": {
+    "class": "IOMobileFramebufferLegacy",
+    "vtable_base": "0xfffffff00802e740",
+    "slots": [
+      {"slot": 278, "entry": "0xfffffff00802eff0", "target": "0xfffffff009a7a4d4", "diversity": "0x786c", "method": "hotPlug_notify(uint64_t)"},
+      {"slot": 316, "entry": "0xfffffff00802f120", "target": "0xfffffff009a780c4", "diversity": "0xe2fa", "method": "create_default_fb_surface"},
+      {"slot": 319, "entry": "0xfffffff00802f138", "target": "0xfffffff009a7e284", "diversity": "0xdcfc", "method": "getRefreshAttributes"}
+    ]
+  },
+  "pac_boundaries": {
+    "stubs": "each stub is bti c + movz/movk x16 + br x16 to the original VA, identical shape to emit_bindings(); every code target begins with bti c (IOSurface/IOMobileGraphicsFamily) or pacibsp (com.apple.kernel imports) exactly as the original import stubs reach them",
+    "virtual_call": "the only virtual call inside the adapter reproduces the original autda/blraa sequence: vtable auth diversity 0xcda1 on the object address, slot +0x100 invoked as braa x8,x16 with context (vt+0x100)|0xc323<<48",
+    "release": "OSObject::release() through vt+0x28 diversity 0x3a87 is emitted by the compiler for the C++ ->release() calls"
+  },
+  "out_of_scope": {
+    "macos_dispatcher": "swap_info_notify_dispatch_gated remains a macOS-only pending item; no no-op stub was added and NATIVE_LEGACY_MACOS stays 0 for the iOS path",
+    "constructor_derivation": "owned by another Devin session",
+    "parent_integration": "another session adds this archive to the driver link"
+  }
+}

@@ -1,0 +1,568 @@
+{
+  "schema_version": 1,
+  "target": "ios-27.2-24B119",
+  "baseline_commit": "7a0d68ff",
+  "branch": "port/ios27.2-marble",
+  "status": "porting",
+  "inputs": "records/ios27-24B119/inputs.json",
+  "source": "records/ios27-24B119/build-source.json",
+  "performance": {
+    "xnu_cpus": 8,
+    "affinities": [
+      0,
+      256,
+      512,
+      768,
+      1024,
+      1280,
+      1536,
+      1792
+    ],
+    "cpu_l3_policy": "native_marble_cpu_start selects highest valid hardware LUT row",
+    "gpu_policy": "MarbleGmu selects highest supported board vote; inspect power results per candidate",
+    "owned_contiguous_bytes": 8589934592,
+    "outside_memory": "adopt loader free ranges; reserve firmware/DMA ranges",
+    "display_hz": 120,
+    "usb_owner": "kernel"
+  },
+  "device": {
+    "adb_devices": [],
+    "fastboot_devices": [],
+    "observed_at": "2026-11-12T01:07:29.562093+08:00",
+    "apple_usb_devices": []
+  },
+  "workers": {
+    "kernel": {
+      "log": "/tmp/marble-ios27-kernel-devin-active.log",
+      "scope": "patches/xnu-12377; kernel-patches record",
+      "status": "finished"
+    },
+    "drivers": {
+      "log": "/tmp/marble-ios27-driver-devin-resumed9.log",
+      "scope": "main agent owns build_ios27_drivers.py; previous Devin session interrupted",
+      "session_id": 1786,
+      "status": "stopped",
+      "devin_session": "equinox-freeze"
+    },
+    "sources": {
+      "log": "/tmp/marble-ios27-source-devin-resumed.log",
+      "scope": "ios27/sources; source-integration record",
+      "session_id": 32922,
+      "status": "finished",
+      "devin_session": "butter-tanker"
+    },
+    "runtime": {
+      "log": "/tmp/marble-ios27-runtime-devin-active.log",
+      "scope": "24B119 runtime and userland policies",
+      "session_id": 77068,
+      "status": "finished",
+      "devin_session": "graceful-light"
+    },
+    "ioav": {
+      "log": "/tmp/marble-ios27-ioav-devin-resumed2.log",
+      "session_id": 30494,
+      "devin_session": "butter-tanker",
+      "status": "finished",
+      "scope": "four target IOAV adapters built and audited"
+    },
+    "prelink": {
+      "log": "/tmp/marble-ios27-prelink-devin-resumed3.log",
+      "session_id": 20939,
+      "devin_session": "graceful-light",
+      "status": "running",
+      "scope": "target fileset mappings and required source KPIs",
+      "pid": 94561
+    },
+    "gpu_compile": {
+      "session_id": 49391,
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/marble-gpu-build.log",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/driver-gpu/marble-gpu/build-report.json",
+      "status": "reported-pending"
+    },
+    "board_kernel": {
+      "status": "finished",
+      "session_id": 36717,
+      "log": "/tmp/ios27-release-link-final.log"
+    },
+    "gpu_userspace": {
+      "status": "built",
+      "session_id": 11244,
+      "log": "/tmp/ios27-metal-target-final.log"
+    },
+    "constructors": {
+      "status": "finished",
+      "devin_session": "equinox-freeze",
+      "session_id": 36363,
+      "log": "/tmp/marble-ios27-constructor-devin.log",
+      "scope": "target constructor derivation only",
+      "record": "records/ios27-24B119/constructor-bindings.json"
+    },
+    "display_helpers": {
+      "status": "finished",
+      "devin_session": "butter-tanker",
+      "session_id": 38456,
+      "log": "/tmp/marble-ios27-display-helpers-devin.log",
+      "scope": "package/ios27-display; target display helper records",
+      "record": "records/ios27-24B119/display-helper-parent-review.json"
+    },
+    "runtime_refresh": {
+      "status": "finished",
+      "session_id": 64631,
+      "log": "/tmp/ios27-runtime-build-refreshed2.log"
+    },
+    "memory_mappings": {
+      "status": "running",
+      "devin_session": "equinox-freeze",
+      "session_id": 81394,
+      "log": "/tmp/marble-ios27-memory-mappings-devin.log",
+      "scope": "six Invoke/memory identity proofs only"
+    },
+    "board_prelink": {
+      "status": "incomplete",
+      "report": "outputs/UniXNU_marble/ios27_24B119/board-prelink-proc-review2/summary.json",
+      "missing_references": 20,
+      "missing_targets": 15,
+      "pending_fixture_delta": "proc_pid identity corrected after this run"
+    }
+  },
+  "stages": {
+    "branch": "complete",
+    "manifest": "complete",
+    "kernelcache": {
+      "status": "complete",
+      "kernelcache_path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed",
+      "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc"
+    },
+    "upstream_build_source": {
+      "status": "refreshed",
+      "revision": "62be7bc54266f0a731796ee71395963abccc0687",
+      "record": "records/ios27-24B119/build-source.json",
+      "refresh_report": "records/ios27-24B119/build-source-refresh.json"
+    },
+    "driver_source_integration": {
+      "status": "staged",
+      "component_count": 18,
+      "semantic_gaps": 0,
+      "record": "records/ios27-24B119/source-integration.json"
+    },
+    "kernel_patches": {
+      "status": "applied",
+      "patch_count": 128,
+      "patch_identity": "7f24763d5c28dd49452cbbce7000d302c30e8b49d4871cb1029e3cf21a7eb2c9",
+      "patches_record": "records/ios27-24B119/applied-patches.json"
+    },
+    "driver_abi": "running",
+    "system_images": {
+      "status": "complete",
+      "images_record": "records/ios27-24B119/system-images.json"
+    },
+    "kernel_build": {
+      "status": "complete",
+      "kernel_native": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/kernel.native.macho",
+      "native_sha256": "b04dcfb40b01cf2f46688cd250f7e5814241bc6675d685e83004fd733eb97491"
+    },
+    "prelink": {
+      "status": "complete",
+      "kernel_fileset": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/kernel.fileset.macho",
+      "fileset_sha256": "b4d477b269b54d58d4e6ac59be1af65cc9b09bacd0a570517845c2997cc17b33"
+    },
+    "runtime": {
+      "status": "assembled",
+      "files": 714,
+      "cdhashes": 26,
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-payload/report.json"
+    },
+    "image": {
+      "status": "built",
+      "candidate": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-piliplus-metallib-v49/candidate.json",
+      "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/candidate-piliplus-metallib-v49/marble_ios27_temporary_boot.img",
+      "image_sha256": "d9cf018f8add20cb9e614b975b8604236a405fab1cabec36508126507f92a826"
+    },
+    "device_boot": {
+      "status": "boot-command-sent",
+      "candidate": "outputs/UniXNU_marble/ios27_24B119/candidate-phone/candidate.json",
+      "serial": "556fdfe"
+    },
+    "references": {
+      "status": "complete",
+      "reference_record": "records/ios27-24B119/references.json"
+    },
+    "build_tree": {
+      "status": "prepared",
+      "tree": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree"
+    },
+    "bootstrap": {
+      "status": "compile-records-ready",
+      "bootstrap_link": "pending-board-archives",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/kernel-bootstrap.log"
+    },
+    "hardware_tree": {
+      "status": "generated",
+      "record": "records/ios27-24B119/hardware-tree.json",
+      "enabled_cpus": 8
+    },
+    "syscall_diagnostics": {
+      "status": "compiled",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/syscall-diagnostic-compile.log"
+    },
+    "corecrypto": {
+      "status": "built",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/corecrypto.log"
+    },
+    "corecrypto-namespace": {
+      "status": "built",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/corecrypto-namespace.log"
+    },
+    "pthread": {
+      "status": "built",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/pthread.log"
+    },
+    "ArmCpu": {
+      "status": "built",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/ArmCpu.log"
+    },
+    "ArmDTPlatform": {
+      "status": "built",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/ArmDTPlatform.log"
+    },
+    "debug_screen": {
+      "status": "compiled",
+      "object_bytes": 2594,
+      "writable_bytes": 0,
+      "source": "scripts/xnu-panic-screen.c",
+      "integration": "scripts/prepare_ios27_debug.py",
+      "device_result": "pending"
+    },
+    "kernel_boot_policy": {
+      "status": "configured",
+      "record": "records/ios27-24B119/boot-policy.json",
+      "command_bytes": 730
+    },
+    "usb_debug": {
+      "status": "source-integrated",
+      "source": "package/MarblePkg/RootUsb.c",
+      "source_sha256": "98bc1133b802bb246a0fb3f1b79ffe1de9208dffe1c8947d2e1ef996858756bf",
+      "feature": "ROOTMEM1 retained conventional DRAM ranges; fault-contained USB reads"
+    },
+    "firmware27": {
+      "status": "built",
+      "binaries": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/firmware27/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64",
+      "darwinboot_sha256": "0b97a1427614e1e476c61bca6101021d22f28b35a9bcf02e851bf036420d4a29",
+      "bootstrap_sha256": "302c6667699bd45e271337966f373ade320b8e8ed78d5ee8a944a756e4946529",
+      "runtime_capacity_bytes": 134217728,
+      "loader_memory": "outside DRAM reservation and retained page-table walk"
+    },
+    "target_checkpoint": {
+      "status": "saved",
+      "source_record": "records/ios27-24B119/target-sources.json",
+      "source_record_sha256": "c29a7ea990d7f3b592d907cfcdaf687eb2e50a9ddf51f86592a2f934d3dd8e9b"
+    },
+    "wifi_kernel": {
+      "status": "built",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/wifi/objects/build-report.json"
+    },
+    "memory_storage_checks": {
+      "status": "passed",
+      "record": "records/ios27-24B119/host-checks.json"
+    },
+    "turnip": {
+      "status": "built",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/turnip27.log"
+    },
+    "board_hardware_sources": {
+      "status": "compiled",
+      "source_count": 28,
+      "report": "records/ios27-24B119/hardware-driver-compile.json"
+    },
+    "coreanimation_target": {
+      "status": "source-generated",
+      "record": "records/ios27-24B119/coreanimation-target.json",
+      "build": "plugin compilation running"
+    },
+    "gpu_bridge": {
+      "status": "built-and-signed",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/gpu/userspace.json",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/metal-plugin27.log"
+    },
+    "runtime_policies": {
+      "status": "compiled",
+      "record": "records/ios27-24B119/runtime-kernel-compile.json",
+      "text_fixups": 19,
+      "final_gpu_runtime": "pending target Metal build"
+    },
+    "fileset_reference": {
+      "status": "built",
+      "path": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree/build/xnu/fileset-reference/mach.release.bcm2837.unstripped.noctf",
+      "qualification": "comparison kernel used for mapping; final board kernel pending"
+    },
+    "gpu_userspace": {
+      "status": "built",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/gpu/userspace.json"
+    },
+    "runtime_payload": {
+      "status": "assembled",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-payload-capacity-ui/report.json",
+      "addon_sha256": "5770c12ca8b4dbb9342cf851f1d572ae0a2ae52557555af01401370ab0a8a67e",
+      "trust_cache_sha256": "43ac406b8efe44b6b0310ffea6f54a97090fa6b25be48a58866af4cf8dc855d9"
+    },
+    "prelink_analysis": {
+      "status": "recorded",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/prelink-analysis/reference.fileset.json",
+      "scope": "comparison-kernel mapping analysis; final board kernel pending"
+    },
+    "native_usb_debug": {
+      "status": "compiled-and-packaged",
+      "report": "records/ios27-24B119/native-debug-agent.json",
+      "kernel_sysctl": "kern.marble_log",
+      "loopback_port": 23456,
+      "host_transport": "iproxy through usbmuxd"
+    },
+    "gpu_kernel_archive": {
+      "status": "pending",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/driver-gpu/marble-gpu/build-report.json",
+      "failed_sources": 5,
+      "pending_bindings": 12,
+      "next_action": "driver worker fixes explicit source manifest, new client signature and native IOService binding classification"
+    },
+    "runtime_capacity": {
+      "status": "compiled",
+      "addon_bytes": 71617504,
+      "capacity": 134217728,
+      "loader_patch": "patches/DarwinBoot/ios27-runtime-capacity.patch",
+      "kernel_reader": "generated board-overrides/marble/MarbleRuntime18.cpp",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/runtime-addon-capacity.log"
+    },
+    "ioav_adapter": {
+      "status": "compiled-and-address-checked",
+      "report": "records/ios27-24B119/ioav.json",
+      "default_ios_path": "native iOS surface; optional adapter retained"
+    },
+    "driver_source_refresh": {
+      "status": "integrating",
+      "upstream_report": "upstream_revisions.json",
+      "integration_log": "/tmp/ios27-source-advance.log",
+      "policy": "preserve staged marble changes; merge fetched delta from prior upstream pins"
+    },
+    "driver_archives": {
+      "status": "built",
+      "archives": {
+        "marble-boot/libMarbleBoot.a": "ce20521f0a646934d2ce7b37957a526f550c28617f885f1c1c3e07e4160813df",
+        "marble-storage/libMarbleStorage.a": "af2f374f432741dd573c0e16b8f7807d123b85f22c9000cad48f85b7189a4f5d",
+        "marble-gpu/libMarbleGpu.a": "b0df6b5bbad4f4012fdc4882b7ca48f1ae203180badad5d08d6296020257d4a3"
+      },
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/drivers.log"
+    },
+    "gpu_source_refresh": {
+      "status": "materializing",
+      "component": "metal2vulkan",
+      "previous_source": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree/.cache/gpu-reference/metal2vulkan.source-400efe7932f2",
+      "revision": "244fa022868b8cb49c3e69ccfcfd10aaeb88b184"
+    },
+    "cpu": {
+      "status": "built",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/cpu.log"
+    },
+    "platform": {
+      "status": "built",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/platform.log"
+    },
+    "kernel": {
+      "status": "failed",
+      "error": "CalledProcessError: Command '['bash', '/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree/scripts/build-xnu-4k-baseline.sh']' returned non-zero exit status 2."
+    },
+    "kernel_patch_update": {
+      "status": "pending-build",
+      "patch": "patches/ios27-performance/gpupool-device-pager-close.patch",
+      "sha256": "cc7b0fc02cf2a4a4c417c3c1e219b36e178cdee63d5ebac92ab6978ded8203a9",
+      "reason": "GPU physical pool reuse waits for device-pager final unmap"
+    },
+    "driver_linkage": {
+      "status": "incomplete",
+      "log": "outputs/UniXNU_marble/ios27_24B119/logs/kernel-development.log",
+      "resolved": [
+        "const virtual method bindings",
+        "root declaration substitutions",
+        "ADSP firmware pointer and size generation",
+        "GPU firmware embedding",
+        "storage source manifest matched to iOS18"
+      ],
+      "pending": [
+        "six target protected constructors",
+        "target IOSurface/display helper bindings",
+        "relink after GPU pager-close patch"
+      ],
+      "device_boot": "pending"
+    },
+    "metal_plugin": {
+      "status": "built",
+      "source_sha256": "958071f6b75e5986302f547c4f4fbc2738a8bbc769c470037e51307dcbe50633",
+      "binary": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree/build/adreno-metal-plugin27/NativeAdrenoMetal.bundle/NativeAdrenoMetal",
+      "binary_sha256": "d74e364a224c420da7f16e02084e3793b15baf27659459825494d5cf363ef78b",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/metal-plugin27.log"
+    },
+    "runtime_refresh": {
+      "status": "assembled",
+      "files": 716,
+      "cdhashes": 28,
+      "addon_bytes": 71680680,
+      "addon_sha256": "04fa3bd0057c4a0e6b67ad7a26b25f492a7adca3b123660c604468e73631b3c9",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/runtime-payload/report.json"
+    },
+    "hid_edge_abi": {
+      "status": "verified",
+      "record": "records/ios27-24B119/hid-edge-target-review.json",
+      "driver_slots": 220,
+      "event_slots": 37,
+      "dispatch_slot": 198,
+      "device_result": "pending"
+    },
+    "display_helper_review": {
+      "status": "verified",
+      "report": "build/ios27-display/obj/build-report.json",
+      "key_got": "0xfffffff008030f70",
+      "negative_key_check": "rejected",
+      "surface_validation": [
+        "dimensions",
+        "BGRA format",
+        "zero plane count",
+        "stride",
+        "descriptor allocation bound"
+      ],
+      "device_result": "pending"
+    },
+    "panic_buffer": {
+      "status": "compiled",
+      "buffer_bytes": 4096,
+      "retained_read_bytes": 4096,
+      "renderer_text_bytes": 2630,
+      "renderer_writable_bytes": 0,
+      "record": "records/ios27-24B119/board-runtime-source.json",
+      "device_result": "pending"
+    },
+    "board_development_link": {
+      "status": "linked",
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/logs/kernel-development.log"
+    },
+    "drivers": {
+      "status": "failed",
+      "error": "CalledProcessError: Command '['/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/../../tools/marble-build/venv/bin/python', '/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/work/UniXNU-marble/scripts/build_ios27_drivers.py', '--tree', '/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/tree', '--output', '/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119', '--kernelcache', '/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed']' returned non-zero exit status 1."
+    },
+    "host_checks": {
+      "status": "recorded",
+      "record": "records/ios27-24B119/host-test-status.json",
+      "device_result": "pending"
+    },
+    "release_configuration": {
+      "status": "linked-once-finalizing",
+      "driver_configuration": "RELEASE with inspectable non-LTO driver objects",
+      "export_policy": "implemented kernel symbols and their linker aliases; original source export lists preserved",
+      "export_record": "records/ios27-24B119/release-exports.json",
+      "remaining": "final link with alias-inclusive reproducible export record; strict fileset mapping"
+    },
+    "board_prelink": {
+      "status": "incomplete",
+      "report": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/board-prelink-cs-review/kernel.fileset.json",
+      "report_written": true,
+      "summary": {
+        "mapping_complete": false,
+        "runtime_qualified": false,
+        "loadable": false,
+        "missing_targets": [
+          "0xfffffff00a6bdb6c",
+          "0xfffffff00a6f91e4",
+          "0xfffffff00a7381f8",
+          "0xfffffff00a738238",
+          "0xfffffff00a7382a0",
+          "0xfffffff00a8c4828",
+          "0xfffffff00a953248"
+        ],
+        "missing_references": 16,
+        "stubbed_targets": [],
+        "stubbed_references": 0,
+        "components": [
+          "com.apple.driver.AppleM2ScalerCSCDriver",
+          "com.apple.driver.AppleMobileFileIntegrity",
+          "com.apple.filesystems.apfs",
+          "com.apple.iokit.CoreAnalyticsFamily",
+          "com.apple.iokit.IOGPUFamily",
+          "com.apple.iokit.IOHIDFamily",
+          "com.apple.iokit.IOStorageFamily",
+          "com.apple.iokit.IOSurface",
+          "com.apple.security.AppleImage4",
+          "com.apple.security.Image4",
+          "com.apple.security.sandbox"
+        ]
+      },
+      "log": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/board-prelink-cs-review/emit.log"
+    },
+    "board_release_audit": {
+      "status": "verified",
+      "record": "records/ios27-24B119/board-release-kernel.json",
+      "kernel_sha256": "45877b748ebf90d03c149f041292788025709f032c6a19c7601f5310cae32824",
+      "ce_stack_shift": 14,
+      "strict_prelink": "34 references across 18 targets remain",
+      "device_result": "pending"
+    },
+    "process_api_mapping_review": {
+      "status": "verified",
+      "record": "records/ios27-24B119/parent-proc-mapping-review.json",
+      "functions": 7,
+      "contract": "target function arguments, source semantics, full-body hashes and native symbols",
+      "device_result": "pending"
+    },
+    "qemu": {
+      "status": "kernel-panic",
+      "record": "records/ios27-24B119/qemu.json",
+      "result": "UEFI -> UniXNU -> DarwinBoot -> XNU -> AMFI; board watchdog SMC on QEMU virt",
+      "next": "virtual platform guard for Qualcomm watchdog; preserve physical candidate identity"
+    },
+    "qemu_platform": {
+      "status": "configured",
+      "record": "records/ios27-24B119/armdt-release-nvram.json",
+      "cpus_published": 8,
+      "nvram_service": true,
+      "runtime_boundary": "root storage initialization"
+    },
+    "qemu_storage": {
+      "status": "building",
+      "worker_log": "outputs/UniXNU_marble/ios27_24B119/qemu/devin-storage.log",
+      "source": "package/ios27-qemu",
+      "signed_original_images": [
+        "OS",
+        "SystemOS"
+      ],
+      "scratch_data": "external qemu/disks/scratch-data.qcow2"
+    },
+    "contract_audit": {
+      "status": "in-progress",
+      "reviewed_fixture_functions": 135,
+      "record": "records/ios27-24B119/function-fixture-input-audit.json",
+      "remaining": "Image4 new monitor interfaces; automatic matcher contracts"
+    },
+    "qemu_kernel": {
+      "status": "linked",
+      "kernel_native": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/ios27_24B119/kernel.native.macho",
+      "native_sha256": "cb611dbed64b81b7d35034f460fdb3ed1994a7f73d9e8fbcf4574236b2629de4",
+      "policy_segment": "__QEMUPOLICY read-only",
+      "ipi_bridge": "retained callable MPIDR bridge"
+    },
+    "systems_installation": {
+      "status": "written-and-read",
+      "report": "outputs/UniXNU_marble/ios27_24B119/device-20261113/installation.json",
+      "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
+      "data_superblock_sha256": "ef234fe4616b3470dec9ec329f9e87fe6ed44adc6099aaaa830df8257226aae1"
+    }
+  },
+  "requirements": [
+    "Boot iOS 27.2 / 24B119 on marble",
+    "Port every supported iOS18 hardware driver and local fix",
+    "Integrate upstream iOS27 and cross-system prerequisite fixes",
+    "Derive all binary ABI bindings from 24B119",
+    "USB log and panic/symbol diagnostics with one transport reader",
+    "Eight CPU cores; highest supported frequency votes; all usable memory",
+    "Source/kernel/plugin/args/image provenance in CURRENT.json",
+    "Host build, actual-device rendering, interaction, performance and lifecycle results",
+    "Resumable build and evidence-driven handoff"
+  ],
+  "updated_at": "2026-11-16T09:38:46.092052+08:00"
+}

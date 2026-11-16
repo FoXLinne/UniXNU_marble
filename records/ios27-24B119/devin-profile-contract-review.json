@@ -1,0 +1,147 @@
+{
+  "target": "24B119",
+  "kernelcache": "../../outputs/UniXNU_marble/ios27_24B119/ipsw/24B119/kernelcache.decompressed",
+  "kernelcache_sha256": "8cc8eccc429aa95397aef0ffe64b226e71b014d84190c1e3f84cf5c270a6e6bc",
+  "entry": "com.apple.kernel",
+  "source": "bsd/kern/ubc_subr.c; bsd/kern/kern_codesigning.c; bsd/kern/code_signing/txm.c; bsd/sys/code_signing.h",
+  "method": "kc_image.Image function-start bounds; whole-function SHA256 covers bytes from function start through next function start; callers found by scanning every fileset entry TEXT segment for B/BL to target",
+  "functions": [
+    {
+      "original": "0xfffffff00a75b4ec",
+      "previous_label": "_ubc_cs_blob_get",
+      "original_sha256": "008ebe68ef3bc1ff4c8ae52f9894aed970fb168e80b373037abbb0cf51cfeb13",
+      "function_bytes": 172,
+      "verified_symbol": "_csblob_register_profile",
+      "source_counterpart": "bsd/kern/ubc_subr.c:962 csblob_register_profile(struct cs_blob *csblob, cs_profile_register_t *profile)",
+      "parameters": "x0 = struct cs_blob *csblob (monitor sig object loaded from signed pointer csb_csm_obj @ +0xf0, IA-key diversity 0xe82b, NULL passes NULL); x1 = cs_profile_register_t *profile (uuid_t uuid @ +0x00, const void *sig_data @ +0x10, size_t sig_size @ +0x18, const void *data @ +0x20, size_t size @ +0x28, matching bsd/sys/code_signing.h:103)",
+      "return": "int; 0 on full success and when register returns KERN_NOT_SUPPORTED (0x2e), EPERM (1) otherwise: register rejects other errors, trust failure and associate failure return EPERM",
+      "direct_callers": "none: no B/BL to this address in com.apple.kernel or any of the 242 other fileset entries; code_signing.h documents the export with AMFI as primary consumer",
+      "direct_callees": "bl 0xfffffff00a738534 csm_register_provisioning_profile(profile->uuid, profile->data, profile->size); bl 0xfffffff00a738704 csm_trust_provisioning_profile(profile->uuid, profile->sig_data, profile->sig_size); bl 0xfffffff00a738870 csm_associate_provisioning_profile(csblob->csb_csm_obj, profile->uuid)",
+      "evidence": "call1 returns accepted iff w0==0 or w0==0xb (KERN_ALREADY_IN_SET), w0==0x2e returns 0 else 1; call2 nonzero returns 1; call3 returns cset ne = EPERM; exact source control flow and field offsets; all three callees verified below against csm_* bodies",
+      "confidence": "high",
+      "uncertainty": "prior _ubc_cs_blob_get label is wrong; real ubc_cs_blob_get is 0xfffffff00a76060c (verified: spinlock on vp+8, UBCINFOEXISTS byte +0x71, signed v_ubcinfo +0x78 diversity 0x22de, blob walk comparing csb_cpu_type +0x18 / masked subtype +0x1c / [base+start,base+end) offsets +0x28..+0x38, called from cs_identity_get 0xfffffff00a6bf1b8 with (textvp,-1,-1,textoff))"
+    },
+    {
+      "original": "0xfffffff00a738a70",
+      "previous_label": "suspected set_compilation_service_cdhash_ext",
+      "original_sha256": "2967d9f304f0a5b51192ab1e82f8a8f49b0f3b31b26263e9d864dda096b6ee3b",
+      "function_bytes": 8,
+      "verified_symbol": "_set_compilation_service_cdhash_ext",
+      "source_counterpart": "bsd/kern/kern_codesigning.c:949 set_compilation_service_cdhash_ext(const cs_cdhash_ext_t *cdhash)",
+      "parameters": "x0 = const cs_cdhash_ext_t *cdhash (hash[64] @ +0x00, size_t length @ +0x40, bsd/sys/code_signing.h:388)",
+      "return": "void",
+      "direct_callers": "none in cache (kext export)",
+      "direct_callees": "b 0xfffffff00a73a73c shared compilation-service request helper",
+      "evidence": "ldr x1,[x0,#0x40] extracts ext length then tail-calls helper; helper builds txm_call selector 0x1d with num_input_args 2 forwarding (cdhash, length) under compilation_service_lock at 0xfffffff00ad97400 via txm_kernel_call 0xfffffff00a739590; sibling non-ext _set_compilation_service_cdhash at 0xfffffff00a7389fc copies 20-byte hash into zeroed 64-byte stack buffer with length field 0x14 and calls the same helper, proving this is the ext variant; selector 0x1d follows verified 0x1a/0x1b/0x1c local-signing selectors in parent-csm-contract-review",
+      "confidence": "high",
+      "uncertainty": "xnu-work source gates on cdhash->length == CS_CDHASH_LEN before dispatch; binary forwards caller length to the monitor request unfiltered, so the CS_CDHASH_LEN check is not in kernel code (monitor-side validation or source drift)"
+    },
+    {
+      "original": "0xfffffff00a738aec",
+      "previous_label": "suspected match_compilation_service_cdhash_ext",
+      "original_sha256": "b58810f0892fcc5c8599bc2b7636773436bac2f30cb5ba97a6eec76dc5fd0489",
+      "function_bytes": 8,
+      "verified_symbol": "_match_compilation_service_cdhash_ext",
+      "source_counterpart": "bsd/kern/kern_codesigning.c:958 match_compilation_service_cdhash_ext(const cs_cdhash_ext_t *cdhash)",
+      "parameters": "x0 = const cs_cdhash_ext_t *cdhash (hash[64] @ +0x00, size_t length @ +0x40)",
+      "return": "bool: helper converts kern_return_t to (ret == KERN_SUCCESS)",
+      "direct_callers": "none in cache (kext export)",
+      "direct_callees": "b 0xfffffff00a73a828 shared match request helper",
+      "evidence": "ldr x1,[x0,#0x40] then tail-call; helper builds txm_call selector 0x1e, failure_silent byte set, num_input_args 2 / num_output_args 1 (template 02000000 01000000 loaded from __const 0xfffffff00700dcb8), forwards (cdhash, length) under the same compilation_service_lock, ends cmp w0,#0; cset w0,eq matching source 'return ret == KERN_SUCCESS'; sibling non-ext _match_compilation_service_cdhash at 0xfffffff00a738a78 uses identical stack-ext prologue",
+      "confidence": "high",
+      "uncertainty": "same as set_: in-kernel CS_CDHASH_LEN gate absent; length forwarded to monitor"
+    },
+    {
+      "original": "0xfffffff00a73834c",
+      "previous_label": "suspected garbage_collect_provisioning_profiles",
+      "original_sha256": "788f1512f26f87f558ccda89030f23036527961be061f31e047ad5b93b8aafe2",
+      "function_bytes": 4,
+      "verified_symbol": "_garbage_collect_provisioning_profiles",
+      "source_counterpart": "bsd/kern/kern_codesigning.c:583 garbage_collect_provisioning_profiles(void) -> csm_free_provisioning_profiles (same file :866)",
+      "parameters": "none",
+      "return": "void",
+      "direct_callers": "none in cache (kext export)",
+      "direct_callees": "b 0xfffffff00a738350 csm_free_provisioning_profiles",
+      "evidence": "single-instruction tail thunk to 0xfffffff00a738350, whose 280-byte body takes profiles_lock (0xfffffff00ad53b48) exclusive, walks SLIST all_profiles head 0xfffffff00ad973d8 (node: skip_collector byte +0x18, profile_obj +0x10, link +0x20), clears skip_collector, calls txm unregister helper 0xfffffff00a73a5d0 on profile_obj, KERN_FAILURE (5) keeps the node, other non-success panics with 'unable to unregister profile from monitor: %d | %p @%s:%d' + 'kern_codesigning.c', KERN_SUCCESS SLIST_REMOVEs and kfree_types; exact csm_free_provisioning_profiles contract",
+      "confidence": "high",
+      "uncertainty": "none material; thunk is the CODE_SIGNING_MONITOR build path, csm_enabled byte at 0xfffffff007c28be0 reads 1"
+    }
+  ],
+  "related_verified": [
+    {
+      "original": "0xfffffff00a75b598",
+      "sha256": "d26b696f9a923caf2a01f3f4c56c3c8d65cb303548a58ffa1f60b134f71502c5",
+      "function_bytes": 236,
+      "identity": "_csblob_register_profile_uuid",
+      "note": "builds cs_profile_register_t on stack (uuid memcpy from x1, sig_data/sig_size zeroed, data=x2, size=x3) and inlines the same register/trust/associate sequence; demonstrates caller-side argument setup for the profile contract"
+    },
+    {
+      "original": "0xfffffff00a76060c",
+      "sha256": "0df56cd46e8fc3fcdc8c7f3bcc6880946202d977fc63c54124d54966331471da",
+      "function_bytes": 516,
+      "identity": "_ubc_cs_blob_get",
+      "note": "actual location of the function previously attributed to 0xfffffff00a75b4ec; signature (struct vnode *vp, cpu_type_t cputype, cpu_subtype_t cpusubtype, off_t offset)"
+    },
+    {
+      "original": "0xfffffff00a738534",
+      "sha256": "5a775c3b9605b5417ef1ac39ea1a8454c95eb66f4740b332807b1c25a6eb4b21",
+      "function_bytes": 464,
+      "identity": "csm_register_provisioning_profile",
+      "note": "csm_enabled gate -> KERN_NOT_SUPPORTED; kalloc_type cs_profile_t; exclusive profiles_lock; uuid_compare dedup -> skip_collector + ALREADY_IN_SET; TXM register call 0xfffffff00a73a4d8"
+    },
+    {
+      "original": "0xfffffff00a738704",
+      "sha256": "f8a3f1c2de33abfce44d7fdda4c3aee53b7eb27de5383249b4a4e302abe06902",
+      "function_bytes": 364,
+      "identity": "csm_trust_provisioning_profile",
+      "note": "exclusive lock, uuid search, trusted byte +0x19 short-circuit, TXM selector 0x12 with 3 input words (profile_obj, sig_data, sig_size)"
+    },
+    {
+      "original": "0xfffffff00a738870",
+      "sha256": "352045570b8ebfe3dcab93d2964e243a7ea0fab4e2fe6d6b51ebc8c5eb9189d3",
+      "function_bytes": 396,
+      "identity": "csm_associate_provisioning_profile",
+      "note": "shared lock, uuid search -> KERN_NOT_FOUND (0x38), TXM selector 0x14 with 2 input words (monitor_sig_obj, profile_obj), success sets skip_collector"
+    },
+    {
+      "original": "0xfffffff00a738350",
+      "sha256": "10db4675be392a1b332883b149752bef3ffd718ccf5c05d935956ef40dafd6c4",
+      "function_bytes": 280,
+      "identity": "csm_free_provisioning_profiles",
+      "note": "tail target of 0xfffffff00a73834c"
+    },
+    {
+      "original": "0xfffffff00a7389fc",
+      "sha256": "617fd20d239eb003c0cdf0bcb08e62246181d7180881d935e74cc867ebc9f989",
+      "function_bytes": 116,
+      "identity": "_set_compilation_service_cdhash",
+      "note": "non-ext wrapper: copies 20-byte cdhash into zeroed 64-byte stack field, length 0x14, calls helper 0xfffffff00a73a73c"
+    },
+    {
+      "original": "0xfffffff00a738a78",
+      "sha256": "19e04255b12c5afa958560e0677ec89a74dd9f0fe4fbd686d68002345f3ed8a7",
+      "function_bytes": 116,
+      "identity": "_match_compilation_service_cdhash",
+      "note": "non-ext wrapper: same stack-ext construction, calls helper 0xfffffff00a73a828"
+    },
+    {
+      "original": "0xfffffff00a73a73c",
+      "sha256": "c4c5c26584658c9bab88e091dc2e0c97b1927ee9d5661cb731a0ea39291d9277",
+      "function_bytes": 236,
+      "identity": "compilation-service set request (TXM selector 0x1d)",
+      "note": "txm_call {selector 0x1d, num_input_args 2}; forwards (ptr, len); lck_mtx fast/slow on compilation_service_lock"
+    },
+    {
+      "original": "0xfffffff00a73a828",
+      "sha256": "5b5eca64f2744479feb886531a51c72fd10a4a3304a80950286a9af23e9471df",
+      "function_bytes": 240,
+      "identity": "compilation-service match request (TXM selector 0x1e)",
+      "note": "txm_call {selector 0x1e, failure_silent, 2 in / 1 out}; returns ret == KERN_SUCCESS"
+    }
+  ],
+  "speculation": [
+    "TXMKernelSelector_t numeric order in external TrustedExecutionMonitor/API.h (unavailable in-tree) inferred as AuthorizeCompilationServiceCDHash=0x1d, MatchCompilationServiceCDHash=0x1e from request words; ordering is not kern_codesigning.c declaration order",
+    "Darwin-26 ext ABI sends (hash pointer, length) as two monitor input words and leaves the CS_CDHASH_LEN decision to the monitor; the in-tree kern_codesigning.c gate 'cdhash->length == CS_CDHASH_LEN' has no kernel-side counterpart in this build",
+    "absence of static callers implies all four exports are reached only through kext symbol resolution at load time (AMFI family) or are dead exports kept for ABI; no in-image indirect call table entry was required to confirm identity"
+  ]
+}
