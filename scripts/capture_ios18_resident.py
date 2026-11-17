@@ -248,6 +248,41 @@ def capture_processes(memory, symbols, layout):
     return result
 
 
+def read_message_buffer(memory, symbols, limit=None):
+    address, = struct.unpack('<Q', memory.read(symbols['_msgbufp'], 8))
+    header = memory.read(address, 24)
+    magic, size, cursor, reader, data = struct.unpack('<4IQ', header)
+    if magic != 0x063061 or not 0 < size <= 4194304 or not 0 <= cursor < size:
+        raise ValueError(f'Invalid XNU message buffer: {magic:#x}, size {size}, cursor {cursor}')
+    if limit is None:
+        ring = memory.read(data, size)
+        ordered = ring[cursor:] + ring[:cursor]
+    else:
+        count = min(limit, size)
+        start = (cursor - count) % size
+        first = min(count, size - start)
+        ordered = memory.read(data + start, first)
+        if count > first:
+            ordered += memory.read(data, count - first)
+        ring = None
+    info = {'address': hex(address), 'data': hex(data), 'size': size,
+            'cursor': cursor, 'reader': reader, 'exported': len(ordered)}
+    return ordered.lstrip(b'\0'), info, header, ring
+
+
+def capture_log(channel, kernel, output):
+    memory = RetainedKernel(channel)
+    symbols = kernel_symbols(kernel)
+    log, info, _, _ = read_message_buffer(memory, symbols, limit=128 * 1024)
+    if '_native_resident_panic_message' in symbols:
+        panic = memory.read(symbols['_native_resident_panic_message'], 512).split(b'\0', 1)[0]
+        if panic:
+            log += b'\nPANIC\n' + panic + b'\n'
+    output.mkdir(parents=True, exist_ok=True)
+    (output / 'kernel.log').write_bytes(log)
+    return info
+
+
 def capture(channel, kernel, output, data_snapshot=False):
     output.mkdir(parents=True, exist_ok=True)
     result = {'kernel': str(kernel.resolve()), 'completed': False}
@@ -341,18 +376,10 @@ def capture(channel, kernel, output, data_snapshot=False):
                            ('_cs_native4k_read_ticks', 8), ('_cs_native4k_hash_ticks', 8)):
             if name in symbols:
                 result['globals'][name] = int.from_bytes(memory.read(symbols[name], size), 'little')
-        address, = struct.unpack('<Q', memory.read(symbols['_msgbufp'], 8))
-        header = memory.read(address, 24)
+        ordered, result['msgbuf'], header, ring = read_message_buffer(memory, symbols)
         (output / 'msgbuf-header.bin').write_bytes(header)
-        magic, size, cursor, reader, data = struct.unpack('<4IQ', header)
-        if magic != 0x063061 or not 0 < size <= 1048576 or not 0 <= cursor < size:
-            raise ValueError(f'Invalid XNU message buffer: {magic:#x}, size {size}, cursor {cursor}')
-        ring = memory.read(data, size)
         (output / 'msgbuf.bin').write_bytes(ring)
-        ordered = (ring[cursor:] + ring[:cursor]).lstrip(b'\0')
         (output / 'kernel.log').write_bytes(ordered)
-        result['msgbuf'] = {'address': hex(address), 'data': hex(data), 'size': size,
-                            'cursor': cursor, 'reader': reader, 'exported': len(ring)}
         varargs = re.search(r'Resident varargs: ([0-9A-Fa-f ]+)', console)
         values = [int(value, 16) for value in varargs[1].split()] if varargs else []
         if values:
@@ -462,10 +489,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--kernel', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--data-snapshot', action='store_true')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--data-snapshot', action='store_true')
+    mode.add_argument('--log-only', action='store_true', help='Save the last 128 KiB of the kernel log')
     args = parser.parse_args()
     channel = RootUsb()
     try:
-        print(json.dumps(capture(channel, args.kernel.resolve(), args.output.resolve(), args.data_snapshot), indent=2))
+        if args.log_only:
+            result = capture_log(channel, args.kernel.resolve(), args.output.resolve())
+        else:
+            result = capture(channel, args.kernel.resolve(), args.output.resolve(), args.data_snapshot)
+        print(json.dumps(result, indent=2))
     finally:
         channel.close()

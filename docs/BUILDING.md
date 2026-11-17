@@ -17,10 +17,10 @@
 
 ## 来源与构建
 
-上游同步修改本地来源树，并在 `build/upstream/latest.json` 保存合入结果与冲突。2026-11-11 的同步快照已归档至 `records/upstream-sync-2026-11-11.json`。
+上游分支引用和合入结果见 `build/upstream/latest.json`。2026-11-11 的同步快照保存在 `records/upstream-sync-2026-11-11.json`。
 
 ```sh
-work/UniXNU-marble/scripts/update_upstream.sh
+work/UniXNU-marble/scripts/update_upstream.sh --fetch-only
 tools/marble-build/venv/bin/python work/UniXNU-marble/scripts/snapshot_upstream.py
 tools/marble-build/venv/bin/python work/UniXNU-marble/scripts/build_ios18_arm64e.py kernel \
   --output outputs/UniXNU_marble/ios18_arm64e
@@ -72,4 +72,4 @@ xcrun clang -std=c11 -O2 -Wall -Wextra -Werror \
 /tmp/marble-audio-graph
 ```
 
-真机结果保留各自候选和证据路径。手机处于 Android，设备操作停止；本页命令范围为主机构建与检查。
+真机结果见 [iOS 18 移植进度](IOS18-PORT.md)，候选和证据路径见 [CURRENT.json](../CURRENT.json)。

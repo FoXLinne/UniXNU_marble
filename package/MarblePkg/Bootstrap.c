@@ -81,8 +81,12 @@ CaptureBootScreen(UINT8 *Buffer, UINTN Capacity)
 STATIC EFI_STATUS EFIAPI
 BootOutput(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This, CHAR16 *Text)
 {
-  for (UINTN Index = 0; Text[Index] && mBootTextUsed + 1 < ARRAY_SIZE(mBootText); Index++)
-    mBootText[mBootTextUsed++] = Text[Index];
+  for (UINTN Index = 0; Text[Index] && mBootTextUsed + 1 < ARRAY_SIZE(mBootText); Index++) {
+    mBootText[mBootTextUsed] = Text[Index];
+    ((CHAR16 *)mFirmwareLog)[mBootTextUsed++] = Text[Index];
+  }
+  ((CHAR16 *)mFirmwareLog)[mBootTextUsed] = 0;
+  __asm__ volatile("dmb ishst" ::: "memory");
   return mOutputString(This, Text);
 }
 
@@ -249,6 +253,7 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
   EFI_EVENT LoaderEvent;
   VOID *Registration;
   EFI_GUID LoaderGuid = UNIXNU_LOADER_PROTOCOL_GUID;
+  MarbleRootUsbSetFirmwareLog(mFirmwareLog);
   mOutputString = gST->ConOut->OutputString;
   gST->ConOut->OutputString = BootOutput;
   Status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, LoaderAvailable, NULL, &LoaderEvent);

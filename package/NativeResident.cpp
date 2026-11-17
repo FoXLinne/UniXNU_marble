@@ -252,6 +252,17 @@ void native_resident_configure(uint64_t address)
 
 extern "C" __attribute__((used)) void native_resident_panic_return(void)
 {
+  // The firmware USB CPU owns its controller and watchdog independently.
+  // Retain that owner and the kernel mappings when a userspace or kernel
+  // panic reaches this entry. Host memory reads and reboot-bootloader remain
+  // available through the firmware without a secondary-CPU return sequence.
+  unsigned resident_mode = 0;
+  PE_parse_boot_argn("rootstage-runtime-usb", &resident_mode, sizeof(resident_mode));
+  if (resident_mode == 3) {
+    native_root_block_capture_log();
+    __asm__ volatile("dsb sy\n\tmsr daifset, #15" ::: "memory");
+    for (;;) __asm__ volatile("wfe");
+  }
   if (!return_stub && !native_resident_prepare()) return;
   native_root_block_capture_log();
   native_root_block_export_data();

@@ -1,16 +1,22 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-11-11T21:31:33.382639+08:00",
+  "updated_at": "2026-11-18T07:47:46.488556+08:00",
   "device": "marble",
-  "work_focus": "工作区归档与仓库维护；设备操作停止",
+  "work_focus": "iOS 18.7.11 / 22H384",
   "execution_state": {
-    "status": "stopped_by_user",
-    "device_system": "Android",
-    "android_version": "17",
+    "os": "Android 17",
     "slot": "a",
-    "boot_completed": true,
-    "device_operations": "stopped",
-    "evidence": "records/audio-2026-11-11/stage.json"
+    "usb_adb": "online",
+    "fastboot": "USB 可用，bootloader unlocked，完成返回 Android",
+    "unixnu_bytes": 274879983616,
+    "installed_system": "22H384 系统窗写入中",
+    "storage_plan": "cache/ios18-port/ufs-256/storage_plan.json",
+    "ios18_data": {
+      "logical_bytes": 68719476736,
+      "source_build": "22H384",
+      "seed_sha256": "65250da33018afd092796a0928f109083aaa6cf27775505c0c6a121e0880bdbe",
+      "status": "Data 窗口清零并从 22H384 种子重建"
+    }
   },
   "latest_source": {
     "snapshot": "source_snapshot.json",
@@ -101,7 +107,8 @@
     "audio": "records/audio-2026-11-11/stage.json",
     "history": "records/archive/current-2026-11-11.json",
     "upstream": "records/upstream-sync-2026-11-11.json",
-    "workspace": "docs/WORKSPACE.md"
+    "workspace": "docs/WORKSPACE.md",
+    "ios18_port": "docs/IOS18-PORT.md"
   },
   "必须采用的基线": {
     "candidate": "gpu-producer-island",
@@ -274,7 +281,29 @@
     "last_ios_result": "用户报告锁屏一次触发崩溃；候选验收失败",
     "record": "records/audio-2026-11-11/stage.json"
   },
-  "待启动候选": null,
+  "待启动候选": {
+    "target": "22H384",
+    "source_reference": "780d3b2d",
+    "baseline": {
+      "candidate": "outputs/UniXNU_marble/audio-20261110/boot-lock-state0-dsp/temporary-boot.json",
+      "kernel": "outputs/UniXNU_marble/ios18-port/baseline/kernel.macho",
+      "kernel_sha256": "d6679b940b54847bf128581bbc6715d06b06378b9e1993691f2bb37fe584cb47",
+      "image_status": "镜像需重打包"
+    },
+    "status": "原 22H384 内核配新版驻留 USB 固件，系统窗写入中",
+    "usb_owner": "firmware",
+    "firmware_usb_affinity": 256,
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "device_result": "待启动",
+    "firmware_sha256": "06e1583cc56f29e7079be734a0152456767aa14401469fc3f4c8c16f9258621e",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-baseline/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-baseline/marble_temporary_boot.img",
+    "image_sha256": "cac93df52292f39249f23207131ede46a819bb5f9949683ec8f656ad6d603c9f",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-baseline/kernel.macho",
+    "kernel_sha256": "d6679b940b54847bf128581bbc6715d06b06378b9e1993691f2bb37fe584cb47",
+    "gpu_addon_sha256": "07e423c6c0a4f859512610a9fd796dd1cda993d508e8b5b5eb39b8bb0cd634f2",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-skip-setup=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 sheng-diag=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-wifi-service=1 marble-haptics=2 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 appsync=1 marble-ui-identity=1602 marble-display-scale=3"
+  },
   "maintenance": {
     "status": "整理完成；源码与文档随本次提交保存",
     "record": "records/maintenance-2026-11-11.json",
@@ -282,5 +311,10 @@
     "removed_files": 840,
     "logical_bytes_removed": 53046277642,
     "observed_free_bytes_increase": 53047115776
+  },
+  "上游同步": {
+    "repositories": 85,
+    "report": "build/upstream/latest.json",
+    "status": "上游分支引用已更新，按组件选择实现"
   }
 }

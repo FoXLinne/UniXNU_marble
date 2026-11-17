@@ -231,7 +231,7 @@ def kernel(root):
     sources = [DEVICE / 'package' / name for name in
                ('MarbleGpu.cpp', 'MarbleGmu.cpp', 'MarbleAdreno.cpp', 'MarbleZap.cpp')]
     sources += [driver / ('NativeAdreno' + name + '.cpp') for name in
-                ('Memory', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit',
+                ('Memory', 'Pool', 'Cpu', 'SmmuMemory', 'SmmuContext', 'Vm', 'GpuContext', 'Ring', 'CpInit',
                  'Pwrup', 'Preempt', 'Submit', 'UserClient', 'Publish', 'Timer', 'KernelTime')]
     sources += sorted((source / 'kits/ArmSmmu4K').glob('ArmSmmu4K*.c'))
     sources += [source / 'kits/AdrenoPM4/AdrenoPM4.c']

@@ -30,7 +30,11 @@ preamble = r'''
 #define AsciiStrLen strlen
 #define CopyMem memcpy
 static struct {uint64_t ReturnTest;} stage;
-static int mKernelRunning, published, transferred, fail, pending;
+static int mKernelRunning, published, transferred, fail, pending, resetFailure, resets;
+#define EFI_STATUS int
+#define EFI_ERROR(v) ((v)!=0)
+static int PrepareBootloaderReset(void) { return resetFailure; }
+static void FirmwareBootloaderReset(void) { assert(transferred && !fail); ++resets; }
 static const char *Command;
 #define AsciiStrCmp strcmp
 static unsigned UsbControl(void) { return pending; }
@@ -54,17 +58,20 @@ int main(void) {
     Command="reboot-bootloader"; mKernelRunning=1;
     stage.ReturnTest=UINT64_C(0x80000005)<<32;
     run();
-    assert(transferred && published==2);
+    assert(transferred && !published && resets==1);
     assert(stage.ReturnTest>>32==UINT32_C(0x80000005));
-    assert(!strcmp(mTx,"OKAYbootloader reset requested"));
+    assert(!strcmp(mTx,"OKAYfirmware bootloader reset requested"));
     stage.ReturnTest=UINT64_C(0x80000007)<<32;
     fail=1; published=transferred=0;
     run();
     assert(transferred && !published && (uint32_t)stage.ReturnTest==0);
+    assert(resets==1);
     fail=0; mKernelRunning=0; transferred=0;
     run();
-    assert(transferred && !published && (uint32_t)stage.ReturnTest==0);
-    assert(!strncmp(mTx,"FAIL",4));
+    assert(transferred && !published && resets==2);
+    resetFailure=1; transferred=0; run();
+    assert(transferred && resets==2 && !strncmp(mTx,"FAIL",4));
+    resetFailure=0;
     mKernelRunning=1; Command="oem interrupt"; fail=0; published=transferred=0;
     run(); assert(transferred && published==1);
     fail=1; published=transferred=0; run(); assert(transferred && !published);
@@ -79,4 +86,4 @@ with tempfile.TemporaryDirectory(prefix='root-usb-reboot-') as temporary:
     subprocess.run(['cc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', str(program),
                     '-o', str(directory / 'reboot')], check=True)
     subprocess.run([str(directory / 'reboot')], check=True)
-print('RootStage reboot: acknowledgement completion, failed reply, phase gate and heartbeat preservation passed')
+print('RootStage reboot: firmware reset in both phases, failed preparation/reply, interrupt gate and heartbeat preservation passed')

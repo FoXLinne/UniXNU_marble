@@ -191,16 +191,50 @@ def main():
         raise RuntimeError('System windows exceed the UFS partition')
     args.assets.mkdir(parents=True, exist_ok=True)
     if args.action == 'systems':
+        header_path = args.assets / 'root_manifest.bin'
+        header = header_path.read_bytes()
+        if (len(header) != 4096 or header[:8] != b'SHNGROOT' or
+                hashlib.sha256(header[:4064]).digest() != header[4064:] or
+                struct.unpack_from('<IIQ', header, 8) != (1, len(images), cursor)):
+            raise RuntimeError('Root manifest differs from the system image layout')
+        for index, image in enumerate(images):
+            at = 24 + index * 128
+            if (header[at:at + 32].split(b'\0', 1)[0].decode() != image['name'] or
+                    struct.unpack_from('<QQ', header, at + 32) != (image['offset'], image['raw_bytes']) or
+                    header[at + 56:at + 88].hex() != image['sha256']):
+                raise RuntimeError('Root manifest differs from ' + image['name'])
+
         progress = args.assets / 'system-windows.json'
         installed = json.loads(progress.read_text()) if progress.exists() else []
         for image in images:
             if image in installed:
                 continue
-            source = push(Path(image['source']))
-            root(f'dd if={shlex.quote(source)} of={target} bs=4194304 seek={image["offset"]} oflag=seek_bytes conv=notrunc,fsync')
+            source = Path(image['source'])
+            if (image['format'] != 'raw' or source.stat().st_size != image['raw_bytes'] or
+                    image['raw_bytes'] % 4096):
+                raise RuntimeError('Invalid raw system window: ' + image['name'])
+            remote = shlex.quote(push(source))
+            try:
+                root(f'dd if={remote} of={target} bs=4194304 seek={image["offset"]} oflag=seek_bytes conv=notrunc,fsync')
+                offset, count = image['offset'], image['raw_bytes']
+                digest = root(f'set -o pipefail; dd if={target} bs=4194304 skip={offset} count={count} '
+                              'iflag=skip_bytes,count_bytes status=none | sha256sum',
+                              stdout=subprocess.PIPE).stdout.decode().split()[0]
+                if digest != image['sha256']:
+                    raise RuntimeError('UFS readback differs from ' + image['name'])
+            finally:
+                root(f'rm -f {remote}')
             installed.append(image)
             progress.write_text(json.dumps(installed, indent=2) + '\n')
             print(f'{image["name"]}: {image["raw_bytes"]} bytes persisted', flush=True)
+        remote = shlex.quote(push(header_path))
+        try:
+            root(f'dd if={remote} of={target} bs=4096 count=1 conv=notrunc,fsync')
+            readback = root(f'dd if={target} bs=4096 count=1 status=none', stdout=subprocess.PIPE).stdout
+            if readback != header:
+                raise RuntimeError('Installed UFS root manifest differs from the candidate')
+        finally:
+            root(f'rm -f {remote}')
     elif args.action == 'data':
         if args.data is None:
             parser.error('data requires --data')

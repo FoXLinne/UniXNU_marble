@@ -87,7 +87,7 @@ def main():
                         help='Embed the kernel and retain the RootStage USB service')
     parser.add_argument('--hold-rootstage', action='store_true',
                         help='Wait for the RootStage continue command before entering XNU')
-    parser.add_argument('--usb-owner', choices=('firmware','kernel'), default='kernel',
+    parser.add_argument('--usb-owner', choices=('firmware','kernel'), default='firmware',
                         help='Controller owner while XNU runs; kernel ownership uses all eight CPUs')
     parser.add_argument('--vsync', type=int, default=120,
                         help='Display presentation cadence')
@@ -222,8 +222,6 @@ def main():
     boot_args += f' marble-ui-identity={identity["generation"]}'
     if args.disabled_jobs:
         boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
-    if args.skip_setup:
-        boot_args += ' marble-skip-setup=1'
     if candidate:
         boot_args = candidate['boot_args']
         if (candidate['data_uuid'].upper() != metadata['volume_uuid'].upper()
@@ -236,6 +234,8 @@ def main():
             args.kernel_arg+=['rootstage-runtime-usb=3','marble-native-services=0',f'cpus={len(cpu_regs)}']
         if appsync:
             args.kernel_arg.append('appsync=1')
+        if args.skip_setup:
+            args.kernel_arg.append('marble-skip-setup=1')
         boot_args = merge_kernel_args(boot_args, ['sheng-aks-sls=3', *args.kernel_arg,
                                                       f'marble-ui-identity={identity["generation"]}',
                                                       f'marble-display-scale={args.display_scale}'])

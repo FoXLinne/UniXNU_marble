@@ -38,8 +38,12 @@ class RootUsb:
         if self.native:
             try:self.device.get_active_configuration()
             except usb.core.USBError:self.device.set_configuration(1)
-        if self.command('getvar:version') != 'RootStage2':
-            raise RuntimeError('Unexpected RootStage USB protocol')
+        try:
+            if self.command('getvar:version') != 'RootStage2':
+                raise RuntimeError('Unexpected RootStage USB protocol')
+        except BaseException:
+            usb.util.dispose_resources(self.device)
+            raise
 
     def close(self):
         usb.util.dispose_resources(self.device)

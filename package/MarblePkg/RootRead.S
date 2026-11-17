@@ -12,6 +12,16 @@ ASM_FUNC(MarbleRootReadMemory)
   isb
   mov x8, #1
   cbz x2, MarbleRootReadDone
+  // The boot CPU can write retained RAM with its MMU and caches disabled.
+  // Discard this observer CPU's old lines before exporting that RAM.
+  bic x4, x1, #63
+  add x5, x1, x2
+MarbleRootReadInvalidate:
+  dc ivac, x4
+  add x4, x4, #64
+  cmp x4, x5
+  b.lo MarbleRootReadInvalidate
+  dsb sy
 MarbleRootReadLoop:
   ldrb w4, [x1]
   strb w4, [x0]
