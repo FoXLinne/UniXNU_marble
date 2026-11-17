@@ -67,11 +67,29 @@ struct nw_wifi_events {
 };
 void nw_wifi_set_events(const struct nw_wifi_events *ev);
 int nw_wifi_scan(const uint8_t *ssid, size_t len);                       /* ssid may be NULL (all networks) */
+int nw_wifi_scan_channels(const uint8_t *ssid, size_t len, const uint32_t *frequencies, size_t count);
 int nw_wifi_bss_count(void);
 int nw_wifi_bss_get(int i, struct nw_bss_info *out);                     /* 0 on success */
 int nw_wifi_connect(const uint8_t *ssid, size_t len, const uint8_t *bssid, const char *pass, size_t plen);   /* pass NULL: open network */
 void nw_wifi_disconnect(void);
 void nw_wifi_power(int enabled);                  /* queue radio on/off on the wireless worker */
+/* 0 awake, 1 static PS, 2 dynamic PS. Requests run on the wireless worker. */
+int nw_wifi_power_save(unsigned mode);
+struct nw_power_save_status { uint32_t requested, applied, pending, attempts; int32_t error; };
+void nw_wifi_power_save_get(struct nw_power_save_status *out);
+/* Actual station capabilities and negotiated link. Mode bits follow
+ * Apple80211: auto/a/b/g/n/ac/ax = 1/2/4/8/16/128/256.
+ * Bits 32/64 describe the older turbo modes. */
+struct nw_wifi_link_info {
+  uint32_t version, supported_modes, active_mode, width_mhz, streams;
+  uint32_t firmware_ps, mac_ps, mhi_device_state, mhi_pm_state, updates;
+};
+void nw_wifi_link_info_get(struct nw_wifi_link_info *out);
+uint32_t nw_wifi_card_capabilities(void);
+/* Regulatory channel snapshot: flags 1 disabled, 2 no initiating radiation, 4 radar. */
+struct nw_channel_info { uint32_t frequency, flags; int32_t max_power; };
+int nw_wifi_channel_count(void);
+int nw_wifi_channel_get(unsigned index, struct nw_channel_info *out);
 int nw_wifi_tx(const uint8_t *eth, size_t len);                          /* 0 queued */
 /* A successful queue takes ownership; release runs once on the wireless worker.
  * A rejected queue leaves ownership with the caller. No payload copy here. */

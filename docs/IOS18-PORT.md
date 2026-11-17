@@ -4,10 +4,10 @@
 
 | 阶段 | 实现来源与结果 |
 | --- | --- |
-| USB、内核日志和复位 | 保留 22H384 的 RootStage 交接。引入 iOS 27 固件独立复位、驻留 watchdog、固件日志和 panic 时保留驻留核心。固件构建及现有复位、watchdog 检查通过。待真机读取 XNU 日志，并覆盖断线重连、panic、USB 服务卡死后回到 Fastboot。 |
-| UFS 和 Data | `unixnu` 扩到 256 GiB，Android 重启后 USB ADB 可用，Fastboot 报告 bootloader 已解锁。64 GiB Data 窗口清零后写入 22H384 种子。22H384 的 OS 和 SystemOS 与原候选摘要一致，正在写入 UFS。 |
-| 用户态和系统 App | 使用 22H384 的 Setup 跳过逻辑。恢复完成后检查设置、照片、Safari 和其他系统 App 的启动及可用性。 |
-| Wi-Fi | iOS 18 有扫描、WPA2 和 DHCP 基础。iOS 27 v47 的自动连接、开关重连和省电路径作为实现参考。真机检查自动连接、快速切换和获取网络地址。 |
+| USB、内核日志和复位 | R1 在 MPIDR `0x100` 保持 RootStage，panic 后读出 XNU 日志并经固件命令返回 Fastboot。R1 的 watchdog 在 XNU 交接时关闭，R2 在 DarwinBoot 进入 XNU 前转交驻留 USB 并启用 watchdog。断线重连和服务停滞恢复待真机覆盖。 |
+| UFS 和 Data | `unixnu` 扩到 256 GiB。Android 重启后 USB ADB 可用，Fastboot 报告 bootloader 已解锁。64 GiB Data 用 22H384 种子重建，APFS 超级块读回一致。22H384 的 OS、SystemOS、KernelSeed 和 UFS 清单已写入并读回。 |
+| 用户态和系统 App | R1 挂载 SystemOS 和 Data，Setup 跳过策略返回成功。壁纸挂载检查读取旧尺寸路径，触发 `SystemOS preparation failed 2`。修正路径后从 R2 检查桌面、设置、照片、Safari 和其他系统 App。 |
+| Wi-Fi | 引入 iOS 27 v47 的 supplicant 定向重连、调度唤醒合并、监管域处理和扫描缓存策略，保留 22H384 的关联与扫描结果接口。内核及 22H384 签名 runtime 已构建，R2 用于真机自动连接、切换和 DHCP 检查。 |
 | 电源、CPU 休眠、自动熄屏 | iOS 27 v62 有三次自动锁屏、七个 XNU 核心进入和离开休眠的记录。需核对 22H384 的电源控制、计时和唤醒接口，以及驻留 USB 的核心归属。 |
 | 蓝牙 | iOS 27 v82 可双向发现，经典蓝牙连接失败。以同板 QCA 固件和 GENI 传输作起点，针对 22H384 适配 Bluetooth 栈。 |
 | 扬声器和马达 | iOS 18 已有音频和马达驱动。比较 iOS 27 的输出路由、锁屏行为和系统触觉，分别检查播放、唤醒恢复和系统触觉请求。 |

@@ -12,6 +12,7 @@ struct net_device *nw_cfg80211_primary(void);
 /* Starting an attempt closes the old interface before changing its generation. */
 int nw_cfg80211_begin_attempt(void);
 int nw_cfg80211_set_power(int enabled);
+int nw_cfg80211_set_power_save(unsigned mode);
 int nw_cfg80211_event_begin(struct nw_control_builder *builder, void *bytes, size_t size, unsigned operation, int status);
 int nw_cfg80211_event_send(struct nw_control_builder *builder);
 #endif

@@ -5,6 +5,7 @@
 #include <net/mac80211.h>
 #include "core.h"
 #include "debug.h"
+#include "pci.h"
 #include "nw_qrtr.h"
 #include "nw_mainline.h"
 #include "nw_wifi.h"
@@ -22,7 +23,44 @@ extern const struct bus_type mhi_bus_type;
 struct nw_wifi_stats nw_wifi_stats;
 static struct ieee80211_hw *g_hw;
 static bool cfg_started, mac_started, pci_started, mhi_started, qrtr_started;
-void nw_wifi_hw_ready(struct ieee80211_hw *hw) { g_hw=hw; }
+static uint32_t link_info[10];
+static uint32_t card_caps;
+uint32_t nw_wifi_card_capabilities(void) { return __atomic_load_n(&card_caps,__ATOMIC_ACQUIRE); }
+void nw_wifi_link_info_get(struct nw_wifi_link_info *out) {
+  if (!out) return;
+  uint32_t *words=(uint32_t *)out;
+  for (unsigned i=0;i<10;i++) words[i]=__atomic_load_n(&link_info[i],__ATOMIC_ACQUIRE);
+}
+void nw_wifi_hw_ready(struct ieee80211_hw *hw) {
+  unsigned modes=1;
+  unsigned caps=(1u<<9)|(1u<<10);
+  g_hw=hw;
+  if (hw->queues>=4) caps|=1u<<17;
+  if (ieee80211_hw_check(hw,SUPPORTS_PS)) caps|=1u<<6;
+  for (unsigned i=0;i<hw->wiphy->n_cipher_suites;i++)
+    if (hw->wiphy->cipher_suites[i]==WLAN_CIPHER_SUITE_CCMP) caps|=(1u<<3)|(1u<<14);
+  for (unsigned band=0;band<NUM_NL80211_BANDS;band++) {
+    const struct ieee80211_supported_band *b=hw->wiphy->bands[band];
+    if (!b) continue;
+    if (band==NL80211_BAND_2GHZ) modes|=4|8;
+    if (band==NL80211_BAND_5GHZ) modes|=2;
+    if (b->ht_cap.ht_supported) modes|=16;
+    if (b->vht_cap.vht_supported) modes|=128;
+    if (ieee80211_get_he_iftype_cap(b,NL80211_IFTYPE_STATION)) modes|=256;
+    if (b->ht_cap.cap&IEEE80211_HT_CAP_SGI_20) caps|=1u<<19;
+    if (b->ht_cap.cap&IEEE80211_HT_CAP_SGI_40) caps|=1u<<18;
+  }
+  __atomic_store_n(&link_info[0],1,__ATOMIC_RELEASE);
+  __atomic_store_n(&link_info[1],modes,__ATOMIC_RELEASE);
+  __atomic_store_n(&card_caps,caps,__ATOMIC_RELEASE);
+}
+static void link_ps(void *data,u8 *mac,struct ieee80211_vif *vif) {
+  (void)mac;
+  if (vif->type==NL80211_IFTYPE_STATION) {
+    struct ath11k_vif *arvif=(void *)vif->drv_priv;
+    *(uint32_t *)data=arvif->ps ? 1 : 0;
+  }
+}
 int mhi_init_mmio(struct mhi_controller *controller);
 void nw_mhi_pre_load(struct mhi_controller *controller) { mhi_init_mmio(controller); }
 void nw_wifi_tx_reasons(char *text, int size) {
@@ -32,11 +70,29 @@ void nw_wifi_tx_reasons(char *text, int size) {
 void nw_wifi_link_state(char *text, int size) {
   struct nw_wifi_status state; nw_wifi_status_get(&state);
   text[0]=0;
-  if (!g_hw || state.state != NW_STA_UP) return;
+  if (!g_hw) return;
   struct ath11k *ar=g_hw->priv;
+  uint32_t ps=0;
+  ieee80211_iterate_active_interfaces_atomic(g_hw,IEEE80211_IFACE_ITER_NORMAL,link_ps,&ps);
+  struct mhi_controller *mhi=ath11k_pci_priv(ar->ab)->mhi_ctrl;
+  __atomic_store_n(&link_info[5],ps,__ATOMIC_RELEASE);
+  __atomic_store_n(&link_info[6],!!(g_hw->conf.flags&IEEE80211_CONF_PS),__ATOMIC_RELEASE);
+  __atomic_store_n(&link_info[7],mhi ? READ_ONCE(mhi->dev_state) : UINT32_MAX,__ATOMIC_RELEASE);
+  __atomic_store_n(&link_info[8],mhi ? READ_ONCE(mhi->pm_state) : UINT32_MAX,__ATOMIC_RELEASE);
+  __atomic_fetch_add(&link_info[9],1,__ATOMIC_RELAXED);
+  if (state.state != NW_STA_UP) {
+    for (unsigned i=2;i<=4;i++) __atomic_store_n(&link_info[i],0,__ATOMIC_RELEASE);
+    return;
+  }
   rcu_read_lock();
   struct ieee80211_sta *sta=ieee80211_find_sta_by_ifaddr(g_hw,state.bssid,NULL);
   if (sta) {
+    const struct ieee80211_link_sta *link=&sta->deflink;
+    unsigned mode=link->he_cap.has_he ? 256 : link->vht_cap.vht_supported ? 128 :
+                  link->ht_cap.ht_supported ? 16 : state.freq_mhz>=4000 ? 2 : 8;
+    __atomic_store_n(&link_info[2],mode,__ATOMIC_RELEASE);
+    __atomic_store_n(&link_info[3],20u<<min_t(unsigned,link->bandwidth,4),__ATOMIC_RELEASE);
+    __atomic_store_n(&link_info[4],link->rx_nss,__ATOMIC_RELEASE);
     struct ath11k_sta *peer=(void *)sta->drv_priv;
     spin_lock_bh(&ar->data_lock);
     u32 rate=cfg80211_calculate_bitrate(&peer->txrate);
@@ -89,7 +145,9 @@ int nw_wifi_step(void) {
   static unsigned last_frames; nw_wifi_control_poll(); lx_pump(); nw_mainline_run();
   static u64 next_signal;
   if (g_hw && lx_now_ms() >= next_signal) {
-    next_signal = lx_now_ms() + 1000;
+    struct nw_wifi_status station; nw_wifi_status_get(&station);
+    /* Associated links refresh signal each second; an idle radio needs no 1 Hz wake. */
+    next_signal = lx_now_ms() + (station.state == NW_STA_UP ? 1000 : 10000);
     char link[128]; nw_wifi_link_state(link, sizeof(link));
   }
   const unsigned f = nw_wifi_stats.frames; const int moved = f != last_frames; last_frames = f;

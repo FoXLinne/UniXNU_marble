@@ -1,15 +1,15 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-11-18T07:47:46.488556+08:00",
+  "updated_at": "2026-11-18T07:57:43.632847+08:00",
   "device": "marble",
   "work_focus": "iOS 18.7.11 / 22H384",
   "execution_state": {
-    "os": "Android 17",
+    "os": "Fastboot",
     "slot": "a",
-    "usb_adb": "online",
-    "fastboot": "USB 可用，bootloader unlocked，完成返回 Android",
+    "usb_adb": "inactive",
+    "fastboot": "USB 在线，固件从 R1 panic 返回",
     "unixnu_bytes": 274879983616,
-    "installed_system": "22H384 系统窗写入中",
+    "installed_system": "22H384 OS、SystemOS、KernelSeed 及 UFS 清单已读回核对",
     "storage_plan": "cache/ios18-port/ufs-256/storage_plan.json",
     "ios18_data": {
       "logical_bytes": 68719476736,
@@ -130,142 +130,30 @@
     "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17"
   },
   "最新构建": {
-    "image": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/audio-20261110/boot-lock-state0-dsp/marble_temporary_boot.img",
-    "kernel_sha256": "d6679b940b54847bf128581bbc6715d06b06378b9e1993691f2bb37fe584cb47",
-    "native_sha256": "774cde74d8fdad3f18f476c313fb5547cb67a39a8305c07887a9cab8d4446647",
-    "kernel_source": "boot-image",
-    "system_source": "ufs",
-    "exit_boot_services": false,
-    "resident_usb": true,
-    "runtime_usb_mode": 3,
+    "target": "22H384",
+    "source_reference": "780d3b2d",
+    "baseline": {
+      "candidate": "outputs/UniXNU_marble/audio-20261110/boot-lock-state0-dsp/temporary-boot.json",
+      "kernel": "outputs/UniXNU_marble/ios18-port/baseline/kernel.macho",
+      "kernel_sha256": "d6679b940b54847bf128581bbc6715d06b06378b9e1993691f2bb37fe584cb47",
+      "image_status": "镜像需重打包"
+    },
+    "status": "R1 真机结束，已返回 Fastboot",
     "usb_owner": "firmware",
-    "enabled_cpu_affinities": [
-      0,
-      512,
-      768,
-      1024,
-      1280,
-      1536,
-      1792
-    ],
-    "rootstage_hold": true,
     "firmware_usb_affinity": 256,
-    "display_scale": 3,
-    "ui_identity": {
-      "product": "iPhone16,2",
-      "name": "iPhone 15 Pro Max",
-      "target_type": "D84",
-      "hardware_model": "D84AP",
-      "artwork_device_subtype": 2796,
-      "screen_category": 11,
-      "compatible_device_fallback": "iPhone15,3",
-      "generation": 1602,
-      "large_format_phone": true,
-      "island_notch_location": 144,
-      "chrome_identifier": "com.apple.dt.devicekit.chrome.phone8",
-      "oled_display": true,
-      "udid_version": 2
-    },
-    "data_logical_bytes": 68719476736,
-    "data_uuid": "931BD214-5A94-47D4-828F-9B782A272D55",
-    "storage_profile_sha256": "2f439c20ac2a30cd6f3b979ff2f590fb3c0e1b04b55b8edfb7806be238b08f56",
-    "logical_size": [
-      375.0,
-      812.0
-    ],
-    "native_size": [
-      1125,
-      2436
-    ],
-    "artwork_scale": 3,
-    "display_layout_target": {
-      "logical_width": 375.0,
-      "reference_height": 812.0,
-      "home_screen": "D52",
-      "standard_width_pixels": 1125,
-      "standard_height_pixels": 2436,
-      "zoomed_width_pixels": 960,
-      "zoomed_height_pixels": 2079,
-      "zoomed_screen_category": 12,
-      "corner_radius_pixels": 100.0,
-      "sensor_width_pixels": 288.0,
-      "sensor_height_pixels": 84.0,
-      "sensor_top_pixels": 18.0,
-      "point_scale": 2.88,
-      "artwork_scale": 3,
-      "logical_zoom": 1.0,
-      "logical_height": 812.0,
-      "compositor_size": [
-        1125,
-        2436
-      ],
-      "native_points_scale": 2.88
-    },
-    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-skip-setup=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 sheng-diag=0 sheng-aks-sls=0 marble-audio=2 no-lc=1 gpu-addon=1 marble-wifi-service=1 marble-haptics=2 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 appsync=1 marble-ui-identity=1602 marble-display-scale=3",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "device_result": "SystemOS 和 Data 已挂载，Setup 策略成功。壁纸检查命中旧尺寸路径，触发 ENOENT panic。USB 读取日志并由固件复位进入 Fastboot。",
+    "firmware_sha256": "06e1583cc56f29e7079be734a0152456767aa14401469fc3f4c8c16f9258621e",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r1/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r1/marble_temporary_boot.img",
+    "image_sha256": "71dc2a397ef0e886b21434ce3fe3ddbefdc71571c000f6dfed748ff200e35020",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r1/kernel.macho",
+    "kernel_sha256": "c7cbbd1390aa0be8abd5497995766bd50a797cacb8af9d44d8e8fe2114549a0e",
     "gpu_addon_sha256": "07e423c6c0a4f859512610a9fd796dd1cda993d508e8b5b5eb39b8bb0cd634f2",
-    "gpu_sources": {
-      "UniXNU": "d3de950a23a54d454d6ac21d8deceaa3f4ad0e73",
-      "Adreno740": "6fa7bae2a5b3b523e790eb3e0348af4d98969e4d",
-      "AdrenoMetal": "da7aedd827dfdb581eac041615c45cc1cd5e71db",
-      "ArmSmmu4K": "83969cd874503e65997ff7639f7dcf3d0a92cd17",
-      "Mesa": "6384fd6037871b44784d78bf63369bdf05708965",
-      "metal2vulkan": "963f0e64f103d2e682cd0cc454a8fe50f52c8cbb"
-    },
-    "owner_trust_cache_sha256": "42d8a7435807800bb4bb6abc3cb0b71e86068d837f615f9b0cb3501e380dcecb",
-    "appsync_runtime": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/usb-fix-20261109/app-install/runtime",
-    "wifi_firmware": {
-      "source": "Endless OS linux-firmware; WCN6855 hw2.0 distribution shared by hw2.1",
-      "files": [
-        {
-          "name": "Notice.txt",
-          "bytes": 152394,
-          "git_blob": "edf86d4a7b5ddb42077edb8426a9ed2eb9a2c821",
-          "sha256": "770720d03de70ff503c6d9bb6f6932fc7833d078647fe8352c6d5d49d44bbc5f",
-          "url": "https://github.com/endlessm/linux-firmware/blob/master/ath11k/WCN6855/hw2.0/Notice.txt"
-        },
-        {
-          "name": "amss.bin",
-          "bytes": 4988928,
-          "git_blob": "1576410ec76394d37037f8309692b4d664ce94c1",
-          "sha256": "e12b23ddc4b8d2d2a10a651a5d6fdcd00f60fcae884d2cf5dad17627211fcdfd",
-          "url": "https://github.com/endlessm/linux-firmware/blob/master/ath11k/WCN6855/hw2.0/amss.bin"
-        },
-        {
-          "name": "board-2.bin",
-          "bytes": 7237392,
-          "git_blob": "a896e6df58b6c280a975419645392eaa2bb27fff",
-          "sha256": "9287fa8d14d915892666b03e9403135875d08371fd1438d2c6d9fe96ae71cf68",
-          "url": "https://github.com/endlessm/linux-firmware/blob/master/ath11k/WCN6855/hw2.0/board-2.bin"
-        },
-        {
-          "name": "m3.bin",
-          "bytes": 266684,
-          "git_blob": "a5000154d6b329822a8fc100f569e47b6d87f63c",
-          "sha256": "0c590881870d0e6e98fc7d393ce05690e09287933b1b535e935bf5d98b77713f",
-          "url": "https://github.com/endlessm/linux-firmware/blob/master/ath11k/WCN6855/hw2.0/m3.bin"
-        },
-        {
-          "name": "regdb.bin",
-          "bytes": 24310,
-          "git_blob": "d4ab6ef96c08fe1184380996eb8d766590875ecd",
-          "sha256": "e1b774b1feda4cab01f5a26089124059539fc31544ac34129dce45c8ff26d645",
-          "url": "https://github.com/endlessm/linux-firmware/blob/master/ath11k/WCN6855/hw2.0/regdb.bin"
-        }
-      ],
-      "device": "marble",
-      "pci_id": "17cb:1103",
-      "soc_version": "0x400c1211",
-      "soc_subversion": "0x1016d0e1",
-      "status": "firmware bring-up candidate; hardware qualification pending"
-    },
-    "wifi_runtime": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/wifi-service-native-20261110/runtime",
-    "haptics_runtime": "/Volumes/Extra/https-github-com-oosexgang-hackios-xnu/outputs/UniXNU_marble/audio-20261110/runtime-lock-offline",
-    "appsync_build": "22H384",
-    "baseline_candidate": "boot",
-    "baseline_kernel_sha256": "7afc03d1a75205c641d60946553e4a01ffd3a4ae6799c5f44893ea7e8442726b",
-    "candidate": "boot-lock-state0-dsp",
-    "image_sha256": "d0f02d72af2eb27714e9c0b13769396115353237e5b350a167bff1f120e139bc",
-    "status": "历史实验候选；锁屏崩溃验收失败"
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 sheng-diag=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-wifi-service=1 marble-haptics=2 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 appsync=1 marble-skip-setup=1 marble-ui-identity=1602 marble-display-scale=3",
+    "source_commit": "4ba84ed6",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r1/kernel.log",
+    "watchdog": "R1 进入 XNU 后关闭"
   },
   "更新要求": [
     "每次源码、内核、插件、启动参数或启动镜像变化，立即更新本文件。",
@@ -283,26 +171,11 @@
   },
   "待启动候选": {
     "target": "22H384",
-    "source_reference": "780d3b2d",
-    "baseline": {
-      "candidate": "outputs/UniXNU_marble/audio-20261110/boot-lock-state0-dsp/temporary-boot.json",
-      "kernel": "outputs/UniXNU_marble/ios18-port/baseline/kernel.macho",
-      "kernel_sha256": "d6679b940b54847bf128581bbc6715d06b06378b9e1993691f2bb37fe584cb47",
-      "image_status": "镜像需重打包"
-    },
-    "status": "原 22H384 内核配新版驻留 USB 固件，系统窗写入中",
-    "usb_owner": "firmware",
-    "firmware_usb_affinity": 256,
-    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
-    "device_result": "待启动",
-    "firmware_sha256": "06e1583cc56f29e7079be734a0152456767aa14401469fc3f4c8c16f9258621e",
-    "candidate": "outputs/UniXNU_marble/ios18-port/usb-baseline/temporary-boot.json",
-    "image": "outputs/UniXNU_marble/ios18-port/usb-baseline/marble_temporary_boot.img",
-    "image_sha256": "cac93df52292f39249f23207131ede46a819bb5f9949683ec8f656ad6d603c9f",
-    "kernel": "outputs/UniXNU_marble/ios18-port/usb-baseline/kernel.macho",
-    "kernel_sha256": "d6679b940b54847bf128581bbc6715d06b06378b9e1993691f2bb37fe584cb47",
-    "gpu_addon_sha256": "07e423c6c0a4f859512610a9fd796dd1cda993d508e8b5b5eb39b8bb0cd634f2",
-    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 sheng-smp=1 armcpu-self-ipi=1 marble-skip-setup=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 sheng-diag=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-wifi-service=1 marble-haptics=2 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 appsync=1 marble-ui-identity=1602 marble-display-scale=3"
+    "status": "R2 内核和镜像构建中",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r2/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "firmware_sha256": "68e52098c9afbd1b1ab1953342b3a342e308f4477872542d1ce2999e028d3502",
+    "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
+    "device_result": "待启动"
   },
   "maintenance": {
     "status": "整理完成；源码与文档随本次提交保存",

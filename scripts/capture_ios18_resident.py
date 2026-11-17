@@ -18,10 +18,15 @@ def png_chunk(kind, payload):
 
 
 class RetainedKernel:
-    def __init__(self, channel):
+    def __init__(self, channel, symbols=None):
         self.channel = channel
         self.base, self.size = (int(v, 16) for v in channel.command('getvar:kernel-memory').split(':'))
         self.ttbr1, self.tcr = (int(v, 16) for v in channel.command('getvar:handoff-translation').split(':'))
+        if not self.ttbr1 and symbols and '_cpu_ttep' in symbols:
+            # 22H384 maps its native Mach header at base + 0x4000.
+            address = self.base + 0x4000 + symbols['_cpu_ttep'] - 0xfffffff006e04000
+            self.ttbr1 = int.from_bytes(self.physical(address, 8), 'little')
+            self.tcr = 25 | (25 << 16)
         self.bits = 64 - ((self.tcr >> 16) & 63)
         if not self.ttbr1 or not 25 <= self.bits <= 48:
             raise ValueError('Retained kernel translation registers are unavailable')
@@ -123,8 +128,12 @@ def capture_data(memory, symbols, output):
 
 
 def kernel_symbols(kernel, tools=None):
-    tools = Path(tools) if tools is not None else next(parent / 'XnuPrelink' for parent in kernel.parents
-                 if (parent / 'XnuPrelink/kc_image.py').is_file())
+    if tools is None:
+        vendored = Path(__file__).resolve().parents[1] / 'ios18/sources/XnuPrelink'
+        tools = next((parent / 'XnuPrelink' for parent in kernel.parents
+                      if (parent / 'XnuPrelink/kc_image.py').is_file()), vendored)
+    else:
+        tools = Path(tools)
     sys.path.insert(0, str(tools))
     from kc_image import Image
     collection = Image(kernel.read_bytes())
@@ -271,8 +280,8 @@ def read_message_buffer(memory, symbols, limit=None):
 
 
 def capture_log(channel, kernel, output):
-    memory = RetainedKernel(channel)
     symbols = kernel_symbols(kernel)
+    memory = RetainedKernel(channel, symbols)
     log, info, _, _ = read_message_buffer(memory, symbols, limit=128 * 1024)
     if '_native_resident_panic_message' in symbols:
         panic = memory.read(symbols['_native_resident_panic_message'], 512).split(b'\0', 1)[0]

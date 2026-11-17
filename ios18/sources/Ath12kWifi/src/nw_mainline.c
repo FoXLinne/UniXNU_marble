@@ -12,13 +12,17 @@ static spinlock_t boundary_lock;
 static struct nw_wifi_status status;
 static struct nw_bss_info *bsses;
 static unsigned bss_count, rx_drops;
-struct ui_request { unsigned operation, frequency; u8 ssid[32], ssid_length, bssid[6], has_bssid; char password[64]; u8 password_length, enabled; };
+static u64 bss_snapshot_ms;
+static struct nw_channel_info channel_snapshot[256];
+static unsigned channel_count;
+struct ui_request { unsigned operation, frequency; u8 ssid[32], ssid_length, bssid[6], has_bssid; char password[64]; u8 password_length, enabled; unsigned scan_count; u32 scan_frequencies[256]; };
 static struct ui_request ui;
 static struct { bool pending, enabled; unsigned revision; } radio;
+static struct { struct nw_power_save_status state; unsigned revision; u64 retry_at; } power_save;
 static u64 scan_deadline;
 static bool scan_waiting;
 static u64 join_deadline;
-static bool join_waiting;
+static bool join_waiting, disconnect_waiting;
 struct tx_packet { struct tx_packet *next; unsigned length, epoch; void *context; nw_packet_reader reader; void (*release)(void *); u8 bytes[]; };
 static struct tx_packet *tx_head, *tx_tail;
 static unsigned tx_count, tx_bytes, epoch;
@@ -60,6 +64,7 @@ static void scan_snapshot(struct net_device *dev) {
     if (ssid && ssid->datalen <= 32) { out->ssid_len = ssid->datalen; memcpy(out->ssid, ssid->data, ssid->datalen); }
   }
   nw_wifi_stats.bss_seen = bss_count;
+  bss_snapshot_ms = lx_now_ms();
   lx_shared_spin_unlock(&boundary_lock); spin_unlock_bh(&rdev->bss_lock); rcu_read_unlock();
 }
 static int packet_read(void *context, size_t offset, void *destination, size_t length) {
@@ -87,8 +92,21 @@ static void ready(struct net_device *dev) {
   lx_shared_spin_lock(&boundary_lock);
   memcpy(status.mac, dev->dev_addr, ETH_ALEN); status.state = NW_STA_IDLE;
   status.channels = ieee80211_get_num_supported_channels(dev->ieee80211_ptr->wiphy);
+  channel_count = 0;
+  for (unsigned band = 0; band < NUM_NL80211_BANDS; band++) {
+    struct ieee80211_supported_band *supported = dev->ieee80211_ptr->wiphy->bands[band];
+    if (!supported) continue;
+    for (unsigned i = 0; i < supported->n_channels && channel_count < ARRAY_SIZE(channel_snapshot); i++) {
+      struct ieee80211_channel *channel = &supported->channels[i];
+      channel_snapshot[channel_count++] = (struct nw_channel_info) { channel->center_freq,
+        ((channel->flags & IEEE80211_CHAN_DISABLED) ? 1 : 0) |
+        ((channel->flags & IEEE80211_CHAN_NO_IR) ? 2 : 0) |
+        ((channel->flags & IEEE80211_CHAN_RADAR) ? 4 : 0), channel->max_power };
+    }
+  }
   lx_shared_spin_unlock(&boundary_lock);
   nw_wifi_hw_ready(wiphy_to_ieee80211_hw(dev->ieee80211_ptr->wiphy));
+  lx_shared_spin_lock(&boundary_lock); power_save.state.pending = true; lx_shared_spin_unlock(&boundary_lock);
   nw_wifi_stats.stage = 4;
 }
 static void clear_connection(unsigned state) {
@@ -132,8 +150,10 @@ static void event(unsigned operation, int result, const struct nw_control_view *
     break;
   }
   case NW_CONTROL_SET_PORT:
+    if (!result && disconnect_waiting) break; // Await physical MLME teardown.
+    if (result) disconnect_waiting = false;
     if (result && status.state != NW_STA_UP) {
-      join_waiting = false;
+      disconnect_waiting = false; join_waiting = false;
       status.state = NW_STA_UP; status.result = NW_RES_OK;
       lx_shared_spin_unlock(&boundary_lock); if (nw_events.connect_done) nw_events.connect_done(NW_RES_OK); return;
     }
@@ -145,14 +165,17 @@ static void event(unsigned operation, int result, const struct nw_control_view *
     }
     break;
   case NW_CONTROL_SET_OPERSTATE:
+    if (!result && disconnect_waiting) break; // The port state precedes deauth completion.
     if (!result && status.state == NW_STA_UP) {
+      bool notify = status.state == NW_STA_UP;
       clear_connection(NW_STA_IDLE); epoch++;
       lx_shared_spin_unlock(&boundary_lock);
-      if (nw_events.link_lost) nw_events.link_lost(WLAN_REASON_UNSPECIFIED);
+      if (notify && nw_events.link_lost) nw_events.link_lost(WLAN_REASON_UNSPECIFIED);
       return;
     }
     break;
   case NW_CONTROL_DISCONNECTED: {
+    disconnect_waiting = false;
     bool notify = status.state == NW_STA_UP;
     bool failed_join = join_waiting; join_waiting = false;
     clear_connection(status.state == NW_STA_OFF ? NW_STA_OFF : NW_STA_IDLE); epoch++;
@@ -181,7 +204,8 @@ static void event(unsigned operation, int result, const struct nw_control_view *
 int nw_mainline_init(void) {
   spin_lock_init(&boundary_lock); memset(&status, 0, sizeof(status)); stopping = false;
   memzero_explicit(&ui, sizeof(ui)); bss_count = rx_drops = 0; scan_ack_pending = false;
-  memset(&radio, 0, sizeof(radio)); radio.enabled = true; scan_waiting = false; scan_deadline = 0;
+  memset(&radio, 0, sizeof(radio)); radio.enabled = true; disconnect_waiting = false; scan_waiting = false; scan_deadline = 0;
+  memset(&power_save, 0, sizeof(power_save)); power_save.state.requested = 2; power_save.state.pending = true;
   join_waiting = false; join_deadline = 0;
   INIT_WORK(&transmit_work, transmit_run);
   /* Keep the UI snapshot outside the kernel collection's fixed data gap. */
@@ -191,13 +215,23 @@ int nw_mainline_init(void) {
   return 0;
 }
 int nw_wifi_scan(const u8 *ssid, size_t length) {
-  if (length > 32 || (length && !ssid)) return -EINVAL;
+  return nw_wifi_scan_channels(ssid, length, NULL, 0);
+}
+int nw_wifi_scan_channels(const u8 *ssid, size_t length, const u32 *frequencies, size_t count) {
+  if (length > 32 || (length && !ssid) || count > 256 || (count && !frequencies)) return -EINVAL;
   lx_shared_spin_lock(&boundary_lock);
   if (stopping || !radio.enabled) { lx_shared_spin_unlock(&boundary_lock); return -ENETDOWN; }
-  if (scan_waiting) { lx_shared_spin_unlock(&boundary_lock); return 0; } /* Coalesce duplicate UI scan requests. */
+  for (size_t i = 0; i < count; i++) {
+    bool supported = false;
+    for (unsigned c = 0; c < channel_count; c++)
+      if (channel_snapshot[c].frequency == frequencies[i] && !(channel_snapshot[c].flags & 1)) { supported = true; break; }
+    if (!supported) { lx_shared_spin_unlock(&boundary_lock); return -EINVAL; }
+  }
+  if (scan_waiting) { lx_shared_spin_unlock(&boundary_lock); lx_log(6, "wifi: UI scan coalesced with pending scan"); return 0; } /* Coalesce duplicate UI scan requests. */
   if (!ui.operation || ui.operation == NW_CONTROL_SCAN_REQUEST) {
     memzero_explicit(&ui, sizeof(ui)); ui.operation = NW_CONTROL_SCAN_REQUEST;
     ui.ssid_length = length; if (length) memcpy(ui.ssid, ssid, length);
+    ui.scan_count = count; if (count) memcpy(ui.scan_frequencies, frequencies, count * sizeof(*frequencies));
     scan_waiting = true; scan_deadline = lx_now_ms() + 12000;
   } else scan_ack_pending = true;
   lx_shared_spin_unlock(&boundary_lock); return 0;
@@ -222,27 +256,58 @@ int nw_wifi_connect(const u8 *ssid, size_t length, const u8 *address, const char
   }
   if (password) { ui.password_length = password_length; memcpy(ui.password, password, password_length); }
   clear_connection(NW_STA_AUTH); status.ssid_len = length; memcpy(status.ssid, ssid, length); epoch++;
-  join_waiting = true; join_deadline = lx_now_ms() + 30000;
+  disconnect_waiting = false; join_waiting = true; join_deadline = lx_now_ms() + 30000;
   lx_shared_spin_unlock(&boundary_lock); return 0;
 }
 void nw_wifi_disconnect(void) {
-  lx_shared_spin_lock(&boundary_lock); memzero_explicit(&ui, sizeof(ui)); ui.operation = NW_CONTROL_DISCONNECT_REQUEST;
+  lx_shared_spin_lock(&boundary_lock); disconnect_waiting = true; memzero_explicit(&ui, sizeof(ui)); ui.operation = NW_CONTROL_DISCONNECT_REQUEST;
   join_waiting = false;
   if (scan_waiting) { scan_waiting = false; scan_ack_pending = true; }
-  clear_connection(radio.enabled ? NW_STA_IDLE : NW_STA_OFF); epoch++; lx_shared_spin_unlock(&boundary_lock);
+  if (!radio.enabled) clear_connection(NW_STA_OFF);
+  epoch++; lx_shared_spin_unlock(&boundary_lock);
 }
 void nw_wifi_power(int enabled) {
-  lx_shared_spin_lock(&boundary_lock); memzero_explicit(&ui, sizeof(ui));
+  lx_shared_spin_lock(&boundary_lock); disconnect_waiting = false; memzero_explicit(&ui, sizeof(ui));
   radio.pending = true; radio.enabled = !!enabled; radio.revision++;
+  power_save.revision++; power_save.state.pending = !!enabled; power_save.state.attempts = 0; power_save.state.error = 0; power_save.retry_at = 0;
+  if (!enabled) power_save.state.applied = 0;
   join_waiting = false;
   if (scan_waiting) { scan_waiting = false; scan_ack_pending = true; }
   clear_connection(enabled ? NW_STA_IDLE : NW_STA_OFF); epoch++; lx_shared_spin_unlock(&boundary_lock);
 }
+int nw_wifi_power_save(unsigned mode) {
+  if (mode > 2) return -EINVAL;
+  lx_shared_spin_lock(&boundary_lock);
+  if (stopping) { lx_shared_spin_unlock(&boundary_lock); return -ENETDOWN; }
+  if (power_save.state.requested != mode || power_save.state.error) {
+    power_save.state.requested = mode; power_save.state.pending = true;
+    power_save.state.attempts = 0; power_save.state.error = 0;
+    power_save.revision++; power_save.retry_at = 0;
+  }
+  lx_shared_spin_unlock(&boundary_lock); return 0;
+}
+void nw_wifi_power_save_get(struct nw_power_save_status *out) {
+  if (!out) return;
+  lx_shared_spin_lock(&boundary_lock); *out = power_save.state; lx_shared_spin_unlock(&boundary_lock);
+}
 int nw_wifi_bss_count(void) { lx_shared_spin_lock(&boundary_lock); unsigned count = bss_count; lx_shared_spin_unlock(&boundary_lock); return count; }
+int nw_wifi_channel_count(void) { lx_shared_spin_lock(&boundary_lock); unsigned count = channel_count; lx_shared_spin_unlock(&boundary_lock); return count; }
+int nw_wifi_channel_get(unsigned index, struct nw_channel_info *out) {
+  if (!out) return -EINVAL;
+  lx_shared_spin_lock(&boundary_lock);
+  int result = index < channel_count ? 0 : -ENOENT;
+  if (!result) *out = channel_snapshot[index];
+  lx_shared_spin_unlock(&boundary_lock); return result;
+}
 int nw_wifi_bss_get(int index, struct nw_bss_info *out) {
   if (!out) return -EINVAL; lx_shared_spin_lock(&boundary_lock);
   int result = index < 0 || (unsigned)index >= bss_count ? -ENOENT : 0;
-  if (!result) *out = bsses[index]; lx_shared_spin_unlock(&boundary_lock); return result;
+  if (!result) {
+    *out = bsses[index];
+    u64 now = lx_now_ms(), age = out->age_ms + (now >= bss_snapshot_ms ? now - bss_snapshot_ms : 0);
+    out->age_ms = age > UINT32_MAX ? UINT32_MAX : age;
+  }
+  lx_shared_spin_unlock(&boundary_lock); return result;
 }
 void nw_wifi_status_get(struct nw_wifi_status *out) { lx_shared_spin_lock(&boundary_lock); *out = status; lx_shared_spin_unlock(&boundary_lock); }
 void nw_mainline_rate_update(const u8 *bssid, unsigned rate) {
@@ -264,7 +329,7 @@ void nw_mainline_signal_update(const u8 *bssid, int signal) {
 static int queue_packet(struct tx_packet *packet) {
   unsigned length = packet->length; packet->next = NULL;
   lx_shared_spin_lock(&boundary_lock);
-  if (stopping || status.state != NW_STA_UP || tx_count >= 256 || tx_bytes + length > 512 * 1024) {
+  if (stopping || disconnect_waiting || status.state != NW_STA_UP || tx_count >= 256 || tx_bytes + length > 512 * 1024) {
     lx_shared_spin_unlock(&boundary_lock); lx_free(packet); return -ENOBUFS;
   }
   packet->epoch = epoch;
@@ -339,6 +404,24 @@ void nw_mainline_run(void) {
       lx_shared_spin_unlock(&boundary_lock); lx_log(4, "wifi: radio request failed: %d", result);
     }
   }
+  struct nw_power_save_status ps; unsigned ps_revision;
+  lx_shared_spin_lock(&boundary_lock);
+  ps = power_save.state; ps_revision = power_save.revision;
+  bool ps_ready = ps.pending && radio.enabled && !radio.pending && lx_now_ms() >= power_save.retry_at;
+  lx_shared_spin_unlock(&boundary_lock);
+  if (ps_ready) {
+    const int result = nw_cfg80211_set_power_save(ps.requested);
+    lx_shared_spin_lock(&boundary_lock);
+    if (ps_revision == power_save.revision) {
+      power_save.state.error = result;
+      if (result != -ENETDOWN) power_save.state.attempts++;
+      if (!result) { power_save.state.applied = ps.requested; power_save.state.pending = false; }
+      else if (result == -ENETDOWN || ((result == -EBUSY || result == -EAGAIN) && power_save.state.attempts < 3))
+        power_save.retry_at = lx_now_ms() + 250 * (power_save.state.attempts + 1);
+      else power_save.state.pending = false;
+    }
+    lx_shared_spin_unlock(&boundary_lock);
+  }
   struct ui_request pending;
   lx_shared_spin_lock(&boundary_lock);
   if (scan_waiting && lx_now_ms() >= scan_deadline) {
@@ -351,7 +434,7 @@ void nw_mainline_run(void) {
   if (scan_ack && nw_events.scan_done) nw_events.scan_done();
   if (power_changing) { memzero_explicit(&pending, sizeof(pending)); nw_mainline_poll(); return; }
   if (pending.operation) {
-    u8 bytes[256]; struct nw_control_builder b;
+    u8 bytes[1536]; struct nw_control_builder b;
     int result = nw_cfg80211_event_begin(&b, bytes, sizeof(bytes), pending.operation, 0);
     if (!result && pending.operation == NW_CONTROL_JOIN_REQUEST) {
       result = nw_cfg80211_begin_attempt();
@@ -365,10 +448,22 @@ void nw_mainline_run(void) {
     } else if (!result && pending.operation == NW_CONTROL_DISCONNECT_REQUEST) {
       result = nw_cfg80211_begin_attempt();
       if (!result) nw_cfg80211_event_begin(&b, bytes, sizeof(bytes), pending.operation, 0);
-    } else if (!result && pending.operation == NW_CONTROL_SCAN_REQUEST && pending.ssid_length) {
-      result = nw_control_put(&b, NW_CONTROL_ATTR_SSID, pending.ssid, pending.ssid_length);
+    } else if (!result && pending.operation == NW_CONTROL_SCAN_REQUEST) {
+      if (pending.ssid_length) result = nw_control_put(&b, NW_CONTROL_ATTR_SSID, pending.ssid, pending.ssid_length);
+      if (!result && pending.scan_count) {
+        for (unsigned i = 0; i < pending.scan_count; i++) pending.scan_frequencies[i] = cpu_to_le32(pending.scan_frequencies[i]);
+        result = nw_control_put(&b, NW_CONTROL_ATTR_SCAN_FREQUENCIES, pending.scan_frequencies, pending.scan_count * 4);
+      }
     }
     if (!result) result = nw_cfg80211_event_send(&b);
+    if (pending.operation == NW_CONTROL_SCAN_REQUEST) {
+      static u64 last_dispatch_log;
+      u64 now = lx_now_ms();
+      if (!result || now >= last_dispatch_log + 1000) {
+        last_dispatch_log = now;
+        lx_log(6, "wifi: UI scan dispatch channels=%u result=%d", pending.scan_count, result);
+      }
+    }
     if (!result) {
       lx_shared_spin_lock(&boundary_lock);
       if (!memcmp(&ui, &pending, sizeof(ui))) {

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Compile the WCN6855 ath11k backend for iOS 18 arm64e. Usage: build_marble_wifi.py <module dir> <output dir>
+"""Compile the WCN6855 ath11k backend for the selected iOS arm64e target. Usage: build_marble_wifi.py <module dir> <output dir>
 Prints one line "OBJ <path>" per object. The module fetches its pinned public sources with tools/fetch-sources.sh and lays out its generated include trees with tools/prepare.sh first."""
-import hashlib, json, shlex, shutil, subprocess, sys
+import hashlib, json, os, shlex, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-TRIPLE = 'arm64e-apple-ios18.0'
+TRIPLE = os.environ.get('UNIXNU_XNU_ARCH', 'arm64e') + '-apple-ios' + os.environ.get('UNIXNU_IOS_VERSION', '18.0')
 
 module = Path(sys.argv[1]).resolve()
 out = Path(sys.argv[2]).resolve()
@@ -86,7 +86,8 @@ with ThreadPoolExecutor(8) as pool:
 # The module's global names (sock_release, kernel_sendmsg, ...) are common in a kernel: give every one the prefix nwk_ except the entry points the board uses.
 keep = {'_nw_wifi_start', '_nw_wifi_step', '_nw_wifi_stop', '_nw_wifi_stats', '_nw_wifi_set_events', '_nw_wifi_scan', '_nw_wifi_bss_count',
         '_nw_wifi_bss_get', '_nw_wifi_connect', '_nw_wifi_disconnect', '_nw_wifi_tx', '_nw_wifi_status_get', '_nw_wifi_where',
-        '_nw_wifi_power',
+        '_nw_wifi_power', '_nw_wifi_power_save', '_nw_wifi_power_save_get', '_nw_wifi_scan_channels',
+        '_nw_wifi_channel_count', '_nw_wifi_channel_get', '_nw_wifi_link_info_get', '_nw_wifi_card_capabilities',
         '_nw_wifi_tx_packet', '_nw_wifi_link_state',
         '_nw_wifi_tx_reasons', '_nw_wifi_buffer_stats_get', '_nw_wifi_buffer_pool_configure', '_nw_wifi_buffer_pool_trim',
         '_nw_wifi_irq_mode', '_nw_wifi_irq_pending', '_nw_wifi_wait_ms', '_nw_wifi_poll'}

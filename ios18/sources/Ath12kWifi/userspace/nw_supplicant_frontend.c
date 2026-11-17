@@ -35,6 +35,15 @@ static int fixed_command(struct wpa_supplicant *supplicant, const char *text)
   if (os_strlcpy(buffer, text, sizeof(buffer)) >= sizeof(buffer)) return -1;
   return command(supplicant, buffer, 0);
 }
+/* Native power/attempt generations retire the previous physical scan.
+ * Release its upstream radio work before accepting the next request. */
+static void retire_scan(struct wpa_supplicant *supplicant)
+{
+  radio_remove_works(supplicant, "scan", 0);
+  supplicant->own_scan_running = 0;
+  supplicant->own_scan_requested = 0;
+  supplicant->scan_res_handler = NULL;
+}
 static int join(struct wpa_supplicant *supplicant, const struct nw_control_view *event)
 {
   size_t ssid_length, password_length;
@@ -53,6 +62,7 @@ static int join(struct wpa_supplicant *supplicant, const struct nw_control_view 
   }
   /* wifid retains saved networks. The supplicant holds only its active profile
    * in RAM; REMOVE_NETWORK also clears old SME, PMK and handshake ownership. */
+  retire_scan(supplicant);
   if (fixed_command(supplicant, "REMOVE_NETWORK all")) return -1;
   char text[512] = "ADD_NETWORK";
   int id = command(supplicant, text, 1);
@@ -87,7 +97,22 @@ static int join(struct wpa_supplicant *supplicant, const struct nw_control_view 
   os_snprintf(text, sizeof(text), "SET_NETWORK %d scan_ssid 1", id);
   if (command(supplicant, text, 0)) goto fail;
   os_snprintf(text, sizeof(text), "SELECT_NETWORK %d", id);
-  if (!command(supplicant, text, 0)) return 0;
+  if (!command(supplicant, text, 0)) {
+    uint32_t frequency;
+    if (!nw_control_get_u32(event, NW_CONTROL_ATTR_FREQUENCY, &frequency) &&
+        frequency >= 2412 && frequency <= 7125) {
+      // The native worker selected this channel from its live BSS snapshot.
+      // Restrict upstream's next selection scan once; subsequent retries and
+      // roaming retain upstream's full-channel discovery policy.
+      int *frequencies = os_calloc(2, sizeof(*frequencies));
+      if (frequencies) {
+        frequencies[0] = frequency;
+        os_free(supplicant->select_network_scan_freqs);
+        supplicant->select_network_scan_freqs = frequencies;
+      }
+    }
+    return 0;
+  }
 fail:
   forced_memzero(text, sizeof(text));
   os_snprintf(text, sizeof(text), "REMOVE_NETWORK %d", id);
@@ -100,20 +125,46 @@ int nw_supplicant_request(void *context, const struct nw_control_view *event)
   int result = -1;
   switch (event->header.operation) {
   case NW_CONTROL_JOIN_REQUEST: result = join(supplicant, event); break;
-  case NW_CONTROL_DISCONNECT_REQUEST: result = fixed_command(supplicant, "DISCONNECT"); break;
+  case NW_CONTROL_DISCONNECT_REQUEST:
+    result = fixed_command(supplicant, "DISCONNECT"); retire_scan(supplicant); break;
   case NW_CONTROL_SCAN_REQUEST: {
     size_t length; const u8 *ssid = nw_control_get(event, NW_CONTROL_ATTR_SSID, &length);
-    if (ssid && length && length <= 32) {
-      char hex[65], text[80]; wpa_snprintf_hex(hex, sizeof(hex), ssid, length);
-      os_snprintf(text, sizeof(text), "SCAN ssid %s", hex); result = command(supplicant, text, 0);
-    } else result = fixed_command(supplicant, "SCAN");
+    size_t freq_bytes; const u8 *frequencies = nw_control_get(event, NW_CONTROL_ATTR_SCAN_FREQUENCIES, &freq_bytes);
+    if (length > 32 || (freq_bytes && (!frequencies || freq_bytes % 4 || freq_bytes > 256 * 4))) break;
+    int *scan_frequencies = NULL;
+    if (freq_bytes) {
+      scan_frequencies = os_calloc(freq_bytes / 4 + 1, sizeof(*scan_frequencies));
+      if (!scan_frequencies) break;
+      for (size_t i = 0; i < freq_bytes / 4; i++) {
+        unsigned frequency = WPA_GET_LE32(frequencies + i * 4);
+        if (frequency < 2412 || frequency > 7125) { os_free(scan_frequencies); scan_frequencies = NULL; break; }
+        scan_frequencies[i] = frequency;
+      }
+      if (!scan_frequencies) break;
+    }
+    char text[80] = "SCAN";
+    if (ssid && length) {
+      char hex[65]; wpa_snprintf_hex(hex, sizeof(hex), ssid, length);
+      os_snprintf(text, sizeof(text), "SCAN ssid %s", hex);
+    }
+    result = command(supplicant, text, 0);
+    if (!result && scan_frequencies) {
+      // The textual freq= parser requires get_hw_feature_data, which this
+      // backend has not exported. These frequencies were validated against
+      // the live wiphy by the native worker. Transfer the list to upstream's
+      // queued manual scan on this same eloop thread, before its callback.
+      os_free(supplicant->manual_scan_freqs);
+      supplicant->manual_scan_freqs = scan_frequencies;
+    } else os_free(scan_frequencies);
     break;
   }
   case NW_CONTROL_POWER_REQUEST: {
     uint32_t state;
-    if (!nw_control_get_u32(event, NW_CONTROL_ATTR_OPERSTATE, &state))
+    if (!nw_control_get_u32(event, NW_CONTROL_ATTR_OPERSTATE, &state)) {
       // Radio power does not select a network. Settings/wifid owns selection.
       result = fixed_command(supplicant, "DISCONNECT");
+      retire_scan(supplicant);
+    }
     break;
   }
   }

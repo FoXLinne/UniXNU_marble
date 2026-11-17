@@ -37,6 +37,7 @@ extern "C" {
 #include <sys/systm.h>
 #include <stdarg.h>
 #include "MarbleWifi.h"
+#include "MarbleWifiScanPolicy.h"
 #include "nw_abi.h"
 #include "nw_control_endpoint.h"
 
@@ -133,6 +134,13 @@ int gAssocResult = kAssocPending;
 bool gAssocModern;
 bool gJoinPending;
 unsigned gScanCursor, gScanning;
+uint64_t gLastScanMs, gLastScanStartMs;
+uint64_t wifi_now_ms() {
+  uint64_t ticks, ns;
+  clock_get_uptime(&ticks);
+  absolutetime_to_nanoseconds(ticks, &ns);
+  return ns / 1000000;
+}
 bool gUserJoin;   // the wireless daemon joined, left or switched the radio itself: the unattended test join steps aside
 uint32_t gLogged[256 / 32];
 
@@ -155,7 +163,7 @@ void post_event(uint32_t code, const void *payload, size_t length) {
 // link state for the network configuration: the interface's flags and the stack's own link events
 void post_link(bool up) {
   if (!gIf) return;
-  ifnet_set_flags(gIf, up ? IFF_RUNNING : 0, IFF_RUNNING);
+  ifnet_set_flags(gIf, gPower ? IFF_RUNNING : 0, IFF_RUNNING);
   struct { struct net_event_data data; } payload; memset(&payload, 0, sizeof payload);
   payload.data.if_family = IFNET_FAMILY_ETHERNET; payload.data.if_unit = 0; snprintf(payload.data.if_name, sizeof payload.data.if_name, "en");
   struct kev_msg msg; memset(&msg, 0, sizeof msg);
@@ -182,7 +190,7 @@ void disconnect_user() {
   const bool pending = __atomic_exchange_n(&gJoinPending, false, __ATOMIC_ACQ_REL);
   gUserJoin = true; gLinkSuppressed = true; gAssocResult = kAssocFailed;
   nw_wifi_disconnect();
-  marble_wifi_wake();
+  marble_wifi_command_wake();
   // A requested disconnect suppresses the station's link_lost callback. Notify
   // both BSD and Apple80211 here, before asynchronous firmware teardown completes.
   log(6, "wifi-net: explicit link down");
@@ -190,7 +198,7 @@ void disconnect_user() {
   if (pending) post_association_result();
 }
 int drain_disconnect() {
-  disconnect_user(); marble_wifi_wake();
+  disconnect_user();
   // Ioctls run on the requesting process, independently of the station worker.
   // Do not replace its one-slot DISCONNECT request with CONNECT before teardown.
   for (unsigned waited = 0; waited < 2000; waited += 10) {
@@ -210,10 +218,18 @@ void visible_status(nw_wifi_status &st) {
 }
 
 // ---- what the module tells us ----
-void on_scan_done() { __atomic_store_n(&gScanning, 0u, __ATOMIC_RELEASE); gScanCursor = 0; post_event(kEvScanDone, nullptr, 0); }
+void on_scan_done() {
+  __atomic_store_n(&gLastScanMs, wifi_now_ms(), __ATOMIC_RELAXED);
+  __atomic_store_n(&gScanning, 0u, __ATOMIC_RELEASE);
+  gScanCursor = 0;
+  if (gPower) post_event(kEvScanDone, nullptr, 0);
+}
 // A scan answered from the cache finishes after the time a short scan takes: answered at once, the daemon asks again straight away.
 thread_call_t gCachedScan;
-void cached_scan_done(thread_call_param_t, thread_call_param_t) { on_scan_done(); }
+void cached_scan_done(thread_call_param_t, thread_call_param_t) {
+  if (__atomic_exchange_n(&gScanning, 0u, __ATOMIC_ACQ_REL) && gPower)
+    post_event(kEvScanDone, nullptr, 0);
+}
 void on_connect_done(int result) {
   if (!gPower || gLinkSuppressed) {
     log(6, "wifi-net: ignore join completion after explicit disconnect: %d", result);
@@ -354,6 +370,7 @@ void on_rx_packet(void *context, size_t length, nw_packet_reader reader) {
   }
   if (done != length) { gRxNoBuffer++; mbuf_freem(m); return; }
   mbuf_pkthdr_setlen(m, length); mbuf_pkthdr_setrcvif(m, gIf);
+  bpf_tap_in(gIf, DLT_EN10MB, m, nullptr, 0);
   mbuf_pkthdr_setheader(m, mbuf_data(m)); mbuf_adj(m, 14);   // the stack wants the Ethernet header apart from the payload
   mbuf_setnextpkt(m, nullptr);
   if (gRxTail) mbuf_setnextpkt(gRxTail, m); else gRxHead = m;
@@ -371,6 +388,7 @@ errno_t if_output(ifnet_t, mbuf_t m) {
   size_t length = mbuf_pkthdr_len(m);
   if (length >= 14 && length <= 2000) {
     note_packet(m, length, mbuf_read, true);
+    bpf_tap_out(gIf, DLT_EN10MB, m, nullptr, 0);
     if (nw_wifi_tx_packet(m, length, mbuf_read, mbuf_release)) log(6, "wifi-net: a frame was dropped (queue full)");
     else {ifnet_stat_increment_out(gIf, 1, static_cast<uint32_t>(length), 0); marble_wifi_wake(); return 0;}
   }
@@ -455,7 +473,25 @@ int apple80211(bool set, apple80211req &rq) {
   uint32_t *w = reinterpret_cast<uint32_t *>(out.raw);
   if (set) {
     switch (type) {
-    case kPower: { uint32_t in[6]; if (copy_in(rq, in, sizeof in)) return EFAULT; gUserJoin = true; gPower = in[2] != 0; log(6, "wifi-net: power set %u", in[2]); gLinkSuppressed = !gPower; if (!gPower) disconnect_user(); nw_wifi_power(gPower); marble_wifi_wake(); post_event(kEvPowerChanged, nullptr, 0); return 0; }
+    case kPower: {
+      uint32_t in[6];
+      if (copy_in(rq, in, sizeof in)) return EFAULT;
+      gUserJoin = true;
+      gPower = in[2] != 0;
+      ifnet_set_flags(gIf, gPower ? IFF_RUNNING : 0, IFF_RUNNING);
+      gLinkSuppressed = !gPower;
+      if (!gPower) {
+        __atomic_store_n(&gLastScanMs, 0, __ATOMIC_RELAXED);
+        __atomic_store_n(&gLastScanStartMs, 0, __ATOMIC_RELAXED);
+        if (gCachedScan) thread_call_cancel(gCachedScan);
+        __atomic_store_n(&gScanning, 0u, __ATOMIC_RELEASE);
+        disconnect_user();
+      }
+      nw_wifi_power(gPower);
+      marble_wifi_command_wake();
+      post_event(kEvPowerChanged, nullptr, 0);
+      return 0;
+    }
     case kScanReq: case kScanReqMultiple: {
       if (!gPower) return ENETDOWN;
       if (gLinkSuppressed) {
@@ -464,16 +500,34 @@ int apple80211(bool set, apple80211req &rq) {
       }
       uint8_t buf[0x80]; if (copy_in(rq, buf, sizeof buf)) return EFAULT;
       uint32_t ssidLength; memcpy(&ssidLength, buf + 16, 4); const uint8_t *ssid = buf + 20;
-      // joining or joined: a scan takes the radio off channel for seconds and the access point's beacons and handshake frames are missed, so
-      // the daemon gets the last results instead
-      if (st.state >= NW_STA_AUTH && nw_wifi_bss_count() > 0) {
+      if (ssidLength > 32) return EINVAL;
+      if (__atomic_exchange_n(&gScanning, 1u, __ATOMIC_ACQ_REL)) return 0;
+      const uint64_t now = wifi_now_ms();
+      const uint64_t completed = __atomic_load_n(&gLastScanMs, __ATOMIC_RELAXED);
+      const uint64_t started = __atomic_load_n(&gLastScanStartMs, __ATOMIC_RELAXED);
+      if (marble_wifi_scan_cached(now, completed, started, st.state == NW_STA_UP,
+                                 st.state >= NW_STA_AUTH && st.state < NW_STA_UP,
+                                 ssidLength != 0, nw_wifi_bss_count())) {
         if (!gCachedScan) gCachedScan = thread_call_allocate(cached_scan_done, nullptr);
-        static unsigned answered; if (++answered <= 8 || answered % 64 == 0) log(6, "wifi-net: scan %u while joined: answered from the cache", answered);
-        gScanning = 1; gScanCursor = 0; gResultsShown = 24; uint64_t at; clock_interval_to_deadline(20, kMillisecondScale, &at); thread_call_enter_delayed(gCachedScan, at); return 0; }
-      gScanning = 1; gScanCursor = 0; gResultsShown = 0;
-      int result = nw_wifi_scan(ssidLength && ssidLength <= 32 ? ssid : nullptr, ssidLength <= 32 ? ssidLength : 0);
+        if (!gCachedScan) {
+          __atomic_store_n(&gScanning, 0u, __ATOMIC_RELEASE);
+          return ENOMEM;
+        }
+        gScanCursor = 0;
+        gResultsShown = 24;
+        uint64_t deadline;
+        clock_interval_to_deadline(50, kMillisecondScale, &deadline);
+        thread_call_enter_delayed(gCachedScan, deadline);
+        return 0;
+      }
+      gScanCursor = 0;
+      gResultsShown = 0;
+      int result = nw_wifi_scan(ssidLength ? ssid : nullptr, ssidLength);
       if (result) { __atomic_store_n(&gScanning, 0u, __ATOMIC_RELEASE); return ENETDOWN; }
-      marble_wifi_wake(); return 0; }
+      __atomic_store_n(&gLastScanStartMs, now, __ATOMIC_RELAXED);
+      marble_wifi_command_wake();
+      return 0;
+    }
     case kAssociate: {
       assoc_parameters a{};
       struct Clear { assoc_parameters &p; ~Clear() { memset(&p, 0, sizeof p); } } clear{a};
@@ -505,12 +559,25 @@ int apple80211(bool set, apple80211req &rq) {
       __atomic_store_n(&gJoinPending, true, __ATOMIC_RELEASE);
       log(6, "wifi-net: join: layout %u, ssid length %u, bssid given %d, key length %u cipher %u", rq.req_len, a.ssid_length, hasBssid, a.key_length, a.key_cipher);
       gKeyed = hasKey; int r = nw_wifi_connect(a.ssid, a.ssid_length, hasBssid ? a.bssid : nullptr, hasKey ? pass : nullptr, hasKey ? keyLength : 0);
-      if (!r) marble_wifi_wake();
+      if (!r) marble_wifi_command_wake();
       else { gAssocResult = kAssocFailed; __atomic_store_n(&gJoinPending, false, __ATOMIC_RELEASE); }
       memset(pass, 0, sizeof pass); memset(&a, 0, sizeof a);
       return r ? EINVAL : 0; }
     case kDisassociate: case kDeauth: log(6, "wifi-net: leave"); disconnect_user(); return 0;
-    case kScanCacheClear: case kLocale: case kCountryCode: case kPowerSave: case kAuthType: case kCipherKey: return 0;
+    case kPowerSave: {
+      uint32_t mode = static_cast<uint32_t>(rq.req_val);
+      if (rq.req_len) {
+        uint32_t input[2];
+        if (rq.req_len < sizeof input || copy_in(rq, input, sizeof input) || input[0] != 1)
+          return EINVAL;
+        mode = input[1];
+      }
+      if (nw_wifi_power_save(mode)) return EINVAL;
+      marble_wifi_command_wake();
+      return 0;
+    }
+    case kScanCacheClear: __atomic_store_n(&gLastScanMs, 0, __ATOMIC_RELAXED); return 0;
+    case kLocale: case kCountryCode: case kAuthType: case kCipherKey: return 0;
     default: return EOPNOTSUPP;
     }
   }
@@ -519,7 +586,11 @@ int apple80211(bool set, apple80211req &rq) {
   case kState: return answer_value(rq, static_cast<uint32_t>(gPower ? map_state(st.state) : 0));
   case kOpMode: return answer_value(rq, 1);   // station
   case kAuthType: w[0] = 1; w[1] = 1; w[2] = gKeyed ? 0x10 : 0; w[3] = 0; return copy_out(rq, w, 16);   // {version, lower: open system, upper: WPA2 personal, extension}
-  case kPowerSave: return answer_value(rq, 0);
+  case kPowerSave: {
+    nw_power_save_status ps{};
+    nw_wifi_power_save_get(&ps);
+    return answer_value(rq, ps.applied);
+  }
   case kCardCaps: {   // a bitmap, bit n in byte n / 8: AES, AES-CCM, power management, short slot and preamble, WPA2, WME, short guard interval at 20 MHz
     static const uint8_t has[] = { 2, 3, 6, 9, 10, 14, 17, 19 };
     for (uint8_t b : has) out.raw[b / 8] |= static_cast<uint8_t>(1u << (b % 8));

@@ -103,6 +103,7 @@ static int scan(struct cfg80211_registered_device *rdev, const struct nw_control
   rdev->scan_req = request;
   int result = cfg80211_scan(rdev);
   if (result) { rdev->scan_req = NULL; kfree(request); return result; }
+  lx_log(6, "wifi: scan submitted channels=%u first=%u", request->req.n_channels, request->req.channels[0]->center_freq);
   dev_hold(primary); nl80211_send_scan_start(rdev, primary->ieee80211_ptr);
   return 0;
 }
@@ -388,7 +389,15 @@ static void closed(void *unused, uint64_t session) {
 int nw_cfg80211_begin_attempt(void) {
   if (!owner || !primary) return -ENOTCONN;
   if (!radio_enabled) return -ERFKILL;
-  rtnl_lock(); dev_close(primary); generation++; snapshot_free();
+  rtnl_lock();
+  struct cfg80211_registered_device *rdev = wiphy_to_rdev(primary->ieee80211_ptr->wiphy);
+  wiphy_lock(&rdev->wiphy);
+  if (rdev->scan_req && rdev->ops->abort_scan)
+    rdev_abort_scan(rdev, primary->ieee80211_ptr);
+  generation++; snapshot_free();
+  wiphy_unlock(&rdev->wiphy);
+  // The supplicant tears down the old association and keys through cfg80211.
+  // Preserve the open netdev/vif across connection attempts.
   int result = dev_open(primary, NULL); rtnl_unlock();
   return result;
 }
@@ -401,6 +410,19 @@ int nw_cfg80211_set_power(int enabled) {
   int result = enabled ? dev_open(primary, NULL) : 0;
   if (enabled) radio_enabled = result == 0;
   rtnl_unlock(); return result;
+}
+int nw_cfg80211_set_power_save(unsigned mode) {
+  if (mode > 2) return -EINVAL;
+  if (!primary || !radio_enabled || !netif_running(primary)) return -ENETDOWN;
+  struct wireless_dev *wdev = primary->ieee80211_ptr;
+  struct cfg80211_registered_device *rdev = wiphy_to_rdev(wdev->wiphy);
+  if (!rdev->ops->set_power_mgmt) return -EOPNOTSUPP;
+  const int timeout = mode == 2 ? 100 : 0;
+  wiphy_lock(&rdev->wiphy);
+  int result = rdev_set_power_mgmt(rdev, primary, mode != 0, timeout);
+  if (!result) { wdev->ps = mode != 0; wdev->ps_timeout = timeout; }
+  wiphy_unlock(&rdev->wiphy);
+  return result;
 }
 static void ready(struct work_struct *work) {
   (void)work;

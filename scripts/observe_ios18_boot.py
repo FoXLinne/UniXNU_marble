@@ -41,16 +41,7 @@ def observe(kernel, layout_path, output, interval, duration, once=False, skip_th
                         report['buttons_firmware'] = channel.command('getvar:buttons-firmware')
                     except RuntimeError as error:
                         report['buttons_firmware'] = str(error)
-                if report['phase'] == 'firmware':
-                    memory = RetainedKernel(channel)
-                else:
-                    base, size = (int(v, 16) for v in channel.command('getvar:kernel-memory').split(':'))
-                    address = base + 0x4000 + symbols['_cpu_ttep'] - 0xfffffff006e04000
-                    channel.command(f'oem memory-read:{address:016x}:00000008')
-                    memory = object.__new__(RetainedKernel)
-                    memory.channel, memory.base, memory.size = channel, base, size
-                    memory.ttbr1 = int.from_bytes(channel.read_back(), 'little')
-                    memory.bits, memory.tcr, memory.tables = 39, 25 | (25 << 16), {}
+                memory = RetainedKernel(channel, symbols if report['phase'] == 'kernel' else None)
                 report['panic'] = memory.read(symbols['_native_resident_panic_message'], 512).split(b'\0')[0].decode(errors='replace')
                 fields = (('_marble_display_transfers', 4), ('_marble_display_frames', 4),
                           ('_marble_ufs_reads', 8), ('_marble_ufs_writes', 8),

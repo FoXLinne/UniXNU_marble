@@ -17,6 +17,7 @@ struct sheng_driver {
   uint64_t generation;
   unsigned references;
   unsigned join_frequency;
+  unsigned requested_scan_count, requested_scan_frequencies[256];
   int closing, failed, drain_scheduled;
 };
 static void sheng_drain(void *context, void *unused);
@@ -127,11 +128,17 @@ static int sheng_scan(void *priv, struct wpa_driver_scan_params *parameters)
       WPA_PUT_LE32(frequencies + count * 4, parameters->freqs[count]); count++;
     }
   }
-  if (!count && driver->join_frequency) {
+  if (driver->requested_scan_count) {
+    count = driver->requested_scan_count;
+    for (size_t i = 0; i < count; ++i)
+      WPA_PUT_LE32(frequencies + i * 4, driver->requested_scan_frequencies[i]);
+  }
+  if (driver->join_frequency) {
     WPA_PUT_LE32(frequencies, driver->join_frequency); count = 1;
   }
+  // The selected target channel takes precedence over upstream scan history.
   // The hint belongs to this first scan only; retries use upstream's search.
-  driver->join_frequency = 0;
+  driver->join_frequency = 0; driver->requested_scan_count = 0;
   if (sheng_begin(driver, &b, bytes, sizeof(bytes), NW_CONTROL_SCAN)) return -1;
   if (nw_control_put(&b, NW_CONTROL_ATTR_SCAN_SSIDS, ssids, parameters->num_ssids * 33) ||
       nw_control_put(&b, NW_CONTROL_ATTR_SCAN_FREQUENCIES, frequencies, count * 4) ||
@@ -343,6 +350,20 @@ static void sheng_event(struct sheng_driver *driver, const struct nw_control_vie
     if (view->header.generation < driver->generation) return;
     driver->generation = view->header.generation;
     nw_control_client_generation(driver->client, driver->generation);
+    driver->requested_scan_count = 0;
+    if (operation == NW_CONTROL_SCAN_REQUEST) {
+      size_t length;
+      const u8 *frequencies = nw_control_get(view, NW_CONTROL_ATTR_SCAN_FREQUENCIES, &length);
+      if (frequencies && length && !(length % 4) && length <= 256 * 4) {
+        unsigned count = length / 4, i;
+        for (i = 0; i < count; ++i) {
+          unsigned frequency = WPA_GET_LE32(frequencies + i * 4);
+          if (frequency < 2412 || frequency > 7125) break;
+          driver->requested_scan_frequencies[i] = frequency;
+        }
+        if (i == count) driver->requested_scan_count = count;
+      }
+    }
     if (operation != NW_CONTROL_SCAN_REQUEST) driver->join_frequency = 0;
     if (operation == NW_CONTROL_JOIN_REQUEST) {
       u32 frequency = sheng_value(view, NW_CONTROL_ATTR_FREQUENCY, 0);

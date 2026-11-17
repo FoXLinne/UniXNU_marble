@@ -343,6 +343,12 @@ volatile uint64_t nw_wifi_where[4];
 static void where(int kind, const void *fn) {
   nw_wifi_where[0] = kind; nw_wifi_where[1] = fn ? (uint64_t)((uintptr_t)fn - (uintptr_t)lx_now_ms) : 0;
   nw_wifi_where[2] = g_depth; nw_wifi_where[3] = lx_now_ms(); }
+static void report_slow_callback(unsigned kind, const void *function, u64 began) {
+  u64 elapsed = lx_now_ms() - began;
+  if (elapsed >= 100)
+    lx_log(4, "wifi: slow callback kind=%u offset=%lld ms=%llu", kind,
+      (long long)((intptr_t)function - (intptr_t)lx_now_ms), (unsigned long long)elapsed);
+}
 /* The dispatcher: interrupts first, then due timers, then one round of queued work. */
 int lx_pump(void) {
   int ran = 0;
@@ -358,8 +364,10 @@ int lx_pump(void) {
     where(1, (const void *)g_irq[i].h);
     g_running_queue[g_nrunning] = NULL; g_running_ticket[g_nrunning] = 0;
     g_running[g_nrunning++] = &g_irq[i];
+    u64 began = lx_now_ms();
     irqreturn_t r = g_irq[i].h ? g_irq[i].h(g_irq[i].irq, g_irq[i].id) : IRQ_WAKE_THREAD;
     if (r == IRQ_WAKE_THREAD && g_irq[i].t) g_irq[i].t(g_irq[i].irq, g_irq[i].id);
+    report_slow_callback(1, (const void *)(g_irq[i].t ? g_irq[i].t : g_irq[i].h), began);
     g_nrunning--;
   }
   LIST_HEAD(ready_timers);
@@ -395,7 +403,9 @@ int lx_pump(void) {
     due->armed = false; list_del_init(&due->entry); ran = 1; where(2, (const void *)due->function);
     g_running_queue[g_nrunning] = NULL; g_running_ticket[g_nrunning] = 0;
     g_running[g_nrunning++] = due;
+    const void *function = (const void *)due->function; u64 began = lx_now_ms();
     enum hrtimer_restart restart = due->function(due); g_nrunning--;
+    report_slow_callback(2, function, began);
     /* NORESTART callbacks may have freed their timer. */
     if (restart == HRTIMER_RESTART && !due->armed) { due->armed = true; list_add_tail(&due->entry, &g_hrtimers); }
   }
@@ -415,7 +425,9 @@ int lx_pump(void) {
     list_del_init(&w->entry); w->queued = 0; ran = 1;
     where(3, (const void *)w->func);
     g_running_queue[g_nrunning] = w->queue; g_running_ticket[g_nrunning] = w->ticket;
+    const void *function = (const void *)w->func; u64 began = lx_now_ms();
     g_running[g_nrunning++] = w; if (w->func) w->func(w); g_nrunning--;
+    report_slow_callback(3, function, began);
     if (lx_now_ms() - work_started >= 2) break;
   }
   g_depth--;
