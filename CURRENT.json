@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-11-18T09:32:44+0800",
+  "updated_at": "2026-11-18T09:38:25+0800",
   "device": "marble",
   "work_focus": "iOS 18.7.11 / 22H384",
   "execution_state": {
@@ -160,8 +160,8 @@
   "真机运行记录": {
     "system": "iOS 18.7.11",
     "build": "22H384",
-    "candidate": "R9",
-    "status": "RootStage USB 可读内核日志，蓝牙控制器以 3 Mbaud 启动。Safari 打开 apple.com，网页区域黑屏，WebKit GPU 读取 hw.pagesize 遭沙箱拒绝。",
+    "candidate": "R10",
+    "status": "内核异常，RootStage USB 可响应",
     "usb_phase": "kernel"
   },
   "maintenance": {
@@ -179,22 +179,24 @@
   },
   "最近失败候选": {
     "target": "22H384",
-    "status": "R6 DarwinBoot 拒绝启动参数",
+    "status": "R10 挂载 APFS 时触发内核异常",
     "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r3/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
     "firmware_sha256": "06e1583cc56f29e7079be734a0152456767aa14401469fc3f4c8c16f9258621e",
     "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
-    "device_result": "启动参数为 1030 字节，固件返回 EFI_BAD_BUFFER_SIZE，RootStage USB 可响应。",
-    "source_commit": "71e51514",
-    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r6/temporary-boot.json",
-    "image": "outputs/UniXNU_marble/ios18-port/usb-r6/marble_temporary_boot.img",
-    "image_sha256": "5b843947649bfa4a85e58726e4746409b84c25ad80f53604cdbef6967bac7428",
-    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r6/kernel.macho",
-    "kernel_sha256": "8106dd5eca525184acb76f7aeca981d776a50871761b3cdb0bb7fa9fd42c6362",
-    "gpu_addon_sha256": "3e918a62d91c3fe5b06bca7265cc555f5379edf2379226d4a06a73cb23218341",
-    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 marble-input-profile=0 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 sheng-diag=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 appsync=1 marble-skip-setup=1 marble-ui-identity=1602 marble-display-scale=3",
+    "device_result": "sysctl_root 对空 namestring 调用 strcmp。RootStage USB 导出了内核异常。",
+    "source_commit": "bffc7676",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r10/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r10/marble_temporary_boot.img",
+    "image_sha256": "64cf9afd5887a30cc6b55d497bc383a71ca14d0602948de95ce297f63146b057",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r10/kernel.macho",
+    "kernel_sha256": "25b3aa6a1968c117c05ba353662f0a0b3df8bf8b3d33a34949954d376505f810",
+    "gpu_addon_sha256": "671371f3a9bac4bc681366fb1d610aed441cae222e5668e9422e21100b11144f",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 appsync=1 marble-skip-setup=1 marble-ui-identity=1602 marble-display-scale=3",
     "usb_owner": "firmware",
     "firmware_usb_affinity": 256,
     "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
-    "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json"
+    "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
+    "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r10/kernel.log"
   }
 }
