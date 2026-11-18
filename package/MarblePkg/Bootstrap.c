@@ -279,11 +279,8 @@ MarbleBootstrapEntry(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
       if (EFI_ERROR(Status)) return BootReturn(Status,10);
       mRootStage=FALSE;
     }
-    // DarwinResident arms the watchdog and transfers USB ownership at XNU entry.
-    if (mNativeUsb) {
-      Status=MarbleRootUsbStartResident();
-      if (EFI_ERROR(Status)) return BootReturn(Status,10);
-    }
+    Status=MarbleRootUsbStartResident();
+    if (EFI_ERROR(Status)) return BootReturn(Status,10);
     for (UINTN Tick=0;Tick<500;Tick++) {
       Status=MarbleRootUsbPoll();
       if (EFI_ERROR(Status)) break;

@@ -280,7 +280,8 @@ def export_data(channel, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'cpu', 'load', 'start', 'logs', 'screen', 'trace', 'data', 'continue', 'selftest', 'reboot'])
+    parser.add_argument('command', choices=['status', 'cpu', 'load', 'start', 'logs', 'screen', 'trace',
+                                            'data', 'continue', 'selftest', 'reboot', 'reboot-bootloader'])
     parser.add_argument('--images', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--kernel', type=Path)

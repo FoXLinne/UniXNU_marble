@@ -254,7 +254,7 @@ EFI_STATUS DarwinResidentRun(ROOT_STAGE_TABLE *Stage, UINT64 Args, UINT64 Entry,
   }
   EFI_STATUS Status=EFI_SUCCESS;
   if (Service) {
-    VmWatchdogCall(VM_WDT_CONTROL,2,0,NULL);
+    // RootStage owns its watchdog across the handoff to XNU.
     mWatchdogArmed=FALSE;
   } else {
     Status=ArmVmWatchdog();
