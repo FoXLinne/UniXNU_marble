@@ -11,7 +11,7 @@
 | 电源、CPU 休眠、自动熄屏 | iOS 27 v62 有三次自动锁屏、七个 XNU 核心进入和离开休眠的记录。R5 通过 22H384 的 idle 回调更新 EPSS 频率投票，屏幕关闭时限制活跃核的最高频率。R7 移植 v62 的保留式休眠入口。启动参数由打包器按 DarwinBoot 的 1023 字节上限检查，R7 的 994 字节参数启动成功。整机睡眠和唤醒待真机覆盖。 |
 | 蓝牙 | iOS 27 v82 可双向发现，经典蓝牙连接失败。R9 加载同板 QCA 固件，控制器以 3 Mbaud 启动，Wi-Fi 与蓝牙共用电源管理。22H384 的用户态接口和配对待适配。 |
 | 扬声器和马达 | R5 启动镜像包含低音量自检。三条播放路径使用峰值约 −54 dBFS、时长 250 ms 的测试音，扬声器音量只读。播放、唤醒恢复和系统触觉请求待真机覆盖。 |
-| Metal | R7 和 R9 的 Safari 可导航至 apple.com，网页区域黑屏。R9 中 WebKit GPU 读取动态编号的 `hw.pagesize` 时遭沙箱拒绝。R10 对内核请求的空名称指针调用 `strcmp`，RootStage 导出异常现场。R11 在用户态读请求中匹配已解析的节点名。Metal 工作集预算改用 `NSProcessInfo.physicalMemory` 返回的字节数，ARM64e 前端通过编译检查。插件重建受 Rust 运行库接口不匹配影响，R9 使用原签名插件。 |
+| Metal | R9 的 Safari 打开 apple.com 时网页区域黑屏，WebKit GPU 读取动态编号的 `hw.pagesize` 遭沙箱拒绝。R10 的空指针异常由 RootStage 导出。R11 对用户态读请求匹配已解析的节点名，Safari 渲染 apple.com 的离线错误页，日志无该项拒绝。工作集预算改用 `NSProcessInfo.physicalMemory` 返回的字节数，ARM64e 前端通过编译检查。R11 使用原签名插件，插件重建待解决 Rust 接口不匹配。 |
 
 新内核通过 Fastboot 临时启动。本轮 USB 证据记录设备枚举、内核日志和复位结果。用户态到达桌面后按需截图。
 

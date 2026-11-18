@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-11-18T09:38:25+0800",
+  "updated_at": "2026-11-18T09:45:50+0800",
   "device": "marble",
   "work_focus": "iOS 18.7.11 / 22H384",
   "execution_state": {
@@ -131,17 +131,17 @@
   },
   "最新构建": {
     "target": "22H384",
-    "status": "R9 临时启动至桌面",
+    "status": "R11 临时启动至桌面",
     "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r3/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
     "firmware_sha256": "06e1583cc56f29e7079be734a0152456767aa14401469fc3f4c8c16f9258621e",
     "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
-    "device_result": "RootStage USB 可读内核日志，蓝牙控制器以 3 Mbaud 启动。Safari 打开 apple.com，网页区域黑屏，WebKit GPU 读取 hw.pagesize 遭沙箱拒绝。",
-    "source_commit": "3a59978f",
-    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r9/temporary-boot.json",
-    "image": "outputs/UniXNU_marble/ios18-port/usb-r9/marble_temporary_boot.img",
-    "image_sha256": "cde34401c0638cc1f0f1c090dc568d4f043ceb96d2214f2b9f0c2acb05541287",
-    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r9/kernel.macho",
-    "kernel_sha256": "8c4dc97c029d68142f9435d15cdc278b58007c7cc8e5bf8660433f32c80cb04c",
+    "device_result": "Safari 打开 apple.com 并渲染离线错误页。此次 WebKit GPU 日志无 hw.pagesize 拒绝。RootStage USB 可读内核日志，蓝牙控制器以 3 Mbaud 启动。",
+    "source_commit": "7263d9fb",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r11/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r11/marble_temporary_boot.img",
+    "image_sha256": "2040f66dbb52a987d0e5705cfbfaeca1da9959297a2d6e1c3a13da14517a3947",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r11/kernel.macho",
+    "kernel_sha256": "2d95d1d3de44605c2888ef8760293ea4716fc4278fcc7b1f504ca38063bd03a8",
     "gpu_addon_sha256": "671371f3a9bac4bc681366fb1d610aed441cae222e5668e9422e21100b11144f",
     "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 appsync=1 marble-skip-setup=1 marble-ui-identity=1602 marble-display-scale=3",
     "usb_owner": "firmware",
@@ -149,8 +149,8 @@
     "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
     "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
     "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
-    "safari_screenshot": "outputs/UniXNU_marble/ios18-port/usb-r9/Safari-page-black.png",
-    "log": "outputs/UniXNU_marble/ios18-port/usb-r9/kernel.log"
+    "safari_screenshot": "outputs/UniXNU_marble/ios18-port/usb-r11/Safari-offline.png",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r11/kernel.log"
   },
   "更新要求": [
     "每次源码、内核、插件、启动参数或启动镜像变化，立即更新本文件。",
@@ -160,8 +160,8 @@
   "真机运行记录": {
     "system": "iOS 18.7.11",
     "build": "22H384",
-    "candidate": "R10",
-    "status": "内核异常，RootStage USB 可响应",
+    "candidate": "R11",
+    "status": "Safari 打开 apple.com 并渲染离线错误页。此次 WebKit GPU 日志无 hw.pagesize 拒绝。RootStage USB 可读内核日志，蓝牙控制器以 3 Mbaud 启动。",
     "usb_phase": "kernel"
   },
   "maintenance": {
