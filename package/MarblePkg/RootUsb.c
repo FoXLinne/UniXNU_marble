@@ -863,7 +863,9 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
         Reply("FAIL","invalid input request"); continue;
       }
       UINT32 Operation=AsciiStrHexToUintn(Command+10), X=AsciiStrHexToUintn(Command+13), Y=AsciiStrHexToUintn(Command+18);
-      if (Operation<1 || Operation>5 || X>=1080 || Y>=2400) { Reply("FAIL","input outside display"); continue; }
+      BOOLEAN ValidKey = Operation==8 && X>=4 && X<=0x65 && Y<=0xff;
+      BOOLEAN ValidTouch = Operation>=1 && Operation<=5 && X<1080 && Y<2400;
+      if (!ValidKey && !ValidTouch) { Reply("FAIL","invalid input request"); continue; }
       if (UsbControl()) { Reply("FAIL","control request pending"); continue; }
       PublishControl(0x80000000U|(Operation<<24)|(X<<12)|Y);
       Reply("OKAY","");

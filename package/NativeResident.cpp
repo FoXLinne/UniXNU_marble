@@ -18,6 +18,9 @@ extern "C" void native_resident_panic_return(void);
 extern "C" void native_root_block_capture_log(void);
 extern "C" void native_marble_display_snapshot(void);
 extern "C" void native_hid_request_tap(unsigned, unsigned);
+#ifdef MARBLE_IOS18_GPU
+extern "C" void native_hid_type_key(unsigned, unsigned);
+#endif
 extern "C" void native_hid_request_contact(unsigned, unsigned, bool);
 extern "C" void armcpu_complete_active_interrupt(void);
 extern "C" void native_runtime_usb_stop(void);
@@ -160,6 +163,7 @@ static void usbControlWorker(void *, wait_result_t)
       if (operation==6) native_marble_rtc_observe();
       if (operation==7) native_marble_rtc_sync();
 #ifdef MARBLE_IOS18_GPU
+      if (operation==8) native_hid_type_key(x,y);
       if (operation==5) {
         if (y==1) native_marble_buttons_pulse(x);
         else if (x) native_marble_panel_refresh_request(x==1 ? 0 : x);
