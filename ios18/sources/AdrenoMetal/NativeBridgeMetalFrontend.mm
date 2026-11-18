@@ -39,7 +39,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/time.h>
-#include <sys/sysctl.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -4197,8 +4196,8 @@ static bool pipelineArchives(NSArray *list,std::vector<NmbBinaryArchive *> &arch
 - (NSUInteger)currentAllocatedSize {return nmb_device_current_allocated_size(gDevice);}
 - (NSUInteger)recommendedMaxWorkingSetSize {
  // A process's cache budget is a quarter of the RAM exposed by the selected board.
- uint64_t bytes=0;size_t size=sizeof bytes;
- if(sysctlbyname("hw.memsize",&bytes,&size,nullptr,0))return 256ull<<20;
+ const uint64_t bytes = NSProcessInfo.processInfo.physicalMemory;
+ if (!bytes) return 256ull << 20;
  return (NSUInteger)std::min<uint64_t>(bytes/4,2ull<<30);
 }
 - (id<MTLCommandQueue>)newCommandQueue {

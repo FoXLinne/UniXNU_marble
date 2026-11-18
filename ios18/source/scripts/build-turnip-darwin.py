@@ -112,12 +112,14 @@ if args.configure_only:
     print('PASS: Turnip darwin-kmd configuration (%s)' % args.target)
     sys.exit(0)
 build_log = LOGS / ('mesa-tu-%s-build.log' % args.target)
+library_target = 'src/freedreno/vulkan/libvulkan_freedreno.dylib'
 with build_log.open('w') as stream:
-    result = subprocess.run(['ninja', '-C', str(OUT), '-j6'], env=env, stdout=stream, stderr=subprocess.STDOUT)
+    result = subprocess.run(['ninja', '-C', str(OUT), '-j6', library_target],
+                            env=env, stdout=stream, stderr=subprocess.STDOUT)
 if result.returncode:
     sys.exit('Build failed; see ' + str(build_log) + '\n' + '\n'.join(
         l for l in build_log.read_text().splitlines() if ': error:' in l or 'fatal error:' in l or l.startswith('FAILED:'))[:3000])
-library = OUT / 'src/freedreno/vulkan/libvulkan_freedreno.dylib'
+library = OUT / library_target
 symbols = subprocess.run(['nm', '-gU', str(library)], capture_output=True, text=True).stdout
 if ' T _vk_icdGetInstanceProcAddr' not in symbols:
     sys.exit('The library does not export vk_icdGetInstanceProcAddr')

@@ -103,6 +103,7 @@ def main():
     parser.add_argument('--wifi-runtime', type=Path, help='Signed iOS 18 supplicant and launchd cache')
     parser.add_argument('--haptics-runtime', type=Path, help='Signed 22H384 Actuator HAL and tuning overlay')
     parser.add_argument('--wifi-firmware', type=Path, help='WCN6855 firmware matching profiles/wifi-wcn6855-hw21.json')
+    parser.add_argument('--bluetooth-firmware', type=Path, help='Stock marble Bluetooth firmware matching firmware/bluetooth/manifest.json')
     parser.add_argument('--kernel', type=Path, help='New fileset kernel built from the current device sources')
     parser.add_argument('--firmware-binaries', type=Path, help='Built MarbleBoot AARCH64 applications for this candidate')
     parser.add_argument('--baseline', type=Path,
@@ -204,6 +205,24 @@ def main():
         subprocess.run([sys.executable, DEVICE / 'ios18/source/scripts/addon-add-dir.py',
                         addon, wifi_addon, prefix, args.wifi_firmware.resolve()], check=True)
         addon = wifi_addon
+    bluetooth_firmware = None
+    if args.bluetooth_firmware:
+        manifest = DEVICE / 'firmware/bluetooth/manifest.json'
+        bluetooth_firmware = json.loads(manifest.read_text())
+        files = bluetooth_firmware['files']
+        if {path.name for path in args.bluetooth_firmware.iterdir()} != files.keys():
+            raise ValueError('Bluetooth firmware directory differs from its marble manifest')
+        for name, entry in files.items():
+            data = (args.bluetooth_firmware / name).read_bytes()
+            if len(data) != entry['bytes'] or hashlib.sha256(data).hexdigest() != entry['sha256']:
+                raise ValueError('Bluetooth firmware differs from its marble manifest: ' + name)
+        prefix = re.search(r'^#define MARBLE_BT_FIRMWARE_PREFIX "([^"]+)"',
+                           (DEVICE / 'package/MarbleBluetoothFirmware.h').read_text(), re.M).group(1)
+        bluetooth_addon = out / 'bluetooth.gpuaddon'
+        subprocess.run([sys.executable, DEVICE / 'ios18/source/scripts/addon-add-dir.py',
+                        addon, bluetooth_addon, prefix, args.bluetooth_firmware.resolve()], check=True)
+        addon = bluetooth_addon
+        args.kernel_arg.append('qbt=1')
     data = kernel.read_bytes()
     data += bytes(-len(data) % 4096)
     offset = len(data)
@@ -344,6 +363,14 @@ def main():
             wlan = ({'name': b'wlan\0', 'compatible': b'qcom,wcn6855\0', 'status': b'okay\0'}, [])
             armio[1].append(wlan)
         wlan[0]['local-mac-address'] = bytes(mac)
+    if bluetooth_firmware:
+        armio = next(node for node in tree[1] if node[0].get('name') == b'arm-io\0')
+        bluetooth = next((node for node in armio[1] if node[0].get('name') == b'bluetooth\0'), None)
+        if bluetooth is None:
+            bluetooth = ({'name': b'bluetooth\0'}, [])
+            armio[1].append(bluetooth)
+        bluetooth[0].update({'transport-encoding': struct.pack('<I', 1),
+                             'transport-speed': struct.pack('<I', 3000000)})
     cpus = next(node for node in tree[1] if node[0].get('name') == b'cpus\0')
     template = cpus[1][0][0]
     cpus[1][:] = [({**template, 'name': f'cpu{index}\0'.encode(),
@@ -427,6 +454,8 @@ def main():
             owner_trust_cache_sha256=gpu['trust_cache_sha256'],
             appsync_runtime=str(args.appsync_runtime.resolve()) if appsync else None,
             wifi_firmware=wifi_firmware,
+            bluetooth_firmware_manifest_sha256=(hashlib.sha256(manifest.read_bytes()).hexdigest()
+                                                if bluetooth_firmware else None),
             wifi_runtime=str(args.wifi_runtime.resolve()) if wifi_runtime else None,
             haptics_runtime=str(args.haptics_runtime.resolve()) if haptics_runtime else None,
             appsync_build=appsync['build'] if appsync else None), indent=2) + '\n')

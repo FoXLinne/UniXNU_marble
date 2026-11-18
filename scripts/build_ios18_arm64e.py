@@ -117,11 +117,13 @@ def prepare(out, upstream, stack, profile):
     apply_patch(work, DEVICE / 'patches/xnu-11417/haptics-device-access.patch')
     retained_sleep_patch = DEVICE / 'patches/xnu-11417/marble-retained-sleep.patch'
     apply_patch(work, retained_sleep_patch)
+    gpu_page_size_patch = DEVICE / 'patches/xnu-11417/webkit-gpu-page-size.patch'
+    apply_patch(work, gpu_page_size_patch)
     patch_list = out / 'xnu-patches.list'
     patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n' + str(filesystem_patch) + '\n' + str(rtc_patch) + '\n' + str(performance_patch) + '\n' + str(native_pac_el0_patch) + '\n' + str(dataprotect_patch) + '\n' + str(console_patch) + '\n')
     with patch_list.open('a') as stream:
         stream.write(str(metal_cache_patch) + '\n' + str(cache_times_patch) + '\n' + str(microtime_patch) + '\n' + str(msgbuf_patch) + '\n' + str(backlight_patch) + '\n' + str(appsync_patch) + '\n' + str(launch_constraints_patch) + '\n')
-        stream.write(str(retained_sleep_patch) + '\n')
+        stream.write(str(retained_sleep_patch) + '\n' + str(gpu_page_size_patch) + '\n')
     env = dict(os.environ, UNIXNU_XNU_TAG='xnu-' + os_spec['xnu_version'],
                UNIXNU_XNU_COMMIT=os_spec['xnu_revision'], UNIXNU_XNU_DARWIN=os_spec['darwin'],
                UNIXNU_XNU_VERSION=os_spec['xnu_version'], UNIXNU_XNU_ARCH=os_spec['arch'],
@@ -271,6 +273,8 @@ def qualify_pmgr(out, profile):
 
 def build_board(tree, env):
     stage_ios18('GopFramebuffer', tree.parent / 'GopFramebuffer')
+    bluetooth = stage_ios18('QcaBluetooth', tree.parent / 'QcaBluetooth')
+    subprocess.run([sys.executable, bluetooth / 'tools/prepare-linux.py'], env=env, check=True)
     wifi_module = stage_ios18('Ath12kWifi', tree.parent / 'wifi/Ath12kWifi')
     wifi_output = tree.parent / 'wifi/objects'
     with (tree.parent / 'wifi-build.log').open('w') as log:
@@ -324,6 +328,9 @@ def build_board(tree, env):
         sources.append(DEVICE / 'ios18/sources/QcomGeniSpi/GeniSpi.c')
         sources += [DEVICE / 'package/MarbleAudio.cpp', DEVICE / 'package/audio/ShengGpr.c',
                     DEVICE / 'package/audio/ShengAudioReach.c']
+        sources += [DEVICE / 'package/MarbleBluetooth.cpp', DEVICE / 'package/MarbleBluetoothFirmware.c']
+        sources += [bluetooth / path for path in ('src/qbt_core.c', 'src/qbt_linux.c', 'src/qbt_geni.c',
+                                                  'src/qbt_transport.c', 'out/linux/btqca.c')]
         for source in sources:
             filename = source.name
             if filename == 'MarbleAdsp.cpp':
@@ -363,6 +370,12 @@ def build_board(tree, env):
             command += ['-I', str(wifi_module / 'include')]
             command += ['-I', str(DEVICE / 'ios18/source/package/UniXNUPkg/Include')]
             command += ['-I', str(DEVICE / 'ios18/sources/QcomGeniSpi')]
+            if source.is_relative_to(bluetooth):
+                command += ['-I' + str(bluetooth / path) for path in ('include', 'src', 'shim', 'out/linux')]
+            if filename == 'MarbleBluetooth.cpp':
+                command += ['-I', str(bluetooth / 'include')]
+            if filename == 'btqca.c':
+                command += ['-Wno-sign-compare']
             if filename == 'RuntimeUsb.cpp':
                 command += ['-DMARBLE_IOS18=1']
             if filename == 'NativeHomeInput.cpp':

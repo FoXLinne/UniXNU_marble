@@ -2,6 +2,7 @@
 // SM7475/QCA6490 board bring-up. PCIe sequencing follows UniXNU-sheng
 // WifiProbe.cpp and Xiaomi marble-s-oss pci-msm.c / gcc-waipio.c.
 #include <IOKit/IOLib.h>
+#include <IOKit/IOLocks.h>
 #include <IOKit/IOMemoryDescriptor.h>
 #include <IOKit/IODeviceMemory.h>
 #include <kern/thread.h>
@@ -11,6 +12,7 @@
 #include "MarbleWifiPhy.h"
 #include "QcomRpmh.h"
 #include "MarbleWifiFirmware.h"
+#include "MarbleWcnPower.h"
 
 extern "C" {volatile uint32_t native_marble_wifi_stats[24];}
 namespace {
@@ -176,7 +178,7 @@ void run(void *arg, wait_result_t) {
     native_marble_wifi_stats[20]=tlmm.read(80*0x1000+4);
     native_marble_wifi_stats[21]=tlmm.read(94*0x1000+4);
     if (requested==1) return;
-    if (!power()) {fail(StRails,EIO); return;}
+    if (marble_wcn_power_get(MARBLE_WCN_WLAN)) {fail(StRails,EIO); return;}
     stage(StRails);
     pin(tlmm,94,1u|(1u<<9),0);
     pin(tlmm,95,3u|(1u<<2),-1);
@@ -247,6 +249,43 @@ void run(void *arg, wait_result_t) {
     if (!endpoint(a,dbi,requested)) {fail(StEndpoint,ENXIO); return;}
     stage(StIdentified);
 }
+}
+namespace {
+IOLock *wcnPowerLock;
+unsigned wcnPowerOwners;
+bool wcnPowerReady;
+IOLock *wcnLock() {
+    IOLock *created=IOLockAlloc();
+    if(!created)return nullptr;
+    IOLock *expected=nullptr;
+    if(!__atomic_compare_exchange_n(&wcnPowerLock,&expected,created,false,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE))
+        IOLockFree(created);
+    return __atomic_load_n(&wcnPowerLock,__ATOMIC_ACQUIRE);
+}
+}
+extern "C" int marble_wcn_power_get(unsigned radio) {
+    if(radio>MARBLE_WCN_BLUETOOTH)return EINVAL;
+    IOLock *gate=__atomic_load_n(&wcnPowerLock,__ATOMIC_ACQUIRE);
+    if(!gate)gate=wcnLock();
+    if(!gate)return ENOMEM;
+    IOLockLock(gate);
+    // Preserve the board rail setpoints and serialize the shared TCS0 votes.
+    // A radio retains its supplies while the other radio changes state.
+    if(!wcnPowerReady)wcnPowerReady=power();
+    if(wcnPowerReady)wcnPowerOwners|=1u<<radio;
+    bool ready=wcnPowerReady;
+    IOLockUnlock(gate);
+    return ready?0:EIO;
+}
+extern "C" int marble_wcn_power_put(unsigned radio) {
+    if(radio>MARBLE_WCN_BLUETOOTH)return EINVAL;
+    IOLock *gate=__atomic_load_n(&wcnPowerLock,__ATOMIC_ACQUIRE);
+    if(!gate)return 0;
+    IOLockLock(gate);wcnPowerOwners&=~(1u<<radio);IOLockUnlock(gate);
+    return 0;
+}
+extern "C" unsigned marble_wcn_power_owners(void) {
+    return __atomic_load_n(&wcnPowerOwners,__ATOMIC_ACQUIRE);
 }
 extern "C" void marble_wifi_start(void) {
     unsigned stage=0;
