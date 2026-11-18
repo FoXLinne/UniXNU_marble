@@ -167,8 +167,12 @@ void native_marble_display_timing_request(void)
 
 static IOService *mainPowerDisplay;
 extern "C" void native_marble_display_backlight_state(bool);
+extern "C" void native_marble_cpu_display_power(bool) __attribute__((weak_import));
+extern "C" void native_marble_wifi_display_power(bool) __attribute__((weak_import));
 void native_marble_display_backlight_state(bool on)
 {
+    if (native_marble_cpu_display_power) native_marble_cpu_display_power(on);
+    if (native_marble_wifi_display_power) native_marble_wifi_display_power(on);
     // 22H384 PLDisplayAgent registers its legacy power interest on the
     // service returned by IOMobileFramebufferGetMainDisplay.
     if (mainPowerDisplay) mainPowerDisplay->messageClients(on?0xe0014100u:0xe0014101u);

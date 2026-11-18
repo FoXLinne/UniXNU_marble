@@ -13,6 +13,14 @@
 // not exported to IOKit; the IRQ path calls the real kernel implementation.
 extern "C" void rtclock_intr (unsigned int);
 extern "C" void native_marble_watchdog_start(void) __attribute__((weak_import));
+extern "C" void native_marble_cpu_idle(unsigned, bool) __attribute__((weak_import));
+
+static void marbleIdleNotify(cpu_id_t, boolean_t entering, uint64_t *)
+{
+  uint64_t mpidr;
+  __asm__ volatile("mrs %0, mpidr_el1" : "=r"(mpidr));
+  native_marble_cpu_idle(static_cast<unsigned>((mpidr >> 8) & 0xff), entering);
+}
 // Kernel-internal entries used for secondary CPU startup (Darwin 23 osfmk).
 extern "C" vm_offset_t ml_static_vtop (vm_offset_t);
 extern "C" char LowResetVectorBase[], LowResetVectorEnd[], ResetHandlerData[], const_boot_args[];
@@ -471,6 +479,7 @@ bool ArmCpu::start (IOService *provider)
   info.log_id = logicalId;
   info.cluster_id = static_cast<uint32_t> (ml_get_cluster_number (physical));
   info.cluster_type = clusterType (physical);
+  if (native_marble_cpu_idle) info.processor_idle = marbleIdleNotify;
   setCPUNumber (info.log_id);
   unsigned smp = 0;
   PE_parse_boot_argn ("smp", &smp, sizeof (smp));
@@ -524,6 +533,7 @@ bool ArmCpu::finishSecondary (void)
   info.log_id = logicalId;
   info.cluster_id = static_cast<uint32_t> (ml_get_cluster_number (static_cast<uint32_t> (affinity)));
   info.cluster_type = clusterType (static_cast<uint32_t> (affinity));
+  if (native_marble_cpu_idle) info.processor_idle = marbleIdleNotify;
   perfmon_interrupt_handler_func pmi = nullptr;
   kern_return_t status = ml_processor_register (&info, &machProcessor, &ipi_handler, &pmi);
   if (status != KERN_SUCCESS) { armcpu_smp_fail[logicalId] = 4; return false; }

@@ -217,13 +217,14 @@ def main():
                  'marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 '
                  'sheng-gpu-preempt=2 sheng-gpu-ttbr=2 '
                  'sheng-early-retire=0 marble-display-flip=0')
-    cpu_args = f'cpus={len(cpu_regs)} sheng-smp={int(len(cpu_regs) > 1)} armcpu-self-ipi=1'
+    cpu_args = 'armcpu-self-ipi=1'
     boot_args += ' ' + cpu_args + f' marble-display-scale={args.display_scale}'
     boot_args += f' marble-ui-identity={identity["generation"]}'
     if args.disabled_jobs:
         boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
     if candidate:
-        boot_args = candidate['boot_args']
+        boot_args = ' '.join(arg for arg in candidate['boot_args'].split()
+                             if not arg.startswith('sheng-smp='))
         if (candidate['data_uuid'].upper() != metadata['volume_uuid'].upper()
                 or candidate['data_logical_bytes'] != metadata['logical_bytes']):
             raise ValueError('Candidate Data identity differs from the selected installation')
@@ -232,6 +233,7 @@ def main():
             args.kernel_arg+=['rootstage-runtime-usb=1','marble-native-services=1',f'cpus={len(cpu_regs)}']
         else:
             args.kernel_arg+=['rootstage-runtime-usb=3','marble-native-services=0',f'cpus={len(cpu_regs)}']
+        args.kernel_arg.append(f'smp={int(len(cpu_regs) > 1)}')
         if appsync:
             args.kernel_arg.append('appsync=1')
         if args.skip_setup:

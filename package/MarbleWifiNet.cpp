@@ -67,7 +67,7 @@ enum {
   kSsid = 1, kAuthType = 2, kCipherKey = 3, kChannel = 4, kPowerSave = 5, kTxPower = 7, kRate = 8, kBssid = 9, kScanReq = 10, kScanResult = 11,
   kCardCaps = 12, kState = 13, kPhyMode = 14, kOpMode = 15, kRssi = 16, kNoise = 17, kPower = 19, kAssociate = 20, kAssociateResult = 21,
   kDisassociate = 22, kSupportedChannels = 27, kLocale = 28, kDeauth = 29, kDriverVersion = 43, kHardwareVersion = 44, kCountryCode = 51,
-  kRadioInfo = 54, kScanReqMultiple = 86, kScanCacheClear = 90, kCurrentNetwork = 103, kChannelsInfo = 207, kHwSupportedChannels = 254,
+  kRadioInfo = 54, kScanReqMultiple = 86, kScanCacheClear = 90, kCurrentNetwork = 103, kRssiBounds = 106, kChannelsInfo = 207, kHwSupportedChannels = 254,
 };
 // events
 enum { kEvPowerChanged = 1, kEvSsidChanged = 2, kEvBssidChanged = 3, kEvLinkChanged = 4, kEvAssocDone = 9, kEvScanDone = 10 };
@@ -87,6 +87,17 @@ static_assert(sizeof(assoc_attempt18) == 44 && sizeof(assoc_event18) == 460,
 
 struct channel { uint32_t version, channel, flags; };
 struct channels_list { uint32_t version, count; channel list[401]; uint32_t unused; };           // 4824 bytes
+// 22H384 wifid requests the same 10016-byte regulatory channel table as 24B119.
+struct channels_info {
+  uint32_t version;
+  uint8_t reserved0[8];
+  uint16_t count;
+  uint8_t reserved1[0x32e - 0x0e];
+  uint8_t number[400], indoor[400], dfs[400], passive[400], width40[400], width80[400];
+  uint8_t reserved2[0x2720 - 0xc8e];
+};
+static_assert(sizeof(channels_info) == 0x2720 &&
+              __builtin_offsetof(channels_info, number) == 0x32e, "Apple80211 channel table");
 struct scan_result {                                                                              // 1164 bytes
   uint32_t version; channel ch; uint16_t noise_known; int16_t noise, snr, rssi; uint16_t beacon_interval, capability; uint8_t bssid[6];
   uint8_t rate_count, unused0; uint32_t rates[15]; uint8_t ssid_length, ssid[32], unused1[3]; uint32_t age_ms; uint8_t flags, unused2;
@@ -460,9 +471,42 @@ void country(char cc[3]) {
 }
 int map_state(unsigned s) { switch (s) { case NW_STA_SCANNING: return 1; case NW_STA_AUTH: return 2; case NW_STA_ASSOC: case NW_STA_KEYS: return 3; case NW_STA_UP: return 4; default: return 0; } }
 
+int get_channels_info(apple80211req &rq) {
+  if (rq.req_len != sizeof(channels_info)) return EINVAL;
+  auto *info = static_cast<channels_info *>(IOMallocData(sizeof(channels_info)));
+  if (!info) return ENOMEM;
+  memset(info, 0, sizeof(*info));
+  info->version = 1;
+  for (int i = 0, count = nw_wifi_channel_count(); i < count && info->count < 400; ++i) {
+    nw_channel_info band{};
+    if (nw_wifi_channel_get(static_cast<unsigned>(i), &band) || (band.flags & 1) ||
+        band.frequency >= 5925) continue;
+    channel entry{};
+    fill_channel(entry, band.frequency);
+    const unsigned n = info->count++;
+    const unsigned number = entry.channel;
+    const bool high = band.frequency >= 5000;
+    const bool block80 = high && ((number >= 36 && number <= 64) ||
+        (number >= 100 && number <= 144) || (number >= 149 && number <= 161));
+    info->number[n] = static_cast<uint8_t>(number);
+    info->dfs[n] = (band.flags & 4) != 0;
+    info->passive[n] = (band.flags & 2) != 0;
+    info->width40[n] = high ? block80 : number <= 13;
+    info->width80[n] = block80;
+  }
+  const int result = copy_out(rq, info, sizeof(*info));
+  IOFreeData(info, sizeof(*info));
+  return result;
+}
+
 int apple80211(bool set, apple80211req &rq) {
-  nw_wifi_status st; visible_status(st);
   const int type = rq.req_type;
+  if (!set && type == kRssiBounds) {
+    const int32_t bounds[4] = {1, -95, -20, -80};
+    return copy_out(rq, bounds, sizeof(bounds));
+  }
+  if (!set && type == kChannelsInfo) return get_channels_info(rq);
+  nw_wifi_status st; visible_status(st);
   // (not on the stack: the largest answer is 4824 bytes)
   union Out { uint8_t raw[5120]; channels_list chans; scan_result res; };
   Out *outp = static_cast<Out *>(IOMallocData(sizeof(Out)));

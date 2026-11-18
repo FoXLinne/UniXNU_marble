@@ -17,15 +17,23 @@ __attribute__((used, visibility("default"))) char marble_haptics_probe_devices[1
 __attribute__((used, visibility("default"))) char marble_haptics_probe_version[4096];
 static AudioStreamBasicDescription toneFormat;
 static uint64_t toneFrame;
+static double speakerSample(uint64_t frame, double rate) {
+    const double length = rate / 4;
+    if (frame >= length) return 0;
+    const double ramp = rate / 200;
+    const double envelope = fmin(1, fmin(frame, length - frame) / ramp);
+    return sin(frame * (750.0 * 6.283185307179586 / rate)) * envelope / 512;
+}
 static OSStatus toneIO(AudioDeviceID device, const AudioTimeStamp *now, const AudioBufferList *input,
     const AudioTimeStamp *inputTime, AudioBufferList *output, const AudioTimeStamp *outputTime, void *context) {
     (void)device; (void)now; (void)input; (void)inputTime; (void)outputTime; (void)context;
+    unsigned framesProcessed = 0;
     for (unsigned buffer = 0; buffer < output->mNumberBuffers; ++buffer) {
         AudioBuffer *b = &output->mBuffers[buffer];
         if (!b->mData || !toneFormat.mBytesPerFrame) continue;
         unsigned frames = b->mDataByteSize / toneFormat.mBytesPerFrame;
         for (unsigned frame = 0; frame < frames; ++frame) {
-            double value = sin((toneFrame + frame) * (750.0 * 6.283185307179586 / toneFormat.mSampleRate)) * .015625;
+            double value = speakerSample(toneFrame + frame, toneFormat.mSampleRate);
             for (unsigned channel = 0; channel < b->mNumberChannels; ++channel) {
                 unsigned index = frame * b->mNumberChannels + channel;
                 if (toneFormat.mFormatFlags & kAudioFormatFlagIsFloat) ((float *)b->mData)[index] = value;
@@ -33,9 +41,10 @@ static OSStatus toneIO(AudioDeviceID device, const AudioTimeStamp *now, const Au
                 else ((int32_t *)b->mData)[index] = (int32_t)(value * 2147483647);
             }
         }
-        toneFrame += frames;
+        if (frames > framesProcessed) framesProcessed = frames;
         ++marble_haptics_probe_results[46];
     }
+    toneFrame += framesProcessed;
     return 0;
 }
 static void speakerTest(void) {
@@ -78,21 +87,21 @@ static void speakerTransportTest(void) {
     marble_haptics_probe_results[49] = bytes == sizeof(packet.header) ? 0 : errno;
     if (bytes == sizeof(packet.header)) {
         packet.header.flags = 0; packet.header.frames = 960;
-        for (unsigned chunk = 0; chunk < 50; ++chunk) {
+        for (unsigned chunk = 0; chunk < 25; ++chunk) {
             for (unsigned frame = 0; frame < 960; ++frame) {
-                int32_t sample = (int32_t)(sin((chunk * 960 + frame) * (750.0 * 6.283185307179586 / 96000)) * (4096.0 * 65536));
+                int32_t sample = (int32_t)(speakerSample(chunk * 960 + frame, MARBLE_SPEAKER_RATE) * INT32_MAX);
                 packet.samples[frame * 2] = packet.samples[frame * 2 + 1] = sample;
             }
             if (write(fd, &packet, sizeof(packet)) != sizeof(packet)) { marble_haptics_probe_results[50] = errno; break; }
             ++marble_haptics_probe_results[51];
         }
-        sleep(5);
+        usleep(500000);
         packet.header.frames = 0; packet.header.flags = MARBLE_HAPTICS_STOP;
         write(fd, &packet, sizeof(packet.header));
     }
     close(fd);
 }
-static void speakerFullVolume(void) {
+static void recordSpeakerVolume(void) {
     CFStringRef uid = CFSTR("Speaker");
     AudioDeviceID device = 0; UInt32 size = sizeof(device);
     AudioObjectPropertyAddress a = {kAudioHardwarePropertyTranslateUIDToDevice, kAudioObjectPropertyScopeGlobal, 0};
@@ -102,19 +111,19 @@ static void speakerFullVolume(void) {
         AudioObjectGetPropertyData(kAudioObjectSystemObject, &a, sizeof(uid), &uid, &size, &device);
     }
     if (!device) { marble_haptics_probe_results[58] = 'nodv'; return; }
-    Float32 volume = 1;
+    Float32 volume = 0;
     a = (AudioObjectPropertyAddress){kAudioDevicePropertyVolumeScalar, kAudioObjectPropertyScopeOutput, 0};
-    marble_haptics_probe_results[58] = (uint32_t)AudioObjectSetPropertyData(device, &a, 0, NULL, sizeof(volume), &volume);
-    size = sizeof(volume); volume = -1;
-    AudioObjectGetPropertyData(device, &a, 0, NULL, &size, &volume);
-    marble_haptics_probe_results[59] = (uint32_t)(volume * 1000);
+    size = sizeof(volume);
+    OSStatus status = AudioObjectGetPropertyData(device, &a, 0, NULL, &size, &volume);
+    marble_haptics_probe_results[58] = (uint32_t)status;
+    if (!status) marble_haptics_probe_results[59] = (uint32_t)(volume * 1000);
 }
 static void systemSpeakerTest(void) {
-    const uint32_t frames = 144000, bytes = frames * 4;
+    const uint32_t rate = 48000, frames = rate / 4, bytes = frames * 4;
     NSMutableData *wave = [NSMutableData dataWithLength:44 + bytes];
     uint8_t *header = wave.mutableBytes;
     memcpy(header, "RIFF", 4); memcpy(header + 8, "WAVEfmt ", 8);
-    uint32_t chunkSize = bytes + 36, formatSize = 16, rate = 48000, byteRate = 192000;
+    uint32_t chunkSize = bytes + 36, formatSize = 16, byteRate = rate * 4;
     uint16_t pcm = 1, channels = 2, align = 4, bits = 16;
     memcpy(header + 4, &chunkSize, 4); memcpy(header + 16, &formatSize, 4);
     memcpy(header + 20, &pcm, 2); memcpy(header + 22, &channels, 2);
@@ -123,7 +132,7 @@ static void systemSpeakerTest(void) {
     memcpy(header + 36, "data", 4); memcpy(header + 40, &bytes, 4);
     int16_t *samples = (int16_t *)(header + 44);
     for (uint32_t frame = 0; frame < frames; ++frame) {
-        int16_t sample = (int16_t)(sin(frame * (750.0 * 6.283185307179586 / rate)) * 16384);
+        int16_t sample = (int16_t)(speakerSample(frame, rate) * INT16_MAX);
         samples[frame * 2] = samples[frame * 2 + 1] = sample;
     }
     NSError *error = nil;
@@ -137,9 +146,9 @@ static void systemSpeakerTest(void) {
     error = nil;
     AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithData:wave error:&error];
     marble_haptics_probe_results[56] = (uint32_t)error.code;
-    speakerFullVolume();
+    recordSpeakerVolume();
     marble_haptics_probe_results[57] = [player play];
-    [NSThread sleepForTimeInterval:5];
+    [NSThread sleepForTimeInterval:0.5];
     [player stop];
     [session setActive:NO error:nil];
 }
