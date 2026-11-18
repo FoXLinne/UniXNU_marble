@@ -1,15 +1,16 @@
 diff --git a/bsd/kern/kern_newsysctl.c b/bsd/kern/kern_newsysctl.c
 --- a/bsd/kern/kern_newsysctl.c
 +++ b/bsd/kern/kern_newsysctl.c
-@@ -1880,9 +1880,12 @@
+@@ -1880,9 +1880,13 @@
  
  	lck_rw_done(&sysctl_geometry_lock);
  
  #if CONFIG_MACF
 -	if (!from_kernel) {
 +	/* WebKit's GPU process needs the VM page size to map IOSurfaces. */
-+	const bool page_size_read = namelen == 2 && name[0] == CTL_HW &&
-+	    name[1] == HW_PAGESIZE && req->newptr == USER_ADDR_NULL;
++	const bool page_size_read = req->newptr == USER_ADDR_NULL &&
++	    namelen == 2 && name[0] == CTL_HW &&
++	    (name[1] == HW_PAGESIZE || strcmp(namestring, "hw.pagesize") == 0);
 +	if (!from_kernel && !page_size_read) {
  		error = mac_system_check_sysctlbyname(kauth_cred_get(),
  		    namestring,
