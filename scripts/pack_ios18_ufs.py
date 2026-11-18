@@ -19,6 +19,7 @@ from build_pac_uefi import build_applications, pack_boot_image
 USB_AFFINITY = int(re.search(r'^#define MARBLE_USB_AFFINITY (0x[0-9a-fA-F]+)$',
     (DEVICE / 'package/MarblePkg/MarbleCpuOwnership.h').read_text(), re.M).group(1), 16)
 XNU_AFFINITIES = [value for value in range(0, 0x800, 0x100) if value != USB_AFFINITY]
+DARWIN_BOOT_ARGS_LIMIT = 1023  # DarwinBoot reserves 1024 bytes including the terminator.
 
 
 def merge_kernel_args(base, additions):
@@ -31,7 +32,13 @@ def merge_kernel_args(base, additions):
             raise ValueError('--kernel-arg requires a setting name')
         tokens = [token for token in tokens if token.split('=', 1)[0] != name]
         tokens.append(value)
-    return ' '.join(tokens)
+    boot_args = ' '.join(tokens)
+    if not boot_args.isascii():
+        raise ValueError('DarwinBoot requires ASCII boot arguments')
+    if len(boot_args) > DARWIN_BOOT_ARGS_LIMIT:
+        raise ValueError(f'DarwinBoot accepts at most {DARWIN_BOOT_ARGS_LIMIT} bytes of boot arguments; '
+                         f'got {len(boot_args)}')
+    return boot_args
 
 
 def persistent_data_metadata(seed, profile_path):
@@ -224,7 +231,8 @@ def main():
         boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
     if candidate:
         boot_args = ' '.join(arg for arg in candidate['boot_args'].split()
-                             if not arg.startswith('sheng-smp='))
+                             if not arg.startswith('sheng-smp=') and
+                             arg not in ('marble-input-profile=0', 'sheng-diag=0'))
         if (candidate['data_uuid'].upper() != metadata['volume_uuid'].upper()
                 or candidate['data_logical_bytes'] != metadata['logical_bytes']):
             raise ValueError('Candidate Data identity differs from the selected installation')
