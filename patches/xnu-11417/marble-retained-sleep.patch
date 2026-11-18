@@ -1,0 +1,63 @@
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -996,6 +996,11 @@
+ 	return getCpuDatap()->cpu_cluster_id;
+ }
+ 
++#if XNU_ARMCPU
++extern int native_marble_cpu_sleep_ready(void) __attribute__((weak_import));
++extern void native_marble_retained_sleep(void *) __attribute__((weak_import, noreturn));
++#endif
++
+ __attribute__((noreturn))
+ void
+ ml_arm_sleep(void)
+@@ -1031,6 +1036,12 @@
+ 	}
+ 
+ 	cpu_data_ptr->cpu_sleep_token = ARM_CPU_ON_SLEEP_PATH;
++#if XNU_ARMCPU
++	if (native_marble_cpu_sleep_ready && native_marble_retained_sleep &&
++	    native_marble_cpu_sleep_ready()) {
++		native_marble_retained_sleep(cpu_data_ptr);
++	}
++#endif
+ 
+ 	if (cpu_data_ptr == &BootCpuData) {
+ #if WITH_CLASSIC_S2R
+--- a/iokit/Kernel/IOCPU.cpp
++++ b/iokit/Kernel/IOCPU.cpp
+@@ -53,6 +53,11 @@
+ 
+ extern "C" void console_suspend();
+ extern "C" void console_resume();
++#if XNU_ARMCPU
++extern "C" int native_marble_cpu_sleep_ready(void) __attribute__((weak_import));
++extern "C" void *native_marble_suspend_bind_boot(void) __attribute__((weak_import));
++extern "C" void native_marble_suspend_restore_binding(void *) __attribute__((weak_import));
++#endif
+ extern "C" void sched_override_available_cores_for_sleep(void);
+ extern "C" void sched_restore_available_cores_after_sleep(void);
+ 
+@@ -278,6 +283,11 @@
+ 
+ 	integer_t old_pri;
+ 	thread_t self = current_thread();
++#if XNU_ARMCPU
++	const bool retained_sleep = native_marble_cpu_sleep_ready && native_marble_cpu_sleep_ready() &&
++	    native_marble_suspend_bind_boot && native_marble_suspend_restore_binding;
++	void *sleep_binding = retained_sleep ? native_marble_suspend_bind_boot() : nullptr;
++#endif
+ 
+ 	/*
+ 	 * We need to boost this thread's priority to the maximum kernel priority to
+@@ -365,6 +375,9 @@
+ 	sched_restore_available_cores_after_sleep();
+ 
+ 	thread_kern_set_pri(self, old_pri);
++#if XNU_ARMCPU
++	if (retained_sleep) native_marble_suspend_restore_binding(sleep_binding);
++#endif
+ 	printf("IOCPUSleepKernel exit\n");
+ }
+ 

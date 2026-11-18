@@ -125,6 +125,13 @@ extern "C" bool native_resident_prepare(void)
   return return_stub!=0;
 }
 
+extern "C" bool native_resident_wake_requested(void)
+{
+  if (!usb_host || !usb_kernel) return false;
+  refreshUsbHost();
+  return usb_host->Sequence != usb_kernel->Completed && usb_host->Command != 0;
+}
+
 static void usbControlWorker(void *, wait_result_t)
 {
   uint64_t activeUntil=0;

@@ -14,6 +14,9 @@
 extern "C" void rtclock_intr (unsigned int);
 extern "C" void native_marble_watchdog_start(void) __attribute__((weak_import));
 extern "C" void native_marble_cpu_idle(unsigned, bool) __attribute__((weak_import));
+extern "C" int native_marble_cpu_sleep_ready(void) __attribute__((weak_import));
+extern "C" int native_marble_cpu_resume_request(unsigned) __attribute__((weak_import));
+extern "C" void ml_arm_sleep(void) __attribute__((noreturn));
 
 static void marbleIdleNotify(cpu_id_t, boolean_t entering, uint64_t *)
 {
@@ -214,6 +217,7 @@ static ArmCpuSpi gSpi[ARMCPU_SPI_SLOTS];
 static uint32_t gSpiRoutes[1024];
 static volatile uint32_t gSpiUsed = 0;
 static uint64_t gBootAffinity = 0;
+static uintptr_t gBootSgiFrame = 0;
 static IOLock *gSpiRegistrationLock;
 static IOLock *spiRegistrationLock (void)
 {
@@ -369,6 +373,7 @@ bool ArmCpu::wakeRedistributor (bool local)
   write32 (redist, 0x14, read32 (redist, 0x14) & ~2U);
   if (!waitClear (redist, 0x14, 4)) { return false; }
   uintptr_t sgi = redist + 0x10000;
+  if (local && !secondary) gBootSgiFrame = sgi;
   write32 (sgi, 0x180, 0xffffffff);
   write32 (sgi, 0x80, 0xffffffff);
   write32 (sgi, 0xd00, 0);
@@ -573,6 +578,21 @@ static int64_t psciCall (bool hvc, uint64_t function, uint64_t a, uint64_t b, ui
     __asm__ volatile ("smc #0" : "+r" (x0) : "r" (x1), "r" (x2), "r" (x3) : "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "memory");
   }
   return static_cast<int64_t> (x0);
+}
+
+extern "C" void armcpu_clear_virtual_timer_pending(void)
+{
+  if (gBootSgiFrame) {
+    write32(gBootSgiFrame, 0x280, 1U << 27);
+    __asm__ volatile("dsb sy" ::: "memory");
+  }
+}
+
+extern "C" int armcpu_retained_standby(void)
+{
+  const auto conduit = armcpu_smp_conduit;
+  if (conduit != 1 && conduit != 2) return -1;
+  return static_cast<int32_t>(psciCall(conduit == 2, 0xc4000001, 0, 0, 0));
 }
 
 void ArmCpu::startThread (void *argument, wait_result_t)
@@ -824,6 +844,10 @@ void ArmCpu::enableCPUTimeBase (bool enabled)
 void ArmCpu::quiesceCPU (void)
 {
   armcpu_quiesce_calls=armcpu_quiesce_calls+1;
+  if (native_marble_cpu_sleep_ready && native_marble_cpu_sleep_ready() && ml_is_quiescing()) {
+    enableCPUTimeBase(false);
+    ml_arm_sleep();
+  }
   if(diagnosePower)panic("ArmCpu: unsupported quiesce requested before timer/GIC disable caller=%p halt=%u timer=%llu phase=%u",__builtin_return_address(0),armcpu_halt_calls,armcpu_timer_interrupts,armcpu_irq_phase);
   enableCPUTimeBase (false);
   uint64_t value = 0;
@@ -833,6 +857,10 @@ void ArmCpu::quiesceCPU (void)
 void ArmCpu::haltCPU (void)
 {
   armcpu_halt_calls=armcpu_halt_calls+1;
+  if (native_marble_cpu_sleep_ready && native_marble_cpu_sleep_ready() && ml_is_quiescing()) {
+    setCPUState(kIOCPUStateStopped);
+    return;
+  }
   quiesceCPU ();
   setCPUState (kIOCPUStateStopped);
   __asm__ volatile ("msr daifset, #15" ::: "memory");
@@ -854,6 +882,8 @@ static void cleanToMemory (const void *start, size_t length)
 
 kern_return_t ArmCpu::startCPU (vm_offset_t, vm_offset_t)
 {
+  if (native_marble_cpu_resume_request && native_marble_cpu_resume_request(logicalId))
+    return KERN_SUCCESS;
   if (!secondary) { return KERN_NOT_SUPPORTED; }
   bool hvc = false;
   if (!psciConduit (&hvc)) { armcpu_smp_psci_rc[logicalId] = -1001; return KERN_NOT_SUPPORTED; }

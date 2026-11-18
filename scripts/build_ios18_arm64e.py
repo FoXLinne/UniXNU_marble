@@ -115,10 +115,13 @@ def prepare(out, upstream, stack, profile):
     launch_constraints_patch = DEVICE / 'ios18/source/patches/xnu/zzyc-owner-skip-launch-constraints.patch'
     apply_patch(work, launch_constraints_patch)
     apply_patch(work, DEVICE / 'patches/xnu-11417/haptics-device-access.patch')
+    retained_sleep_patch = DEVICE / 'patches/xnu-11417/marble-retained-sleep.patch'
+    apply_patch(work, retained_sleep_patch)
     patch_list = out / 'xnu-patches.list'
     patch_list.write_text(str(patch) + '\n' + str(DEVICE / profile['kernel']['gpu_patch']) + '\n' + str(ui_patch) + '\n' + str(filesystem_patch) + '\n' + str(rtc_patch) + '\n' + str(performance_patch) + '\n' + str(native_pac_el0_patch) + '\n' + str(dataprotect_patch) + '\n' + str(console_patch) + '\n')
     with patch_list.open('a') as stream:
         stream.write(str(metal_cache_patch) + '\n' + str(cache_times_patch) + '\n' + str(microtime_patch) + '\n' + str(msgbuf_patch) + '\n' + str(backlight_patch) + '\n' + str(appsync_patch) + '\n' + str(launch_constraints_patch) + '\n')
+        stream.write(str(retained_sleep_patch) + '\n')
     env = dict(os.environ, UNIXNU_XNU_TAG='xnu-' + os_spec['xnu_version'],
                UNIXNU_XNU_COMMIT=os_spec['xnu_revision'], UNIXNU_XNU_DARWIN=os_spec['darwin'],
                UNIXNU_XNU_VERSION=os_spec['xnu_version'], UNIXNU_XNU_ARCH=os_spec['arch'],
@@ -310,7 +313,7 @@ def build_board(tree, env):
     objects = []
     with (out / 'compile.log').open('w') as log:
         sources = [DEVICE / 'package' / filename for filename in
-                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp', 'MarbleScanout.cpp', 'MarblePanel.cpp', 'MarbleBacklight.cpp',
+                   ('MarbleBootWatchdog.cpp', 'MarblePmgr.cpp', 'MarbleRtc.cpp', 'MarbleCpu.cpp', 'MarbleCpuSleep.c', 'MarbleSystemOS.c', 'MarbleMetal.c', 'MarbleUiPolicy.c', 'MarbleSetupPolicy.c', 'MarbleAppPublication.c', 'RootWatchdogPolicy.c', 'MarbleDisplay.cpp', 'MarbleScanout.cpp', 'MarblePanel.cpp', 'MarbleBacklight.cpp',
                     'QcomSmem.c', 'QcomSmp2p.c', 'QcomGlink.c', 'QcomQmp.c', 'QcomRpmh.c',
                     'QcomMdt.c', 'QcomQrtr.c', 'MarbleQrtr.c', 'MarbleBattmgr.c', 'MarbleAdsp.cpp',
                     'MarbleBattery.cpp', 'MarbleBatteryProbe.cpp', 'MarbleCharging.cpp', 'MarbleWifi.cpp', 'MarbleWifiRuntime.cpp', 'MarbleWifiNet.cpp', 'MarbleWifiFirmware.c', 'MarbleRuntime18.cpp', 'RuntimeUsb.cpp', 'MarbleUsb.cpp', 'GeniI2c.c', 'NativeResident.cpp', 'MarbleNativePanel.cpp',
@@ -329,6 +332,8 @@ def build_board(tree, env):
                 source = resident
             record_path = records / ('bsd/DEVELOPMENT/kern_exec.o.json' if source.suffix == '.c'
                                      else 'iokit/DEVELOPMENT/IOPlatformExpert.cpo.json')
+            if filename == 'MarbleCpuSleep.c':
+                record_path = records / 'osfmk/DEVELOPMENT/cpu.o.json'
             if filename in ('MarbleMetal.c', 'MarbleUiPolicy.c'):
                 release_record = tree / 'build/xnu/ios-release-obj/RELEASE_ARM64_BCM2837/bsd/RELEASE/kern_exec.o.json'
                 if release_record.is_file():

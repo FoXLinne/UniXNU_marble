@@ -20,8 +20,10 @@ static MarbleCpuIdlePolicy idlePolicy;
 static IOMemoryMap *frequencyMap, *voteMemoryMap;
 static volatile uint32_t *frequencyRegisters, *voteRegisters;
 static unsigned minimumState[3], peakState[3], screenOffState[3], configuredDomains;
+static unsigned l3Minimum, l3Maximum;
 static unsigned voteLock, votesReady;
 static bool displayOn = true;
+extern "C" void native_marble_system_sleep_configure(void);
 
 static void voteForDomain(unsigned domain)
 {
@@ -56,6 +58,13 @@ extern "C" void native_marble_cpu_display_power(bool on)
     }
     __atomic_store_n(&voteLock, 0u, __ATOMIC_RELEASE);
     ml_set_interrupts_enabled(interrupts);
+}
+
+extern "C" void native_marble_cpu_l3_sleep(bool asleep)
+{
+    if (!__atomic_load_n(&votesReady, __ATOMIC_ACQUIRE)) return;
+    frequencyRegisters[0x90 / 4] = asleep ? l3Minimum : l3Maximum;
+    __asm__ volatile("dsb sy" ::: "memory");
 }
 
 extern "C" void native_marble_cpu_start(void) {
@@ -118,14 +127,16 @@ extern "C" void native_marble_cpu_start(void) {
     }
     // marble-s-oss dcvs_epss.c: the L3 LUT starts at 0x100 and the
     // shared vote is at 0x90 in the same EPSS block as the CPU domains.
-    unsigned l3Index=0,l3Frequency=0,l3Previous=0;
+    unsigned l3Index=0,l3Frequency=0,l3Previous=0,l3Floor=UINT32_MAX;
     for (unsigned index=0;index<40;++index) {
         const uint32_t row=base[0x100/4+index];
         const unsigned frequency=row>>30 ? (row&255)*19200 : 300000;
         if (index && frequency==l3Previous) break;
         l3Previous=frequency;
         if (frequency>l3Frequency) {l3Frequency=frequency;l3Index=index;}
+        if (frequency && frequency < l3Floor) { l3Floor = frequency; l3Minimum = index; }
     }
+    l3Maximum = l3Index;
     marble_cpu_l3[0]=base[0x90/4];
     base[0x90/4]=l3Index;
     __asm__ volatile("dsb sy":::"memory");
@@ -144,6 +155,7 @@ extern "C" void native_marble_cpu_start(void) {
     frequencyRegisters = base;
     voteRegisters = pdmem;
     __atomic_store_n(&votesReady, 1u, __ATOMIC_RELEASE);
+    native_marble_system_sleep_configure();
 }
 
 extern "C" unsigned native_marble_cpu_report(char *out, unsigned cap) {
